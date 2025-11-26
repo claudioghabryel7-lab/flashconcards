@@ -1,0 +1,522 @@
+[
+  {
+    "pergunta": "O que é leitura literal?",
+    "resposta": "É a leitura baseada SOMENTE no que está explícito no texto, sem deduções nem inferências. O leitor apenas reconhece informações declaradas.",
+    "explicacao": "É a leitura baseada SOMENTE no que está explícito no texto, sem deduções nem inferências. O leitor apenas reconhece informações declaradas.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 1"
+    ]
+  },
+  {
+    "pergunta": "O que é leitura inferencial?",
+    "resposta": "É a leitura que exige que o leitor conclua algo que o texto sugere, mas não diz diretamente. A FGV cobra isso o tempo todo.",
+    "explicacao": "É a leitura que exige que o leitor conclua algo que o texto sugere, mas não diz diretamente. A FGV cobra isso o tempo todo.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 2"
+    ]
+  },
+  {
+    "pergunta": "O que é ideia central?",
+    "resposta": "É o eixo principal do texto, o conceito que o autor desenvolve ao longo da argumentação. Tudo no texto gira em torno dela.",
+    "explicacao": "É o eixo principal do texto, o conceito que o autor desenvolve ao longo da argumentação. Tudo no texto gira em torno dela.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 3"
+    ]
+  },
+  {
+    "pergunta": "O que são informações explícitas?",
+    "resposta": "São aquelas claramente apresentadas no texto, sem necessidade de interpretação. Basta localizar.",
+    "explicacao": "São aquelas claramente apresentadas no texto, sem necessidade de interpretação. Basta localizar.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 4"
+    ]
+  },
+  {
+    "pergunta": "O que são informações implícitas?",
+    "resposta": "São informações sugeridas, que exigem elaboração mental. São as mais cobradas na FGV.",
+    "explicacao": "São informações sugeridas, que exigem elaboração mental. São as mais cobradas na FGV.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 5"
+    ]
+  },
+  {
+    "pergunta": "O que são fatos?",
+    "resposta": "São informações objetivas, verificáveis, que não expressam opinião nem julgamento de valor.",
+    "explicacao": "São informações objetivas, verificáveis, que não expressam opinião nem julgamento de valor.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 6"
+    ]
+  },
+  {
+    "pergunta": "O que são opiniões?",
+    "resposta": "São avaliações subjetivas, marcadas por adjetivos, juízos e interpretações pessoais do autor.",
+    "explicacao": "São avaliações subjetivas, marcadas por adjetivos, juízos e interpretações pessoais do autor.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 7"
+    ]
+  },
+  {
+    "pergunta": "O que é pressuposto?",
+    "resposta": "Informação necessária para que a frase faça sentido. Algo que está \"por trás\" do enunciado.",
+    "explicacao": "Informação necessária para que a frase faça sentido. Algo que está \"por trás\" do enunciado.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 8"
+    ]
+  },
+  {
+    "pergunta": "O que é subentendido?",
+    "resposta": "Sentido adicional sugerido, mas não declarado diretamente pelo autor. FGV cobra isso como inferência.",
+    "explicacao": "Sentido adicional sugerido, mas não declarado diretamente pelo autor. FGV cobra isso como inferência.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 9"
+    ]
+  },
+  {
+    "pergunta": "O que é progressão textual?",
+    "resposta": "É o desenvolvimento coerente das ideias ao longo do texto, sem rupturas ou saltos lógicos.",
+    "explicacao": "É o desenvolvimento coerente das ideias ao longo do texto, sem rupturas ou saltos lógicos.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 10"
+    ]
+  },
+  {
+    "pergunta": "O que é coerência textual?",
+    "resposta": "A lógica entre as ideias. Um texto coerente apresenta relações claras entre fatos, argumentos e conclusões.",
+    "explicacao": "A lógica entre as ideias. Um texto coerente apresenta relações claras entre fatos, argumentos e conclusões.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 11"
+    ]
+  },
+  {
+    "pergunta": "O que é coesão textual?",
+    "resposta": "São mecanismos linguísticos (pronomes, conjunções, advérbios) que conectam as partes do texto.",
+    "explicacao": "São mecanismos linguísticos (pronomes, conjunções, advérbios) que conectam as partes do texto.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 12"
+    ]
+  },
+  {
+    "pergunta": "Qual a diferença entre coerência e coesão?",
+    "resposta": "Coesão = cola linguística. Coerência = lógica das ideias. Um texto pode ser coeso e incoerente, ou coerente e mal coeso.",
+    "explicacao": "Coesão = cola linguística. Coerência = lógica das ideias. Um texto pode ser coeso e incoerente, ou coerente e mal coeso.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 13"
+    ]
+  },
+  {
+    "pergunta": "O que é ironia?",
+    "resposta": "Quando o autor diz algo, mas pretende o sentido oposto. Geralmente marcada por humor crítico, exageros e inversões.",
+    "explicacao": "Quando o autor diz algo, mas pretende o sentido oposto. Geralmente marcada por humor crítico, exageros e inversões.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 14"
+    ]
+  },
+  {
+    "pergunta": "O que é ambiguidade?",
+    "resposta": "Quando uma frase permite mais de uma interpretação. A FGV testa se o candidato percebe isso.",
+    "explicacao": "Quando uma frase permite mais de uma interpretação. A FGV testa se o candidato percebe isso.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 15"
+    ]
+  },
+  {
+    "pergunta": "Como identificar causa?",
+    "resposta": "Procure expressões como: \"porque\", \"já que\", \"uma vez que\", \"visto que\".",
+    "explicacao": "Procure expressões como: \"porque\", \"já que\", \"uma vez que\", \"visto que\".",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 16"
+    ]
+  },
+  {
+    "pergunta": "Como identificar consequência?",
+    "resposta": "Expressões como \"portanto\", \"logo\", \"assim\", \"desse modo\".",
+    "explicacao": "Expressões como \"portanto\", \"logo\", \"assim\", \"desse modo\".",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 17"
+    ]
+  },
+  {
+    "pergunta": "Como identificar oposição (contraste)?",
+    "resposta": "\"Mas\", \"porém\", \"todavia\", \"contudo\", marcando quebra de expectativa.",
+    "explicacao": "\"Mas\", \"porém\", \"todavia\", \"contudo\", marcando quebra de expectativa.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 18"
+    ]
+  },
+  {
+    "pergunta": "O que nunca pode ser feito em interpretação FGV?",
+    "resposta": "Inventar informação. A FGV elimina candidatos que extrapolam o texto.",
+    "explicacao": "Inventar informação. A FGV elimina candidatos que extrapolam o texto.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 19"
+    ]
+  },
+  {
+    "pergunta": "Dica de ouro da FGV em interpretação",
+    "resposta": "A alternativa correta é sempre a mais fiel ao texto — nunca a mais bonita. Siga o texto. Não viaje. Não complete com sua opinião.",
+    "explicacao": "A alternativa correta é sempre a mais fiel ao texto — nunca a mais bonita. Siga o texto. Não viaje. Não complete com sua opinião.",
+    "categoria": "Interpretação de Texto",
+    "materia": "Português",
+    "referencia": "Módulo 1 - Interpretação de Texto",
+    "tags": [
+      "módulo 1",
+      "interpretação de texto",
+      "card 20"
+    ]
+  },
+  {
+    "pergunta": "O que é coesão textual?",
+    "resposta": "É o uso de elementos linguísticos (pronomes, conectivos, advérbios, elipses) que ligam partes do texto, garantindo continuidade.",
+    "explicacao": "É o uso de elementos linguísticos (pronomes, conectivos, advérbios, elipses) que ligam partes do texto, garantindo continuidade.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 1"
+    ]
+  },
+  {
+    "pergunta": "O que é coerência textual?",
+    "resposta": "É a lógica interna das ideias, garantindo sentido global e harmonia entre todas as partes do texto.",
+    "explicacao": "É a lógica interna das ideias, garantindo sentido global e harmonia entre todas as partes do texto.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 2"
+    ]
+  },
+  {
+    "pergunta": "Diferença entre coesão e coerência",
+    "resposta": "Coesão = gramática (ligação). Coerência = lógica (sentido).",
+    "explicacao": "Coesão = gramática (ligação). Coerência = lógica (sentido).",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 3"
+    ]
+  },
+  {
+    "pergunta": "O que é coesão referencial?",
+    "resposta": "É a retomada ou antecipação de termos por pronomes, sinônimos ou expressões equivalentes.",
+    "explicacao": "É a retomada ou antecipação de termos por pronomes, sinônimos ou expressões equivalentes.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 4"
+    ]
+  },
+  {
+    "pergunta": "Exemplo clássico de coesão referencial",
+    "resposta": "\"Maria chegou cedo. Ela estava cansada.\" (Ela retoma Maria)",
+    "explicacao": "\"Maria chegou cedo. Ela estava cansada.\" (Ela retoma Maria)",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 5"
+    ]
+  },
+  {
+    "pergunta": "O que é coesão sequencial?",
+    "resposta": "É o uso de conectivos que mostram as relações lógicas entre as partes de um texto.",
+    "explicacao": "É o uso de conectivos que mostram as relações lógicas entre as partes de um texto.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 6"
+    ]
+  },
+  {
+    "pergunta": "Conectivos de adição",
+    "resposta": "e, nem, bem como, além disso.",
+    "explicacao": "e, nem, bem como, além disso.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 7"
+    ]
+  },
+  {
+    "pergunta": "Conectivos de oposição (contraste)",
+    "resposta": "mas, porém, contudo, todavia, entretanto.",
+    "explicacao": "mas, porém, contudo, todavia, entretanto.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 8"
+    ]
+  },
+  {
+    "pergunta": "Conectivos de causa",
+    "resposta": "porque, já que, visto que, uma vez que.",
+    "explicacao": "porque, já que, visto que, uma vez que.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 9"
+    ]
+  },
+  {
+    "pergunta": "Conectivos de consequência",
+    "resposta": "portanto, assim, logo, por isso.",
+    "explicacao": "portanto, assim, logo, por isso.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 10"
+    ]
+  },
+  {
+    "pergunta": "Conectivos de conclusão",
+    "resposta": "portanto, assim, logo, conclui-se que.",
+    "explicacao": "portanto, assim, logo, conclui-se que.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 11"
+    ]
+  },
+  {
+    "pergunta": "Conectivos de condição",
+    "resposta": "se, caso, desde que, contanto que.",
+    "explicacao": "se, caso, desde que, contanto que.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 12"
+    ]
+  },
+  {
+    "pergunta": "Conectivos de concessão (FGV AMA)",
+    "resposta": "embora, mesmo que, ainda que, apesar de.",
+    "explicacao": "embora, mesmo que, ainda que, apesar de.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 13"
+    ]
+  },
+  {
+    "pergunta": "O que é elipse?",
+    "resposta": "Omissão de um termo facilmente identificado pelo contexto.",
+    "explicacao": "Omissão de um termo facilmente identificado pelo contexto.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 14"
+    ]
+  },
+  {
+    "pergunta": "O que é referenciação?",
+    "resposta": "Estrutura que evita repetição exagerada utilizando pronomes ou expressões equivalentes.",
+    "explicacao": "Estrutura que evita repetição exagerada utilizando pronomes ou expressões equivalentes.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 15"
+    ]
+  },
+  {
+    "pergunta": "O que é progressão referencial?",
+    "resposta": "O texto alterna formas de referir-se ao mesmo elemento (ex.: \"o autor\", \"ele\", \"o escritor\").",
+    "explicacao": "O texto alterna formas de referir-se ao mesmo elemento (ex.: \"o autor\", \"ele\", \"o escritor\").",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 16"
+    ]
+  },
+  {
+    "pergunta": "O que causa incoerência?",
+    "resposta": "Contradição, quebra lógica, informação impossível, mudança brusca de assunto ou falta de relação entre ideias.",
+    "explicacao": "Contradição, quebra lógica, informação impossível, mudança brusca de assunto ou falta de relação entre ideias.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 17"
+    ]
+  },
+  {
+    "pergunta": "O que causa falta de coesão?",
+    "resposta": "Uso errado ou ausência de conectivos, pronomes mal empregados, elipses que dificultam sentido.",
+    "explicacao": "Uso errado ou ausência de conectivos, pronomes mal empregados, elipses que dificultam sentido.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 18"
+    ]
+  },
+  {
+    "pergunta": "Erro típico da FGV em coesão",
+    "resposta": "Ambiguidade referencial — quando um pronome pode retomar dois termos diferentes.",
+    "explicacao": "Ambiguidade referencial — quando um pronome pode retomar dois termos diferentes.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 19"
+    ]
+  },
+  {
+    "pergunta": "Dica final para acertar coesão/coerência",
+    "resposta": "Leia sempre procurando quem retoma quem e qual relação lógica está sendo construída. A FGV cobra isso o tempo todo.",
+    "explicacao": "Leia sempre procurando quem retoma quem e qual relação lógica está sendo construída. A FGV cobra isso o tempo todo.",
+    "categoria": "Coesão e Coerência",
+    "materia": "Português",
+    "referencia": "Módulo 2 - Coesão e Coerência",
+    "tags": [
+      "módulo 2",
+      "coesão e coerência",
+      "card 20"
+    ]
+  }
+]
