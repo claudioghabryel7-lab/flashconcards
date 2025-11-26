@@ -24,7 +24,7 @@ const ProgressCalendar = ({ dates = [], streak = 0 }) => {
           <p className="text-3xl font-bold text-alego-700">{streak} dias 🔥</p>
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
         {lastDays.map((day) => {
           const key = day.format('YYYY-MM-DD')
           const done = studied.has(key)
