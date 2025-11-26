@@ -1,0 +1,104 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ✅ Agora usando Firebase Authentication - Segurança completa!
+    
+    // Função auxiliar para verificar se o usuário está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Função auxiliar para verificar se é o próprio usuário
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Função auxiliar para verificar se é admin
+    function isAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Coleção de usuários
+    match /users/{userId} {
+      // Usuário pode ler seu próprio perfil ou admin pode ler qualquer um
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      
+      // Usuário pode criar seu próprio perfil (primeira vez)
+      allow create: if isAuthenticated() && isOwner(userId);
+      
+      // Usuário pode atualizar seu próprio perfil
+      // Permite atualizar role apenas se o documento não tiver role ainda
+      allow update: if isAuthenticated() && 
+                       isOwner(userId) &&
+                       (request.resource.data.role == resource.data.role ||
+                        !resource.data.hasAny(['role']));
+      
+      // Apenas admin pode deletar usuários
+      allow delete: if isAdmin();
+    }
+    
+    // Coleção de flashcards
+    match /flashcards/{cardId} {
+      // Qualquer usuário autenticado pode ler
+      allow read: if isAuthenticated();
+      
+      // Apenas admin pode criar, atualizar ou deletar
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Coleção de progresso do usuário
+    match /progress/{progressId} {
+      // Usuário só pode ler seu próprio progresso
+      allow read: if isAuthenticated() && 
+                    resource.data.uid == request.auth.uid;
+      
+      // Usuário só pode criar/atualizar seu próprio progresso
+      allow create, update: if isAuthenticated() && 
+                              request.resource.data.uid == request.auth.uid;
+      
+      // Apenas admin pode deletar
+      allow delete: if isAdmin();
+    }
+    
+    // Coleção de progresso de cards do usuário
+    match /userProgress/{userId} {
+      // Usuário só pode ler seu próprio progresso
+      allow read: if isAuthenticated() && userId == request.auth.uid;
+      
+      // Usuário só pode criar/atualizar seu próprio progresso
+      allow create, update: if isAuthenticated() && userId == request.auth.uid;
+      
+      // Apenas admin pode deletar
+      allow delete: if isAdmin();
+    }
+    
+    // Coleção de chats (mensagens do chat IA)
+    match /chats/{userId}/messages/{messageId} {
+      // Usuário só pode ler suas próprias mensagens
+      allow read: if isAuthenticated() && userId == request.auth.uid;
+      
+      // Usuário só pode criar mensagens em seu próprio chat
+      allow create: if isAuthenticated() && userId == request.auth.uid;
+      
+      // Ninguém pode atualizar ou deletar mensagens
+      allow update, delete: if false;
+    }
+    
+    // Coleção de configuração (edital, etc)
+    match /config/{configId} {
+      // Qualquer usuário autenticado pode ler
+      allow read: if isAuthenticated();
+      
+      // Apenas admin pode criar, atualizar ou deletar
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Bloquear acesso a qualquer outra coleção
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

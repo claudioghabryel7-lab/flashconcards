@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom'
 import { ShieldCheckIcon, SparklesIcon } from '@heroicons/react/24/solid'
 
 const benefits = [
-  'Flashcards animados com Lei 18.884/2015 e Regimento interno',
+  'Flashcards animados com sistema de repetição espaçada (SRS)',
   'Calendário inteligente e streak de estudos',
-  'Chat IA simulado focado no concurso',
+  'Seu Flash Mentor - orientação personalizada para seus estudos',
   'Mentoria intensiva com foco total na ALEGO',
 ]
 
@@ -52,7 +52,7 @@ const PublicHome = () => {
       </div>
 
       <div className="grid gap-8 md:grid-cols-3">
-        {['Flashcards', 'Agenda e Streak', 'Chat IA Simulada'].map((item) => (
+        {['Flashcards', 'Agenda e Streak', 'Seu Flash Mentor'].map((item) => (
           <div
             key={item}
             className="rounded-2xl bg-white p-6 shadow-sm shadow-alego-50"

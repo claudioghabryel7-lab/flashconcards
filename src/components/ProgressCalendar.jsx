@@ -1,13 +1,21 @@
 import dayjs from 'dayjs'
+import { useDarkMode } from '../hooks/useDarkMode.jsx'
 
 const ProgressCalendar = ({ dates = [], streak = 0 }) => {
+  const { darkMode } = useDarkMode()
   const studied = new Set(dates)
   const lastDays = Array.from({ length: 14 }, (_, index) =>
     dayjs().subtract(13 - index, 'day'),
   )
 
   return (
-    <div className="rounded-2xl bg-white p-6 shadow-sm">
+    <div 
+      className="rounded-2xl p-6 shadow-sm"
+      style={{
+        backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+        color: darkMode ? '#f1f5f9' : '#1e293b'
+      }}
+    >
       <div className="mb-4 flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-alego-500">

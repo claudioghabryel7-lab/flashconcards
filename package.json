@@ -10,8 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@heroicons/react": "^2.2.0",
     "axios": "^1.13.2",
+    "crypto-js": "^4.2.0",
     "dayjs": "^1.11.19",
     "firebase": "^12.6.0",
     "framer-motion": "^12.23.24",

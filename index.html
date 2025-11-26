@@ -5,6 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>plegimentoria</title>
+    <script>
+      // Aplicar dark mode antes do React renderizar para evitar flash
+      (function() {
+        try {
+          const saved = localStorage.getItem('darkMode');
+          if (saved === 'true') {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {
+          console.error('Erro ao carregar dark mode:', e);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

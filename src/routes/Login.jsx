@@ -1,14 +1,14 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
 import {
   EnvelopeIcon,
   LockClosedIcon,
   ArrowRightCircleIcon,
 } from '@heroicons/react/24/solid'
 import { useAuth } from '../hooks/useAuth'
+import { useNavigate } from 'react-router-dom'
 
 const Login = () => {
-  const { login, loginWithGoogle } = useAuth()
+  const { login } = useAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
@@ -26,20 +26,8 @@ const Login = () => {
       await login(form.email, form.password)
       navigate('/dashboard')
     } catch (err) {
-      setError('Credenciais inválidas. Confira e tente novamente.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleGoogle = async () => {
-    setError('')
-    setLoading(true)
-    try {
-      await loginWithGoogle()
-      navigate('/dashboard')
-    } catch (err) {
-      setError('Não foi possível entrar com o Google.')
+      console.error('Erro no login:', err)
+      setError(err.message || 'Credenciais inválidas. Confira e tente novamente.')
     } finally {
       setLoading(false)
     }
@@ -98,23 +86,8 @@ const Login = () => {
           Entrar
         </button>
       </form>
-      <button
-        type="button"
-        onClick={handleGoogle}
-        disabled={loading}
-        className="mt-4 w-full rounded-full border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-      >
-        Entrar com Google
-      </button>
-      <p className="mt-6 text-center text-sm text-slate-500">
-        Ainda não tem conta?{' '}
-        <Link to="/register" className="font-semibold text-alego-600">
-          Faça seu cadastro
-        </Link>
-      </p>
     </div>
   )
 }
 
 export default Login
-
