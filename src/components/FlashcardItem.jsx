@@ -48,7 +48,7 @@ const FlashcardItem = ({
   ][currentStage] || { label: 'Novo', color: 'bg-slate-200 dark:bg-slate-700' }
 
   return (
-    <div className="relative mx-auto max-w-md w-full md:max-w-lg">
+    <div className="relative mx-auto max-w-md w-full md:max-w-lg px-2 sm:px-0">
       <AnimatePresence>
         {showLevelUp && (
           <motion.div
@@ -57,7 +57,7 @@ const FlashcardItem = ({
             exit={{ opacity: 0, scale: 1.5 }}
             className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
           >
-            <div className="rounded-full bg-emerald-500 px-8 py-4 text-2xl font-black text-white shadow-2xl">
+            <div className="rounded-full bg-emerald-500 px-6 sm:px-8 py-3 sm:py-4 text-xl sm:text-2xl font-black text-white shadow-2xl">
               ⭐ Subiu de Nível!
             </div>
           </motion.div>
@@ -65,7 +65,7 @@ const FlashcardItem = ({
       </AnimatePresence>
 
       <motion.div
-        className="relative h-64 w-full cursor-pointer"
+        className="relative h-56 sm:h-64 w-full cursor-pointer"
         style={{ perspective: 1000 }}
         onClick={toggle}
       >
@@ -119,12 +119,12 @@ const FlashcardItem = ({
             )}
           </div>
           <div className="flex-1 flex items-center justify-center">
-            <h3 className="text-xl font-bold text-alego-700 dark:text-alego-300 text-center px-4">
+            <h3 className="text-base sm:text-lg md:text-xl font-bold text-alego-700 dark:text-alego-300 text-center px-2 sm:px-4">
               {card.pergunta}
             </h3>
           </div>
           {!flipped && (
-            <p className="text-xs text-center text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-center text-slate-500 dark:text-slate-400 px-2">
               Clique para ver a resposta
             </p>
           )}
@@ -146,7 +146,7 @@ const FlashcardItem = ({
             Resposta
           </p>
           <div className="flex-1 flex items-center justify-center">
-            <p className="text-lg font-bold text-center">
+            <p className="text-base sm:text-lg font-bold text-center px-2 sm:px-4">
               {card.resposta}
             </p>
           </div>
@@ -171,7 +171,7 @@ const FlashcardItem = ({
                     e.stopPropagation()
                     handleRate('hard')
                   }}
-                  className="flex-1 rounded-lg bg-rose-500 px-3 py-2 text-xs font-semibold text-white shadow-lg hover:bg-rose-600 border-2 border-rose-600"
+                  className="flex-1 rounded-lg bg-rose-500 px-2 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white shadow-lg hover:bg-rose-600 border-2 border-rose-600 min-h-[44px]"
                 >
                   🔴 Difícil
                 </motion.button>
@@ -183,7 +183,7 @@ const FlashcardItem = ({
                     e.stopPropagation()
                     handleRate('easy')
                   }}
-                  className="flex-1 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-white shadow-lg hover:bg-emerald-600 border-2 border-emerald-600"
+                  className="flex-1 rounded-lg bg-emerald-500 px-2 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white shadow-lg hover:bg-emerald-600 border-2 border-emerald-600 min-h-[44px]"
                 >
                   🟢 Fácil
                 </motion.button>

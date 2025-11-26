@@ -64,7 +64,7 @@ function App() {
       }}
     >
       <Header />
-      <main className="mx-auto w-full max-w-6xl px-4 py-8">
+      <main className="mx-auto w-full max-w-6xl px-2 sm:px-4 py-4 sm:py-6 md:py-8 overflow-x-hidden">
         <Routes>
           <Route path="/" element={<PublicHome />} />
           <Route path="/setup" element={<SetupUser />} />

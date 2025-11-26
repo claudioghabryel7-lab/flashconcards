@@ -41,6 +41,8 @@ VITE_FIREBASE_APP_ID=seu_app_id
 VITE_GEMINI_API_KEY=sua_gemini_api_key_aqui
 ```
 
+💡 **Dica:** Veja o arquivo `VARIAVEIS_VERCEL.md` para uma lista completa e instruções detalhadas!
+
 ### Passo 4: Deploy
 
 1. Clique em **"Deploy"**

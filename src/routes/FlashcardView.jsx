@@ -221,32 +221,32 @@ const FlashcardView = () => {
   const needsReview = true // Sempre mostra os botões de avaliação
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4 sm:space-y-6 px-2 sm:px-0">
       <div 
-        className="rounded-2xl p-6 shadow-sm"
+        className="rounded-2xl p-4 sm:p-6 shadow-sm"
         style={{
           backgroundColor: darkMode ? '#1e293b' : '#ffffff',
           color: darkMode ? '#f1f5f9' : '#1e293b'
         }}
       >
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-alego-500 dark:text-alego-400">
+        <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.2em] text-alego-500 dark:text-alego-400">
           Sistema de Repetição Espaçada (SRS)
         </p>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="mt-2 text-3xl font-bold text-alego-700 dark:text-alego-300">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+          <div className="flex-1">
+            <h1 className="mt-2 text-xl sm:text-2xl md:text-3xl font-bold text-alego-700 dark:text-alego-300">
               Flashcards Organizados por Matéria e Módulo
             </h1>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            <p className="mt-2 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
               {isStudying 
                 ? `Estudando: ${selectedMateria} - ${selectedModulo}`
                 : 'Selecione uma matéria e módulo para começar a estudar'}
             </p>
           </div>
           {isStudying && (
-            <div className="flex items-center gap-2 rounded-full bg-alego-100 dark:bg-alego-900 px-4 py-2">
-              <ClockIcon className="h-5 w-5 text-alego-600 dark:text-alego-400" />
-              <span className="text-sm font-semibold text-alego-700 dark:text-alego-300">
+            <div className="flex items-center gap-2 rounded-full bg-alego-100 dark:bg-alego-900 px-3 sm:px-4 py-2 self-start sm:self-auto">
+              <ClockIcon className="h-4 w-4 sm:h-5 sm:w-5 text-alego-600 dark:text-alego-400" />
+              <span className="text-xs sm:text-sm font-semibold text-alego-700 dark:text-alego-300">
                 {formattedTime}
               </span>
             </div>
@@ -254,16 +254,16 @@ const FlashcardView = () => {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Árvore de Pastas */}
         <div 
-          className="rounded-2xl p-6 shadow-sm"
+          className="rounded-2xl p-4 sm:p-6 shadow-sm"
           style={{
             backgroundColor: darkMode ? '#1e293b' : '#ffffff',
             color: darkMode ? '#f1f5f9' : '#1e293b'
           }}
         >
-          <p className="mb-4 text-sm font-semibold text-alego-600 dark:text-alego-400">
+          <p className="mb-3 sm:mb-4 text-xs sm:text-sm font-semibold text-alego-600 dark:text-alego-400">
             Estrutura de Estudo:
           </p>
           <div className="space-y-1">
@@ -337,17 +337,17 @@ const FlashcardView = () => {
         <div className="lg:col-span-2">
           {!selectedMateria || !selectedModulo ? (
             <div 
-              className="rounded-2xl p-12 text-center shadow-sm"
+              className="rounded-2xl p-6 sm:p-8 md:p-12 text-center shadow-sm"
               style={{
                 backgroundColor: darkMode ? '#1e293b' : '#ffffff',
                 color: darkMode ? '#f1f5f9' : '#1e293b'
               }}
             >
-              <p className="text-4xl mb-4">📚</p>
-              <p className="text-lg font-semibold text-slate-600 dark:text-slate-300">
+              <p className="text-3xl sm:text-4xl mb-3 sm:mb-4">📚</p>
+              <p className="text-base sm:text-lg font-semibold text-slate-600 dark:text-slate-300">
                 Selecione uma matéria e módulo para começar
               </p>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              <p className="mt-2 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                 Navegue pela estrutura ao lado e escolha o conteúdo que deseja estudar
               </p>
             </div>
@@ -363,15 +363,15 @@ const FlashcardView = () => {
             </div>
           ) : (
             <div 
-              className="rounded-2xl p-6 shadow-sm"
+              className="rounded-2xl p-4 sm:p-6 shadow-sm"
               style={{
                 backgroundColor: darkMode ? '#1e293b' : '#ffffff',
                 color: darkMode ? '#f1f5f9' : '#1e293b'
               }}
             >
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-3 sm:mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
                 <div>
-                  <p className="text-sm font-semibold text-alego-600 dark:text-alego-400">
+                  <p className="text-xs sm:text-sm font-semibold text-alego-600 dark:text-alego-400">
                     {selectedMateria} • {selectedModulo}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -384,7 +384,7 @@ const FlashcardView = () => {
                     setSelectedMateria(null)
                     setSelectedModulo(null)
                   }}
-                  className="rounded-full border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  className="rounded-full border border-slate-300 dark:border-slate-600 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 self-start sm:self-auto"
                 >
                   Voltar
                 </button>
