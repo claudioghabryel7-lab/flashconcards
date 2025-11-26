@@ -103,6 +103,12 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <footer className="mx-auto w-full max-w-6xl px-4 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+        <p>
+          © {new Date().getFullYear()} Plegimentoria Mentoria para Polícia Legislativa ALEGO. Todos os direitos reservados.
+          É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.
+        </p>
+      </footer>
       <FloatingAIChat />
       <SupportButton />
     </div>
