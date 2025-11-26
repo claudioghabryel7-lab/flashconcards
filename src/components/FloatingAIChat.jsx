@@ -621,7 +621,7 @@ Responda CURTO e OBJETIVO: ${userMessage}`
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-50 flex h-16 w-16 items-center justify-center rounded-full bg-alego-600 shadow-lg transition hover:bg-alego-700 hover:scale-110"
+        className="fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-alego-600 shadow-lg transition hover:bg-alego-700 hover:scale-110 sm:bottom-6 sm:right-6 sm:h-16 sm:w-16"
         aria-label="Abrir chat com mentor"
       >
         <ChatBubbleLeftRightIcon className="h-8 w-8 text-white" />
@@ -634,7 +634,7 @@ Responda CURTO e OBJETIVO: ${userMessage}`
 
       {/* Modal do Chat */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-end p-4 md:items-center md:justify-center">
+        <div className="fixed inset-0 z-50 flex items-end justify-center px-2 pb-4 pt-16 sm:px-4 sm:pb-6 sm:pt-24 md:items-center md:justify-center">
           {/* Overlay */}
           <div
             className="absolute inset-0 bg-black/50"
@@ -643,7 +643,7 @@ Responda CURTO e OBJETIVO: ${userMessage}`
 
           {/* Chat Container */}
           <div
-            className={`relative flex h-[600px] w-full max-w-md flex-col rounded-2xl shadow-2xl ${
+            className={`relative flex h-[70vh] w-full max-w-md flex-col rounded-2xl shadow-2xl ${
               darkMode ? 'bg-slate-800' : 'bg-white'
             }`}
           >
@@ -691,7 +691,7 @@ Responda CURTO e OBJETIVO: ${userMessage}`
                   className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
+                    className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-4 py-2 text-sm break-words ${
                       message.sender === 'user'
                         ? 'bg-alego-600 text-white'
                         : darkMode
@@ -706,7 +706,7 @@ Responda CURTO e OBJETIVO: ${userMessage}`
               {sending && (
                 <div className="flex justify-start">
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
+                    className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-4 py-2 text-sm break-words ${
                       darkMode
                         ? 'bg-slate-700 text-slate-200'
                         : 'bg-slate-100 text-slate-800'
