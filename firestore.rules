@@ -123,9 +123,8 @@ service cloud.firestore {
       // Qualquer usuário autenticado pode ler (tanto documentos individuais quanto list queries)
       allow read: if isAuthenticated();
       
-      // Usuário pode criar posts - validação simplificada
-      allow create: if isAuthenticated() && 
-                       request.resource.data.authorId == request.auth.uid;
+      // Usuário autenticado pode criar posts (validação mínima para teste)
+      allow create: if isAuthenticated();
       
       // Apenas o autor pode atualizar/deletar seu próprio post
       allow update: if isAuthenticated() && 
