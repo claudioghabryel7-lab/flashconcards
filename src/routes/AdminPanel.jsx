@@ -74,6 +74,13 @@ const AdminPanel = () => {
           }
         }
       })
+
+      Object.keys(modulesByMateria).forEach((materia) => {
+        modulesByMateria[materia].sort((a, b) =>
+          a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' }),
+        )
+      })
+
       setModules(modulesByMateria)
     })
 
