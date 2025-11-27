@@ -38,6 +38,10 @@ const FlashcardView = () => {
   const [selectedMateria, setSelectedMateria] = useState(null)
   const [selectedModulo, setSelectedModulo] = useState(null)
   const [expandedMaterias, setExpandedMaterias] = useState({})
+  const [sessionRatings, setSessionRatings] = useState({})
+  const [moduleCompleted, setModuleCompleted] = useState(false)
+  const [studyMode, setStudyMode] = useState('module')
+  const [miniSimCards, setMiniSimCards] = useState([])
   
   // Timer de estudo - ativo quando um módulo está selecionado
   const isStudying = !!selectedMateria && !!selectedModulo
@@ -102,11 +106,25 @@ const FlashcardView = () => {
 
   // Cards filtrados baseado na seleção
   const filteredCards = useMemo(() => {
-    if (!selectedMateria || !selectedModulo) {
+    if (!selectedMateria || !selectedModulo || studyMode === 'miniSim') {
       return []
     }
     return organizedCards[selectedMateria]?.[selectedModulo] || []
-  }, [selectedMateria, selectedModulo, organizedCards])
+  }, [selectedMateria, selectedModulo, organizedCards, studyMode])
+
+  const activeCards = studyMode === 'miniSim' ? miniSimCards : filteredCards
+
+  useEffect(() => {
+    setSessionRatings({})
+    setModuleCompleted(false)
+  }, [selectedMateria, selectedModulo, studyMode])
+
+  const checkModuleCompletion = (ratingsSnapshot) => {
+    if (studyMode === 'miniSim') return false
+    if (!selectedMateria || !selectedModulo) return false
+    if (activeCards.length === 0) return false
+    return activeCards.every((card) => ratingsSnapshot[card.id] === 'easy')
+  }
 
   // Calcular próxima revisão com sistema retroativo
   const calculateNextReview = (currentProgress, difficulty, isRetroactive = false) => {
@@ -146,20 +164,35 @@ const FlashcardView = () => {
   }
 
   const selectModulo = (materia, modulo) => {
+    setStudyMode('module')
+    setMiniSimCards([])
     setSelectedMateria(materia)
     setSelectedModulo(modulo)
     setCurrentIndex(0)
   }
 
+  const startMiniSim = (materia) => {
+    const cardsByModulo = organizedCards[materia] || {}
+    const allCards = Object.values(cardsByModulo).flat()
+    if (allCards.length === 0) return
+    const shuffled = [...allCards].sort(() => Math.random() - 0.5)
+    const selected = shuffled.slice(0, Math.min(10, shuffled.length))
+    setStudyMode('miniSim')
+    setMiniSimCards(selected)
+    setSelectedMateria(materia)
+    setSelectedModulo('Mini simulado')
+    setCurrentIndex(0)
+  }
+
   const goNext = () => {
     setCurrentIndex((prev) =>
-      prev + 1 >= filteredCards.length ? 0 : prev + 1,
+      prev + 1 >= activeCards.length ? 0 : prev + 1,
     )
   }
 
   const goPrev = () => {
     setCurrentIndex((prev) =>
-      prev - 1 < 0 ? filteredCards.length - 1 : prev - 1,
+      prev - 1 < 0 ? activeCards.length - 1 : prev - 1,
     )
   }
 
@@ -202,6 +235,14 @@ const FlashcardView = () => {
       },
       { merge: true },
     )
+
+    setSessionRatings((prevRatings) => {
+      const updated = { ...prevRatings, [cardId]: difficulty }
+      if (checkModuleCompletion(updated)) {
+        setModuleCompleted(true)
+      }
+      return updated
+    })
     
     // Avançar para próximo card após um pequeno delay
     setTimeout(() => {
@@ -209,15 +250,33 @@ const FlashcardView = () => {
     }, 300)
   }
 
+  const resetModuleSession = () => {
+    setSessionRatings({})
+    setModuleCompleted(false)
+    setCurrentIndex(0)
+  }
+
+  const handleReviewAgain = () => {
+    resetModuleSession()
+  }
+
+  const handleExitModule = () => {
+    resetModuleSession()
+    setStudyMode('module')
+    setMiniSimCards([])
+    setSelectedMateria(null)
+    setSelectedModulo(null)
+  }
+
   const shuffle = () => {
     setCurrentIndex(0)
   }
 
   const viewedIds = useMemo(() => {
-    return filteredCards.slice(0, currentIndex + 1).map((c) => c.id)
-  }, [filteredCards, currentIndex])
+    return activeCards.slice(0, currentIndex + 1).map((c) => c.id)
+  }, [activeCards, currentIndex])
 
-  const currentCard = filteredCards[currentIndex]
+  const currentCard = activeCards[currentIndex]
   const needsReview = true // Sempre mostra os botões de avaliação
 
   return (
@@ -298,10 +357,13 @@ const FlashcardView = () => {
                   </button>
                   
                   {isExpanded && (
-                    <div className="ml-6 mt-1 space-y-1">
+                    <div className="ml-6 mt-1 space-y-2">
                       {modulos.map((modulo) => {
                         const cardsInModulo = organizedCards[materia][modulo] || []
-                        const isModuloSelected = selectedMateria === materia && selectedModulo === modulo
+                        const isModuloSelected =
+                          studyMode === 'module' &&
+                          selectedMateria === materia &&
+                          selectedModulo === modulo
                         
                         return (
                           <button
@@ -325,6 +387,13 @@ const FlashcardView = () => {
                           </button>
                         )
                       })}
+                      <button
+                        type="button"
+                        onClick={() => startMiniSim(materia)}
+                        className="w-full rounded-lg border border-dashed border-alego-400 px-3 py-2 text-left text-sm font-semibold text-alego-600 dark:text-alego-300 hover:bg-alego-50/50 dark:hover:bg-slate-800"
+                      >
+                        Mini simulado (10 cards)
+                      </button>
                     </div>
                   )}
                 </div>
@@ -351,7 +420,7 @@ const FlashcardView = () => {
                 Navegue pela estrutura ao lado e escolha o conteúdo que deseja estudar
               </p>
             </div>
-          ) : filteredCards.length === 0 ? (
+          ) : activeCards.length === 0 ? (
             <div 
               className="rounded-2xl p-8 text-center shadow-sm"
               style={{
@@ -374,8 +443,13 @@ const FlashcardView = () => {
                   <p className="text-xs sm:text-sm font-semibold text-alego-600 dark:text-alego-400">
                     {selectedMateria} • {selectedModulo}
                   </p>
+                  {studyMode === 'miniSim' && (
+                    <p className="text-[11px] uppercase tracking-wide text-alego-500 dark:text-alego-400">
+                      10 cards aleatórios deste mini simulado
+                    </p>
+                  )}
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {filteredCards.length} {filteredCards.length === 1 ? 'card' : 'cards'}
+                    {activeCards.length} {activeCards.length === 1 ? 'card' : 'cards'}
                   </p>
                 </div>
                 <button
@@ -383,6 +457,8 @@ const FlashcardView = () => {
                   onClick={() => {
                     setSelectedMateria(null)
                     setSelectedModulo(null)
+                    setStudyMode('module')
+                    setMiniSimCards([])
                   }}
                   className="rounded-full border border-slate-300 dark:border-slate-600 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 self-start sm:self-auto"
                 >
@@ -391,7 +467,7 @@ const FlashcardView = () => {
               </div>
               
               <FlashcardList
-                cards={filteredCards}
+                cards={activeCards}
                 currentIndex={currentIndex}
                 onSelect={setCurrentIndex}
                 onToggleFavorite={toggleFavorite}
@@ -408,6 +484,36 @@ const FlashcardView = () => {
           )}
         </div>
       </div>
+
+      {studyMode === 'module' && moduleCompleted && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <div className="max-w-md w-full rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-2xl">
+            <p className="text-4xl mb-4 text-center">🎉</p>
+            <h2 className="text-xl font-bold text-center text-alego-700 dark:text-alego-300">
+              Módulo finalizado!
+            </h2>
+            <p className="mt-2 text-sm text-center text-slate-600 dark:text-slate-300">
+              Você marcou todos os cards como &quot;Fácil&quot;. Deseja revisar este módulo novamente?
+            </p>
+            <div className="mt-6 flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={handleReviewAgain}
+                className="flex-1 rounded-full bg-alego-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-alego-700"
+              >
+                Revisar novamente
+              </button>
+              <button
+                type="button"
+                onClick={handleExitModule}
+                className="flex-1 rounded-full border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                Voltar aos módulos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
