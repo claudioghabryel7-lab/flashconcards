@@ -1,0 +1,103 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Função auxiliar para verificar se o usuário está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Função auxiliar para verificar se é o próprio usuário
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Função auxiliar para verificar se é admin
+    function isAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Coleção de usuários
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && 
+                       isOwner(userId) &&
+                       (request.resource.data.role == resource.data.role ||
+                        !resource.data.hasAny(['role']));
+      allow delete: if isAdmin();
+    }
+    
+    // Coleção de flashcards
+    match /flashcards/{cardId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Coleção de progresso do usuário
+    match /progress/{progressId} {
+      allow read: if isAuthenticated() && 
+                    resource.data.uid == request.auth.uid;
+      allow create, update: if isAuthenticated() && 
+                              request.resource.data.uid == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+    
+    // Coleção de progresso de cards do usuário
+    match /userProgress/{userId} {
+      allow read: if isAuthenticated() && userId == request.auth.uid;
+      allow create, update: if isAuthenticated() && userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+    
+    // Coleção de chats (mensagens do chat IA)
+    match /chats/{userId}/messages/{messageId} {
+      allow read: if isAuthenticated() && userId == request.auth.uid;
+      allow create: if isAuthenticated() && userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+    
+    // Coleção de configuração (edital, etc)
+    match /config/{configId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Coleção de usuários deletados
+    match /deletedUsers/{userId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+    
+    // Coleção de presença (online/offline)
+    match /presence/{userId} {
+      allow read, create, update: if isAuthenticated() && isOwner(userId);
+      allow read: if isAdmin();
+      allow delete: if false;
+    }
+    
+    // Coleção de posts (rede social) - VERSÃO SIMPLIFICADA PARA TESTE
+    match /posts/{postId} {
+      // Qualquer usuário autenticado pode ler
+      allow read: if isAuthenticated();
+      
+      // Usuário autenticado pode criar posts (validação mínima)
+      allow create: if isAuthenticated();
+      
+      // Apenas o autor pode atualizar/deletar seu próprio post
+      allow update: if isAuthenticated() && 
+                      resource.data.authorId == request.auth.uid;
+      
+      allow delete: if isAuthenticated() && 
+                      resource.data.authorId == request.auth.uid;
+    }
+    
+    // Bloquear acesso a qualquer outra coleção
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
