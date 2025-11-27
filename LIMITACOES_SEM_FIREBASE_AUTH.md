@@ -149,3 +149,4 @@ db.collection('users').doc('email-de-outra-pessoa').update({
 **Tempo estimado para migração:** 2-3 horas
 **Benefício:** Segurança profissional
 
+

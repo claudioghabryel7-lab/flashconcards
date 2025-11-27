@@ -60,3 +60,4 @@ Se após atualizar as regras algo parar de funcionar:
 2. Verifique se os usuários têm contas no Firebase Auth
 3. Verifique os logs de erro no console do navegador
 
+

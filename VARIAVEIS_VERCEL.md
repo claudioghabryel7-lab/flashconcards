@@ -49,3 +49,4 @@ VITE_GEMINI_API_KEY
 
 **Depois de adicionar todas as variáveis, faça um novo deploy!** 🚀
 
+

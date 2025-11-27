@@ -43,3 +43,4 @@ Recarregue a página (F5) - agora deve aparecer como Admin permanentemente!
 
 O código tenta atualizar automaticamente, mas o `onSnapshot` (sincronização em tempo real) pode estar lendo o valor antigo antes da atualização ser concluída. Atualizando diretamente no Firestore, garantimos que o valor correto está salvo.
 
+

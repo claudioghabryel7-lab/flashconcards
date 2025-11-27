@@ -91,3 +91,4 @@ Após seguir os passos:
 - Eles precisam criar novas contas no Firebase Authentication
 - OU você precisa migrar manualmente criando contas para eles
 
+
