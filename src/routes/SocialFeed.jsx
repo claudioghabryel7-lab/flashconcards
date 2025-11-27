@@ -33,61 +33,69 @@ const SocialFeed = () => {
 
   // Carregar posts
   useEffect(() => {
-    if (!user) return () => {}
+    if (!user) {
+      setPosts([])
+      return () => {}
+    }
     
     const postsRef = collection(db, 'posts')
+    let unsubscribe = null
     
-    // Tentar com orderBy primeiro, se falhar, usar sem orderBy
-    const q = query(postsRef, orderBy('createdAt', 'desc'))
-    
-    const unsub = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs.map((docSnapshot) => ({
-          id: docSnapshot.id,
-          ...docSnapshot.data(),
-        }))
-        // Ordenar por data manualmente se necessário
-        data.sort((a, b) => {
-          const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0
-          const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0
-          return bTime - aTime
-        })
-        setPosts(data)
-      },
-      (error) => {
-        // Se der erro de índice, tentar sem orderBy
-        if (error.code === 'failed-precondition') {
-          console.warn('Índice do Firestore não criado. Usando query sem orderBy.')
-          const qSimple = query(postsRef)
-          onSnapshot(
-            qSimple,
-            (snapshot) => {
-              const data = snapshot.docs.map((docSnapshot) => ({
-                id: docSnapshot.id,
-                ...docSnapshot.data(),
-              }))
-              // Ordenar manualmente por data
-              data.sort((a, b) => {
-                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0
-                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0
-                return bTime - aTime
-              })
-              setPosts(data)
-            },
-            (err) => {
-              console.error('Erro ao carregar posts:', err)
-              setError('Erro ao carregar posts. Verifique as regras do Firestore.')
+    // Função para tentar carregar posts
+    const tryLoadPosts = (useOrderBy = true) => {
+      try {
+        const q = useOrderBy 
+          ? query(postsRef, orderBy('createdAt', 'desc'))
+          : query(postsRef)
+        
+        unsubscribe = onSnapshot(
+          q,
+          (snapshot) => {
+            const data = snapshot.docs.map((docSnapshot) => ({
+              id: docSnapshot.id,
+              ...docSnapshot.data(),
+            }))
+            // Ordenar por data manualmente
+            data.sort((a, b) => {
+              const aTime = a.createdAt?.toMillis?.() || (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0) || 0
+              const bTime = b.createdAt?.toMillis?.() || (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0) || 0
+              return bTime - aTime
+            })
+            setPosts(data)
+            setError('') // Limpar erro se conseguir carregar
+          },
+          (error) => {
+            console.error('Erro ao carregar posts:', error)
+            
+            // Se der erro de índice e ainda não tentamos sem orderBy, tentar novamente
+            if (error.code === 'failed-precondition' && useOrderBy) {
+              console.warn('Índice do Firestore não criado. Usando query sem orderBy.')
+              tryLoadPosts(false)
+              return
             }
-          )
-        } else {
-          console.error('Erro ao carregar posts:', error)
-          setError(`Erro ao carregar posts: ${error.message || 'Erro desconhecido'}`)
-        }
+            
+            // Se for erro de permissão, dar mensagem específica
+            if (error.code === 'permission-denied' || error.message?.includes('permission') || error.message?.includes('Missing or insufficient')) {
+              setError('Erro de permissão. Verifique se você está autenticado e se as regras do Firestore foram atualizadas. Atualize as regras no Firebase Console.')
+            } else {
+              setError(`Erro ao carregar posts: ${error.message || 'Erro desconhecido'}`)
+            }
+          }
+        )
+      } catch (err) {
+        console.error('Erro ao criar query:', err)
+        setError('Erro ao carregar posts. Tente recarregar a página.')
       }
-    )
+    }
     
-    return () => unsub()
+    // Tentar carregar com orderBy primeiro
+    tryLoadPosts(true)
+    
+    return () => {
+      if (unsubscribe) {
+        unsubscribe()
+      }
+    }
   }, [user])
 
   // Criar novo post
