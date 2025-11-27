@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react'
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  Timestamp,
   where,
 } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -38,6 +41,55 @@ const AIChat = () => {
   const [userProgress, setUserProgress] = useState(null)
   const [lastRequestTime, setLastRequestTime] = useState(0)
   const MIN_REQUEST_INTERVAL = 2000 // Mínimo de 2 segundos entre requisições
+
+  // Limpar mensagens antigas (mais de 1 hora) automaticamente
+  useEffect(() => {
+    if (!user) return () => {}
+    
+    const cleanOldMessages = async () => {
+      try {
+        const chatRef = collection(db, 'chats', user.uid, 'messages')
+        const oneHourAgo = Date.now() - 60 * 60 * 1000 // 1 hora atrás em milissegundos
+        
+        // Buscar todas as mensagens (sem filtro para evitar necessidade de índice)
+        const q = query(chatRef, orderBy('createdAt', 'asc'))
+        const snapshot = await getDocs(q)
+        
+        if (snapshot.empty) return
+        
+        // Filtrar mensagens com mais de 1 hora e deletar
+        const messagesToDelete = snapshot.docs.filter((docSnapshot) => {
+          const data = docSnapshot.data()
+          const createdAt = data.createdAt
+          if (!createdAt) return false
+          
+          // Converter Timestamp do Firestore para milissegundos
+          const msgTime = createdAt.toMillis ? createdAt.toMillis() : (createdAt.seconds * 1000)
+          return msgTime < oneHourAgo
+        })
+        
+        if (messagesToDelete.length === 0) return
+        
+        // Deletar mensagens antigas
+        const deletePromises = messagesToDelete.map((docSnapshot) => 
+          deleteDoc(doc(chatRef, docSnapshot.id))
+        )
+        await Promise.all(deletePromises)
+        
+        console.log(`🧹 Limpeza automática: ${messagesToDelete.length} mensagens antigas removidas`)
+      } catch (err) {
+        console.error('Erro ao limpar mensagens antigas:', err)
+      }
+    }
+    
+    // Limpar imediatamente ao carregar
+    cleanOldMessages()
+    
+    // Limpar a cada 30 minutos (verifica e remove mensagens com mais de 1h)
+    const cleanupInterval = setInterval(cleanOldMessages, 30 * 60 * 1000)
+    
+    return () => clearInterval(cleanupInterval)
+  }, [user])
 
   useEffect(() => {
     if (!user) return () => {}
@@ -234,15 +286,23 @@ ${progressInfo}
 
 Responda CURTO e OBJETIVO: ${userMessage}`
 
-      // Adicionar histórico recente se houver
-      const recentMessages = messages.slice(-4)
+      // Adicionar histórico recente se houver (limitado a 3 mensagens para economizar tokens)
+      // Filtrar apenas mensagens das últimas 2 horas para evitar contexto muito antigo
+      const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000
+      const recentMessages = messages
+        .filter((msg) => {
+          const msgTime = msg.createdAt?.toMillis?.() || msg.createdAt?.seconds * 1000 || 0
+          return msgTime > twoHoursAgo
+        })
+        .slice(-3) // Apenas 3 mensagens mais recentes (reduz tokens)
+      
       let fullPrompt = mentorPrompt
       
       if (recentMessages.length > 0) {
         const history = recentMessages
           .map((msg) => `${msg.sender === 'user' ? 'Aluno' : 'Flash Mentor'}: ${msg.text}`)
           .join('\n\n')
-        fullPrompt = `${mentorPrompt}\n\nHISTÓRICO DA CONVERSA:\n${history}`
+        fullPrompt = `${mentorPrompt}\n\nHISTÓRICO RECENTE (últimas 3 mensagens):\n${history}`
       }
 
       // Tentar gerar resposta com retry em caso de quota (backoff exponencial)

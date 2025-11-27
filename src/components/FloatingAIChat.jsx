@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react'
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  Timestamp,
   where,
 } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -189,6 +192,55 @@ const FloatingAIChat = () => {
 
     setStudyStats(stats)
   }, [allCards, cardProgress, progressData, user])
+
+  // Limpar mensagens antigas (mais de 1 hora) automaticamente
+  useEffect(() => {
+    if (!user) return () => {}
+    
+    const cleanOldMessages = async () => {
+      try {
+        const chatRef = collection(db, 'chats', user.uid, 'messages')
+        const oneHourAgo = Date.now() - 60 * 60 * 1000 // 1 hora atrás em milissegundos
+        
+        // Buscar todas as mensagens (sem filtro para evitar necessidade de índice)
+        const q = query(chatRef, orderBy('createdAt', 'asc'))
+        const snapshot = await getDocs(q)
+        
+        if (snapshot.empty) return
+        
+        // Filtrar mensagens com mais de 1 hora e deletar
+        const messagesToDelete = snapshot.docs.filter((docSnapshot) => {
+          const data = docSnapshot.data()
+          const createdAt = data.createdAt
+          if (!createdAt) return false
+          
+          // Converter Timestamp do Firestore para milissegundos
+          const msgTime = createdAt.toMillis ? createdAt.toMillis() : (createdAt.seconds * 1000)
+          return msgTime < oneHourAgo
+        })
+        
+        if (messagesToDelete.length === 0) return
+        
+        // Deletar mensagens antigas
+        const deletePromises = messagesToDelete.map((docSnapshot) => 
+          deleteDoc(doc(chatRef, docSnapshot.id))
+        )
+        await Promise.all(deletePromises)
+        
+        console.log(`🧹 Limpeza automática: ${messagesToDelete.length} mensagens antigas removidas`)
+      } catch (err) {
+        console.error('Erro ao limpar mensagens antigas:', err)
+      }
+    }
+    
+    // Limpar imediatamente ao carregar
+    cleanOldMessages()
+    
+    // Limpar a cada 30 minutos (verifica e remove mensagens com mais de 1h)
+    const cleanupInterval = setInterval(cleanOldMessages, 30 * 60 * 1000)
+    
+    return () => clearInterval(cleanupInterval)
+  }, [user])
 
   // Carregar mensagens do chat
   useEffect(() => {
