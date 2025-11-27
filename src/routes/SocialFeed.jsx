@@ -17,7 +17,7 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/solid'
 import { HeartIcon as HeartOutlineIcon } from '@heroicons/react/24/outline'
-import { db } from '../firebase/config'
+import { auth, db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 
@@ -102,11 +102,15 @@ const SocialFeed = () => {
   const createPost = async () => {
     if (!newPost.trim() || !user || sending) return
     
+    // Debug: verificar autenticação
+    console.log('Tentando criar post. User:', user?.uid, 'Email:', user?.email)
+    console.log('Auth current user:', auth.currentUser?.uid)
+    
     setSending(true)
     setError('')
     try {
       const postsRef = collection(db, 'posts')
-      await addDoc(postsRef, {
+      const postData = {
         text: newPost.trim(),
         authorId: user.uid,
         authorName: profile?.displayName || user.email || 'Usuário',
@@ -114,16 +118,23 @@ const SocialFeed = () => {
         likes: [],
         comments: [],
         createdAt: serverTimestamp(),
-      })
+      }
+      console.log('Dados do post a serem enviados:', postData)
+      
+      await addDoc(postsRef, postData)
+      console.log('Post criado com sucesso!')
       setNewPost('')
+      setError('') // Limpar qualquer erro anterior
     } catch (err) {
       console.error('Erro ao criar post:', err)
+      console.error('Código do erro:', err.code)
+      console.error('Mensagem completa:', err.message)
       const errorMessage = err.message || String(err) || 'Erro desconhecido'
       setError(`Erro ao publicar: ${errorMessage}. Verifique as regras do Firestore.`)
       
       // Se for erro de permissão, dar dica específica
-      if (errorMessage.includes('permission') || errorMessage.includes('Permission')) {
-        setError('Erro de permissão. Verifique se as regras do Firestore permitem criar posts. Atualize as regras no Firebase Console.')
+      if (errorMessage.includes('permission') || errorMessage.includes('Permission') || err.code === 'permission-denied') {
+        setError('Erro de permissão. Verifique se você está autenticado e se as regras do Firestore foram atualizadas. Recarregue a página após atualizar as regras.')
       }
     } finally {
       setSending(false)
