@@ -46,6 +46,23 @@ export const AuthProvider = ({ children }) => {
             if (snap.exists()) {
               const data = { uid: firebaseUser.uid, email: firebaseUser.email, ...snap.data() }
               
+              // Verificar se o usuário foi deletado
+              if (data.deleted === true) {
+                // Usuário foi removido pelo admin - fazer logout imediato
+                console.log('Usuário foi removido do sistema. Fazendo logout...')
+                try {
+                  await signOut(auth)
+                  setUser(null)
+                  setProfile(null)
+                  return
+                } catch (err) {
+                  console.error('Erro ao fazer logout:', err)
+                  setUser(null)
+                  setProfile(null)
+                  return
+                }
+              }
+              
               // Se for o email do admin mas não tiver role admin, atualizar automaticamente
               if (isAdminEmail && data.role !== 'admin') {
                 try {
@@ -69,7 +86,27 @@ export const AuthProvider = ({ children }) => {
               
               setProfile(data)
             } else {
-              // Criar perfil se não existir
+              // Verificar se o usuário foi deletado antes de recriar
+              const deletedUserRef = doc(db, 'deletedUsers', firebaseUser.uid)
+              const deletedSnap = await getDoc(deletedUserRef)
+              
+              if (deletedSnap.exists()) {
+                // Usuário foi deletado pelo admin - fazer logout e não recriar
+                console.log('Usuário foi removido do sistema. Acesso negado.')
+                try {
+                  await signOut(auth)
+                  setUser(null)
+                  setProfile(null)
+                  return
+                } catch (err) {
+                  console.error('Erro ao fazer logout:', err)
+                  setUser(null)
+                  setProfile(null)
+                  return
+                }
+              }
+              
+              // Criar perfil se não existir e não foi deletado
               const newProfile = {
                 uid: firebaseUser.uid,
                 email: firebaseUser.email,
@@ -123,9 +160,27 @@ export const AuthProvider = ({ children }) => {
     }
     
     const userRef = doc(db, 'users', user.uid)
-    const unsub = onSnapshot(userRef, (snap) => {
+    const unsub = onSnapshot(userRef, async (snap) => {
       if (snap.exists()) {
         let data = { uid: user.uid, email: user.email, ...snap.data() }
+        
+        // Verificar se o usuário foi deletado
+        if (data.deleted === true) {
+          // Usuário foi removido pelo admin - fazer logout imediato
+          console.log('Usuário foi removido do sistema. Fazendo logout...')
+          try {
+            await signOut(auth)
+            setUser(null)
+            setProfile(null)
+            return
+          } catch (err) {
+            console.error('Erro ao fazer logout:', err)
+            // Mesmo com erro, limpar estado local
+            setUser(null)
+            setProfile(null)
+            return
+          }
+        }
         
         // Se for o email do admin, garantir que role seja admin
         const isAdminEmail = user.email?.toLowerCase() === 'claudioghabryel.cg@gmail.com'
@@ -148,7 +203,28 @@ export const AuthProvider = ({ children }) => {
         
         setProfile(data)
       } else {
-        setProfile(null)
+        // Perfil não existe - verificar se foi deletado antes de fazer logout
+        const deletedUserRef = doc(db, 'deletedUsers', user.uid)
+        const deletedSnap = await getDoc(deletedUserRef)
+        
+        if (deletedSnap.exists()) {
+          // Usuário foi deletado pelo admin - fazer logout
+          console.log('Usuário foi removido do sistema. Fazendo logout...')
+          try {
+            await signOut(auth)
+            setUser(null)
+            setProfile(null)
+          } catch (err) {
+            console.error('Erro ao fazer logout:', err)
+            setUser(null)
+            setProfile(null)
+          }
+        } else {
+          // Perfil não existe mas não foi deletado - pode ser um usuário novo
+          // Não fazer logout, apenas limpar profile (o onAuthStateChanged vai recriar se necessário)
+          console.log('Perfil não encontrado, mas usuário não foi deletado. Aguardando recriação...')
+          setProfile(null)
+        }
       }
     }, (error) => {
       console.error('Erro no onSnapshot do perfil:', error)
@@ -162,14 +238,28 @@ export const AuthProvider = ({ children }) => {
     try {
       const emailLower = email.toLowerCase().trim()
       const userCredential = await signInWithEmailAndPassword(auth, emailLower, password)
+      
+      // Verificar se o usuário foi deletado ANTES de permitir login
+      const deletedUserRef = doc(db, 'deletedUsers', userCredential.user.uid)
+      const deletedSnap = await getDoc(deletedUserRef)
+      
+      if (deletedSnap.exists()) {
+        // Usuário foi deletado - fazer logout imediato
+        console.log('Usuário foi removido do sistema. Acesso negado.')
+        await signOut(auth)
+        throw new Error('Este usuário foi removido do sistema. Entre em contato com o administrador.')
+      }
+      
       // O estado será atualizado automaticamente pelo onAuthStateChanged
       return userCredential.user
     } catch (err) {
       console.error('Erro no login:', err)
-      if (err.code === 'auth/user-not-found') {
-        throw new Error('Usuário não encontrado.')
+      if (err.message?.includes('removido do sistema')) {
+        throw err // Re-throw a mensagem de usuário deletado
+      } else if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        throw new Error('Aluno não encontrado no sistema.')
       } else if (err.code === 'auth/wrong-password') {
-        throw new Error('Senha incorreta.')
+        throw new Error('Aluno não encontrado no sistema.')
       } else if (err.code === 'auth/invalid-email') {
         throw new Error('Email inválido.')
       } else if (err.code === 'auth/api-key-not-valid' || err.message?.includes('api-key')) {
@@ -177,7 +267,7 @@ export const AuthProvider = ({ children }) => {
       } else if (err.code === 'auth/network-request-failed') {
         throw new Error('Erro de conexão. Verifique sua internet.')
       } else {
-        throw new Error(err.message || 'Erro ao fazer login.')
+        throw new Error('Aluno não encontrado no sistema.')
       }
     }
   }

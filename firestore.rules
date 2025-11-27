@@ -96,6 +96,16 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
     
+    // Coleção de usuários deletados
+    match /deletedUsers/{userId} {
+      // Apenas admin pode ler e criar
+      // Usuários não podem ler seus próprios documentos (para não saberem que foram deletados)
+      allow read, create: if isAdmin();
+      
+      // Ninguém pode atualizar ou deletar (registro permanente)
+      allow update, delete: if false;
+    }
+    
     // Bloquear acesso a qualquer outra coleção
     match /{document=**} {
       allow read, write: if false;
