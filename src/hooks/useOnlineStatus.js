@@ -12,7 +12,7 @@ export const useOnlineStatus = () => {
 
     const userPresenceRef = doc(db, 'presence', user.uid)
 
-    // Marcar como online
+    // Marcar como online imediatamente
     const setOnline = async () => {
       try {
         await setDoc(userPresenceRef, {
@@ -23,13 +23,16 @@ export const useOnlineStatus = () => {
           lastSeen: serverTimestamp(),
           updatedAt: serverTimestamp(),
         }, { merge: true })
+        console.log('Status online atualizado para:', user.uid)
       } catch (err) {
         console.error('Erro ao atualizar status online:', err)
       }
     }
 
-    // Atualizar heartbeat a cada 30 segundos
+    // Atualizar imediatamente
     setOnline()
+    
+    // Atualizar heartbeat a cada 15 segundos (mais frequente para melhor sincronização)
     const heartbeatInterval = setInterval(() => {
       setDoc(userPresenceRef, {
         status: 'online',
@@ -38,7 +41,7 @@ export const useOnlineStatus = () => {
       }, { merge: true }).catch(err => {
         console.error('Erro no heartbeat:', err)
       })
-    }, 30000) // 30 segundos
+    }, 15000) // 15 segundos
 
     // Cleanup - marcar como offline ao desmontar
     return () => {
