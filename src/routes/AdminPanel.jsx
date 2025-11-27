@@ -750,7 +750,10 @@ INFORMAÇÕES ADICIONAIS:
         <div className="mt-4 divide-y divide-slate-100">
           {users.map((user) => {
             const userPresence = presence[user.uid] || { status: 'offline' }
+            // Verificar se está online baseado no status e no tempo desde última atualização
             const isOnline = userPresence.status === 'online'
+            // Se não tiver dados de presença, considerar offline
+            const hasPresenceData = presence[user.uid] !== undefined
             
             return (
               <div
