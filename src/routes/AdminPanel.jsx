@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   addDoc,
   collection,
@@ -50,6 +50,8 @@ const AdminPanel = () => {
   const [editalPrompt, setEditalPrompt] = useState('')
   const [savingPrompt, setSavingPrompt] = useState(false)
   const [promptStatus, setPromptStatus] = useState(null)
+  const [expandedCardMaterias, setExpandedCardMaterias] = useState({})
+  const [expandedCardModulos, setExpandedCardModulos] = useState({})
 
   useEffect(() => {
     const cardsRef = collection(db, 'flashcards')
@@ -97,6 +99,37 @@ const AdminPanel = () => {
       .split(',')
       .map((tag) => tag.trim())
       .filter(Boolean)
+  }
+
+  const cardsOrganized = useMemo(() => {
+    const grouped = {}
+    cards.forEach((card) => {
+      const materia = card.materia || 'Sem matéria'
+      const modulo = card.modulo || 'Sem módulo'
+      if (!grouped[materia]) {
+        grouped[materia] = {}
+      }
+      if (!grouped[materia][modulo]) {
+        grouped[materia][modulo] = []
+      }
+      grouped[materia][modulo].push(card)
+    })
+    return grouped
+  }, [cards])
+
+  const toggleCardMateria = (materia) => {
+    setExpandedCardMaterias((prev) => ({
+      ...prev,
+      [materia]: !prev[materia],
+    }))
+  }
+
+  const toggleCardModulo = (materia, modulo) => {
+    const key = `${materia}::${modulo}`
+    setExpandedCardModulos((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }))
   }
 
   // Adicionar módulo a uma matéria
@@ -604,7 +637,7 @@ INFORMAÇÕES ADICIONAIS:
         <div className="mt-4 divide-y divide-slate-100">
           {users.map((user) => (
             <div
-              key={user.email}
+              key={user.uid || user.email}
               className="flex flex-col gap-2 py-4 md:flex-row md:items-center md:justify-between"
             >
               <div>
@@ -651,43 +684,107 @@ INFORMAÇÕES ADICIONAIS:
 
       {/* Lista de cards */}
       <div className="rounded-2xl bg-white p-6 shadow-sm">
-        <p className="text-sm font-semibold text-alego-600">
-          {cards.length} cards cadastrados
-        </p>
-        <div className="mt-4 divide-y divide-slate-100">
-          {cards.map((card) => (
-            <div
-              key={card.id}
-              className="flex flex-col gap-2 py-4 md:flex-row md:items-center md:justify-between"
-            >
-              <div>
-                <p className="font-semibold text-alego-700">{card.pergunta}</p>
-                <div className="mt-1 flex flex-wrap gap-2 text-xs">
-                  {card.materia && (
-                    <span className="rounded-full bg-alego-100 px-2 py-1 font-semibold text-alego-700">
-                      {card.materia}
-                    </span>
-                  )}
-                  {card.modulo && (
-                    <span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-600">
-                      {card.modulo}
-                    </span>
-                  )}
-                  {card.categoria && (
-                    <span className="text-slate-500">{card.categoria}</span>
-                  )}
-                </div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <p className="text-sm font-semibold text-alego-600">
+            {cards.length} cards cadastrados
+          </p>
+          <p className="text-xs text-slate-500">
+            Expanda a matéria e o módulo para visualizar e gerenciar os cards correspondentes.
+          </p>
+        </div>
+        <div className="mt-4 space-y-3">
+          {Object.keys(cardsOrganized).length === 0 && (
+            <p className="text-sm text-slate-500">Nenhum card cadastrado ainda.</p>
+          )}
+          {Object.entries(cardsOrganized).map(([materia, modulos]) => {
+            const totalCards = Object.values(modulos).reduce((acc, list) => acc + list.length, 0)
+            const isMateriaOpen = expandedCardMaterias[materia]
+            return (
+              <div key={materia} className="rounded-2xl border border-slate-100 bg-slate-50/40 p-3">
+                <button
+                  type="button"
+                  onClick={() => toggleCardMateria(materia)}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-left"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-alego-700">{materia}</p>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                      {totalCards} {totalCards === 1 ? 'card' : 'cards'}
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold text-alego-500">
+                    {isMateriaOpen ? 'Ocultar' : 'Ver módulos'}
+                  </span>
+                </button>
+
+                {isMateriaOpen && (
+                  <div className="mt-3 space-y-2">
+                    {Object.entries(modulos).map(([modulo, cardsList]) => {
+                      const moduloKey = `${materia}::${modulo}`
+                      const isModuloOpen = expandedCardModulos[moduloKey]
+                      return (
+                        <div key={modulo} className="rounded-xl border border-slate-100 bg-white">
+                          <button
+                            type="button"
+                            onClick={() => toggleCardModulo(materia, modulo)}
+                            className="flex w-full items-center justify-between px-4 py-3 text-left"
+                          >
+                            <div>
+                              <p className="text-sm font-semibold text-slate-700">{modulo}</p>
+                              <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                                {cardsList.length} {cardsList.length === 1 ? 'card' : 'cards'}
+                              </p>
+                            </div>
+                            <span className="text-xs font-semibold text-alego-500">
+                              {isModuloOpen ? 'Ocultar' : 'Ver cards'}
+                            </span>
+                          </button>
+
+                          {isModuloOpen && (
+                            <div className="border-t border-slate-100 p-3">
+                              <div className="grid gap-3 md:grid-cols-2">
+                                {cardsList.map((card) => (
+                                  <div
+                                    key={card.id}
+                                    className="rounded-xl border border-slate-100 bg-slate-50 p-3"
+                                  >
+                                    <p className="text-sm font-semibold text-alego-700">
+                                      {card.pergunta}
+                                    </p>
+                                    <p className="mt-2 text-xs text-slate-500">
+                                      {card.resposta}
+                                    </p>
+                                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
+                                      {card.tags?.map((tag) => (
+                                        <span
+                                          key={tag}
+                                          className="rounded-full bg-alego-100 px-2 py-0.5 text-alego-700"
+                                        >
+                                          {tag}
+                                        </span>
+                                      ))}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeCard(card.id)}
+                                      className="mt-3 inline-flex items-center gap-1 rounded-full border border-rose-500 px-3 py-1 text-xs font-semibold text-rose-500"
+                                    >
+                                      <TrashIcon className="h-4 w-4" />
+                                      Excluir
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => removeCard(card.id)}
-                className="flex items-center gap-1 rounded-full border border-rose-500 px-4 py-2 text-sm font-semibold text-rose-500"
-              >
-                <TrashIcon className="h-4 w-4" />
-                Excluir
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </section>
