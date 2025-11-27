@@ -18,11 +18,21 @@ if (!firebaseConfig.apiKey || firebaseConfig.apiKey === 'undefined') {
   console.error('Crie um arquivo .env na raiz do projeto com as variáveis do Firebase')
 }
 
+// Log da configuração para debug
+console.log('🔥 Firebase Config:', {
+  projectId: firebaseConfig.projectId,
+  authDomain: firebaseConfig.authDomain,
+  hasApiKey: !!firebaseConfig.apiKey
+})
+
 const app = initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 export const storage = getStorage(app)
+
+// Verificar se o Firestore está configurado corretamente
+console.log('🔥 Firestore Database:', db.app.options.projectId)
 
 export default app
 

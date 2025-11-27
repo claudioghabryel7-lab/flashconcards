@@ -121,6 +121,14 @@ const SocialFeed = () => {
     setSending(true)
     setError('')
     try {
+      // Verificar qual projeto está sendo usado
+      console.log('🔥 Projeto Firestore:', db.app.options.projectId)
+      console.log('🔥 Usuário autenticado:', {
+        uid: currentUser.uid,
+        email: currentUser.email,
+        token: await currentUser.getIdToken().then(t => t.substring(0, 20) + '...')
+      })
+      
       const postsRef = collection(db, 'posts')
       const postData = {
         text: newPost.trim(),
@@ -132,11 +140,8 @@ const SocialFeed = () => {
         createdAt: serverTimestamp(),
       }
       
-      console.log('Criando post com dados:', {
-        authorId: postData.authorId,
-        textLength: postData.text.length,
-        hasAuth: !!currentUser
-      })
+      console.log('🔥 Tentando criar post no projeto:', db.app.options.projectId)
+      console.log('🔥 Dados do post:', postData)
       
       await addDoc(postsRef, postData)
       console.log('Post criado com sucesso!')
