@@ -41,6 +41,8 @@ const FloatingAIChat = () => {
   const [availableModel, setAvailableModel] = useState(null)
   const [modelError, setModelError] = useState(null)
   const [initialMessageSent, setInitialMessageSent] = useState(false)
+  const [lastRequestTime, setLastRequestTime] = useState(0)
+  const MIN_REQUEST_INTERVAL = 2000 // Mínimo de 2 segundos entre requisições
   
   // Dados de progresso para análise
   const [progressData, setProgressData] = useState([])
@@ -444,9 +446,11 @@ MATÉRIAS: Português, Área de Atuação (PL), Raciocínio Lógico, Constitucio
 
 Responda CURTO e OBJETIVO: ${userMessage}`
 
+      // Tentar gerar resposta com retry em caso de quota (backoff exponencial)
       let result = null
       let retries = 0
-      const maxRetries = 2
+      const maxRetries = 3
+      const baseDelay = 2000 // 2 segundos base
 
       while (retries <= maxRetries) {
         try {
@@ -459,22 +463,35 @@ Responda CURTO e OBJETIVO: ${userMessage}`
               topK: 40,
             },
           })
-          break
+          break // Sucesso
         } catch (apiErr) {
-          if (
-            (apiErr.message?.includes('429') || apiErr.message?.includes('quota')) &&
-            retries < maxRetries
-          ) {
+          const errorMessage = apiErr.message || String(apiErr) || ''
+          const isQuotaError = 
+            errorMessage.includes('429') || 
+            errorMessage.includes('quota') ||
+            errorMessage.includes('Too Many Requests') ||
+            errorMessage.includes('RESOURCE_EXHAUSTED') ||
+            errorMessage.includes('rate limit') ||
+            apiErr.status === 429 ||
+            apiErr.code === 429
+          
+          // Se for erro de quota e ainda temos tentativas, aguardar e tentar novamente
+          if (isQuotaError && retries < maxRetries) {
             retries++
-            await new Promise(resolve => setTimeout(resolve, 3000 * retries))
+            // Backoff exponencial: 2s, 4s, 8s
+            const waitTime = baseDelay * Math.pow(2, retries - 1)
+            console.warn(`⚠️ Quota excedida (tentativa ${retries}/${maxRetries}). Aguardando ${waitTime/1000}s...`)
+            await new Promise(resolve => setTimeout(resolve, waitTime))
             continue
           }
+          
+          // Se não for erro de quota ou já tentou demais, lança o erro
           throw apiErr
         }
       }
 
       if (!result) {
-        throw new Error('Não foi possível gerar resposta.')
+        throw new Error('Quota da API excedida. Aguarde alguns minutos antes de tentar novamente.')
       }
 
       const response = result.response
@@ -568,9 +585,19 @@ Responda CURTO e OBJETIVO: ${userMessage}`
       
       let errorMessage = 'Desculpe, ocorreu um erro. Tente novamente em alguns instantes.'
       
-      if (err.message?.includes('429') || err.message?.includes('quota')) {
-        errorMessage = 'Quota da API excedida. Aguarde alguns minutos e tente novamente.'
-      } else if (err.message?.includes('API key')) {
+      const errorMsg = err.message || String(err) || ''
+      const isQuotaError = 
+        errorMsg.includes('429') || 
+        errorMsg.includes('quota') ||
+        errorMsg.includes('Too Many Requests') ||
+        errorMsg.includes('RESOURCE_EXHAUSTED') ||
+        errorMsg.includes('rate limit') ||
+        err.status === 429 ||
+        err.code === 429
+      
+      if (isQuotaError) {
+        errorMessage = '⏳ A quota da API foi excedida. Por favor, aguarde 2-3 minutos antes de tentar novamente. Isso acontece quando há muitas requisições em pouco tempo. O sistema tentará automaticamente novamente em alguns instantes.'
+      } else if (errorMsg.includes('API key')) {
         errorMessage = 'Erro na configuração da API. Verifique a chave do Gemini.'
       }
       
@@ -587,8 +614,23 @@ Responda CURTO e OBJETIVO: ${userMessage}`
     event?.preventDefault()
     if (!input.trim() || !user || sending) return
     
+    // Rate limiting: evitar muitas requisições seguidas
+    const now = Date.now()
+    const timeSinceLastRequest = now - lastRequestTime
+    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+      const waitTime = Math.ceil((MIN_REQUEST_INTERVAL - timeSinceLastRequest) / 1000)
+      const chatRef = collection(db, 'chats', user.uid, 'messages')
+      await addDoc(chatRef, {
+        text: `⏳ Aguarde ${waitTime} segundo(s) antes de enviar outra mensagem para evitar exceder a quota da API.`,
+        sender: 'ai',
+        createdAt: serverTimestamp(),
+      })
+      return
+    }
+    
     const userMessage = input.trim()
     setSending(true)
+    setLastRequestTime(now)
     const chatRef = collection(db, 'chats', user.uid, 'messages')
     
     try {
