@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import dayjs from 'dayjs'
 import FlashcardList from '../components/FlashcardList'
@@ -33,6 +34,7 @@ const STAGES = [
 const FlashcardView = () => {
   const { user, favorites, updateFavorites } = useAuth()
   const { darkMode } = useDarkMode()
+  const [searchParams] = useSearchParams()
   const [cards, setCards] = useState([])
   const [cardProgress, setCardProgress] = useState({})
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -128,6 +130,19 @@ const FlashcardView = () => {
     })
     return organized
   }, [cards])
+
+  // Selecionar matéria e módulo baseado em query params
+  useEffect(() => {
+    const materiaParam = searchParams.get('materia')
+    const moduloParam = searchParams.get('modulo')
+    
+    if (materiaParam && moduloParam && organizedCards[materiaParam]?.[moduloParam]) {
+      setSelectedMateria(materiaParam)
+      setSelectedModulo(moduloParam)
+      setStudyMode('module')
+      setCurrentIndex(0)
+    }
+  }, [searchParams, organizedCards])
 
   // Cards filtrados baseado na seleção
   const filteredCards = useMemo(() => {
