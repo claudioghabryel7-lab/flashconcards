@@ -27,6 +27,7 @@ const SocialFeed = () => {
   const [posts, setPosts] = useState([])
   const [newPost, setNewPost] = useState('')
   const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
   const [commentInputs, setCommentInputs] = useState({}) // { postId: commentText }
   const [expandedComments, setExpandedComments] = useState({}) // { postId: true/false }
 
@@ -53,13 +54,14 @@ const SocialFeed = () => {
     if (!newPost.trim() || !user || sending) return
     
     setSending(true)
+    setError('')
     try {
       const postsRef = collection(db, 'posts')
       await addDoc(postsRef, {
         text: newPost.trim(),
         authorId: user.uid,
-        authorName: profile?.displayName || user.email,
-        authorEmail: user.email,
+        authorName: profile?.displayName || user.email || 'Usuário',
+        authorEmail: user.email || '',
         likes: [],
         comments: [],
         createdAt: serverTimestamp(),
@@ -67,6 +69,13 @@ const SocialFeed = () => {
       setNewPost('')
     } catch (err) {
       console.error('Erro ao criar post:', err)
+      const errorMessage = err.message || String(err) || 'Erro desconhecido'
+      setError(`Erro ao publicar: ${errorMessage}. Verifique as regras do Firestore.`)
+      
+      // Se for erro de permissão, dar dica específica
+      if (errorMessage.includes('permission') || errorMessage.includes('Permission')) {
+        setError('Erro de permissão. Verifique se as regras do Firestore permitem criar posts. Atualize as regras no Firebase Console.')
+      }
     } finally {
       setSending(false)
     }
@@ -106,7 +115,7 @@ const SocialFeed = () => {
           id: Date.now().toString(),
           text: commentText.trim(),
           authorId: user.uid,
-          authorName: profile?.displayName || user.email,
+          authorName: profile?.displayName || user.email || 'Usuário',
           createdAt: serverTimestamp(),
         }]
       })
@@ -114,6 +123,7 @@ const SocialFeed = () => {
       setCommentInputs(prev => ({ ...prev, [postId]: '' }))
     } catch (err) {
       console.error('Erro ao comentar:', err)
+      setError(`Erro ao comentar: ${err.message || 'Erro desconhecido'}`)
     }
   }
 
