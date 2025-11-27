@@ -98,68 +98,31 @@ const SocialFeed = () => {
     }
   }, [user])
 
-  // Criar novo post
+  // Criar novo post - EXATAMENTE como no AdminPanel para criar flashcards
   const createPost = async () => {
     if (!newPost.trim() || !user || sending) return
     
-    // Verificar se o usuário está realmente autenticado
-    const currentUser = auth.currentUser
-    if (!currentUser) {
-      setError('Você precisa estar autenticado para criar posts. Faça login novamente.')
-      return
-    }
-    
-    // Forçar atualização do token de autenticação
-    try {
-      await currentUser.getIdToken(true) // true = força refresh
-    } catch (tokenErr) {
-      console.error('Erro ao atualizar token:', tokenErr)
-      setError('Erro de autenticação. Faça logout e login novamente.')
-      return
-    }
-    
     setSending(true)
     setError('')
+    
     try {
-      // Verificar qual projeto está sendo usado
-      console.log('🔥 Projeto Firestore:', db.app.options.projectId)
-      console.log('🔥 Usuário autenticado:', {
-        uid: currentUser.uid,
-        email: currentUser.email,
-        token: await currentUser.getIdToken().then(t => t.substring(0, 20) + '...')
-      })
-      
+      // EXATAMENTE como no AdminPanel - simples e direto
       const postsRef = collection(db, 'posts')
-      const postData = {
+      await addDoc(postsRef, {
         text: newPost.trim(),
-        authorId: currentUser.uid,
-        authorName: profile?.displayName || currentUser.email || 'Usuário',
-        authorEmail: currentUser.email || '',
+        authorId: user.uid,
+        authorName: profile?.displayName || user.email || 'Usuário',
+        authorEmail: user.email || '',
         likes: [],
         comments: [],
         createdAt: serverTimestamp(),
-      }
+      })
       
-      console.log('🔥 Tentando criar post no projeto:', db.app.options.projectId)
-      console.log('🔥 Dados do post:', postData)
-      console.log('🔥 Collection path:', postsRef.path)
-      
-      // Tentar criar o documento
-      const docRef = await addDoc(postsRef, postData)
-      console.log('✅ Post criado com sucesso! ID:', docRef.id)
       setNewPost('')
       setError('')
     } catch (err) {
       console.error('Erro ao criar post:', err)
-      console.error('Código do erro:', err.code)
-      console.error('Mensagem completa:', err.message)
-      console.error('Usuário atual:', currentUser?.uid, currentUser?.email)
-      
-      if (err.code === 'permission-denied') {
-        setError('Erro de permissão. As regras do Firestore precisam ser atualizadas no Firebase Console. Certifique-se de que: 1) As regras foram publicadas, 2) Você aguardou 30 segundos após publicar, 3) Recarregou a página completamente.')
-      } else {
-        setError(`Erro ao publicar: ${err.message || 'Erro desconhecido'}`)
-      }
+      setError(`Erro ao publicar: ${err.message || 'Erro desconhecido'}`)
     } finally {
       setSending(false)
     }
