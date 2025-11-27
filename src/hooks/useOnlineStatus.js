@@ -8,7 +8,7 @@ export const useOnlineStatus = () => {
   const { user } = useAuth()
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !user.uid) return
 
     const userPresenceRef = doc(db, 'presence', user.uid)
 
@@ -17,8 +17,8 @@ export const useOnlineStatus = () => {
       try {
         await setDoc(userPresenceRef, {
           uid: user.uid,
-          email: user.email,
-          displayName: user.displayName || user.email,
+          email: user.email || '',
+          displayName: user.displayName || user.email || 'Usuário',
           status: 'online',
           lastSeen: serverTimestamp(),
           updatedAt: serverTimestamp(),

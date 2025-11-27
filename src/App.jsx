@@ -10,7 +10,9 @@ import Dashboard from './routes/Dashboard'
 import FlashcardView from './routes/FlashcardView'
 import Login from './routes/Login'
 import PublicHome from './routes/PublicHome'
+import Ranking from './routes/Ranking'
 import SetupUser from './routes/SetupUser'
+import SocialFeed from './routes/SocialFeed'
 
 const ProtectedRoute = ({ children, adminOnly = false }) => {
   const { user, loading, isAdmin } = useAuth()
