@@ -96,21 +96,28 @@ const AdminPanel = () => {
 
     // Carregar status online/offline dos usuários
     const presenceRef = collection(db, 'presence')
-    const unsubPresence = onSnapshot(presenceRef, (snapshot) => {
-      const presenceData = {}
-      snapshot.docs.forEach((docSnapshot) => {
-        const data = docSnapshot.data()
-        const uid = docSnapshot.id || data.uid // Usar ID do documento (que é o UID) ou data.uid como fallback
-        if (uid) {
-          presenceData[uid] = {
-            status: data.status || 'offline',
-            lastSeen: data.lastSeen,
-            updatedAt: data.updatedAt,
+    const unsubPresence = onSnapshot(
+      presenceRef, 
+      (snapshot) => {
+        const presenceData = {}
+        snapshot.docs.forEach((docSnapshot) => {
+          const data = docSnapshot.data()
+          const uid = docSnapshot.id || data.uid // Usar ID do documento (que é o UID) ou data.uid como fallback
+          if (uid) {
+            presenceData[uid] = {
+              status: data.status || 'offline',
+              lastSeen: data.lastSeen,
+              updatedAt: data.updatedAt,
+            }
           }
-        }
-      })
-      setPresence(presenceData)
-    })
+        })
+        console.log('Presence data atualizado:', presenceData)
+        setPresence(presenceData)
+      },
+      (error) => {
+        console.error('Erro ao carregar presence:', error)
+      }
+    )
 
     return () => {
       unsubCards()
