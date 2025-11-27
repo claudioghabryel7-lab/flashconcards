@@ -118,19 +118,21 @@ service cloud.firestore {
       allow delete: if false;
     }
     
-    // Coleção de posts (rede social)
+    // Coleção de posts (rede social) - VERSÃO ULTRA SIMPLIFICADA
     match /posts/{postId} {
       // Qualquer usuário autenticado pode ler
       allow read: if request.auth != null;
       
-      // Qualquer usuário autenticado pode criar posts
-      allow create: if request.auth != null;
+      // Qualquer usuário autenticado pode criar posts (SEM VALIDAÇÕES EXTRAS)
+      allow create: if request.auth != null && request.auth.uid != null;
       
       // Apenas o autor pode atualizar/deletar seu próprio post
       allow update: if request.auth != null && 
+                      request.auth.uid != null &&
                       resource.data.authorId == request.auth.uid;
       
       allow delete: if request.auth != null && 
+                      request.auth.uid != null &&
                       resource.data.authorId == request.auth.uid;
     }
     
