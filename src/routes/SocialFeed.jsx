@@ -4,13 +4,11 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDocs,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   updateDoc,
-  where,
 } from 'firebase/firestore'
 import {
   HeartIcon,

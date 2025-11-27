@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, doc, onSnapshot, query, orderBy, limit } from 'firebase/firestore'
+import { collection, doc, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { TrophyIcon, FireIcon, ClockIcon, ChartBarIcon } from '@heroicons/react/24/solid'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
