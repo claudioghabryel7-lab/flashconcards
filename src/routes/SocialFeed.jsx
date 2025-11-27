@@ -220,11 +220,19 @@ const SocialFeed = () => {
           color: darkMode ? '#f1f5f9' : '#1e293b'
         }}
       >
+        {error && (
+          <div className="mb-4 rounded-xl bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
+            {error}
+          </div>
+        )}
         <div className="flex gap-3">
           <div className="flex-1">
             <textarea
               value={newPost}
-              onChange={(e) => setNewPost(e.target.value)}
+              onChange={(e) => {
+                setNewPost(e.target.value)
+                setError('') // Limpar erro ao digitar
+              }}
               placeholder="O que você está estudando hoje? Compartilhe sua motivação!"
               rows={3}
               className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none resize-none"
@@ -234,7 +242,7 @@ const SocialFeed = () => {
             type="button"
             onClick={createPost}
             disabled={!newPost.trim() || sending}
-            className="flex items-center gap-2 rounded-xl bg-alego-600 px-6 py-3 text-sm font-semibold text-white disabled:opacity-50 self-end"
+            className="flex items-center gap-2 rounded-xl bg-alego-600 px-6 py-3 text-sm font-semibold text-white disabled:opacity-50 self-end hover:bg-alego-700 transition"
           >
             <PaperAirplaneIcon className="h-5 w-5" />
             {sending ? 'Publicando...' : 'Publicar'}
