@@ -4,6 +4,7 @@ import FloatingAIChat from './components/FloatingAIChat'
 import SupportButton from './components/SupportButton'
 import { useAuth } from './hooks/useAuth'
 import { useDarkMode } from './hooks/useDarkMode.jsx'
+import { useOnlineStatus } from './hooks/useOnlineStatus'
 import AdminPanel from './routes/AdminPanel'
 import Dashboard from './routes/Dashboard'
 import FlashcardView from './routes/FlashcardView'
@@ -53,6 +54,10 @@ const GuestOnlyRoute = ({ children }) => {
 
 function App() {
   const { darkMode } = useDarkMode()
+  const { user } = useAuth()
+  
+  // Rastrear status online/offline
+  useOnlineStatus()
   
   return (
     <div 
@@ -89,6 +94,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <FlashcardView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ranking"
+            element={
+              <ProtectedRoute>
+                <Ranking />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/social"
+            element={
+              <ProtectedRoute>
+                <SocialFeed />
               </ProtectedRoute>
             }
           />

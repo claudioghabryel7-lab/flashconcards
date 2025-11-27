@@ -1,0 +1,325 @@
+import { useEffect, useState } from 'react'
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+} from 'firebase/firestore'
+import {
+  HeartIcon,
+  ChatBubbleLeftIcon,
+  PaperAirplaneIcon,
+  TrashIcon,
+} from '@heroicons/react/24/solid'
+import { HeartIcon as HeartOutlineIcon } from '@heroicons/react/24/outline'
+import { db } from '../firebase/config'
+import { useAuth } from '../hooks/useAuth'
+import { useDarkMode } from '../hooks/useDarkMode.jsx'
+
+const SocialFeed = () => {
+  const { user, profile } = useAuth()
+  const { darkMode } = useDarkMode()
+  const [posts, setPosts] = useState([])
+  const [newPost, setNewPost] = useState('')
+  const [sending, setSending] = useState(false)
+  const [commentInputs, setCommentInputs] = useState({}) // { postId: commentText }
+  const [expandedComments, setExpandedComments] = useState({}) // { postId: true/false }
+
+  // Carregar posts
+  useEffect(() => {
+    if (!user) return () => {}
+    
+    const postsRef = collection(db, 'posts')
+    const q = query(postsRef, orderBy('createdAt', 'desc'))
+    
+    const unsub = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map((docSnapshot) => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data(),
+      }))
+      setPosts(data)
+    })
+    
+    return () => unsub()
+  }, [user])
+
+  // Criar novo post
+  const createPost = async () => {
+    if (!newPost.trim() || !user || sending) return
+    
+    setSending(true)
+    try {
+      const postsRef = collection(db, 'posts')
+      await addDoc(postsRef, {
+        text: newPost.trim(),
+        authorId: user.uid,
+        authorName: profile?.displayName || user.email,
+        authorEmail: user.email,
+        likes: [],
+        comments: [],
+        createdAt: serverTimestamp(),
+      })
+      setNewPost('')
+    } catch (err) {
+      console.error('Erro ao criar post:', err)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // Curtir/descurtir post
+  const toggleLike = async (postId, currentLikes) => {
+    if (!user) return
+    
+    const postRef = doc(db, 'posts', postId)
+    const likes = currentLikes || []
+    const isLiked = likes.includes(user.uid)
+    
+    try {
+      await updateDoc(postRef, {
+        likes: isLiked 
+          ? likes.filter(uid => uid !== user.uid)
+          : [...likes, user.uid]
+      })
+    } catch (err) {
+      console.error('Erro ao curtir post:', err)
+    }
+  }
+
+  // Adicionar comentário
+  const addComment = async (postId) => {
+    const commentText = commentInputs[postId]
+    if (!commentText?.trim() || !user) return
+    
+    try {
+      const postRef = doc(db, 'posts', postId)
+      const post = posts.find(p => p.id === postId)
+      const currentComments = post?.comments || []
+      
+      await updateDoc(postRef, {
+        comments: [...currentComments, {
+          id: Date.now().toString(),
+          text: commentText.trim(),
+          authorId: user.uid,
+          authorName: profile?.displayName || user.email,
+          createdAt: serverTimestamp(),
+        }]
+      })
+      
+      setCommentInputs(prev => ({ ...prev, [postId]: '' }))
+    } catch (err) {
+      console.error('Erro ao comentar:', err)
+    }
+  }
+
+  // Deletar post (apenas o autor)
+  const deletePost = async (postId) => {
+    if (!window.confirm('Deseja realmente excluir este post?')) return
+    
+    try {
+      await deleteDoc(doc(db, 'posts', postId))
+    } catch (err) {
+      console.error('Erro ao deletar post:', err)
+    }
+  }
+
+  // Toggle comentários
+  const toggleComments = (postId) => {
+    setExpandedComments(prev => ({
+      ...prev,
+      [postId]: !prev[postId]
+    }))
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-lg font-semibold text-alego-600">Faça login para ver o feed</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 px-2 sm:px-0">
+      <div 
+        className="rounded-2xl p-6 shadow-sm"
+        style={{
+          backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+          color: darkMode ? '#f1f5f9' : '#1e293b'
+        }}
+      >
+        <h1 className="text-2xl sm:text-3xl font-bold text-alego-700 dark:text-alego-300">
+          Feed Social
+        </h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+          Compartilhe suas conquistas e motivações com outros alunos!
+        </p>
+      </div>
+
+      {/* Criar novo post */}
+      <div 
+        className="rounded-2xl p-6 shadow-sm"
+        style={{
+          backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+          color: darkMode ? '#f1f5f9' : '#1e293b'
+        }}
+      >
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <textarea
+              value={newPost}
+              onChange={(e) => setNewPost(e.target.value)}
+              placeholder="O que você está estudando hoje? Compartilhe sua motivação!"
+              rows={3}
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none resize-none"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={createPost}
+            disabled={!newPost.trim() || sending}
+            className="flex items-center gap-2 rounded-xl bg-alego-600 px-6 py-3 text-sm font-semibold text-white disabled:opacity-50 self-end"
+          >
+            <PaperAirplaneIcon className="h-5 w-5" />
+            {sending ? 'Publicando...' : 'Publicar'}
+          </button>
+        </div>
+      </div>
+
+      {/* Lista de posts */}
+      <div className="space-y-4">
+        {posts.length === 0 && (
+          <div 
+            className="rounded-2xl p-8 text-center shadow-sm"
+            style={{
+              backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+              color: darkMode ? '#f1f5f9' : '#1e293b'
+            }}
+          >
+            <p className="text-slate-500 dark:text-slate-400">
+              Nenhum post ainda. Seja o primeiro a compartilhar!
+            </p>
+          </div>
+        )}
+
+        {posts.map((post) => {
+          const isLiked = post.likes?.includes(user.uid) || false
+          const likesCount = post.likes?.length || 0
+          const comments = post.comments || []
+          const isAuthor = post.authorId === user.uid
+          const showComments = expandedComments[post.id]
+
+          return (
+            <div
+              key={post.id}
+              className="rounded-2xl p-6 shadow-sm"
+              style={{
+                backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+                color: darkMode ? '#f1f5f9' : '#1e293b'
+              }}
+            >
+              {/* Header do post */}
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="font-semibold text-alego-700 dark:text-alego-300">
+                    {post.authorName || post.authorEmail}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {post.createdAt?.toDate?.().toLocaleString('pt-BR') || 'Agora'}
+                  </p>
+                </div>
+                {isAuthor && (
+                  <button
+                    type="button"
+                    onClick={() => deletePost(post.id)}
+                    className="text-rose-500 hover:text-rose-600"
+                  >
+                    <TrashIcon className="h-5 w-5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Conteúdo do post */}
+              <p className="mb-4 text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                {post.text}
+              </p>
+
+              {/* Ações */}
+              <div className="flex items-center gap-4 border-t border-slate-200 dark:border-slate-700 pt-3">
+                <button
+                  type="button"
+                  onClick={() => toggleLike(post.id, post.likes)}
+                  className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-rose-500"
+                >
+                  {isLiked ? (
+                    <HeartIcon className="h-5 w-5 text-rose-500" />
+                  ) : (
+                    <HeartOutlineIcon className="h-5 w-5" />
+                  )}
+                  <span className="text-sm font-semibold">{likesCount}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => toggleComments(post.id)}
+                  className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-500"
+                >
+                  <ChatBubbleLeftIcon className="h-5 w-5" />
+                  <span className="text-sm font-semibold">{comments.length}</span>
+                </button>
+              </div>
+
+              {/* Comentários */}
+              {showComments && (
+                <div className="mt-4 space-y-3 border-t border-slate-200 dark:border-slate-700 pt-4">
+                  {comments.map((comment) => (
+                    <div key={comment.id} className="rounded-lg bg-slate-50 dark:bg-slate-800 p-3">
+                      <p className="text-xs font-semibold text-alego-600 dark:text-alego-400 mb-1">
+                        {comment.authorName || comment.authorEmail}
+                      </p>
+                      <p className="text-sm text-slate-700 dark:text-slate-300">
+                        {comment.text}
+                      </p>
+                    </div>
+                  ))}
+
+                  {/* Input de comentário */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={commentInputs[post.id] || ''}
+                      onChange={(e) => setCommentInputs(prev => ({
+                        ...prev,
+                        [post.id]: e.target.value
+                      }))}
+                      onKeyPress={(e) => e.key === 'Enter' && addComment(post.id)}
+                      placeholder="Escreva um comentário..."
+                      className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:border-alego-400 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => addComment(post.id)}
+                      className="rounded-lg bg-alego-600 px-4 py-2 text-sm font-semibold text-white"
+                    >
+                      Enviar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export default SocialFeed
+

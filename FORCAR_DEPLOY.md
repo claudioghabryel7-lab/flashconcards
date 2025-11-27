@@ -61,3 +61,6 @@ O Vercel detecta automaticamente e faz o deploy! 🎉
 **Recomendação:** Use a **Opção 1** (Interface Web) - é mais rápida e não requer configuração!
 
 
+
+
+

@@ -31,6 +31,7 @@ const AdminPanel = () => {
   const { isAdmin } = useAuth()
   const [cards, setCards] = useState([])
   const [users, setUsers] = useState([])
+  const [presence, setPresence] = useState({}) // { uid: { status, lastSeen } }
   const [jsonInput, setJsonInput] = useState('')
   const [message, setMessage] = useState('')
   const [userForm, setUserForm] = useState({ email: '', password: '', name: '', role: 'student' })
@@ -87,15 +88,30 @@ const AdminPanel = () => {
     const usersRef = collection(db, 'users')
     const unsubUsers = onSnapshot(usersRef, (snapshot) => {
       const data = snapshot.docs.map((docSnapshot) => ({
-        email: docSnapshot.id,
+        uid: docSnapshot.id,
         ...docSnapshot.data(),
       }))
       setUsers(data)
     })
 
+    // Carregar status online/offline dos usuários
+    const presenceRef = collection(db, 'presence')
+    const unsubPresence = onSnapshot(presenceRef, (snapshot) => {
+      const presenceData = {}
+      snapshot.docs.forEach((docSnapshot) => {
+        const data = docSnapshot.data()
+        presenceData[data.uid] = {
+          status: data.status || 'offline',
+          lastSeen: data.lastSeen,
+        }
+      })
+      setPresence(presenceData)
+    })
+
     return () => {
       unsubCards()
       unsubUsers()
+      unsubPresence()
     }
   }, [])
 
@@ -728,28 +744,50 @@ INFORMAÇÕES ADICIONAIS:
           {users.length} usuários cadastrados
         </p>
         <div className="mt-4 divide-y divide-slate-100">
-          {users.map((user) => (
-            <div
-              key={user.uid || user.email}
-              className="flex flex-col gap-2 py-4 md:flex-row md:items-center md:justify-between"
-            >
-              <div>
-                <p className="font-semibold text-alego-700">{user.displayName || user.email}</p>
-                <p className="text-sm text-slate-500">{user.email}</p>
-                <span className="mt-1 inline-block rounded-full bg-alego-100 px-2 py-1 text-xs font-semibold text-alego-600">
-                  {user.role === 'admin' ? 'Admin' : 'Aluno'}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => removeUser(user.uid || user.email)}
-                className="flex items-center gap-1 rounded-full border border-rose-500 px-4 py-2 text-sm font-semibold text-rose-500"
+          {users.map((user) => {
+            const userPresence = presence[user.uid] || { status: 'offline' }
+            const isOnline = userPresence.status === 'online'
+            
+            return (
+              <div
+                key={user.uid || user.email}
+                className="flex flex-col gap-2 py-4 md:flex-row md:items-center md:justify-between"
               >
-                <TrashIcon className="h-4 w-4" />
-                Excluir
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className={`h-3 w-3 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                    {isOnline && (
+                      <div className="absolute inset-0 h-3 w-3 animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-alego-700">{user.displayName || user.email}</p>
+                    <p className="text-sm text-slate-500">{user.email}</p>
+                    <div className="mt-1 flex gap-2">
+                      <span className="inline-block rounded-full bg-alego-100 px-2 py-1 text-xs font-semibold text-alego-600">
+                        {user.role === 'admin' ? 'Admin' : 'Aluno'}
+                      </span>
+                      <span className={`inline-block rounded-full px-2 py-1 text-xs font-semibold ${
+                        isOnline 
+                          ? 'bg-emerald-100 text-emerald-700' 
+                          : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {isOnline ? '🟢 Online' : '⚫ Offline'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeUser(user.uid || user.email)}
+                  className="flex items-center gap-1 rounded-full border border-rose-500 px-4 py-2 text-sm font-semibold text-rose-500"
+                >
+                  <TrashIcon className="h-4 w-4" />
+                  Excluir
+                </button>
+              </div>
+            )
+          })}
         </div>
       </div>
 

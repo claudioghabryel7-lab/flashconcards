@@ -60,3 +60,6 @@ Se você já tem usuários no sistema antigo, precisa:
 **Tempo total da migração:** ~15 minutos (não 2-3 horas!) 🚀
 
 
+
+
+

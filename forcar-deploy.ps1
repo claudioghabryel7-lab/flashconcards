@@ -12,3 +12,6 @@ Write-Host "`n✅ Push realizado! O Vercel deve iniciar o deploy automaticamente
 Write-Host "`n💡 Dica: Acesse https://vercel.com para acompanhar o deploy em tempo real." -ForegroundColor Cyan
 
 
+
+
+
