@@ -120,17 +120,17 @@ service cloud.firestore {
     
     // Coleção de posts (rede social)
     match /posts/{postId} {
-      // Qualquer usuário autenticado pode ler (tanto documentos individuais quanto list queries)
-      allow read: if isAuthenticated();
+      // Qualquer usuário autenticado pode ler
+      allow read: if request.auth != null;
       
-      // Usuário autenticado pode criar posts (validação mínima para teste)
-      allow create: if isAuthenticated();
+      // Qualquer usuário autenticado pode criar posts
+      allow create: if request.auth != null;
       
       // Apenas o autor pode atualizar/deletar seu próprio post
-      allow update: if isAuthenticated() && 
+      allow update: if request.auth != null && 
                       resource.data.authorId == request.auth.uid;
       
-      allow delete: if isAuthenticated() && 
+      allow delete: if request.auth != null && 
                       resource.data.authorId == request.auth.uid;
     }
     
