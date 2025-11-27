@@ -142,9 +142,11 @@ const SocialFeed = () => {
       
       console.log('🔥 Tentando criar post no projeto:', db.app.options.projectId)
       console.log('🔥 Dados do post:', postData)
+      console.log('🔥 Collection path:', postsRef.path)
       
-      await addDoc(postsRef, postData)
-      console.log('Post criado com sucesso!')
+      // Tentar criar o documento
+      const docRef = await addDoc(postsRef, postData)
+      console.log('✅ Post criado com sucesso! ID:', docRef.id)
       setNewPost('')
       setError('')
     } catch (err) {
