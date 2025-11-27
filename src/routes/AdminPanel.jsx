@@ -509,11 +509,34 @@ INFORMAÇÕES ADICIONAIS:
             const modulos = modules[materia] || []
             if (modulos.length === 0) return null
             
+            // Ordenar módulos numericamente
+            const sortedModulos = [...modulos].sort((a, b) => {
+              // Extrair números dos módulos para ordenação numérica
+              const extractNumber = (str) => {
+                const match = str.match(/\d+/)
+                return match ? parseInt(match[0], 10) : 999
+              }
+              const numA = extractNumber(a)
+              const numB = extractNumber(b)
+              
+              // Se ambos têm números, ordenar numericamente
+              if (numA !== 999 && numB !== 999) {
+                return numA - numB
+              }
+              
+              // Se apenas um tem número, o com número vem primeiro
+              if (numA !== 999) return -1
+              if (numB !== 999) return 1
+              
+              // Se nenhum tem número, ordenar alfabeticamente
+              return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+            })
+            
             return (
               <div key={materia} className="rounded-xl border border-slate-200 p-4">
                 <h3 className="mb-3 text-base font-bold text-alego-700">{materia}</h3>
                 <div className="flex flex-wrap gap-2">
-                  {modulos.map((modulo) => (
+                  {sortedModulos.map((modulo) => (
                     <div
                       key={modulo}
                       className="flex items-center gap-2 rounded-full bg-alego-100 px-4 py-2"
@@ -572,7 +595,29 @@ INFORMAÇÕES ADICIONAIS:
               className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none disabled:bg-slate-50"
             >
               <option value="">{flashcardForm.materia ? 'Selecione o módulo' : 'Primeiro selecione a matéria'}</option>
-              {flashcardForm.materia && (modules[flashcardForm.materia] || []).map((modulo) => (
+              {flashcardForm.materia && (modules[flashcardForm.materia] || [])
+                .sort((a, b) => {
+                  // Extrair números dos módulos para ordenação numérica
+                  const extractNumber = (str) => {
+                    const match = str.match(/\d+/)
+                    return match ? parseInt(match[0], 10) : 999
+                  }
+                  const numA = extractNumber(a)
+                  const numB = extractNumber(b)
+                  
+                  // Se ambos têm números, ordenar numericamente
+                  if (numA !== 999 && numB !== 999) {
+                    return numA - numB
+                  }
+                  
+                  // Se apenas um tem número, o com número vem primeiro
+                  if (numA !== 999) return -1
+                  if (numB !== 999) return 1
+                  
+                  // Se nenhum tem número, ordenar alfabeticamente
+                  return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+                })
+                .map((modulo) => (
                 <option key={modulo} value={modulo}>
                   {modulo}
                 </option>
@@ -767,7 +812,29 @@ INFORMAÇÕES ADICIONAIS:
 
                 {isMateriaOpen && (
                   <div className="mt-3 space-y-2">
-                    {Object.entries(modulos).map(([modulo, cardsList]) => {
+                    {Object.entries(modulos)
+                      .sort(([moduloA], [moduloB]) => {
+                        // Extrair números dos módulos para ordenação numérica
+                        const extractNumber = (str) => {
+                          const match = str.match(/\d+/)
+                          return match ? parseInt(match[0], 10) : 999
+                        }
+                        const numA = extractNumber(moduloA)
+                        const numB = extractNumber(moduloB)
+                        
+                        // Se ambos têm números, ordenar numericamente
+                        if (numA !== 999 && numB !== 999) {
+                          return numA - numB
+                        }
+                        
+                        // Se apenas um tem número, o com número vem primeiro
+                        if (numA !== 999) return -1
+                        if (numB !== 999) return 1
+                        
+                        // Se nenhum tem número, ordenar alfabeticamente
+                        return moduloA.localeCompare(moduloB, 'pt-BR', { numeric: true, sensitivity: 'base' })
+                      })
+                      .map(([modulo, cardsList]) => {
                       const moduloKey = `${materia}::${modulo}`
                       const isModuloOpen = expandedCardModulos[moduloKey]
                       return (

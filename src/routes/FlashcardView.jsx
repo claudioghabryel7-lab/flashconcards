@@ -482,7 +482,29 @@ Regras:
                   
                   {isExpanded && (
                     <div className="ml-6 mt-1 space-y-2">
-                      {modulos.map((modulo) => {
+                      {modulos
+                        .sort((a, b) => {
+                          // Extrair números dos módulos para ordenação numérica
+                          const extractNumber = (str) => {
+                            const match = str.match(/\d+/)
+                            return match ? parseInt(match[0], 10) : 999
+                          }
+                          const numA = extractNumber(a)
+                          const numB = extractNumber(b)
+                          
+                          // Se ambos têm números, ordenar numericamente
+                          if (numA !== 999 && numB !== 999) {
+                            return numA - numB
+                          }
+                          
+                          // Se apenas um tem número, o com número vem primeiro
+                          if (numA !== 999) return -1
+                          if (numB !== 999) return 1
+                          
+                          // Se nenhum tem número, ordenar alfabeticamente
+                          return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+                        })
+                        .map((modulo) => {
                         const cardsInModulo = organizedCards[materia][modulo] || []
                         const isModuloSelected =
                           studyMode === 'module' &&
