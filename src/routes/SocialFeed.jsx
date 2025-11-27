@@ -36,15 +36,56 @@ const SocialFeed = () => {
     if (!user) return () => {}
     
     const postsRef = collection(db, 'posts')
+    
+    // Tentar com orderBy primeiro, se falhar, usar sem orderBy
     const q = query(postsRef, orderBy('createdAt', 'desc'))
     
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((docSnapshot) => ({
-        id: docSnapshot.id,
-        ...docSnapshot.data(),
-      }))
-      setPosts(data)
-    })
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        const data = snapshot.docs.map((docSnapshot) => ({
+          id: docSnapshot.id,
+          ...docSnapshot.data(),
+        }))
+        // Ordenar por data manualmente se necessário
+        data.sort((a, b) => {
+          const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0
+          const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0
+          return bTime - aTime
+        })
+        setPosts(data)
+      },
+      (error) => {
+        // Se der erro de índice, tentar sem orderBy
+        if (error.code === 'failed-precondition') {
+          console.warn('Índice do Firestore não criado. Usando query sem orderBy.')
+          const qSimple = query(postsRef)
+          onSnapshot(
+            qSimple,
+            (snapshot) => {
+              const data = snapshot.docs.map((docSnapshot) => ({
+                id: docSnapshot.id,
+                ...docSnapshot.data(),
+              }))
+              // Ordenar manualmente por data
+              data.sort((a, b) => {
+                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0
+                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0
+                return bTime - aTime
+              })
+              setPosts(data)
+            },
+            (err) => {
+              console.error('Erro ao carregar posts:', err)
+              setError('Erro ao carregar posts. Verifique as regras do Firestore.')
+            }
+          )
+        } else {
+          console.error('Erro ao carregar posts:', error)
+          setError(`Erro ao carregar posts: ${error.message || 'Erro desconhecido'}`)
+        }
+      }
+    )
     
     return () => unsub()
   }, [user])
