@@ -118,12 +118,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     
-    // Coleção de posts (rede social) - PERMITE TUDO TEMPORARIAMENTE PARA TESTE
-    match /posts/{postId} {
-      // PERMITE TUDO - APENAS PARA TESTE SE O PROBLEMA É NAS REGRAS
-      allow read, write: if true;
-    }
-    
     // Bloquear acesso a qualquer outra coleção
     match /{document=**} {
       allow read, write: if false;
