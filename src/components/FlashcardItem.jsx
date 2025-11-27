@@ -8,7 +8,8 @@ const FlashcardItem = ({
   onToggleFavorite, 
   onRateDifficulty,
   showRating = false,
-  cardProgress = null
+  cardProgress = null,
+  onExplainCard = null
 }) => {
   const [flipped, setFlipped] = useState(false)
   const [showLevelUp, setShowLevelUp] = useState(false)
@@ -162,31 +163,47 @@ const FlashcardItem = ({
               <p className="text-xs font-semibold text-alego-100 text-center">
                 Como foi essa revisão?
               </p>
-              <div className="flex gap-2">
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleRate('hard')
-                  }}
-                  className="flex-1 rounded-lg bg-rose-500 px-2 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white shadow-lg hover:bg-rose-600 border-2 border-rose-600 min-h-[44px]"
-                >
-                  🔴 Difícil
-                </motion.button>
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleRate('easy')
-                  }}
-                  className="flex-1 rounded-lg bg-emerald-500 px-2 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white shadow-lg hover:bg-emerald-600 border-2 border-emerald-600 min-h-[44px]"
-                >
-                  🟢 Fácil
-                </motion.button>
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRate('hard')
+                    }}
+                    className="flex-1 rounded-lg bg-rose-500 px-2 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white shadow-lg hover:bg-rose-600 border-2 border-rose-600 min-h-[44px]"
+                  >
+                    🔴 Difícil
+                  </motion.button>
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRate('easy')
+                    }}
+                    className="flex-1 rounded-lg bg-emerald-500 px-2 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-white shadow-lg hover:bg-emerald-600 border-2 border-emerald-600 min-h-[44px]"
+                  >
+                    🟢 Fácil
+                  </motion.button>
+                </div>
+                {onExplainCard && (
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onExplainCard(card)
+                    }}
+                    className="w-full rounded-lg bg-white/90 text-alego-700 font-semibold border-2 border-alego-200 px-3 py-2 text-xs sm:text-sm shadow-sm hover:bg-white"
+                  >
+                    💡 Explicação da IA
+                  </motion.button>
+                )}
               </div>
             </motion.div>
           )}

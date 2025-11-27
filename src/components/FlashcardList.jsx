@@ -14,6 +14,7 @@ const FlashcardList = ({
   onShuffle,
   viewedIds,
   showRating = false,
+  onExplainCard = null,
 }) => {
   const visited = viewedIds || []
   const currentCard = cards[currentIndex]
@@ -42,6 +43,7 @@ const FlashcardList = ({
             onRateDifficulty={onRateDifficulty}
             showRating={showRating}
             cardProgress={cardProgress[currentCard.id]}
+            onExplainCard={onExplainCard}
           />
         </div>
       )}

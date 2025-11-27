@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore'
+import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import dayjs from 'dayjs'
 import FlashcardList from '../components/FlashcardList'
 import { db } from '../firebase/config'
@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useStudyTimer } from '../hooks/useStudyTimer'
 import { FolderIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon } from '@heroicons/react/24/outline'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const MATERIAS = [
   'Português',
@@ -42,6 +43,14 @@ const FlashcardView = () => {
   const [moduleCompleted, setModuleCompleted] = useState(false)
   const [studyMode, setStudyMode] = useState('module')
   const [miniSimCards, setMiniSimCards] = useState([])
+  const [explanationModal, setExplanationModal] = useState({
+    open: false,
+    loading: false,
+    text: '',
+    error: null,
+    card: null,
+  })
+  const [editalPrompt, setEditalPrompt] = useState('')
   
   // Timer de estudo - ativo quando um módulo está selecionado
   const isStudying = !!selectedMateria && !!selectedModulo
@@ -69,6 +78,22 @@ const FlashcardView = () => {
       setCards(data)
     })
     return () => unsub()
+  }, [])
+
+  useEffect(() => {
+    const fetchPrompt = async () => {
+      try {
+        const promptDoc = await getDoc(doc(db, 'config', 'edital'))
+        if (promptDoc.exists()) {
+          const data = promptDoc.data()
+          setEditalPrompt(data.prompt || data.content || '')
+        }
+      } catch (err) {
+        console.error('Erro ao carregar prompt do edital:', err)
+      }
+    }
+
+    fetchPrompt()
   }, [])
 
   // Carregar progresso dos cards do usuário
@@ -279,6 +304,105 @@ const FlashcardView = () => {
   const currentCard = activeCards[currentIndex]
   const needsReview = true // Sempre mostra os botões de avaliação
 
+  const generateCardExplanation = async (card) => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+    if (!apiKey) {
+      throw new Error('API do Gemini não configurada.')
+    }
+
+    const preferredModel = import.meta.env.VITE_GEMINI_MODEL || 'gemini-1.5-flash-latest'
+    const fallbackModels = ['gemini-2.0-flash', 'gemini-1.5-pro-latest']
+    const candidates = [preferredModel, ...fallbackModels].filter(
+      (value, idx, arr) => value && arr.indexOf(value) === idx,
+    )
+
+    const genAI = new GoogleGenerativeAI(apiKey)
+    let lastError = null
+
+    for (const modelName of candidates) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName })
+
+        const prompt = `
+Explique o conteúdo deste flashcard de forma clara, prática e em até 5 parágrafos curtos.
+
+Matéria: ${card.materia || 'Não informado'}
+Módulo: ${card.modulo || 'Não informado'}
+Pergunta do flashcard: "${card.pergunta}"
+Resposta correta: "${card.resposta}"
+
+${editalPrompt ? `Contexto do concurso ALEGO:\n${editalPrompt}` : ''}
+
+Regras:
+- Seja didático, direto e motivador.
+- Traga exemplos simples quando fizer sentido.
+- Foque no entendimento do conceito, não apenas repetir a resposta.`.trim()
+
+        const result = await model.generateContent({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 400,
+          },
+        })
+
+        const text = result?.response?.text()
+        if (!text) {
+          throw new Error('Não foi possível gerar a explicação.')
+        }
+        return text
+      } catch (err) {
+        lastError = err
+        // tenta próximo modelo se for erro de modelo inválido/404
+        if (
+          err.message?.includes('404') ||
+          err.message?.includes('not found') ||
+          err.message?.includes('is not supported')
+        ) {
+          continue
+        }
+        throw err
+      }
+    }
+
+    throw lastError || new Error('Não foi possível gerar a explicação.')
+  }
+
+  const handleExplainCard = async (card) => {
+    setExplanationModal({
+      open: true,
+      loading: true,
+      text: '',
+      error: null,
+      card,
+    })
+
+    try {
+      const explanation = await generateCardExplanation(card)
+      setExplanationModal((prev) => ({
+        ...prev,
+        loading: false,
+        text: explanation,
+      }))
+    } catch (err) {
+      setExplanationModal((prev) => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Erro ao gerar explicação.',
+      }))
+    }
+  }
+
+  const closeExplanationModal = () => {
+    setExplanationModal({
+      open: false,
+      loading: false,
+      text: '',
+      error: null,
+      card: null,
+    })
+  }
+
   return (
     <section className="space-y-4 sm:space-y-6 px-2 sm:px-0">
       <div 
@@ -479,6 +603,7 @@ const FlashcardView = () => {
                 onShuffle={shuffle}
                 viewedIds={viewedIds}
                 showRating={needsReview}
+                onExplainCard={handleExplainCard}
               />
             </div>
           )}
@@ -510,6 +635,44 @@ const FlashcardView = () => {
               >
                 Voltar aos módulos
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {explanationModal.open && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <div className="max-w-2xl w-full rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-2xl max-h-[80vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm uppercase tracking-wide text-alego-500">Explicação da IA</p>
+                <h3 className="text-xl font-bold text-alego-700 dark:text-alego-300">
+                  {explanationModal.card?.pergunta}
+                </h3>
+                {explanationModal.card?.materia && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {explanationModal.card.materia} • {explanationModal.card?.modulo}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={closeExplanationModal}
+                className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 text-sm font-semibold"
+              >
+                Fechar ✕
+              </button>
+            </div>
+            <div className="mt-4 rounded-xl bg-slate-50 dark:bg-slate-800 p-4 text-sm text-slate-700 dark:text-slate-200 space-y-3">
+              {explanationModal.loading && <p>Gerando explicação... aguarde alguns segundos.</p>}
+              {explanationModal.error && (
+                <p className="text-rose-600">
+                  {explanationModal.error}
+                </p>
+              )}
+              {!explanationModal.loading && !explanationModal.error && (
+                <p className="whitespace-pre-wrap leading-relaxed">{explanationModal.text}</p>
+              )}
             </div>
           </div>
         </div>
