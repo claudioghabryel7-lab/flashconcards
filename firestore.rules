@@ -126,8 +126,9 @@ service cloud.firestore {
       // Usuário pode criar posts
       allow create: if isAuthenticated() && 
                        request.resource.data.authorId == request.auth.uid &&
-                       request.resource.data.authorId != null &&
-                       request.resource.data.text != null;
+                       request.resource.data.authorId is string &&
+                       request.resource.data.text is string &&
+                       request.resource.data.text.size() > 0;
       
       // Apenas o autor pode atualizar/deletar seu próprio post
       allow update: if isAuthenticated() && 
