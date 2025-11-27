@@ -10,7 +10,6 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  Timestamp,
   where,
 } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
