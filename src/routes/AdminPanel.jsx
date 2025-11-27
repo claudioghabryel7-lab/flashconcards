@@ -100,9 +100,13 @@ const AdminPanel = () => {
       const presenceData = {}
       snapshot.docs.forEach((docSnapshot) => {
         const data = docSnapshot.data()
-        presenceData[data.uid] = {
-          status: data.status || 'offline',
-          lastSeen: data.lastSeen,
+        const uid = docSnapshot.id || data.uid // Usar ID do documento (que é o UID) ou data.uid como fallback
+        if (uid) {
+          presenceData[uid] = {
+            status: data.status || 'offline',
+            lastSeen: data.lastSeen,
+            updatedAt: data.updatedAt,
+          }
         }
       })
       setPresence(presenceData)
@@ -768,11 +772,11 @@ INFORMAÇÕES ADICIONAIS:
                         {user.role === 'admin' ? 'Admin' : 'Aluno'}
                       </span>
                       <span className={`inline-block rounded-full px-2 py-1 text-xs font-semibold ${
-                        isOnline 
+                        isOnline && hasPresenceData
                           ? 'bg-emerald-100 text-emerald-700' 
                           : 'bg-slate-100 text-slate-600'
                       }`}>
-                        {isOnline ? '🟢 Online' : '⚫ Offline'}
+                        {isOnline && hasPresenceData ? '🟢 Online' : '⚫ Offline'}
                       </span>
                     </div>
                   </div>
