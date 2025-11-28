@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 
 const Ranking = () => {
-  const { user, profile } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { darkMode } = useDarkMode()
   const [users, setUsers] = useState([])
   const [userProgress, setUserProgress] = useState({}) // { uid: { totalDays, totalHours, studiedCards } }
@@ -202,68 +202,75 @@ const Ranking = () => {
         </div>
       )}
 
-      {/* Top 10 */}
-      <div 
-        className="rounded-2xl p-6 shadow-sm"
-        style={{
-          backgroundColor: darkMode ? '#1e293b' : '#ffffff',
-          color: darkMode ? '#f1f5f9' : '#1e293b'
-        }}
-      >
-        <h2 className="text-xl font-bold text-alego-700 dark:text-alego-300 mb-4">
-          Top 10 Alunos
-        </h2>
-        <div className="space-y-3">
-          {ranking.slice(0, 10).map((userRank, index) => {
-            const isCurrentUser = userRank.uid === user?.uid
-            const medalColors = [
-              'bg-yellow-500', // 1º lugar
-              'bg-slate-400',  // 2º lugar
-              'bg-amber-600',  // 3º lugar
-            ]
-            
-            return (
-              <div
-                key={userRank.uid}
-                className={`flex items-center gap-4 rounded-xl p-4 ${
-                  isCurrentUser 
-                    ? 'bg-alego-50 dark:bg-alego-900 border-2 border-alego-500' 
-                    : 'bg-slate-50 dark:bg-slate-800'
-                }`}
-              >
-                <div className={`flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold text-white ${
-                  index < 3 ? medalColors[index] : 'bg-alego-600'
-                }`}>
-                  {index < 3 ? '🏆' : `#${userRank.position}`}
-                </div>
-                <div className="flex-1">
-                  <p className={`font-semibold ${
+      {/* Top 10 - Visível para todos */}
+      {ranking.length > 0 && (
+        <div 
+          className="rounded-2xl p-6 shadow-sm"
+          style={{
+            backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+            color: darkMode ? '#f1f5f9' : '#1e293b'
+          }}
+        >
+          <h2 className="text-xl font-bold text-alego-700 dark:text-alego-300 mb-4">
+            Top 10 Alunos
+          </h2>
+          <div className="space-y-3">
+            {ranking.slice(0, 10).map((userRank, index) => {
+              const isCurrentUser = userRank.uid === user?.uid
+              const showScore = isAdmin || isCurrentUser // Admin vê todas as pontuações, aluno vê apenas a própria
+              const medalColors = [
+                'bg-yellow-500', // 1º lugar
+                'bg-slate-400',  // 2º lugar
+                'bg-amber-600',  // 3º lugar
+              ]
+              
+              return (
+                <div
+                  key={userRank.uid}
+                  className={`flex items-center gap-4 rounded-xl p-4 ${
                     isCurrentUser 
-                      ? 'text-alego-700 dark:text-alego-300' 
-                      : 'text-slate-700 dark:text-slate-300'
+                      ? 'bg-alego-50 dark:bg-alego-900 border-2 border-alego-500' 
+                      : 'bg-slate-50 dark:bg-slate-800'
+                  }`}
+                >
+                  <div className={`flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold text-white ${
+                    index < 3 ? medalColors[index] : 'bg-alego-600'
                   }`}>
-                    {userRank.displayName || userRank.email}
-                    {isCurrentUser && ' (Você)'}
-                  </p>
-                  <div className="mt-1 flex gap-3 text-xs text-slate-500 dark:text-slate-400">
-                    <span>{userRank.progress.totalDays} dias</span>
-                    <span>{userRank.progress.totalHours.toFixed(1)}h</span>
-                    <span>{userRank.progress.studiedCards} cards</span>
+                    {index < 3 ? '🏆' : `#${userRank.position}`}
                   </div>
+                  <div className="flex-1">
+                    <p className={`font-semibold ${
+                      isCurrentUser 
+                        ? 'text-alego-700 dark:text-alego-300' 
+                        : 'text-slate-700 dark:text-slate-300'
+                    }`}>
+                      {userRank.displayName || userRank.email}
+                      {isCurrentUser && ' (Você)'}
+                    </p>
+                    {isAdmin && (
+                      <div className="mt-1 flex gap-3 text-xs text-slate-500 dark:text-slate-400">
+                        <span>{userRank.progress.totalDays} dias</span>
+                        <span>{userRank.progress.totalHours.toFixed(1)}h</span>
+                        <span>{userRank.progress.studiedCards} cards</span>
+                      </div>
+                    )}
+                  </div>
+                  {showScore && (
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-alego-600 dark:text-alego-400">
+                        {userRank.score}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">pontos</p>
+                    </div>
+                  )}
                 </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold text-alego-600 dark:text-alego-400">
-                    {userRank.score}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">pontos</p>
-                </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Ranking completo */}
+      {/* Ranking completo - Visível para todos */}
       {ranking.length > 10 && (
         <div 
           className="rounded-2xl p-6 shadow-sm"
@@ -278,6 +285,7 @@ const Ranking = () => {
           <div className="space-y-2">
             {ranking.map((userRank) => {
               const isCurrentUser = userRank.uid === user?.uid
+              const showScore = isAdmin || isCurrentUser // Admin vê todas as pontuações, aluno vê apenas a própria
               
               return (
                 <div
@@ -301,13 +309,30 @@ const Ranking = () => {
                       {isCurrentUser && ' (Você)'}
                     </p>
                   </div>
-                  <span className="text-sm font-bold text-alego-600 dark:text-alego-400">
-                    {userRank.score} pts
-                  </span>
+                  {showScore && (
+                    <span className="text-sm font-bold text-alego-600 dark:text-alego-400">
+                      {userRank.score} pts
+                    </span>
+                  )}
                 </div>
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* Mensagem se não houver ranking */}
+      {ranking.length === 0 && (
+        <div 
+          className="rounded-2xl p-6 shadow-sm text-center"
+          style={{
+            backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+            color: darkMode ? '#f1f5f9' : '#1e293b'
+          }}
+        >
+          <p className="text-slate-500 dark:text-slate-400">
+            Ainda não há alunos no ranking. Comece a estudar para aparecer aqui!
+          </p>
         </div>
       )}
     </div>
