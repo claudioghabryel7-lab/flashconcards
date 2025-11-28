@@ -511,20 +511,82 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: availableModel })
 
-      // Carregar prompt do admin
+      // Carregar prompt do admin e texto do PDF
       let editalPrompt = null
+      let pdfText = null
       try {
         const editalDoc = await getDoc(doc(db, 'config', 'edital'))
         if (editalDoc.exists()) {
-          editalPrompt = editalDoc.data().prompt || editalDoc.data().content
+          const data = editalDoc.data()
+          editalPrompt = data.prompt || data.content || ''
+          pdfText = data.pdfText || ''
+          
+          // Log para debug
+          console.log('📋 Edital carregado para o chat:')
+          console.log('  - Texto digitado:', editalPrompt ? `${editalPrompt.length} caracteres` : 'não há')
+          console.log('  - Texto do PDF:', pdfText ? `${pdfText.length} caracteres` : 'não há')
+          
+          if (!pdfText && !editalPrompt) {
+            console.warn('⚠️ ATENÇÃO: Nenhum edital/PDF encontrado no Firestore!')
+          }
+        } else {
+          console.warn('⚠️ Documento config/edital não existe no Firestore!')
         }
       } catch (err) {
-        console.error('Erro ao carregar configuração:', err)
+        console.error('❌ Erro ao carregar configuração:', err)
       }
 
-      const editalContext = editalPrompt 
-        ? `\n\nINFORMAÇÕES DO CONCURSO ALEGO POLICIAL LEGISLATIVO:\n${editalPrompt}\n\nUse APENAS essas informações para responder sobre o concurso.`
-        : ''
+      // Combinar texto digitado + texto do PDF
+      let editalContext = ''
+      if (editalPrompt || pdfText) {
+        editalContext = '\n\n═══════════════════════════════════════════════════════════\n'
+        editalContext += '📋 INFORMAÇÕES COMPLETAS DO CONCURSO ALEGO POLICIAL LEGISLATIVO\n'
+        editalContext += '═══════════════════════════════════════════════════════════\n\n'
+        
+        if (editalPrompt) {
+          editalContext += `📝 TEXTO CONFIGURADO PELO ADMIN:\n${editalPrompt}\n\n`
+        }
+        
+        if (pdfText) {
+          console.log('📄 PDF carregado para o chat:', pdfText.length, 'caracteres')
+          
+          // Estratégia inteligente: início + fim do PDF
+          // Isso garante que informações importantes (datas, requisitos) sejam incluídas
+          let limitedPdfText = ''
+          const totalLength = pdfText.length
+          if (totalLength <= 50000) {
+            // PDF pequeno/médio: usar tudo
+            limitedPdfText = pdfText
+            console.log('✅ Usando PDF completo:', totalLength, 'caracteres')
+          } else {
+            // PDF grande: início (40000) + fim (10000)
+            const inicio = pdfText.substring(0, 40000)
+            const fim = pdfText.substring(totalLength - 10000)
+            limitedPdfText = `${inicio}\n\n[... conteúdo intermediário omitido (${totalLength - 50000} caracteres) ...]\n\n${fim}`
+            console.log('📄 PDF grande: usando início (40000) + fim (10000) =', inicio.length + fim.length, 'caracteres')
+          }
+          
+          editalContext += `📄 CONTEÚDO COMPLETO DO PDF DO EDITAL/CRONOGRAMA:\n`
+          editalContext += `⚠️ ATENÇÃO: Leia e analise TODO o conteúdo abaixo com MUITA ATENÇÃO.\n`
+          editalContext += `Este PDF contém TODAS as informações do edital, incluindo:\n`
+          editalContext += `- Datas importantes (prova, inscrição, etc.)\n`
+          editalContext += `- Número de questões\n`
+          editalContext += `- Conteúdo programático completo\n`
+          editalContext += `- Requisitos e critérios\n`
+          editalContext += `- Cronograma detalhado\n`
+          editalContext += `- Tópicos específicos de cada matéria\n\n`
+          editalContext += `${limitedPdfText}\n\n`
+        }
+        
+        editalContext += '═══════════════════════════════════════════════════════════\n'
+        editalContext += '⚠️ REGRA CRÍTICA: Use APENAS as informações acima para responder.\n'
+        editalContext += 'Se a informação estiver no edital/PDF acima, você DEVE usá-la.\n'
+        editalContext += 'NUNCA diga "não há informação" se a informação estiver no texto acima.\n'
+        editalContext += 'Leia o edital com atenção antes de responder qualquer pergunta.\n'
+        editalContext += '═══════════════════════════════════════════════════════════\n'
+      } else {
+        console.warn('⚠️ Nenhum edital/PDF carregado para o chat')
+      }
 
       const mentorPrompt = `Você é o "Flash Mentor", mentor do concurso ALEGO Policial Legislativo.
 
@@ -534,11 +596,26 @@ REGRAS DE RESPOSTA:
 - Foque em AÇÕES práticas
 - SEMPRE termine suas respostas com pontuação final
 - Responda APENAS sobre o concurso ALEGO Policial Legislativo
+
 ${editalContext}
+
+INSTRUÇÕES CRÍTICAS:
+1. ANTES de responder qualquer pergunta, LEIA TODO o edital/PDF acima com atenção
+2. PROCURE a informação no edital/PDF antes de dizer que não sabe
+3. Se a informação estiver no edital/PDF, você DEVE usá-la na resposta
+4. NUNCA diga "não há informação" se a informação estiver no edital/PDF
+5. Se perguntarem sobre:
+   - Datas → procure no edital/PDF
+   - Número de questões → procure no edital/PDF
+   - Tópicos de matérias → procure no edital/PDF
+   - Requisitos → procure no edital/PDF
+   - Qualquer coisa sobre o concurso → procure no edital/PDF primeiro
 
 MATÉRIAS: Português, Área de Atuação (PL), Raciocínio Lógico, Constitucional, Administrativo, Legislação Estadual, Realidade de Goiás, Redação.
 
-Responda CURTO e OBJETIVO: ${userMessage}`
+Pergunta do aluno: ${userMessage}
+
+⚠️ Lembre-se: Leia o edital/PDF acima ANTES de responder!`
 
       // Tentar gerar resposta com Gemini primeiro
       let result = null

@@ -88,7 +88,28 @@ const FlashcardView = () => {
         const promptDoc = await getDoc(doc(db, 'config', 'edital'))
         if (promptDoc.exists()) {
           const data = promptDoc.data()
-          setEditalPrompt(data.prompt || data.content || '')
+          // Combinar texto digitado + texto do PDF
+          let combinedText = ''
+          if (data.prompt || data.content) {
+            combinedText += data.prompt || data.content || ''
+          }
+          if (data.pdfText) {
+            if (combinedText) combinedText += '\n\n'
+            // Estratégia inteligente: início + fim do PDF
+            let limitedPdfText = ''
+            const totalLength = data.pdfText.length
+            if (totalLength <= 20000) {
+              // PDF pequeno: usar tudo
+              limitedPdfText = data.pdfText
+            } else {
+              // PDF grande: início (15000) + fim (5000)
+              const inicio = data.pdfText.substring(0, 15000)
+              const fim = data.pdfText.substring(totalLength - 5000)
+              limitedPdfText = `${inicio}\n\n[... conteúdo intermediário omitido ...]\n\n${fim}`
+            }
+            combinedText += `CONTEÚDO DO PDF DO EDITAL:\n${limitedPdfText}`
+          }
+          setEditalPrompt(combinedText)
         }
       } catch (err) {
         console.error('Erro ao carregar prompt do edital:', err)

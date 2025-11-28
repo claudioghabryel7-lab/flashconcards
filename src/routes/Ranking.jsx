@@ -26,21 +26,53 @@ const Ranking = () => {
     return () => unsub()
   }, [])
 
-  // Carregar progresso de todos os usuários
+  // Carregar progresso de todos os usuários (dias e horas)
   useEffect(() => {
     const progressRef = collection(db, 'progress')
     const unsub = onSnapshot(progressRef, (snapshot) => {
       const progressData = {}
+      const userDates = {} // Para rastrear dias únicos por usuário
+      
+      // Agrupar por uid e calcular totais
       snapshot.docs.forEach((doc) => {
         const data = doc.data()
         const uid = data.uid
+        if (!uid) return
+        
         if (!progressData[uid]) {
           progressData[uid] = { totalDays: 0, totalHours: 0, studiedCards: 0 }
+          userDates[uid] = new Set()
         }
-        progressData[uid].totalDays += 1
+        
+        // Contar dias únicos (cada documento com date único conta como 1 dia)
+        const date = data.date
+        if (date && !userDates[uid].has(date)) {
+          userDates[uid].add(date)
+          progressData[uid].totalDays += 1
+        }
+        
+        // Somar todas as horas (mesmo que seja do mesmo dia)
         progressData[uid].totalHours += parseFloat(data.hours || 0)
       })
-      setUserProgress(progressData)
+      
+      // Atualizar mantendo os dados de cards estudados
+      setUserProgress(prev => {
+        const updated = { ...prev }
+        Object.keys(progressData).forEach(uid => {
+          updated[uid] = {
+            totalDays: progressData[uid].totalDays,
+            totalHours: progressData[uid].totalHours,
+            studiedCards: prev[uid]?.studiedCards || 0
+          }
+        })
+        // Manter dados de usuários que não têm progress ainda mas têm cards
+        Object.keys(prev).forEach(uid => {
+          if (!updated[uid]) {
+            updated[uid] = prev[uid]
+          }
+        })
+        return updated
+      })
     })
     return () => unsub()
   }, [])
@@ -60,7 +92,8 @@ const Ranking = () => {
         setUserProgress(prev => ({
           ...prev,
           [uid]: {
-            ...prev[uid],
+            totalDays: prev[uid]?.totalDays || 0,
+            totalHours: prev[uid]?.totalHours || 0,
             studiedCards: studiedCards,
           }
         }))
