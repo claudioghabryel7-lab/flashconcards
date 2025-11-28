@@ -58,7 +58,7 @@ const HomeBanner = () => {
   const currentBanner = banners[currentIndex]
 
   return (
-    <div className="relative w-full overflow-hidden rounded-2xl shadow-lg mb-6 sm:mb-8">
+    <div className="relative w-full overflow-hidden rounded-2xl shadow-lg mb-6 sm:mb-8" style={{ height: '400px' }}>
       <AnimatePresence mode="wait">
         <motion.div
           key={currentBanner.id}
@@ -66,23 +66,23 @@ const HomeBanner = () => {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -300 }}
           transition={{ duration: 0.5, ease: 'easeInOut' }}
-          className="relative w-full"
+          className="relative w-full h-full"
         >
           {currentBanner.link ? (
-            <Link to={currentBanner.link} className="block w-full">
+            <Link to={currentBanner.link} className="block w-full h-full">
               <img
                 src={currentBanner.imageUrl || currentBanner.imageBase64}
                 alt={currentBanner.title || 'Banner'}
-                className="w-full h-auto object-cover"
-                style={{ maxHeight: '400px', objectFit: 'cover' }}
+                className="w-full h-full object-cover"
+                style={{ objectFit: 'cover', objectPosition: 'center' }}
               />
             </Link>
           ) : (
             <img
               src={currentBanner.imageUrl || currentBanner.imageBase64}
               alt={currentBanner.title || 'Banner'}
-              className="w-full h-auto object-cover"
-              style={{ maxHeight: '400px', objectFit: 'cover' }}
+              className="w-full h-full object-cover"
+              style={{ objectFit: 'cover', objectPosition: 'center' }}
             />
           )}
         </motion.div>

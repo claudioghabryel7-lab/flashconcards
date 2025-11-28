@@ -38,7 +38,6 @@ export const AuthProvider = ({ children }) => {
 
           // Carregar perfil do Firestore
           const userRef = doc(db, 'users', firebaseUser.uid)
-          const isAdminEmail = firebaseUser.email?.toLowerCase() === 'claudioghabryel.cg@gmail.com'
           
           try {
             const snap = await getDoc(userRef)
@@ -49,38 +48,26 @@ export const AuthProvider = ({ children }) => {
               // Verificar se o usuário foi deletado
               if (data.deleted === true) {
                 // Usuário foi removido pelo admin - fazer logout imediato
-                console.log('Usuário foi removido do sistema. Fazendo logout...')
+                if (import.meta.env.DEV) {
+                  console.log('Usuário foi removido do sistema. Fazendo logout...')
+                }
                 try {
                   await signOut(auth)
                   setUser(null)
                   setProfile(null)
                   return
                 } catch (err) {
-                  console.error('Erro ao fazer logout:', err)
+                  if (import.meta.env.DEV) {
+                    console.error('Erro ao fazer logout:', err)
+                  }
                   setUser(null)
                   setProfile(null)
                   return
                 }
               }
               
-              // Se for o email do admin mas não tiver role admin, atualizar automaticamente
-              if (isAdminEmail && data.role !== 'admin') {
-                try {
-                  await setDoc(userRef, { 
-                    role: 'admin',
-                  }, { merge: true })
-                  data.role = 'admin'
-                } catch (err) {
-                  console.error('Erro ao atualizar role:', err)
-                  // Mesmo com erro, definir como admin localmente
-                  data.role = 'admin'
-                }
-              }
-              
               // Garantir que role não seja undefined
-              if (!data.role && isAdminEmail) {
-                data.role = 'admin'
-              } else if (!data.role) {
+              if (!data.role) {
                 data.role = 'student'
               }
               
