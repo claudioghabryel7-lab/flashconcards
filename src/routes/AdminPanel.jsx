@@ -493,59 +493,144 @@ const AdminPanel = () => {
     setMessage('Removendo usuário...')
     
     try {
+      // Verificar se o usuário atual é admin
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        throw new Error('Usuário não autenticado')
+      }
+      
+      console.log('🔍 Verificando permissões de admin...')
+      console.log('UID do usuário atual:', currentUser.uid)
+      console.log('Email do usuário atual:', currentUser.email)
+      
+      const adminDoc = await getDoc(doc(db, 'users', currentUser.uid))
+      if (!adminDoc.exists()) {
+        console.error('❌ Documento do admin não encontrado no Firestore')
+        throw new Error('Documento de usuário não encontrado. Faça logout e login novamente.')
+      }
+      
+      const adminData = adminDoc.data()
+      console.log('📋 Dados do admin:', adminData)
+      
+      if (adminData.role !== 'admin') {
+        console.error('❌ Usuário não é admin. Role atual:', adminData.role)
+        throw new Error(`Apenas administradores podem deletar usuários. Seu role atual: ${adminData.role || 'não definido'}`)
+      }
+      
+      console.log('✅ Admin verificado. Iniciando remoção...')
+      
       // 1. Obter dados do usuário antes de deletar
       const userRef = doc(db, 'users', userUid)
       const userDoc = await getDoc(userRef)
-      const userData = userDoc.exists() ? userDoc.data() : null
+      if (!userDoc.exists()) {
+        throw new Error('Usuário não encontrado')
+      }
+      const userData = userDoc.data()
       const userEmail = userData?.email || userUid
       
-      // 2. Registrar na coleção deletedUsers ANTES de deletar (para bloquear recriação)
-      const deletedUserRef = doc(db, 'deletedUsers', userUid)
-      await setDoc(deletedUserRef, {
-        uid: userUid,
-        email: userEmail,
-        deletedAt: serverTimestamp(),
-        deletedBy: auth.currentUser?.email || 'admin',
-      })
+      console.log('📋 Dados do usuário obtidos:', userEmail)
       
-      // 3. Marcar como deletado no documento do usuário (para bloquear acesso imediato)
-      await setDoc(userRef, { 
-        deleted: true, 
-        deletedAt: serverTimestamp() 
-      }, { merge: true })
-      
-      // 4. Deletar dados relacionados do usuário
+      // 2. Forçar atualização do token de autenticação
+      console.log('🔄 Atualizando token de autenticação...')
       try {
-        // Deletar progresso do usuário
-        const progressRef = doc(db, 'userProgress', userUid)
-        await deleteDoc(progressRef).catch(() => {}) // Ignora se não existir
-        
-        // Deletar estatísticas de questões
-        const questoesStatsRef = doc(db, 'questoesStats', userUid)
-        await deleteDoc(questoesStatsRef).catch(() => {}) // Ignora se não existir
-        
-        // Deletar mensagens do chat
-        const chatsRef = collection(db, 'chats', userUid, 'messages')
-        const chatSnapshot = await getDocs(chatsRef).catch(() => null)
-        if (chatSnapshot && !chatSnapshot.empty) {
-          const deletePromises = chatSnapshot.docs.map(doc => deleteDoc(doc.ref))
-          await Promise.all(deletePromises).catch(() => {})
-        }
-      } catch (dataErr) {
-        console.warn('Erro ao deletar dados relacionados:', dataErr)
+        await currentUser.getIdToken(true) // Força refresh do token
+        console.log('✅ Token atualizado')
+      } catch (tokenErr) {
+        console.warn('⚠️ Erro ao atualizar token:', tokenErr)
         // Continua mesmo se falhar
       }
       
-      // 5. Deletar do Firestore
-      await deleteDoc(userRef)
+      // 3. Registrar na coleção deletedUsers ANTES de deletar (para bloquear recriação)
+      console.log('📝 Registrando em deletedUsers...')
+      try {
+        const deletedUserRef = doc(db, 'deletedUsers', userUid)
+        await setDoc(deletedUserRef, {
+          uid: userUid,
+          email: userEmail,
+          deletedAt: serverTimestamp(),
+          deletedBy: currentUser.email || 'admin',
+        })
+        console.log('✅ Registrado em deletedUsers')
+      } catch (deletedUsersErr) {
+        console.error('❌ Erro ao registrar em deletedUsers:', deletedUsersErr)
+        console.error('Código do erro:', deletedUsersErr.code)
+        console.error('Mensagem completa:', deletedUsersErr.message)
+        
+        // Se falhar em deletedUsers, tenta continuar mesmo assim
+        console.warn('⚠️ Continuando sem registrar em deletedUsers...')
+      }
       
-      // 6. Informar sobre Firebase Authentication
-      // Nota: Para deletar do Auth, seria necessário Admin SDK (Cloud Function)
-      // Por enquanto, o usuário fica bloqueado pelo registro em deletedUsers
+      // 4. Marcar como deletado no documento do usuário (para bloquear acesso imediato)
+      console.log('📝 Marcando usuário como deletado...')
+      try {
+        await setDoc(userRef, { 
+          deleted: true, 
+          deletedAt: serverTimestamp() 
+        }, { merge: true })
+        console.log('✅ Usuário marcado como deletado')
+      } catch (updateErr) {
+        console.error('❌ Erro ao atualizar usuário:', updateErr)
+        throw new Error(`Erro ao atualizar usuário: ${updateErr.message}. Verifique se você tem permissão de admin.`)
+      }
+      
+      // 5. Deletar dados relacionados do usuário
+      console.log('🗑️ Deletando dados relacionados...')
+      try {
+        // Deletar progresso do usuário
+        const progressRef = doc(db, 'userProgress', userUid)
+        await deleteDoc(progressRef).catch(() => {
+          console.log('⚠️ userProgress não existe ou já foi deletado')
+        })
+        console.log('✅ userProgress deletado')
+        
+        // Deletar estatísticas de questões
+        const questoesStatsRef = doc(db, 'questoesStats', userUid)
+        await deleteDoc(questoesStatsRef).catch(() => {
+          console.log('⚠️ questoesStats não existe ou já foi deletado')
+        })
+        console.log('✅ questoesStats deletado')
+        
+        // Deletar mensagens do chat
+        try {
+          const chatsRef = collection(db, 'chats', userUid, 'messages')
+          const chatSnapshot = await getDocs(chatsRef)
+          if (!chatSnapshot.empty) {
+            console.log(`📨 Encontradas ${chatSnapshot.docs.length} mensagens para deletar`)
+            const deletePromises = chatSnapshot.docs.map(doc => deleteDoc(doc.ref))
+            await Promise.all(deletePromises)
+            console.log('✅ Mensagens do chat deletadas')
+          } else {
+            console.log('⚠️ Nenhuma mensagem encontrada')
+          }
+        } catch (chatErr) {
+          console.warn('⚠️ Erro ao deletar mensagens do chat:', chatErr.message)
+          // Continua mesmo se falhar
+        }
+      } catch (dataErr) {
+        console.warn('⚠️ Erro ao deletar dados relacionados:', dataErr.message)
+        // Continua mesmo se falhar
+      }
+      
+      // 6. Deletar do Firestore
+      console.log('🗑️ Deletando documento do usuário...')
+      try {
+        await deleteDoc(userRef)
+        console.log('✅ Usuário deletado do Firestore')
+      } catch (deleteErr) {
+        console.error('❌ Erro ao deletar usuário:', deleteErr)
+        throw new Error(`Erro ao deletar usuário: ${deleteErr.message}. Verifique se você tem permissão de admin.`)
+      }
+      
+      // 7. Informar sobre Firebase Authentication
       setMessage(`✅ Usuário ${userEmail} removido do Firestore e bloqueado permanentemente. O usuário não conseguirá mais fazer login. Para remover completamente do Firebase Authentication, delete manualmente no Console do Firebase (Authentication > Users).`)
     } catch (err) {
-      console.error('Erro ao remover usuário:', err)
-      setMessage(`❌ Erro ao remover usuário: ${err.message}`)
+      console.error('❌ Erro ao remover usuário:', err)
+      console.error('Detalhes do erro:', {
+        code: err.code,
+        message: err.message,
+        stack: err.stack
+      })
+      setMessage(`❌ Erro ao remover usuário: ${err.message}. Verifique o console para mais detalhes.`)
     }
   }
 
