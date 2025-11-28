@@ -65,3 +65,4 @@ Pode haver um problema na forma como o Firestore está sendo inicializado.
 - [ ] Tente criar um documento manualmente no Firebase Console
 - [ ] Verifique a data/hora da última publicação das regras
 
+

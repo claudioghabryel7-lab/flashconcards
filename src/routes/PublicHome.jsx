@@ -13,6 +13,7 @@ import {
   BookOpenIcon,
   RocketLaunchIcon
 } from '@heroicons/react/24/solid'
+import { trackButtonClick } from '../utils/googleAds'
 
 const features = [
   {
@@ -104,9 +105,10 @@ const PublicHome = () => {
             </div>
           </div>
           <a
-            href={whatsappUrl}
+            href="https://hotmart.com/pt-br/marketplace/produtos/mentoria-policial-legislativo-alego/Q103159645K"
             target="_blank"
             rel="noopener noreferrer"
+            onClick={trackButtonClick}
             className="inline-block rounded-full bg-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-rose-600 shadow-2xl hover:bg-rose-50 transition-all transform hover:scale-105"
           >
             Garantir Promoção Agora
@@ -212,6 +214,15 @@ const PublicHome = () => {
           >
             Começar Agora
           </Link>
+          <a
+            href="https://hotmart.com/pt-br/marketplace/produtos/mentoria-policial-legislativo-alego/Q103159645K"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={trackButtonClick}
+            className="inline-block rounded-full bg-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-alego-600 shadow-2xl hover:bg-alego-50 transition-all transform hover:scale-105"
+          >
+            Garantir Promoção
+          </a>
           <a
             href={whatsappUrl}
             target="_blank"

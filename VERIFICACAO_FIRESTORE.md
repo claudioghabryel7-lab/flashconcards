@@ -42,3 +42,4 @@ Se nada funcionar, pode ser que o Firestore esteja em modo Datastore. Nesse caso
 2. Atualize as regras no novo banco
 3. Ou migre do Datastore para Firestore Native
 
+

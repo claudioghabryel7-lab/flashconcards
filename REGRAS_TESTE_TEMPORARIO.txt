@@ -90,3 +90,4 @@ INSTRUÇÕES:
 5. Se funcionar, o problema era nas regras
 6. Se NÃO funcionar, o problema é em outro lugar (configuração do Firebase, projeto errado, etc)
 
+
