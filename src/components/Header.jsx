@@ -23,6 +23,7 @@ const Header = () => {
       { to: '/', label: 'Início', guest: true },
       { to: '/dashboard', label: 'Painel', auth: true },
       { to: '/flashcards', label: 'Flashcards', auth: true },
+      { to: '/flashquestoes', label: 'FlashQuestões', auth: true },
       { to: '/ranking', label: 'Ranking', auth: true },
       { to: '/admin', label: 'Admin', auth: true, admin: true },
     ],

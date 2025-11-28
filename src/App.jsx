@@ -12,6 +12,7 @@ import Login from './routes/Login'
 import PublicHome from './routes/PublicHome'
 import Ranking from './routes/Ranking'
 import SetupUser from './routes/SetupUser'
+import FlashQuestoes from './routes/FlashQuestoes'
 
 const ProtectedRoute = ({ children, adminOnly = false }) => {
   const { user, loading, isAdmin } = useAuth()
@@ -103,6 +104,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Ranking />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/flashquestoes"
+            element={
+              <ProtectedRoute>
+                <FlashQuestoes />
               </ProtectedRoute>
             }
           />

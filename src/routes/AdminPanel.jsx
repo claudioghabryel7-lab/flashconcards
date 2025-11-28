@@ -58,6 +58,9 @@ const AdminPanel = () => {
   const [pdfText, setPdfText] = useState('')
   const [extractingPdf, setExtractingPdf] = useState(false)
   const [pdfUrl, setPdfUrl] = useState('')
+  const [questoesPrompt, setQuestoesPrompt] = useState('')
+  const [bizuPrompt, setBizuPrompt] = useState('')
+  const [savingQuestoesConfig, setSavingQuestoesConfig] = useState(false)
   const [expandedCardMaterias, setExpandedCardMaterias] = useState({})
   const [expandedCardModulos, setExpandedCardModulos] = useState({})
   
@@ -99,6 +102,25 @@ const AdminPanel = () => {
       }
     }
     loadEdital()
+  }, [isAdmin])
+
+  // Carregar configurações de questões e BIZUs
+  useEffect(() => {
+    if (!isAdmin) return
+    
+    const loadQuestoesConfig = async () => {
+      try {
+        const questoesDoc = await getDoc(doc(db, 'config', 'questoes'))
+        if (questoesDoc.exists()) {
+          const data = questoesDoc.data()
+          setQuestoesPrompt(data.prompt || '')
+          setBizuPrompt(data.bizuPrompt || '')
+        }
+      } catch (err) {
+        console.error('Erro ao carregar configuração de questões:', err)
+      }
+    }
+    loadQuestoesConfig()
   }, [isAdmin])
 
   // Extrair texto do PDF
@@ -561,6 +583,28 @@ const AdminPanel = () => {
       setMessage(`Erro ao salvar: ${err.message}`)
     } finally {
       setSavingPrompt(false)
+    }
+  }
+
+  // Salvar configuração de questões e BIZUs
+  const handleSaveQuestoesConfig = async () => {
+    setSavingQuestoesConfig(true)
+    setMessage('Salvando configuração de questões...')
+
+    try {
+      const questoesRef = doc(db, 'config', 'questoes')
+      await setDoc(questoesRef, {
+        prompt: questoesPrompt.trim(),
+        bizuPrompt: bizuPrompt.trim(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+
+      setMessage('Configuração de questões e BIZUs salva com sucesso!')
+    } catch (err) {
+      console.error('Erro ao salvar configuração de questões:', err)
+      setMessage(`Erro ao salvar: ${err.message}`)
+    } finally {
+      setSavingQuestoesConfig(false)
     }
   }
 
@@ -1142,6 +1186,102 @@ INFORMAÇÕES ADICIONAIS:
           className="mt-4 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           {savingPrompt ? 'Salvando...' : 'Salvar Configuração'}
+        </button>
+      </div>
+
+      {/* Configuração de Questões e BIZUs */}
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <p className="flex items-center gap-2 text-sm font-semibold text-alego-600">
+          <DocumentTextIcon className="h-5 w-5" />
+          Configuração de Questões e BIZUs
+        </p>
+        <p className="mt-2 text-xs text-slate-500">
+          Configure como a IA deve gerar as questões fictícias e os BIZUs (explicações) no FlashQuestões.
+        </p>
+
+        <div className="mt-6 space-y-6">
+          {/* Prompt para Questões */}
+          <div>
+            <label className="block text-xs font-semibold uppercase text-slate-500 mb-2">
+              Prompt para Geração de Questões
+            </label>
+            <textarea
+              value={questoesPrompt}
+              onChange={(e) => setQuestoesPrompt(e.target.value)}
+              rows={12}
+              placeholder="Configure como as questões devem ser geradas. Exemplo:
+
+Você é um especialista em criar questões de concursos públicos no estilo FGV para o cargo de Policial Legislativo da ALEGO.
+
+REGRAS PARA AS QUESTÕES:
+- Estilo FGV: questões objetivas, claras, com alternativas bem elaboradas
+- Cada questão deve ter 5 alternativas (A, B, C, D, E)
+- Apenas UMA alternativa está correta
+- As alternativas incorretas devem ser plausíveis (distratores inteligentes)
+- Baseie-se no conteúdo do edital e no módulo especificado
+- Questões devem ser FICTÍCIAS (não são questões reais de provas anteriores)
+- Foque em temas relevantes para o cargo de Policial Legislativo
+- Dificuldade: nível FGV (intermediário a avançado)
+- Enunciados claros e objetivos
+- Alternativas com linguagem formal e técnica quando apropriado
+
+FORMATO:
+- Enunciado completo e claro
+- 5 alternativas bem elaboradas
+- Justificativa breve explicando a resposta correta"
+              className="w-full rounded-xl border border-slate-200 p-4 text-sm focus:border-alego-400 focus:outline-none font-mono"
+              disabled={savingQuestoesConfig}
+            />
+            <p className="mt-2 text-xs text-slate-400">
+              💡 Este prompt será usado como base para gerar as questões. Se deixar em branco, será usado o prompt padrão.
+            </p>
+          </div>
+
+          {/* Prompt para BIZUs */}
+          <div>
+            <label className="block text-xs font-semibold uppercase text-slate-500 mb-2">
+              Prompt para Geração de BIZUs (Explicações)
+            </label>
+            <textarea
+              value={bizuPrompt}
+              onChange={(e) => setBizuPrompt(e.target.value)}
+              rows={12}
+              placeholder="Configure como os BIZUs (explicações) devem ser gerados. Exemplo:
+
+Você é um professor especialista em concursos públicos.
+
+REGRAS PARA OS BIZUs:
+- Explique por que a alternativa correta está certa
+- Explique por que as outras alternativas estão incorretas
+- Dê dicas e macetes relacionados ao tema
+- Seja objetivo mas completo (3-5 parágrafos)
+- Use linguagem didática e acessível
+- Inclua exemplos práticos quando fizer sentido
+- Relacione com o contexto do cargo de Policial Legislativo
+- Destaque pontos importantes que podem cair em prova
+- Seja motivador e encorajador
+
+ESTRUTURA SUGERIDA:
+1. Por que a resposta correta está certa
+2. Por que as outras alternativas estão erradas
+3. Dicas e macetes sobre o tema
+4. Relação com o edital/conteúdo programático"
+              className="w-full rounded-xl border border-slate-200 p-4 text-sm focus:border-alego-400 focus:outline-none font-mono"
+              disabled={savingQuestoesConfig}
+            />
+            <p className="mt-2 text-xs text-slate-400">
+              💡 Este prompt será usado como base para gerar os BIZUs. Se deixar em branco, será usado o prompt padrão.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSaveQuestoesConfig}
+          disabled={savingQuestoesConfig}
+          className="mt-6 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {savingQuestoesConfig ? 'Salvando...' : 'Salvar Configuração de Questões'}
         </button>
       </div>
 
