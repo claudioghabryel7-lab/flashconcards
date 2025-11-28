@@ -763,10 +763,10 @@ INFORMAÇÕES ADICIONAIS:
             const hasPresenceData = presence[user.uid] !== undefined
             
             return (
-              <div
-                key={user.uid || user.email}
-                className="flex flex-col gap-2 py-4 md:flex-row md:items-center md:justify-between"
-              >
+            <div
+              key={user.uid || user.email}
+              className="flex flex-col gap-2 py-4 md:flex-row md:items-center md:justify-between"
+            >
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <div className={`h-3 w-3 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
@@ -774,13 +774,13 @@ INFORMAÇÕES ADICIONAIS:
                       <div className="absolute inset-0 h-3 w-3 animate-ping rounded-full bg-emerald-400 opacity-75" />
                     )}
                   </div>
-                  <div>
-                    <p className="font-semibold text-alego-700">{user.displayName || user.email}</p>
-                    <p className="text-sm text-slate-500">{user.email}</p>
+              <div>
+                <p className="font-semibold text-alego-700">{user.displayName || user.email}</p>
+                <p className="text-sm text-slate-500">{user.email}</p>
                     <div className="mt-1 flex gap-2">
                       <span className="inline-block rounded-full bg-alego-100 px-2 py-1 text-xs font-semibold text-alego-600">
-                        {user.role === 'admin' ? 'Admin' : 'Aluno'}
-                      </span>
+                  {user.role === 'admin' ? 'Admin' : 'Aluno'}
+                </span>
                       <span className={`inline-block rounded-full px-2 py-1 text-xs font-semibold ${
                         isOnline && hasPresenceData
                           ? 'bg-emerald-100 text-emerald-700' 
@@ -790,16 +790,16 @@ INFORMAÇÕES ADICIONAIS:
                       </span>
                     </div>
                   </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeUser(user.uid || user.email)}
-                  className="flex items-center gap-1 rounded-full border border-rose-500 px-4 py-2 text-sm font-semibold text-rose-500"
-                >
-                  <TrashIcon className="h-4 w-4" />
-                  Excluir
-                </button>
               </div>
+              <button
+                type="button"
+                onClick={() => removeUser(user.uid || user.email)}
+                className="flex items-center gap-1 rounded-full border border-rose-500 px-4 py-2 text-sm font-semibold text-rose-500"
+              >
+                <TrashIcon className="h-4 w-4" />
+                Excluir
+              </button>
+            </div>
             )
           })}
         </div>

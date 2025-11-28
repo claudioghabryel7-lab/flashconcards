@@ -44,7 +44,10 @@ const FloatingAIChat = () => {
   const [modelError, setModelError] = useState(null)
   const [initialMessageSent, setInitialMessageSent] = useState(false)
   const [lastRequestTime, setLastRequestTime] = useState(0)
-  const MIN_REQUEST_INTERVAL = 2000 // Mínimo de 2 segundos entre requisições
+  const [quotaCooldown, setQuotaCooldown] = useState(0) // Tempo restante de cooldown por quota
+  const [quotaDailyLimit, setQuotaDailyLimit] = useState(false) // Limite diário atingido
+  const [usingGroq, setUsingGroq] = useState(false) // Se está usando Groq como fallback
+  const MIN_REQUEST_INTERVAL = 5000 // Mínimo de 5 segundos entre requisições (aumentado)
   
   // Dados de progresso para análise
   const [progressData, setProgressData] = useState([])
@@ -437,6 +440,46 @@ ANÁLISE:
 Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestões práticas.`
   }
 
+  // Chamar Groq API como fallback
+  const callGroqAPI = async (prompt) => {
+    const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+    if (!groqApiKey) {
+      throw new Error('GROQ_API_KEY não configurada')
+    }
+
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile', // Modelo rápido e eficiente
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 800,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error?.message || `Groq API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return data.choices[0]?.message?.content || 'Desculpe, não consegui gerar uma resposta.'
+    } catch (err) {
+      console.error('Erro ao chamar Groq API:', err)
+      throw err
+    }
+  }
+
   // Enviar mensagem da IA
   const sendAIMessage = async (userMessage, isInitial = false) => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY
@@ -497,47 +540,92 @@ MATÉRIAS: Português, Área de Atuação (PL), Raciocínio Lógico, Constitucio
 
 Responda CURTO e OBJETIVO: ${userMessage}`
 
-      // Tentar gerar resposta com retry em caso de quota (backoff exponencial)
+      // Tentar gerar resposta com Gemini primeiro
       let result = null
-      let retries = 0
-      const maxRetries = 3
-      const baseDelay = 2000 // 2 segundos base
-
-      while (retries <= maxRetries) {
-        try {
-          result = await model.generateContent({
-            contents: [{ parts: [{ text: mentorPrompt }] }],
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 800, // Aumentado para evitar cortes
-              topP: 0.9,
-              topK: 40,
-            },
-          })
-          break // Sucesso
-        } catch (apiErr) {
-          const errorMessage = apiErr.message || String(apiErr) || ''
-          const isQuotaError = 
-            errorMessage.includes('429') || 
-            errorMessage.includes('quota') ||
-            errorMessage.includes('Too Many Requests') ||
-            errorMessage.includes('RESOURCE_EXHAUSTED') ||
-            errorMessage.includes('rate limit') ||
-            apiErr.status === 429 ||
-            apiErr.code === 429
-          
-          // Se for erro de quota e ainda temos tentativas, aguardar e tentar novamente
-          if (isQuotaError && retries < maxRetries) {
-            retries++
-            // Backoff exponencial: 2s, 4s, 8s
-            const waitTime = baseDelay * Math.pow(2, retries - 1)
-            console.warn(`⚠️ Quota excedida (tentativa ${retries}/${maxRetries}). Aguardando ${waitTime/1000}s...`)
-            await new Promise(resolve => setTimeout(resolve, waitTime))
-            continue
-          }
-          
-          // Se não for erro de quota ou já tentou demais, lança o erro
+      let useGroqFallback = false
+      
+      try {
+        result = await model.generateContent({
+          contents: [{ parts: [{ text: mentorPrompt }] }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 800,
+            topP: 0.9,
+            topK: 40,
+          },
+        })
+      } catch (apiErr) {
+        // Capturar erro de forma mais robusta
+        const errorMessage = apiErr.message || String(apiErr) || ''
+        const errorString = JSON.stringify(apiErr) || ''
+        
+        console.log('🔍 Erro capturado:', {
+          message: errorMessage.substring(0, 200),
+          status: apiErr.status,
+          code: apiErr.code,
+          hasQuota: errorMessage.includes('quota') || errorString.includes('quota'),
+          has429: errorMessage.includes('429') || errorString.includes('429')
+        })
+        
+        // Verificar se é erro de quota (429 ou mensagens relacionadas)
+        const isQuotaError = 
+          errorMessage.includes('429') || 
+          errorMessage.includes('quota') ||
+          errorMessage.includes('Quota exceeded') ||
+          errorMessage.includes('Too Many Requests') ||
+          errorMessage.includes('RESOURCE_EXHAUSTED') ||
+          errorMessage.includes('rate limit') ||
+          errorString.includes('429') ||
+          errorString.includes('quota') ||
+          errorString.includes('Quota exceeded') ||
+          errorString.includes('free_tier_requests') ||
+          apiErr.status === 429 ||
+          apiErr.code === 429 ||
+          (apiErr.response && apiErr.response.status === 429)
+        
+        if (isQuotaError) {
+          // Qualquer erro de quota = tentar Groq imediatamente
+          console.warn('⚠️ Erro de quota detectado. Usando Groq como fallback...')
+          useGroqFallback = true
+        } else {
+          // Se não for erro de quota, lança o erro normalmente
+          console.log('❌ Erro não é de quota, lançando erro original')
           throw apiErr
+        }
+      }
+      
+      // Se detectou erro de quota, usar Groq como fallback
+      if (useGroqFallback) {
+        const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+        if (groqApiKey) {
+          try {
+            console.log('🔄 Tentando usar Groq como fallback...')
+            setUsingGroq(true)
+            setQuotaDailyLimit(true)
+            
+            const groqResponse = await callGroqAPI(mentorPrompt)
+            
+            // Se Groq funcionou, salvar resposta e retornar
+            const chatRef = collection(db, 'chats', user.uid, 'messages')
+            await addDoc(chatRef, {
+              text: groqResponse,
+              sender: 'ai',
+              createdAt: serverTimestamp(),
+            })
+            
+            console.log('✅ Groq respondeu com sucesso!')
+            setSending(false)
+            return // Sucesso com Groq
+          } catch (groqErr) {
+            console.error('❌ Erro ao usar Groq como fallback:', groqErr)
+            setUsingGroq(false)
+            // Se Groq também falhar, continuar para mostrar erro
+            throw new Error('QUOTA_DAILY_LIMIT')
+          }
+        } else {
+          // Se não tem Groq configurado, lançar erro
+          console.error('❌ Groq API key não configurada')
+          throw new Error('QUOTA_DAILY_LIMIT')
         }
       }
 
@@ -637,26 +725,70 @@ Responda CURTO e OBJETIVO: ${userMessage}`
       let errorMessage = 'Desculpe, ocorreu um erro. Tente novamente em alguns instantes.'
       
       const errorMsg = err.message || String(err) || ''
+      const errorString = JSON.stringify(err) || ''
       const isQuotaError = 
         errorMsg.includes('429') || 
         errorMsg.includes('quota') ||
+        errorMsg.includes('Quota exceeded') ||
         errorMsg.includes('Too Many Requests') ||
         errorMsg.includes('RESOURCE_EXHAUSTED') ||
         errorMsg.includes('rate limit') ||
+        errorString.includes('429') ||
+        errorString.includes('quota') ||
+        errorString.includes('Quota exceeded') ||
         err.status === 429 ||
         err.code === 429
       
-      if (isQuotaError) {
-        errorMessage = '⏳ A quota da API foi excedida. Por favor, aguarde 2-3 minutos antes de tentar novamente. Isso acontece quando há muitas requisições em pouco tempo. O sistema tentará automaticamente novamente em alguns instantes.'
+      // Verificar se é limite diário
+      const isDailyLimit = errorMsg === 'QUOTA_DAILY_LIMIT' || 
+                          errorMsg.includes('QUOTA_DAILY_LIMIT') ||
+                          errorMsg.includes('free_tier_requests') ||
+                          errorString.includes('free_tier_requests') ||
+                          (errorMsg.includes('200') && errorMsg.includes('quota'))
+      
+      if (isDailyLimit) {
+        setQuotaDailyLimit(true)
+        errorMessage = `⏳ LIMITE DIÁRIO ATINGIDO
+
+Você atingiu o limite de 200 requisições/dia do plano gratuito do Google Gemini API.
+
+📋 COMO RESOLVER:
+
+1. AGUARDAR: O limite será resetado automaticamente amanhã (meia-noite UTC)
+
+2. FAZER UPGRADE (RECOMENDADO):
+   - Acesse: https://ai.google.dev/pricing
+   - Faça upgrade para um plano pago
+   - Planos pagos têm limites muito maiores (milhares de requisições/dia)
+   - O custo é baixo: ~$0.0001 por requisição
+
+3. CONFIGURAR NOVA API KEY:
+   - Após fazer upgrade, gere uma nova API key no Google AI Studio
+   - Substitua a VITE_GEMINI_API_KEY no arquivo .env
+   - Reinicie o servidor
+
+O chat estará disponível novamente amanhã ou após configurar um plano pago.`
+      } else if (isQuotaError) {
+        // Tentar extrair o tempo de espera do erro
+        const retryMatch = errorMsg.match(/retry in ([\d.]+)s/i) || 
+                          errorMsg.match(/(\d+\.?\d*)\s*seconds?/i)
+        const waitSeconds = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60
+        
+        errorMessage = `⏳ Quota temporária excedida. Aguarde ${waitSeconds} segundos antes de tentar novamente.`
       } else if (errorMsg.includes('API key')) {
         errorMessage = 'Erro na configuração da API. Verifique a chave do Gemini.'
       }
       
-      await addDoc(chatRef, {
-        text: errorMessage,
-        sender: 'ai',
-        createdAt: serverTimestamp(),
-      })
+      // Sempre salvar a mensagem de erro no chat
+      try {
+        await addDoc(chatRef, {
+          text: errorMessage,
+          sender: 'ai',
+          createdAt: serverTimestamp(),
+        })
+      } catch (saveErr) {
+        console.error('Erro ao salvar mensagem de erro:', saveErr)
+      }
     }
   }
 
@@ -664,6 +796,17 @@ Responda CURTO e OBJETIVO: ${userMessage}`
   const sendMessage = async (event) => {
     event?.preventDefault()
     if (!input.trim() || !user || sending) return
+    
+    // Verificar se está em cooldown de quota
+    if (quotaCooldown > 0) {
+      const chatRef = collection(db, 'chats', user.uid, 'messages')
+      await addDoc(chatRef, {
+        text: `⏳ Quota excedida. Aguarde ${quotaCooldown} segundo(s) antes de tentar novamente.`,
+        sender: 'ai',
+        createdAt: serverTimestamp(),
+      })
+      return
+    }
     
     // Rate limiting: evitar muitas requisições seguidas
     const now = Date.now()
@@ -755,6 +898,13 @@ Responda CURTO e OBJETIVO: ${userMessage}`
                 }`}>
                   Mentor do Concurso ALEGO
                 </p>
+                {usingGroq && (
+                  <p className={`text-xs ${
+                    darkMode ? 'text-emerald-400' : 'text-emerald-600'
+                  }`}>
+                    ⚡ Usando Groq (fallback)
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -771,6 +921,27 @@ Responda CURTO e OBJETIVO: ${userMessage}`
 
             {/* Messages */}
             <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+              {quotaDailyLimit && (
+                <div className={`rounded-lg border-2 p-4 mb-4 ${
+                  darkMode 
+                    ? 'border-amber-500/50 bg-amber-900/20 text-amber-200' 
+                    : 'border-amber-500 bg-amber-50 text-amber-800'
+                }`}>
+                  <p className="font-bold mb-2">⏳ Limite Diário Atingido</p>
+                  <p className="text-xs mb-2">
+                    Você atingiu o limite de 200 requisições/dia do plano gratuito.
+                  </p>
+                  <p className="text-xs font-semibold mb-1">Para remover o limite:</p>
+                  <ol className="text-xs list-decimal list-inside space-y-1 mb-2">
+                    <li>Acesse <a href="https://ai.google.dev/pricing" target="_blank" rel="noopener noreferrer" className="underline">ai.google.dev/pricing</a></li>
+                    <li>Faça upgrade para um plano pago</li>
+                    <li>Configure a nova API key no .env</li>
+                  </ol>
+                  <p className="text-xs">
+                    O limite será resetado amanhã automaticamente.
+                  </p>
+                </div>
+              )}
               {messages.length === 0 && !sending && (
                 <div className={`text-center text-sm ${
                   darkMode ? 'text-slate-400' : 'text-slate-500'
@@ -822,8 +993,8 @@ Responda CURTO e OBJETIVO: ${userMessage}`
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={initialMessageSent ? "Pergunte ao seu mentor..." : "Aguardando análise..."}
-                disabled={sending || !availableModel || !initialMessageSent}
+                placeholder={quotaDailyLimit ? "Limite diário atingido. Tente amanhã." : (initialMessageSent ? "Pergunte ao seu mentor..." : "Aguardando análise...")}
+                disabled={sending || !availableModel || !initialMessageSent || quotaDailyLimit || quotaCooldown > 0}
                 className={`flex-1 rounded-full border px-4 py-2 text-sm focus:outline-none disabled:opacity-50 ${
                   darkMode
                     ? 'border-slate-600 bg-slate-700 text-slate-200 focus:border-alego-500'
@@ -832,10 +1003,12 @@ Responda CURTO e OBJETIVO: ${userMessage}`
               />
               <button
                 type="submit"
-                disabled={!input.trim() || sending || !availableModel || !initialMessageSent}
+                disabled={!input.trim() || sending || !availableModel || !initialMessageSent || quotaCooldown > 0 || quotaDailyLimit}
                 className="flex items-center gap-2 rounded-full bg-alego-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
                 <PaperAirplaneIcon className="h-4 w-4" />
+                {quotaCooldown > 0 && <span className="text-xs">{quotaCooldown}s</span>}
+                {quotaDailyLimit && <span className="text-xs">⏳</span>}
               </button>
             </form>
           </div>

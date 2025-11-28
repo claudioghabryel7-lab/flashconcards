@@ -325,25 +325,25 @@ const Dashboard = () => {
     }
   }
 
-  // Calcular estatísticas baseadas em cards estudados
-  useEffect(() => {
-    // Horas dos dias registrados (tempo real rastreado)
-    const hoursFromDays = progressData.reduce((sum, item) => {
-      const hours = parseFloat(item.hours || 0)
-      return sum + hours
-    }, 0)
+      // Calcular estatísticas baseadas em cards estudados
+      useEffect(() => {
+        // Horas dos dias registrados (tempo real rastreado)
+        const hoursFromDays = progressData.reduce((sum, item) => {
+          const hours = parseFloat(item.hours || 0)
+          return sum + hours
+        }, 0)
+        
+        console.log('📊 Atualizando estatísticas:', { 
+          progressDataLength: progressData.length, 
+          hoursFromDays: hoursFromDays.toFixed(2) 
+        })
+        
+        const stats = {
+          totalDays: progressData.length,
+          totalHours: hoursFromDays, // Usar apenas horas reais do Firestore (rastreadas pelo timer)
+          bySubject: {},
+        }
     
-    console.log('📊 Atualizando estatísticas:', { 
-      progressDataLength: progressData.length, 
-      hoursFromDays: hoursFromDays.toFixed(2) 
-    })
-    
-    const stats = {
-      totalDays: progressData.length,
-      totalHours: hoursFromDays, // Usar apenas horas reais do Firestore (rastreadas pelo timer)
-      bySubject: {},
-    }
-
     // Inicializar todas as matérias
     MATERIAS.forEach((materia) => {
       stats.bySubject[materia] = {

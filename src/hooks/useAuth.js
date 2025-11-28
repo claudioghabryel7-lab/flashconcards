@@ -210,13 +210,13 @@ export const AuthProvider = ({ children }) => {
         if (deletedSnap.exists()) {
           // Usuário foi deletado pelo admin - fazer logout
           console.log('Usuário foi removido do sistema. Fazendo logout...')
-          try {
-            await signOut(auth)
-            setUser(null)
-            setProfile(null)
-          } catch (err) {
-            console.error('Erro ao fazer logout:', err)
-            setUser(null)
+        try {
+          await signOut(auth)
+          setUser(null)
+          setProfile(null)
+        } catch (err) {
+          console.error('Erro ao fazer logout:', err)
+          setUser(null)
             setProfile(null)
           }
         } else {

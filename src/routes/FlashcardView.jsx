@@ -319,6 +319,46 @@ const FlashcardView = () => {
   const currentCard = activeCards[currentIndex]
   const needsReview = true // Sempre mostra os botões de avaliação
 
+  // Chamar Groq API como fallback
+  const callGroqAPI = async (prompt) => {
+    const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+    if (!groqApiKey) {
+      throw new Error('GROQ_API_KEY não configurada')
+    }
+
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 400,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error?.message || `Groq API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return data.choices[0]?.message?.content || 'Desculpe, não consegui gerar uma explicação.'
+    } catch (err) {
+      console.error('Erro ao chamar Groq API:', err)
+      throw err
+    }
+  }
+
   const generateCardExplanation = async (card) => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY
     if (!apiKey) {
@@ -331,14 +371,7 @@ const FlashcardView = () => {
       (value, idx, arr) => value && arr.indexOf(value) === idx,
     )
 
-    const genAI = new GoogleGenerativeAI(apiKey)
-    let lastError = null
-
-    for (const modelName of candidates) {
-      try {
-        const model = genAI.getGenerativeModel({ model: modelName })
-
-        const prompt = `
+    const prompt = `
 Explique o conteúdo deste flashcard de forma clara, prática e em até 5 parágrafos curtos.
 
 Matéria: ${card.materia || 'Não informado'}
@@ -352,6 +385,14 @@ Regras:
 - Seja didático, direto e motivador.
 - Traga exemplos simples quando fizer sentido.
 - Foque no entendimento do conceito, não apenas repetir a resposta.`.trim()
+
+    const genAI = new GoogleGenerativeAI(apiKey)
+    let lastError = null
+    let isQuotaError = false
+
+    for (const modelName of candidates) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName })
 
         const result = await model.generateContent({
           contents: [{ parts: [{ text: prompt }] }],
@@ -368,6 +409,36 @@ Regras:
         return text
       } catch (err) {
         lastError = err
+        const errorMessage = err.message || String(err) || ''
+        const errorString = JSON.stringify(err) || ''
+        
+        // Verificar se é erro de quota
+        isQuotaError = 
+          errorMessage.includes('429') || 
+          errorMessage.includes('quota') ||
+          errorMessage.includes('Quota exceeded') ||
+          errorString.includes('429') ||
+          errorString.includes('quota') ||
+          errorString.includes('free_tier_requests')
+        
+        // Se for erro de quota, tentar Groq imediatamente
+        if (isQuotaError) {
+          console.warn('⚠️ Erro de quota detectado. Usando Groq como fallback para explicação...')
+          const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+          if (groqApiKey) {
+            try {
+              const groqResponse = await callGroqAPI(prompt)
+              console.log('✅ Groq gerou explicação com sucesso!')
+              return groqResponse
+            } catch (groqErr) {
+              console.error('❌ Erro ao usar Groq como fallback:', groqErr)
+              throw new Error('Limite de quota atingido. Tente novamente mais tarde.')
+            }
+          } else {
+            throw new Error('Limite de quota atingido. Configure VITE_GROQ_API_KEY para usar fallback automático.')
+          }
+        }
+        
         // tenta próximo modelo se for erro de modelo inválido/404
         if (
           err.message?.includes('404') ||

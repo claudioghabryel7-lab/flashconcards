@@ -14,6 +14,7 @@ VITE_FIREBASE_STORAGE_BUCKET
 VITE_FIREBASE_MESSAGING_SENDER_ID
 VITE_FIREBASE_APP_ID
 VITE_GEMINI_API_KEY
+VITE_GROQ_API_KEY
 ```
 
 ## 📝 Como Adicionar no Vercel
@@ -45,9 +46,15 @@ VITE_GEMINI_API_KEY
 1. Acesse [Google AI Studio](https://aistudio.google.com/app/apikey)
 2. Crie uma nova API key ou copie uma existente
 
+### Groq API
+1. Acesse [Groq Console](https://console.groq.com/keys)
+2. Crie uma nova API key ou copie uma existente
+3. Usado como fallback automático quando Gemini atinge quota
+
 ---
 
 **Depois de adicionar todas as variáveis, faça um novo deploy!** 🚀
+
 
 
 

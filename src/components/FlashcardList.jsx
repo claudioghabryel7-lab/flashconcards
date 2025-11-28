@@ -6,9 +6,9 @@ const FlashcardList = ({
   currentIndex,
   onSelect,
   onToggleFavorite,
-  onRateDifficulty,
+  onRateDifficulty = null,
   favorites,
-  cardProgress,
+  cardProgress = {},
   onPrev,
   onNext,
   onShuffle,
@@ -42,7 +42,7 @@ const FlashcardList = ({
             onToggleFavorite={onToggleFavorite}
             onRateDifficulty={onRateDifficulty}
             showRating={showRating}
-            cardProgress={cardProgress[currentCard.id]}
+            cardProgress={cardProgress && cardProgress[currentCard.id] ? cardProgress[currentCard.id] : null}
             onExplainCard={onExplainCard}
           />
         </div>
@@ -71,7 +71,7 @@ const FlashcardList = ({
       <div className="grid grid-cols-5 gap-3">
         {cards.map((card, index) => {
           const isFavoriteCard = favorites.includes(card.id)
-          const progress = cardProgress[card.id]
+          const progress = cardProgress && cardProgress[card.id] ? cardProgress[card.id] : null
           const isReviewed = progress && progress.nextReview
           return (
             <button
