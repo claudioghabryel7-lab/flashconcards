@@ -47,8 +47,13 @@ const HomeBanner = () => {
     return () => clearInterval(timer)
   }, [banners, currentIndex])
 
+  // Mostrar skeleton enquanto carrega para evitar flash
   if (loading) {
-    return null // Não mostra nada enquanto carrega
+    return (
+      <div className="relative w-full overflow-hidden rounded-2xl shadow-lg mb-6 sm:mb-8" style={{ height: '300px' }}>
+        <div className="w-full h-full bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 animate-pulse" />
+      </div>
+    )
   }
 
   if (banners.length === 0) {
