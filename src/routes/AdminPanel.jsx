@@ -10,7 +10,7 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore'
-import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, SparklesIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline'
+import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
 import { auth, db, storage } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -1143,111 +1143,6 @@ INFORMAÇÕES ADICIONAIS:
         >
           {savingPrompt ? 'Salvando...' : 'Salvar Configuração'}
         </button>
-      </div>
-
-      {/* Geração Automática com IA */}
-      <div className="rounded-2xl bg-gradient-to-br from-purple-50 to-blue-50 p-6 shadow-sm border-2 border-purple-200">
-        <p className="flex items-center gap-2 text-lg font-bold text-purple-700">
-          <SparklesIcon className="h-6 w-6" />
-          Geração Automática com IA
-        </p>
-        <p className="mt-1 text-sm text-slate-600">
-          Use a IA para gerar automaticamente módulos e flashcards. Configure o prompt e a IA criará tudo para você!
-        </p>
-
-        {generationProgress && (
-          <div className="mt-4 rounded-lg bg-blue-100 p-4">
-            <p className="text-sm font-semibold text-blue-700">{generationProgress}</p>
-          </div>
-        )}
-
-        <div className="mt-6 space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            <label className="block text-sm font-semibold text-slate-700">
-              Matéria *
-              <select
-                value={aiGenerationConfig.materia}
-                onChange={(e) => setAiGenerationConfig(prev => ({ ...prev, materia: e.target.value }))}
-                className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-purple-400 focus:outline-none"
-                disabled={generating}
-              >
-                <option value="">Selecione a matéria</option>
-                {MATERIAS.map((materia) => (
-                  <option key={materia} value={materia}>
-                    {materia}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm font-semibold text-slate-700">
-              Quantidade de Módulos
-              <input
-                type="number"
-                min="1"
-                max="10"
-                value={aiGenerationConfig.quantidadeModulos}
-                onChange={(e) => setAiGenerationConfig(prev => ({ 
-                  ...prev, 
-                  quantidadeModulos: parseInt(e.target.value) || 1 
-                }))}
-                className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-purple-400 focus:outline-none"
-                disabled={generating}
-              />
-            </label>
-            <label className="block text-sm font-semibold text-slate-700">
-              Flashcards por Módulo
-              <input
-                type="number"
-                min="1"
-                max="50"
-                value={aiGenerationConfig.flashcardsPorModulo}
-                onChange={(e) => setAiGenerationConfig(prev => ({ 
-                  ...prev, 
-                  flashcardsPorModulo: parseInt(e.target.value) || 20 
-                }))}
-                className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-purple-400 focus:outline-none"
-                disabled={generating}
-              />
-            </label>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Instruções Adicionais (Opcional)
-            </label>
-            <textarea
-              value={aiGenerationPrompt}
-              onChange={(e) => setAiGenerationPrompt(e.target.value)}
-              rows={6}
-              placeholder="Instruções adicionais específicas (opcional):
-
-Exemplo:
-- Foque em questões de múltipla escolha
-- Dificuldade: intermediária
-- Priorize tópicos X, Y, Z
-
-Se deixar em branco, a IA usará as regras padrão:
-• 20 flashcards por módulo
-• Nível FGV
-• Baseado 100% no edital
-• Perguntas objetivas e respostas completas"
-              className="w-full rounded-xl border border-slate-200 p-4 text-sm focus:border-purple-400 focus:outline-none"
-              disabled={generating}
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={generateWithAI}
-            disabled={!aiGenerationConfig.materia || generating}
-            className="w-full rounded-full bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-3 text-sm font-semibold text-white disabled:opacity-50 hover:from-purple-700 hover:to-blue-700 transition"
-          >
-            {generating ? 'Gerando...' : `✨ Gerar ${aiGenerationConfig.quantidadeModulos} Módulo(s) e ${aiGenerationConfig.quantidadeModulos * aiGenerationConfig.flashcardsPorModulo} Flashcards`}
-          </button>
-          <p className="text-xs text-slate-500 text-center mt-2">
-            💡 O prompt padrão será usado automaticamente. Instruções adicionais são opcionais.
-          </p>
-        </div>
       </div>
 
       {/* Gerenciar Módulos */}
