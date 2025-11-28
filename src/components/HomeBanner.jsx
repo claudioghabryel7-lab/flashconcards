@@ -58,14 +58,14 @@ const HomeBanner = () => {
   const currentBanner = banners[currentIndex]
 
   return (
-    <div className="relative w-full overflow-hidden rounded-2xl shadow-lg mb-6 sm:mb-8" style={{ height: '400px' }}>
+    <div className="relative w-full overflow-hidden rounded-2xl shadow-lg mb-6 sm:mb-8" style={{ height: '300px' }}>
       <AnimatePresence mode="wait">
         <motion.div
           key={currentBanner.id}
-          initial={{ opacity: 0, x: 300 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -300 }}
-          transition={{ duration: 0.5, ease: 'easeInOut' }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
           className="relative w-full h-full"
         >
           {currentBanner.link ? (
