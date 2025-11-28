@@ -79,7 +79,7 @@ const benefits = [
 const PublicHome = () => {
   // Número do WhatsApp (formato: código do país + DDD + número, sem espaços ou caracteres especiais)
   const whatsappNumber = '5562981841878'
-  const whatsappMessage = encodeURIComponent('Olá! Gostaria de garantir a promoção de R$ 59,99 para a mentoria ALEGO Policial Legislativo.')
+  const whatsappMessage = encodeURIComponent('Olá! Gostaria de garantir a promoção de R$ 99,90 para a mentoria ALEGO Policial Legislativo.')
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`
 
   return (
@@ -95,10 +95,13 @@ const PublicHome = () => {
             De <span className="line-through opacity-70">R$ 149,99</span> por apenas
           </h2>
           <div className="mb-4">
-            <span className="text-5xl sm:text-6xl md:text-7xl font-black text-white">R$ 59,99</span>
+            <span className="text-5xl sm:text-6xl md:text-7xl font-black text-white">R$ 99,90</span>
             <p className="mt-2 text-sm sm:text-base text-white/90">
-              Economize <span className="font-bold text-white">R$ 90,00</span> agora!
+              Economize <span className="font-bold text-white">R$ 50,09</span> agora!
             </p>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-red-500/90 px-4 py-1.5 text-xs sm:text-sm font-bold text-white">
+              <span>🔥 SOMENTE 100 VAGAS</span>
+            </div>
           </div>
           <a
             href={whatsappUrl}
