@@ -5,13 +5,14 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   serverTimestamp,
   setDoc,
   updateDoc,
 } from 'firebase/firestore'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline'
-import { createUserWithEmailAndPassword } from 'firebase/auth'
+import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser } from 'firebase/auth'
 import { auth, db, storage } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -487,50 +488,64 @@ const AdminPanel = () => {
   }
 
   const removeUser = async (userUid) => {
-    if (!window.confirm(`Deseja realmente excluir este usuário? Esta ação não pode ser desfeita.`)) return
+    if (!window.confirm(`Deseja realmente excluir este usuário DEFINITIVAMENTE? Esta ação não pode ser desfeita e o usuário será removido completamente do sistema.`)) return
+    
+    setMessage('Removendo usuário...')
+    
     try {
-      // 1. Registrar na coleção deletedUsers ANTES de deletar (para bloquear recriação)
+      // 1. Obter dados do usuário antes de deletar
+      const userRef = doc(db, 'users', userUid)
+      const userDoc = await getDoc(userRef)
+      const userData = userDoc.exists() ? userDoc.data() : null
+      const userEmail = userData?.email || userUid
+      
+      // 2. Registrar na coleção deletedUsers ANTES de deletar (para bloquear recriação)
       const deletedUserRef = doc(db, 'deletedUsers', userUid)
       await setDoc(deletedUserRef, {
         uid: userUid,
+        email: userEmail,
         deletedAt: serverTimestamp(),
-        deletedBy: 'admin',
+        deletedBy: auth.currentUser?.email || 'admin',
       })
       
-      // 2. Marcar como deletado no documento do usuário (para bloquear acesso imediato)
-      const userRef = doc(db, 'users', userUid)
+      // 3. Marcar como deletado no documento do usuário (para bloquear acesso imediato)
       await setDoc(userRef, { 
         deleted: true, 
         deletedAt: serverTimestamp() 
       }, { merge: true })
       
-      // 3. Aguardar um momento para garantir que as marcações foram salvas
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      // 4. Deletar do Firestore
-      await deleteDoc(userRef)
-      
-      // 5. Tentar deletar do Firebase Authentication usando API REST
-      // Nota: Isso requer token de admin, então pode falhar silenciosamente
-      // O importante é que o registro em deletedUsers impede a recriação
+      // 4. Deletar dados relacionados do usuário
       try {
-        const userDoc = await getDoc(userRef)
-        const userData = userDoc.exists() ? userDoc.data() : null
-        const userEmail = userData?.email
+        // Deletar progresso do usuário
+        const progressRef = doc(db, 'userProgress', userUid)
+        await deleteDoc(progressRef).catch(() => {}) // Ignora se não existir
         
-        if (userEmail) {
-          // Tentar deletar via API REST do Firebase (requer configuração adicional)
-          // Por enquanto, apenas informar que precisa deletar manualmente
-          console.log(`Usuário ${userEmail} (${userUid}) marcado como deletado. Para remover completamente do Firebase Auth, delete manualmente no Console.`)
+        // Deletar estatísticas de questões
+        const questoesStatsRef = doc(db, 'questoesStats', userUid)
+        await deleteDoc(questoesStatsRef).catch(() => {}) // Ignora se não existir
+        
+        // Deletar mensagens do chat
+        const chatsRef = collection(db, 'chats', userUid, 'messages')
+        const chatSnapshot = await getDocs(chatsRef).catch(() => null)
+        if (chatSnapshot && !chatSnapshot.empty) {
+          const deletePromises = chatSnapshot.docs.map(doc => deleteDoc(doc.ref))
+          await Promise.all(deletePromises).catch(() => {})
         }
-      } catch (authErr) {
-        console.warn('Não foi possível deletar do Firebase Auth automaticamente:', authErr)
+      } catch (dataErr) {
+        console.warn('Erro ao deletar dados relacionados:', dataErr)
+        // Continua mesmo se falhar
       }
       
-      setMessage('Usuário removido do sistema. O acesso foi bloqueado permanentemente. O usuário não conseguirá mais fazer login.')
+      // 5. Deletar do Firestore
+      await deleteDoc(userRef)
+      
+      // 6. Informar sobre Firebase Authentication
+      // Nota: Para deletar do Auth, seria necessário Admin SDK (Cloud Function)
+      // Por enquanto, o usuário fica bloqueado pelo registro em deletedUsers
+      setMessage(`✅ Usuário ${userEmail} removido do Firestore e bloqueado permanentemente. O usuário não conseguirá mais fazer login. Para remover completamente do Firebase Authentication, delete manualmente no Console do Firebase (Authentication > Users).`)
     } catch (err) {
       console.error('Erro ao remover usuário:', err)
-      setMessage(`Erro ao remover usuário: ${err.message}`)
+      setMessage(`❌ Erro ao remover usuário: ${err.message}`)
     }
   }
 
