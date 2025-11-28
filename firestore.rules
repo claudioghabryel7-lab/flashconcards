@@ -61,7 +61,8 @@ service cloud.firestore {
     }
     
     match /homeBanners/{bannerId} {
-      allow read: if isAuthenticated();
+      // Permitir leitura pública (sem autenticação) para banners na página inicial
+      allow read: if true;
       // Admin pode criar, atualizar e deletar - VERIFICAÇÃO EXPANDIDA
       allow create: if isAuthenticated() && 
                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
