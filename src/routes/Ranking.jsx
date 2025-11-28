@@ -247,13 +247,11 @@ const Ranking = () => {
                       {userRank.displayName || userRank.email}
                       {isCurrentUser && ' (Você)'}
                     </p>
-                    {isAdmin && (
-                      <div className="mt-1 flex gap-3 text-xs text-slate-500 dark:text-slate-400">
-                        <span>{userRank.progress.totalDays} dias</span>
-                        <span>{userRank.progress.totalHours.toFixed(1)}h</span>
-                        <span>{userRank.progress.studiedCards} cards</span>
-                      </div>
-                    )}
+                    <div className="mt-1 flex gap-3 text-xs text-slate-500 dark:text-slate-400">
+                      <span>{userRank.progress.totalDays} dias</span>
+                      <span>{userRank.progress.totalHours.toFixed(1)}h</span>
+                      <span>{userRank.progress.studiedCards} cards</span>
+                    </div>
                   </div>
                   {showScore && (
                     <div className="text-right">
@@ -308,6 +306,11 @@ const Ranking = () => {
                       {userRank.displayName || userRank.email}
                       {isCurrentUser && ' (Você)'}
                     </p>
+                    <div className="mt-1 flex gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <span>{userRank.progress.totalDays} dias</span>
+                      <span>{userRank.progress.totalHours.toFixed(1)}h</span>
+                      <span>{userRank.progress.studiedCards} cards</span>
+                    </div>
                   </div>
                   {showScore && (
                     <span className="text-sm font-bold text-alego-600 dark:text-alego-400">

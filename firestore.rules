@@ -17,7 +17,8 @@ service cloud.firestore {
     }
     
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      // Permitir leitura para todos autenticados (para ranking) - apenas campos públicos
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isOwner(userId);
       allow update: if isAuthenticated() && (
         (isOwner(userId) && 
@@ -34,13 +35,15 @@ service cloud.firestore {
     }
     
     match /progress/{progressId} {
-      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      // Permitir leitura para todos autenticados (para ranking)
+      allow read: if isAuthenticated();
       allow create, update: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
       allow delete: if isAdmin();
     }
     
     match /userProgress/{userId} {
-      allow read: if isAuthenticated() && (userId == request.auth.uid || isAdmin());
+      // Permitir leitura para todos autenticados (para ranking)
+      allow read: if isAuthenticated();
       allow create, update: if isAuthenticated() && userId == request.auth.uid;
       allow delete: if isAdmin();
     }
