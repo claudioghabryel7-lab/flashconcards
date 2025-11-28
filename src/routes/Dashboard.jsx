@@ -53,6 +53,7 @@ const Dashboard = () => {
   const [studiedModules, setStudiedModules] = useState({}) // { materia: { modulo: true } }
   const [suggestedModule, setSuggestedModule] = useState(null) // { materia, modulo }
   const [studyPhase, setStudyPhase] = useState(1) // Fase atual (1, 2, 3...)
+  const [expandedMaterias, setExpandedMaterias] = useState({}) // { materia: true/false }
 
   // Carregar todos os flashcards
   useEffect(() => {
@@ -692,28 +693,46 @@ const Dashboard = () => {
                   const modulos = organizedModules[materia] || []
                   if (modulos.length === 0) return null
 
+                  const isExpanded = expandedMaterias[materia] || false
+
                   return (
                     <div key={materia} className="space-y-2">
-                      <h4 className="text-sm font-bold text-alego-700 dark:text-alego-300">
-                        {materia}
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {modulos.map((modulo) => {
-                          const isStudied = studiedModules[materia]?.[modulo] === true
-                          return (
-                            <div
-                              key={modulo}
-                              className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
-                                isStudied
-                                  ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
-                              }`}
-                            >
-                              {modulo} {isStudied && '✓'}
-                            </div>
-                          )
-                        })}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExpandedMaterias(prev => ({
+                            ...prev,
+                            [materia]: !prev[materia]
+                          }))
+                        }}
+                        className="flex items-center justify-between w-full text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg p-2 transition"
+                      >
+                        <h4 className="text-sm font-bold text-alego-700 dark:text-alego-300">
+                          {materia} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">({modulos.length} módulos)</span>
+                        </h4>
+                        <span className="text-xs text-alego-500 dark:text-alego-400">
+                          {isExpanded ? '▼ Ocultar' : '▶ Mostrar'}
+                        </span>
+                      </button>
+                      {isExpanded && (
+                        <div className="flex flex-wrap gap-2 pl-2">
+                          {modulos.map((modulo) => {
+                            const isStudied = studiedModules[materia]?.[modulo] === true
+                            return (
+                              <div
+                                key={modulo}
+                                className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+                                  isStudied
+                                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                                }`}
+                              >
+                                {modulo} {isStudied && '✓'}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
