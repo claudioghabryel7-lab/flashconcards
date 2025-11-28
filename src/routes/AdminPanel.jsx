@@ -1328,25 +1328,47 @@ Se deixar em branco, a IA usará as regras padrão:
               return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
             })
             
+            // Contar flashcards por módulo
+            const getFlashcardCount = (moduloName) => {
+              return cards.filter(card => card.materia === materia && card.modulo === moduloName).length
+            }
+            
             return (
               <div key={materia} className="rounded-xl border border-slate-200 p-4">
                 <h3 className="mb-3 text-base font-bold text-alego-700">{materia}</h3>
-                <div className="flex flex-wrap gap-2">
-                  {sortedModulos.map((modulo) => (
-                    <div
-                      key={modulo}
-                      className="flex items-center gap-2 rounded-full bg-alego-100 px-4 py-2"
-                    >
-                      <span className="text-sm font-semibold text-alego-700">{modulo}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeModule(materia, modulo)}
-                        className="text-rose-600 hover:text-rose-700"
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {sortedModulos.map((modulo) => {
+                    const flashcardCount = getFlashcardCount(modulo)
+                    // Truncar nome do módulo se muito longo (máximo 50 caracteres)
+                    const displayName = modulo.length > 50 ? modulo.substring(0, 47) + '...' : modulo
+                    
+                    return (
+                      <div
+                        key={modulo}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-alego-50 border border-alego-200 px-3 py-2 hover:bg-alego-100 transition-colors"
+                        title={modulo} // Tooltip com nome completo
                       >
-                        <TrashIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs font-semibold text-alego-700 block truncate">
+                            {displayName}
+                          </span>
+                          {flashcardCount > 0 && (
+                            <span className="text-xs text-slate-500">
+                              {flashcardCount} flashcard{flashcardCount !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeModule(materia, modulo)}
+                          className="flex-shrink-0 text-rose-600 hover:text-rose-700 transition-colors"
+                          title="Remover módulo"
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )
@@ -1663,15 +1685,16 @@ Se deixar em branco, a IA usará as regras padrão:
                           <button
                             type="button"
                             onClick={() => toggleCardModulo(materia, modulo)}
-                            className="flex w-full items-center justify-between px-4 py-3 text-left"
+                            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
+                            title={modulo} // Tooltip com nome completo
                           >
-                            <div>
-                              <p className="text-sm font-semibold text-slate-700">{modulo}</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-slate-700 truncate">{modulo}</p>
                               <p className="text-[11px] uppercase tracking-wide text-slate-400">
                                 {cardsList.length} {cardsList.length === 1 ? 'card' : 'cards'}
                               </p>
                             </div>
-                            <span className="text-xs font-semibold text-alego-500">
+                            <span className="text-xs font-semibold text-alego-500 flex-shrink-0">
                               {isModuloOpen ? 'Ocultar' : 'Ver cards'}
                             </span>
                           </button>
