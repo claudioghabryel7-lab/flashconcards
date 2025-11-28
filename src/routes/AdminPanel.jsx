@@ -74,6 +74,18 @@ const AdminPanel = () => {
   })
   const [generating, setGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState('')
+  
+  // Estado para gerenciar banners
+  const [banners, setBanners] = useState([])
+  const [bannerForm, setBannerForm] = useState({
+    title: '',
+    imageBase64: '',
+    link: '',
+    order: 0,
+    duration: 5000,
+    active: true,
+  })
+  const [uploadingBanner, setUploadingBanner] = useState(false)
 
   // Configurar PDF.js worker
   useEffect(() => {
@@ -313,10 +325,24 @@ const AdminPanel = () => {
       }
     )
 
+    // Carregar banners
+    const bannersRef = collection(db, 'homeBanners')
+    const unsubBanners = onSnapshot(bannersRef, (snapshot) => {
+      const data = snapshot.docs.map((docSnapshot) => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data(),
+      }))
+      setBanners(data.sort((a, b) => (a.order || 0) - (b.order || 0)))
+    }, (error) => {
+      console.error('Erro ao carregar banners:', error)
+      setBanners([])
+    })
+
     return () => {
       unsubCards()
       unsubUsers()
       unsubPresence()
+      unsubBanners()
     }
   }, [])
 
@@ -631,6 +657,101 @@ const AdminPanel = () => {
         stack: err.stack
       })
       setMessage(`❌ Erro ao remover usuário: ${err.message}. Verifique o console para mais detalhes.`)
+    }
+  }
+
+  // Funções para gerenciar banners
+  const handleBannerImageUpload = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setMessage('❌ Por favor, selecione uma imagem.')
+      return
+    }
+
+    // Limitar tamanho (máximo 1MB para base64)
+    if (file.size > 1024 * 1024) {
+      setMessage('❌ A imagem é muito grande. Máximo: 1MB. Use imagens menores ou comprima antes de enviar.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setBannerForm(prev => ({
+        ...prev,
+        imageBase64: e.target.result
+      }))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const addBanner = async () => {
+    if (!isAdmin) {
+      setMessage('❌ Apenas administradores podem adicionar banners.')
+      return
+    }
+
+    if (!bannerForm.imageBase64) {
+      setMessage('❌ Por favor, adicione uma imagem.')
+      return
+    }
+
+    setUploadingBanner(true)
+    try {
+      const maxOrder = banners.length > 0 
+        ? Math.max(...banners.map(b => b.order || 0))
+        : 0
+
+      await addDoc(collection(db, 'homeBanners'), {
+        title: bannerForm.title || '',
+        imageBase64: bannerForm.imageBase64,
+        link: bannerForm.link || '',
+        order: bannerForm.order || maxOrder + 1,
+        duration: bannerForm.duration || 5000,
+        active: bannerForm.active !== false,
+        createdAt: serverTimestamp(),
+      })
+
+      setMessage('✅ Banner adicionado com sucesso!')
+      setBannerForm({
+        title: '',
+        imageBase64: '',
+        link: '',
+        order: maxOrder + 2,
+        duration: 5000,
+        active: true,
+      })
+    } catch (err) {
+      console.error('Erro ao adicionar banner:', err)
+      setMessage(`❌ Erro ao adicionar banner: ${err.message}`)
+    } finally {
+      setUploadingBanner(false)
+    }
+  }
+
+  const updateBanner = async (bannerId, updates) => {
+    try {
+      await updateDoc(doc(db, 'homeBanners', bannerId), {
+        ...updates,
+        updatedAt: serverTimestamp(),
+      })
+      setMessage('✅ Banner atualizado com sucesso!')
+    } catch (err) {
+      console.error('Erro ao atualizar banner:', err)
+      setMessage(`❌ Erro ao atualizar banner: ${err.message}`)
+    }
+  }
+
+  const deleteBanner = async (bannerId) => {
+    if (!confirm('Tem certeza que deseja excluir este banner?')) return
+
+    try {
+      await deleteDoc(doc(db, 'homeBanners', bannerId))
+      setMessage('✅ Banner excluído com sucesso!')
+    } catch (err) {
+      console.error('Erro ao excluir banner:', err)
+      setMessage(`❌ Erro ao excluir banner: ${err.message}`)
     }
   }
 
@@ -1383,6 +1504,183 @@ ESTRUTURA SUGERIDA:
         >
           {savingQuestoesConfig ? 'Salvando...' : 'Salvar Configuração de Questões'}
         </button>
+      </div>
+
+      {/* Gerenciar Banners da Página Inicial */}
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
+          <DocumentTextIcon className="h-5 w-5" />
+          Gerenciar Banners da Página Inicial
+        </p>
+        <p className="text-xs text-slate-500 mb-6">
+          Adicione imagens ilustrativas que aparecerão no carrossel da página inicial. As imagens passam automaticamente.
+        </p>
+
+        {/* Formulário para adicionar banner */}
+        <div className="mb-6 rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-alego-700 mb-4">Adicionar Novo Banner</h3>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">
+                Imagem (máximo 1MB)
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleBannerImageUpload}
+                className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+              />
+              {bannerForm.imageBase64 && (
+                <div className="mt-2">
+                  <img
+                    src={bannerForm.imageBase64}
+                    alt="Preview"
+                    className="max-h-32 rounded-lg border border-slate-200"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">
+                Título (opcional)
+              </label>
+              <input
+                type="text"
+                value={bannerForm.title}
+                onChange={(e) => setBannerForm(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="Ex: Assembleia Legislativa"
+                className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">
+                Link de destino (opcional)
+              </label>
+              <input
+                type="text"
+                value={bannerForm.link}
+                onChange={(e) => setBannerForm(prev => ({ ...prev, link: e.target.value }))}
+                placeholder="Ex: /sobre ou https://..."
+                className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-2">
+                  Ordem
+                </label>
+                <input
+                  type="number"
+                  value={bannerForm.order}
+                  onChange={(e) => setBannerForm(prev => ({ ...prev, order: parseInt(e.target.value) || 0 }))}
+                  className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-2">
+                  Duração (ms)
+                </label>
+                <input
+                  type="number"
+                  value={bannerForm.duration}
+                  onChange={(e) => setBannerForm(prev => ({ ...prev, duration: parseInt(e.target.value) || 5000 }))}
+                  className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                />
+                <p className="text-xs text-slate-400 mt-1">Padrão: 5000ms (5 segundos)</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={bannerForm.active}
+                onChange={(e) => setBannerForm(prev => ({ ...prev, active: e.target.checked }))}
+                className="rounded"
+              />
+              <label className="text-xs text-slate-600">Banner ativo</label>
+            </div>
+
+            <button
+              type="button"
+              onClick={addBanner}
+              disabled={uploadingBanner || !bannerForm.imageBase64}
+              className="w-full rounded-lg bg-alego-600 px-4 py-2 text-sm font-semibold text-white hover:bg-alego-700 disabled:opacity-50"
+            >
+              {uploadingBanner ? 'Adicionando...' : 'Adicionar Banner'}
+            </button>
+          </div>
+        </div>
+
+        {/* Lista de banners existentes */}
+        <div>
+          <h3 className="text-sm font-semibold text-alego-700 mb-4">
+            Banners Existentes ({banners.length})
+          </h3>
+          
+          {banners.length === 0 ? (
+            <p className="text-sm text-slate-500">Nenhum banner adicionado ainda.</p>
+          ) : (
+            <div className="space-y-4">
+              {banners.map((banner) => (
+                <div
+                  key={banner.id}
+                  className="rounded-xl border border-slate-200 p-4"
+                >
+                  <div className="flex items-start gap-4">
+                    <img
+                      src={banner.imageBase64 || banner.imageUrl}
+                      alt={banner.title || 'Banner'}
+                      className="h-24 w-auto rounded-lg border border-slate-200 object-cover"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-700">
+                            {banner.title || 'Sem título'}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Ordem: {banner.order || 0} • Duração: {banner.duration || 5000}ms
+                            {banner.link && ` • Link: ${banner.link}`}
+                          </p>
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                              banner.active !== false
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {banner.active !== false ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => updateBanner(banner.id, { active: !(banner.active !== false) })}
+                            className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            {banner.active !== false ? 'Desativar' : 'Ativar'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteBanner(banner.id)}
+                            className="rounded-lg bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-200"
+                          >
+                            <TrashIcon className="h-4 w-4 inline" /> Excluir
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Gerenciar Módulos */}

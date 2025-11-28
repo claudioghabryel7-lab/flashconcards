@@ -106,3 +106,4 @@ O Google Ads já está rastreando:
 
 **Me avise se quer que eu crie a página de obrigado ou configure o webhook para disparar conversões!** 🚀
 
+

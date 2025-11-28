@@ -60,6 +60,20 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
     
+    match /homeBanners/{bannerId} {
+      allow read: if isAuthenticated();
+      // Admin pode criar, atualizar e deletar - VERIFICAÇÃO EXPANDIDA
+      allow create: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow update: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow delete: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
     // ✅ CORRIGIDO: Regra expandida diretamente para deletedUsers
     match /deletedUsers/{userId} {
       // Admin pode ler

@@ -66,3 +66,4 @@ Pode haver um problema na forma como o Firestore está sendo inicializado.
 - [ ] Verifique a data/hora da última publicação das regras
 
 
+

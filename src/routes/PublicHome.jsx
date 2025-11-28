@@ -14,6 +14,7 @@ import {
   RocketLaunchIcon
 } from '@heroicons/react/24/solid'
 import { trackButtonClick } from '../utils/googleAds'
+import HomeBanner from '../components/HomeBanner'
 
 const features = [
   {
@@ -85,6 +86,9 @@ const PublicHome = () => {
 
   return (
     <section className="space-y-6 sm:space-y-8 md:space-y-12 px-2 sm:px-0">
+      {/* Carrossel de Banners */}
+      <HomeBanner />
+      
       {/* Promoção */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 p-6 sm:p-8 shadow-xl">
         <div className="relative z-10 text-center">

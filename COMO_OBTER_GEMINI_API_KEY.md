@@ -54,3 +54,4 @@ Depois de configurar, o chat IA usará o Gemini para responder dúvidas sobre:
 
 
 
+

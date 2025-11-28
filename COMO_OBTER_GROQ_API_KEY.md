@@ -93,3 +93,4 @@ O sistema usa o modelo **`llama-3.3-70b-versatile`** da Groq, que é:
 Após configurar, o sistema automaticamente usará Groq quando o Gemini atingir o limite diário. Não precisa fazer mais nada!
 
 
+

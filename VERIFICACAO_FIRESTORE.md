@@ -43,3 +43,4 @@ Se nada funcionar, pode ser que o Firestore esteja em modo Datastore. Nesse caso
 3. Ou migre do Datastore para Firestore Native
 
 
+
