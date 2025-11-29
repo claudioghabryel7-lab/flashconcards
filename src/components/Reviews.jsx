@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { StarIcon } from '@heroicons/react/24/solid'
@@ -20,15 +20,21 @@ const Reviews = () => {
   // Carregar avaliações
   useEffect(() => {
     const reviewsRef = collection(db, 'reviews')
-    const q = query(reviewsRef, orderBy('createdAt', 'desc'))
     
-    const unsub = onSnapshot(q, (snapshot) => {
+    const unsub = onSnapshot(reviewsRef, (snapshot) => {
       const data = snapshot.docs
         .map((doc) => ({
           id: doc.id,
           ...doc.data(),
         }))
         .filter((review) => review.approved !== false) // Filtrar apenas aprovadas
+      
+      // Ordenar manualmente por data (mais recente primeiro)
+      data.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(0)
+        const dateB = b.createdAt?.toDate?.() || new Date(0)
+        return dateB - dateA
+      })
       
       setReviews(data)
       setLoading(false)

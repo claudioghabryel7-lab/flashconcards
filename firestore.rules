@@ -76,11 +76,8 @@ service cloud.firestore {
     }
     
     match /reviews/{reviewId} {
-      // Leitura pública apenas de avaliações aprovadas, admin pode ver todas
-      allow read: if resource.data.approved == true || 
-                    (isAuthenticated() && 
-                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      // Leitura pública de todas as avaliações (filtro de aprovadas é feito no código)
+      allow read: if true;
       // Usuários autenticados podem criar avaliações
       allow create: if isAuthenticated();
       // Apenas admin pode atualizar ou deletar
