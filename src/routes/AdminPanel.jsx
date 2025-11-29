@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline'
 import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
-import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser } from 'firebase/auth'
+import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { auth, db, storage } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -35,7 +35,7 @@ const MATERIAS = [
 
 
 const AdminPanel = () => {
-  const { isAdmin } = useAuth()
+  const { isAdmin, user: currentAdminUser } = useAuth()
   const [cards, setCards] = useState([])
   const [users, setUsers] = useState([])
   const [presence, setPresence] = useState({}) // { uid: { status, lastSeen } }
@@ -531,7 +531,65 @@ const AdminPanel = () => {
     try {
       const email = userForm.email.toLowerCase().trim()
       
-      // Criar usuário no Firebase Authentication
+      // Verificar se o email já existe no Firebase Auth
+      const signInMethods = await fetchSignInMethodsForEmail(auth, email)
+      
+      if (signInMethods.length > 0) {
+        // Email já existe no Firebase Auth
+        // Buscar se existe no Firestore
+        const usersRef = collection(db, 'users')
+        const q = query(usersRef, where('email', '==', email))
+        const userSnapshot = await getDocs(q)
+        
+        if (!userSnapshot.empty) {
+          // Usuário existe em ambos - já está cadastrado
+          setMessage('❌ Este email já está cadastrado no sistema. O usuário já pode fazer login.')
+          return
+        }
+        
+        // Email existe no Auth mas não no Firestore
+        // Tentar fazer login com a senha fornecida para pegar o UID e criar perfil
+        // Se a senha estiver correta, criamos o perfil. Se não, informamos o que fazer.
+        try {
+          // Fazer login temporário com o email/senha do usuário para pegar o UID
+          const userCredential = await signInWithEmailAndPassword(auth, email, userForm.password)
+          const uid = userCredential.user.uid
+          
+          // Criar perfil no Firestore
+          const userRef = doc(db, 'users', uid)
+          await setDoc(userRef, {
+            uid,
+            email,
+            displayName: userForm.name || email,
+            role: userForm.role || 'student',
+            favorites: [],
+            createdAt: serverTimestamp(),
+            deleted: false,
+          })
+          
+          // Fazer logout do usuário temporário
+          await signOut(auth)
+          
+          setUserForm({ email: '', password: '', name: '', role: 'student' })
+          setMessage('✅ Perfil sincronizado no Firestore com sucesso! Faça login novamente como admin. O usuário já pode fazer login.')
+          
+          // Redirecionar para login após 2 segundos
+          setTimeout(() => {
+            window.location.href = '/login'
+          }, 2000)
+          return
+        } catch (loginErr) {
+          // Senha incorreta ou outro erro
+          if (loginErr.code === 'auth/wrong-password') {
+            setMessage('⚠️ Este email já existe no Firebase Authentication, mas a senha fornecida está incorreta.\n\nSOLUÇÃO:\n1. Delete o usuário do Firebase Console > Authentication\n   (https://console.firebase.google.com/project/_/authentication/users)\n2. Depois tente criar novamente\n\nOU peça ao usuário para fazer login - o perfil será criado automaticamente.')
+          } else {
+            setMessage(`⚠️ Este email já existe no Firebase Authentication.\n\nSOLUÇÃO: Delete o usuário do Firebase Console > Authentication primeiro:\nhttps://console.firebase.google.com/project/_/authentication/users\n\nDepois tente criar novamente.`)
+          }
+          return
+        }
+      }
+      
+      // Email não existe no Auth - criar normalmente
       const userCredential = await createUserWithEmailAndPassword(auth, email, userForm.password)
       const uid = userCredential.user.uid
 
@@ -549,17 +607,16 @@ const AdminPanel = () => {
       })
 
       setUserForm({ email: '', password: '', name: '', role: 'student' })
-      setMessage('Usuário criado com sucesso! O novo aluno já pode fazer login.')
+      setMessage('✅ Usuário criado com sucesso! O novo aluno já pode fazer login.')
     } catch (err) {
       console.error('Erro ao criar usuário:', err)
       if (err.code === 'auth/email-already-in-use') {
-        // Email já existe no Firebase Auth - pode ser um usuário que foi removido
-        // Tentar encontrar o UID pelo email (não é possível diretamente, mas podemos informar)
-        setMessage('Este email já está cadastrado no Firebase Authentication. Se o usuário foi removido, você precisa deletá-lo também no Firebase Console > Authentication antes de recriar, ou o usuário pode fazer login com a senha antiga.')
+        // Fallback caso fetchSignInMethodsForEmail não tenha capturado
+        setMessage('⚠️ Este email já está cadastrado no Firebase Authentication. Para recadastrar, delete o usuário do Firebase Console > Authentication primeiro.')
       } else if (err.code === 'auth/weak-password') {
-        setMessage('Senha muito fraca. Use pelo menos 6 caracteres.')
+        setMessage('❌ Senha muito fraca. Use pelo menos 6 caracteres.')
       } else {
-        setMessage(`Erro ao criar usuário: ${err.message}`)
+        setMessage(`❌ Erro ao criar usuário: ${err.message}`)
       }
     }
   }
