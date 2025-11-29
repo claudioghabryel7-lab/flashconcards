@@ -15,6 +15,7 @@ import {
 } from '@heroicons/react/24/solid'
 import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
+import Reviews from '../components/Reviews'
 
 const features = [
   {
@@ -200,6 +201,11 @@ const PublicHome = () => {
             )
           })}
         </div>
+      </div>
+
+      {/* Avaliações dos Alunos */}
+      <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 sm:p-8 shadow-sm">
+        <Reviews />
       </div>
 
       {/* CTA Final */}

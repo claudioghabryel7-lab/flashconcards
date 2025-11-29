@@ -75,6 +75,20 @@ service cloud.firestore {
                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     
+    match /reviews/{reviewId} {
+      // Leitura pública apenas de avaliações aprovadas, admin pode ver todas
+      allow read: if resource.data.approved == true || 
+                    (isAuthenticated() && 
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      // Usuários autenticados podem criar avaliações
+      allow create: if isAuthenticated();
+      // Apenas admin pode atualizar ou deletar
+      allow update, delete: if isAuthenticated() && 
+                              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
     // ✅ CORRIGIDO: Regra expandida diretamente para deletedUsers
     match /deletedUsers/{userId} {
       // Admin pode ler

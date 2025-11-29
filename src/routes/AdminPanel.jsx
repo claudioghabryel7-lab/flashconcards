@@ -12,6 +12,7 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline'
+import { StarIcon } from '@heroicons/react/24/solid'
 import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser } from 'firebase/auth'
 import { auth, db, storage } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -86,6 +87,9 @@ const AdminPanel = () => {
     active: true,
   })
   const [uploadingBanner, setUploadingBanner] = useState(false)
+  
+  // Estado para gerenciar avaliações
+  const [reviews, setReviews] = useState([])
 
   // Configurar PDF.js worker
   useEffect(() => {
@@ -338,11 +342,26 @@ const AdminPanel = () => {
       setBanners([])
     })
 
+    // Carregar avaliações
+    const reviewsRef = collection(db, 'reviews')
+    const qReviews = query(reviewsRef, orderBy('createdAt', 'desc'))
+    const unsubReviews = onSnapshot(qReviews, (snapshot) => {
+      const data = snapshot.docs.map((docSnapshot) => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data(),
+      }))
+      setReviews(data)
+    }, (error) => {
+      console.error('Erro ao carregar avaliações:', error)
+      setReviews([])
+    })
+
     return () => {
       unsubCards()
       unsubUsers()
       unsubPresence()
       unsubBanners()
+      unsubReviews()
     }
   }, [])
 
@@ -752,6 +771,45 @@ const AdminPanel = () => {
     } catch (err) {
       console.error('Erro ao excluir banner:', err)
       setMessage(`❌ Erro ao excluir banner: ${err.message}`)
+    }
+  }
+
+  // Funções para gerenciar avaliações
+  const approveReview = async (reviewId) => {
+    try {
+      await updateDoc(doc(db, 'reviews', reviewId), {
+        approved: true,
+        updatedAt: serverTimestamp(),
+      })
+      setMessage('✅ Avaliação aprovada com sucesso!')
+    } catch (err) {
+      console.error('Erro ao aprovar avaliação:', err)
+      setMessage(`❌ Erro ao aprovar avaliação: ${err.message}`)
+    }
+  }
+
+  const rejectReview = async (reviewId) => {
+    try {
+      await updateDoc(doc(db, 'reviews', reviewId), {
+        approved: false,
+        updatedAt: serverTimestamp(),
+      })
+      setMessage('✅ Avaliação rejeitada.')
+    } catch (err) {
+      console.error('Erro ao rejeitar avaliação:', err)
+      setMessage(`❌ Erro ao rejeitar avaliação: ${err.message}`)
+    }
+  }
+
+  const deleteReview = async (reviewId) => {
+    if (!confirm('Tem certeza que deseja excluir esta avaliação permanentemente?')) return
+
+    try {
+      await deleteDoc(doc(db, 'reviews', reviewId))
+      setMessage('✅ Avaliação excluída permanentemente!')
+    } catch (err) {
+      console.error('Erro ao excluir avaliação:', err)
+      setMessage(`❌ Erro ao excluir avaliação: ${err.message}`)
     }
   }
 
@@ -1681,6 +1739,100 @@ ESTRUTURA SUGERIDA:
             </div>
           )}
         </div>
+      </div>
+
+      {/* Gerenciar Avaliações */}
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
+          <DocumentTextIcon className="h-5 w-5" />
+          Gerenciar Avaliações dos Alunos
+        </p>
+        <p className="text-xs text-slate-500 mb-6">
+          Aprove, rejeite ou exclua avaliações dos alunos. Avaliações aprovadas aparecem na página inicial.
+        </p>
+
+        {reviews.length === 0 ? (
+          <p className="text-sm text-slate-500">Nenhuma avaliação ainda.</p>
+        ) : (
+          <div className="space-y-4">
+            {reviews.map((review) => {
+              const renderStars = (rating) => {
+                return (
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <StarIcon
+                        key={star}
+                        className={`h-4 w-4 ${
+                          star <= rating ? 'text-yellow-400' : 'text-gray-300'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )
+              }
+
+              return (
+                <div
+                  key={review.id}
+                  className={`rounded-xl border p-4 ${
+                    review.approved
+                      ? 'border-emerald-200 bg-emerald-50'
+                      : 'border-amber-200 bg-amber-50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="font-semibold text-slate-900">
+                        {review.userName || 'Aluno'}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {review.userEmail} • {review.createdAt?.toDate?.().toLocaleDateString('pt-BR') || 'Data não disponível'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {renderStars(review.rating)}
+                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                        review.approved
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {review.approved ? 'Aprovada' : 'Pendente'}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-slate-700 mb-3">{review.comment}</p>
+                  <div className="flex gap-2">
+                    {!review.approved && (
+                      <button
+                        type="button"
+                        onClick={() => approveReview(review.id)}
+                        className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
+                      >
+                        Aprovar
+                      </button>
+                    )}
+                    {review.approved && (
+                      <button
+                        type="button"
+                        onClick={() => rejectReview(review.id)}
+                        className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-700"
+                      >
+                        Rejeitar
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => deleteReview(review.id)}
+                      className="rounded-lg bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-200"
+                    >
+                      <TrashIcon className="h-4 w-4 inline" /> Excluir
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Gerenciar Módulos */}
