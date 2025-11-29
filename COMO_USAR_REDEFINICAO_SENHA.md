@@ -58,3 +58,4 @@ O link gerado **não redefine a senha diretamente**. Ele:
 
 Isso garante máxima segurança usando o sistema oficial do Firebase.
 
+

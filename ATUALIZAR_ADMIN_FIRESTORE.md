@@ -50,3 +50,4 @@ O código tenta atualizar automaticamente, mas o `onSnapshot` (sincronização e
 
 
 
+

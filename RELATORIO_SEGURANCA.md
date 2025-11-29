@@ -230,3 +230,4 @@ As regras do Firestore estão bem configuradas e protegem contra a maioria dos a
 
 **Nível de Segurança Atual:** 🟡 MÉDIO (com potencial para ALTO após correções)
 
+

@@ -88,3 +88,4 @@ O Google Ads já está rastreando cliques. Para conversões, só precisa configu
 **Me avise se quer que eu configure o webhook para disparar conversões automaticamente!** 🚀
 
 
+
