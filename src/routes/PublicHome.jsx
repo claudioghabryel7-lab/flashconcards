@@ -139,16 +139,16 @@ const PublicHome = () => {
             Plataforma completa com IA, flashcards inteligentes, questões personalizadas,
             ranking em tempo real e suporte 24/7 para acelerar sua aprovação.
           </p>
-          <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4">
+          <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-center items-center">
             <Link
               to="/login"
-              className="rounded-full bg-white px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-alego-600 shadow text-center hover:bg-alego-50 transition"
+              className="rounded-full bg-white px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-alego-600 shadow text-center hover:bg-alego-50 transition whitespace-nowrap"
             >
               Começar agora
             </Link>
             <Link
               to="/login"
-              className="rounded-full border border-white/60 px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-white text-center hover:bg-white/10 transition"
+              className="rounded-full border border-white/60 px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-white text-center hover:bg-white/10 transition whitespace-nowrap"
             >
               Já tenho conta
             </Link>
@@ -217,10 +217,10 @@ const PublicHome = () => {
         <p className="text-alego-100 mb-6 text-sm sm:text-base max-w-2xl mx-auto">
           Junte-se a centenas de alunos que já estão se preparando para a ALEGO com nossa plataforma completa.
         </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
           <Link
             to="/login"
-            className="inline-block rounded-full bg-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-alego-600 shadow-2xl hover:bg-alego-50 transition-all transform hover:scale-105"
+            className="inline-block rounded-full bg-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-alego-600 shadow-2xl hover:bg-alego-50 transition-all transform hover:scale-105 whitespace-nowrap"
           >
             Começar Agora
           </Link>
@@ -229,7 +229,7 @@ const PublicHome = () => {
             target="_blank"
             rel="noopener noreferrer"
             onClick={trackButtonClick}
-            className="inline-block rounded-full bg-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-alego-600 shadow-2xl hover:bg-alego-50 transition-all transform hover:scale-105"
+            className="inline-block rounded-full bg-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-alego-600 shadow-2xl hover:bg-alego-50 transition-all transform hover:scale-105 whitespace-nowrap"
           >
             Garantir Promoção
           </a>
@@ -237,7 +237,7 @@ const PublicHome = () => {
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block rounded-full border-2 border-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-white hover:bg-white/10 transition-all"
+            className="inline-block rounded-full border-2 border-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-white hover:bg-white/10 transition-all whitespace-nowrap"
           >
             Falar no WhatsApp
           </a>
