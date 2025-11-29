@@ -113,6 +113,19 @@ service cloud.firestore {
       allow delete: if false;
     }
     
+    match /passwordResetTokens/{tokenId} {
+      // Apenas admin pode criar tokens
+      allow create: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      // Leitura pública do token (para validar na página de reset)
+      allow read: if true;
+      // Apenas admin pode atualizar ou deletar
+      allow update, delete: if isAuthenticated() && 
+                              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
     match /{document=**} {
       allow read, write: if false;
     }

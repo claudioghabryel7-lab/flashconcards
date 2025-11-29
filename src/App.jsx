@@ -13,6 +13,7 @@ import PublicHome from './routes/PublicHome'
 import Ranking from './routes/Ranking'
 import SetupUser from './routes/SetupUser'
 import FlashQuestoes from './routes/FlashQuestoes'
+import ResetPassword from './routes/ResetPassword'
 
 const ProtectedRoute = ({ children, adminOnly = false }) => {
   const { user, loading, isAdmin } = useAuth()
@@ -123,6 +124,8 @@ function App() {
               </ProtectedRoute>
             }
           />
+          {/* Rota oculta de redefinição de senha */}
+          <Route path="/reset/:token" element={<ResetPassword />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

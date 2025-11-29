@@ -7,12 +7,14 @@ import {
   getDoc,
   getDocs,
   onSnapshot,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from 'firebase/firestore'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline'
-import { StarIcon } from '@heroicons/react/24/solid'
+import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
 import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser } from 'firebase/auth'
 import { auth, db, storage } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -90,6 +92,11 @@ const AdminPanel = () => {
   
   // Estado para gerenciar avaliações
   const [reviews, setReviews] = useState([])
+  
+  // Estado para gerar link de redefinição
+  const [resetEmail, setResetEmail] = useState('')
+  const [generatedLink, setGeneratedLink] = useState('')
+  const [generatingLink, setGeneratingLink] = useState(false)
 
   // Configurar PDF.js worker
   useEffect(() => {
@@ -835,6 +842,57 @@ const AdminPanel = () => {
     } catch (err) {
       console.error('Erro ao excluir avaliação:', err)
       setMessage(`❌ Erro ao excluir avaliação: ${err.message}`)
+    }
+  }
+
+  // Gerar link de redefinição de senha
+  const generateResetLink = async () => {
+    if (!resetEmail.trim()) {
+      setMessage('❌ Digite o email do usuário.')
+      return
+    }
+
+    setGeneratingLink(true)
+    setGeneratedLink('')
+    setMessage('')
+
+    try {
+      // Verificar se o email existe
+      const usersRef = collection(db, 'users')
+      const q = query(usersRef, where('email', '==', resetEmail.toLowerCase().trim()))
+      const userSnapshot = await getDocs(q)
+
+      if (userSnapshot.empty) {
+        setMessage('❌ Usuário com este email não encontrado.')
+        setGeneratingLink(false)
+        return
+      }
+
+      // Gerar token aleatório seguro
+      const token = crypto.randomUUID() + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15)
+      
+      // Criar token no Firestore (expira em 24 horas)
+      const expiresAt = new Date()
+      expiresAt.setHours(expiresAt.getHours() + 24)
+
+      await setDoc(doc(db, 'passwordResetTokens', token), {
+        email: resetEmail.toLowerCase().trim(),
+        createdAt: serverTimestamp(),
+        expiresAt: expiresAt,
+        used: false,
+      })
+
+      // Gerar link completo
+      const baseUrl = window.location.origin
+      const resetLink = `${baseUrl}/reset/${token}`
+      
+      setGeneratedLink(resetLink)
+      setMessage('✅ Link gerado com sucesso! Copie e envie para o usuário.')
+    } catch (err) {
+      console.error('Erro ao gerar link:', err)
+      setMessage(`❌ Erro ao gerar link: ${err.message}`)
+    } finally {
+      setGeneratingLink(false)
     }
   }
 
@@ -1858,6 +1916,71 @@ ESTRUTURA SUGERIDA:
             })}
           </div>
         )}
+      </div>
+
+      {/* Gerar Link de Redefinição de Senha */}
+      <div className="rounded-2xl bg-white p-6 shadow-sm border-2 border-alego-200">
+        <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
+          <LockClosedIcon className="h-5 w-5" />
+          Gerar Link de Redefinição de Senha
+        </p>
+        <p className="text-xs text-slate-500 mb-6">
+          Gere um link seguro e oculto para usuários redefinirem suas senhas. O link expira em 24 horas.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-2">
+              Email do Usuário
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                placeholder="usuario@email.com"
+                className="flex-1 rounded-lg border border-slate-300 p-2 text-sm"
+              />
+              <button
+                type="button"
+                onClick={generateResetLink}
+                disabled={generatingLink || !resetEmail.trim()}
+                className="rounded-lg bg-alego-600 px-4 py-2 text-sm font-semibold text-white hover:bg-alego-700 disabled:opacity-50"
+              >
+                {generatingLink ? 'Gerando...' : 'Gerar Link'}
+              </button>
+            </div>
+          </div>
+
+          {generatedLink && (
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4">
+              <p className="text-xs font-semibold text-emerald-700 mb-2">
+                ✅ Link gerado com sucesso!
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={generatedLink}
+                  readOnly
+                  className="flex-1 rounded-lg border border-emerald-300 bg-white p-2 text-xs font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedLink)
+                    setMessage('✅ Link copiado para a área de transferência!')
+                  }}
+                  className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+                >
+                  Copiar
+                </button>
+              </div>
+              <p className="text-xs text-emerald-600 mt-2">
+                ⚠️ Este link expira em 24 horas e só pode ser usado uma vez.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Gerenciar Módulos */}
