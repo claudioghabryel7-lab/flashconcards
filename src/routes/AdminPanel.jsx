@@ -344,16 +344,41 @@ const AdminPanel = () => {
 
     // Carregar avaliações
     const reviewsRef = collection(db, 'reviews')
-    const qReviews = query(reviewsRef, orderBy('createdAt', 'desc'))
-    const unsubReviews = onSnapshot(qReviews, (snapshot) => {
+    const unsubReviews = onSnapshot(reviewsRef, (snapshot) => {
       const data = snapshot.docs.map((docSnapshot) => ({
         id: docSnapshot.id,
         ...docSnapshot.data(),
       }))
+      // Ordenar manualmente por data (mais recente primeiro)
+      data.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(0)
+        const dateB = b.createdAt?.toDate?.() || new Date(0)
+        return dateB - dateA
+      })
       setReviews(data)
     }, (error) => {
       console.error('Erro ao carregar avaliações:', error)
-      setReviews([])
+      // Se der erro de índice, tentar sem orderBy
+      if (error.code === 'failed-precondition') {
+        const reviewsRefSimple = collection(db, 'reviews')
+        onSnapshot(reviewsRefSimple, (snapshot) => {
+          const data = snapshot.docs.map((docSnapshot) => ({
+            id: docSnapshot.id,
+            ...docSnapshot.data(),
+          }))
+          data.sort((a, b) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(0)
+            const dateB = b.createdAt?.toDate?.() || new Date(0)
+            return dateB - dateA
+          })
+          setReviews(data)
+        }, (err) => {
+          console.error('Erro ao carregar avaliações (fallback):', err)
+          setReviews([])
+        })
+      } else {
+        setReviews([])
+      }
     })
 
     return () => {
