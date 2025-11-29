@@ -211,31 +211,30 @@ const Reviews = () => {
 
       {/* Carrossel de Avaliações */}
       {reviews.length === 0 ? (
-        <div className="text-center py-12 text-slate-500 dark:text-slate-400 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-          <p className="text-lg">Nenhuma avaliação ainda. Seja o primeiro a avaliar!</p>
+        <div className="text-center py-8 text-slate-500 dark:text-slate-400 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+          <p>Nenhuma avaliação ainda. Seja o primeiro a avaliar!</p>
         </div>
       ) : (
         <div className="relative">
           {/* Carrossel */}
-          <div className="relative w-full overflow-hidden rounded-2xl shadow-lg" style={{ minHeight: '200px' }}>
+          <div className="relative w-full overflow-hidden rounded-xl shadow-md" style={{ height: '180px' }}>
             <AnimatePresence mode="wait">
               {currentReview && (
                 <motion.div
                   key={currentReview.id}
-                  initial={{ opacity: 0, y: 50 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -50 }}
+                  initial={{ opacity: 0, x: 300 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -300 }}
                   transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
-                  className="relative w-full p-8 bg-gradient-to-br from-alego-50 via-white to-alego-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 border-2 border-alego-200 dark:border-alego-700"
-                  style={{ minHeight: '200px' }}
+                  className="absolute inset-0 p-6 bg-gradient-to-br from-alego-50 via-white to-alego-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 border border-alego-200 dark:border-alego-700 rounded-xl"
                 >
-                  <div className="flex flex-col items-center text-center space-y-4">
+                  <div className="flex flex-col items-center text-center space-y-3 h-full justify-center">
                     {/* Estrelas */}
                     <div className="flex gap-1">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <StarIcon
                           key={star}
-                          className={`h-8 w-8 ${
+                          className={`h-5 w-5 ${
                             star <= currentReview.rating ? 'text-yellow-400' : 'text-gray-300'
                           }`}
                         />
@@ -243,23 +242,23 @@ const Reviews = () => {
                     </div>
                     
                     {/* Comentário */}
-                    <p className="text-lg font-medium text-slate-800 dark:text-slate-200 max-w-3xl leading-relaxed">
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200 max-w-2xl leading-relaxed line-clamp-3">
                       "{currentReview.comment}"
                     </p>
                     
                     {/* Autor e Data */}
-                    <div className="flex items-center gap-3 mt-4">
-                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-alego-500 to-alego-600 flex items-center justify-center text-white font-bold text-lg">
+                    <div className="flex items-center gap-2 mt-2">
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-alego-500 to-alego-600 flex items-center justify-center text-white font-semibold text-sm">
                         {(currentReview.userName || 'A')[0].toUpperCase()}
                       </div>
                       <div className="text-left">
-                        <p className="font-semibold text-slate-900 dark:text-slate-100">
+                        <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">
                           {currentReview.userName || 'Aluno'}
                         </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
                           {currentReview.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
                             day: 'numeric',
-                            month: 'long',
+                            month: 'short',
                             year: 'numeric'
                           }) || 'Data não disponível'}
                         </p>
@@ -276,20 +275,20 @@ const Reviews = () => {
                 <button
                   type="button"
                   onClick={() => setCurrentReviewIndex((prev) => (prev - 1 + reviews.length) % reviews.length)}
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800 rounded-full p-2 shadow-lg transition"
+                  className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800 rounded-full p-1.5 shadow-md transition z-10"
                   aria-label="Avaliação anterior"
                 >
-                  <svg className="w-6 h-6 text-gray-800 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-gray-800 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
                 <button
                   type="button"
                   onClick={() => setCurrentReviewIndex((prev) => (prev + 1) % reviews.length)}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800 rounded-full p-2 shadow-lg transition"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800 rounded-full p-1.5 shadow-md transition z-10"
                   aria-label="Próxima avaliação"
                 >
-                  <svg className="w-6 h-6 text-gray-800 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-gray-800 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
@@ -298,16 +297,16 @@ const Reviews = () => {
 
             {/* Indicadores */}
             {reviews.length > 1 && (
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+              <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 flex gap-1.5 z-10">
                 {reviews.map((_, index) => (
                   <button
                     key={index}
                     type="button"
                     onClick={() => setCurrentReviewIndex(index)}
-                    className={`h-2 rounded-full transition-all ${
+                    className={`h-1.5 rounded-full transition-all ${
                       index === currentReviewIndex
-                        ? 'w-8 bg-alego-600 dark:bg-alego-400'
-                        : 'w-2 bg-white/50 dark:bg-slate-400/50 hover:bg-white/75 dark:hover:bg-slate-400/75'
+                        ? 'w-6 bg-alego-600 dark:bg-alego-400'
+                        : 'w-1.5 bg-white/50 dark:bg-slate-400/50 hover:bg-white/75 dark:hover:bg-slate-400/75'
                     }`}
                     aria-label={`Ir para avaliação ${index + 1}`}
                   />
