@@ -12,7 +12,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 
 const navClass =
-  'rounded-full px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition hover:bg-alego-100 dark:hover:bg-alego-900 hover:text-alego-700 dark:hover:text-alego-300'
+  'rounded-full px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold transition-all duration-200'
 
 const Header = () => {
   const { user, logout, isAdmin } = useAuth()
@@ -32,30 +32,33 @@ const Header = () => {
 
   return (
     <header
-      className="border-b border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
+      className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-md shadow-sm dark:border-slate-700/80 dark:bg-slate-900/95"
       style={{
-        backgroundColor: darkMode ? '#0f172a' : '#ffffff',
-        borderColor: darkMode ? '#334155' : '#e2e8f0',
+        backgroundColor: darkMode ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+        borderColor: darkMode ? 'rgba(51, 65, 85, 0.8)' : 'rgba(226, 232, 240, 0.8)',
       }}
     >
-      <div className="mx-auto w-full max-w-6xl px-3 py-2 sm:px-4 sm:py-3">
+      <div className="mx-auto w-full max-w-7xl px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-2">
-            <Link to="/" className="flex items-center gap-1.5 sm:gap-2">
-              <AcademicCapIcon className="h-6 w-6 sm:h-8 sm:w-8 text-alego-600 dark:text-alego-400" />
+          <div className="flex items-center justify-between gap-3">
+            <Link to="/" className="flex items-center gap-2 sm:gap-3 group">
+              <div className="relative">
+                <AcademicCapIcon className="h-7 w-7 sm:h-9 sm:w-9 text-alego-600 dark:text-alego-400 transition-transform group-hover:scale-110" />
+                <div className="absolute inset-0 bg-alego-600/20 dark:bg-alego-400/20 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              </div>
               <div className="hidden sm:block">
-                <p className="text-base sm:text-lg font-bold text-alego-700 dark:text-alego-300">Mentoria ALEGO</p>
-                <p className="text-xs uppercase tracking-wide text-alego-400 dark:text-alego-500">Polícia Legislativa</p>
+                <p className="text-lg sm:text-xl font-black text-alego-700 dark:text-alego-300 leading-tight">Mentoria ALEGO</p>
+                <p className="text-xs uppercase tracking-wider text-alego-500 dark:text-alego-400 font-semibold">Polícia Legislativa</p>
               </div>
               <div className="sm:hidden">
-                <p className="text-sm font-bold text-alego-700 dark:text-alego-300">ALEGO</p>
+                <p className="text-base font-black text-alego-700 dark:text-alego-300">ALEGO</p>
               </div>
             </Link>
             {user ? (
               <button
                 type="button"
                 onClick={logout}
-                className="flex items-center gap-1 rounded-full bg-alego-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-alego-700 dark:bg-alego-700 dark:hover:bg-alego-600 sm:hidden"
+                className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-alego-600 to-alego-700 px-4 py-2 text-xs font-semibold text-white shadow-md transition-all hover:from-alego-700 hover:to-alego-800 sm:hidden"
               >
                 <ArrowLeftOnRectangleIcon className="h-4 w-4" />
                 Sair
@@ -63,7 +66,7 @@ const Header = () => {
             ) : (
               <Link
                 to="/login"
-                className="flex items-center gap-1 rounded-full border border-alego-600 px-3 py-1.5 text-xs font-semibold text-alego-600 transition hover:bg-alego-50 dark:border-alego-500 dark:text-alego-400 sm:hidden"
+                className="flex items-center gap-1.5 rounded-full border-2 border-alego-600 px-4 py-2 text-xs font-bold text-alego-600 transition-all hover:bg-alego-50 dark:border-alego-500 dark:text-alego-400 sm:hidden"
               >
                 <ArrowRightOnRectangleIcon className="h-4 w-4" />
                 Entrar
@@ -71,8 +74,8 @@ const Header = () => {
             )}
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <nav className="flex flex-wrap items-center gap-1 sm:gap-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <nav className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               {links
                 .filter((item) => {
                   if (item.admin && !isAdmin) return false
@@ -86,7 +89,9 @@ const Header = () => {
                     to={item.to}
                     className={({ isActive }) =>
                       `${navClass} ${
-                        isActive ? 'bg-alego-600 text-white dark:bg-alego-700' : 'text-alego-600 dark:text-alego-400'
+                        isActive 
+                          ? 'bg-gradient-to-r from-alego-600 to-alego-700 text-white shadow-md dark:from-alego-700 dark:to-alego-800' 
+                          : 'text-alego-600 dark:text-alego-400 hover:bg-alego-50 dark:hover:bg-alego-900/50'
                       }`
                     }
                   >
@@ -95,11 +100,11 @@ const Header = () => {
                 ))}
             </nav>
 
-            <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
                 type="button"
                 onClick={toggleDarkMode}
-                className="flex items-center justify-center rounded-full p-2 text-alego-600 transition hover:bg-alego-100 dark:text-alego-400 dark:hover:bg-alego-900"
+                className="flex items-center justify-center rounded-full p-2.5 text-alego-600 transition-all hover:bg-alego-100 hover:scale-110 dark:text-alego-400 dark:hover:bg-alego-900"
                 aria-label="Alternar modo escuro"
               >
                 {darkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
@@ -110,25 +115,25 @@ const Header = () => {
                   <button
                     type="button"
                     onClick={logout}
-                    className="hidden items-center gap-1 rounded-full bg-alego-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-alego-700 dark:bg-alego-700 dark:hover:bg-alego-600 sm:flex"
+                    className="hidden items-center gap-1.5 rounded-full bg-gradient-to-r from-alego-600 to-alego-700 px-4 py-2 text-xs font-semibold text-white shadow-md transition-all hover:from-alego-700 hover:to-alego-800 hover:shadow-lg dark:from-alego-700 dark:to-alego-800 sm:flex"
                   >
                     <ArrowLeftOnRectangleIcon className="h-4 w-4" />
                     Sair
                   </button>
-                  <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-800">
-                    <UserCircleIcon className="h-4 w-4 text-alego-500 dark:text-alego-400" />
-                    <div className="text-left">
-                      <p className="max-w-[120px] truncate font-semibold text-alego-700 dark:text-alego-300">
+                  <div className="flex items-center gap-2.5 rounded-full border border-slate-200/80 bg-white/80 backdrop-blur-sm px-3 py-2 text-xs shadow-sm dark:border-slate-700/80 dark:bg-slate-800/80">
+                    <UserCircleIcon className="h-5 w-5 text-alego-500 dark:text-alego-400 flex-shrink-0" />
+                    <div className="text-left min-w-0">
+                      <p className="max-w-[120px] truncate font-bold text-alego-700 dark:text-alego-300">
                         {user.displayName || user.email?.split('@')[0]}
                       </p>
-                      <p className="text-slate-500 dark:text-slate-400">{isAdmin ? 'Admin' : 'Aluno'}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{isAdmin ? 'Admin' : 'Aluno'}</p>
                     </div>
                   </div>
                 </>
               ) : (
                 <Link
                   to="/login"
-                  className="hidden items-center gap-1 rounded-full border border-alego-600 px-3 py-1.5 text-xs font-semibold text-alego-600 transition hover:bg-alego-50 dark:border-alego-500 dark:text-alego-400 sm:flex"
+                  className="hidden items-center gap-1.5 rounded-full border-2 border-alego-600 px-4 py-2 text-xs font-bold text-alego-600 transition-all hover:bg-alego-50 hover:border-alego-700 dark:border-alego-500 dark:text-alego-400 dark:hover:bg-alego-900/50 sm:flex"
                 >
                   <ArrowRightOnRectangleIcon className="h-4 w-4" />
                   Entrar

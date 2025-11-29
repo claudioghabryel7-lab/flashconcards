@@ -127,7 +127,7 @@ const PublicHome = () => {
       </div>
 
       {/* Hero Section */}
-      <div className="grid gap-6 sm:gap-8 rounded-2xl bg-gradient-to-r from-alego-700 to-alego-500 p-6 sm:p-8 md:p-10 text-white md:grid-cols-2">
+      <div className="grid gap-6 sm:gap-8 rounded-3xl bg-gradient-to-br from-alego-700 via-alego-600 to-alego-500 p-6 sm:p-8 md:p-10 text-white md:grid-cols-2 shadow-xl border border-alego-600/20">
         <div>
           <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.3em] text-alego-100">
             Mentoria Intensiva
