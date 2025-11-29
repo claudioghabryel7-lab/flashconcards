@@ -4,12 +4,14 @@ import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { StarIcon } from '@heroicons/react/24/solid'
 import { StarIcon as StarOutlineIcon } from '@heroicons/react/24/outline'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const Reviews = () => {
   const { user, profile } = useAuth()
   const [reviews, setReviews] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [currentReviewIndex, setCurrentReviewIndex] = useState(0)
   const [formData, setFormData] = useState({
     rating: 0,
     comment: '',
@@ -49,6 +51,17 @@ const Reviews = () => {
 
   // Verificar se usuário já avaliou
   const userHasReviewed = user && reviews.some(r => r.userId === user.uid)
+
+  // Auto-play do carrossel de avaliações
+  useEffect(() => {
+    if (reviews.length <= 1) return
+
+    const timer = setInterval(() => {
+      setCurrentReviewIndex((prev) => (prev + 1) % reviews.length)
+    }, 6000) // 6 segundos por avaliação
+
+    return () => clearInterval(timer)
+  }, [reviews.length])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -125,8 +138,7 @@ const Reviews = () => {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="h-32 bg-slate-100 animate-pulse rounded-xl" />
-        <div className="h-32 bg-slate-100 animate-pulse rounded-xl" />
+        <div className="h-48 bg-slate-100 animate-pulse rounded-2xl" />
       </div>
     )
   }
@@ -134,6 +146,8 @@ const Reviews = () => {
   const averageRating = reviews.length > 0
     ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
     : 0
+
+  const currentReview = reviews[currentReviewIndex]
 
   return (
     <div className="space-y-6">
@@ -195,34 +209,112 @@ const Reviews = () => {
         </form>
       )}
 
-      {/* Lista de avaliações */}
+      {/* Carrossel de Avaliações */}
       {reviews.length === 0 ? (
-        <div className="text-center py-8 text-slate-500 dark:text-slate-400">
-          <p>Nenhuma avaliação ainda. Seja o primeiro a avaliar!</p>
+        <div className="text-center py-12 text-slate-500 dark:text-slate-400 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+          <p className="text-lg">Nenhuma avaliação ainda. Seja o primeiro a avaliar!</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {reviews.map((review) => (
-            <div
-              key={review.id}
-              className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-800"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <p className="font-semibold text-slate-900 dark:text-slate-100">
-                    {review.userName || 'Aluno'}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {review.createdAt?.toDate?.().toLocaleDateString('pt-BR') || 'Data não disponível'}
-                  </p>
-                </div>
-                {renderStars(review.rating)}
+        <div className="relative">
+          {/* Carrossel */}
+          <div className="relative w-full overflow-hidden rounded-2xl shadow-lg" style={{ minHeight: '200px' }}>
+            <AnimatePresence mode="wait">
+              {currentReview && (
+                <motion.div
+                  key={currentReview.id}
+                  initial={{ opacity: 0, y: 50 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -50 }}
+                  transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
+                  className="relative w-full p-8 bg-gradient-to-br from-alego-50 via-white to-alego-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 border-2 border-alego-200 dark:border-alego-700"
+                  style={{ minHeight: '200px' }}
+                >
+                  <div className="flex flex-col items-center text-center space-y-4">
+                    {/* Estrelas */}
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <StarIcon
+                          key={star}
+                          className={`h-8 w-8 ${
+                            star <= currentReview.rating ? 'text-yellow-400' : 'text-gray-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    
+                    {/* Comentário */}
+                    <p className="text-lg font-medium text-slate-800 dark:text-slate-200 max-w-3xl leading-relaxed">
+                      "{currentReview.comment}"
+                    </p>
+                    
+                    {/* Autor e Data */}
+                    <div className="flex items-center gap-3 mt-4">
+                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-alego-500 to-alego-600 flex items-center justify-center text-white font-bold text-lg">
+                        {(currentReview.userName || 'A')[0].toUpperCase()}
+                      </div>
+                      <div className="text-left">
+                        <p className="font-semibold text-slate-900 dark:text-slate-100">
+                          {currentReview.userName || 'Aluno'}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {currentReview.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric'
+                          }) || 'Data não disponível'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Botões de navegação */}
+            {reviews.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCurrentReviewIndex((prev) => (prev - 1 + reviews.length) % reviews.length)}
+                  className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800 rounded-full p-2 shadow-lg transition"
+                  aria-label="Avaliação anterior"
+                >
+                  <svg className="w-6 h-6 text-gray-800 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentReviewIndex((prev) => (prev + 1) % reviews.length)}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800 rounded-full p-2 shadow-lg transition"
+                  aria-label="Próxima avaliação"
+                >
+                  <svg className="w-6 h-6 text-gray-800 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </>
+            )}
+
+            {/* Indicadores */}
+            {reviews.length > 1 && (
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+                {reviews.map((_, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => setCurrentReviewIndex(index)}
+                    className={`h-2 rounded-full transition-all ${
+                      index === currentReviewIndex
+                        ? 'w-8 bg-alego-600 dark:bg-alego-400'
+                        : 'w-2 bg-white/50 dark:bg-slate-400/50 hover:bg-white/75 dark:hover:bg-slate-400/75'
+                    }`}
+                    aria-label={`Ir para avaliação ${index + 1}`}
+                  />
+                ))}
               </div>
-              <p className="text-sm text-slate-700 dark:text-slate-300 mt-2">
-                {review.comment}
-              </p>
-            </div>
-          ))}
+            )}
+          </div>
         </div>
       )}
     </div>
