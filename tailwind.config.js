@@ -51,6 +51,14 @@ export default {
         'fade-in-up': 'fadeInUp 0.6s ease-out',
         'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
         'shimmer': 'shimmer 2s linear infinite',
+        'shimmer-slow': 'shimmer 3s linear infinite',
+        'shimmer-slide': 'shimmer-slide 3s linear infinite',
+      },
+      keyframes: {
+        'shimmer-slide': {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
+        },
       },
       backdropBlur: {
         xs: '2px',

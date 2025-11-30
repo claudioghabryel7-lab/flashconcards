@@ -97,6 +97,9 @@ const AdminPanel = () => {
   const [resetEmail, setResetEmail] = useState('')
   const [generatedLink, setGeneratedLink] = useState('')
   const [generatingLink, setGeneratingLink] = useState(false)
+  
+  // Estado para controle de tabs
+  const [activeTab, setActiveTab] = useState('config')
 
   // Configurar PDF.js worker
   useEffect(() => {
@@ -1481,24 +1484,85 @@ CRÍTICO:
     )
   }
 
+  const tabs = [
+    { id: 'config', label: '⚙️ Configurações', icon: '⚙️' },
+    { id: 'flashcards', label: '📚 Flashcards', icon: '📚' },
+    { id: 'users', label: '👥 Usuários', icon: '👥' },
+    { id: 'banners', label: '🖼️ Banners', icon: '🖼️' },
+    { id: 'reviews', label: '⭐ Avaliações', icon: '⭐' },
+  ]
+
   return (
-    <section className="space-y-8">
-      <div className="rounded-2xl bg-white p-8 shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-alego-500">
-          Painel administrativo
-        </p>
-        <h1 className="mt-2 text-3xl font-bold text-alego-700">
-          Gerenciar flashcards e usuários
-        </h1>
-      </div>
-
-      {message && (
-        <div className="rounded-xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-600">
-          {message}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 dark:from-slate-900 dark:via-blue-900/20 dark:to-purple-900/20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        {/* Header Tecnológico */}
+        <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8 mb-6">
+          {/* Background decorativo */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 rounded-full blur-3xl -mr-48 -mt-48"></div>
+          <div className="absolute bottom-0 left-0 w-72 h-72 bg-gradient-to-tr from-indigo-500/10 to-purple-500/10 rounded-full blur-3xl -ml-36 -mb-36"></div>
+          
+          <div className="relative">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur-lg opacity-50 animate-pulse"></div>
+                <div className="relative rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 p-3 shadow-lg">
+                  <span className="text-white font-bold text-xl">⚙️</span>
+                </div>
+              </div>
+              <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
+                Painel Administrativo
+              </p>
+            </div>
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black mb-2">
+              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 dark:from-blue-400 dark:via-purple-400 dark:to-cyan-400 bg-clip-text text-transparent">
+                Administração do Sistema
+              </span>
+            </h1>
+            <p className="text-sm sm:text-base font-semibold text-slate-600 dark:text-slate-400">
+              Gerencie flashcards, usuários, configurações e mais
+            </p>
+          </div>
         </div>
-      )}
 
-      {/* Configuração do Prompt da IA */}
+        {/* Mensagem de feedback */}
+        {message && (
+          <div className="mb-6 relative overflow-hidden rounded-xl bg-gradient-to-r from-emerald-500/10 to-green-500/10 border border-emerald-500/30 dark:border-emerald-400/30 px-4 py-3 backdrop-blur-sm">
+            <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 via-green-500/5 to-emerald-500/5"></div>
+            <p className="relative text-sm font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+              <span>✓</span> {message}
+            </p>
+          </div>
+        )}
+
+        {/* Tabs Navigation */}
+        <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 mb-6">
+          <div className="flex flex-wrap gap-2 p-2 border-b border-slate-200 dark:border-slate-700">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`group relative flex items-center gap-2 px-4 sm:px-6 py-3 rounded-xl font-bold text-sm transition-all overflow-hidden ${
+                  activeTab === tab.id
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                }`}
+              >
+                {activeTab === tab.id && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                )}
+                <span className="relative z-10">{tab.icon}</span>
+                <span className="relative z-10 hidden sm:inline">{tab.label.replace(/^[^\s]+\s/, '')}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Conteúdo das Tabs */}
+          <div className="p-4 sm:p-6">
+            {/* Tab: Configurações */}
+            {activeTab === 'config' && (
+              <div className="space-y-6">
+                {/* Configuração do Prompt da IA */}
       <div className="rounded-2xl bg-white p-6 shadow-sm">
         <p className="flex items-center gap-2 text-sm font-semibold text-alego-600">
           <DocumentTextIcon className="h-5 w-5" />
@@ -1750,186 +1814,200 @@ ESTRUTURA SUGERIDA:
           {savingQuestoesConfig ? 'Salvando...' : 'Salvar Configuração de Questões'}
         </button>
       </div>
-
-      {/* Gerenciar Banners da Página Inicial */}
-      <div className="rounded-2xl bg-white p-6 shadow-sm">
-        <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
-          <DocumentTextIcon className="h-5 w-5" />
-          Gerenciar Banners da Página Inicial
-        </p>
-        <p className="text-xs text-slate-500 mb-6">
-          Adicione imagens ilustrativas que aparecerão no carrossel da página inicial. As imagens passam automaticamente.
-        </p>
-
-        {/* Formulário para adicionar banner */}
-        <div className="mb-6 rounded-xl border border-slate-200 p-4">
-          <h3 className="text-sm font-semibold text-alego-700 mb-4">Adicionar Novo Banner</h3>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-2">
-                Imagem (máximo 1MB)
-              </label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleBannerImageUpload}
-                className="w-full rounded-lg border border-slate-300 p-2 text-sm"
-              />
-              {bannerForm.imageBase64 && (
-                <div className="mt-2">
-                  <img
-                    src={bannerForm.imageBase64}
-                    alt="Preview"
-                    className="max-h-32 rounded-lg border border-slate-200"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-2">
-                Título (opcional)
-              </label>
-              <input
-                type="text"
-                value={bannerForm.title}
-                onChange={(e) => setBannerForm(prev => ({ ...prev, title: e.target.value }))}
-                placeholder="Ex: Assembleia Legislativa"
-                className="w-full rounded-lg border border-slate-300 p-2 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-2">
-                Link de destino (opcional)
-              </label>
-              <input
-                type="text"
-                value={bannerForm.link}
-                onChange={(e) => setBannerForm(prev => ({ ...prev, link: e.target.value }))}
-                placeholder="Ex: /sobre ou https://..."
-                className="w-full rounded-lg border border-slate-300 p-2 text-sm"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-2">
-                  Ordem
-                </label>
-                <input
-                  type="number"
-                  value={bannerForm.order}
-                  onChange={(e) => setBannerForm(prev => ({ ...prev, order: parseInt(e.target.value) || 0 }))}
-                  className="w-full rounded-lg border border-slate-300 p-2 text-sm"
-                />
               </div>
+            )}
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-2">
-                  Duração (ms)
-                </label>
-                <input
-                  type="number"
-                  value={bannerForm.duration}
-                  onChange={(e) => setBannerForm(prev => ({ ...prev, duration: parseInt(e.target.value) || 5000 }))}
-                  className="w-full rounded-lg border border-slate-300 p-2 text-sm"
-                />
-                <p className="text-xs text-slate-400 mt-1">Padrão: 5000ms (5 segundos)</p>
-              </div>
-            </div>
+            {/* Tab: Banners */}
+            {activeTab === 'banners' && (
+              <div className="space-y-6">
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
+                      <DocumentTextIcon className="h-5 w-5" />
+                      Gerenciar Banners da Página Inicial
+                    </p>
+                    <p className="text-xs text-slate-500 mb-6">
+                      Adicione imagens ilustrativas que aparecerão no carrossel da página inicial. As imagens passam automaticamente.
+                    </p>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={bannerForm.active}
-                onChange={(e) => setBannerForm(prev => ({ ...prev, active: e.target.checked }))}
-                className="rounded"
-              />
-              <label className="text-xs text-slate-600">Banner ativo</label>
-            </div>
-
-            <button
-              type="button"
-              onClick={addBanner}
-              disabled={uploadingBanner || !bannerForm.imageBase64}
-              className="w-full rounded-lg bg-alego-600 px-4 py-2 text-sm font-semibold text-white hover:bg-alego-700 disabled:opacity-50"
-            >
-              {uploadingBanner ? 'Adicionando...' : 'Adicionar Banner'}
-            </button>
-          </div>
-        </div>
-
-        {/* Lista de banners existentes */}
-        <div>
-          <h3 className="text-sm font-semibold text-alego-700 mb-4">
-            Banners Existentes ({banners.length})
-          </h3>
-          
-          {banners.length === 0 ? (
-            <p className="text-sm text-slate-500">Nenhum banner adicionado ainda.</p>
-          ) : (
-            <div className="space-y-4">
-              {banners.map((banner) => (
-                <div
-                  key={banner.id}
-                  className="rounded-xl border border-slate-200 p-4"
-                >
-                  <div className="flex items-start gap-4">
-                    <img
-                      src={banner.imageBase64 || banner.imageUrl}
-                      alt={banner.title || 'Banner'}
-                      className="h-24 w-auto rounded-lg border border-slate-200 object-cover"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between">
+                    {/* Formulário para adicionar banner */}
+                    <div className="mb-6 rounded-xl border border-slate-200 p-4">
+                      <h3 className="text-sm font-semibold text-alego-700 mb-4">Adicionar Novo Banner</h3>
+                      
+                      <div className="space-y-4">
                         <div>
-                          <p className="text-sm font-semibold text-slate-700">
-                            {banner.title || 'Sem título'}
-                          </p>
-                          <p className="text-xs text-slate-500 mt-1">
-                            Ordem: {banner.order || 0} • Duração: {banner.duration || 5000}ms
-                            {banner.link && ` • Link: ${banner.link}`}
-                          </p>
-                          <div className="mt-2 flex items-center gap-2">
-                            <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                              banner.active !== false
-                                ? 'bg-emerald-100 text-emerald-700'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}>
-                              {banner.active !== false ? 'Ativo' : 'Inativo'}
-                            </span>
+                          <label className="block text-xs font-semibold text-slate-600 mb-2">
+                            Imagem (máximo 1MB)
+                          </label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleBannerImageUpload}
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          />
+                          {bannerForm.imageBase64 && (
+                            <div className="mt-2">
+                              <img
+                                src={bannerForm.imageBase64}
+                                alt="Preview"
+                                className="max-h-32 rounded-lg border border-slate-200"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-2">
+                            Título (opcional)
+                          </label>
+                          <input
+                            type="text"
+                            value={bannerForm.title}
+                            onChange={(e) => setBannerForm(prev => ({ ...prev, title: e.target.value }))}
+                            placeholder="Ex: Assembleia Legislativa"
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-2">
+                            Link de destino (opcional)
+                          </label>
+                          <input
+                            type="text"
+                            value={bannerForm.link}
+                            onChange={(e) => setBannerForm(prev => ({ ...prev, link: e.target.value }))}
+                            placeholder="Ex: /sobre ou https://..."
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-2">
+                              Ordem
+                            </label>
+                            <input
+                              type="number"
+                              value={bannerForm.order}
+                              onChange={(e) => setBannerForm(prev => ({ ...prev, order: parseInt(e.target.value) || 0 }))}
+                              className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-2">
+                              Duração (ms)
+                            </label>
+                            <input
+                              type="number"
+                              value={bannerForm.duration}
+                              onChange={(e) => setBannerForm(prev => ({ ...prev, duration: parseInt(e.target.value) || 5000 }))}
+                              className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                            />
+                            <p className="text-xs text-slate-400 mt-1">Padrão: 5000ms (5 segundos)</p>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => updateBanner(banner.id, { active: !(banner.active !== false) })}
-                            className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                          >
-                            {banner.active !== false ? 'Desativar' : 'Ativar'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteBanner(banner.id)}
-                            className="rounded-lg bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-200"
-                          >
-                            <TrashIcon className="h-4 w-4 inline" /> Excluir
-                          </button>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={bannerForm.active}
+                            onChange={(e) => setBannerForm(prev => ({ ...prev, active: e.target.checked }))}
+                            className="rounded"
+                          />
+                          <label className="text-xs text-slate-600">Banner ativo</label>
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={addBanner}
+                          disabled={uploadingBanner || !bannerForm.imageBase64}
+                          className="w-full rounded-lg bg-alego-600 px-4 py-2 text-sm font-semibold text-white hover:bg-alego-700 disabled:opacity-50"
+                        >
+                          {uploadingBanner ? 'Adicionando...' : 'Adicionar Banner'}
+                        </button>
                       </div>
+                    </div>
+
+                    {/* Lista de banners existentes */}
+                    <div>
+                      <h3 className="text-sm font-semibold text-alego-700 mb-4">
+                        Banners Existentes ({banners.length})
+                      </h3>
+                      
+                      {banners.length === 0 ? (
+                        <p className="text-sm text-slate-500">Nenhum banner adicionado ainda.</p>
+                      ) : (
+                        <div className="space-y-4">
+                          {banners.map((banner) => (
+                            <div
+                              key={banner.id}
+                              className="rounded-xl border border-slate-200 p-4"
+                            >
+                              <div className="flex items-start gap-4">
+                                <img
+                                  src={banner.imageBase64 || banner.imageUrl}
+                                  alt={banner.title || 'Banner'}
+                                  className="h-24 w-auto rounded-lg border border-slate-200 object-cover"
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-start justify-between">
+                                    <div>
+                                      <p className="text-sm font-semibold text-slate-700">
+                                        {banner.title || 'Sem título'}
+                                      </p>
+                                      <p className="text-xs text-slate-500 mt-1">
+                                        Ordem: {banner.order || 0} • Duração: {banner.duration || 5000}ms
+                                        {banner.link && ` • Link: ${banner.link}`}
+                                      </p>
+                                      <div className="mt-2 flex items-center gap-2">
+                                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                                          banner.active !== false
+                                            ? 'bg-emerald-100 text-emerald-700'
+                                            : 'bg-slate-100 text-slate-600'
+                                        }`}>
+                                          {banner.active !== false ? 'Ativo' : 'Inativo'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => updateBanner(banner.id, { active: !(banner.active !== false) })}
+                                        className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                      >
+                                        {banner.active !== false ? 'Desativar' : 'Ativar'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => deleteBanner(banner.id)}
+                                        className="rounded-lg bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-200"
+                                      >
+                                        <TrashIcon className="h-4 w-4 inline" /> Excluir
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+              </div>
+            )}
 
-      {/* Gerenciar Avaliações */}
-      <div className="rounded-2xl bg-white p-6 shadow-sm">
+            {/* Tab: Avaliações */}
+            {activeTab === 'reviews' && (
+              <div className="space-y-6">
+                {/* Gerenciar Avaliações */}
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
         <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
           <DocumentTextIcon className="h-5 w-5" />
           Gerenciar Avaliações dos Alunos
@@ -2020,19 +2098,27 @@ ESTRUTURA SUGERIDA:
             })}
           </div>
         )}
-      </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-      {/* Gerar Link de Redefinição de Senha */}
-      <div className="rounded-2xl bg-white p-6 shadow-sm border-2 border-alego-200">
-        <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
-          <LockClosedIcon className="h-5 w-5" />
-          Gerar Link de Redefinição de Senha
-        </p>
-        <p className="text-xs text-slate-500 mb-6">
-          Gere um link seguro e oculto para usuários redefinirem suas senhas. O link expira em 24 horas.
-        </p>
+            {/* Tab: Usuários */}
+            {activeTab === 'users' && (
+              <div className="space-y-6">
+                {/* Gerar Link de Redefinição de Senha */}
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
+                      <LockClosedIcon className="h-5 w-5" />
+                      Gerar Link de Redefinição de Senha
+                    </p>
+                    <p className="text-xs text-slate-500 mb-6">
+                      Gere um link seguro e oculto para usuários redefinirem suas senhas. O link expira em 24 horas.
+                    </p>
 
-        <div className="space-y-4">
+                    <div className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-2">
               Email do Usuário
@@ -2083,507 +2169,535 @@ ESTRUTURA SUGERIDA:
                 ⚠️ Este link expira em 24 horas e só pode ser usado uma vez.
               </p>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Gerenciar Módulos */}
-      <div className="rounded-2xl bg-white p-6 shadow-sm">
-        <p className="flex items-center gap-2 text-lg font-bold text-alego-700">
-          <PlusIcon className="h-6 w-6" />
-          Gerenciar Módulos por Matéria
-        </p>
-        <p className="mt-1 text-sm text-slate-500">
-          Primeiro, adicione os módulos dentro de cada matéria. Depois você poderá criar flashcards atribuindo-os aos módulos.
-        </p>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <label className="block text-sm font-semibold text-slate-700">
-            Selecionar Matéria
-            <select
-              value={selectedMateriaForModule}
-              onChange={(e) => setSelectedMateriaForModule(e.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none"
-            >
-              <option value="">Selecione a matéria</option>
-              {MATERIAS.map((materia) => (
-                <option key={materia} value={materia}>
-                  {materia}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm font-semibold text-slate-700">
-            Nome do Módulo
-            <div className="mt-2 flex gap-2">
-              <input
-                type="text"
-                value={newModuleName}
-                onChange={(e) => setNewModuleName(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addModule()}
-                placeholder="Ex: Módulo 1, Aula 1, Capítulo 1..."
-                className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={addModule}
-                disabled={!selectedMateriaForModule || !newModuleName.trim()}
-                className="rounded-xl bg-alego-600 px-6 py-3 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                Adicionar
-              </button>
-            </div>
-          </label>
-        </div>
-
-        {/* Lista de módulos por matéria */}
-        <div className="mt-6 space-y-4">
-          {MATERIAS.map((materia) => {
-            const modulos = modules[materia] || []
-            if (modulos.length === 0) return null
-            
-            // Ordenar módulos numericamente
-            const sortedModulos = [...modulos].sort((a, b) => {
-              // Extrair números dos módulos para ordenação numérica
-              const extractNumber = (str) => {
-                const match = str.match(/\d+/)
-                return match ? parseInt(match[0], 10) : 999
-              }
-              const numA = extractNumber(a)
-              const numB = extractNumber(b)
-              
-              // Se ambos têm números, ordenar numericamente
-              if (numA !== 999 && numB !== 999) {
-                return numA - numB
-              }
-              
-              // Se apenas um tem número, o com número vem primeiro
-              if (numA !== 999) return -1
-              if (numB !== 999) return 1
-              
-              // Se nenhum tem número, ordenar alfabeticamente
-              return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
-            })
-            
-            // Contar flashcards por módulo
-            const getFlashcardCount = (moduloName) => {
-              return cards.filter(card => card.materia === materia && card.modulo === moduloName).length
-            }
-            
-            return (
-              <div key={materia} className="rounded-xl border border-slate-200 p-4">
-                <h3 className="mb-3 text-base font-bold text-alego-700">{materia}</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {sortedModulos.map((modulo) => {
-                    const flashcardCount = getFlashcardCount(modulo)
-                    // Truncar nome do módulo se muito longo (máximo 50 caracteres)
-                    const displayName = modulo.length > 50 ? modulo.substring(0, 47) + '...' : modulo
-                    
-                    return (
-                      <div
-                        key={modulo}
-                        className="flex items-center justify-between gap-2 rounded-lg bg-alego-50 border border-alego-200 px-3 py-2 hover:bg-alego-100 transition-colors"
-                        title={modulo} // Tooltip com nome completo
-                      >
-                        <div className="flex-1 min-w-0">
-                          <span className="text-xs font-semibold text-alego-700 block truncate">
-                            {displayName}
-                          </span>
-                          {flashcardCount > 0 && (
-                            <span className="text-xs text-slate-500">
-                              {flashcardCount} flashcard{flashcardCount !== 1 ? 's' : ''}
-                            </span>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeModule(materia, modulo)}
-                          className="flex-shrink-0 text-rose-600 hover:text-rose-700 transition-colors"
-                          title="Remover módulo"
-                        >
-                          <TrashIcon className="h-4 w-4" />
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Criar Flashcard */}
-      <div className="rounded-2xl bg-white p-6 shadow-sm">
-        <p className="flex items-center gap-2 text-lg font-bold text-alego-700">
-          <DocumentTextIcon className="h-6 w-6" />
-          Criar Flashcard
-        </p>
-        <p className="mt-1 text-sm text-slate-500">
-          Selecione a matéria e o módulo (que você já criou acima), depois preencha o flashcard.
-        </p>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <label className="block text-sm font-semibold text-slate-700">
-            Matéria *
-            <select
-              value={flashcardForm.materia}
-              onChange={(e) => {
-                setFlashcardForm((prev) => ({ ...prev, materia: e.target.value, modulo: '' }))
-              }}
-              className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none"
-            >
-              <option value="">Selecione a matéria</option>
-              {MATERIAS.map((materia) => (
-                <option key={materia} value={materia}>
-                  {materia}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm font-semibold text-slate-700">
-            Módulo *
-            <select
-              value={flashcardForm.modulo}
-              onChange={(e) => setFlashcardForm((prev) => ({ ...prev, modulo: e.target.value }))}
-              disabled={!flashcardForm.materia}
-              className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none disabled:bg-slate-50"
-            >
-              <option value="">{flashcardForm.materia ? 'Selecione o módulo' : 'Primeiro selecione a matéria'}</option>
-              {flashcardForm.materia && (modules[flashcardForm.materia] || [])
-                .sort((a, b) => {
-                  // Extrair números dos módulos para ordenação numérica
-                  const extractNumber = (str) => {
-                    const match = str.match(/\d+/)
-                    return match ? parseInt(match[0], 10) : 999
-                  }
-                  const numA = extractNumber(a)
-                  const numB = extractNumber(b)
-                  
-                  // Se ambos têm números, ordenar numericamente
-                  if (numA !== 999 && numB !== 999) {
-                    return numA - numB
-                  }
-                  
-                  // Se apenas um tem número, o com número vem primeiro
-                  if (numA !== 999) return -1
-                  if (numB !== 999) return 1
-                  
-                  // Se nenhum tem número, ordenar alfabeticamente
-                  return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
-                })
-                .map((modulo) => (
-                <option key={modulo} value={modulo}>
-                  {modulo}
-                </option>
-              ))}
-            </select>
-            {flashcardForm.materia && (!modules[flashcardForm.materia] || modules[flashcardForm.materia].length === 0) && (
-              <p className="mt-1 text-xs text-amber-600">
-                Nenhum módulo criado para esta matéria. Crie módulos acima primeiro.
-              </p>
-            )}
-          </label>
-        </div>
-
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <label className="block text-sm font-semibold text-slate-700">
-            Pergunta *
-            <input
-              type="text"
-              value={flashcardForm.pergunta}
-              onChange={(e) => setFlashcardForm((prev) => ({ ...prev, pergunta: e.target.value }))}
-              className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none"
-              placeholder="Digite a pergunta..."
-            />
-          </label>
-          <label className="block text-sm font-semibold text-slate-700">
-            Resposta *
-            <input
-              type="text"
-              value={flashcardForm.resposta}
-              onChange={(e) => setFlashcardForm((prev) => ({ ...prev, resposta: e.target.value }))}
-              className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none"
-              placeholder="Digite a resposta..."
-            />
-          </label>
-        </div>
-
-        <button
-          type="button"
-          onClick={createFlashcard}
-          disabled={!flashcardForm.materia || !flashcardForm.modulo || !flashcardForm.pergunta || !flashcardForm.resposta}
-          className="mt-4 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          Criar Flashcard
-        </button>
-      </div>
-
-      {/* Gerenciamento de usuários */}
-      <div className="rounded-2xl bg-white p-6 shadow-sm">
-        <p className="flex items-center gap-2 text-sm font-semibold text-alego-600">
-          <UserPlusIcon className="h-5 w-5" />
-          Criar novo usuário
-        </p>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <label className="text-xs font-semibold uppercase text-slate-500">
-            Email
-            <input
-              type="email"
-              value={userForm.email}
-              onChange={(e) => setUserForm((prev) => ({ ...prev, email: e.target.value }))}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-alego-400 focus:outline-none"
-              placeholder="usuario@email.com"
-            />
-          </label>
-          <label className="text-xs font-semibold uppercase text-slate-500">
-            Senha
-            <input
-              type="password"
-              value={userForm.password}
-              onChange={(e) => setUserForm((prev) => ({ ...prev, password: e.target.value }))}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-alego-400 focus:outline-none"
-              placeholder="Senha do usuário"
-            />
-          </label>
-          <label className="text-xs font-semibold uppercase text-slate-500">
-            Nome
-            <input
-              type="text"
-              value={userForm.name}
-              onChange={(e) => setUserForm((prev) => ({ ...prev, name: e.target.value }))}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-alego-400 focus:outline-none"
-              placeholder="Nome completo (opcional)"
-            />
-          </label>
-          <label className="text-xs font-semibold uppercase text-slate-500">
-            Tipo
-            <input
-              type="text"
-              value="Aluno (padrão)"
-              disabled
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500"
-            />
-            <p className="mt-1 text-xs text-slate-400">
-              Todos os novos usuários são criados como alunos. Apenas o administrador principal tem acesso ao painel.
-            </p>
-          </label>
-        </div>
-        <button
-          type="button"
-          onClick={createUser}
-          className="mt-4 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white"
-        >
-          Criar usuário
-        </button>
-      </div>
-
-      <div className="rounded-2xl bg-white p-6 shadow-sm">
-        <p className="text-sm font-semibold text-alego-600">
-          {users.length} usuários cadastrados
-        </p>
-        <div className="mt-4 divide-y divide-slate-100">
-          {users.map((user) => {
-            const userPresence = presence[user.uid] || { status: 'offline' }
-            // Verificar se está online baseado no status e no tempo desde última atualização
-            const isOnline = userPresence.status === 'online'
-            // Se não tiver dados de presença, considerar offline
-            const hasPresenceData = presence[user.uid] !== undefined
-            
-            return (
-            <div
-              key={user.uid || user.email}
-              className="flex flex-col gap-2 py-4 md:flex-row md:items-center md:justify-between"
-            >
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className={`h-3 w-3 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                    {isOnline && (
-                      <div className="absolute inset-0 h-3 w-3 animate-ping rounded-full bg-emerald-400 opacity-75" />
                     )}
-                  </div>
-              <div>
-                <p className="font-semibold text-alego-700">{user.displayName || user.email}</p>
-                <p className="text-sm text-slate-500">{user.email}</p>
-                    <div className="mt-1 flex gap-2">
-                      <span className="inline-block rounded-full bg-alego-100 px-2 py-1 text-xs font-semibold text-alego-600">
-                  {user.role === 'admin' ? 'Admin' : 'Aluno'}
-                </span>
-                      <span className={`inline-block rounded-full px-2 py-1 text-xs font-semibold ${
-                        isOnline && hasPresenceData
-                          ? 'bg-emerald-100 text-emerald-700' 
-                          : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {isOnline && hasPresenceData ? '🟢 Online' : '⚫ Offline'}
-                      </span>
                     </div>
                   </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => removeUser(user.uid || user.email)}
-                className="flex items-center gap-1 rounded-full border border-rose-500 px-4 py-2 text-sm font-semibold text-rose-500"
-              >
-                <TrashIcon className="h-4 w-4" />
-                Excluir
-              </button>
-            </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Importar via JSON */}
-      <div className="rounded-2xl bg-white p-6 shadow-sm">
-        <p className="flex items-center gap-2 text-sm font-semibold text-alego-600">
-          <DocumentTextIcon className="h-5 w-5" />
-          Importar via JSON
-        </p>
-        <textarea
-          value={jsonInput}
-          onChange={(event) => setJsonInput(event.target.value)}
-          rows={6}
-          className="mt-3 w-full rounded-2xl border border-slate-200 p-4 text-sm focus:border-alego-400 focus:outline-none"
-          placeholder='[{"pergunta":"...","resposta":"...","materia":"Português","modulo":"Módulo 1"}]'
-        />
-        <button
-          type="button"
-          onClick={handleImport}
-          className="mt-4 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white"
-        >
-          Importar flashcards
-        </button>
-      </div>
-
-      {/* Lista de cards */}
-      <div className="rounded-2xl bg-white p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <p className="text-sm font-semibold text-alego-600">
-            {cards.length} cards cadastrados
-          </p>
-          <p className="text-xs text-slate-500">
-            Expanda a matéria e o módulo para visualizar e gerenciar os cards correspondentes.
-          </p>
-        </div>
-        <div className="mt-4 space-y-3">
-          {Object.keys(cardsOrganized).length === 0 && (
-            <p className="text-sm text-slate-500">Nenhum card cadastrado ainda.</p>
-          )}
-          {Object.entries(cardsOrganized).map(([materia, modulos]) => {
-            const totalCards = Object.values(modulos).reduce((acc, list) => acc + list.length, 0)
-            const isMateriaOpen = expandedCardMaterias[materia]
-            return (
-              <div key={materia} className="rounded-2xl border border-slate-100 bg-slate-50/40 p-3">
-                <button
-                  type="button"
-                  onClick={() => toggleCardMateria(materia)}
-                  className="flex w-full items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-left"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-alego-700">{materia}</p>
-                    <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                      {totalCards} {totalCards === 1 ? 'card' : 'cards'}
+                </div>
+                
+                {/* Gerenciamento de usuários */}
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
+                      <UserPlusIcon className="h-5 w-5" />
+                      Criar novo usuário
                     </p>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <label className="text-xs font-semibold uppercase text-slate-500">
+                        Email
+                        <input
+                          type="email"
+                          value={userForm.email}
+                          onChange={(e) => setUserForm((prev) => ({ ...prev, email: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-alego-400 focus:outline-none"
+                          placeholder="usuario@email.com"
+                        />
+                      </label>
+                      <label className="text-xs font-semibold uppercase text-slate-500">
+                        Senha
+                        <input
+                          type="password"
+                          value={userForm.password}
+                          onChange={(e) => setUserForm((prev) => ({ ...prev, password: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-alego-400 focus:outline-none"
+                          placeholder="Senha do usuário"
+                        />
+                      </label>
+                      <label className="text-xs font-semibold uppercase text-slate-500">
+                        Nome
+                        <input
+                          type="text"
+                          value={userForm.name}
+                          onChange={(e) => setUserForm((prev) => ({ ...prev, name: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-alego-400 focus:outline-none"
+                          placeholder="Nome completo (opcional)"
+                        />
+                      </label>
+                      <label className="text-xs font-semibold uppercase text-slate-500">
+                        Tipo
+                        <input
+                          type="text"
+                          value="Aluno (padrão)"
+                          disabled
+                          className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500"
+                        />
+                        <p className="mt-1 text-xs text-slate-400">
+                          Todos os novos usuários são criados como alunos. Apenas o administrador principal tem acesso ao painel.
+                        </p>
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={createUser}
+                      className="mt-4 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white"
+                    >
+                      Criar usuário
+                    </button>
                   </div>
-                  <span className="text-xs font-semibold text-alego-500">
-                    {isMateriaOpen ? 'Ocultar' : 'Ver módulos'}
-                  </span>
-                </button>
+                </div>
+                
+                {/* Lista de usuários */}
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <p className="text-sm font-semibold text-alego-600 mb-4">
+                      {users.length} usuários cadastrados
+                    </p>
+                    <div className="mt-4 divide-y divide-slate-100">
+                      {users.map((user) => {
+                        const userPresence = presence[user.uid] || { status: 'offline' }
+                        const isOnline = userPresence.status === 'online'
+                        const hasPresenceData = presence[user.uid] !== undefined
+                        
+                        return (
+                          <div
+                            key={user.uid || user.email}
+                            className="flex flex-col gap-2 py-4 md:flex-row md:items-center md:justify-between"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="relative">
+                                <div className={`h-3 w-3 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                {isOnline && (
+                                  <div className="absolute inset-0 h-3 w-3 animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-alego-700">{user.displayName || user.email}</p>
+                                <p className="text-sm text-slate-500">{user.email}</p>
+                                <div className="mt-1 flex gap-2">
+                                  <span className="inline-block rounded-full bg-alego-100 px-2 py-1 text-xs font-semibold text-alego-600">
+                                    {user.role === 'admin' ? 'Admin' : 'Aluno'}
+                                  </span>
+                                  <span className={`inline-block rounded-full px-2 py-1 text-xs font-semibold ${
+                                    isOnline && hasPresenceData
+                                      ? 'bg-emerald-100 text-emerald-700' 
+                                      : 'bg-slate-100 text-slate-600'
+                                  }`}>
+                                    {isOnline && hasPresenceData ? '🟢 Online' : '⚫ Offline'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeUser(user.uid || user.email)}
+                              className="flex items-center gap-1 rounded-full border border-rose-500 px-4 py-2 text-sm font-semibold text-rose-500"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                              Excluir
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-                {isMateriaOpen && (
-                  <div className="mt-3 space-y-2">
-                    {Object.entries(modulos)
-                      .sort(([moduloA], [moduloB]) => {
-                        // Extrair números dos módulos para ordenação numérica
-                        const extractNumber = (str) => {
-                          const match = str.match(/\d+/)
-                          return match ? parseInt(match[0], 10) : 999
-                        }
-                        const numA = extractNumber(moduloA)
-                        const numB = extractNumber(moduloB)
-                        
-                        // Se ambos têm números, ordenar numericamente
-                        if (numA !== 999 && numB !== 999) {
-                          return numA - numB
-                        }
-                        
-                        // Se apenas um tem número, o com número vem primeiro
-                        if (numA !== 999) return -1
-                        if (numB !== 999) return 1
-                        
-                        // Se nenhum tem número, ordenar alfabeticamente
-                        return moduloA.localeCompare(moduloB, 'pt-BR', { numeric: true, sensitivity: 'base' })
-                      })
-                      .map(([modulo, cardsList]) => {
-                      const moduloKey = `${materia}::${modulo}`
-                      const isModuloOpen = expandedCardModulos[moduloKey]
-                      return (
-                        <div key={modulo} className="rounded-xl border border-slate-100 bg-white">
+            {/* Tab: Flashcards */}
+            {activeTab === 'flashcards' && (
+              <div className="space-y-6">
+                {/* Gerenciar Módulos */}
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <p className="flex items-center gap-2 text-lg font-bold text-alego-700">
+                      <PlusIcon className="h-6 w-6" />
+                      Gerenciar Módulos por Matéria
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Primeiro, adicione os módulos dentro de cada matéria. Depois você poderá criar flashcards atribuindo-os aos módulos.
+                    </p>
+
+                    <div className="mt-6 grid gap-4 md:grid-cols-2">
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Selecionar Matéria
+                        <select
+                          value={selectedMateriaForModule}
+                          onChange={(e) => setSelectedMateriaForModule(e.target.value)}
+                          className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none"
+                        >
+                          <option value="">Selecione a matéria</option>
+                          {MATERIAS.map((materia) => (
+                            <option key={materia} value={materia}>
+                              {materia}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Nome do Módulo
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            type="text"
+                            value={newModuleName}
+                            onChange={(e) => setNewModuleName(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && addModule()}
+                            placeholder="Ex: Módulo 1, Aula 1, Capítulo 1..."
+                            className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none"
+                          />
                           <button
                             type="button"
-                            onClick={() => toggleCardModulo(materia, modulo)}
-                            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
-                            title={modulo} // Tooltip com nome completo
+                            onClick={addModule}
+                            disabled={!selectedMateriaForModule || !newModuleName.trim()}
+                            className="rounded-xl bg-alego-600 px-6 py-3 text-sm font-semibold text-white disabled:opacity-50"
                           >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-slate-700 truncate">{modulo}</p>
-                              <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                                {cardsList.length} {cardsList.length === 1 ? 'card' : 'cards'}
-                              </p>
-                            </div>
-                            <span className="text-xs font-semibold text-alego-500 flex-shrink-0">
-                              {isModuloOpen ? 'Ocultar' : 'Ver cards'}
-                            </span>
+                            Adicionar
                           </button>
+                        </div>
+                      </label>
+                    </div>
 
-                          {isModuloOpen && (
-                            <div className="border-t border-slate-100 p-3">
-                              <div className="grid gap-3 md:grid-cols-2">
-                                {cardsList.map((card) => (
+                    {/* Lista de módulos por matéria */}
+                    <div className="mt-6 space-y-4">
+                      {MATERIAS.map((materia) => {
+                        const modulos = modules[materia] || []
+                        if (modulos.length === 0) return null
+                        
+                        // Ordenar módulos numericamente
+                        const sortedModulos = [...modulos].sort((a, b) => {
+                          // Extrair números dos módulos para ordenação numérica
+                          const extractNumber = (str) => {
+                            const match = str.match(/\d+/)
+                            return match ? parseInt(match[0], 10) : 999
+                          }
+                          const numA = extractNumber(a)
+                          const numB = extractNumber(b)
+                          
+                          // Se ambos têm números, ordenar numericamente
+                          if (numA !== 999 && numB !== 999) {
+                            return numA - numB
+                          }
+                          
+                          // Se apenas um tem número, o com número vem primeiro
+                          if (numA !== 999) return -1
+                          if (numB !== 999) return 1
+                          
+                          // Se nenhum tem número, ordenar alfabeticamente
+                          return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+                        })
+                        
+                        // Contar flashcards por módulo
+                        const getFlashcardCount = (moduloName) => {
+                          return cards.filter(card => card.materia === materia && card.modulo === moduloName).length
+                        }
+                        
+                        return (
+                          <div key={materia} className="rounded-xl border border-slate-200 p-4">
+                            <h3 className="mb-3 text-base font-bold text-alego-700">{materia}</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                              {sortedModulos.map((modulo) => {
+                                const flashcardCount = getFlashcardCount(modulo)
+                                // Truncar nome do módulo se muito longo (máximo 50 caracteres)
+                                const displayName = modulo.length > 50 ? modulo.substring(0, 47) + '...' : modulo
+                                
+                                return (
                                   <div
-                                    key={card.id}
-                                    className="rounded-xl border border-slate-100 bg-slate-50 p-3"
+                                    key={modulo}
+                                    className="flex items-center justify-between gap-2 rounded-lg bg-alego-50 border border-alego-200 px-3 py-2 hover:bg-alego-100 transition-colors"
+                                    title={modulo} // Tooltip com nome completo
                                   >
-                                    <p className="text-sm font-semibold text-alego-700">
-                                      {card.pergunta}
-                                    </p>
-                                    <p className="mt-2 text-xs text-slate-500">
-                                      {card.resposta}
-                                    </p>
-                                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
-                                      {card.tags?.map((tag) => (
-                                        <span
-                                          key={tag}
-                                          className="rounded-full bg-alego-100 px-2 py-0.5 text-alego-700"
-                                        >
-                                          {tag}
+                                    <div className="flex-1 min-w-0">
+                                      <span className="text-xs font-semibold text-alego-700 block truncate">
+                                        {displayName}
+                                      </span>
+                                      {flashcardCount > 0 && (
+                                        <span className="text-xs text-slate-500">
+                                          {flashcardCount} flashcard{flashcardCount !== 1 ? 's' : ''}
                                         </span>
-                                      ))}
+                                      )}
                                     </div>
                                     <button
                                       type="button"
-                                      onClick={() => removeCard(card.id)}
-                                      className="mt-3 inline-flex items-center gap-1 rounded-full border border-rose-500 px-3 py-1 text-xs font-semibold text-rose-500"
+                                      onClick={() => removeModule(materia, modulo)}
+                                      className="flex-shrink-0 text-rose-600 hover:text-rose-700 transition-colors"
+                                      title="Remover módulo"
                                     >
                                       <TrashIcon className="h-4 w-4" />
-                                      Excluir
                                     </button>
                                   </div>
-                                ))}
-                              </div>
+                                )
+                              })}
                             </div>
-                          )}
-                        </div>
-                      )
-                    })}
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                )}
+                </div>
+                
+                {/* Criar Flashcard */}
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <p className="flex items-center gap-2 text-lg font-bold text-alego-700">
+                      <DocumentTextIcon className="h-6 w-6" />
+                      Criar Flashcard
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Selecione a matéria e o módulo (que você já criou acima), depois preencha o flashcard.
+                    </p>
+
+                    <div className="mt-6 grid gap-4 md:grid-cols-2">
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Matéria *
+                        <select
+                          value={flashcardForm.materia}
+                          onChange={(e) => {
+                            setFlashcardForm((prev) => ({ ...prev, materia: e.target.value, modulo: '' }))
+                          }}
+                          className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none"
+                        >
+                          <option value="">Selecione a matéria</option>
+                          {MATERIAS.map((materia) => (
+                            <option key={materia} value={materia}>
+                              {materia}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Módulo *
+                        <select
+                          value={flashcardForm.modulo}
+                          onChange={(e) => setFlashcardForm((prev) => ({ ...prev, modulo: e.target.value }))}
+                          disabled={!flashcardForm.materia}
+                          className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none disabled:bg-slate-50"
+                        >
+                          <option value="">{flashcardForm.materia ? 'Selecione o módulo' : 'Primeiro selecione a matéria'}</option>
+                          {flashcardForm.materia && (modules[flashcardForm.materia] || [])
+                            .sort((a, b) => {
+                              // Extrair números dos módulos para ordenação numérica
+                              const extractNumber = (str) => {
+                                const match = str.match(/\d+/)
+                                return match ? parseInt(match[0], 10) : 999
+                              }
+                              const numA = extractNumber(a)
+                              const numB = extractNumber(b)
+                              
+                              // Se ambos têm números, ordenar numericamente
+                              if (numA !== 999 && numB !== 999) {
+                                return numA - numB
+                              }
+                              
+                              // Se apenas um tem número, o com número vem primeiro
+                              if (numA !== 999) return -1
+                              if (numB !== 999) return 1
+                              
+                              // Se nenhum tem número, ordenar alfabeticamente
+                              return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+                            })
+                            .map((modulo) => (
+                            <option key={modulo} value={modulo}>
+                              {modulo}
+                            </option>
+                          ))}
+                        </select>
+                        {flashcardForm.materia && (!modules[flashcardForm.materia] || modules[flashcardForm.materia].length === 0) && (
+                          <p className="mt-1 text-xs text-amber-600">
+                            Nenhum módulo criado para esta matéria. Crie módulos acima primeiro.
+                          </p>
+                        )}
+                      </label>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Pergunta *
+                        <input
+                          type="text"
+                          value={flashcardForm.pergunta}
+                          onChange={(e) => setFlashcardForm((prev) => ({ ...prev, pergunta: e.target.value }))}
+                          className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none"
+                          placeholder="Digite a pergunta..."
+                        />
+                      </label>
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Resposta *
+                        <input
+                          type="text"
+                          value={flashcardForm.resposta}
+                          onChange={(e) => setFlashcardForm((prev) => ({ ...prev, resposta: e.target.value }))}
+                          className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none"
+                          placeholder="Digite a resposta..."
+                        />
+                      </label>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={createFlashcard}
+                      disabled={!flashcardForm.materia || !flashcardForm.modulo || !flashcardForm.pergunta || !flashcardForm.resposta}
+                      className="mt-4 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      Criar Flashcard
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Importar via JSON */}
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
+                      <DocumentTextIcon className="h-5 w-5" />
+                      Importar via JSON
+                    </p>
+                    <textarea
+                      value={jsonInput}
+                      onChange={(event) => setJsonInput(event.target.value)}
+                      rows={6}
+                      className="mt-3 w-full rounded-2xl border border-slate-200 p-4 text-sm focus:border-alego-400 focus:outline-none"
+                      placeholder='[{"pergunta":"...","resposta":"...","materia":"Português","modulo":"Módulo 1"}]'
+                    />
+                    <button
+                      type="button"
+                      onClick={handleImport}
+                      className="mt-4 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white"
+                    >
+                      Importar flashcards
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Lista de cards */}
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <p className="text-sm font-semibold text-alego-600">
+                        {cards.length} cards cadastrados
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Expanda a matéria e o módulo para visualizar e gerenciar os cards correspondentes.
+                      </p>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {Object.keys(cardsOrganized).length === 0 && (
+                        <p className="text-sm text-slate-500">Nenhum card cadastrado ainda.</p>
+                      )}
+                      {Object.entries(cardsOrganized).map(([materia, modulos]) => {
+                        const totalCards = Object.values(modulos).reduce((acc, list) => acc + list.length, 0)
+                        const isMateriaOpen = expandedCardMaterias[materia]
+                        return (
+                          <div key={materia} className="rounded-2xl border border-slate-100 bg-slate-50/40 p-3">
+                            <button
+                              type="button"
+                              onClick={() => toggleCardMateria(materia)}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-left"
+                            >
+                              <div>
+                                <p className="text-sm font-semibold text-alego-700">{materia}</p>
+                                <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                                  {totalCards} {totalCards === 1 ? 'card' : 'cards'}
+                                </p>
+                              </div>
+                              <span className="text-xs font-semibold text-alego-500">
+                                {isMateriaOpen ? 'Ocultar' : 'Ver módulos'}
+                              </span>
+                            </button>
+
+                            {isMateriaOpen && (
+                              <div className="mt-3 space-y-2">
+                                {Object.entries(modulos)
+                                  .sort(([moduloA], [moduloB]) => {
+                                    // Extrair números dos módulos para ordenação numérica
+                                    const extractNumber = (str) => {
+                                      const match = str.match(/\d+/)
+                                      return match ? parseInt(match[0], 10) : 999
+                                    }
+                                    const numA = extractNumber(moduloA)
+                                    const numB = extractNumber(moduloB)
+                                    
+                                    // Se ambos têm números, ordenar numericamente
+                                    if (numA !== 999 && numB !== 999) {
+                                      return numA - numB
+                                    }
+                                    
+                                    // Se apenas um tem número, o com número vem primeiro
+                                    if (numA !== 999) return -1
+                                    if (numB !== 999) return 1
+                                    
+                                    // Se nenhum tem número, ordenar alfabeticamente
+                                    return moduloA.localeCompare(moduloB, 'pt-BR', { numeric: true, sensitivity: 'base' })
+                                  })
+                                  .map(([modulo, cardsList]) => {
+                                    const moduloKey = `${materia}::${modulo}`
+                                    const isModuloOpen = expandedCardModulos[moduloKey]
+                                    return (
+                                      <div key={modulo} className="rounded-xl border border-slate-100 bg-white">
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleCardModulo(materia, modulo)}
+                                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
+                                          title={modulo} // Tooltip com nome completo
+                                        >
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-semibold text-slate-700 truncate">{modulo}</p>
+                                            <p className="text-[11px] uppercase tracking-wide text-slate-400">
+                                              {cardsList.length} {cardsList.length === 1 ? 'card' : 'cards'}
+                                            </p>
+                                          </div>
+                                          <span className="text-xs font-semibold text-alego-500 flex-shrink-0">
+                                            {isModuloOpen ? 'Ocultar' : 'Ver cards'}
+                                          </span>
+                                        </button>
+
+                                        {isModuloOpen && (
+                                          <div className="border-t border-slate-100 p-3">
+                                            <div className="grid gap-3 md:grid-cols-2">
+                                              {cardsList.map((card) => (
+                                                <div
+                                                  key={card.id}
+                                                  className="rounded-xl border border-slate-100 bg-slate-50 p-3"
+                                                >
+                                                  <p className="text-sm font-semibold text-alego-700">
+                                                    {card.pergunta}
+                                                  </p>
+                                                  <p className="mt-2 text-xs text-slate-500">
+                                                    {card.resposta}
+                                                  </p>
+                                                  <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
+                                                    {card.tags?.map((tag) => (
+                                                      <span
+                                                        key={tag}
+                                                        className="rounded-full bg-alego-100 px-2 py-0.5 text-alego-700"
+                                                      >
+                                                        {tag}
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => removeCard(card.id)}
+                                                    className="mt-3 inline-flex items-center gap-1 rounded-full border border-rose-500 px-3 py-1 text-xs font-semibold text-rose-500"
+                                                  >
+                                                    <TrashIcon className="h-4 w-4" />
+                                                    Excluir
+                                                  </button>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
               </div>
-            )
-          })}
+            )}
+          </div>
         </div>
       </div>
-    </section>
+    </div>
   )
 }
 

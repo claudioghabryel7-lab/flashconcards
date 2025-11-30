@@ -13,7 +13,9 @@ import PublicHome from './routes/PublicHome'
 import Ranking from './routes/Ranking'
 import SetupUser from './routes/SetupUser'
 import FlashQuestoes from './routes/FlashQuestoes'
+import QuestionView from './routes/QuestionView'
 import ResetPassword from './routes/ResetPassword'
+import Payment from './routes/Payment'
 
 const ProtectedRoute = ({ children, adminOnly = false }) => {
   const { user, loading, isAdmin } = useAuth()
@@ -117,6 +119,14 @@ function App() {
             }
           />
           <Route
+            path="/flashquestoes/responder"
+            element={
+              <ProtectedRoute>
+                <QuestionView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin"
             element={
               <ProtectedRoute adminOnly>
@@ -126,6 +136,8 @@ function App() {
           />
           {/* Rota oculta de redefinição de senha */}
           <Route path="/reset/:token" element={<ResetPassword />} />
+          {/* Página de Pagamento - Acessível sem login */}
+          <Route path="/pagamento" element={<Payment />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

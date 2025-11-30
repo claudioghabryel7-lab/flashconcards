@@ -1,153 +1,153 @@
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-    
-    function isAdmin() {
-      return isAuthenticated() && 
-             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-    
-    match /users/{userId} {
-      // Permitir leitura para todos autenticados (para ranking) - apenas campos públicos
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isOwner(userId);
-      allow update: if isAuthenticated() && (
-        (isOwner(userId) && 
-         (request.resource.data.role == resource.data.role ||
-          !resource.data.hasAny(['role']))) ||
-        isAdmin()
-      );
-      allow delete: if isAdmin();
-    }
-    
-    match /flashcards/{cardId} {
-      allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
-    }
-    
-    match /progress/{progressId} {
-      // Permitir leitura para todos autenticados (para ranking)
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
-      allow delete: if isAdmin();
-    }
-    
-    match /userProgress/{userId} {
-      // Permitir leitura para todos autenticados (para ranking)
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && userId == request.auth.uid;
-      allow delete: if isAdmin();
-    }
-    
-    match /chats/{userId}/messages/{messageId} {
-      allow read: if isAuthenticated() && (userId == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && userId == request.auth.uid;
-      allow update: if false;
-      allow delete: if isAdmin();
-    }
-    
-    match /config/{configId} {
-      allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
-    }
-    
-    match /homeBanners/{bannerId} {
-      // Permitir leitura pública (sem autenticação) para banners na página inicial
-      allow read: if true;
-      // Admin pode criar, atualizar e deletar - VERIFICAÇÃO EXPANDIDA
-      allow create: if isAuthenticated() && 
-                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-      allow update: if isAuthenticated() && 
-                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-      allow delete: if isAuthenticated() && 
-                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-    
-    match /reviews/{reviewId} {
-      // Leitura pública de todas as avaliações (filtro de aprovadas é feito no código)
-      allow read: if true;
-      // Usuários autenticados podem criar avaliações
-      allow create: if isAuthenticated();
-      // Apenas admin pode atualizar ou deletar
-      allow update, delete: if isAuthenticated() && 
-                              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-    
-    // ✅ CORRIGIDO: Regra expandida diretamente para deletedUsers
-    match /deletedUsers/{userId} {
-      // Admin pode ler
-      allow read: if isAuthenticated() && 
-                    exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+  rules_version = '2';
+  service cloud.firestore {
+    match /databases/{database}/documents {
       
-      // Admin pode criar - VERIFICAÇÃO EXPANDIDA
-      allow create: if isAuthenticated() && 
-                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      function isAuthenticated() {
+        return request.auth != null;
+      }
       
-      allow update, delete: if false;
-    }
-    
-    match /questoesStats/{userId} {
-      allow read: if isAuthenticated() && (userId == request.auth.uid || isAdmin());
-      allow create, update: if isAuthenticated() && userId == request.auth.uid;
-      allow delete: if isAdmin();
-    }
-    
-    match /presence/{userId} {
-      allow read, create, update: if isAuthenticated() && isOwner(userId);
-      allow read: if isAdmin();
-      allow delete: if false;
-    }
-    
-    match /passwordResetTokens/{tokenId} {
-      // Apenas admin pode criar tokens
-      allow create: if isAuthenticated() && 
+      function isOwner(userId) {
+        return isAuthenticated() && request.auth.uid == userId;
+      }
+      
+      function isAdmin() {
+        return isAuthenticated() && 
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      match /users/{userId} {
+        // Permitir leitura para todos autenticados (para ranking) - apenas campos públicos
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isOwner(userId);
+        allow update: if isAuthenticated() && (
+          (isOwner(userId) && 
+          (request.resource.data.role == resource.data.role ||
+            !resource.data.hasAny(['role']))) ||
+          isAdmin()
+        );
+        allow delete: if isAdmin();
+      }
+      
+      match /flashcards/{cardId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isAdmin();
+      }
+      
+      match /progress/{progressId} {
+        // Permitir leitura para todos autenticados (para ranking)
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+        allow delete: if isAdmin();
+      }
+      
+      match /userProgress/{userId} {
+        // Permitir leitura para todos autenticados (para ranking)
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated() && userId == request.auth.uid;
+        allow delete: if isAdmin();
+      }
+      
+      match /chats/{userId}/messages/{messageId} {
+        allow read: if isAuthenticated() && (userId == request.auth.uid || isAdmin());
+        allow create: if isAuthenticated() && userId == request.auth.uid;
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+      
+      match /config/{configId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isAdmin();
+      }
+      
+      match /homeBanners/{bannerId} {
+        // Permitir leitura pública (sem autenticação) para banners na página inicial
+        allow read: if true;
+        // Admin pode criar, atualizar e deletar - VERIFICAÇÃO EXPANDIDA
+        allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow update: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow delete: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      match /reviews/{reviewId} {
+        // Leitura pública de todas as avaliações (filtro de aprovadas é feito no código)
+        allow read: if true;
+        // Usuários autenticados podem criar avaliações
+        allow create: if isAuthenticated();
+        // Apenas admin pode atualizar ou deletar
+        allow update, delete: if isAuthenticated() && 
+                                exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                                get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      // ✅ CORRIGIDO: Regra expandida diretamente para deletedUsers
+      match /deletedUsers/{userId} {
+        // Admin pode ler
+        allow read: if isAuthenticated() && 
                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-      // Leitura pública do token (para validar na página de reset)
-      allow read: if true;
-      // Apenas admin pode atualizar ou deletar
-      allow update, delete: if isAuthenticated() && 
-                              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-    
-    // 🔥 NOVO: Cache de Questões (compartilhado entre alunos)
-    match /questoesCache/{cacheId} {
-      // Todos autenticados podem ler (para usar questões do cache)
-      allow read: if isAuthenticated();
-      // Apenas sistema pode criar/atualizar (via código)
-      allow create, update: if isAuthenticated();
-      // Admin pode deletar
-      allow delete: if isAdmin();
-    }
-    
-    // 🔥 NOVO: Cache de Explicações (compartilhado entre alunos)
-    match /explanationsCache/{explanationId} {
-      // Todos autenticados podem ler (para usar explicações do cache)
-      allow read: if isAuthenticated();
-      // Apenas sistema pode criar/atualizar (via código)
-      allow create, update: if isAuthenticated();
-      // Admin pode deletar
-      allow delete: if isAdmin();
-    }
-    
-    match /{document=**} {
-      allow read, write: if false;
+        
+        // Admin pode criar - VERIFICAÇÃO EXPANDIDA
+        allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        
+        allow update, delete: if false;
+      }
+      
+      match /questoesStats/{userId} {
+        allow read: if isAuthenticated() && (userId == request.auth.uid || isAdmin());
+        allow create, update: if isAuthenticated() && userId == request.auth.uid;
+        allow delete: if isAdmin();
+      }
+      
+      match /presence/{userId} {
+        allow read, create, update: if isAuthenticated() && isOwner(userId);
+        allow read: if isAdmin();
+        allow delete: if false;
+      }
+      
+      match /passwordResetTokens/{tokenId} {
+        // Apenas admin pode criar tokens
+        allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        // Leitura pública do token (para validar na página de reset)
+        allow read: if true;
+        // Apenas admin pode atualizar ou deletar
+        allow update, delete: if isAuthenticated() && 
+                                exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                                get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      // 🔥 NOVO: Cache de Questões (compartilhado entre alunos)
+      match /questoesCache/{cacheId} {
+        // Todos autenticados podem ler (para usar questões do cache)
+        allow read: if isAuthenticated();
+        // Apenas sistema pode criar/atualizar (via código)
+        allow create, update: if isAuthenticated();
+        // Admin pode deletar
+        allow delete: if isAdmin();
+      }
+      
+      // 🔥 NOVO: Cache de Explicações (compartilhado entre alunos)
+      match /explanationsCache/{explanationId} {
+        // Todos autenticados podem ler (para usar explicações do cache)
+        allow read: if isAuthenticated();
+        // Apenas sistema pode criar/atualizar (via código)
+        allow create, update: if isAuthenticated();
+        // Admin pode deletar
+        allow delete: if isAdmin();
+      }
+      
+      match /{document=**} {
+        allow read, write: if false;
+      }
     }
   }
-}

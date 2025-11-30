@@ -539,52 +539,76 @@ Regras:
   }
 
   return (
-    <section className="space-y-4 sm:space-y-6 px-2 sm:px-0">
-      <div 
-        className="rounded-2xl p-4 sm:p-6 shadow-sm"
-        style={{
-          backgroundColor: darkMode ? '#1e293b' : '#ffffff',
-          color: darkMode ? '#f1f5f9' : '#1e293b'
-        }}
-      >
-        <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.2em] text-alego-500 dark:text-alego-400">
-          Sistema de Repetição Espaçada (SRS)
-        </p>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
-          <div className="flex-1">
-            <h1 className="mt-2 text-xl sm:text-2xl md:text-3xl font-bold text-alego-700 dark:text-alego-300">
-              Flashcards Organizados por Matéria e Módulo
-            </h1>
-            <p className="mt-2 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-              {isStudying 
-                ? `Estudando: ${selectedMateria} - ${selectedModulo}`
-                : 'Selecione uma matéria e módulo para começar a estudar'}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+      {/* Header Tecnológico */}
+      <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
+        {/* Background gradient decorativo */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 rounded-full blur-3xl -mr-48 -mt-48"></div>
+        <div className="absolute bottom-0 left-0 w-72 h-72 bg-gradient-to-tr from-indigo-500/10 to-purple-500/10 rounded-full blur-3xl -ml-36 -mb-36"></div>
+        
+        <div className="relative">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur-lg opacity-50 animate-pulse"></div>
+              <div className="relative rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 p-3 shadow-lg">
+                <span className="text-white font-bold text-xl">📚</span>
+              </div>
+            </div>
+            <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
+              Sistema de Repetição Espaçada (SRS)
             </p>
           </div>
-          {isStudying && (
-            <div className="flex items-center gap-2 rounded-full bg-alego-100 dark:bg-alego-900 px-3 sm:px-4 py-2 self-start sm:self-auto">
-              <ClockIcon className="h-4 w-4 sm:h-5 sm:w-5 text-alego-600 dark:text-alego-400" />
-              <span className="text-xs sm:text-sm font-semibold text-alego-700 dark:text-alego-300">
-                {formattedTime}
-              </span>
+          
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex-1">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black mb-3">
+                <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 dark:from-blue-400 dark:via-purple-400 dark:to-cyan-400 bg-clip-text text-transparent">
+                  Flashcards Inteligentes
+                </span>
+              </h1>
+              <p className="text-sm sm:text-base font-semibold text-slate-600 dark:text-slate-400">
+                {isStudying 
+                  ? (
+                    <span>
+                      Estudando: <span className="font-black text-blue-600 dark:text-blue-400">{selectedMateria}</span> • <span className="font-black text-purple-600 dark:text-purple-400">{selectedModulo}</span>
+                    </span>
+                  )
+                  : 'Selecione uma matéria e módulo para começar a estudar'}
+              </p>
             </div>
-          )}
+            {isStudying && (
+              <div className="relative group inline-flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 rounded-xl border border-blue-500/30 dark:border-blue-400/30 backdrop-blur-sm hover:border-blue-500/50 dark:hover:border-blue-400/50 transition-all">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-blue-500 rounded-full blur-md opacity-50 group-hover:opacity-75 transition-opacity animate-pulse"></div>
+                  <ClockIcon className="relative h-6 w-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Tempo</p>
+                  <p className="text-xl font-black bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent">
+                    {formattedTime}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
-        {/* Árvore de Pastas */}
-        <div 
-          className="rounded-2xl p-4 sm:p-6 shadow-sm"
-          style={{
-            backgroundColor: darkMode ? '#1e293b' : '#ffffff',
-            color: darkMode ? '#f1f5f9' : '#1e293b'
-          }}
-        >
-          <p className="mb-3 sm:mb-4 text-xs sm:text-sm font-semibold text-alego-600 dark:text-alego-400">
-            Estrutura de Estudo:
-          </p>
-          <div className="space-y-1">
+        {/* Árvore de Pastas - Design Tecnológico */}
+        <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6">
+          {/* Background decorativo */}
+          <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+          
+          <div className="relative">
+            <div className="flex items-center gap-3 mb-5">
+              <FolderIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              <p className="text-sm font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
+                Estrutura de Estudo
+              </p>
+            </div>
+          <div className="space-y-2">
             {MATERIAS.map((materia) => {
               const modulos = organizedCards[materia] ? Object.keys(organizedCards[materia]) : []
               const isExpanded = expandedMaterias[materia]
@@ -593,50 +617,50 @@ Regras:
               if (modulos.length === 0) return null
               
               return (
-                <div key={materia}>
+                <div key={materia} className="space-y-2">
                   <button
                     type="button"
                     onClick={() => toggleMateria(materia)}
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
+                    className={`group relative flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-bold transition-all overflow-hidden ${
                       isSelected
-                        ? 'bg-alego-100 dark:bg-alego-900 text-alego-700 dark:text-alego-300'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                        ? 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30 dark:border-blue-400/30'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50/50 dark:hover:bg-slate-700/50 border border-slate-200/50 dark:border-slate-700/50'
                     }`}
                   >
-                    {isExpanded ? (
-                      <ChevronDownIcon className="h-4 w-4" />
-                    ) : (
+                    {/* Background hover */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    
+                    <div className={`relative flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-transform duration-300 ${
+                      isExpanded ? 'rotate-90' : ''
+                    } ${isSelected ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'}`}>
                       <ChevronRightIcon className="h-4 w-4" />
-                    )}
-                    <FolderIcon className="h-5 w-5" />
-                    <span className="flex-1">{materia}</span>
-                    <span className="rounded-full bg-slate-200 dark:bg-slate-700 px-2 py-0.5 text-xs text-slate-700 dark:text-slate-300">
+                    </div>
+                    <FolderIcon className={`h-5 w-5 flex-shrink-0 ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`} />
+                    <span className="flex-1 font-semibold">{materia}</span>
+                    <span className={`rounded-full px-3 py-1 text-xs font-black ${
+                      isSelected
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                    }`}>
                       {modulos.length}
                     </span>
                   </button>
                   
                   {isExpanded && (
-                    <div className="ml-6 mt-1 space-y-2">
+                    <div className="ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-700 space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
                       {modulos
                         .sort((a, b) => {
-                          // Extrair números dos módulos para ordenação numérica
                           const extractNumber = (str) => {
                             const match = str.match(/\d+/)
                             return match ? parseInt(match[0], 10) : 999
                           }
                           const numA = extractNumber(a)
                           const numB = extractNumber(b)
-                          
-                          // Se ambos têm números, ordenar numericamente
                           if (numA !== 999 && numB !== 999) {
                             return numA - numB
                           }
-                          
-                          // Se apenas um tem número, o com número vem primeiro
                           if (numA !== 999) return -1
                           if (numB !== 999) return 1
-                          
-                          // Se nenhum tem número, ordenar alfabeticamente
                           return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
                         })
                         .map((modulo) => {
@@ -651,29 +675,36 @@ Regras:
                             key={modulo}
                             type="button"
                             onClick={() => selectModulo(materia, modulo)}
-                            className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+                            className={`group/module relative flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold transition-all ${
                               isModuloSelected
-                                ? 'bg-alego-600 dark:bg-alego-700 text-white'
-                                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                                : 'text-slate-600 dark:text-slate-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 border border-transparent hover:border-blue-500/30'
                             }`}
                           >
-                            <span>{modulo}</span>
-                            <span className={`rounded-full px-2 py-0.5 text-xs ${
+                            <span className="relative z-10">{modulo}</span>
+                            <span className={`relative z-10 rounded-full px-2 py-0.5 text-xs font-bold ${
                               isModuloSelected
                                 ? 'bg-white/20 text-white'
                                 : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                             }`}>
                               {cardsInModulo.length}
                             </span>
+                            {isModuloSelected && (
+                              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-white/10 to-purple-500/0 animate-shimmer-slide"></div>
+                            )}
                           </button>
                         )
                       })}
                       <button
                         type="button"
                         onClick={() => startMiniSim(materia)}
-                        className="w-full rounded-lg border border-dashed border-alego-400 px-3 py-2 text-left text-sm font-semibold text-alego-600 dark:text-alego-300 hover:bg-alego-50/50 dark:hover:bg-slate-800"
+                        className="group/btn relative w-full rounded-lg border-2 border-dashed border-blue-400 dark:border-blue-500 px-3 py-2 text-left text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-all overflow-hidden"
                       >
-                        Mini simulado (10 cards)
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/5 to-purple-500/0 opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
+                        <span className="relative z-10 flex items-center gap-2">
+                          <span>⚡</span>
+                          <span>Mini simulado (10 cards)</span>
+                        </span>
                       </button>
                     </div>
                   )}
@@ -681,160 +712,206 @@ Regras:
               )
             })}
           </div>
+          </div>
         </div>
 
-        {/* Área de Estudo */}
+        {/* Área de Estudo - Design Tecnológico */}
         <div className="lg:col-span-2">
           {!selectedMateria || !selectedModulo ? (
-            <div 
-              className="rounded-2xl p-6 sm:p-8 md:p-12 text-center shadow-sm"
-              style={{
-                backgroundColor: darkMode ? '#1e293b' : '#ffffff',
-                color: darkMode ? '#f1f5f9' : '#1e293b'
-              }}
-            >
-              <p className="text-3xl sm:text-4xl mb-3 sm:mb-4">📚</p>
-              <p className="text-base sm:text-lg font-semibold text-slate-600 dark:text-slate-300">
-                Selecione uma matéria e módulo para começar
-              </p>
-              <p className="mt-2 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                Navegue pela estrutura ao lado e escolha o conteúdo que deseja estudar
-              </p>
+            <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-12 text-center">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-purple-500/5 to-cyan-500/5"></div>
+              <div className="relative">
+                <div className="inline-block mb-4 text-6xl animate-bounce">📚</div>
+                <p className="text-xl font-black bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent mb-2">
+                  Selecione uma matéria e módulo para começar
+                </p>
+                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  Navegue pela estrutura ao lado e escolha o conteúdo que deseja estudar
+                </p>
+              </div>
             </div>
           ) : activeCards.length === 0 ? (
-            <div 
-              className="rounded-2xl p-8 text-center shadow-sm"
-              style={{
-                backgroundColor: darkMode ? '#1e293b' : '#ffffff',
-                color: darkMode ? '#cbd5e1' : '#64748b'
-              }}
-            >
-              <p>Nenhum card encontrado neste módulo.</p>
+            <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8 text-center">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-purple-500/5 to-cyan-500/5"></div>
+              <p className="relative text-slate-600 dark:text-slate-400 font-semibold">Nenhum card encontrado neste módulo.</p>
             </div>
           ) : (
-            <div 
-              className="rounded-2xl p-4 sm:p-6 shadow-sm"
-              style={{
-                backgroundColor: darkMode ? '#1e293b' : '#ffffff',
-                color: darkMode ? '#f1f5f9' : '#1e293b'
-              }}
-            >
-              <div className="mb-3 sm:mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-                <div>
-                  <p className="text-xs sm:text-sm font-semibold text-alego-600 dark:text-alego-400">
-                    {selectedMateria} • {selectedModulo}
-                  </p>
-                  {studyMode === 'miniSim' && (
-                    <p className="text-[11px] uppercase tracking-wide text-alego-500 dark:text-alego-400">
-                      10 cards aleatórios deste mini simulado
-                    </p>
-                  )}
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {activeCards.length} {activeCards.length === 1 ? 'card' : 'cards'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedMateria(null)
-                    setSelectedModulo(null)
-                    setStudyMode('module')
-                    setMiniSimCards([])
-                  }}
-                  className="rounded-full border border-slate-300 dark:border-slate-600 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 self-start sm:self-auto"
-                >
-                  Voltar
-                </button>
-              </div>
+            <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
+              {/* Background decorativo */}
+              <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
               
-              <FlashcardList
-                cards={activeCards}
-                currentIndex={currentIndex}
-                onSelect={setCurrentIndex}
-                onToggleFavorite={toggleFavorite}
-                onRateDifficulty={rateDifficulty}
-                favorites={favorites}
-                cardProgress={cardProgress}
-                onPrev={goPrev}
-                onNext={goNext}
-                onShuffle={shuffle}
-                viewedIds={viewedIds}
-                showRating={needsReview}
-                onExplainCard={handleExplainCard}
-              />
+              <div className="relative space-y-6">
+                {/* Header do módulo */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur-md opacity-50"></div>
+                      <div className="relative rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 p-2 shadow-lg">
+                        <span className="text-white text-lg">⚡</span>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
+                        {selectedMateria}
+                      </p>
+                      <p className="text-base font-bold text-slate-900 dark:text-white">
+                        {selectedModulo}
+                      </p>
+                      {studyMode === 'miniSim' && (
+                        <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 mt-1">
+                          ⚡ 10 cards aleatórios deste mini simulado
+                        </p>
+                      )}
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        {activeCards.length} {activeCards.length === 1 ? 'card' : 'cards'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMateria(null)
+                      setSelectedModulo(null)
+                      setStudyMode('module')
+                      setMiniSimCards([])
+                    }}
+                    className="group/btn relative inline-flex items-center justify-center gap-2 px-4 py-2 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-all overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-slate-500/0 via-slate-500/10 to-slate-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
+                    <span className="relative z-10">← Voltar</span>
+                  </button>
+                </div>
+              
+                <FlashcardList
+                  cards={activeCards}
+                  currentIndex={currentIndex}
+                  onSelect={setCurrentIndex}
+                  onToggleFavorite={toggleFavorite}
+                  onRateDifficulty={rateDifficulty}
+                  favorites={favorites}
+                  cardProgress={cardProgress}
+                  onPrev={goPrev}
+                  onNext={goNext}
+                  onShuffle={shuffle}
+                  viewedIds={viewedIds}
+                  showRating={needsReview}
+                  onExplainCard={handleExplainCard}
+                />
+              </div>
             </div>
           )}
         </div>
       </div>
 
       {studyMode === 'module' && moduleCompleted && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-w-md w-full rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-2xl">
-            <p className="text-4xl mb-4 text-center">🎉</p>
-            <h2 className="text-xl font-bold text-center text-alego-700 dark:text-alego-300">
-              Módulo finalizado!
-            </h2>
-            <p className="mt-2 text-sm text-center text-slate-600 dark:text-slate-300">
-              Você marcou todos os cards como &quot;Fácil&quot;. Deseja revisar este módulo novamente?
-            </p>
-            <div className="mt-6 flex flex-col sm:flex-row gap-3">
-              <button
-                type="button"
-                onClick={handleReviewAgain}
-                className="flex-1 rounded-full bg-alego-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-alego-700"
-              >
-                Revisar novamente
-              </button>
-              <button
-                type="button"
-                onClick={handleExitModule}
-                className="flex-1 rounded-full border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-              >
-                Voltar aos módulos
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="relative max-w-md w-full rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            {/* Background decorativo */}
+            <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 via-emerald-500/10 to-teal-500/10"></div>
+            
+            <div className="relative p-8 text-center">
+              <div className="inline-block mb-4 text-6xl animate-bounce">🎉</div>
+              <h2 className="text-2xl sm:text-3xl font-black mb-3">
+                <span className="bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 dark:from-green-400 dark:via-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">
+                  Módulo Finalizado!
+                </span>
+              </h2>
+              <p className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-8">
+                Você marcou todos os cards como &quot;Fácil&quot;. Deseja revisar este módulo novamente?
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={handleReviewAgain}
+                  className="group/btn relative flex-1 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:shadow-green-500/50 hover:scale-105 transition-all overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000"></div>
+                  <span className="relative z-10">🔄 Revisar novamente</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExitModule}
+                  className="group/btn relative flex-1 rounded-xl border-2 border-slate-300 dark:border-slate-600 px-6 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-slate-500/0 via-slate-500/10 to-slate-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
+                  <span className="relative z-10">← Voltar aos módulos</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {explanationModal.open && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-w-2xl w-full rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-2xl max-h-[80vh] overflow-y-auto">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm uppercase tracking-wide text-alego-500">Explicação da IA</p>
-                <h3 className="text-xl font-bold text-alego-700 dark:text-alego-300">
-                  {explanationModal.card?.pergunta}
-                </h3>
-                {explanationModal.card?.materia && (
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    {explanationModal.card.materia} • {explanationModal.card?.modulo}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="relative max-w-3xl w-full rounded-2xl bg-white dark:bg-slate-900 shadow-2xl max-h-[85vh] overflow-hidden border border-slate-200 dark:border-slate-700">
+            {/* Background decorativo */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+            
+            <div className="relative p-6 sm:p-8 max-h-[85vh] overflow-y-auto">
+              <div className="flex items-start justify-between gap-4 mb-6">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg blur-md opacity-50"></div>
+                      <div className="relative rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 p-2">
+                        <span className="text-white text-lg">💡</span>
+                      </div>
+                    </div>
+                    <p className="text-xs font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
+                      Explicação da IA
+                    </p>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mb-2">
+                    {explanationModal.card?.pergunta}
+                  </h3>
+                  {explanationModal.card?.materia && (
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-1 text-xs font-bold rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
+                        {explanationModal.card.materia}
+                      </span>
+                      <span className="px-2 py-1 text-xs font-bold rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
+                        {explanationModal.card?.modulo}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={closeExplanationModal}
+                  className="group relative flex-shrink-0 w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition-all hover:scale-110"
+                >
+                  <span className="text-lg font-bold text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white">✕</span>
+                </button>
+              </div>
+              
+              <div className="relative rounded-xl bg-gradient-to-br from-blue-50/50 via-purple-50/30 to-cyan-50/50 dark:from-blue-900/20 dark:via-purple-900/20 dark:to-cyan-900/20 p-6 border border-blue-200/50 dark:border-blue-800/50 backdrop-blur-sm">
+                {explanationModal.loading && (
+                  <div className="text-center py-8">
+                    <div className="inline-block animate-spin text-blue-500 text-4xl mb-4">⚙️</div>
+                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">Gerando explicação... aguarde alguns segundos.</p>
+                  </div>
+                )}
+                {explanationModal.error && (
+                  <div className="text-center py-8">
+                    <p className="text-lg font-bold text-rose-600 dark:text-rose-400 mb-2">❌ Erro</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      {explanationModal.error}
+                    </p>
+                  </div>
+                )}
+                {!explanationModal.loading && !explanationModal.error && (
+                  <p className="text-sm sm:text-base text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
+                    {explanationModal.text}
                   </p>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={closeExplanationModal}
-                className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 text-sm font-semibold"
-              >
-                Fechar ✕
-              </button>
-            </div>
-            <div className="mt-4 rounded-xl bg-slate-50 dark:bg-slate-800 p-4 text-sm text-slate-700 dark:text-slate-200 space-y-3">
-              {explanationModal.loading && <p>Gerando explicação... aguarde alguns segundos.</p>}
-              {explanationModal.error && (
-                <p className="text-rose-600">
-                  {explanationModal.error}
-                </p>
-              )}
-              {!explanationModal.loading && !explanationModal.error && (
-                <p className="whitespace-pre-wrap leading-relaxed">{explanationModal.text}</p>
-              )}
             </div>
           </div>
         </div>
       )}
-    </section>
+      </div>
+    </div>
   )
 }
 

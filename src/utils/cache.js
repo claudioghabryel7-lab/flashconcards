@@ -3,7 +3,7 @@
  * Reduz drasticamente requisições de IA compartilhando conteúdo entre alunos
  */
 
-import { doc, getDoc, setDoc, serverTimestamp, updateDoc, increment } from 'firebase/firestore'
+import { doc, getDoc, setDoc, serverTimestamp, updateDoc, increment, deleteDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 
 /**
@@ -192,27 +192,146 @@ const calculateScore = (likes, dislikes) => {
 }
 
 /**
- * Remover cache automaticamente se score muito baixo
+ * Avaliar questão individual
+ */
+export const rateIndividualQuestion = async (materia, modulo, questionIndex, isLike) => {
+  try {
+    const cacheId = `${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    const cacheRef = doc(db, 'questoesCache', cacheId)
+    const cacheSnap = await getDoc(cacheRef)
+    
+    if (!cacheSnap.exists()) return
+    
+    const data = cacheSnap.data()
+    const questoes = data.questoes || []
+    if (!questoes[questionIndex]) return
+    
+    // Inicializar avaliações individuais se não existir
+    let questionRatings = data.questionRatings || {}
+    const questionId = `q${questionIndex}`
+    
+    if (!questionRatings[questionId]) {
+      questionRatings[questionId] = { likes: 0, dislikes: 0 }
+    }
+    
+    // Incrementar avaliação
+    if (isLike) {
+      questionRatings[questionId].likes = (questionRatings[questionId].likes || 0) + 1
+    } else {
+      questionRatings[questionId].dislikes = (questionRatings[questionId].dislikes || 0) + 1
+    }
+    
+    // Atualizar avaliações no cache
+    await updateDoc(cacheRef, {
+      questionRatings,
+      updatedAt: serverTimestamp(),
+    })
+    
+    // Verificar se questão precisa ser removida
+    const qScore = calculateScore(questionRatings[questionId].likes, questionRatings[questionId].dislikes)
+    const totalRatings = questionRatings[questionId].likes + questionRatings[questionId].dislikes
+    
+    // Se score < 60% e tem pelo menos 3 avaliações, remover questão
+    if (qScore < 60 && totalRatings >= 3) {
+      await removeBadQuestion(materia, modulo, questionIndex)
+      return { removed: true, reason: 'Questão removida por baixa qualidade' }
+    }
+    
+    return { 
+      removed: false,
+      likes: questionRatings[questionId].likes,
+      dislikes: questionRatings[questionId].dislikes,
+      score: qScore
+    }
+  } catch (error) {
+    console.error('Erro ao avaliar questão individual:', error)
+    throw error
+  }
+}
+
+/**
+ * Remover questão ruim do array
+ */
+export const removeBadQuestion = async (materia, modulo, questionIndex) => {
+  try {
+    const cacheId = `${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    const cacheRef = doc(db, 'questoesCache', cacheId)
+    const cacheSnap = await getDoc(cacheRef)
+    
+    if (!cacheSnap.exists()) return
+    
+    const data = cacheSnap.data()
+    const questoes = [...(data.questoes || [])]
+    
+    if (questionIndex >= questoes.length) return { error: 'Question index out of bounds' }
+    
+    // Remover questão do array
+    const removedQuestion = questoes.splice(questionIndex, 1)[0]
+    
+    // Remover avaliações da questão removida e reorganizar índices
+    let questionRatings = { ...(data.questionRatings || {}) }
+    const questionId = `q${questionIndex}`
+    delete questionRatings[questionId]
+    
+    // Reorganizar índices das avaliações (questões posteriores)
+    const reorganizedRatings = {}
+    Object.keys(questionRatings).forEach((key) => {
+      const idx = parseInt(key.replace('q', ''))
+      if (idx > questionIndex) {
+        reorganizedRatings[`q${idx - 1}`] = questionRatings[key]
+      } else {
+        reorganizedRatings[key] = questionRatings[key]
+      }
+    })
+    
+    // Atualizar cache com questões restantes e avaliações reorganizadas
+    await updateDoc(cacheRef, {
+      questoes,
+      questionRatings: reorganizedRatings,
+      updatedAt: serverTimestamp(),
+    })
+    
+    console.log(`🗑️ Questão ${questionIndex} DELETADA permanentemente do cache (${cacheId})`)
+    
+    // Se não sobrou nenhuma questão, deletar cache completo
+    if (questoes.length === 0) {
+      await deleteDoc(cacheRef)
+      console.log(`🗑️ Cache completo DELETADO (sem questões restantes)`)
+      return { cacheDeleted: true }
+    }
+    
+    return { questionRemoved: true, remainingQuestions: questoes.length, removedQuestion }
+  } catch (error) {
+    console.error('Erro ao remover questão ruim:', error)
+    throw error
+  }
+}
+
+/**
+ * Remover cache automaticamente se score muito baixo (DELETAR DE VERDADE)
  */
 export const autoRemoveBadCache = async (collectionName, docId) => {
   try {
     const docRef = doc(db, collectionName, docId)
     const docSnap = await getDoc(docRef)
     
-    if (!docSnap.exists()) return
+    if (!docSnap.exists()) return false
     
     const data = docSnap.data()
+    
+    // Se já está marcado como removido, deletar de verdade
+    if (data.removed) {
+      await deleteDoc(docRef)
+      console.log(`🗑️ Cache DELETADO permanentemente: ${docId}`)
+      return true
+    }
+    
     const score = calculateScore(data.likes || 0, data.dislikes || 0)
     
-    // Se score < 50% e tem pelo menos 10 avaliações, remover
+    // Se score < 50% e tem pelo menos 10 avaliações, DELETAR de verdade
     if (score < 50 && (data.likes + data.dislikes) >= 10) {
-      // Marcar como removido ao invés de deletar (para histórico)
-      await updateDoc(docRef, {
-        removed: true,
-        removedAt: serverTimestamp(),
-        removedReason: 'Score muito baixo'
-      })
-      console.log(`🗑️ Cache removido automaticamente: ${docId} (score: ${score}%)`)
+      await deleteDoc(docRef)
+      console.log(`🗑️ Cache DELETADO por score baixo: ${docId} (score: ${score}%)`)
       return true
     }
     

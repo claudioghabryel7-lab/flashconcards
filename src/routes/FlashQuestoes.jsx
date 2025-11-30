@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
@@ -9,6 +10,8 @@ import {
   getOrCreateQuestionsCache, 
   saveQuestionsCache, 
   rateQuestionsCache,
+  rateIndividualQuestion,
+  removeBadQuestion,
   getOrCreateExplanationCache,
   saveExplanationCache,
   rateExplanationCache,
@@ -27,6 +30,7 @@ const MATERIAS = [
 ]
 
 const FlashQuestoes = () => {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { darkMode } = useDarkMode()
   const [cards, setCards] = useState([])
@@ -119,6 +123,7 @@ const FlashQuestoes = () => {
     return () => unsub()
   }, [user])
 
+
   // Organizar módulos por matéria
   const organizedModules = useMemo(() => {
     const modulesByMateria = {}
@@ -199,6 +204,10 @@ const FlashQuestoes = () => {
   // Estado para avaliações das questões
   const [questionsRating, setQuestionsRating] = useState({ liked: false, disliked: false })
   const [cacheInfo, setCacheInfo] = useState(null)
+  
+  // Estado para avaliação individual de cada questão
+  const [individualRatings, setIndividualRatings] = useState({}) // { questionIndex: { liked: bool, disliked: bool, loading: bool } }
+  const [questionScores, setQuestionScores] = useState({}) // { questionIndex: { likes, dislikes, score } }
 
   // Gerar questões com IA (COM CACHE INTELIGENTE)
   const generateQuestions = async () => {
@@ -214,6 +223,8 @@ const FlashQuestoes = () => {
     setShowResult(false)
     setQuestionsRating({ liked: false, disliked: false })
     setCacheInfo(null)
+    setIndividualRatings({})
+    setQuestionScores({})
 
     try {
       // 🔥 NOVO: VERIFICAR CACHE PRIMEIRO
@@ -222,17 +233,27 @@ const FlashQuestoes = () => {
       
       if (cachedData && cachedData.questoes && cachedData.questoes.length > 0) {
         console.log(`✅ Cache encontrado! Usando ${cachedData.questoes.length} questões do cache.`)
-        setQuestions(cachedData.questoes)
-        setCacheInfo({
+        const cacheInfoData = {
           likes: cachedData.likes,
           dislikes: cachedData.dislikes,
           score: cachedData.score,
           cached: true
-        })
-        setGenerating(false)
+        }
         
         // Verificar se precisa remover por score baixo
         await autoRemoveBadCache('questoesCache', `${selectedMateria}_${selectedModulo}`.replace(/[^a-zA-Z0-9_]/g, '_'))
+        
+        setGenerating(false)
+        
+        // Navegar para a página de responder questões
+        navigate('/flashquestoes/responder', {
+          state: {
+            questions: cachedData.questoes,
+            selectedMateria,
+            selectedModulo,
+            cacheInfo: cacheInfoData
+          }
+        })
         return // Sair da função - questões já foram carregadas do cache
       }
 
@@ -373,9 +394,17 @@ CRÍTICO:
       // 🔥 NOVO: SALVAR NO CACHE
       console.log('💾 Salvando questões no cache...')
       await saveQuestionsCache(selectedMateria, selectedModulo, parsedData.questoes)
-      setCacheInfo({ likes: 0, dislikes: 0, score: 100, cached: false })
+      const newCacheInfo = { likes: 0, dislikes: 0, score: 100, cached: false }
 
-      setQuestions(parsedData.questoes)
+      // Navegar para a página de responder questões
+      navigate('/flashquestoes/responder', {
+        state: {
+          questions: parsedData.questoes,
+          selectedMateria,
+          selectedModulo,
+          cacheInfo: newCacheInfo
+        }
+      })
     } catch (err) {
       console.error('Erro ao gerar questões:', err)
       alert(`Erro ao gerar questões: ${err.message}`)
@@ -437,8 +466,95 @@ CRÍTICO:
     }
   }
 
-  // Próxima questão
+  // Avaliar questão individual (OBRIGATÓRIO)
+  const handleRateIndividualQuestion = async (questionIndex, isLike) => {
+    if (!selectedMateria || !selectedModulo) return
+    
+    setIndividualRatings(prev => ({
+      ...prev,
+      [questionIndex]: { liked: isLike, disliked: !isLike, loading: true }
+    }))
+    
+    try {
+      const result = await rateIndividualQuestion(selectedMateria, selectedModulo, questionIndex, isLike)
+      
+      if (result.removed || result.cacheDeleted) {
+        // Questão foi removida do banco - remover também do array local
+        const updatedQuestions = questions.filter((_, idx) => idx !== questionIndex)
+        
+        // Limpar avaliação da questão removida
+        const updatedRatings = { ...individualRatings }
+        delete updatedRatings[questionIndex]
+        
+        // Reorganizar avaliações (ajustar índices)
+        const reorganizedRatings = {}
+        Object.keys(updatedRatings).forEach((key) => {
+          const idx = parseInt(key)
+          if (idx > questionIndex) {
+            reorganizedRatings[idx - 1] = updatedRatings[idx]
+          } else {
+            reorganizedRatings[idx] = updatedRatings[idx]
+          }
+        })
+        
+        setIndividualRatings(reorganizedRatings)
+        setQuestions(updatedQuestions)
+        
+        // Ajustar índice se necessário
+        if (result.cacheDeleted || updatedQuestions.length === 0) {
+          // Todas as questões foram removidas
+          setQuestions([])
+          setCurrentQuestionIndex(0)
+          setIndividualRatings({})
+          setQuestionScores({})
+          alert('Todas as questões foram removidas por baixa qualidade. Por favor, gere novas questões.')
+          return
+        } else if (currentQuestionIndex >= updatedQuestions.length) {
+          // Se estava na última questão, volta para a nova última
+          setCurrentQuestionIndex(updatedQuestions.length - 1)
+        } else if (currentQuestionIndex > questionIndex) {
+          // Se estava depois da removida, ajusta índice
+          setCurrentQuestionIndex(currentQuestionIndex - 1)
+        }
+        
+        // Limpar resultado para mostrar nova questão
+        setSelectedAnswer(null)
+        setShowResult(false)
+        setShowBizu({})
+        
+        alert('Questão removida por baixa qualidade. Continuando com as questões restantes.')
+        return
+      } else {
+        // Atualizar score da questão
+        setQuestionScores(prev => ({
+          ...prev,
+          [questionIndex]: {
+            likes: result.likes,
+            dislikes: result.dislikes,
+            score: result.score
+          }
+        }))
+      }
+    } catch (error) {
+      console.error('Erro ao avaliar questão:', error)
+      alert('Erro ao avaliar questão. Tente novamente.')
+    } finally {
+      setIndividualRatings(prev => ({
+        ...prev,
+        [questionIndex]: { ...prev[questionIndex], loading: false }
+      }))
+    }
+  }
+
+  // Próxima questão (EXIGE AVALIAÇÃO)
   const nextQuestion = () => {
+    // Verificar se a questão atual foi avaliada
+    const currentRating = individualRatings[currentQuestionIndex]
+    if (!currentRating || (!currentRating.liked && !currentRating.disliked)) {
+      alert('⚠️ Por favor, avalie esta questão (👍 ou 👎) antes de continuar!')
+      return
+    }
+    
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1)
       setSelectedAnswer(null)
@@ -615,84 +731,121 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
   const accuracy = totalAnswered > 0 ? ((stats.correct || 0) / totalAnswered * 100).toFixed(1) : 0
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-to-r from-alego-600 to-alego-500 p-6 text-white">
-        <h1 className="text-2xl font-bold">FlashQuestões</h1>
-        <p className="mt-2 text-sm text-alego-50">
-          Pratique com questões fictícias geradas por IA no estilo FGV
-        </p>
+    <div className="space-y-6 stark-bg-primary min-h-screen p-4 sm:p-6 lg:p-8">
+      {/* Header STARK */}
+      <div className="stark-glass stark-animate-fade-in p-6 sm:p-8 lg:p-10 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-purple-500/10"></div>
+        <div className="relative z-10">
+          <h1 className="stark-text-gradient text-3xl sm:text-4xl lg:text-5xl font-black mb-3 tracking-tight">
+            FLASHQUESTÕES
+          </h1>
+          <p className="stark-text-secondary text-sm sm:text-base">
+            Pratique com questões fictícias geradas por IA no estilo FGV
+          </p>
+        </div>
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-full blur-3xl"></div>
       </div>
 
-      {/* Estatísticas */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-xl bg-white p-4 shadow-sm border border-slate-200">
-          <p className="text-xs text-slate-500">Taxa de Acerto</p>
-          <p className="text-2xl font-bold text-alego-600">{accuracy}%</p>
-          <p className="text-xs text-slate-400 mt-1">
+      {/* Estatísticas STARK */}
+      <div className="stark-grid stark-animate-fade-in">
+        <div className="stark-stats">
+          <p className="stark-text-muted text-xs font-semibold uppercase tracking-wider mb-2">Taxa de Acerto</p>
+          <p className="stark-text-gradient text-4xl sm:text-5xl font-black mb-2">{accuracy}%</p>
+          <p className="stark-text-secondary text-xs sm:text-sm">
             {stats.correct || 0} acertos / {totalAnswered} questões
           </p>
         </div>
-        <div className="rounded-xl bg-white p-4 shadow-sm border border-slate-200">
-          <p className="text-xs text-slate-500">Acertos</p>
-          <p className="text-2xl font-bold text-emerald-600">{stats.correct || 0}</p>
+        <div className="stark-stats">
+          <p className="stark-text-muted text-xs font-semibold uppercase tracking-wider mb-2">Acertos</p>
+          <p className="text-4xl sm:text-5xl font-black mb-2" style={{ color: '#10b981' }}>{stats.correct || 0}</p>
+          <p className="stark-text-secondary text-xs sm:text-sm">Questões corretas</p>
         </div>
-        <div className="rounded-xl bg-white p-4 shadow-sm border border-slate-200">
-          <p className="text-xs text-slate-500">Erros</p>
-          <p className="text-2xl font-bold text-rose-600">{stats.wrong || 0}</p>
+        <div className="stark-stats">
+          <p className="stark-text-muted text-xs font-semibold uppercase tracking-wider mb-2">Erros</p>
+          <p className="text-4xl sm:text-5xl font-black mb-2" style={{ color: '#ef4444' }}>{stats.wrong || 0}</p>
+          <p className="stark-text-secondary text-xs sm:text-sm">Questões incorretas</p>
         </div>
       </div>
 
-      {/* Bot de Déficit */}
+      {/* Bot de Déficit STARK */}
       {deficitByMateria.length > 0 && (
-        <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
-          <p className="text-sm font-semibold text-amber-800 mb-2">⚠️ Matérias com Déficit:</p>
-          <ul className="space-y-1">
-            {deficitByMateria.map((item) => (
-              <li key={item.materia} className="text-sm text-amber-700">
-                • <strong>{item.materia}</strong>: {item.accuracy}% de acerto ({item.correct}/{item.total})
+        <div className="stark-card stark-animate-slide-in p-4 sm:p-6 border-orange-500/30">
+          <p className="stark-text-primary text-sm sm:text-base font-bold mb-3 flex items-center gap-2">
+            <span className="text-xl">⚠️</span> Matérias com Déficit
+          </p>
+          <ul className="space-y-2">
+            {deficitByMateria.map((item, idx) => (
+              <li key={item.materia} className="stark-text-secondary text-xs sm:text-sm flex items-start gap-2">
+                <span className="text-orange-500 mt-1">▸</span>
+                <span>
+                  <strong className="stark-text-primary">{item.materia}</strong>: 
+                  <span className="text-orange-500 font-semibold"> {item.accuracy}%</span> de acerto 
+                  ({item.correct}/{item.total})
+                </span>
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {/* Seleção de Módulo */}
+      {/* Seleção de Módulo STARK */}
       {questions.length === 0 && (
-        <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
-          <h2 className="text-lg font-bold text-alego-700 mb-4">Selecione um Módulo</h2>
+        <div className="stark-card stark-animate-fade-in p-4 sm:p-6 lg:p-8">
+          <h2 className="stark-text-gradient text-xl sm:text-2xl font-black mb-6 uppercase tracking-tight">
+            Selecione um Módulo
+          </h2>
           <div className="space-y-3">
-            {Object.entries(organizedModules).map(([materia, modulos]) => (
-              <div key={materia} className="border border-slate-200 rounded-lg">
+            {Object.entries(organizedModules).map(([materia, modulos], idx) => (
+              <div key={materia} className="stark-card border-2">
                 <button
                   type="button"
                   onClick={() => toggleMateria(materia)}
-                  className="w-full flex items-center justify-between p-3 hover:bg-slate-50"
+                  className="w-full flex items-center justify-between p-4 stark-text-primary hover:stark-bg-hover transition-stark rounded-lg"
                 >
-                  <span className="font-semibold text-alego-700">{materia}</span>
+                  <span className="font-bold text-base sm:text-lg">{materia}</span>
                   {expandedMaterias[materia] ? (
-                    <ChevronDownIcon className="h-5 w-5" />
+                    <ChevronDownIcon className="h-5 w-5 text-cyan-400" />
                   ) : (
-                    <ChevronRightIcon className="h-5 w-5" />
+                    <ChevronRightIcon className="h-5 w-5 text-cyan-400" />
                   )}
                 </button>
                 {expandedMaterias[materia] && (
-                  <div className="p-3 pt-0 space-y-2">
+                  <div className="p-3 pt-0 space-y-2 border-t border-cyan-500/20 mt-2">
                     {modulos.map((modulo) => (
                       <button
                         key={modulo}
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
+                          // Limpar questões anteriores
+                          setQuestions([])
+                          setCurrentQuestionIndex(0)
+                          setSelectedAnswer(null)
+                          setShowResult(false)
+                          setQuestionsRating({ liked: false, disliked: false })
+                          setCacheInfo(null)
+                          setIndividualRatings({})
+                          setQuestionScores({})
+                          // Selecionar módulo
                           setSelectedMateria(materia)
                           setSelectedModulo(modulo)
+                          // Scroll suave para o topo
+                          window.scrollTo({ top: 0, behavior: 'smooth' })
+                          // Gerar questões automaticamente após um pequeno delay
+                          setTimeout(() => {
+                            generateQuestions()
+                          }, 300)
                         }}
-                        className={`w-full text-left p-3 rounded-lg border transition ${
+                        className={`w-full text-left p-3 sm:p-4 rounded-lg border-2 transition-stark ${
                           selectedMateria === materia && selectedModulo === modulo
-                            ? 'bg-alego-100 border-alego-300 text-alego-700'
-                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                            ? 'stark-bg-hover border-cyan-500/50 stark-text-primary'
+                            : 'stark-border stark-text-secondary hover:border-cyan-500/30 hover:stark-bg-hover'
                         }`}
                       >
-                        <FolderIcon className="h-4 w-4 inline mr-2" />
-                        {modulo}
+                        <FolderIcon className="h-4 w-4 inline mr-2 text-cyan-400" />
+                        <span className="text-sm sm:text-base font-semibold">{modulo}</span>
+                        {selectedMateria === materia && selectedModulo === modulo && generating && (
+                          <span className="ml-2 text-xs text-cyan-400 animate-pulse">⚙️ Gerando...</span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -701,232 +854,31 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
             ))}
           </div>
 
-          {selectedMateria && selectedModulo && (
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={generateQuestions}
-                disabled={generating}
-                className="w-full rounded-full bg-gradient-to-r from-alego-600 to-alego-500 px-6 py-3 text-white font-semibold disabled:opacity-50 hover:from-alego-700 hover:to-alego-600 transition"
-              >
-                {generating ? 'Gerando questões...' : '✨ Gerar 10 Questões Fictícias'}
-              </button>
-              <p className="text-xs text-slate-500 text-center mt-2">
-                ⚠️ As questões são fictícias e geradas por IA
-              </p>
+          {selectedMateria && selectedModulo && questions.length === 0 && (
+            <div className="mt-8">
+              {generating ? (
+                <div className="stark-card p-6 text-center">
+                  <div className="inline-block animate-spin text-4xl mb-4">⚙️</div>
+                  <p className="stark-text-primary text-lg font-bold mb-2">Gerando questões...</p>
+                  <p className="stark-text-secondary text-sm">
+                    Por favor, aguarde enquanto a IA cria 10 questões personalizadas para você
+                  </p>
+                </div>
+              ) : (
+                <div className="stark-card p-6 text-center">
+                  <p className="stark-text-primary text-sm font-semibold mb-3">
+                    Módulo selecionado: <span className="text-cyan-400">{selectedModulo}</span>
+                  </p>
+                  <p className="stark-text-secondary text-xs">
+                    ⚠️ As questões serão geradas automaticamente ao selecionar um módulo acima
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {/* Questões */}
-      {questions.length > 0 && (
-        <div className="space-y-6">
-          {/* Info de Cache e Avaliação */}
-          {cacheInfo && (
-            <div className="rounded-xl bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-700 border border-blue-200 dark:border-slate-600 p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  {cacheInfo.cached && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold">
-                      ✅ Questões do Cache
-                    </span>
-                  )}
-                  <span className="text-xs text-slate-600 dark:text-slate-400">
-                    👍 {cacheInfo.likes} | 👎 {cacheInfo.dislikes} | Score: {cacheInfo.score}%
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleRateQuestions(true)}
-                    disabled={questionsRating.liked || questionsRating.disliked}
-                    className={`p-2 rounded-lg transition ${
-                      questionsRating.liked
-                        ? 'bg-green-500 text-white'
-                        : 'bg-white dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/20 text-slate-600 dark:text-slate-400'
-                    } ${questionsRating.disliked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <HandThumbUpIcon className="h-5 w-5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRateQuestions(false)}
-                    disabled={questionsRating.liked || questionsRating.disliked}
-                    className={`p-2 rounded-lg transition ${
-                      questionsRating.disliked
-                        ? 'bg-red-500 text-white'
-                        : 'bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-600 dark:text-slate-400'
-                    } ${questionsRating.liked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <HandThumbDownIcon className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm text-slate-500">
-                Questão {currentQuestionIndex + 1} de {questions.length}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setQuestions([])
-                  setCurrentQuestionIndex(0)
-                  setSelectedAnswer(null)
-                  setShowResult(false)
-                  setQuestionsRating({ liked: false, disliked: false })
-                  setCacheInfo(null)
-                }}
-                className="text-xs text-slate-500 hover:text-slate-700"
-              >
-                Voltar
-              </button>
-            </div>
-
-            {questions[currentQuestionIndex] && (
-              <div className="space-y-4">
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-amber-800">
-                    ⚠️ Questão FICTÍCIA gerada por IA
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-lg font-semibold text-slate-800 mb-4">
-                    {questions[currentQuestionIndex].enunciado}
-                  </p>
-
-                  <div className="space-y-2">
-                    {Object.entries(questions[currentQuestionIndex].alternativas).map(([letra, texto]) => {
-                      const isSelected = selectedAnswer === letra
-                      const isCorrect = letra === questions[currentQuestionIndex].correta
-                      const showCorrect = showResult && isCorrect
-                      const showWrong = showResult && isSelected && !isCorrect
-
-                      return (
-                        <button
-                          key={letra}
-                          type="button"
-                          onClick={() => handleAnswer(letra)}
-                          disabled={showResult}
-                          className={`w-full text-left p-4 rounded-lg border-2 transition ${
-                            showCorrect
-                              ? 'bg-emerald-50 border-emerald-500'
-                              : showWrong
-                              ? 'bg-rose-50 border-rose-500'
-                              : isSelected
-                              ? 'bg-blue-50 border-blue-500'
-                              : 'bg-white border-slate-200 hover:border-alego-300'
-                          } ${showResult ? 'cursor-default' : 'cursor-pointer'}`}
-                        >
-                          <div className="flex items-start gap-3">
-                            <span className="font-bold text-alego-600">{letra})</span>
-                            <span className="flex-1">{texto}</span>
-                            {showCorrect && <CheckCircleIcon className="h-5 w-5 text-emerald-600 flex-shrink-0" />}
-                            {showWrong && <XCircleIcon className="h-5 w-5 text-rose-600 flex-shrink-0" />}
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  {showResult && (
-                    <div className="mt-4 space-y-3">
-                      <div className="bg-slate-50 rounded-lg p-4">
-                        <p className="text-sm font-semibold text-slate-700 mb-2">Justificativa:</p>
-                        <p className="text-sm text-slate-600">
-                          {questions[currentQuestionIndex].justificativa}
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!showBizu[currentQuestionIndex]) {
-                            generateBizu(currentQuestionIndex)
-                          } else {
-                            setShowBizu({ ...showBizu, [currentQuestionIndex]: !showBizu[currentQuestionIndex] })
-                          }
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 bg-alego-600 text-white rounded-lg hover:bg-alego-700 transition"
-                      >
-                        <LightBulbIcon className="h-5 w-5" />
-                        {showBizu[currentQuestionIndex] && bizuText[currentQuestionIndex] ? 'Ocultar BIZU' : 'BIZU'}
-                      </button>
-
-                      {showBizu[currentQuestionIndex] && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                          {bizuLoading[currentQuestionIndex] ? (
-                            <p className="text-sm text-blue-700">Gerando BIZU...</p>
-                          ) : bizuText[currentQuestionIndex] ? (
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <p className="text-sm font-semibold text-blue-800">💡 BIZU:</p>
-                                {bizuCacheInfo[currentQuestionIndex] && (
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs text-slate-500">
-                                      👍 {bizuCacheInfo[currentQuestionIndex].likes} | 👎 {bizuCacheInfo[currentQuestionIndex].dislikes}
-                                    </span>
-                                    <div className="flex items-center gap-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRateBizu(currentQuestionIndex, true)}
-                                        disabled={bizuRatings[currentQuestionIndex]?.liked || bizuRatings[currentQuestionIndex]?.disliked}
-                                        className={`p-1.5 rounded transition ${
-                                          bizuRatings[currentQuestionIndex]?.liked
-                                            ? 'bg-green-500 text-white'
-                                            : 'bg-white hover:bg-green-50 text-slate-600'
-                                        } ${bizuRatings[currentQuestionIndex]?.disliked ? 'opacity-50' : ''}`}
-                                      >
-                                        <HandThumbUpIcon className="h-4 w-4" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRateBizu(currentQuestionIndex, false)}
-                                        disabled={bizuRatings[currentQuestionIndex]?.liked || bizuRatings[currentQuestionIndex]?.disliked}
-                                        className={`p-1.5 rounded transition ${
-                                          bizuRatings[currentQuestionIndex]?.disliked
-                                            ? 'bg-red-500 text-white'
-                                            : 'bg-white hover:bg-red-50 text-slate-600'
-                                        } ${bizuRatings[currentQuestionIndex]?.liked ? 'opacity-50' : ''}`}
-                                      >
-                                        <HandThumbDownIcon className="h-4 w-4" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                              <p className="text-sm text-blue-700 whitespace-pre-wrap">
-                                {bizuText[currentQuestionIndex]}
-                              </p>
-                            </div>
-                          ) : (
-                            <p className="text-sm text-blue-700">Carregando...</p>
-                          )}
-                        </div>
-                      )}
-
-                      {currentQuestionIndex < questions.length - 1 && (
-                        <button
-                          type="button"
-                          onClick={nextQuestion}
-                          className="w-full rounded-full bg-gradient-to-r from-alego-600 to-alego-500 px-6 py-3 text-white font-semibold hover:from-alego-700 hover:to-alego-600 transition"
-                        >
-                          Próxima Questão →
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

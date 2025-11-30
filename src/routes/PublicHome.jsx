@@ -115,15 +115,13 @@ const PublicHome = () => {
               <span>🔥 SOMENTE 100 VAGAS</span>
             </div>
           </div>
-          <a
-            href="https://hotmart.com/pt-br/marketplace/produtos/mentoria-policial-legislativo-alego/Q103159645K"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            to="/pagamento"
             onClick={trackButtonClick}
             className="inline-block rounded-full bg-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-rose-600 shadow-2xl hover:bg-rose-50 transition-all transform hover:scale-105"
           >
             Garantir Promoção Agora
-          </a>
+          </Link>
           <p className="mt-4 text-xs sm:text-sm text-white/80">
             ⚡ Oferta válida por tempo limitado. Não perca esta oportunidade!
           </p>
@@ -264,15 +262,13 @@ const PublicHome = () => {
           >
             Começar Agora
           </Link>
-          <a
-            href="https://hotmart.com/pt-br/marketplace/produtos/mentoria-policial-legislativo-alego/Q103159645K"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            to="/pagamento"
             onClick={trackButtonClick}
             className="inline-block rounded-full bg-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-alego-600 shadow-2xl hover:bg-alego-50 transition-all transform hover:scale-105 whitespace-nowrap"
           >
             Garantir Promoção
-          </a>
+          </Link>
           <a
             href={whatsappUrl}
             target="_blank"
