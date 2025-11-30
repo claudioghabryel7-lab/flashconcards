@@ -157,76 +157,86 @@ export const AuthProvider = ({ children }) => {
     }
     
     const userRef = doc(db, 'users', user.uid)
-    const unsub = onSnapshot(userRef, async (snap) => {
-      if (snap.exists()) {
-        let data = { uid: user.uid, email: user.email, ...snap.data() }
-        
-        // Verificar se o usuário foi deletado
-        if (data.deleted === true) {
-          // Usuário foi removido pelo admin - fazer logout imediato
-          console.log('Usuário foi removido do sistema. Fazendo logout...')
+    const unsub = onSnapshot(
+      userRef, 
+      async (snap) => {
+        if (snap.exists()) {
+          let data = { uid: user.uid, email: user.email, ...snap.data() }
+          
+          // Verificar se o usuário foi deletado
+          if (data.deleted === true) {
+            // Usuário foi removido pelo admin - fazer logout imediato
+            console.log('Usuário foi removido do sistema. Fazendo logout...')
+            try {
+              await signOut(auth)
+              setUser(null)
+              setProfile(null)
+              return
+            } catch (err) {
+              console.error('Erro ao fazer logout:', err)
+              // Mesmo com erro, limpar estado local
+              setUser(null)
+              setProfile(null)
+              return
+            }
+          }
+          
+          // Se for o email do admin, garantir que role seja admin
+          const isAdminEmail = user.email?.toLowerCase() === 'claudioghabryel.cg@gmail.com'
+          if (isAdminEmail) {
+            // Se role não for admin, atualizar
+            if (data.role !== 'admin') {
+              // Atualizar localmente primeiro
+              data.role = 'admin'
+              // Atualizar no Firestore (sem await para não bloquear)
+              setDoc(userRef, { role: 'admin' }, { merge: true }).catch(err => {
+                console.error('Erro ao atualizar role no Firestore:', err)
+              })
+            }
+          }
+          
+          // Garantir que role não seja undefined
+          if (!data.role) {
+            data.role = isAdminEmail ? 'admin' : 'student'
+          }
+          
+          setProfile(data)
+        } else {
+          // Perfil não existe - verificar se foi deletado antes de fazer logout
+          const deletedUserRef = doc(db, 'deletedUsers', user.uid)
+          const deletedSnap = await getDoc(deletedUserRef)
+          
+          if (deletedSnap.exists()) {
+            // Usuário foi deletado pelo admin - fazer logout
+            console.log('Usuário foi removido do sistema. Fazendo logout...')
           try {
             await signOut(auth)
             setUser(null)
             setProfile(null)
-            return
           } catch (err) {
             console.error('Erro ao fazer logout:', err)
-            // Mesmo com erro, limpar estado local
             setUser(null)
-            setProfile(null)
-            return
-          }
-        }
-        
-        // Se for o email do admin, garantir que role seja admin
-        const isAdminEmail = user.email?.toLowerCase() === 'claudioghabryel.cg@gmail.com'
-        if (isAdminEmail) {
-          // Se role não for admin, atualizar
-          if (data.role !== 'admin') {
-            // Atualizar localmente primeiro
-            data.role = 'admin'
-            // Atualizar no Firestore (sem await para não bloquear)
-            setDoc(userRef, { role: 'admin' }, { merge: true }).catch(err => {
-              console.error('Erro ao atualizar role no Firestore:', err)
-            })
-          }
-        }
-        
-        // Garantir que role não seja undefined
-        if (!data.role) {
-          data.role = isAdminEmail ? 'admin' : 'student'
-        }
-        
-        setProfile(data)
-      } else {
-        // Perfil não existe - verificar se foi deletado antes de fazer logout
-        const deletedUserRef = doc(db, 'deletedUsers', user.uid)
-        const deletedSnap = await getDoc(deletedUserRef)
-        
-        if (deletedSnap.exists()) {
-          // Usuário foi deletado pelo admin - fazer logout
-          console.log('Usuário foi removido do sistema. Fazendo logout...')
-        try {
-          await signOut(auth)
-          setUser(null)
-          setProfile(null)
-        } catch (err) {
-          console.error('Erro ao fazer logout:', err)
-          setUser(null)
+              setProfile(null)
+            }
+          } else {
+            // Perfil não existe mas não foi deletado - pode ser um usuário novo
+            // Não fazer logout, apenas limpar profile (o onAuthStateChanged vai recriar se necessário)
+            console.log('Perfil não encontrado, mas usuário não foi deletado. Aguardando recriação...')
             setProfile(null)
           }
-        } else {
-          // Perfil não existe mas não foi deletado - pode ser um usuário novo
-          // Não fazer logout, apenas limpar profile (o onAuthStateChanged vai recriar se necessário)
-          console.log('Perfil não encontrado, mas usuário não foi deletado. Aguardando recriação...')
-          setProfile(null)
         }
+      },
+      (error) => {
+        // Tratar erro de permissão silenciosamente se for permission-denied
+        if (error.code === 'permission-denied') {
+          console.warn('Permissão negada ao ler perfil do usuário. Isso é normal se o usuário não estiver completamente autenticado.')
+          // Não resetar profile em caso de erro de permissão para evitar flicker
+          return
+        }
+        console.error('Erro no onSnapshot do perfil:', error)
+        // Não resetar profile em caso de erro para evitar flicker
       }
-    }, (error) => {
-      console.error('Erro no onSnapshot do perfil:', error)
-      // Não resetar profile em caso de erro para evitar flicker
-    })
+    )
     
     return () => unsub()
   }, [user])

@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../hooks/useAuth'
 import { doc, setDoc, getDoc, collection, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
+import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 
 const Payment = () => {
   const { user } = useAuth()
@@ -206,7 +207,7 @@ const Payment = () => {
   const createUserAccount = async (email, name, password, transactionId) => {
     try {
       // Chamar função Firebase para criar usuário e enviar email
-      const response = await fetch('https://us-central1-plegi-d84c2.cloudfunctions.net/createUserAndSendEmail', {
+      const response = await fetch(FIREBASE_FUNCTIONS.createUserAndSendEmail, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
