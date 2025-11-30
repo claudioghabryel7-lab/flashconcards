@@ -42,3 +42,4 @@ const TabNavigation = ({ tabs, activeTab, onTabChange, className = '' }) => {
 
 export default TabNavigation
 
+

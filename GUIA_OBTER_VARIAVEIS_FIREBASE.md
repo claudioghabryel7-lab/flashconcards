@@ -117,3 +117,4 @@ As variáveis geralmente aparecem em uma caixa de código na página, parecida c
 
 **Depois que você me enviar essas 6 variáveis, eu configuro tudo automaticamente para você!** 🚀
 
+

@@ -122,3 +122,4 @@ curl -X POST https://us-central1-seu-projeto.cloudfunctions.net/createUserAndSen
 - ✅ Para produção, use serviços profissionais (SendGrid, Resend)
 - ✅ Configure SPF e DKIM no seu domínio (se usar domínio próprio)
 
+

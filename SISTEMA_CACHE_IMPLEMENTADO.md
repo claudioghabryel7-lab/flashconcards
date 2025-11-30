@@ -209,3 +209,4 @@ explanationsCache/
 
 **🎉 TUDO PRONTO! O sistema está funcionando com cache inteligente!**
 
+

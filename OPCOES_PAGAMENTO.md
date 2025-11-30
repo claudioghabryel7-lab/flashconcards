@@ -109,3 +109,4 @@ Após escolher o gateway:
 - ✅ Webhooks assinados para validação
 - ✅ Dados sensíveis nunca são armazenados
 
+

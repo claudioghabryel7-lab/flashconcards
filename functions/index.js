@@ -168,11 +168,110 @@ exports.createUserAndSendEmail = functions.https.onRequest((req, res) => {
   })
 })
 
-// Função para processar webhook do Mercado Pago (quando integrar)
+// Função para processar webhook do Mercado Pago
 exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
-    // Implementar quando integrar com Mercado Pago
-    // Por enquanto, apenas retornar OK
-    return res.status(200).json({ received: true })
+    try {
+      // O Mercado Pago envia os dados no body
+      const { type, data } = req.body
+      
+      console.log('Webhook recebido:', { type, data })
+      
+      // Verificar se é um evento de pagamento
+      if (type === 'payment' || type === 'payment.updated') {
+        const paymentId = data?.id
+        
+        if (!paymentId) {
+          console.error('Payment ID não encontrado')
+          return res.status(400).json({ error: 'Payment ID não encontrado' })
+        }
+        
+        // Buscar transação no Firestore pelo paymentId do Mercado Pago
+        const transactionsRef = admin.firestore().collection('transactions')
+        const snapshot = await transactionsRef
+          .where('mercadopagoPaymentId', '==', paymentId.toString())
+          .limit(1)
+          .get()
+        
+        if (snapshot.empty) {
+          console.log(`Transação não encontrada para paymentId: ${paymentId}`)
+          // Retornar OK mesmo assim (pode ser um pagamento de teste ou de outro sistema)
+          return res.status(200).json({ received: true, message: 'Transação não encontrada' })
+        }
+        
+        const transactionDoc = snapshot.docs[0]
+        const transactionData = transactionDoc.data()
+        
+        // Buscar informações do pagamento no Mercado Pago usando o Access Token
+        // Nota: Em produção, você precisaria instalar o SDK: npm install mercadopago
+        // Por enquanto, vamos atualizar baseado nos dados recebidos do webhook
+        
+        // O webhook do Mercado Pago envia o status do pagamento
+        const paymentStatus = data?.status || 'pending'
+        
+        // Mapear status do Mercado Pago para nosso sistema
+        let newStatus = 'pending'
+        if (paymentStatus === 'approved') {
+          newStatus = 'paid'
+        } else if (paymentStatus === 'rejected' || paymentStatus === 'cancelled') {
+          newStatus = 'cancelled'
+        }
+        
+        // Atualizar transação no Firestore
+        await transactionDoc.ref.update({
+          status: newStatus,
+          mercadopagoStatus: paymentStatus,
+          mercadopagoPaymentId: paymentId.toString(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...(newStatus === 'paid' && {
+            paidAt: admin.firestore.FieldValue.serverTimestamp()
+          })
+        })
+        
+        console.log(`Transação ${transactionDoc.id} atualizada para status: ${newStatus}`)
+        
+        // Se pagamento foi aprovado, ativar acesso do usuário
+        if (newStatus === 'paid') {
+          const userId = transactionData.userId
+          const userEmail = transactionData.userEmail
+          
+          if (userId) {
+            // Usuário já existe - apenas ativar acesso
+            const userRef = admin.firestore().collection('users').doc(userId)
+            const userDoc = await userRef.get()
+            
+            if (userDoc.exists()) {
+              await userRef.update({
+                hasActiveSubscription: true,
+                subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
+                lastPaymentDate: admin.firestore.FieldValue.serverTimestamp()
+              })
+              console.log(`Acesso ativado para usuário: ${userId}`)
+            }
+          } else if (userEmail) {
+            // Usuário ainda não existe - será criado quando processar o pagamento
+            // Por enquanto, apenas logar
+            console.log(`Pagamento aprovado para email: ${userEmail}, mas usuário ainda não criado`)
+          }
+        }
+        
+        return res.status(200).json({ 
+          received: true, 
+          transactionId: transactionDoc.id,
+          status: newStatus
+        })
+      }
+      
+      // Se não for um evento de pagamento, apenas confirmar recebimento
+      return res.status(200).json({ received: true, message: 'Evento não processado' })
+      
+    } catch (error) {
+      console.error('Erro ao processar webhook do Mercado Pago:', error)
+      // Sempre retornar 200 para o Mercado Pago não tentar reenviar
+      return res.status(200).json({ 
+        received: true, 
+        error: error.message 
+      })
+    }
   })
 })

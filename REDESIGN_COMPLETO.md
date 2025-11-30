@@ -170,3 +170,4 @@ import ModernTable from '../components/ui/ModernTable'
 - Responsivo em todos os dispositivos
 - UX melhorada significativamente
 
+

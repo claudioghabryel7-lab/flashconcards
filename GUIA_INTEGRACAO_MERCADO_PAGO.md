@@ -255,3 +255,4 @@ Após configurar:
 4. ✅ Fazer primeiro pagamento real (valor baixo)
 5. ✅ Monitorar transações no painel do Mercado Pago
 
+

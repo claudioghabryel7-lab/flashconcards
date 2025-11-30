@@ -12,6 +12,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@heroicons/react": "^2.2.0",
+    "@mercadopago/sdk-react": "^1.0.6",
     "axios": "^1.13.2",
     "crypto-js": "^4.2.0",
     "dayjs": "^1.11.19",
