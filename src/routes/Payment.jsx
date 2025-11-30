@@ -45,8 +45,8 @@ const Payment = () => {
   const product = {
     name: 'Mentoria Policial Legislativo ALEGO',
     originalPrice: 149.99,
-    price: 99.90,
-    discount: 50.09
+    price: 1.00, // Valor de teste
+    discount: 148.99
   }
 
   // Opções de parcelamento
