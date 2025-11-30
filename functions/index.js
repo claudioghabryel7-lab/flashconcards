@@ -2,6 +2,7 @@ const functions = require('firebase-functions')
 const admin = require('firebase-admin')
 const nodemailer = require('nodemailer')
 const cors = require('cors')({ origin: true })
+const { MercadoPagoConfig, Payment } = require('mercadopago')
 
 admin.initializeApp()
 
@@ -163,6 +164,79 @@ exports.createUserAndSendEmail = functions.https.onRequest((req, res) => {
       return res.status(500).json({ 
         error: 'Erro ao criar usuário',
         message: error.message
+      })
+    }
+  })
+})
+
+// Função para criar pagamento PIX real no Mercado Pago
+exports.createPixPayment = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Método não permitido' })
+    }
+
+    try {
+      const { amount, description, transactionId, userEmail, userName } = req.body
+
+      if (!amount || !description || !transactionId) {
+        return res.status(400).json({ error: 'Campos obrigatórios: amount, description, transactionId' })
+      }
+
+      // Obter Access Token do Mercado Pago
+      const accessToken = functions.config().mercadopago?.access_token_prod || 
+                         process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
+                         'APP_USR-3743437950896305-112812-559fadd346072c35f8cb81e21d4e562d-2583165550'
+
+      // Configurar cliente do Mercado Pago
+      const client = new MercadoPagoConfig({
+        accessToken: accessToken,
+        options: { timeout: 5000 }
+      })
+
+      const payment = new Payment(client)
+
+      // Criar pagamento PIX
+      const paymentData = {
+        transaction_amount: parseFloat(amount),
+        description: description,
+        payment_method_id: 'pix',
+        payer: {
+          email: userEmail || 'cliente@exemplo.com',
+          first_name: userName || 'Cliente',
+        },
+        metadata: {
+          transaction_id: transactionId,
+        },
+        notification_url: `${functions.config().app?.webhook_url || 'https://us-central1-plegi-d84c2.cloudfunctions.net/webhookMercadoPago'}`,
+      }
+
+      const result = await payment.create({ body: paymentData })
+
+      if (result && result.point_of_interaction && result.point_of_interaction.transaction_data) {
+        const pixData = result.point_of_interaction.transaction_data
+
+        return res.status(200).json({
+          success: true,
+          paymentId: result.id,
+          status: result.status,
+          pixQrCode: pixData.qr_code || null,
+          pixCopyPaste: pixData.qr_code_base64 || pixData.qr_code || null,
+          ticketUrl: result.point_of_interaction.transaction_data.ticket_url || null,
+        })
+      } else {
+        return res.status(500).json({ 
+          error: 'Erro ao gerar PIX',
+          message: 'Resposta do Mercado Pago não contém dados do PIX'
+        })
+      }
+
+    } catch (error) {
+      console.error('Erro ao criar pagamento PIX:', error)
+      return res.status(500).json({ 
+        error: 'Erro ao criar pagamento PIX',
+        message: error.message,
+        details: error.response?.data || null
       })
     }
   })

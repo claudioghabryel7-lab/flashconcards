@@ -162,11 +162,6 @@ const Payment = () => {
         status: 'pending',
         createdAt: serverTimestamp(),
         transactionId,
-        // Para PIX, gerar QR Code e código copia e cola
-        ...(paymentMethod === 'pix' && {
-          pixQrCode: `00020126580014BR.GOV.BCB.PIX0136${transactionId}`,
-          pixCopyPaste: `00020126580014BR.GOV.BCB.PIX0136${transactionId}5204000053039865802BR5913PLegimentoria6009SAO PAULO62070503***6304${transactionId.slice(-4)}`
-        }),
         // Para cartão, salvar últimos 4 dígitos
         ...(paymentMethod === 'card' && {
           cardLastDigits: cardData.number.slice(-4)
@@ -175,15 +170,54 @@ const Payment = () => {
 
       await setDoc(transactionRef, transactionData)
 
-      // SIMULAÇÃO: Em produção, aqui você integraria com o gateway de pagamento
-      // Por enquanto, vamos simular o processamento
+      // Processar pagamento baseado no método
       if (paymentMethod === 'pix') {
-        // PIX: aguarda pagamento
-        // Salvar código PIX e ID da transação para exibir
-        setPixCode(transactionData.pixCopyPaste || '')
-        setCurrentTransactionId(transactionId)
-        setPaymentStatus('pending')
-        setLoading(false)
+        // PIX: criar pagamento real no Mercado Pago
+        try {
+          const pixResponse = await fetch(FIREBASE_FUNCTIONS.createPixPayment, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              amount: product.price,
+              description: product.name,
+              transactionId: transactionId,
+              userEmail: email.toLowerCase().trim(),
+              userName: name || email.split('@')[0],
+            })
+          })
+
+          if (!pixResponse.ok) {
+            throw new Error('Erro ao gerar pagamento PIX')
+          }
+
+          const pixData = await pixResponse.json()
+
+          if (pixData.success && pixData.pixCopyPaste) {
+            // Atualizar transação com dados do PIX
+            await setDoc(transactionRef, {
+              mercadopagoPaymentId: pixData.paymentId,
+              pixQrCode: pixData.pixQrCode,
+              pixCopyPaste: pixData.pixCopyPaste,
+              ticketUrl: pixData.ticketUrl,
+              mercadopagoStatus: pixData.status,
+            }, { merge: true })
+
+            // Salvar código PIX para exibir
+            setPixCode(pixData.pixCopyPaste)
+            setCurrentTransactionId(transactionId)
+            setPaymentStatus('pending')
+            setLoading(false)
+          } else {
+            throw new Error('Resposta do Mercado Pago inválida')
+          }
+        } catch (error) {
+          console.error('Erro ao criar pagamento PIX:', error)
+          setErrorMessage('Erro ao gerar código PIX. Tente novamente.')
+          setLoading(false)
+          setPaymentStatus('error')
+        }
       } else {
         // Cartão: processa pagamento
         // Em produção: integrar com Mercado Pago SDK

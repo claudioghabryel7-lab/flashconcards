@@ -18,6 +18,9 @@ export const FIREBASE_FUNCTIONS = {
   
   // Função para processar webhook do Mercado Pago
   webhookMercadoPago: `${FIREBASE_FUNCTIONS_BASE_URL}/webhookMercadoPago`,
+  
+  // Função para criar pagamento PIX real no Mercado Pago
+  createPixPayment: `${FIREBASE_FUNCTIONS_BASE_URL}/createPixPayment`,
 }
 
 /**
