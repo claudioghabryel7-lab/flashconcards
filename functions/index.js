@@ -318,14 +318,23 @@ exports.createPixPayment = functions.https.onRequest((req, res) => {
       console.error('Response:', error.response?.data || error.response || error.cause || 'Sem resposta')
       
       // Verificar se é erro de PIX não habilitado
-      const errorMessage = error.message || JSON.stringify(error.cause || {})
-      if (errorMessage.includes('Collector user without key enabled for QR') || 
-          errorMessage.includes('key enabled for QR')) {
+      const errorMessage = error.message || ''
+      const errorCause = JSON.stringify(error.cause || {})
+      const errorString = errorMessage + ' ' + errorCause
+      
+      console.log('Analisando erro:', { errorMessage, errorCause, errorString })
+      
+      if (errorString.includes('Collector user without key enabled for QR') || 
+          errorString.includes('key enabled for QR') ||
+          errorString.includes('13253') || // Código de erro do Mercado Pago
+          errorString.includes('Financial Identity Use Case')) {
+        console.log('Erro detectado: PIX não habilitado na conta')
         return res.status(400).json({ 
           error: 'PIX não habilitado na conta',
-          message: 'Sua conta do Mercado Pago não tem a chave PIX habilitada. Acesse https://www.mercadopago.com.br/account/settings para habilitar o PIX.',
+          message: 'Sua conta do Mercado Pago não tem a chave PIX habilitada. Para habilitar, acesse o painel do Mercado Pago e configure sua chave PIX.',
           code: 'PIX_NOT_ENABLED',
-          solution: 'Habilite o PIX nas configurações da sua conta do Mercado Pago'
+          solution: 'Habilite o PIX nas configurações da sua conta do Mercado Pago. Acesse: https://www.mercadopago.com.br/account/settings ou entre em contato com o suporte do Mercado Pago.',
+          details: error.message || 'Chave PIX não configurada na conta'
         })
       }
       

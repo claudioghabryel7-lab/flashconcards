@@ -243,8 +243,15 @@ const Payment = () => {
           }
           
           // Verificar se é erro de PIX não habilitado
-          if (errorData.code === 'PIX_NOT_ENABLED' || errorData.message?.includes('PIX não habilitado') || error.message?.includes('PIX não habilitado')) {
-            setErrorMessage('PIX não está habilitado na sua conta do Mercado Pago. Entre em contato com o suporte ou habilite o PIX nas configurações da conta.')
+          if (errorData.code === 'PIX_NOT_ENABLED' || 
+              errorData.message?.includes('PIX não habilitado') || 
+              errorData.message?.includes('chave PIX') ||
+              error.message?.includes('PIX não habilitado')) {
+            setErrorMessage(
+              errorData.solution || 
+              errorData.message || 
+              'PIX não está habilitado na sua conta do Mercado Pago. Para habilitar, acesse o painel do Mercado Pago e configure sua chave PIX nas configurações da conta.'
+            )
           } else {
             setErrorMessage(errorData.message || errorData.error || error.message || 'Erro ao gerar código PIX. Tente novamente ou entre em contato com o suporte.')
           }
