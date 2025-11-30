@@ -146,6 +146,25 @@
         allow delete: if isAdmin();
       }
       
+      // 💳 Transações de Pagamento
+      match /transactions/{transactionId} {
+        // Permitir criação de transações por qualquer pessoa (checkout público)
+        // Isso permite que usuários não autenticados iniciem o processo de pagamento
+        allow create: if true;
+        
+        // Usuários autenticados podem ler suas próprias transações
+        allow read: if isAuthenticated() && 
+                      (resource.data.userEmail == request.auth.token.email ||
+                       resource.data.userId == request.auth.uid ||
+                       isAdmin());
+        
+        // Apenas admin pode atualizar transações (para mudar status de pagamento)
+        allow update: if isAdmin();
+        
+        // Apenas admin pode deletar
+        allow delete: if isAdmin();
+      }
+      
       match /{document=**} {
         allow read, write: if false;
       }
