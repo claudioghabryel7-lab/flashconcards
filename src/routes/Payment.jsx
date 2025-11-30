@@ -11,7 +11,7 @@ import {
   ExclamationTriangleIcon
 } from '@heroicons/react/24/solid'
 import { useAuth } from '../hooks/useAuth'
-import { doc, setDoc, getDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { doc, setDoc, getDoc, collection, serverTimestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 
@@ -51,6 +51,86 @@ const Payment = () => {
 
   // Opções de parcelamento
   const installmentsOptions = Array.from({ length: 10 }, (_, i) => i + 1)
+
+  // Monitorar status da transação quando estiver pendente
+  useEffect(() => {
+    if (!currentTransactionId || paymentStatus !== 'pending') {
+      return
+    }
+
+    console.log('Monitorando transação:', currentTransactionId)
+    const transactionRef = doc(db, 'transactions', currentTransactionId)
+    
+    // Criar listener para mudanças na transação
+    const unsubscribe = onSnapshot(
+      transactionRef,
+      async (snapshot) => {
+        if (!snapshot.exists()) {
+          return
+        }
+
+        const transactionData = snapshot.data()
+        const status = transactionData.status
+
+        console.log('Status da transação atualizado:', status)
+
+        // Se o pagamento foi confirmado
+        if (status === 'paid') {
+          console.log('Pagamento confirmado! Atualizando página...')
+          
+          // Buscar credenciais do usuário criado
+          const userId = transactionData.userId
+          
+          if (userId) {
+            // Buscar usuário para pegar email
+            const userRef = doc(db, 'users', userId)
+            const userDoc = await getDoc(userRef)
+            
+            if (userDoc.exists()) {
+              const userData = userDoc.data()
+              // Mostrar que foi criado (senha só vem no email)
+              setCreatedCredentials({
+                email: userData.email || transactionData.userEmail,
+                password: 'Senha enviada por email' // Não temos a senha aqui, ela foi enviada por email
+              })
+            } else {
+              setCreatedCredentials({
+                email: transactionData.userEmail,
+                password: 'Senha enviada por email'
+              })
+            }
+          } else {
+            // Se não tem userId, mostrar apenas email
+            setCreatedCredentials({
+              email: transactionData.userEmail,
+              password: 'Senha enviada por email'
+            })
+          }
+          
+          // Atualizar status para success
+          setPaymentStatus('success')
+          setLoading(false)
+          
+          // Parar de monitorar
+          unsubscribe()
+        } else if (status === 'cancelled') {
+          setErrorMessage('Pagamento cancelado. Tente novamente.')
+          setPaymentStatus('error')
+          setLoading(false)
+          unsubscribe()
+        }
+      },
+      (error) => {
+        console.error('Erro ao monitorar transação:', error)
+        // Não parar o monitoramento por erros de permissão
+      }
+    )
+
+    // Cleanup: parar de monitorar quando componente desmontar ou transação mudar
+    return () => {
+      unsubscribe()
+    }
+  }, [currentTransactionId, paymentStatus])
 
   // Calcular valor das parcelas
   const calculateInstallmentValue = (total, installments) => {
@@ -552,25 +632,30 @@ const Payment = () => {
                         </div>
                         <div>
                           <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                            Senha (também enviada por email):
+                            Senha:
                           </p>
                           <div className="flex gap-2">
                             <input
                               type="text"
                               readOnly
-                              value={createdCredentials.password}
-                              className="flex-1 rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-slate-800 p-2 text-sm font-mono"
+                              value={createdCredentials.password || 'Verifique seu email'}
+                              className="flex-1 rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-slate-800 p-2 text-sm"
                             />
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(createdCredentials.password)
-                                alert('Senha copiada!')
-                              }}
-                              className="rounded-lg bg-blue-600 px-3 py-2 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
-                            >
-                              Copiar
-                            </button>
+                            {createdCredentials.password && createdCredentials.password !== 'Senha enviada por email' && (
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(createdCredentials.password)
+                                  alert('Senha copiada!')
+                                }}
+                                className="rounded-lg bg-blue-600 px-3 py-2 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+                              >
+                                Copiar
+                              </button>
+                            )}
                           </div>
+                          <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
+                            A senha foi enviada para seu email. Verifique sua caixa de entrada (e spam).
+                          </p>
                         </div>
                       </div>
                       <p className="text-xs text-blue-700 dark:text-blue-400 mt-4">
