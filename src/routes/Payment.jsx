@@ -28,7 +28,8 @@ const Payment = () => {
   const [paymentStatus, setPaymentStatus] = useState(null) // 'success', 'pending', 'error'
   const [errorMessage, setErrorMessage] = useState('')
   const [createdCredentials, setCreatedCredentials] = useState(null) // { email, password }
-  const [pixCode, setPixCode] = useState('') // Código PIX para exibir
+  const [pixCode, setPixCode] = useState('') // Código PIX copia-e-cola para exibir
+  const [pixQrCodeBase64, setPixQrCodeBase64] = useState('') // Imagem base64 do QR Code
   const [currentTransactionId, setCurrentTransactionId] = useState('') // ID da transação atual
   
   // Dados do cartão
@@ -221,8 +222,9 @@ const Payment = () => {
               mercadopagoStatus: pixData.status,
             }, { merge: true })
 
-            // Salvar código PIX para exibir
-            setPixCode(pixData.pixCopyPaste)
+            // Salvar código PIX copia-e-cola e imagem base64 separadamente
+            setPixCode(pixData.pixCopyPaste) // Código PIX copia-e-cola (string)
+            setPixQrCodeBase64(pixData.pixQrCode || '') // Imagem base64 do QR Code
             setCurrentTransactionId(transactionId)
             setPaymentStatus('pending')
             setLoading(false)
@@ -594,19 +596,38 @@ const Payment = () => {
                   {/* QR Code PIX */}
                   <div className="bg-white p-4 rounded-xl border-2 border-slate-300 mb-4 flex items-center justify-center">
                     <div className="text-center">
-                      {pixCode ? (
+                      {pixQrCodeBase64 || pixCode ? (
                         <>
                           <p className="text-xs text-slate-500 mb-2">QR Code PIX</p>
                           <div className="w-48 h-48 bg-slate-100 rounded-lg mx-auto flex items-center justify-center">
-                            <img 
-                              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`}
-                              alt="QR Code PIX"
-                              className="w-full h-full rounded-lg"
-                              onError={(e) => {
-                                e.target.style.display = 'none'
-                                e.target.nextSibling.style.display = 'block'
-                              }}
-                            />
+                            {/* Se tiver imagem base64, exibir diretamente */}
+                            {pixQrCodeBase64 ? (
+                              <img 
+                                src={`data:image/png;base64,${pixQrCodeBase64}`}
+                                alt="QR Code PIX"
+                                className="w-full h-full rounded-lg object-contain"
+                                onError={(e) => {
+                                  // Se a imagem base64 falhar, tentar gerar do código
+                                  if (pixCode) {
+                                    e.target.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`
+                                  } else {
+                                    e.target.style.display = 'none'
+                                    e.target.nextSibling.style.display = 'block'
+                                  }
+                                }}
+                              />
+                            ) : pixCode ? (
+                              // Se não tiver base64, gerar QR Code do código PIX
+                              <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`}
+                                alt="QR Code PIX"
+                                className="w-full h-full rounded-lg object-contain"
+                                onError={(e) => {
+                                  e.target.style.display = 'none'
+                                  e.target.nextSibling.style.display = 'block'
+                                }}
+                              />
+                            ) : null}
                             <div style={{display: 'none'}} className="text-xs text-slate-500 p-4">
                               QR Code não disponível. Use o código abaixo.
                             </div>

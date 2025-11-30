@@ -262,25 +262,48 @@ exports.createPixPayment = functions.https.onRequest((req, res) => {
 
       // Extrair dados do PIX de várias formas possíveis
       const pixData = result.point_of_interaction?.transaction_data || {}
-      let pixQrCode = pixData.qr_code || pixData.qr_code_base64 || null
-      let pixCopyPaste = pixData.qr_code_base64 || pixData.qr_code || pixData.qr_code_base64_qr || null
+      
+      // Código PIX copia-e-cola (string longa que começa com 000201...)
+      // NÃO usar qr_code_base64 aqui, pois esse é a imagem, não o código
+      let pixCopyPaste = pixData.qr_code || null
+      
+      // Imagem do QR Code em base64 (para exibir diretamente)
+      // Este é um PNG em base64, NÃO é o código PIX copia-e-cola
+      let pixQrCodeBase64 = pixData.qr_code_base64 || null
+      
+      // URL do ticket (link para pagamento)
       const ticketUrl = pixData.ticket_url || null
 
-      // Se não tem código PIX, verificar outros campos possíveis
+      // Se não tem código PIX copia-e-cola, verificar outros campos possíveis
       if (!pixCopyPaste) {
         // Tentar extrair de outros lugares possíveis
         if (result.transaction_details?.transaction_data?.qr_code) {
           pixCopyPaste = result.transaction_details.transaction_data.qr_code
         }
+        
+        // Tentar do próprio result
+        if (!pixCopyPaste && result.qr_code) {
+          pixCopyPaste = result.qr_code
+        }
       }
       
-      // Se ainda não tem, tentar do próprio result
-      if (!pixCopyPaste && result.qr_code) {
-        pixCopyPaste = result.qr_code
+      // Validar que pixCopyPaste não é uma imagem base64
+      // O código PIX copia-e-cola começa com "000201" (EMV QR Code)
+      if (pixCopyPaste && pixCopyPaste.startsWith('iVBORw0KGgo')) {
+        // Isso é uma imagem PNG base64, não o código PIX
+        console.warn('pixCopyPaste parece ser uma imagem base64, não um código PIX. Tentando encontrar o código correto...')
+        pixCopyPaste = null
       }
-      if (!pixQrCode && pixCopyPaste) {
-        pixQrCode = pixCopyPaste
-      }
+      
+      // Se não tem imagem base64, mas tem código PIX, podemos gerar a imagem depois
+      // ou usar o ticket_url para exibir o QR Code
+      
+      console.log('Dados PIX extraídos:', {
+        hasCopyPaste: !!pixCopyPaste,
+        hasQrCodeBase64: !!pixQrCodeBase64,
+        copyPasteLength: pixCopyPaste?.length || 0,
+        copyPasteStart: pixCopyPaste?.substring(0, 20) || 'N/A'
+      })
 
       // Se não tem código PIX, retornar erro mais descritivo
       if (!pixCopyPaste) {
@@ -307,9 +330,11 @@ exports.createPixPayment = functions.https.onRequest((req, res) => {
         success: true,
         paymentId: result.id,
         status: result.status,
-        pixQrCode: pixQrCode,
-        pixCopyPaste: pixCopyPaste,
+        pixQrCode: pixQrCodeBase64, // Imagem base64 do QR Code
+        pixCopyPaste: pixCopyPaste, // Código PIX copia-e-cola (string)
         ticketUrl: ticketUrl,
+        // Incluir resposta completa para debug
+        rawResponse: result
       })
 
     } catch (error) {
