@@ -222,9 +222,29 @@ const Payment = () => {
               mercadopagoStatus: pixData.status,
             }, { merge: true })
 
-            // Salvar código PIX copia-e-cola e imagem base64 separadamente
-            setPixCode(pixData.pixCopyPaste) // Código PIX copia-e-cola (string)
-            setPixQrCodeBase64(pixData.pixQrCode || '') // Imagem base64 do QR Code
+            // Salvar código PIX copia-e-cola (sempre usar este para gerar QR Code)
+            const pixCopyPasteCode = pixData.pixCopyPaste || ''
+            setPixCode(pixCopyPasteCode) // Código PIX copia-e-cola (string que começa com "000201...")
+            
+            // Validar que pixQrCode é realmente uma imagem base64, não o código PIX
+            // O código PIX copia-e-cola começa com "000201" - NÃO é base64 de imagem
+            // Imagens base64 de PNG começam com "iVBORw0KGgo"
+            let qrCodeBase64 = ''
+            if (pixData.pixQrCode && typeof pixData.pixQrCode === 'string') {
+              const qrCode = pixData.pixQrCode.trim()
+              // Verificar se é código PIX (começa com "000201") - se for, ignorar
+              if (qrCode.startsWith('000201')) {
+                console.warn('pixQrCode é código PIX, não imagem base64. Ignorando.')
+                qrCodeBase64 = '' // Não usar, vamos gerar do código PIX
+              } else if (qrCode.startsWith('iVBORw0KGgo') || qrCode.startsWith('/9j/')) {
+                // É realmente uma imagem base64 válida
+                qrCodeBase64 = qrCode
+              } else if (qrCode.length > 500) {
+                // Muito longo, provavelmente é base64 de imagem
+                qrCodeBase64 = qrCode
+              }
+            }
+            setPixQrCodeBase64(qrCodeBase64) // Imagem base64 do QR Code (ou vazio)
             setCurrentTransactionId(transactionId)
             setPaymentStatus('pending')
             setLoading(false)
@@ -600,15 +620,20 @@ const Payment = () => {
                         <>
                           <p className="text-xs text-slate-500 mb-2">QR Code PIX</p>
                           <div className="w-48 h-48 bg-slate-100 rounded-lg mx-auto flex items-center justify-center">
-                            {/* Se tiver imagem base64, exibir diretamente */}
-                            {pixQrCodeBase64 ? (
+                            {/* Verificar se pixQrCodeBase64 é realmente uma imagem base64 válida */}
+                            {pixQrCodeBase64 && 
+                             (pixQrCodeBase64.startsWith('iVBORw0KGgo') || 
+                              pixQrCodeBase64.startsWith('/9j/') ||
+                              pixQrCodeBase64.length > 500) ? (
+                              // Se tiver imagem base64 válida, exibir diretamente
                               <img 
                                 src={`data:image/png;base64,${pixQrCodeBase64}`}
                                 alt="QR Code PIX"
                                 className="w-full h-full rounded-lg object-contain"
                                 onError={(e) => {
-                                  // Se a imagem base64 falhar, tentar gerar do código
-                                  if (pixCode) {
+                                  // Se a imagem base64 falhar, gerar do código
+                                  console.warn('Falha ao exibir imagem base64, gerando QR Code do código PIX')
+                                  if (pixCode && !pixCode.startsWith('iVBORw0KGgo')) {
                                     e.target.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`
                                   } else {
                                     e.target.style.display = 'none'
@@ -616,21 +641,23 @@ const Payment = () => {
                                   }
                                 }}
                               />
-                            ) : pixCode ? (
-                              // Se não tiver base64, gerar QR Code do código PIX
+                            ) : pixCode && !pixCode.startsWith('iVBORw0KGgo') ? (
+                              // Se não tiver base64 válida OU código PIX não for base64, gerar QR Code do código PIX
                               <img 
                                 src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`}
                                 alt="QR Code PIX"
                                 className="w-full h-full rounded-lg object-contain"
                                 onError={(e) => {
+                                  console.error('Falha ao gerar QR Code')
                                   e.target.style.display = 'none'
                                   e.target.nextSibling.style.display = 'block'
                                 }}
                               />
-                            ) : null}
-                            <div style={{display: 'none'}} className="text-xs text-slate-500 p-4">
-                              QR Code não disponível. Use o código abaixo.
-                            </div>
+                            ) : (
+                              <div className="text-xs text-slate-500 p-4">
+                                QR Code não disponível. Use o código abaixo.
+                              </div>
+                            )}
                           </div>
                         </>
                       ) : (
