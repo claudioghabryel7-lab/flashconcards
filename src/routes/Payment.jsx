@@ -28,6 +28,8 @@ const Payment = () => {
   const [paymentStatus, setPaymentStatus] = useState(null) // 'success', 'pending', 'error'
   const [errorMessage, setErrorMessage] = useState('')
   const [createdCredentials, setCreatedCredentials] = useState(null) // { email, password }
+  const [pixCode, setPixCode] = useState('') // Código PIX para exibir
+  const [currentTransactionId, setCurrentTransactionId] = useState('') // ID da transação atual
   
   // Dados do cartão
   const [cardData, setCardData] = useState({
@@ -177,6 +179,9 @@ const Payment = () => {
       // Por enquanto, vamos simular o processamento
       if (paymentMethod === 'pix') {
         // PIX: aguarda pagamento
+        // Salvar código PIX e ID da transação para exibir
+        setPixCode(transactionData.pixCopyPaste || '')
+        setCurrentTransactionId(transactionId)
         setPaymentStatus('pending')
         setLoading(false)
       } else {
@@ -511,11 +516,35 @@ const Payment = () => {
                     </p>
                   </div>
                   
-                  {/* QR Code PIX (placeholder - em produção usar biblioteca de QR Code) */}
-                  <div className="bg-white p-4 rounded-xl border-2 border-dashed border-slate-300 mb-4 flex items-center justify-center">
+                  {/* QR Code PIX */}
+                  <div className="bg-white p-4 rounded-xl border-2 border-slate-300 mb-4 flex items-center justify-center">
                     <div className="text-center">
-                      <p className="text-xs text-slate-500 mb-2">QR Code será gerado aqui</p>
-                      <div className="w-48 h-48 bg-slate-100 rounded-lg mx-auto"></div>
+                      {pixCode ? (
+                        <>
+                          <p className="text-xs text-slate-500 mb-2">QR Code PIX</p>
+                          <div className="w-48 h-48 bg-slate-100 rounded-lg mx-auto flex items-center justify-center">
+                            <img 
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`}
+                              alt="QR Code PIX"
+                              className="w-full h-full rounded-lg"
+                              onError={(e) => {
+                                e.target.style.display = 'none'
+                                e.target.nextSibling.style.display = 'block'
+                              }}
+                            />
+                            <div style={{display: 'none'}} className="text-xs text-slate-500 p-4">
+                              QR Code não disponível. Use o código abaixo.
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs text-slate-500 mb-2">Gerando QR Code...</p>
+                          <div className="w-48 h-48 bg-slate-100 rounded-lg mx-auto flex items-center justify-center">
+                            <ArrowPathIcon className="h-8 w-8 text-slate-400 animate-spin" />
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -528,15 +557,18 @@ const Payment = () => {
                       <input
                         type="text"
                         readOnly
-                        value="00020126580014BR.GOV.BCB.PIX0136..."
+                        value={pixCode || 'Gerando código...'}
                         className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 p-3 text-xs font-mono"
                       />
                       <button
                         onClick={() => {
-                          navigator.clipboard.writeText("00020126580014BR.GOV.BCB.PIX0136...")
-                          alert('Código copiado!')
+                          if (pixCode) {
+                            navigator.clipboard.writeText(pixCode)
+                            alert('Código copiado!')
+                          }
                         }}
-                        className="rounded-lg bg-blue-600 px-4 py-3 text-white font-semibold hover:bg-blue-700 transition-colors"
+                        disabled={!pixCode}
+                        className="rounded-lg bg-blue-600 px-4 py-3 text-white font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Copiar
                       </button>
