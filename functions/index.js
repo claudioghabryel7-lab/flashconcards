@@ -392,26 +392,92 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
         
         // Buscar transação no Firestore pelo paymentId do Mercado Pago
         const transactionsRef = admin.firestore().collection('transactions')
-        const snapshot = await transactionsRef
+        
+        // Tentar buscar com diferentes formatos do paymentId
+        let snapshot = await transactionsRef
           .where('mercadopagoPaymentId', '==', paymentId.toString())
           .limit(1)
           .get()
         
+        // Se não encontrou, tentar com número
+        if (snapshot.empty) {
+          snapshot = await transactionsRef
+            .where('mercadopagoPaymentId', '==', parseInt(paymentId))
+            .limit(1)
+            .get()
+        }
+        
+        // Se ainda não encontrou, buscar por metadata no Mercado Pago e usar transactionId
+        if (snapshot.empty) {
+          console.log(`Transação não encontrada para paymentId: ${paymentId}, tentando buscar no Mercado Pago...`)
+          
+          try {
+            const accessToken = functions.config().mercadopago?.access_token_prod || 
+                               process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
+                               'APP_USR-3743437950896305-112812-559fadd346072c35f8cb81e21d4e562d-2583165550'
+            
+            const client = new MercadoPagoConfig({
+              accessToken: accessToken,
+              options: { timeout: 10000 }
+            })
+            
+            const payment = new Payment(client)
+            const paymentInfo = await payment.get({ id: paymentId.toString() })
+            
+            // Buscar transactionId no metadata
+            const transactionId = paymentInfo?.metadata?.transaction_id
+            
+            if (transactionId) {
+              console.log(`Encontrado transactionId no metadata: ${transactionId}`)
+              const transactionDoc = await transactionsRef.doc(transactionId).get()
+              
+              if (transactionDoc.exists()) {
+                // Processar com este documento
+                snapshot = {
+                  docs: [transactionDoc],
+                  empty: false
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Erro ao buscar pagamento no Mercado Pago:', error)
+          }
+        }
+        
         if (snapshot.empty) {
           console.log(`Transação não encontrada para paymentId: ${paymentId}`)
-          // Retornar OK mesmo assim (pode ser um pagamento de teste ou de outro sistema)
+          console.log('Webhook completo recebido:', JSON.stringify(req.body, null, 2))
+          // Retornar OK mesmo assim para o Mercado Pago não tentar reenviar
           return res.status(200).json({ received: true, message: 'Transação não encontrada' })
         }
         
         const transactionDoc = snapshot.docs[0]
         const transactionData = transactionDoc.data()
         
-        // Buscar informações do pagamento no Mercado Pago usando o Access Token
-        // Nota: Em produção, você precisaria instalar o SDK: npm install mercadopago
-        // Por enquanto, vamos atualizar baseado nos dados recebidos do webhook
+        // Buscar informações do pagamento no Mercado Pago usando a API
+        const accessToken = functions.config().mercadopago?.access_token_prod || 
+                           process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
+                           'APP_USR-3743437950896305-112812-559fadd346072c35f8cb81e21d4e562d-2583165550'
         
-        // O webhook do Mercado Pago envia o status do pagamento
-        const paymentStatus = data?.status || 'pending'
+        const client = new MercadoPagoConfig({
+          accessToken: accessToken,
+          options: { timeout: 10000 }
+        })
+        
+        const payment = new Payment(client)
+        
+        // Buscar status real do pagamento no Mercado Pago
+        let paymentInfo = null
+        try {
+          paymentInfo = await payment.get({ id: paymentId.toString() })
+          console.log('Status do pagamento no Mercado Pago:', paymentInfo.status)
+        } catch (error) {
+          console.error('Erro ao buscar pagamento no Mercado Pago:', error)
+          // Continuar com os dados do webhook se falhar
+        }
+        
+        // Usar status do pagamento buscado ou do webhook
+        const paymentStatus = paymentInfo?.status || data?.status || 'pending'
         
         // Mapear status do Mercado Pago para nosso sistema
         let newStatus = 'pending'
@@ -434,10 +500,22 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
         
         console.log(`Transação ${transactionDoc.id} atualizada para status: ${newStatus}`)
         
-        // Se pagamento foi aprovado, ativar acesso do usuário
+        // Se pagamento foi aprovado, criar usuário e enviar email
         if (newStatus === 'paid') {
           const userId = transactionData.userId
           const userEmail = transactionData.userEmail
+          const userName = transactionData.userName || userEmail?.split('@')[0] || 'Cliente'
+          
+          // Função auxiliar para gerar senha
+          const generatePassword = () => {
+            const length = 12
+            const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%'
+            let password = ''
+            for (let i = 0; i < length; i++) {
+              password += charset.charAt(Math.floor(Math.random() * charset.length))
+            }
+            return password
+          }
           
           if (userId) {
             // Usuário já existe - apenas ativar acesso
@@ -453,9 +531,120 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
               console.log(`Acesso ativado para usuário: ${userId}`)
             }
           } else if (userEmail) {
-            // Usuário ainda não existe - será criado quando processar o pagamento
-            // Por enquanto, apenas logar
-            console.log(`Pagamento aprovado para email: ${userEmail}, mas usuário ainda não criado`)
+            // Usuário não existe - criar usuário e enviar email
+            try {
+              const password = generatePassword()
+              
+              // Criar usuário no Firebase Authentication
+              const userRecord = await admin.auth().createUser({
+                email: userEmail.toLowerCase().trim(),
+                password: password,
+                displayName: userName,
+                emailVerified: false
+              })
+              
+              // Criar perfil no Firestore
+              await admin.firestore().collection('users').doc(userRecord.uid).set({
+                uid: userRecord.uid,
+                email: userEmail.toLowerCase().trim(),
+                displayName: userName,
+                role: 'student',
+                favorites: [],
+                hasActiveSubscription: true,
+                subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              })
+              
+              // Atualizar transação com userId
+              await transactionDoc.ref.update({
+                userId: userRecord.uid
+              })
+              
+              // Enviar email com credenciais
+              const transporter = createEmailTransporter()
+              if (transporter) {
+                const mailOptions = {
+                  from: `"Plegimentoria ALEGO" <${functions.config().email?.user || process.env.EMAIL_USER || 'flashconcards@gmail.com'}>`,
+                  to: userEmail.toLowerCase().trim(),
+                  subject: '✅ Pagamento Confirmado - Suas Credenciais de Acesso',
+                  html: `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                      <meta charset="utf-8">
+                      <style>
+                        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+                        .credentials { background: white; border: 2px solid #667eea; border-radius: 8px; padding: 20px; margin: 20px 0; }
+                        .credential-item { margin: 15px 0; }
+                        .label { font-weight: bold; color: #667eea; }
+                        .value { font-family: monospace; font-size: 16px; color: #333; background: #f5f5f5; padding: 10px; border-radius: 4px; margin-top: 5px; }
+                        .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+                        .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; }
+                      </style>
+                    </head>
+                    <body>
+                      <div class="container">
+                        <div class="header">
+                          <h1>🎉 Pagamento Confirmado!</h1>
+                          <p>Sua compra foi processada com sucesso</p>
+                        </div>
+                        <div class="content">
+                          <p>Olá, <strong>${userName}</strong>!</p>
+                          
+                          <p>Seu pagamento foi confirmado e sua conta foi criada automaticamente. Abaixo estão suas credenciais de acesso:</p>
+                          
+                          <div class="credentials">
+                            <div class="credential-item">
+                              <div class="label">📧 Email de Acesso:</div>
+                              <div class="value">${userEmail.toLowerCase().trim()}</div>
+                            </div>
+                            <div class="credential-item">
+                              <div class="label">🔑 Senha:</div>
+                              <div class="value">${password}</div>
+                            </div>
+                          </div>
+
+                          <div class="warning">
+                            <strong>⚠️ Importante:</strong> Guarde essas informações com segurança! Você pode alterar sua senha após o primeiro login.
+                          </div>
+
+                          <div style="text-align: center;">
+                            <a href="https://flashconcards.vercel.app/login" class="button">Acessar Plataforma Agora</a>
+                          </div>
+
+                          <p>Com sua conta, você terá acesso a:</p>
+                          <ul>
+                            <li>📚 Flashcards Inteligentes de todas as matérias</li>
+                            <li>❓ FlashQuestões geradas por IA</li>
+                            <li>🤖 Flash Mentor - Assistente de IA personalizado</li>
+                            <li>📊 Dashboard de progresso</li>
+                            <li>🏆 Ranking de alunos</li>
+                          </ul>
+
+                          <p>Se tiver dúvidas, entre em contato conosco!</p>
+                          
+                          <p>Atenciosamente,<br><strong>Equipe Plegimentoria ALEGO</strong></p>
+                        </div>
+                      </div>
+                    </body>
+                    </html>
+                  `
+                }
+                
+                await transporter.sendMail(mailOptions)
+                console.log(`Email enviado para ${userEmail} com credenciais`)
+              } else {
+                console.warn('Transporter não configurado - email não enviado')
+              }
+              
+              console.log(`Usuário criado e email enviado para: ${userEmail}`)
+            } catch (error) {
+              console.error('Erro ao criar usuário:', error)
+              // Não bloquear o webhook mesmo se falhar criar usuário
+            }
           }
         }
         
