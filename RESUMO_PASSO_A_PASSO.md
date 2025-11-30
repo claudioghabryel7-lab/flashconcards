@@ -122,3 +122,4 @@ firebase deploy --only functions
 
 **Agora é só seguir os passos acima! 🚀**
 
+

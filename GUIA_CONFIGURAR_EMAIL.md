@@ -123,3 +123,4 @@ curl -X POST https://us-central1-seu-projeto.cloudfunctions.net/createUserAndSen
 - ✅ Configure SPF e DKIM no seu domínio (se usar domínio próprio)
 
 
+

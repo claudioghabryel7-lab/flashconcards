@@ -171,3 +171,4 @@ import ModernTable from '../components/ui/ModernTable'
 - UX melhorada significativamente
 
 
+

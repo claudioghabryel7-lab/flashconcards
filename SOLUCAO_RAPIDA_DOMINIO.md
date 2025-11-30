@@ -60,3 +60,4 @@ Se não aparecer mais o erro de domínio não autorizado, funcionou! ✅
 
 **Com essas informações, consigo ajudar melhor!** 🚀
 
+

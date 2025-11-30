@@ -191,7 +191,7 @@ exports.createPixPayment = functions.https.onRequest((req, res) => {
       // Configurar cliente do Mercado Pago
       const client = new MercadoPagoConfig({
         accessToken: accessToken,
-        options: { timeout: 5000 }
+        options: { timeout: 10000 }
       })
 
       const payment = new Payment(client)
@@ -211,9 +211,24 @@ exports.createPixPayment = functions.https.onRequest((req, res) => {
         notification_url: `${functions.config().app?.webhook_url || 'https://us-central1-plegi-d84c2.cloudfunctions.net/webhookMercadoPago'}`,
       }
 
+      console.log('Criando pagamento PIX no Mercado Pago:', { amount, description, transactionId })
+      
       const result = await payment.create({ body: paymentData })
+      
+      console.log('Resposta do Mercado Pago:', JSON.stringify(result, null, 2))
 
-      if (result && result.point_of_interaction && result.point_of_interaction.transaction_data) {
+      // Verificar se o pagamento foi criado com sucesso
+      if (!result || !result.id) {
+        console.error('Pagamento não criado:', result)
+        return res.status(500).json({ 
+          error: 'Erro ao gerar PIX',
+          message: 'Pagamento não foi criado no Mercado Pago',
+          details: result
+        })
+      }
+
+      // Verificar se tem dados do PIX
+      if (result.point_of_interaction && result.point_of_interaction.transaction_data) {
         const pixData = result.point_of_interaction.transaction_data
 
         return res.status(200).json({
@@ -222,21 +237,43 @@ exports.createPixPayment = functions.https.onRequest((req, res) => {
           status: result.status,
           pixQrCode: pixData.qr_code || null,
           pixCopyPaste: pixData.qr_code_base64 || pixData.qr_code || null,
-          ticketUrl: result.point_of_interaction.transaction_data.ticket_url || null,
+          ticketUrl: pixData.ticket_url || null,
         })
       } else {
-        return res.status(500).json({ 
-          error: 'Erro ao gerar PIX',
-          message: 'Resposta do Mercado Pago não contém dados do PIX'
+        // Se não tem dados do PIX, retornar o que temos
+        console.warn('Resposta do Mercado Pago não contém dados do PIX:', result)
+        return res.status(200).json({
+          success: true,
+          paymentId: result.id,
+          status: result.status,
+          pixQrCode: null,
+          pixCopyPaste: null,
+          ticketUrl: result.point_of_interaction?.transaction_data?.ticket_url || null,
+          rawResponse: result
         })
       }
 
     } catch (error) {
       console.error('Erro ao criar pagamento PIX:', error)
+      console.error('Stack:', error.stack)
+      console.error('Response:', error.response?.data || error.response || error.cause || 'Sem resposta')
+      
+      // Verificar se é erro de PIX não habilitado
+      const errorMessage = error.message || JSON.stringify(error.cause || {})
+      if (errorMessage.includes('Collector user without key enabled for QR') || 
+          errorMessage.includes('key enabled for QR')) {
+        return res.status(400).json({ 
+          error: 'PIX não habilitado na conta',
+          message: 'Sua conta do Mercado Pago não tem a chave PIX habilitada. Acesse https://www.mercadopago.com.br/account/settings para habilitar o PIX.',
+          code: 'PIX_NOT_ENABLED',
+          solution: 'Habilite o PIX nas configurações da sua conta do Mercado Pago'
+        })
+      }
+      
       return res.status(500).json({ 
         error: 'Erro ao criar pagamento PIX',
-        message: error.message,
-        details: error.response?.data || null
+        message: error.message || 'Erro desconhecido',
+        details: error.cause || error.response?.data || null
       })
     }
   })

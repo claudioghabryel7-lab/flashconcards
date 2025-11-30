@@ -74,3 +74,4 @@ O único que falta é o email automático, mas as credenciais aparecem na tela m
 **🎉 Tudo commitado e pronto para deploy!**
 
 
+

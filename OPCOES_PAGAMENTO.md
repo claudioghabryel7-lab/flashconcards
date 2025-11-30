@@ -110,3 +110,4 @@ Após escolher o gateway:
 - ✅ Dados sensíveis nunca são armazenados
 
 
+

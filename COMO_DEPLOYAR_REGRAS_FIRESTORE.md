@@ -73,3 +73,4 @@ Adicionei regras para a coleção `transactions`:
 
 **As regras já estão corrigidas no código! Só falta fazer o deploy! 🎉**
 
+

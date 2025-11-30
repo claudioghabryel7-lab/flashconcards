@@ -100,3 +100,4 @@ VITE_FIREBASE_APP_ID=seu_app_id`}
 export default FirebaseConfigError
 
 
+

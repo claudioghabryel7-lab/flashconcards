@@ -214,7 +214,15 @@ const Payment = () => {
           }
         } catch (error) {
           console.error('Erro ao criar pagamento PIX:', error)
-          setErrorMessage('Erro ao gerar código PIX. Tente novamente.')
+          
+          // Verificar se é erro de PIX não habilitado
+          const errorData = await pixResponse.json().catch(() => ({}))
+          if (errorData.code === 'PIX_NOT_ENABLED' || errorData.message?.includes('PIX não habilitado')) {
+            setErrorMessage('PIX não está habilitado na sua conta do Mercado Pago. Entre em contato com o suporte ou habilite o PIX nas configurações da conta.')
+          } else {
+            setErrorMessage('Erro ao gerar código PIX. Tente novamente ou entre em contato com o suporte.')
+          }
+          
           setLoading(false)
           setPaymentStatus('error')
         }

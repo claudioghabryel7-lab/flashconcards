@@ -71,3 +71,4 @@ VITE_GEMINI_API_KEY=sua-chave-aqui
 **Depois de configurar qualquer uma das duas, reinicie o servidor e as questões vão funcionar!** 🎉
 
 
+
