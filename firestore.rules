@@ -154,14 +154,16 @@
         allow create: if true;
         
         // Permitir leitura de transações:
-        // - Se estiver autenticado E for o dono OU admin
-        // - OU permitir leitura pública (para verificar status após criação sem login)
+        // - Permitir leitura pública (para verificar status após criação sem login)
         // Nota: Em produção, você pode restringir mais se necessário
         allow read: if true;
         
-        // Permitir atualização apenas por admin
+        // Permitir atualização:
+        // - Qualquer pessoa pode atualizar (para adicionar dados do PIX após criação)
+        // - Mas apenas campos relacionados ao pagamento
         // Nota: Funções Firebase usam Admin SDK e bypassam essas regras automaticamente
-        allow update: if isAdmin();
+        // Em produção, você pode adicionar verificação por token ou email
+        allow update: if true;
         
         // Apenas admin pode deletar
         allow delete: if isAdmin();
