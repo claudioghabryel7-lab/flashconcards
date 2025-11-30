@@ -173,8 +173,9 @@ const Payment = () => {
       // Processar pagamento baseado no método
       if (paymentMethod === 'pix') {
         // PIX: criar pagamento real no Mercado Pago
+        let pixResponse = null
         try {
-          const pixResponse = await fetch(FIREBASE_FUNCTIONS.createPixPayment, {
+          pixResponse = await fetch(FIREBASE_FUNCTIONS.createPixPayment, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -189,7 +190,23 @@ const Payment = () => {
           })
 
           if (!pixResponse.ok) {
-            throw new Error('Erro ao gerar pagamento PIX')
+            // Tentar ler mensagem de erro da resposta
+            let errorData = {}
+            try {
+              errorData = await pixResponse.json()
+            } catch (e) {
+              errorData = { message: pixResponse.statusText || 'Erro desconhecido' }
+            }
+            
+            // Verificar se é erro de PIX não habilitado
+            if (errorData.code === 'PIX_NOT_ENABLED' || errorData.message?.includes('PIX não habilitado')) {
+              setErrorMessage('PIX não está habilitado na sua conta do Mercado Pago. Entre em contato com o suporte ou habilite o PIX nas configurações da conta.')
+            } else {
+              setErrorMessage(errorData.message || errorData.error || 'Erro ao gerar código PIX. Tente novamente ou entre em contato com o suporte.')
+            }
+            setLoading(false)
+            setPaymentStatus('error')
+            return
           }
 
           const pixData = await pixResponse.json()
@@ -210,17 +227,26 @@ const Payment = () => {
             setPaymentStatus('pending')
             setLoading(false)
           } else {
-            throw new Error('Resposta do Mercado Pago inválida')
+            throw new Error(pixData.message || pixData.error || 'Resposta do Mercado Pago inválida')
           }
         } catch (error) {
           console.error('Erro ao criar pagamento PIX:', error)
           
+          // Tentar ler mensagem de erro da resposta se disponível
+          let errorData = {}
+          if (pixResponse) {
+            try {
+              errorData = await pixResponse.json()
+            } catch (e) {
+              // Se não conseguir fazer parse, usar mensagem padrão
+            }
+          }
+          
           // Verificar se é erro de PIX não habilitado
-          const errorData = await pixResponse.json().catch(() => ({}))
-          if (errorData.code === 'PIX_NOT_ENABLED' || errorData.message?.includes('PIX não habilitado')) {
+          if (errorData.code === 'PIX_NOT_ENABLED' || errorData.message?.includes('PIX não habilitado') || error.message?.includes('PIX não habilitado')) {
             setErrorMessage('PIX não está habilitado na sua conta do Mercado Pago. Entre em contato com o suporte ou habilite o PIX nas configurações da conta.')
           } else {
-            setErrorMessage('Erro ao gerar código PIX. Tente novamente ou entre em contato com o suporte.')
+            setErrorMessage(errorData.message || errorData.error || error.message || 'Erro ao gerar código PIX. Tente novamente ou entre em contato com o suporte.')
           }
           
           setLoading(false)

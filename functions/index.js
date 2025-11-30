@@ -179,8 +179,41 @@ exports.createPixPayment = functions.https.onRequest((req, res) => {
     try {
       const { amount, description, transactionId, userEmail, userName } = req.body
 
-      if (!amount || !description || !transactionId) {
-        return res.status(400).json({ error: 'Campos obrigatórios: amount, description, transactionId' })
+      console.log('Recebido no createPixPayment:', { amount, description, transactionId, userEmail, userName })
+
+      // Validação mais detalhada
+      if (!amount && amount !== 0) {
+        console.error('Campo amount não fornecido')
+        return res.status(400).json({ 
+          error: 'Campo obrigatório faltando: amount',
+          message: 'O valor do pagamento é obrigatório'
+        })
+      }
+      
+      if (!description) {
+        console.error('Campo description não fornecido')
+        return res.status(400).json({ 
+          error: 'Campo obrigatório faltando: description',
+          message: 'A descrição do pagamento é obrigatória'
+        })
+      }
+      
+      if (!transactionId) {
+        console.error('Campo transactionId não fornecido')
+        return res.status(400).json({ 
+          error: 'Campo obrigatório faltando: transactionId',
+          message: 'O ID da transação é obrigatório'
+        })
+      }
+
+      // Validar que amount é um número válido
+      const amountNumber = parseFloat(amount)
+      if (isNaN(amountNumber) || amountNumber <= 0) {
+        console.error('Valor inválido:', amount)
+        return res.status(400).json({ 
+          error: 'Valor inválido',
+          message: `O valor do pagamento deve ser um número positivo. Recebido: ${amount}`
+        })
       }
 
       // Obter Access Token do Mercado Pago
@@ -198,7 +231,7 @@ exports.createPixPayment = functions.https.onRequest((req, res) => {
 
       // Criar pagamento PIX
       const paymentData = {
-        transaction_amount: parseFloat(amount),
+        transaction_amount: amountNumber,
         description: description,
         payment_method_id: 'pix',
         payer: {
@@ -227,31 +260,57 @@ exports.createPixPayment = functions.https.onRequest((req, res) => {
         })
       }
 
-      // Verificar se tem dados do PIX
-      if (result.point_of_interaction && result.point_of_interaction.transaction_data) {
-        const pixData = result.point_of_interaction.transaction_data
+      // Extrair dados do PIX de várias formas possíveis
+      const pixData = result.point_of_interaction?.transaction_data || {}
+      let pixQrCode = pixData.qr_code || pixData.qr_code_base64 || null
+      let pixCopyPaste = pixData.qr_code_base64 || pixData.qr_code || pixData.qr_code_base64_qr || null
+      const ticketUrl = pixData.ticket_url || null
 
-        return res.status(200).json({
-          success: true,
-          paymentId: result.id,
+      // Se não tem código PIX, verificar outros campos possíveis
+      if (!pixCopyPaste) {
+        // Tentar extrair de outros lugares possíveis
+        if (result.transaction_details?.transaction_data?.qr_code) {
+          pixCopyPaste = result.transaction_details.transaction_data.qr_code
+        }
+      }
+      
+      // Se ainda não tem, tentar do próprio result
+      if (!pixCopyPaste && result.qr_code) {
+        pixCopyPaste = result.qr_code
+      }
+      if (!pixQrCode && pixCopyPaste) {
+        pixQrCode = pixCopyPaste
+      }
+
+      // Se não tem código PIX, retornar erro mais descritivo
+      if (!pixCopyPaste) {
+        console.warn('Resposta do Mercado Pago sem código PIX:', {
           status: result.status,
-          pixQrCode: pixData.qr_code || null,
-          pixCopyPaste: pixData.qr_code_base64 || pixData.qr_code || null,
-          ticketUrl: pixData.ticket_url || null,
+          payment_method_id: result.payment_method_id,
+          point_of_interaction: result.point_of_interaction,
+          status_detail: result.status_detail
         })
-      } else {
-        // Se não tem dados do PIX, retornar o que temos
-        console.warn('Resposta do Mercado Pago não contém dados do PIX:', result)
-        return res.status(200).json({
-          success: true,
+        
+        // Retornar erro mais claro
+        return res.status(400).json({
+          error: 'PIX não gerado',
+          message: result.status_detail || 'Não foi possível gerar o código PIX. Verifique as configurações da conta do Mercado Pago.',
           paymentId: result.id,
           status: result.status,
-          pixQrCode: null,
-          pixCopyPaste: null,
-          ticketUrl: result.point_of_interaction?.transaction_data?.ticket_url || null,
+          details: 'O código PIX não foi retornado pelo Mercado Pago. Verifique se a chave PIX está habilitada na sua conta.',
           rawResponse: result
         })
       }
+
+      // Retornar sucesso com dados do PIX
+      return res.status(200).json({
+        success: true,
+        paymentId: result.id,
+        status: result.status,
+        pixQrCode: pixQrCode,
+        pixCopyPaste: pixCopyPaste,
+        ticketUrl: ticketUrl,
+      })
 
     } catch (error) {
       console.error('Erro ao criar pagamento PIX:', error)
