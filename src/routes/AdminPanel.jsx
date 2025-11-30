@@ -1012,13 +1012,51 @@ const AdminPanel = () => {
 
     try {
       const questoesRef = doc(db, 'config', 'questoes')
+      
+      // Buscar configuração existente
+      const existingDoc = await getDoc(questoesRef)
+      const existingData = existingDoc.exists() ? existingDoc.data() : {}
+      
+      // Preparar novos dados - fazer APPEND dos prompts ao invés de substituir
+      const newPrompt = questoesPrompt.trim()
+      const newBizuPrompt = bizuPrompt.trim()
+      
+      // Sempre adicionar ao final, nunca substituir completamente
+      let finalPrompt = existingData.prompt || ''
+      if (newPrompt) {
+        if (finalPrompt && newPrompt !== finalPrompt && !finalPrompt.includes(newPrompt)) {
+          // Adicionar novo prompt ao existente com separador e timestamp
+          finalPrompt = `${finalPrompt}\n\n--- NOVO PROMPT ADICIONADO EM ${new Date().toLocaleString('pt-BR')} ---\n\n${newPrompt}`
+        } else if (!finalPrompt) {
+          // Primeiro prompt
+          finalPrompt = newPrompt
+        }
+        // Se newPrompt === finalPrompt ou já está contido, mantém como está (não adiciona duplicado exato)
+      }
+      
+      let finalBizuPrompt = existingData.bizuPrompt || ''
+      if (newBizuPrompt) {
+        if (finalBizuPrompt && newBizuPrompt !== finalBizuPrompt && !finalBizuPrompt.includes(newBizuPrompt)) {
+          // Adicionar novo prompt ao existente com separador e timestamp
+          finalBizuPrompt = `${finalBizuPrompt}\n\n--- NOVO PROMPT ADICIONADO EM ${new Date().toLocaleString('pt-BR')} ---\n\n${newBizuPrompt}`
+        } else if (!finalBizuPrompt) {
+          // Primeiro prompt
+          finalBizuPrompt = newBizuPrompt
+        }
+        // Se newBizuPrompt === finalBizuPrompt ou já está contido, mantém como está (não adiciona duplicado exato)
+      }
+      
       await setDoc(questoesRef, {
-        prompt: questoesPrompt.trim(),
-        bizuPrompt: bizuPrompt.trim(),
+        prompt: finalPrompt,
+        bizuPrompt: finalBizuPrompt,
         updatedAt: serverTimestamp(),
       }, { merge: true })
 
-      setMessage('Configuração de questões e BIZUs salva com sucesso!')
+      setMessage('✅ Configuração de questões e BIZUs salva com sucesso! Os prompts foram ADICIONADOS aos existentes.')
+      
+      // Atualizar o estado local com o prompt final
+      setQuestoesPrompt(finalPrompt)
+      setBizuPrompt(finalBizuPrompt)
     } catch (err) {
       console.error('Erro ao salvar configuração de questões:', err)
       setMessage(`Erro ao salvar: ${err.message}`)
@@ -1617,6 +1655,13 @@ INFORMAÇÕES ADICIONAIS:
         <p className="mt-2 text-xs text-slate-500">
           Configure como a IA deve gerar as questões fictícias e os BIZUs (explicações) no FlashQuestões.
         </p>
+        <div className="mt-3 rounded-lg bg-blue-50 border border-blue-200 p-3">
+          <p className="text-xs font-semibold text-blue-800 mb-1">ℹ️ Como funciona:</p>
+          <p className="text-xs text-blue-700">
+            Quando você adicionar novos prompts, eles serão <strong>ADICIONADOS aos existentes</strong>, não substituídos. 
+            Isso permite que você faça ajustes incrementais e mantenha um histórico das instruções.
+          </p>
+        </div>
 
         <div className="mt-6 space-y-6">
           {/* Prompt para Questões */}
@@ -1652,7 +1697,8 @@ FORMATO:
               disabled={savingQuestoesConfig}
             />
             <p className="mt-2 text-xs text-slate-400">
-              💡 Este prompt será usado como base para gerar as questões. Se deixar em branco, será usado o prompt padrão.
+              💡 Este prompt será <strong>ADICIONADO</strong> aos prompts existentes. Se deixar em branco, não adicionará nada novo. 
+              O sistema usará o prompt completo (todos os prompts anteriores + este novo).
             </p>
           </div>
 
@@ -1689,7 +1735,8 @@ ESTRUTURA SUGERIDA:
               disabled={savingQuestoesConfig}
             />
             <p className="mt-2 text-xs text-slate-400">
-              💡 Este prompt será usado como base para gerar os BIZUs. Se deixar em branco, será usado o prompt padrão.
+              💡 Este prompt será <strong>ADICIONADO</strong> aos prompts existentes. Se deixar em branco, não adicionará nada novo. 
+              O sistema usará o prompt completo (todos os prompts anteriores + este novo).
             </p>
           </div>
         </div>

@@ -126,6 +126,26 @@ service cloud.firestore {
                               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     
+    // 🔥 NOVO: Cache de Questões (compartilhado entre alunos)
+    match /questoesCache/{cacheId} {
+      // Todos autenticados podem ler (para usar questões do cache)
+      allow read: if isAuthenticated();
+      // Apenas sistema pode criar/atualizar (via código)
+      allow create, update: if isAuthenticated();
+      // Admin pode deletar
+      allow delete: if isAdmin();
+    }
+    
+    // 🔥 NOVO: Cache de Explicações (compartilhado entre alunos)
+    match /explanationsCache/{explanationId} {
+      // Todos autenticados podem ler (para usar explicações do cache)
+      allow read: if isAuthenticated();
+      // Apenas sistema pode criar/atualizar (via código)
+      allow create, update: if isAuthenticated();
+      // Admin pode deletar
+      allow delete: if isAdmin();
+    }
+    
     match /{document=**} {
       allow read, write: if false;
     }

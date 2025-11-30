@@ -4,7 +4,16 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { FolderIcon, ChevronRightIcon, ChevronDownIcon, LightBulbIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
+import { FolderIcon, ChevronRightIcon, ChevronDownIcon, LightBulbIcon, CheckCircleIcon, XCircleIcon, HandThumbUpIcon, HandThumbDownIcon } from '@heroicons/react/24/outline'
+import { 
+  getOrCreateQuestionsCache, 
+  saveQuestionsCache, 
+  rateQuestionsCache,
+  getOrCreateExplanationCache,
+  saveExplanationCache,
+  rateExplanationCache,
+  autoRemoveBadCache
+} from '../utils/cache'
 
 const MATERIAS = [
   'Português',
@@ -187,7 +196,11 @@ const FlashQuestoes = () => {
     }
   }
 
-  // Gerar questões com IA
+  // Estado para avaliações das questões
+  const [questionsRating, setQuestionsRating] = useState({ liked: false, disliked: false })
+  const [cacheInfo, setCacheInfo] = useState(null)
+
+  // Gerar questões com IA (COM CACHE INTELIGENTE)
   const generateQuestions = async () => {
     if (!selectedMateria || !selectedModulo) {
       alert('Selecione uma matéria e um módulo primeiro!')
@@ -199,14 +212,57 @@ const FlashQuestoes = () => {
     setCurrentQuestionIndex(0)
     setSelectedAnswer(null)
     setShowResult(false)
+    setQuestionsRating({ liked: false, disliked: false })
+    setCacheInfo(null)
 
     try {
+      // 🔥 NOVO: VERIFICAR CACHE PRIMEIRO
+      console.log('🔍 Verificando cache de questões...')
+      const cachedData = await getOrCreateQuestionsCache(selectedMateria, selectedModulo)
+      
+      if (cachedData && cachedData.questoes && cachedData.questoes.length > 0) {
+        console.log(`✅ Cache encontrado! Usando ${cachedData.questoes.length} questões do cache.`)
+        setQuestions(cachedData.questoes)
+        setCacheInfo({
+          likes: cachedData.likes,
+          dislikes: cachedData.dislikes,
+          score: cachedData.score,
+          cached: true
+        })
+        setGenerating(false)
+        
+        // Verificar se precisa remover por score baixo
+        await autoRemoveBadCache('questoesCache', `${selectedMateria}_${selectedModulo}`.replace(/[^a-zA-Z0-9_]/g, '_'))
+        return // Sair da função - questões já foram carregadas do cache
+      }
+
+      console.log('📝 Cache não encontrado. Gerando novas questões com IA...')
+      
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
       const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
 
       if (!apiKey && !groqApiKey) {
         throw new Error('Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
       }
+
+      // 🔥 BUSCAR FLASHCARDS DO MÓDULO SELECIONADO
+      const moduleFlashcards = cards.filter(
+        (card) => card.materia === selectedMateria && card.modulo === selectedModulo
+      )
+
+      if (moduleFlashcards.length === 0) {
+        throw new Error(`Nenhum flashcard encontrado para "${selectedMateria}" - "${selectedModulo}". Crie flashcards primeiro no painel administrativo.`)
+      }
+
+      // Formatar conteúdo dos flashcards para incluir no prompt
+      const flashcardsContent = moduleFlashcards
+        .map((card, idx) => {
+          return `Flashcard ${idx + 1}:
+Pergunta: ${card.pergunta || ''}
+Resposta: ${card.resposta || ''}
+${card.explicacao ? `Explicação: ${card.explicacao}` : ''}`
+        })
+        .join('\n\n')
 
       // Usar prompt configurado pelo admin ou prompt padrão
       const basePrompt = questoesConfigPrompt.trim() || `Você é um especialista em criar questões de concursos públicos no estilo FGV para o cargo de Policial Legislativo da ALEGO.
@@ -216,7 +272,7 @@ REGRAS PARA AS QUESTÕES:
 - Cada questão deve ter 5 alternativas (A, B, C, D, E)
 - Apenas UMA alternativa está correta
 - As alternativas incorretas devem ser plausíveis (distratores inteligentes)
-- Baseie-se no conteúdo do edital e no módulo especificado
+- Baseie-se PRIMARIAMENTE no conteúdo dos flashcards fornecidos abaixo
 - Questões devem ser FICTÍCIAS (não são questões reais de provas anteriores)
 - Foque em temas relevantes para o cargo de Policial Legislativo
 - Dificuldade: nível FGV (intermediário a avançado)
@@ -225,13 +281,20 @@ REGRAS PARA AS QUESTÕES:
 
       const prompt = `${basePrompt}
 
-${editalPrompt ? `CONTEXTO DO EDITAL:\n${editalPrompt}\n\n` : ''}
+${editalPrompt ? `CONTEXTO DO EDITAL (para referência):\n${editalPrompt}\n\n` : ''}
+
+⚠️ CONTEÚDO PRINCIPAL - FLASHCARDS DO MÓDULO "${selectedModulo}" (${moduleFlashcards.length} flashcards):
+Use ESTE conteúdo como base principal para criar as questões. As questões devem estar diretamente relacionadas ao conteúdo abaixo:
+
+${flashcardsContent}
 
 TAREFA: Criar 10 questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${selectedMateria}" no módulo "${selectedModulo}".
 
-IMPORTANTE:
-- As questões são FICTÍCIAS (não são questões reais de provas anteriores)
-- Baseie-se no conteúdo do edital e no módulo especificado
+CRÍTICO:
+- As questões devem ser baseadas NO CONTEÚDO DOS FLASHCARDS acima
+- NÃO crie questões genéricas sobre o edital
+- Foque no conteúdo específico dos flashcards fornecidos
+- Cada questão deve testar o conhecimento sobre os conceitos apresentados nos flashcards
 
 FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
 Retorne APENAS um objeto JSON válido no seguinte formato:
@@ -307,12 +370,40 @@ CRÍTICO:
         throw new Error('Formato de resposta inválido: esperado array "questoes"')
       }
 
+      // 🔥 NOVO: SALVAR NO CACHE
+      console.log('💾 Salvando questões no cache...')
+      await saveQuestionsCache(selectedMateria, selectedModulo, parsedData.questoes)
+      setCacheInfo({ likes: 0, dislikes: 0, score: 100, cached: false })
+
       setQuestions(parsedData.questoes)
     } catch (err) {
       console.error('Erro ao gerar questões:', err)
       alert(`Erro ao gerar questões: ${err.message}`)
     } finally {
       setGenerating(false)
+    }
+  }
+
+  // Avaliar questões (like/dislike)
+  const handleRateQuestions = async (isLike) => {
+    if (!selectedMateria || !selectedModulo) return
+    
+    const newRating = isLike ? { liked: true, disliked: false } : { liked: false, disliked: true }
+    setQuestionsRating(newRating)
+    
+    try {
+      await rateQuestionsCache(selectedMateria, selectedModulo, isLike)
+      
+      // Atualizar cacheInfo
+      if (cacheInfo) {
+        setCacheInfo({
+          ...cacheInfo,
+          likes: isLike ? cacheInfo.likes + 1 : cacheInfo.likes,
+          dislikes: !isLike ? cacheInfo.dislikes + 1 : cacheInfo.dislikes
+        })
+      }
+    } catch (error) {
+      console.error('Erro ao avaliar questões:', error)
     }
   }
 
@@ -356,7 +447,11 @@ CRÍTICO:
     }
   }
 
-  // Gerar BIZU (explicação) da questão
+  // Estado para avaliações de BIZUs
+  const [bizuRatings, setBizuRatings] = useState({}) // { questionIndex: { liked: bool, disliked: bool } }
+  const [bizuCacheInfo, setBizuCacheInfo] = useState({}) // { questionIndex: { likes, dislikes, score } }
+
+  // Gerar BIZU (explicação) da questão (COM CACHE)
   const generateBizu = async (questionIndex) => {
     const question = questions[questionIndex]
     if (!question) return
@@ -365,6 +460,30 @@ CRÍTICO:
     setShowBizu({ ...showBizu, [questionIndex]: true })
 
     try {
+      // Criar ID único para a questão (baseado no enunciado)
+      const questionId = `${selectedMateria}_${selectedModulo}_${questionIndex}_${question.enunciado.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '_')}`
+      
+      // 🔥 NOVO: VERIFICAR CACHE PRIMEIRO
+      console.log('🔍 Verificando cache de BIZU...')
+      const cachedExplanation = await getOrCreateExplanationCache(questionId)
+      
+      if (cachedExplanation && cachedExplanation.text) {
+        console.log('✅ BIZU encontrado no cache!')
+        setBizuText({ ...bizuText, [questionIndex]: cachedExplanation.text })
+        setBizuCacheInfo({
+          ...bizuCacheInfo,
+          [questionIndex]: {
+            likes: cachedExplanation.likes,
+            dislikes: cachedExplanation.dislikes,
+            score: cachedExplanation.score
+          }
+        })
+        setBizuLoading({ ...bizuLoading, [questionIndex]: false })
+        return // Sair - explicação já veio do cache
+      }
+
+      console.log('📝 BIZU não encontrado no cache. Gerando com IA...')
+
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
       const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
 
@@ -418,12 +537,52 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
         explanation = await callGroqAPI(prompt)
       }
 
+      // 🔥 NOVO: SALVAR NO CACHE
+      console.log('💾 Salvando BIZU no cache...')
+      await saveExplanationCache(questionId, explanation)
+      setBizuCacheInfo({
+        ...bizuCacheInfo,
+        [questionIndex]: { likes: 0, dislikes: 0, score: 100 }
+      })
+
       setBizuText({ ...bizuText, [questionIndex]: explanation })
     } catch (err) {
       console.error('Erro ao gerar BIZU:', err)
       setBizuText({ ...bizuText, [questionIndex]: `Erro ao gerar explicação: ${err.message}` })
     } finally {
       setBizuLoading({ ...bizuLoading, [questionIndex]: false })
+    }
+  }
+
+  // Avaliar BIZU (like/dislike)
+  const handleRateBizu = async (questionIndex, isLike) => {
+    const question = questions[questionIndex]
+    if (!question) return
+    
+    const questionId = `${selectedMateria}_${selectedModulo}_${questionIndex}_${question.enunciado.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '_')}`
+    
+    const newRating = isLike ? { liked: true, disliked: false } : { liked: false, disliked: true }
+    setBizuRatings({
+      ...bizuRatings,
+      [questionIndex]: newRating
+    })
+    
+    try {
+      await rateExplanationCache(questionId, isLike)
+      
+      // Atualizar cacheInfo
+      if (bizuCacheInfo[questionIndex]) {
+        setBizuCacheInfo({
+          ...bizuCacheInfo,
+          [questionIndex]: {
+            ...bizuCacheInfo[questionIndex],
+            likes: isLike ? bizuCacheInfo[questionIndex].likes + 1 : bizuCacheInfo[questionIndex].likes,
+            dislikes: !isLike ? bizuCacheInfo[questionIndex].dislikes + 1 : bizuCacheInfo[questionIndex].dislikes
+          }
+        })
+      }
+    } catch (error) {
+      console.error('Erro ao avaliar BIZU:', error)
     }
   }
 
@@ -563,6 +722,50 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
       {/* Questões */}
       {questions.length > 0 && (
         <div className="space-y-6">
+          {/* Info de Cache e Avaliação */}
+          {cacheInfo && (
+            <div className="rounded-xl bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-700 border border-blue-200 dark:border-slate-600 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  {cacheInfo.cached && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold">
+                      ✅ Questões do Cache
+                    </span>
+                  )}
+                  <span className="text-xs text-slate-600 dark:text-slate-400">
+                    👍 {cacheInfo.likes} | 👎 {cacheInfo.dislikes} | Score: {cacheInfo.score}%
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleRateQuestions(true)}
+                    disabled={questionsRating.liked || questionsRating.disliked}
+                    className={`p-2 rounded-lg transition ${
+                      questionsRating.liked
+                        ? 'bg-green-500 text-white'
+                        : 'bg-white dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/20 text-slate-600 dark:text-slate-400'
+                    } ${questionsRating.disliked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <HandThumbUpIcon className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRateQuestions(false)}
+                    disabled={questionsRating.liked || questionsRating.disliked}
+                    className={`p-2 rounded-lg transition ${
+                      questionsRating.disliked
+                        ? 'bg-red-500 text-white'
+                        : 'bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-600 dark:text-slate-400'
+                    } ${questionsRating.liked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <HandThumbDownIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm text-slate-500">
@@ -575,6 +778,8 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
                   setCurrentQuestionIndex(0)
                   setSelectedAnswer(null)
                   setShowResult(false)
+                  setQuestionsRating({ liked: false, disliked: false })
+                  setCacheInfo(null)
                 }}
                 className="text-xs text-slate-500 hover:text-slate-700"
               >
@@ -659,7 +864,42 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
                             <p className="text-sm text-blue-700">Gerando BIZU...</p>
                           ) : bizuText[currentQuestionIndex] ? (
                             <div>
-                              <p className="text-sm font-semibold text-blue-800 mb-2">💡 BIZU:</p>
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-sm font-semibold text-blue-800">💡 BIZU:</p>
+                                {bizuCacheInfo[currentQuestionIndex] && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-slate-500">
+                                      👍 {bizuCacheInfo[currentQuestionIndex].likes} | 👎 {bizuCacheInfo[currentQuestionIndex].dislikes}
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRateBizu(currentQuestionIndex, true)}
+                                        disabled={bizuRatings[currentQuestionIndex]?.liked || bizuRatings[currentQuestionIndex]?.disliked}
+                                        className={`p-1.5 rounded transition ${
+                                          bizuRatings[currentQuestionIndex]?.liked
+                                            ? 'bg-green-500 text-white'
+                                            : 'bg-white hover:bg-green-50 text-slate-600'
+                                        } ${bizuRatings[currentQuestionIndex]?.disliked ? 'opacity-50' : ''}`}
+                                      >
+                                        <HandThumbUpIcon className="h-4 w-4" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRateBizu(currentQuestionIndex, false)}
+                                        disabled={bizuRatings[currentQuestionIndex]?.liked || bizuRatings[currentQuestionIndex]?.disliked}
+                                        className={`p-1.5 rounded transition ${
+                                          bizuRatings[currentQuestionIndex]?.disliked
+                                            ? 'bg-red-500 text-white'
+                                            : 'bg-white hover:bg-red-50 text-slate-600'
+                                        } ${bizuRatings[currentQuestionIndex]?.liked ? 'opacity-50' : ''}`}
+                                      >
+                                        <HandThumbDownIcon className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                               <p className="text-sm text-blue-700 whitespace-pre-wrap">
                                 {bizuText[currentQuestionIndex]}
                               </p>

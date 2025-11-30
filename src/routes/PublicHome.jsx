@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { 
   ShieldCheckIcon, 
   SparklesIcon, 
@@ -91,7 +92,12 @@ const PublicHome = () => {
       <HomeBanner />
       
       {/* Promoção */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 p-6 sm:p-8 shadow-xl">
+      <motion.div 
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 p-6 sm:p-8 shadow-xl"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+      >
         <div className="relative z-10 text-center">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-1.5 text-xs sm:text-sm font-bold text-white backdrop-blur-sm">
             <ClockIcon className="h-4 w-4 animate-pulse" />
@@ -122,9 +128,17 @@ const PublicHome = () => {
             ⚡ Oferta válida por tempo limitado. Não perca esta oportunidade!
           </p>
         </div>
-        <div className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
-        <div className="absolute bottom-0 left-0 -mb-4 -ml-4 h-24 w-24 rounded-full bg-white/10 blur-xl"></div>
-      </div>
+        <motion.div 
+          className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-full bg-white/10 blur-2xl"
+          animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
+          transition={{ duration: 4, repeat: Infinity }}
+        ></motion.div>
+        <motion.div 
+          className="absolute bottom-0 left-0 -mb-4 -ml-4 h-24 w-24 rounded-full bg-white/10 blur-xl"
+          animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.5, 0.3] }}
+          transition={{ duration: 5, repeat: Infinity, delay: 1 }}
+        ></motion.div>
+      </motion.div>
 
       {/* Hero Section */}
       <div className="grid gap-6 sm:gap-8 rounded-3xl bg-gradient-to-br from-alego-700 via-alego-600 to-alego-500 p-6 sm:p-8 md:p-10 text-white md:grid-cols-2 shadow-xl border border-alego-600/20">
@@ -168,28 +182,54 @@ const PublicHome = () => {
       </div>
 
       {/* Features Grid */}
-      <div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.6 }}
+      >
         <div className="text-center mb-8">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-alego-700 dark:text-alego-300 mb-3">
+          <motion.h2 
+            className="text-2xl sm:text-3xl md:text-4xl font-black text-alego-700 dark:text-alego-300 mb-3"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+          >
             Tudo que você precisa para sua aprovação
-          </h2>
-          <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
+          </motion.h2>
+          <motion.p 
+            className="text-slate-600 dark:text-slate-400 text-sm sm:text-base"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
             Plataforma completa com inteligência artificial e recursos avançados
-          </p>
+          </motion.p>
         </div>
         <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
           {features.map((feature, index) => {
             const Icon = feature.icon
             return (
-              <div
+              <motion.div
                 key={index}
-                className="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1"
+                className="group relative overflow-hidden rounded-2xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl p-6 shadow-lg hover:shadow-2xl border border-slate-200/50 dark:border-slate-700/50"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                whileHover={{ scale: 1.03, y: -8 }}
               >
-                <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${feature.color} opacity-10 rounded-full blur-2xl group-hover:opacity-20 transition`}></div>
+                <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${feature.color} opacity-10 rounded-full blur-2xl group-hover:opacity-30 transition-all duration-500`}></div>
                 <div className="relative z-10">
-                  <div className={`inline-flex p-3 rounded-xl bg-gradient-to-br ${feature.color} mb-4`}>
+                  <motion.div 
+                    className={`inline-flex p-3 rounded-xl bg-gradient-to-br ${feature.color} mb-4 shadow-lg`}
+                    whileHover={{ scale: 1.1, rotate: 5 }}
+                    transition={{ type: "spring", stiffness: 300 }}
+                  >
                     <Icon className="h-6 w-6 text-white" />
-                  </div>
+                  </motion.div>
                   <h3 className="text-lg font-bold text-alego-700 dark:text-alego-300 mb-2">
                     {feature.title}
                   </h3>
@@ -197,11 +237,11 @@ const PublicHome = () => {
                     {feature.description}
                   </p>
                 </div>
-              </div>
+              </motion.div>
             )
           })}
         </div>
-      </div>
+      </motion.div>
 
       {/* Avaliações dos Alunos */}
       <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 sm:p-8 shadow-sm">

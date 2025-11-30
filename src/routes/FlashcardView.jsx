@@ -9,6 +9,11 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useStudyTimer } from '../hooks/useStudyTimer'
 import { FolderIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon } from '@heroicons/react/24/outline'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import {
+  getOrCreateExplanationCache,
+  saveExplanationCache,
+  rateExplanationCache,
+} from '../utils/cache'
 
 const MATERIAS = [
   'Português',
@@ -381,6 +386,17 @@ const FlashcardView = () => {
   }
 
   const generateCardExplanation = async (card) => {
+    // 🔥 NOVO: VERIFICAR CACHE PRIMEIRO
+    console.log('🔍 Verificando cache de explicação para flashcard...')
+    const cachedExplanation = await getOrCreateExplanationCache(card.id)
+    
+    if (cachedExplanation && cachedExplanation.text) {
+      console.log('✅ Explicação encontrada no cache!')
+      return cachedExplanation.text // Retornar explicação do cache
+    }
+
+    console.log('📝 Explicação não encontrada no cache. Gerando com IA...')
+
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY
     if (!apiKey) {
       throw new Error('API do Gemini não configurada.')
@@ -410,6 +426,7 @@ Regras:
     const genAI = new GoogleGenerativeAI(apiKey)
     let lastError = null
     let isQuotaError = false
+    let explanationText = ''
 
     for (const modelName of candidates) {
       try {
@@ -427,7 +444,13 @@ Regras:
         if (!text) {
           throw new Error('Não foi possível gerar a explicação.')
         }
-        return text
+        explanationText = text
+        
+        // 🔥 NOVO: SALVAR NO CACHE
+        console.log('💾 Salvando explicação no cache...')
+        await saveExplanationCache(card.id, explanationText)
+        
+        return explanationText
       } catch (err) {
         lastError = err
         const errorMessage = err.message || String(err) || ''
@@ -450,6 +473,11 @@ Regras:
             try {
               const groqResponse = await callGroqAPI(prompt)
               console.log('✅ Groq gerou explicação com sucesso!')
+              
+              // 🔥 NOVO: SALVAR NO CACHE também quando usar Groq
+              console.log('💾 Salvando explicação (via Groq) no cache...')
+              await saveExplanationCache(card.id, groqResponse)
+              
               return groqResponse
             } catch (groqErr) {
               console.error('❌ Erro ao usar Groq como fallback:', groqErr)

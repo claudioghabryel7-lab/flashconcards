@@ -14,7 +14,7 @@ import {
   updateProfile,
 } from 'firebase/auth'
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
-import { auth, db } from '../firebase/config'
+import { auth, db, firebaseInitialized } from '../firebase/config'
 
 const AuthContext = createContext(null)
 
@@ -25,6 +25,12 @@ export const AuthProvider = ({ children }) => {
 
   // Observar mudanças no estado de autenticação do Firebase
   useEffect(() => {
+    // Se Firebase não foi inicializado, apenas marcar como não carregando
+    if (!firebaseInitialized || !auth || !db) {
+      setLoading(false)
+      return
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
@@ -38,6 +44,9 @@ export const AuthProvider = ({ children }) => {
 
           // Carregar perfil do Firestore
           const userRef = doc(db, 'users', firebaseUser.uid)
+          
+          // Verificar se é email do admin
+          const isAdminEmail = firebaseUser.email?.toLowerCase() === 'claudioghabryel.cg@gmail.com'
           
           try {
             const snap = await getDoc(userRef)
@@ -68,7 +77,7 @@ export const AuthProvider = ({ children }) => {
               
               // Garantir que role não seja undefined
               if (!data.role) {
-                data.role = 'student'
+                data.role = isAdminEmail ? 'admin' : 'student'
               }
               
               setProfile(data)
@@ -114,11 +123,12 @@ export const AuthProvider = ({ children }) => {
           } catch (err) {
             console.error('Erro ao carregar perfil:', err)
             // Em caso de erro, criar perfil localmente
+            const isAdminEmailFallback = firebaseUser.email?.toLowerCase() === 'claudioghabryel.cg@gmail.com'
             const fallbackProfile = {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
               displayName: firebaseUser.displayName || firebaseUser.email,
-              role: isAdminEmail ? 'admin' : 'student',
+              role: isAdminEmailFallback ? 'admin' : 'student',
               favorites: [],
             }
             setProfile(fallbackProfile)
@@ -141,8 +151,8 @@ export const AuthProvider = ({ children }) => {
 
   // Sincronizar perfil em tempo real
   useEffect(() => {
-    if (!user) {
-      setProfile(null)
+    if (!user || !firebaseInitialized || !db) {
+      if (!user) setProfile(null)
       return () => {}
     }
     
@@ -222,6 +232,9 @@ export const AuthProvider = ({ children }) => {
   }, [user])
 
   const login = async (email, password) => {
+    if (!firebaseInitialized || !auth || !db) {
+      throw new Error('Firebase não está configurado. Verifique as variáveis de ambiente VITE_FIREBASE_*.')
+    }
     try {
       const emailLower = email.toLowerCase().trim()
       const userCredential = await signInWithEmailAndPassword(auth, emailLower, password)
@@ -260,6 +273,9 @@ export const AuthProvider = ({ children }) => {
   }
 
   const register = async (email, password, displayName = null) => {
+    if (!firebaseInitialized || !auth || !db) {
+      throw new Error('Firebase não está configurado. Verifique as variáveis de ambiente VITE_FIREBASE_*.')
+    }
     try {
       const emailLower = email.toLowerCase().trim()
       const userCredential = await createUserWithEmailAndPassword(auth, emailLower, password)
@@ -296,6 +312,11 @@ export const AuthProvider = ({ children }) => {
   }
 
   const logout = async () => {
+    if (!firebaseInitialized || !auth) {
+      setUser(null)
+      setProfile(null)
+      return
+    }
     try {
       await signOut(auth)
       // O estado será atualizado automaticamente pelo onAuthStateChanged
@@ -306,7 +327,7 @@ export const AuthProvider = ({ children }) => {
   }
 
   const updateFavorites = async (favorites = []) => {
-    if (!user) return
+    if (!user || !firebaseInitialized || !db) return
     try {
       const userRef = doc(db, 'users', user.uid)
       await setDoc(userRef, { favorites, updatedAt: serverTimestamp() }, { merge: true })
