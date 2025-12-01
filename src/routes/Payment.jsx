@@ -14,6 +14,7 @@ import { useAuth } from '../hooks/useAuth'
 import { doc, setDoc, getDoc, collection, serverTimestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
+import { trackGoogleAdsConversion } from '../utils/googleAds'
 
 const Payment = () => {
   const { user } = useAuth()
@@ -110,6 +111,9 @@ const Payment = () => {
           // Atualizar status para success
           setPaymentStatus('success')
           setLoading(false)
+          
+          // Rastrear conversão no Google Ads
+          trackGoogleAdsConversion(null, transactionData.amount || product.price, currentTransactionId)
           
           // Parar de monitorar
           unsubscribe()
@@ -515,6 +519,9 @@ const Payment = () => {
           }, { merge: true })
         }
       }
+      
+      // Rastrear conversão no Google Ads
+      trackGoogleAdsConversion(null, transactionData.amount || product.price, transactionData.transactionId)
       
       setPaymentStatus('success')
     } else {

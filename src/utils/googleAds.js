@@ -1,13 +1,19 @@
 // Função para rastrear conversões do Google Ads
-export const trackGoogleAdsConversion = (conversionLabel = null) => {
+// Rótulo de conversão configurado: WE1ACJ2NxMgbEIvjwJdC
+export const trackGoogleAdsConversion = (conversionLabel = null, value = 99.90, transactionId = null) => {
   if (typeof window !== 'undefined' && window.gtag) {
+    // Rótulo de conversão: AW-17766035851/WE1ACJ2NxMgbEIvjwJdC
+    const label = conversionLabel || 'AW-17766035851/WE1ACJ2NxMgbEIvjwJdC';
+    
     window.gtag('event', 'conversion', {
-      'send_to': conversionLabel || 'AW-17766035851/SEU_CONVERSION_LABEL',
-      'value': 99.90,
+      'send_to': label,
+      'value': value,
       'currency': 'BRL',
-      'transaction_id': Date.now().toString()
+      'transaction_id': transactionId || Date.now().toString()
     });
-    console.log('✅ Conversão rastreada no Google Ads');
+    console.log('✅ Conversão rastreada no Google Ads', { label, value, transactionId });
+  } else {
+    console.warn('⚠️ Google Ads (gtag) não está disponível');
   }
 };
 
