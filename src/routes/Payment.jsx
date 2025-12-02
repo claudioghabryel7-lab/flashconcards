@@ -631,25 +631,45 @@ const Payment = () => {
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="rounded-2xl bg-gradient-to-br from-rose-500 via-pink-500 to-rose-600 p-6 text-white shadow-xl"
+              className="rounded-2xl bg-white dark:bg-slate-800 shadow-xl overflow-hidden"
             >
-              <div className="mb-4">
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-xs font-bold backdrop-blur-sm mb-3">
-                  <span>🔥 PROMOÇÃO</span>
+              {/* Imagem do curso */}
+              {selectedCourse && (selectedCourse.imageBase64 || selectedCourse.imageUrl) && (
+                <div className="w-full h-48 overflow-hidden">
+                  <img
+                    src={selectedCourse.imageBase64 || selectedCourse.imageUrl}
+                    alt={selectedCourse.name}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-                <h3 className="text-xl font-bold mb-2">{product.name}</h3>
-                <div className="space-y-1">
-                  <p className="text-sm opacity-90 line-through">
-                    {formatCurrency(product.originalPrice)}
-                  </p>
-                  <p className="text-3xl font-black">
-                    {formatCurrency(product.price)}
-                  </p>
-                  <p className="text-sm opacity-90">
-                    Economize {formatCurrency(product.discount)}
-                  </p>
+              )}
+              
+              <div className="p-6">
+                <div className="mb-4">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 px-3 py-1 text-xs font-bold text-white mb-3">
+                    <span>🔥 PROMOÇÃO</span>
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 text-slate-900 dark:text-white">{product.name}</h3>
+                  
+                  {/* Descrição do curso */}
+                  {selectedCourse && selectedCourse.description && (
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 line-clamp-3">
+                      {selectedCourse.description}
+                    </p>
+                  )}
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-slate-400 line-through">
+                      {formatCurrency(product.originalPrice)}
+                    </p>
+                    <p className="text-3xl font-black text-rose-600 dark:text-rose-400">
+                      {formatCurrency(product.price)}
+                    </p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Economize {formatCurrency(product.discount)}
+                    </p>
+                  </div>
                 </div>
-              </div>
 
               {/* Método de pagamento selecionado */}
               {paymentMethod === 'card' && installments > 1 && (
