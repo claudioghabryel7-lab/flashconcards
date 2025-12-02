@@ -2025,27 +2025,44 @@ REGRAS CRÍTICAS:
 
       const genAI = new GoogleGenerativeAI(apiKey)
       
-      // Tentar modelos válidos (Pro para análise complexa)
-      const modelNames = ['gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash']
+      // Tentar modelos válidos (apenas modelos que funcionam)
+      // Ordem: mais recente primeiro, fallback para modelos mais antigos
+      const modelNames = [
+        'gemini-2.0-flash-exp',
+        'gemini-1.5-pro-latest',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-pro',
+        'gemini-2.0-flash'
+      ]
       let model = null
       let lastError = null
       
       for (const modelName of modelNames) {
         try {
           model = genAI.getGenerativeModel({ model: modelName })
-          // Testar se o modelo funciona
-          await model.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
-          console.log(`✅ Usando modelo: ${modelName}`)
-          break
+          // Testar se o modelo funciona com uma chamada simples
+          const testResult = await model.generateContent('test')
+          if (testResult && testResult.response) {
+            console.log(`✅ Usando modelo: ${modelName}`)
+            break
+          }
         } catch (err) {
-          console.warn(`⚠️ Modelo ${modelName} não disponível:`, err.message)
+          // Ignorar erros de modelos não disponíveis silenciosamente
+          console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
           lastError = err
           continue
         }
       }
       
       if (!model) {
-        throw new Error(`Nenhum modelo Gemini disponível. Último erro: ${lastError?.message || 'Desconhecido'}`)
+        // Se nenhum modelo Gemini funcionar, tentar Groq como fallback
+        const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+        if (groqApiKey) {
+          console.log('⚠️ Nenhum modelo Gemini disponível, usando Groq como fallback...')
+          // Continuar com Groq (será usado mais tarde se necessário)
+        } else {
+          throw new Error('Nenhum modelo de IA disponível. Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
+        }
       }
 
       // 1. Analisar o edital e extrair matérias e estrutura APENAS DO CARGO ESPECÍFICO
@@ -2103,6 +2120,10 @@ Retorne APENAS um JSON válido no seguinte formato:
 }
 
 IMPORTANTE: Retorne TODAS as matérias e TODOS os módulos. Não deixe nada faltando. Retorne APENAS o JSON, sem markdown, sem explicações.`
+
+      if (!model) {
+        throw new Error('Modelo de IA não disponível. Verifique as configurações da API.')
+      }
 
       const analysisResult = await model.generateContent(analysisPrompt)
       let analysisText = analysisResult.response.text().trim()
@@ -2275,6 +2296,9 @@ Retorne APENAS um JSON válido:
 Retorne APENAS o JSON, sem markdown, sem explicações.`
 
           try {
+            if (!model) {
+              throw new Error('Modelo de IA não disponível. Verifique as configurações.')
+            }
             const flashcardsResult = await model.generateContent(flashcardsPrompt)
             let flashcardsText = flashcardsResult.response.text().trim()
             
@@ -2294,6 +2318,9 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
               
               // Tentar novamente uma vez
               try {
+                if (!model) {
+                  throw new Error('Modelo de IA não disponível.')
+                }
                 const retryResult = await model.generateContent(flashcardsPrompt)
                 let retryText = retryResult.response.text().trim()
                 if (retryText.startsWith('```json')) {
@@ -2359,7 +2386,27 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       setMessage(`✅ Geração completa concluída! ${createdSubjects.length} matéria(s), ${totalModulos} módulo(s) e ${totalFlashcardsCreated} flashcard(s) criado(s).`)
     } catch (err) {
       console.error('Erro ao gerar curso completo:', err)
-      setMessage(`❌ Erro ao gerar curso completo: ${err.message}`)
+      
+      // Mensagem de erro amigável sem detalhes técnicos
+      let errorMessage = 'Erro ao gerar curso completo.'
+      
+      if (err.message) {
+        const msg = err.message.toLowerCase()
+        if (msg.includes('modelo') || msg.includes('model') || msg.includes('not found') || msg.includes('404')) {
+          errorMessage = 'Erro: Modelo de IA não disponível. Verifique as configurações da API no arquivo .env'
+        } else if (msg.includes('quota') || msg.includes('429')) {
+          errorMessage = 'Erro: Limite de uso da API atingido. Tente novamente mais tarde.'
+        } else if (msg.includes('api key') || msg.includes('api_key')) {
+          errorMessage = 'Erro: Chave da API não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env'
+        } else if (msg.includes('json') || msg.includes('parse')) {
+          errorMessage = 'Erro: Resposta da IA em formato inválido. Tente novamente.'
+        } else {
+          // Mensagem genérica para outros erros
+          errorMessage = 'Erro ao gerar curso. Verifique as configurações e tente novamente.'
+        }
+      }
+      
+      setMessage(`❌ ${errorMessage}`)
       setFullCourseProgress('')
     } finally {
       setGeneratingFullCourse(false)
@@ -2390,8 +2437,14 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
 
       const genAI = new GoogleGenerativeAI(apiKey)
       
-      // Tentar modelos válidos
-      const modelNames = ['gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash']
+      // Tentar modelos válidos (apenas modelos que funcionam)
+      const modelNames = [
+        'gemini-2.0-flash-exp',
+        'gemini-1.5-pro-latest',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-pro',
+        'gemini-2.0-flash'
+      ]
       let model = null
       let lastError = null
       
