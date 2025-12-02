@@ -100,89 +100,183 @@ const Dashboard = () => {
     return () => unsub()
   }, [profile])
   
-  // Carregar flashcards filtrados por curso selecionado
+  // Carregar flashcards filtrados por curso selecionado com cache
   useEffect(() => {
     if (!user || !profile) return
     
-    const cardsRef = collection(db, 'flashcards')
-    const unsub = onSnapshot(
-      cardsRef,
-      (snapshot) => {
-        const purchasedCourses = profile.purchasedCourses || []
-        const isAdmin = profile.role === 'admin'
-        
-        let data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        
-        // Filtrar por curso selecionado
-        const selectedCourse = (selectedCourseId || '').trim()
-        
-        if (selectedCourse) {
-          // Mostrar apenas flashcards do curso selecionado
-          // Comparar tanto com string quanto com null/undefined
-          data = data.filter(card => {
-            const cardCourseId = card.courseId || null
-            return cardCourseId === selectedCourse || String(cardCourseId) === String(selectedCourse)
-          })
-          console.log(`🔍 Dashboard - Filtrado por curso "${selectedCourse}": ${data.length} flashcards`)
-        } else {
-          // Mostrar apenas flashcards sem courseId (ALEGO padrão)
-          // Incluir null, undefined e string vazia
-          data = data.filter(card => {
-            const cardCourseId = card.courseId
-            return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined
-          })
-          console.log(`🔍 Dashboard - Filtrado para ALEGO padrão: ${data.length} flashcards`)
+    // Tentar carregar do cache primeiro
+    const cacheKey = `flashcards_${selectedCourseId || 'alego'}_${user.uid}`
+    try {
+      const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+      if (cached) {
+        const { data: cachedData, timestamp } = JSON.parse(cached)
+        const now = Date.now()
+        // Usar cache se tiver menos de 5 minutos
+        if (now - timestamp < 5 * 60 * 1000 && cachedData) {
+          setAllCards(cachedData)
+          setLoading(false)
         }
-        
-        // Admin vê todos, mas ainda filtra por curso selecionado
-        if (!isAdmin && selectedCourseId) {
-          // Verificar se o usuário comprou o curso selecionado
-          if (!purchasedCourses.includes(selectedCourseId)) {
-            data = []
+      }
+    } catch (err) {
+      console.warn('Erro ao ler cache:', err)
+    }
+    
+    const cardsRef = collection(db, 'flashcards')
+    let retryCount = 0
+    const maxRetries = 3
+    
+    const loadData = () => {
+      const unsub = onSnapshot(
+        cardsRef,
+        (snapshot) => {
+          const purchasedCourses = profile.purchasedCourses || []
+          const isAdmin = profile.role === 'admin'
+          
+          let data = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          
+          // Filtrar por curso selecionado
+          const selectedCourse = (selectedCourseId || '').trim()
+          
+          if (selectedCourse) {
+            // Mostrar apenas flashcards do curso selecionado
+            // Comparar tanto com string quanto com null/undefined
+            data = data.filter(card => {
+              const cardCourseId = card.courseId || null
+              return cardCourseId === selectedCourse || String(cardCourseId) === String(selectedCourse)
+            })
+            console.log(`🔍 Dashboard - Filtrado por curso "${selectedCourse}": ${data.length} flashcards`)
+          } else {
+            // Mostrar apenas flashcards sem courseId (ALEGO padrão)
+            // Incluir null, undefined e string vazia
+            data = data.filter(card => {
+              const cardCourseId = card.courseId
+              return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined
+            })
+            console.log(`🔍 Dashboard - Filtrado para ALEGO padrão: ${data.length} flashcards`)
+          }
+          
+          // Admin vê todos, mas ainda filtra por curso selecionado
+          if (!isAdmin && selectedCourseId) {
+            // Verificar se o usuário comprou o curso selecionado
+            if (!purchasedCourses.includes(selectedCourseId)) {
+              data = []
+            }
+          }
+          
+          setAllCards(data)
+          setLoading(false)
+          retryCount = 0
+          
+          // Salvar no cache
+          try {
+            localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
+              data,
+              timestamp: Date.now(),
+            }))
+          } catch (err) {
+            console.warn('Erro ao salvar cache:', err)
+          }
+        },
+        (error) => {
+          console.error('Erro ao carregar flashcards:', error)
+          
+          // Retry logic
+          if (retryCount < maxRetries) {
+            retryCount++
+            setTimeout(() => {
+              loadData()
+            }, 1000 * retryCount)
+          } else {
+            setAllCards([])
+            setLoading(false)
           }
         }
-        
-        setAllCards(data)
-        setLoading(false)
-      },
-      (error) => {
-        console.error('Erro ao carregar flashcards:', error)
-        setAllCards([])
-        setLoading(false)
-      }
-    )
+      )
+      return unsub
+    }
+    
+    const unsub = loadData()
     return () => unsub()
   }, [user, profile, selectedCourseId])
 
-  // Carregar progresso dos cards do usuário
+  // Carregar progresso dos cards do usuário com cache
   useEffect(() => {
     if (!user) return () => {}
     
-    const userProgressRef = doc(db, 'userProgress', user.uid)
-    const unsub = onSnapshot(
-      userProgressRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data()
-          setCardProgress(data.cardProgress || {})
-          setStudiedModules(data.studiedModules || {})
-          setStudyPhase(data.studyPhase || 1)
-        } else {
-          setCardProgress({})
-          setStudiedModules({})
-          setStudyPhase(1)
+    // Tentar carregar do cache primeiro
+    const cacheKey = `userProgress_${user.uid}`
+    try {
+      const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+      if (cached) {
+        const { data: cachedData, timestamp } = JSON.parse(cached)
+        const now = Date.now()
+        if (now - timestamp < 5 * 60 * 1000 && cachedData) {
+          setCardProgress(cachedData.cardProgress || {})
+          setStudiedModules(cachedData.studiedModules || {})
+          setStudyPhase(cachedData.studyPhase || 1)
         }
-      },
-      (error) => {
-        console.error('Erro ao carregar progresso dos cards:', error)
-        setCardProgress({})
-        setStudiedModules({})
-        setStudyPhase(1)
       }
-    )
+    } catch (err) {
+      console.warn('Erro ao ler cache de progresso:', err)
+    }
+    
+    const userProgressRef = doc(db, 'userProgress', user.uid)
+    let retryCount = 0
+    const maxRetries = 3
+    
+    const loadData = () => {
+      const unsub = onSnapshot(
+        userProgressRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data()
+            setCardProgress(data.cardProgress || {})
+            setStudiedModules(data.studiedModules || {})
+            setStudyPhase(data.studyPhase || 1)
+            
+            // Salvar no cache
+            try {
+              localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
+                data: {
+                  cardProgress: data.cardProgress || {},
+                  studiedModules: data.studiedModules || {},
+                  studyPhase: data.studyPhase || 1,
+                },
+                timestamp: Date.now(),
+              }))
+            } catch (err) {
+              console.warn('Erro ao salvar cache de progresso:', err)
+            }
+          } else {
+            setCardProgress({})
+            setStudiedModules({})
+            setStudyPhase(1)
+          }
+          retryCount = 0
+        },
+        (error) => {
+          console.error('Erro ao carregar progresso dos cards:', error)
+          
+          // Retry logic
+          if (retryCount < maxRetries) {
+            retryCount++
+            setTimeout(() => {
+              loadData()
+            }, 1000 * retryCount)
+          } else {
+            setCardProgress({})
+            setStudiedModules({})
+            setStudyPhase(1)
+          }
+        }
+      )
+      return unsub
+    }
+    
+    const unsub = loadData()
     return () => unsub()
   }, [user])
 

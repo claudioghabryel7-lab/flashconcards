@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { collection, doc, onSnapshot, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
 import { db } from '../firebase/config'
+import LazyImage from '../components/LazyImage'
 import { 
   ShieldCheckIcon, 
   SparklesIcon, 
@@ -96,27 +97,65 @@ const PublicHome = () => {
   const [loadingCourses, setLoadingCourses] = useState(true)
 
   useEffect(() => {
+    // Tentar carregar do cache primeiro
+    const cacheKey = 'courses_active'
+    try {
+      const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+      if (cached) {
+        const { data: cachedData, timestamp } = JSON.parse(cached)
+        const now = Date.now()
+        if (now - timestamp < 5 * 60 * 1000 && cachedData) {
+          setCourses(cachedData)
+          setLoadingCourses(false)
+        }
+      }
+    } catch (err) {
+      console.warn('Erro ao ler cache de cursos:', err)
+    }
+    
     const coursesRef = collection(db, 'courses')
     const q = query(coursesRef, where('active', '==', true))
+    let retryCount = 0
+    const maxRetries = 3
     
-    const unsub = onSnapshot(q, async (snapshot) => {
-      const data = snapshot.docs.map((docSnapshot) => ({
-        id: docSnapshot.id,
-        ...docSnapshot.data(),
-      }))
-      
-      // Não recriar curso ALEGO padrão automaticamente
-      // Se foi deletado pelo admin, não deve aparecer na página inicial
-      // Apenas mostrar os cursos que realmente existem e estão ativos
-      
-      setCourses(data)
-      setLoadingCourses(false)
-    }, (error) => {
-      console.error('Erro ao carregar cursos:', error)
-      setCourses([])
-      setLoadingCourses(false)
-    })
-
+    const loadData = () => {
+      const unsub = onSnapshot(q, async (snapshot) => {
+        const data = snapshot.docs.map((docSnapshot) => ({
+          id: docSnapshot.id,
+          ...docSnapshot.data(),
+        }))
+        
+        setCourses(data)
+        setLoadingCourses(false)
+        retryCount = 0
+        
+        // Salvar no cache
+        try {
+          localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
+            data,
+            timestamp: Date.now(),
+          }))
+        } catch (err) {
+          console.warn('Erro ao salvar cache de cursos:', err)
+        }
+      }, (error) => {
+        console.error('Erro ao carregar cursos:', error)
+        
+        // Retry logic
+        if (retryCount < maxRetries) {
+          retryCount++
+          setTimeout(() => {
+            loadData()
+          }, 1000 * retryCount)
+        } else {
+          setCourses([])
+          setLoadingCourses(false)
+        }
+      })
+      return unsub
+    }
+    
+    const unsub = loadData()
     return () => unsub()
   }, [])
 
@@ -165,7 +204,7 @@ const PublicHome = () => {
                   {/* Imagem do curso */}
                   {(course.imageBase64 || course.imageUrl) && (
                     <div className="w-full h-48 overflow-hidden rounded-t-2xl">
-                      <img
+                      <LazyImage
                         src={course.imageBase64 || course.imageUrl}
                         alt={course.name}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
@@ -199,6 +238,11 @@ const PublicHome = () => {
                       <p className="text-2xl font-black text-alego-600 dark:text-alego-400">
                         {formatCurrency(course.price || 99.90)}
                       </p>
+                      {course.courseDuration && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          ⏱️ Duração: {course.courseDuration}
+                        </p>
+                      )}
                     </div>
                     
                     <div className="flex gap-2">

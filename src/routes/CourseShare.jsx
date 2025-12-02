@@ -229,6 +229,11 @@ const CourseShare = () => {
                 <p className="text-3xl sm:text-4xl font-black text-blue-600 dark:text-blue-400">
                   Por R$ {course.price?.toFixed(2) || '99.90'}
                 </p>
+                {course.courseDuration && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                    ⏱️ Duração: {course.courseDuration}
+                  </p>
+                )}
               </div>
               
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">

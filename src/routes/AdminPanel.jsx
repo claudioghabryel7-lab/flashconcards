@@ -136,6 +136,7 @@ const AdminPanel = () => {
     price: 99.90,
     originalPrice: 149.99,
     competition: '',
+    courseDuration: '', // Tempo do curso (ex: "6 meses", "1 ano", etc.)
     imageBase64: '',
     imageUrl: '',
     active: true,
@@ -1743,6 +1744,7 @@ REGRAS CRÍTICAS:
         price: parseFloat(courseForm.price) || 99.90,
         originalPrice: parseFloat(courseForm.originalPrice) || 149.99,
         competition: courseForm.competition,
+        courseDuration: courseForm.courseDuration || '',
         imageBase64: courseForm.imageBase64 || '',
         imageUrl: courseForm.imageUrl || '',
         active: courseForm.active !== false,
@@ -1756,6 +1758,7 @@ REGRAS CRÍTICAS:
         price: 99.90,
         originalPrice: 149.99,
         competition: '',
+        courseDuration: '',
         imageBase64: '',
         imageUrl: '',
         active: true,
@@ -4308,6 +4311,22 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                           )}
                         </div>
 
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-2">
+                            Tempo do Curso
+                          </label>
+                          <input
+                            type="text"
+                            value={courseForm.courseDuration}
+                            onChange={(e) => setCourseForm(prev => ({ ...prev, courseDuration: e.target.value }))}
+                            placeholder="Ex: 6 meses, 1 ano, 12 meses, etc."
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          />
+                          <p className="text-xs text-slate-500 mt-1">
+                            Informe a duração do curso (ex: "6 meses", "1 ano", "12 meses")
+                          </p>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-xs font-semibold text-slate-600 mb-2">
@@ -4433,6 +4452,9 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                         Concurso: {course.competition} • R$ {course.price?.toFixed(2) || '0.00'}
                                         {course.originalPrice && course.originalPrice > course.price && (
                                           <span className="line-through ml-2">R$ {course.originalPrice.toFixed(2)}</span>
+                                        )}
+                                        {course.courseDuration && (
+                                          <span className="ml-2">• Duração: {course.courseDuration}</span>
                                         )}
                                       </p>
                                       {course.description && (

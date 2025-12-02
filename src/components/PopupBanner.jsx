@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { doc, getDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
+import LazyImage from './LazyImage'
 
 const PopupBanner = () => {
   const [banner, setBanner] = useState(null)
@@ -10,38 +11,87 @@ const PopupBanner = () => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Carregar banner do popup
-    const popupBannerRef = doc(db, 'config', 'popupBanner')
-    
-    const unsub = onSnapshot(
-      popupBannerRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data()
-          if (data.active && (data.imageUrl || data.imageBase64)) {
-            setBanner(data)
-            // Verificar se já foi mostrado hoje
+    // Tentar carregar do cache primeiro
+    const cacheKey = 'popupBanner'
+    try {
+      const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+      if (cached) {
+        const { data: cachedData, timestamp } = JSON.parse(cached)
+        const now = Date.now()
+        if (now - timestamp < 5 * 60 * 1000 && cachedData) {
+          if (cachedData.active && (cachedData.imageUrl || cachedData.imageBase64)) {
+            setBanner(cachedData)
             const lastShown = localStorage.getItem('popupBannerLastShown')
             const today = new Date().toDateString()
             if (lastShown !== today) {
               setShow(true)
             }
+          }
+          setLoading(false)
+        }
+      }
+    } catch (err) {
+      console.warn('Erro ao ler cache de popup banner:', err)
+    }
+    
+    // Carregar banner do popup
+    const popupBannerRef = doc(db, 'config', 'popupBanner')
+    let retryCount = 0
+    const maxRetries = 3
+    
+    const loadData = () => {
+      const unsub = onSnapshot(
+        popupBannerRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data()
+            if (data.active && (data.imageUrl || data.imageBase64)) {
+              setBanner(data)
+              // Verificar se já foi mostrado hoje
+              const lastShown = localStorage.getItem('popupBannerLastShown')
+              const today = new Date().toDateString()
+              if (lastShown !== today) {
+                setShow(true)
+              }
+              
+              // Salvar no cache
+              try {
+                localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
+                  data,
+                  timestamp: Date.now(),
+                }))
+              } catch (err) {
+                console.warn('Erro ao salvar cache de popup banner:', err)
+              }
+            } else {
+              setBanner(null)
+              setShow(false)
+            }
           } else {
             setBanner(null)
             setShow(false)
           }
-        } else {
-          setBanner(null)
-          setShow(false)
+          setLoading(false)
+          retryCount = 0
+        },
+        (error) => {
+          console.error('Erro ao carregar banner popup:', error)
+          
+          // Retry logic
+          if (retryCount < maxRetries) {
+            retryCount++
+            setTimeout(() => {
+              loadData()
+            }, 1000 * retryCount)
+          } else {
+            setLoading(false)
+          }
         }
-        setLoading(false)
-      },
-      (error) => {
-        console.error('Erro ao carregar banner popup:', error)
-        setLoading(false)
-      }
-    )
-
+      )
+      return unsub
+    }
+    
+    const unsub = loadData()
     return () => unsub()
   }, [])
 
@@ -98,23 +148,21 @@ const PopupBanner = () => {
                 className={banner.link ? 'cursor-pointer' : ''}
               >
                 {banner.imageUrl ? (
-                  <img
+                  <LazyImage
                     src={banner.imageUrl}
                     alt={banner.title || 'Banner'}
                     className="w-full h-auto max-h-[90vh] object-contain"
-                    onError={(e) => {
+                    onError={() => {
                       console.error('Erro ao carregar imagem do banner')
-                      e.target.style.display = 'none'
                     }}
                   />
                 ) : banner.imageBase64 ? (
-                  <img
+                  <LazyImage
                     src={`data:image/png;base64,${banner.imageBase64}`}
                     alt={banner.title || 'Banner'}
                     className="w-full h-auto max-h-[90vh] object-contain"
-                    onError={(e) => {
+                    onError={() => {
                       console.error('Erro ao carregar imagem base64 do banner')
-                      e.target.style.display = 'none'
                     }}
                   />
                 ) : null}

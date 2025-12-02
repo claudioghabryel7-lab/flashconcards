@@ -3,33 +3,76 @@ import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import LazyImage from './LazyImage'
 
 const HomeBanner = () => {
   const [banners, setBanners] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
 
-  // Carregar banners do Firestore
+  // Carregar banners do Firestore com cache
   useEffect(() => {
+    // Tentar carregar do cache primeiro
+    const cacheKey = 'homeBanners'
+    try {
+      const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+      if (cached) {
+        const { data: cachedData, timestamp } = JSON.parse(cached)
+        const now = Date.now()
+        if (now - timestamp < 5 * 60 * 1000 && cachedData) {
+          setBanners(cachedData)
+          setLoading(false)
+        }
+      }
+    } catch (err) {
+      console.warn('Erro ao ler cache de banners:', err)
+    }
+    
     const bannersRef = collection(db, 'homeBanners')
     const q = query(bannersRef, orderBy('order', 'asc'))
+    let retryCount = 0
+    const maxRetries = 3
     
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs
-        .map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        .filter((banner) => banner.active !== false) // Filtrar apenas ativos
-      
-      setBanners(data)
-      setLoading(false)
-    }, (error) => {
-      console.error('Erro ao carregar banners:', error)
-      setBanners([])
-      setLoading(false)
-    })
-
+    const loadData = () => {
+      const unsub = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((banner) => banner.active !== false) // Filtrar apenas ativos
+        
+        setBanners(data)
+        setLoading(false)
+        retryCount = 0
+        
+        // Salvar no cache
+        try {
+          localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
+            data,
+            timestamp: Date.now(),
+          }))
+        } catch (err) {
+          console.warn('Erro ao salvar cache de banners:', err)
+        }
+      }, (error) => {
+        console.error('Erro ao carregar banners:', error)
+        
+        // Retry logic
+        if (retryCount < maxRetries) {
+          retryCount++
+          setTimeout(() => {
+            loadData()
+          }, 1000 * retryCount)
+        } else {
+          setBanners([])
+          setLoading(false)
+        }
+      })
+      return unsub
+    }
+    
+    const unsub = loadData()
     return () => unsub()
   }, [])
 
@@ -75,7 +118,7 @@ const HomeBanner = () => {
         >
           {currentBanner.link ? (
             <Link to={currentBanner.link} className="block w-full h-full group">
-              <img
+              <LazyImage
                 src={currentBanner.imageUrl || currentBanner.imageBase64}
                 alt={currentBanner.title || 'Banner'}
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
@@ -84,7 +127,7 @@ const HomeBanner = () => {
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </Link>
           ) : (
-            <img
+            <LazyImage
               src={currentBanner.imageUrl || currentBanner.imageBase64}
               alt={currentBanner.title || 'Banner'}
               className="w-full h-full object-cover"

@@ -69,7 +69,7 @@ const FlashcardItem = ({
       </AnimatePresence>
 
       <motion.div
-        className="relative h-[400px] sm:h-[450px] md:h-[500px] w-full cursor-pointer group overflow-visible"
+        className="relative min-h-[400px] sm:min-h-[450px] md:min-h-[500px] max-h-[90vh] w-full cursor-pointer group overflow-visible"
         style={{ perspective: 1200 }}
         onClick={toggle}
         whileHover={{ scale: 1.02 }}
@@ -77,7 +77,7 @@ const FlashcardItem = ({
       >
         {/* Frente do Card - Design Tecnológico */}
         <motion.div
-          className="absolute inset-0 flex flex-col justify-between rounded-3xl bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-slate-800 dark:via-blue-900/20 dark:to-purple-900/20 p-3 sm:p-6 shadow-2xl border-4 border-blue-500/50 dark:border-blue-400/50 backdrop-blur-sm overflow-hidden"
+          className="absolute inset-0 flex flex-col justify-between rounded-3xl bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-slate-800 dark:via-blue-900/20 dark:to-purple-900/20 p-3 sm:p-4 md:p-6 shadow-2xl border-2 sm:border-4 border-blue-500/50 dark:border-blue-400/50 backdrop-blur-sm overflow-hidden"
           animate={{ 
             rotateY: flipped ? 180 : 0
           }}
@@ -97,7 +97,7 @@ const FlashcardItem = ({
                 event.stopPropagation()
                 onToggleFavorite(card.id)
               }}
-              className={`group/fav absolute right-2 sm:right-4 top-2 sm:top-4 z-20 flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl transition-all ${
+              className={`group/fav absolute right-2 sm:right-3 md:right-4 top-2 sm:top-3 md:top-4 z-20 flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl transition-all touch-manipulation ${
                 isFavorite 
                   ? 'bg-gradient-to-br from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/50' 
                   : 'bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-2 border-rose-500/30 dark:border-rose-400/30 text-rose-500 dark:text-rose-400 hover:border-rose-500 dark:hover:border-rose-400'
@@ -111,30 +111,30 @@ const FlashcardItem = ({
 
             {/* Badge de estágio - Tech */}
             {cardProgress && cardProgress.stage > 0 && (
-              <div className="absolute left-2 sm:left-4 top-2 sm:top-4 z-20">
-                <div className={`relative rounded-xl ${stageInfo.color} px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-black text-slate-700 dark:text-slate-200 shadow-lg border-2 border-white/50 dark:border-slate-900/50`}>
+              <div className="absolute left-2 sm:left-3 md:left-4 top-2 sm:top-3 md:top-4 z-20">
+                <div className={`relative rounded-xl ${stageInfo.color} px-2 sm:px-2.5 md:px-3 py-1 sm:py-1 md:py-1.5 text-[9px] sm:text-[10px] md:text-xs font-black text-slate-700 dark:text-slate-200 shadow-lg border-2 border-white/50 dark:border-slate-900/50`}>
                   {stageInfo.label}
                 </div>
               </div>
             )}
 
             {/* Badges de matéria/modulo */}
-            <div className="mb-2 sm:mb-4 flex items-center gap-2 mt-8 sm:mt-12 flex-wrap overflow-hidden">
+            <div className="mb-2 sm:mb-3 md:mb-4 flex items-center gap-1.5 sm:gap-2 mt-10 sm:mt-12 md:mt-14 flex-wrap overflow-hidden">
               {card.materia && (
-                <span className="rounded-full bg-gradient-to-r from-blue-500/20 to-cyan-500/20 dark:from-blue-500/30 dark:to-cyan-500/30 border border-blue-500/30 dark:border-blue-400/30 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-bold text-blue-700 dark:text-blue-300 backdrop-blur-sm break-words max-w-full" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                <span className="rounded-full bg-gradient-to-r from-blue-500/20 to-cyan-500/20 dark:from-blue-500/30 dark:to-cyan-500/30 border border-blue-500/30 dark:border-blue-400/30 px-2 sm:px-2.5 md:px-3 py-0.5 sm:py-0.5 md:py-1 text-[9px] sm:text-[10px] md:text-xs font-bold text-blue-700 dark:text-blue-300 backdrop-blur-sm break-words max-w-[45%] sm:max-w-none" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                   {card.materia}
                 </span>
               )}
               {card.modulo && (
-                <span className="rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 dark:from-purple-500/30 dark:to-pink-500/30 border border-purple-500/30 dark:border-purple-400/30 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-bold text-purple-700 dark:text-purple-300 backdrop-blur-sm break-words max-w-full" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                <span className="rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 dark:from-purple-500/30 dark:to-pink-500/30 border border-purple-500/30 dark:border-purple-400/30 px-2 sm:px-2.5 md:px-3 py-0.5 sm:py-0.5 md:py-1 text-[9px] sm:text-[10px] md:text-xs font-bold text-purple-700 dark:text-purple-300 backdrop-blur-sm break-words max-w-[45%] sm:max-w-none" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                   {card.modulo}
                 </span>
               )}
             </div>
             
             {/* Pergunta */}
-            <div className="flex-1 flex items-center justify-center min-h-0 overflow-y-auto py-2">
-              <h3 className="text-base sm:text-lg md:text-xl lg:text-2xl font-black text-slate-900 dark:text-white text-center px-2 sm:px-4 leading-tight break-words overflow-wrap-anywhere max-w-full" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+            <div className="flex-1 flex items-center justify-center min-h-0 overflow-y-auto py-2 sm:py-3 md:py-4">
+              <h3 className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-black text-slate-900 dark:text-white text-center px-2 sm:px-3 md:px-4 leading-tight break-words overflow-wrap-anywhere max-w-full" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                 {card.pergunta}
               </h3>
             </div>
@@ -152,7 +152,7 @@ const FlashcardItem = ({
 
         {/* Verso do Card - Design Tecnológico */}
         <motion.div
-          className="absolute inset-0 flex flex-col justify-between rounded-3xl bg-gradient-to-br from-blue-600 via-purple-600 to-cyan-600 dark:from-blue-700 dark:via-purple-700 dark:to-cyan-700 p-3 sm:p-6 text-white shadow-2xl border-4 border-blue-400 dark:border-blue-500 backdrop-blur-sm overflow-hidden"
+          className="absolute inset-0 flex flex-col justify-between rounded-3xl bg-gradient-to-br from-blue-600 via-purple-600 to-cyan-600 dark:from-blue-700 dark:via-purple-700 dark:to-cyan-700 p-3 sm:p-4 md:p-6 text-white shadow-2xl border-2 sm:border-4 border-blue-400 dark:border-blue-500 backdrop-blur-sm overflow-hidden"
           animate={{ 
             rotateY: flipped ? 0 : -180
           }}
@@ -174,8 +174,8 @@ const FlashcardItem = ({
             </div>
             
             {/* Resposta */}
-            <div className="flex-1 flex items-center justify-center min-h-0 overflow-y-auto py-2">
-              <p className="text-base sm:text-lg md:text-xl lg:text-2xl font-black text-center px-2 sm:px-4 leading-tight drop-shadow-lg break-words overflow-wrap-anywhere max-w-full" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+            <div className="flex-1 flex items-center justify-center min-h-0 overflow-y-auto py-2 sm:py-3 md:py-4">
+              <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-black text-center px-2 sm:px-3 md:px-4 leading-tight drop-shadow-lg break-words overflow-wrap-anywhere max-w-full" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                 {card.resposta}
               </p>
             </div>
@@ -186,14 +186,14 @@ const FlashcardItem = ({
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: flipped ? 1 : 0, y: flipped ? 0 : 20 }}
                 transition={{ delay: flipped ? 0.3 : 0 }}
-                className="space-y-2 sm:space-y-3 mt-2 sm:mt-4 flex-shrink-0"
+                className="space-y-2 sm:space-y-2.5 md:space-y-3 mt-2 sm:mt-3 md:mt-4 flex-shrink-0 pb-2 sm:pb-0"
                 style={{ pointerEvents: flipped ? 'auto' : 'none' }}
               >
-                <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-white/90 text-center">
+                <p className="text-[10px] sm:text-xs md:text-sm font-black uppercase tracking-widest text-white/90 text-center px-1">
                   Como foi essa revisão?
                 </p>
-                <div className="flex flex-col gap-2">
-                  <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:gap-2">
+                  <div className="flex gap-1.5 sm:gap-2">
                     <motion.button
                       type="button"
                       whileHover={{ scale: 1.05, y: -2 }}
@@ -202,12 +202,12 @@ const FlashcardItem = ({
                         e.stopPropagation()
                         handleRate('hard')
                       }}
-                      className="group/btn relative flex-1 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-white shadow-xl hover:shadow-2xl hover:shadow-rose-500/50 border-2 border-white/20 min-h-[48px] sm:min-h-[52px] overflow-hidden"
+                      className="group/btn relative flex-1 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-[10px] sm:text-xs md:text-sm font-black text-white shadow-xl hover:shadow-2xl hover:shadow-rose-500/50 border-2 border-white/20 min-h-[44px] sm:min-h-[48px] md:min-h-[52px] overflow-hidden touch-manipulation"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000"></div>
-                      <span className="relative z-10 flex items-center justify-center gap-1.5 sm:gap-2">
-                        <span className="text-sm sm:text-base">🔴</span>
-                        <span>Difícil</span>
+                      <span className="relative z-10 flex items-center justify-center gap-1 sm:gap-1.5 md:gap-2">
+                        <span className="text-xs sm:text-sm md:text-base">🔴</span>
+                        <span className="whitespace-nowrap">Difícil</span>
                       </span>
                     </motion.button>
                     <motion.button
@@ -218,12 +218,12 @@ const FlashcardItem = ({
                         e.stopPropagation()
                         handleRate('easy')
                       }}
-                      className="group/btn relative flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-white shadow-xl hover:shadow-2xl hover:shadow-emerald-500/50 border-2 border-white/20 min-h-[48px] sm:min-h-[52px] overflow-hidden"
+                      className="group/btn relative flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-[10px] sm:text-xs md:text-sm font-black text-white shadow-xl hover:shadow-2xl hover:shadow-emerald-500/50 border-2 border-white/20 min-h-[44px] sm:min-h-[48px] md:min-h-[52px] overflow-hidden touch-manipulation"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000"></div>
-                      <span className="relative z-10 flex items-center justify-center gap-1.5 sm:gap-2">
-                        <span className="text-sm sm:text-base">🟢</span>
-                        <span>Fácil</span>
+                      <span className="relative z-10 flex items-center justify-center gap-1 sm:gap-1.5 md:gap-2">
+                        <span className="text-xs sm:text-sm md:text-base">🟢</span>
+                        <span className="whitespace-nowrap">Fácil</span>
                       </span>
                     </motion.button>
                   </div>
@@ -236,12 +236,12 @@ const FlashcardItem = ({
                         e.stopPropagation()
                         onExplainCard(card)
                       }}
-                      className="group/btn relative w-full rounded-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm text-slate-900 dark:text-white font-bold border-2 border-white/30 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm shadow-lg hover:shadow-xl overflow-hidden"
+                      className="group/btn relative w-full rounded-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm text-slate-900 dark:text-white font-bold border-2 border-white/30 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-[10px] sm:text-xs md:text-sm shadow-lg hover:shadow-xl overflow-hidden touch-manipulation"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-purple-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
-                      <span className="relative z-10 flex items-center justify-center gap-1.5 sm:gap-2">
-                        <span className="text-sm sm:text-base">💡</span>
-                        <span>Explicação da IA</span>
+                      <span className="relative z-10 flex items-center justify-center gap-1 sm:gap-1.5 md:gap-2">
+                        <span className="text-xs sm:text-sm md:text-base">💡</span>
+                        <span className="whitespace-nowrap">Explicação da IA</span>
                       </span>
                     </motion.button>
                   )}
