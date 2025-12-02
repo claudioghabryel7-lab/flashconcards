@@ -459,26 +459,58 @@ CRÍTICO:
 
       let aiResponse = ''
 
-      // Tentar Gemini primeiro
+      // Tentar Gemini primeiro com fallback para modelos alternativos
       if (apiKey) {
-        try {
-          const genAI = new GoogleGenerativeAI(apiKey)
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
-          const result = await model.generateContent(prompt)
-          aiResponse = result.response.text()
-        } catch (geminiErr) {
-          const errorMessage = geminiErr.message || String(geminiErr) || ''
-          const isQuotaError = errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('Quota exceeded')
-          
-          if (isQuotaError && groqApiKey) {
-            console.warn('⚠️ Erro de quota no Gemini. Usando Groq como fallback...')
-            aiResponse = await callGroqAPI(prompt)
-          } else {
-            throw geminiErr
+        const genAI = new GoogleGenerativeAI(apiKey)
+        const modelNames = ['gemini-2.0-flash-exp', 'gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash']
+        let lastError = null
+        
+        for (const modelName of modelNames) {
+          try {
+            console.log(`🔄 Tentando modelo: ${modelName}...`)
+            const model = genAI.getGenerativeModel({ model: modelName })
+            const result = await model.generateContent(prompt)
+            aiResponse = result.response.text()
+            console.log(`✅ Sucesso com modelo: ${modelName}`)
+            break
+          } catch (modelErr) {
+            console.warn(`⚠️ Modelo ${modelName} falhou:`, modelErr.message)
+            lastError = modelErr
+            const errorMessage = modelErr.message || String(modelErr) || ''
+            const isQuotaError = errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('Quota exceeded')
+            
+            // Se for erro de quota e tiver Groq, usar Groq
+            if (isQuotaError && groqApiKey) {
+              console.warn('⚠️ Erro de quota no Gemini. Usando Groq como fallback...')
+              try {
+                aiResponse = await callGroqAPI(prompt)
+                break
+              } catch (groqErr) {
+                console.error('Erro no Groq:', groqErr)
+                throw groqErr
+              }
+            }
+            
+            // Se não for o último modelo, tentar próximo
+            if (modelName !== modelNames[modelNames.length - 1]) {
+              continue
+            }
           }
+        }
+        
+        // Se nenhum modelo funcionou e não usou Groq, lançar erro
+        if (!aiResponse && lastError) {
+          throw lastError
         }
       } else if (groqApiKey) {
         aiResponse = await callGroqAPI(prompt)
+      } else {
+        throw new Error('Nenhuma API key configurada. Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY')
+      }
+
+      // Validar que temos uma resposta
+      if (!aiResponse || !aiResponse.trim()) {
+        throw new Error('A IA não retornou uma resposta. Tente novamente.')
       }
 
       // Extrair JSON da resposta
@@ -495,14 +527,26 @@ CRÍTICO:
       const firstBrace = jsonText.indexOf('{')
       const lastBrace = jsonText.lastIndexOf('}')
       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        jsonText = jsonText.substring(firstBrace)
-        jsonText = jsonText.substring(0, lastBrace + 1)
+        jsonText = jsonText.substring(firstBrace, lastBrace + 1)
       }
 
-      const parsedData = JSON.parse(jsonText)
+      // Tentar fazer parse do JSON
+      let parsedData
+      try {
+        parsedData = JSON.parse(jsonText)
+      } catch (parseErr) {
+        console.error('Erro ao fazer parse do JSON:', parseErr)
+        console.error('Resposta da IA:', aiResponse.substring(0, 500))
+        throw new Error(`Erro ao processar resposta da IA: ${parseErr.message}. A resposta pode estar em formato inválido.`)
+      }
       
       if (!parsedData.questoes || !Array.isArray(parsedData.questoes)) {
-        throw new Error('Formato de resposta inválido: esperado array "questoes"')
+        console.error('Formato inválido. Resposta:', parsedData)
+        throw new Error('Formato de resposta inválido: esperado array "questoes". A IA pode não ter retornado o formato correto.')
+      }
+
+      if (parsedData.questoes.length === 0) {
+        throw new Error('A IA não gerou nenhuma questão. Tente novamente.')
       }
 
       // 🔥 NOVO: SALVAR NO CACHE
