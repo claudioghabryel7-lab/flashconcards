@@ -1027,7 +1027,7 @@ REGRAS CRÍTICAS:
         try {
           setFlashcardGenProgress('Chamando Gemini API...')
           const genAI = new GoogleGenerativeAI(apiKey)
-          const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' })
+          const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
           const result = await model.generateContent(prompt)
           responseText = result.response.text()
         } catch (geminiError) {
@@ -2025,32 +2025,40 @@ REGRAS CRÍTICAS:
 
       const genAI = new GoogleGenerativeAI(apiKey)
       
-      // Tentar modelos válidos (apenas modelos que funcionam)
-      // Ordem: mais recente primeiro, fallback para modelos mais antigos
+      // Modelos disponíveis na API paga do Gemini (ordem de prioridade: melhor primeiro)
+      // gemini-2.0-flash: Mais recente, rápido e eficiente (recomendado)
+      // gemini-1.5-pro-latest: Melhor para tarefas complexas que requerem mais contexto
       const modelNames = [
-        'gemini-2.0-flash-exp',
-        'gemini-1.5-pro-latest',
-        'gemini-1.5-flash-latest',
-        'gemini-1.5-pro',
-        'gemini-2.0-flash'
+        'gemini-2.0-flash',           // Modelo mais recente e recomendado
+        'gemini-1.5-pro-latest',      // Melhor para análises complexas
+        'gemini-1.5-pro',             // Fallback Pro
+        'gemini-1.5-flash-latest'    // Fallback Flash
       ]
       let model = null
       let lastError = null
       
+      // Para API paga, tentar usar o melhor modelo primeiro
       for (const modelName of modelNames) {
         try {
           model = genAI.getGenerativeModel({ model: modelName })
           // Testar se o modelo funciona com uma chamada simples
           const testResult = await model.generateContent('test')
           if (testResult && testResult.response) {
-            console.log(`✅ Usando modelo: ${modelName}`)
+            console.log(`✅ Usando modelo pago: ${modelName}`)
             break
           }
         } catch (err) {
-          // Ignorar erros de modelos não disponíveis silenciosamente
-          console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
-          lastError = err
-          continue
+          // Se for erro de modelo não encontrado, tentar próximo
+          const errorMsg = err.message?.toLowerCase() || ''
+          if (errorMsg.includes('not found') || errorMsg.includes('404') || errorMsg.includes('not available')) {
+            console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
+            lastError = err
+            continue
+          } else {
+            // Se for outro erro (quota, auth, etc), usar este modelo mesmo assim
+            console.log(`✅ Usando modelo: ${modelName} (pode ter limitações)`)
+            break
+          }
         }
       }
       
@@ -2438,26 +2446,35 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       const genAI = new GoogleGenerativeAI(apiKey)
       
       // Tentar modelos válidos (apenas modelos que funcionam)
+      // Modelos disponíveis na API paga do Gemini (ordem de prioridade: melhor primeiro)
       const modelNames = [
-        'gemini-2.0-flash-exp',
-        'gemini-1.5-pro-latest',
-        'gemini-1.5-flash-latest',
-        'gemini-1.5-pro',
-        'gemini-2.0-flash'
+        'gemini-2.0-flash',           // Modelo mais recente e recomendado
+        'gemini-1.5-pro-latest',      // Melhor para análises complexas
+        'gemini-1.5-pro',             // Fallback Pro
+        'gemini-1.5-flash-latest'     // Fallback Flash
       ]
       let model = null
       let lastError = null
       
+      // Para API paga, tentar usar o melhor modelo primeiro
       for (const modelName of modelNames) {
         try {
           model = genAI.getGenerativeModel({ model: modelName })
           await model.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
-          console.log(`✅ Usando modelo: ${modelName}`)
+          console.log(`✅ Usando modelo pago: ${modelName}`)
           break
         } catch (err) {
-          console.warn(`⚠️ Modelo ${modelName} não disponível:`, err.message)
-          lastError = err
-          continue
+          // Se for erro de modelo não encontrado, tentar próximo
+          const errorMsg = err.message?.toLowerCase() || ''
+          if (errorMsg.includes('not found') || errorMsg.includes('404') || errorMsg.includes('not available')) {
+            console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
+            lastError = err
+            continue
+          } else {
+            // Se for outro erro (quota, auth, etc), usar este modelo mesmo assim
+            console.log(`✅ Usando modelo: ${modelName} (pode ter limitações)`)
+            break
+          }
         }
       }
       
@@ -4309,7 +4326,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                   if (apiKey) {
                                     try {
                                       const genAI = new GoogleGenerativeAI(apiKey)
-                                      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' })
+                                      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
                                       const result = await model.generateContent(prompt)
                                       description = result.response.text().trim()
                                     } catch (geminiErr) {
