@@ -89,7 +89,7 @@ const FlashcardItem = ({
         >
           {/* Background glow */}
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-purple-500/5 to-cyan-500/5 rounded-3xl"></div>
-          <div className="relative z-10">
+          <div className="relative z-10 h-full flex flex-col overflow-hidden">
             {/* Botão de favoritar - Tech */}
             <button
               type="button"
