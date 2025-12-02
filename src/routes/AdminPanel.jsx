@@ -114,6 +114,9 @@ const AdminPanel = () => {
   // Estado para curso selecionado no gerenciamento de flashcards
   const [selectedCourseForFlashcards, setSelectedCourseForFlashcards] = useState('alego-default') // 'alego-default' = ALEGO padrão, 'courseId' = curso específico
   
+  // Estado para curso selecionado nos prompts
+  const [selectedCourseForPrompts, setSelectedCourseForPrompts] = useState('alego-default') // Curso para salvar prompts
+  
   // Estado para gerenciar popup banner
   const [popupBanner, setPopupBanner] = useState({
     active: false,
@@ -140,6 +143,15 @@ const AdminPanel = () => {
   const [uploadingCourse, setUploadingCourse] = useState(false)
   const [editingCourseImage, setEditingCourseImage] = useState(null) // ID do curso sendo editado
   const [newCourseImage, setNewCourseImage] = useState(null) // Nova imagem em base64
+  
+  // Estados para geração completa de curso com IA
+  const [generatingFullCourse, setGeneratingFullCourse] = useState(false)
+  const [fullCourseProgress, setFullCourseProgress] = useState('')
+  const [editalPdfForGeneration, setEditalPdfForGeneration] = useState(null)
+  const [editalPdfTextForGeneration, setEditalPdfTextForGeneration] = useState('')
+  const [selectedCourseForFullGeneration, setSelectedCourseForFullGeneration] = useState(null)
+  const [showFullGenerationModal, setShowFullGenerationModal] = useState(false)
+  const [cargoForGeneration, setCargoForGeneration] = useState('') // Cargo específico para filtrar matérias
 
   // Configurar PDF.js worker
   useEffect(() => {
@@ -147,13 +159,20 @@ const AdminPanel = () => {
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
   }, [])
 
-  // Carregar edital e PDF salvo
+  // Carregar edital e PDF salvo (por curso)
   useEffect(() => {
     if (!isAdmin) return
     
+    // Limpar campos primeiro quando mudar de curso
+    setEditalPrompt('')
+    setPdfText('')
+    setPdfUrl('')
+    
     const loadEdital = async () => {
       try {
-        const editalDoc = await getDoc(doc(db, 'config', 'edital'))
+        const courseId = selectedCourseForPrompts || 'alego-default'
+        const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+        const editalDoc = await getDoc(editalRef)
         if (editalDoc.exists()) {
           const data = editalDoc.data()
           setEditalPrompt(data.prompt || '')
@@ -163,32 +182,54 @@ const AdminPanel = () => {
           if (data.pdfText) {
             console.log('📄 Texto do PDF carregado:', data.pdfText.length, 'caracteres')
           }
+        } else {
+          // Se não encontrar, deixar vazio (não carregar de outros cursos)
+          setEditalPrompt('')
+          setPdfText('')
+          setPdfUrl('')
         }
       } catch (err) {
         console.error('Erro ao carregar edital:', err)
+        // Em caso de erro, limpar campos
+        setEditalPrompt('')
+        setPdfText('')
+        setPdfUrl('')
       }
     }
     loadEdital()
-  }, [isAdmin])
+  }, [isAdmin, selectedCourseForPrompts])
 
-  // Carregar configurações de questões e BIZUs
+  // Carregar configurações de questões e BIZUs (por curso)
   useEffect(() => {
     if (!isAdmin) return
     
+    // Limpar campos primeiro quando mudar de curso
+    setQuestoesPrompt('')
+    setBizuPrompt('')
+    
     const loadQuestoesConfig = async () => {
       try {
-        const questoesDoc = await getDoc(doc(db, 'config', 'questoes'))
+        const courseId = selectedCourseForPrompts || 'alego-default'
+        const questoesRef = doc(db, 'courses', courseId, 'prompts', 'questoes')
+        const questoesDoc = await getDoc(questoesRef)
         if (questoesDoc.exists()) {
           const data = questoesDoc.data()
           setQuestoesPrompt(data.prompt || '')
           setBizuPrompt(data.bizuPrompt || '')
+        } else {
+          // Se não encontrar, deixar vazio (não carregar de outros cursos)
+          setQuestoesPrompt('')
+          setBizuPrompt('')
         }
       } catch (err) {
         console.error('Erro ao carregar configuração de questões:', err)
+        // Em caso de erro, limpar campos
+        setQuestoesPrompt('')
+        setBizuPrompt('')
       }
     }
     loadQuestoesConfig()
-  }, [isAdmin])
+  }, [isAdmin, selectedCourseForPrompts])
 
   // Extrair texto do PDF
   const extractTextFromPDF = async (file) => {
@@ -670,14 +711,147 @@ const AdminPanel = () => {
   // Remover matéria de um curso
   const removeSubjectFromCourse = async (subjectId, subjectName) => {
     if (!selectedCourseForFlashcards) return
-    if (!confirm(`Deseja remover a matéria "${subjectName}" deste curso?`)) return
+    if (!confirm(`Deseja remover a matéria "${subjectName}" deste curso?\n\n⚠️ ATENÇÃO: Todos os flashcards desta matéria serão DELETADOS permanentemente!`)) return
     
     try {
+      // Buscar e deletar todos os flashcards desta matéria do curso
+      const courseId = selectedCourseForFlashcards
+      const cardsRef = collection(db, 'flashcards')
+      const cardsQuery = query(
+        cardsRef,
+        where('materia', '==', subjectName),
+        where('courseId', '==', courseId)
+      )
+      
+      const cardsSnapshot = await getDocs(cardsQuery)
+      const cardsToDelete = cardsSnapshot.docs
+      
+      if (cardsToDelete.length > 0) {
+        // Deletar todos os flashcards
+        const deletePromises = cardsToDelete.map(cardDoc => deleteDoc(cardDoc.ref))
+        await Promise.all(deletePromises)
+        setMessage(`✅ Matéria "${subjectName}" removida! ${cardsToDelete.length} flashcard(s) deletado(s).`)
+      } else {
+        setMessage(`✅ Matéria "${subjectName}" removida!`)
+      }
+      
+      // Deletar a matéria do curso
       await deleteDoc(doc(db, 'courses', selectedCourseForFlashcards, 'subjects', subjectId))
-      setMessage(`✅ Matéria "${subjectName}" removida!`)
     } catch (err) {
       console.error('Erro ao remover matéria:', err)
       setMessage(`❌ Erro ao remover matéria: ${err.message}`)
+    }
+  }
+
+  // Limpar flashcards órfãos (de matérias/módulos que não existem mais)
+  const cleanupOrphanFlashcards = async () => {
+    if (!selectedCourseForFlashcards) {
+      setMessage('❌ Selecione um curso primeiro.')
+      return
+    }
+
+    if (!window.confirm(`Deseja limpar flashcards órfãos do curso selecionado?\n\n⚠️ Isso vai DELETAR permanentemente todos os flashcards cuja matéria ou módulo não existem mais no curso.`)) {
+      return
+    }
+
+    try {
+      setMessage('🔍 Verificando flashcards órfãos...')
+      
+      const courseId = selectedCourseForFlashcards
+      
+      // Buscar matérias válidas do curso
+      let validSubjects = []
+      try {
+        const subjectsRef = collection(db, 'courses', courseId, 'subjects')
+        const subjectsSnapshot = await getDocs(subjectsRef)
+        validSubjects = subjectsSnapshot.docs.map(doc => doc.data().name)
+      } catch (err) {
+        console.warn('Erro ao buscar matérias do curso:', err)
+        // Se não conseguir buscar, usar lista vazia (todos serão considerados órfãos)
+      }
+      
+      // Buscar todos os flashcards do curso
+      const cardsRef = collection(db, 'flashcards')
+      let cardsQuery
+      if (courseId === 'alego-default') {
+        // Para ALEGO padrão, buscar cards sem courseId
+        cardsQuery = query(cardsRef, where('materia', '!=', ''))
+      } else {
+        cardsQuery = query(cardsRef, where('courseId', '==', courseId))
+      }
+      
+      const cardsSnapshot = await getDocs(cardsQuery)
+      
+      // Filtrar cards do curso correto (para ALEGO padrão, filtrar os sem courseId)
+      const courseCards = cardsSnapshot.docs.filter(doc => {
+        const card = doc.data()
+        const cardCourseId = card.courseId || null
+        
+        if (courseId === 'alego-default') {
+          return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined
+        }
+        return cardCourseId === courseId || String(cardCourseId) === String(courseId)
+      })
+      
+      // Usar módulos válidos do estado (que são baseados nos flashcards organizados)
+      // Se não houver módulos no estado, usar os módulos dos flashcards como referência
+      const validModulesFromState = modules || {}
+      
+      // Se não tem módulos no estado, construir a partir dos flashcards
+      let validModules = { ...validModulesFromState }
+      if (Object.keys(validModules).length === 0) {
+        courseCards.forEach(doc => {
+          const card = doc.data()
+          const materia = card.materia
+          const modulo = card.modulo
+          if (materia && modulo) {
+            if (!validModules[materia]) {
+              validModules[materia] = []
+            }
+            if (!validModules[materia].includes(modulo)) {
+              validModules[materia].push(modulo)
+            }
+          }
+        })
+      }
+      
+      // Identificar flashcards órfãos
+      const orphanCards = courseCards.filter(doc => {
+        const card = doc.data()
+        const materia = card.materia
+        const modulo = card.modulo
+        
+        // Se não tem matéria ou módulo, é órfão
+        if (!materia || !modulo) {
+          return true
+        }
+        
+        // Se tem matérias válidas definidas e a matéria não existe, é órfão
+        if (validSubjects.length > 0 && !validSubjects.includes(materia)) {
+          return true
+        }
+        
+        // Se o módulo não existe na matéria (verificar no estado de módulos), é órfão
+        if (!validModules[materia] || !validModules[materia].includes(modulo)) {
+          return true
+        }
+        
+        return false
+      })
+      
+      if (orphanCards.length === 0) {
+        setMessage('✅ Nenhum flashcard órfão encontrado!')
+        return
+      }
+      
+      // Deletar flashcards órfãos
+      const deletePromises = orphanCards.map(cardDoc => deleteDoc(cardDoc.ref))
+      await Promise.all(deletePromises)
+      
+      setMessage(`✅ Limpeza concluída! ${orphanCards.length} flashcard(s) órfão(s) deletado(s).`)
+    } catch (err) {
+      console.error('Erro ao limpar flashcards órfãos:', err)
+      setMessage(`❌ Erro ao limpar flashcards órfãos: ${err.message}`)
     }
   }
 
@@ -706,14 +880,52 @@ const AdminPanel = () => {
   }
 
   // Remover módulo
-  const removeModule = (materia, modulo) => {
-    if (!window.confirm(`Deseja remover o módulo "${modulo}" de ${materia}?`)) return
+  const removeModule = async (materia, modulo) => {
+    if (!window.confirm(`Deseja remover o módulo "${modulo}" de ${materia}?\n\n⚠️ ATENÇÃO: Todos os flashcards deste módulo serão DELETADOS permanentemente!`)) return
     
-    setModules((prev) => ({
-      ...prev,
-      [materia]: (prev[materia] || []).filter((m) => m !== modulo),
-    }))
-    setMessage(`Módulo "${modulo}" removido!`)
+    try {
+      // Buscar e deletar todos os flashcards deste módulo
+      const courseId = selectedCourseForFlashcards || null
+      const cardsRef = collection(db, 'flashcards')
+      
+      // Buscar todos os cards da matéria e módulo (Firestore não permite where com null)
+      const cardsQuery = query(
+        cardsRef,
+        where('materia', '==', materia),
+        where('modulo', '==', modulo)
+      )
+      
+      const cardsSnapshot = await getDocs(cardsQuery)
+      const cardsToDelete = cardsSnapshot.docs.filter(doc => {
+        const data = doc.data()
+        const cardCourseId = data.courseId || null
+        
+        // Se não tem curso selecionado (ALEGO padrão), só deletar cards sem courseId
+        if (!courseId || courseId === 'alego-default') {
+          return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined
+        }
+        // Se tem curso selecionado, só deletar cards desse curso
+        return cardCourseId === courseId || String(cardCourseId) === String(courseId)
+      })
+      
+      if (cardsToDelete.length > 0) {
+        // Deletar todos os flashcards
+        const deletePromises = cardsToDelete.map(cardDoc => deleteDoc(cardDoc.ref))
+        await Promise.all(deletePromises)
+        setMessage(`✅ Módulo "${modulo}" removido! ${cardsToDelete.length} flashcard(s) deletado(s).`)
+      } else {
+        setMessage(`✅ Módulo "${modulo}" removido!`)
+      }
+      
+      // Remover do estado local
+      setModules((prev) => ({
+        ...prev,
+        [materia]: (prev[materia] || []).filter((m) => m !== modulo),
+      }))
+    } catch (err) {
+      console.error('Erro ao remover módulo:', err)
+      setMessage(`❌ Erro ao remover módulo: ${err.message}`)
+    }
   }
 
   // Gerar flashcards por IA a partir de conteúdo colado (estilo Noji)
@@ -744,13 +956,22 @@ const AdminPanel = () => {
       const materia = flashcardForm.materia
       const modulo = flashcardForm.modulo
 
-      // Carregar edital se disponível
+      // Carregar edital se disponível (do curso selecionado)
       let editalInfo = ''
       try {
-        const editalDoc = await getDoc(doc(db, 'config', 'edital'))
+        const courseIdForGeneration = (flashcardForm.courseId || selectedCourseForFlashcards || '').trim() || 'alego-default'
+        const editalRef = doc(db, 'courses', courseIdForGeneration, 'prompts', 'edital')
+        const editalDoc = await getDoc(editalRef)
         if (editalDoc.exists()) {
           const data = editalDoc.data()
           editalInfo = data.prompt || ''
+        } else {
+          // Fallback para config antigo (migração)
+          const oldEditalDoc = await getDoc(doc(db, 'config', 'edital'))
+          if (oldEditalDoc.exists()) {
+            const data = oldEditalDoc.data()
+            editalInfo = data.prompt || ''
+          }
         }
       } catch (err) {
         console.warn('Erro ao carregar edital:', err)
@@ -1503,14 +1724,472 @@ REGRAS CRÍTICAS:
       return
     }
     
-    if (!confirm('Tem certeza que deseja excluir este curso?')) return
+    if (!courseId) {
+      setMessage('❌ ID do curso não fornecido.')
+      return
+    }
+    
+    if (!confirm(`⚠️ ATENÇÃO: Deseja excluir este curso DEFINITIVAMENTE?\n\nIsso vai DELETAR:\n- Todos os flashcards do curso\n- Todos os prompts (edital e questões)\n- Todas as matérias do curso\n- Todo o progresso dos usuários neste curso\n\nEsta ação NÃO pode ser desfeita!`)) return
 
     try {
-      await deleteDoc(doc(db, 'courses', courseId))
-      setMessage('✅ Curso excluído com sucesso!')
+      setMessage('🗑️ Deletando dados do curso...')
+      console.log('🗑️ Iniciando exclusão do curso:', courseId)
+      
+      // 1. Deletar todos os flashcards do curso
+      console.log('🗑️ Deletando flashcards do curso...')
+      const cardsRef = collection(db, 'flashcards')
+      const cardsQuery = query(cardsRef, where('courseId', '==', courseId))
+      const cardsSnapshot = await getDocs(cardsQuery)
+      const cardsToDelete = cardsSnapshot.docs
+      
+      if (cardsToDelete.length > 0) {
+        const deleteCardsPromises = cardsToDelete.map(cardDoc => deleteDoc(cardDoc.ref))
+        await Promise.all(deleteCardsPromises)
+        console.log(`✅ ${cardsToDelete.length} flashcard(s) deletado(s)`)
+      }
+      
+      // 2. Deletar prompts do curso (edital e questões)
+      console.log('🗑️ Deletando prompts do curso...')
+      try {
+        const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+        await deleteDoc(editalRef).catch(() => console.log('⚠️ Prompt edital não existe'))
+        
+        const questoesRef = doc(db, 'courses', courseId, 'prompts', 'questoes')
+        await deleteDoc(questoesRef).catch(() => console.log('⚠️ Prompt questões não existe'))
+        console.log('✅ Prompts deletados')
+      } catch (promptErr) {
+        console.warn('⚠️ Erro ao deletar prompts:', promptErr)
+      }
+      
+      // 3. Deletar matérias do curso (subcoleção)
+      console.log('🗑️ Deletando matérias do curso...')
+      try {
+        const subjectsRef = collection(db, 'courses', courseId, 'subjects')
+        const subjectsSnapshot = await getDocs(subjectsRef)
+        const subjectsToDelete = subjectsSnapshot.docs
+        
+        if (subjectsToDelete.length > 0) {
+          const deleteSubjectsPromises = subjectsToDelete.map(subjectDoc => deleteDoc(subjectDoc.ref))
+          await Promise.all(deleteSubjectsPromises)
+          console.log(`✅ ${subjectsToDelete.length} matéria(s) deletada(s)`)
+        }
+      } catch (subjectErr) {
+        console.warn('⚠️ Erro ao deletar matérias:', subjectErr)
+      }
+      
+      // 4. Deletar progresso dos usuários relacionado ao curso
+      console.log('🗑️ Deletando progresso dos usuários...')
+      try {
+        const progressRef = collection(db, 'progress')
+        const progressSnapshot = await getDocs(progressRef)
+        const progressToDelete = progressSnapshot.docs.filter(doc => {
+          const data = doc.data()
+          return data.courseId === courseId || String(data.courseId) === String(courseId)
+        })
+        
+        if (progressToDelete.length > 0) {
+          const deleteProgressPromises = progressToDelete.map(progressDoc => deleteDoc(progressDoc.ref))
+          await Promise.all(deleteProgressPromises)
+          console.log(`✅ ${progressToDelete.length} registro(s) de progresso deletado(s)`)
+        }
+      } catch (progressErr) {
+        console.warn('⚠️ Erro ao deletar progresso:', progressErr)
+      }
+      
+      // 5. Deletar estatísticas de questões relacionadas ao curso
+      console.log('🗑️ Deletando estatísticas de questões...')
+      try {
+        const questoesStatsRef = collection(db, 'questoesStats')
+        const questoesStatsSnapshot = await getDocs(questoesStatsRef)
+        const statsToDelete = questoesStatsSnapshot.docs.filter(doc => {
+          const data = doc.data()
+          return data.courseId === courseId || String(data.courseId) === String(courseId)
+        })
+        
+        if (statsToDelete.length > 0) {
+          const deleteStatsPromises = statsToDelete.map(statDoc => deleteDoc(statDoc.ref))
+          await Promise.all(deleteStatsPromises)
+          console.log(`✅ ${statsToDelete.length} estatística(s) deletada(s)`)
+        }
+      } catch (statsErr) {
+        console.warn('⚠️ Erro ao deletar estatísticas:', statsErr)
+      }
+      
+      // 6. Remover referências do curso nos perfis de usuários (purchasedCourses e selectedCourseId)
+      console.log('🗑️ Removendo referências do curso nos perfis de usuários...')
+      try {
+        const usersRef = collection(db, 'users')
+        const usersSnapshot = await getDocs(usersRef)
+        const usersToUpdate = usersSnapshot.docs.filter(doc => {
+          const data = doc.data()
+          const purchasedCourses = data.purchasedCourses || []
+          const selectedCourseId = data.selectedCourseId
+          return purchasedCourses.includes(courseId) || selectedCourseId === courseId || String(selectedCourseId) === String(courseId)
+        })
+        
+        if (usersToUpdate.length > 0) {
+          const updatePromises = usersToUpdate.map(userDoc => {
+            const data = userDoc.data()
+            const purchasedCourses = (data.purchasedCourses || []).filter(id => id !== courseId)
+            const selectedCourseId = data.selectedCourseId === courseId || String(data.selectedCourseId) === String(courseId) 
+              ? null // Resetar para ALEGO padrão se estava selecionado
+              : data.selectedCourseId
+            
+            const updateData = {
+              purchasedCourses: purchasedCourses
+            }
+            
+            // Só atualizar selectedCourseId se estava selecionado
+            if (selectedCourseId === null && data.selectedCourseId === courseId) {
+              updateData.selectedCourseId = null
+            }
+            
+            return updateDoc(userDoc.ref, updateData)
+          })
+          await Promise.all(updatePromises)
+          console.log(`✅ ${usersToUpdate.length} perfil(is) de usuário atualizado(s)`)
+        }
+      } catch (userErr) {
+        console.warn('⚠️ Erro ao atualizar perfis de usuários:', userErr)
+      }
+      
+      // 7. Deletar o curso em si
+      console.log('🗑️ Deletando documento do curso...')
+      const courseRef = doc(db, 'courses', courseId)
+      
+      // Verificar se o curso existe antes de deletar
+      const courseDoc = await getDoc(courseRef)
+      if (!courseDoc.exists()) {
+        setMessage('❌ Curso não encontrado. Pode já ter sido deletado.')
+        return
+      }
+      
+      await deleteDoc(courseRef)
+      console.log('✅ Curso deletado')
+      
+      // Recarregar lista de cursos
+      const coursesRef = collection(db, 'courses')
+      const coursesSnapshot = await getDocs(coursesRef)
+      setCourses(coursesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+      
+      const totalDeleted = cardsToDelete.length
+      setMessage(`✅ Curso excluído com sucesso! ${totalDeleted} flashcard(s) e todos os dados relacionados foram removidos.`)
     } catch (err) {
       console.error('Erro ao excluir curso:', err)
-      setMessage(`❌ Erro ao excluir curso: ${err.message}`)
+      console.error('Detalhes do erro:', {
+        code: err.code,
+        message: err.message,
+        stack: err.stack
+      })
+      const errorMessage = err.message || String(err)
+      if (errorMessage.includes('permission') || errorMessage.includes('Permission') || err.code === 'permission-denied') {
+        setMessage(`❌ Erro de permissão ao excluir curso. Verifique se você é administrador e se as regras do Firestore estão atualizadas.`)
+      } else if (errorMessage.includes('not-found') || err.code === 'not-found') {
+        setMessage('❌ Curso não encontrado. Pode já ter sido deletado.')
+      } else {
+        setMessage(`❌ Erro ao excluir curso: ${errorMessage}. Verifique o console para mais detalhes.`)
+      }
+    }
+  }
+
+  // Gerar automaticamente módulos e flashcards completos a partir do PDF do edital
+  const generateFullCourseFromEdital = async (courseId) => {
+    if (!editalPdfTextForGeneration.trim()) {
+      setMessage('❌ Faça upload do PDF do edital primeiro.')
+      return
+    }
+
+    if (!cargoForGeneration.trim()) {
+      setMessage('❌ Informe o cargo específico para filtrar as matérias corretas.')
+      return
+    }
+
+    if (!window.confirm(`⚠️ ATENÇÃO: Isso vai gerar AUTOMATICAMENTE:\n\n- Todas as matérias do cargo: ${cargoForGeneration}\n- Todos os módulos de cada matéria\n- Todos os flashcards de cada módulo\n\nBaseado no edital do PDF.\n\nIsso pode demorar vários minutos. Deseja continuar?`)) {
+      return
+    }
+
+    setGeneratingFullCourse(true)
+    setFullCourseProgress('Iniciando geração completa do curso...')
+    setMessage('')
+
+    try {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      
+      // Tentar modelos válidos (Pro para análise complexa)
+      const modelNames = ['gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash']
+      let model = null
+      let lastError = null
+      
+      for (const modelName of modelNames) {
+        try {
+          model = genAI.getGenerativeModel({ model: modelName })
+          // Testar se o modelo funciona
+          await model.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
+          console.log(`✅ Usando modelo: ${modelName}`)
+          break
+        } catch (err) {
+          console.warn(`⚠️ Modelo ${modelName} não disponível:`, err.message)
+          lastError = err
+          continue
+        }
+      }
+      
+      if (!model) {
+        throw new Error(`Nenhum modelo Gemini disponível. Último erro: ${lastError?.message || 'Desconhecido'}`)
+      }
+
+      // 1. Analisar o edital e extrair matérias e estrutura APENAS DO CARGO ESPECÍFICO
+      setFullCourseProgress(`📄 Analisando o edital e extraindo matérias do cargo: ${cargoForGeneration}...`)
+      const analysisPrompt = `Você é um especialista em análise de editais de concursos públicos.
+
+Analise o edital abaixo e extraia APENAS as informações relevantes para o CARGO ESPECÍFICO mencionado.
+
+CARGO ESPECÍFICO: ${cargoForGeneration}
+
+EDITAL:
+${editalPdfTextForGeneration.substring(0, 100000)}${editalPdfTextForGeneration.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}
+
+TAREFA CRÍTICA:
+1. Identifique APENAS as matérias que serão cobradas para o cargo "${cargoForGeneration}"
+2. IGNORE completamente matérias de outros cargos que possam estar no edital
+3. Procure no edital a seção específica do cargo "${cargoForGeneration}" e suas matérias
+4. Para cada matéria identificada, encontre os tópicos/conteúdos principais
+5. Organize os tópicos em módulos lógicos (3-8 módulos por matéria, dependendo do tamanho)
+6. Cada módulo deve ter um nome descritivo e claro
+
+IMPORTANTE - FILTRO POR CARGO:
+- O edital pode conter múltiplos cargos (ex: Policial, Escrivão, Delegado, etc.)
+- Você DEVE filtrar e extrair APENAS as matérias do cargo "${cargoForGeneration}"
+- Se o edital mencionar "Cargo: ${cargoForGeneration}" ou similar, foque APENAS nessa seção
+- NÃO inclua matérias de outros cargos
+- Se não encontrar matérias específicas para "${cargoForGeneration}", retorne um JSON vazio
+- Seja ESPECÍFICO e DETALHADO, mas APENAS para o cargo informado
+- Baseie-se EXCLUSIVAMENTE no conteúdo do edital
+- Organize de forma lógica e pedagógica
+- Módulos devem ter tamanho similar (não muito grandes, não muito pequenos)
+
+Retorne APENAS um JSON válido no seguinte formato:
+{
+  "materias": [
+    {
+      "nome": "Nome da Matéria",
+      "modulos": [
+        {
+          "nome": "Nome do Módulo 1",
+          "topicos": ["tópico 1", "tópico 2", ...]
+        },
+        {
+          "nome": "Nome do Módulo 2",
+          "topicos": ["tópico 1", "tópico 2", ...]
+        }
+      ]
+    }
+  ]
+}
+
+Retorne APENAS o JSON, sem markdown, sem explicações.`
+
+      const analysisResult = await model.generateContent(analysisPrompt)
+      let analysisText = analysisResult.response.text().trim()
+      
+      // Limpar markdown se houver
+      if (analysisText.startsWith('```json')) {
+        analysisText = analysisText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      } else if (analysisText.startsWith('```')) {
+        analysisText = analysisText.replace(/```\n?/g, '').trim()
+      }
+
+      const analysis = JSON.parse(analysisText)
+      const materias = analysis.materias || []
+
+      if (materias.length === 0) {
+        throw new Error('Nenhuma matéria foi identificada no edital.')
+      }
+
+      setFullCourseProgress(`✅ ${materias.length} matéria(s) identificada(s). Iniciando criação...`)
+
+      // 2. Criar matérias no curso
+      const subjectsRef = collection(db, 'courses', courseId, 'subjects')
+      const createdSubjects = []
+      
+      for (const materia of materias) {
+        try {
+          await addDoc(subjectsRef, {
+            name: materia.nome,
+            createdAt: serverTimestamp(),
+          })
+          createdSubjects.push(materia.nome)
+          setFullCourseProgress(`✅ Matéria "${materia.nome}" criada. Criando módulos...`)
+        } catch (err) {
+          console.warn(`Erro ao criar matéria ${materia.nome}:`, err)
+          // Continuar mesmo se falhar
+        }
+      }
+
+      // 3. Gerar flashcards para cada módulo
+      const cardsRef = collection(db, 'flashcards')
+      let totalFlashcardsCreated = 0
+      const totalModulos = materias.reduce((acc, m) => acc + m.modulos.length, 0)
+      let currentModulo = 0
+
+      for (const materia of materias) {
+        for (const modulo of materia.modulos) {
+          currentModulo++
+          setFullCourseProgress(`📝 Gerando flashcards para ${materia.nome} - ${modulo.nome} (${currentModulo}/${totalModulos})...`)
+
+          // Gerar flashcards para este módulo
+          const flashcardsPrompt = `Você é um especialista em criar flashcards educacionais para concursos públicos.
+
+CARGO ESPECÍFICO: ${cargoForGeneration}
+
+EDITAL DO CONCURSO:
+${editalPdfTextForGeneration.substring(0, 50000)}${editalPdfTextForGeneration.length > 50000 ? '\n\n[... conteúdo truncado ...]' : ''}
+
+MATÉRIA: ${materia.nome}
+MÓDULO: ${modulo.nome}
+TÓPICOS DO MÓDULO: ${modulo.topicos.join(', ')}
+
+TAREFA:
+Crie flashcards específicos para este módulo baseado EXCLUSIVAMENTE no edital e nos tópicos acima.
+
+REGRAS PARA OS FLASHCARDS:
+- Estilo Noji: perguntas objetivas e respostas claras (2-4 frases)
+- Baseie-se PRIMARIAMENTE no conteúdo do edital
+- Seja ESPECÍFICO da banca, do concurso e do cargo "${cargoForGeneration}" mencionado no edital
+- Os flashcards devem ser ESPECÍFICOS para o cargo "${cargoForGeneration}"
+- Crie 15-25 flashcards por módulo (dependendo do tamanho do módulo)
+- Cada flashcard deve cobrir um tópico específico
+- Perguntas devem ser diretas e práticas
+- Respostas devem ser completas mas concisas
+- Foque no que é relevante para o cargo "${cargoForGeneration}"
+
+Retorne APENAS um JSON válido:
+{
+  "flashcards": [
+    {
+      "pergunta": "Pergunta objetiva e direta",
+      "resposta": "Resposta clara e concisa (2-4 frases)"
+    }
+  ]
+}
+
+Retorne APENAS o JSON, sem markdown, sem explicações.`
+
+          try {
+            const flashcardsResult = await model.generateContent(flashcardsPrompt)
+            let flashcardsText = flashcardsResult.response.text().trim()
+            
+            // Limpar markdown se houver
+            if (flashcardsText.startsWith('```json')) {
+              flashcardsText = flashcardsText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+            } else if (flashcardsText.startsWith('```')) {
+              flashcardsText = flashcardsText.replace(/```\n?/g, '').trim()
+            }
+
+            const flashcardsData = JSON.parse(flashcardsText)
+            const flashcards = flashcardsData.flashcards || []
+
+            // Criar flashcards no Firestore
+            for (const flashcard of flashcards) {
+              if (flashcard.pergunta && flashcard.resposta) {
+                await addDoc(cardsRef, {
+                  pergunta: flashcard.pergunta.trim(),
+                  resposta: flashcard.resposta.trim(),
+                  materia: materia.nome,
+                  modulo: modulo.nome,
+                  courseId: courseId,
+                  tags: [],
+                })
+                totalFlashcardsCreated++
+              }
+            }
+
+            setFullCourseProgress(`✅ ${flashcards.length} flashcard(s) criado(s) para ${materia.nome} - ${modulo.nome}`)
+          } catch (err) {
+            console.error(`Erro ao gerar flashcards para ${materia.nome} - ${modulo.nome}:`, err)
+            setFullCourseProgress(`⚠️ Erro ao gerar flashcards para ${materia.nome} - ${modulo.nome}: ${err.message}`)
+            // Continuar com próximo módulo
+          }
+
+          // Pequeno delay para não sobrecarregar a API
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+      }
+
+      setFullCourseProgress('')
+      setMessage(`✅ Geração completa concluída! ${createdSubjects.length} matéria(s), ${totalModulos} módulo(s) e ${totalFlashcardsCreated} flashcard(s) criado(s).`)
+    } catch (err) {
+      console.error('Erro ao gerar curso completo:', err)
+      setMessage(`❌ Erro ao gerar curso completo: ${err.message}`)
+      setFullCourseProgress('')
+    } finally {
+      setGeneratingFullCourse(false)
+    }
+  }
+
+  // Extrair texto do PDF para geração completa
+  const extractPdfForFullGeneration = async (file) => {
+    setExtractingPdf(true)
+    setMessage('📄 Extraindo texto do PDF...')
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      
+      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+      }
+
+      let pdf
+      try {
+        pdf = await pdfjsLib.getDocument({ 
+          data: arrayBuffer,
+          useSystemFonts: true,
+          verbosity: 0,
+        }).promise
+      } catch (workerErr) {
+        console.warn('Erro com worker, tentando sem worker...', workerErr)
+        pdfjsLib.GlobalWorkerOptions.workerSrc = ''
+        pdf = await pdfjsLib.getDocument({ 
+          data: arrayBuffer,
+          useSystemFonts: true,
+          verbosity: 0,
+        }).promise
+      }
+
+      let fullText = ''
+      const numPages = pdf.numPages
+      setMessage(`📄 Extraindo texto de ${numPages} página(s)...`)
+
+      for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+        try {
+          setMessage(`📄 Processando página ${pageNum}/${numPages}...`)
+          const page = await pdf.getPage(pageNum)
+          const textContent = await page.getTextContent()
+          const pageText = textContent.items
+            .map(item => item.str)
+            .filter(str => str && str.trim().length > 0)
+            .join(' ')
+          
+          if (pageText.trim()) {
+            fullText += `\n\n--- Página ${pageNum} ---\n\n${pageText}`
+          }
+        } catch (pageErr) {
+          console.warn(`Erro ao processar página ${pageNum}:`, pageErr)
+        }
+      }
+
+      setEditalPdfTextForGeneration(fullText)
+      setEditalPdfForGeneration(file)
+      setMessage(`✅ PDF processado! ${fullText.length} caracteres extraídos.`)
+    } catch (err) {
+      console.error('Erro ao extrair PDF:', err)
+      setMessage(`❌ Erro ao extrair PDF: ${err.message}`)
+    } finally {
+      setExtractingPdf(false)
     }
   }
 
@@ -1610,10 +2289,15 @@ REGRAS CRÍTICAS:
     setMessage('Card removido.')
   }
 
-  // Salvar prompt/configuração do edital
+  // Salvar prompt/configuração do edital (por curso)
   const handleSavePrompt = async () => {
     if (!editalPrompt.trim() && !pdfText.trim()) {
       setMessage('Digite as informações do concurso ou faça upload de um PDF.')
+      return
+    }
+
+    if (!selectedCourseForPrompts) {
+      setMessage('Selecione um curso para salvar o prompt.')
       return
     }
 
@@ -1621,9 +2305,21 @@ REGRAS CRÍTICAS:
     setMessage('Salvando configuração...')
 
     try {
-      const editalRef = doc(db, 'config', 'edital')
+      const courseId = selectedCourseForPrompts || 'alego-default'
+      
+      // Verificar se o curso existe
+      const courseRef = doc(db, 'courses', courseId)
+      const courseDoc = await getDoc(courseRef)
+      if (!courseDoc.exists()) {
+        setMessage(`❌ Erro: O curso selecionado não existe no banco de dados. Por favor, crie o curso primeiro na aba "Cursos".`)
+        setSavingPrompt(false)
+        return
+      }
+      
+      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
       const dataToSave = {
         prompt: editalPrompt.trim(),
+        courseId: courseId,
         updatedAt: serverTimestamp(),
       }
 
@@ -1639,9 +2335,10 @@ REGRAS CRÍTICAS:
 
       await setDoc(editalRef, dataToSave)
 
+      const courseName = courses.find(c => c.id === courseId)?.name || 'Curso selecionado'
       const infoText = pdfText.trim() 
-        ? `Texto do PDF e informações do edital salvos com sucesso!`
-        : 'Configuração salva com sucesso! A IA agora usará essas informações para responder perguntas.'
+        ? `Texto do PDF e informações do edital salvos com sucesso para ${courseName}!`
+        : `Configuração salva com sucesso para ${courseName}! A IA agora usará essas informações para responder perguntas.`
       
       setMessage(infoText)
       setPromptStatus({
@@ -1656,13 +2353,92 @@ REGRAS CRÍTICAS:
     }
   }
 
-  // Salvar configuração de questões e BIZUs
+  // Limpar/resetar prompt do edital
+  const handleClearEditalPrompt = async () => {
+    if (!selectedCourseForPrompts) {
+      setMessage('Selecione um curso para limpar o prompt.')
+      return
+    }
+
+    if (!window.confirm('⚠️ ATENÇÃO: Isso vai APAGAR COMPLETAMENTE todos os prompts do edital deste curso. Tem certeza?')) {
+      return
+    }
+
+    try {
+      const courseId = selectedCourseForPrompts || 'alego-default'
+      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+      
+      // Deletar o documento
+      await deleteDoc(editalRef)
+      
+      // Limpar campos locais
+      setEditalPrompt('')
+      setPdfText('')
+      setPdfUrl('')
+      setPdfFile(null)
+      
+      const courseName = courses.find(c => c.id === courseId)?.name || 'Curso selecionado'
+      setMessage(`✅ Prompt do edital limpo com sucesso para ${courseName}!`)
+      setPromptStatus(null)
+    } catch (err) {
+      console.error('Erro ao limpar prompt:', err)
+      setMessage(`Erro ao limpar: ${err.message}`)
+    }
+  }
+
+  // Limpar/resetar prompts de questões
+  const handleClearQuestoesPrompt = async () => {
+    if (!selectedCourseForPrompts) {
+      setMessage('Selecione um curso para limpar os prompts.')
+      return
+    }
+
+    if (!window.confirm('⚠️ ATENÇÃO: Isso vai APAGAR COMPLETAMENTE todos os prompts de questões e BIZUs deste curso. Tem certeza?')) {
+      return
+    }
+
+    try {
+      const courseId = selectedCourseForPrompts || 'alego-default'
+      const questoesRef = doc(db, 'courses', courseId, 'prompts', 'questoes')
+      
+      // Deletar o documento
+      await deleteDoc(questoesRef)
+      
+      // Limpar campos locais
+      setQuestoesPrompt('')
+      setBizuPrompt('')
+      
+      const courseName = courses.find(c => c.id === courseId)?.name || 'Curso selecionado'
+      setMessage(`✅ Prompts de questões limpos com sucesso para ${courseName}!`)
+    } catch (err) {
+      console.error('Erro ao limpar prompts:', err)
+      setMessage(`Erro ao limpar: ${err.message}`)
+    }
+  }
+
+  // Salvar configuração de questões e BIZUs (por curso)
   const handleSaveQuestoesConfig = async () => {
+    if (!selectedCourseForPrompts) {
+      setMessage('Selecione um curso para salvar o prompt.')
+      return
+    }
+
     setSavingQuestoesConfig(true)
     setMessage('Salvando configuração de questões...')
 
     try {
-      const questoesRef = doc(db, 'config', 'questoes')
+      const courseId = selectedCourseForPrompts || 'alego-default'
+      
+      // Verificar se o curso existe
+      const courseRef = doc(db, 'courses', courseId)
+      const courseDoc = await getDoc(courseRef)
+      if (!courseDoc.exists()) {
+        setMessage(`❌ Erro: O curso selecionado não existe no banco de dados. Por favor, crie o curso primeiro na aba "Cursos".`)
+        setSavingQuestoesConfig(false)
+        return
+      }
+      
+      const questoesRef = doc(db, 'courses', courseId, 'prompts', 'questoes')
       
       // Buscar configuração existente
       const existingDoc = await getDoc(questoesRef)
@@ -1700,10 +2476,12 @@ REGRAS CRÍTICAS:
       await setDoc(questoesRef, {
         prompt: finalPrompt,
         bizuPrompt: finalBizuPrompt,
+        courseId: courseId,
         updatedAt: serverTimestamp(),
       }, { merge: true })
 
-      setMessage('✅ Configuração de questões e BIZUs salva com sucesso! Os prompts foram ADICIONADOS aos existentes.')
+      const courseName = courses.find(c => c.id === courseId)?.name || 'Curso selecionado'
+      setMessage(`✅ Configuração de questões e BIZUs salva com sucesso para ${courseName}! Os prompts foram ADICIONADOS aos existentes.`)
       
       // Atualizar o estado local com o prompt final
       setQuestoesPrompt(finalPrompt)
@@ -1775,11 +2553,13 @@ REGRAS CRÍTICAS:
         throw new Error('Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
       }
 
-      // Carregar informações do edital e PDF
+      // Carregar informações do edital e PDF (do curso selecionado para flashcards)
       let editalInfo = ''
       let pdfTextContent = ''
       try {
-        const editalDoc = await getDoc(doc(db, 'config', 'edital'))
+        const courseIdForGeneration = (flashcardForm.courseId || selectedCourseForFlashcards || '').trim() || 'alego-default'
+        const editalRef = doc(db, 'courses', courseIdForGeneration, 'prompts', 'edital')
+        const editalDoc = await getDoc(editalRef)
         if (editalDoc.exists()) {
           const data = editalDoc.data()
           editalInfo = data.prompt || ''
@@ -1787,6 +2567,14 @@ REGRAS CRÍTICAS:
           
           if (pdfTextContent) {
             console.log('📄 Usando texto do PDF:', pdfTextContent.length, 'caracteres')
+          }
+        } else {
+          // Fallback para config antigo (migração)
+          const oldEditalDoc = await getDoc(doc(db, 'config', 'edital'))
+          if (oldEditalDoc.exists()) {
+            const data = oldEditalDoc.data()
+            editalInfo = data.prompt || ''
+            pdfTextContent = data.pdfText || ''
           }
         }
       } catch (err) {
@@ -2223,8 +3011,29 @@ CRÍTICO:
           Configuração da IA - Informações do Concurso
         </p>
         <p className="mt-2 text-xs text-slate-500">
-          Configure aqui as informações sobre o concurso ALEGO Policial Legislativo. A IA usará essas informações para responder perguntas dos alunos de forma precisa e objetiva.
+          Configure aqui as informações sobre o concurso. A IA usará essas informações para responder perguntas dos alunos de forma precisa e objetiva.
         </p>
+        
+        {/* Seletor de Curso */}
+        <div className="mt-4">
+          <label className="block text-xs font-semibold uppercase text-slate-500 mb-2">
+            Curso para Configurar
+          </label>
+          <select
+            value={selectedCourseForPrompts}
+            onChange={(e) => setSelectedCourseForPrompts(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-alego-400 focus:outline-none"
+          >
+            {courses.map((course) => (
+              <option key={course.id} value={course.id}>
+                {course.name} {course.id === 'alego-default' ? '(Padrão)' : ''}
+              </option>
+            ))}
+          </select>
+          <p className="mt-2 text-xs text-slate-400">
+            💡 Cada curso tem seus próprios prompts. Selecione o curso antes de salvar.
+          </p>
+        </div>
         
         {promptStatus?.saved && (
           <div className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm">
@@ -2354,14 +3163,25 @@ INFORMAÇÕES ADICIONAIS:
           </div>
         </div>
         
-        <button
-          type="button"
-          onClick={handleSavePrompt}
-          disabled={(!editalPrompt.trim() && !pdfText.trim()) || savingPrompt || extractingPdf}
-          className="mt-4 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          {savingPrompt ? 'Salvando...' : 'Salvar Configuração'}
-        </button>
+        <div className="mt-4 flex gap-3">
+          <button
+            type="button"
+            onClick={handleSavePrompt}
+            disabled={(!editalPrompt.trim() && !pdfText.trim()) || savingPrompt || extractingPdf}
+            className="flex-1 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-alego-700 transition"
+          >
+            {savingPrompt ? 'Salvando...' : 'Salvar Configuração'}
+          </button>
+          <button
+            type="button"
+            onClick={handleClearEditalPrompt}
+            disabled={savingPrompt || extractingPdf}
+            className="rounded-full bg-rose-500 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-rose-600 transition"
+            title="Limpar todos os prompts do edital deste curso"
+          >
+            🗑️ Limpar
+          </button>
+        </div>
       </div>
 
       {/* Configuração de Questões e BIZUs */}
@@ -2373,6 +3193,27 @@ INFORMAÇÕES ADICIONAIS:
         <p className="mt-2 text-xs text-slate-500">
           Configure como a IA deve gerar as questões fictícias e os BIZUs (explicações) no FlashQuestões.
         </p>
+        
+        {/* Seletor de Curso (mesmo curso selecionado acima) */}
+        <div className="mt-4">
+          <label className="block text-xs font-semibold uppercase text-slate-500 mb-2">
+            Curso para Configurar
+          </label>
+          <select
+            value={selectedCourseForPrompts}
+            onChange={(e) => setSelectedCourseForPrompts(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-alego-400 focus:outline-none"
+          >
+            {courses.map((course) => (
+              <option key={course.id} value={course.id}>
+                {course.name} {course.id === 'alego-default' ? '(Padrão)' : ''}
+              </option>
+            ))}
+          </select>
+          <p className="mt-2 text-xs text-slate-400">
+            💡 Cada curso tem seus próprios prompts. Selecione o curso antes de salvar.
+          </p>
+        </div>
         <div className="mt-3 rounded-lg bg-blue-50 border border-blue-200 p-3">
           <p className="text-xs font-semibold text-blue-800 mb-1">ℹ️ Como funciona:</p>
           <p className="text-xs text-blue-700">
@@ -2459,14 +3300,25 @@ ESTRUTURA SUGERIDA:
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleSaveQuestoesConfig}
-          disabled={savingQuestoesConfig}
-          className="mt-6 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          {savingQuestoesConfig ? 'Salvando...' : 'Salvar Configuração de Questões'}
-        </button>
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            onClick={handleSaveQuestoesConfig}
+            disabled={savingQuestoesConfig}
+            className="flex-1 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-alego-700 transition"
+          >
+            {savingQuestoesConfig ? 'Salvando...' : 'Salvar Configuração de Questões'}
+          </button>
+          <button
+            type="button"
+            onClick={handleClearQuestoesPrompt}
+            disabled={savingQuestoesConfig}
+            className="rounded-full bg-rose-500 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-rose-600 transition"
+            title="Limpar todos os prompts de questões e BIZUs deste curso"
+          >
+            🗑️ Limpar
+          </button>
+        </div>
       </div>
               </div>
             )}
@@ -2800,13 +3652,84 @@ ESTRUTURA SUGERIDA:
                           <label className="block text-xs font-semibold text-slate-600 mb-2">
                             Descrição
                           </label>
-                          <textarea
-                            value={courseForm.description}
-                            onChange={(e) => setCourseForm(prev => ({ ...prev, description: e.target.value }))}
-                            placeholder="Descrição do curso..."
-                            rows={3}
-                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
-                          />
+                          <div className="flex gap-2">
+                            <textarea
+                              value={courseForm.description}
+                              onChange={(e) => setCourseForm(prev => ({ ...prev, description: e.target.value }))}
+                              placeholder="Descrição do curso... (ou clique em 'Gerar com IA' para criar automaticamente)"
+                              rows={4}
+                              className="flex-1 rounded-lg border border-slate-300 p-2 text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!courseForm.name || !courseForm.competition) {
+                                  setMessage('❌ Preencha o nome e o concurso primeiro para gerar a descrição.')
+                                  return
+                                }
+                                
+                                try {
+                                  setMessage('🤖 Gerando descrição com IA...')
+                                  
+                                  const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+                                  const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+                                  
+                                  if (!apiKey && !groqApiKey) {
+                                    setMessage('❌ Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
+                                    return
+                                  }
+                                  
+                                  const prompt = `Crie uma descrição atrativa e profissional para um curso preparatório online com as seguintes informações:
+
+Nome do Curso: ${courseForm.name}
+Concurso/Competição: ${courseForm.competition}
+
+A descrição deve:
+- Ser concisa (2-4 frases)
+- Destacar os benefícios do curso
+- Mencionar flashcards, questões e IA personalizada
+- Ser atrativa e motivadora
+- Usar linguagem profissional mas acessível
+
+Retorne APENAS a descrição, sem títulos ou formatação adicional.`
+
+                                  let description = ''
+                                  
+                                  if (apiKey) {
+                                    try {
+                                      const genAI = new GoogleGenerativeAI(apiKey)
+                                      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' })
+                                      const result = await model.generateContent(prompt)
+                                      description = result.response.text().trim()
+                                    } catch (geminiErr) {
+                                      if (groqApiKey) {
+                                        description = await callGroqAPI(prompt)
+                                      } else {
+                                        throw geminiErr
+                                      }
+                                    }
+                                  } else if (groqApiKey) {
+                                    description = await callGroqAPI(prompt)
+                                  }
+                                  
+                                  if (description) {
+                                    setCourseForm(prev => ({ ...prev, description }))
+                                    setMessage('✅ Descrição gerada com sucesso!')
+                                  } else {
+                                    setMessage('❌ Não foi possível gerar a descrição.')
+                                  }
+                                } catch (err) {
+                                  console.error('Erro ao gerar descrição:', err)
+                                  setMessage(`❌ Erro ao gerar descrição: ${err.message}`)
+                                }
+                              }}
+                              disabled={!courseForm.name || !courseForm.competition || uploadingCourse}
+                              className="rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-2 text-xs font-semibold text-white hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition whitespace-nowrap"
+                              title="Gerar descrição automaticamente com IA baseada no nome e concurso"
+                            >
+                              ✨ Gerar com IA
+                            </button>
+                          </div>
                         </div>
 
                         <div>
@@ -2972,13 +3895,24 @@ ESTRUTURA SUGERIDA:
                                         </span>
                                       </div>
                                     </div>
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 flex-wrap">
                                       <button
                                         type="button"
                                         onClick={() => updateCourse(course.id, { active: !(course.active !== false) })}
                                         className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                       >
                                         {course.active !== false ? 'Desativar' : 'Ativar'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedCourseForFullGeneration(course.id)
+                                          setShowFullGenerationModal(true)
+                                        }}
+                                        className="rounded-lg bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-200"
+                                        title="Gerar módulos e flashcards automaticamente a partir do PDF do edital"
+                                      >
+                                        🤖 Gerar com IA
                                       </button>
                                       <button
                                         type="button"
@@ -3004,6 +3938,137 @@ ESTRUTURA SUGERIDA:
                     </div>
                   </div>
                 </div>
+
+                {/* Modal para Geração Completa com IA */}
+                {showFullGenerationModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-slate-200 p-6 max-h-[90vh] overflow-y-auto">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">
+                          🤖 Gerar Curso Completo com IA
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowFullGenerationModal(false)
+                            setSelectedCourseForFullGeneration(null)
+                            setEditalPdfForGeneration(null)
+                            setEditalPdfTextForGeneration('')
+                            setCargoForGeneration('')
+                            setFullCourseProgress('')
+                          }}
+                          className="text-slate-400 hover:text-slate-600"
+                          disabled={generatingFullCourse}
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-sm text-slate-600 mb-4">
+                            Informe o cargo específico e faça upload do PDF do edital. A IA vai analisar o documento e gerar automaticamente:
+                          </p>
+                          <ul className="text-xs text-slate-500 space-y-1 mb-4 ml-4 list-disc">
+                            <li>Apenas as matérias do cargo informado (filtrando outras matérias de outros cargos)</li>
+                            <li>Todos os módulos de cada matéria</li>
+                            <li>Todos os flashcards de cada módulo (15-25 por módulo)</li>
+                          </ul>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">
+                            Cargo Específico *
+                          </label>
+                          <input
+                            type="text"
+                            value={cargoForGeneration}
+                            onChange={(e) => setCargoForGeneration(e.target.value)}
+                            placeholder="Ex: Policial Legislativo, Escrivão, Delegado, etc."
+                            disabled={generatingFullCourse}
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          />
+                          <p className="text-xs text-slate-500 mt-1">
+                            Informe o cargo específico para a IA filtrar apenas as matérias corretas do edital.
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">
+                            PDF do Edital *
+                          </label>
+                          <input
+                            type="file"
+                            accept=".pdf"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) {
+                                extractPdfForFullGeneration(file)
+                              }
+                            }}
+                            disabled={generatingFullCourse || extractingPdf}
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          />
+                          {extractingPdf && (
+                            <p className="text-xs text-blue-600 mt-2">📄 Extraindo texto do PDF...</p>
+                          )}
+                          {editalPdfTextForGeneration && !extractingPdf && (
+                            <p className="text-xs text-green-600 mt-2">
+                              ✅ PDF processado! {editalPdfTextForGeneration.length.toLocaleString()} caracteres extraídos.
+                            </p>
+                          )}
+                        </div>
+
+                        {fullCourseProgress && (
+                          <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+                            <p className="text-sm text-blue-800 whitespace-pre-wrap">
+                              {fullCourseProgress}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 pt-4">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (selectedCourseForFullGeneration) {
+                                generateFullCourseFromEdital(selectedCourseForFullGeneration)
+                              }
+                            }}
+                            disabled={!editalPdfTextForGeneration || !cargoForGeneration.trim() || generatingFullCourse || extractingPdf}
+                            className="flex-1 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {generatingFullCourse ? 'Gerando...' : '🚀 Gerar Curso Completo'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowFullGenerationModal(false)
+                              setSelectedCourseForFullGeneration(null)
+                              setEditalPdfForGeneration(null)
+                              setEditalPdfTextForGeneration('')
+                              setCargoForGeneration('')
+                              setFullCourseProgress('')
+                            }}
+                            disabled={generatingFullCourse}
+                            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+
+                        {generatingFullCourse && (
+                          <div className="mt-4 rounded-lg bg-yellow-50 border border-yellow-200 p-3">
+                            <p className="text-xs text-yellow-800">
+                              ⚠️ <strong>Atenção:</strong> Este processo pode demorar vários minutos dependendo do tamanho do edital. 
+                              Não feche esta janela até a conclusão.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -3922,9 +4987,21 @@ ESTRUTURA SUGERIDA:
                       <p className="text-sm font-semibold text-alego-600">
                         {cards.length} cards cadastrados
                       </p>
-                      <p className="text-xs text-slate-500">
-                        Expanda a matéria e o módulo para visualizar e gerenciar os cards correspondentes.
-                      </p>
+                      <div className="flex items-center gap-3">
+                        {selectedCourseForFlashcards && (
+                          <button
+                            type="button"
+                            onClick={cleanupOrphanFlashcards}
+                            className="rounded-lg bg-rose-500 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-600 transition"
+                            title="Remover flashcards de matérias/módulos que não existem mais no curso"
+                          >
+                            🗑️ Limpar Órfãos
+                          </button>
+                        )}
+                        <p className="text-xs text-slate-500">
+                          Expanda a matéria e o módulo para visualizar e gerenciar os cards correspondentes.
+                        </p>
+                      </div>
                     </div>
                     <div className="mt-4 space-y-3">
                       {Object.keys(cardsOrganized).length === 0 && (
