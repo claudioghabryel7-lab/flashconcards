@@ -119,14 +119,14 @@ const PublicHome = () => {
     const maxRetries = 3
     
     const loadData = () => {
-      const unsub = onSnapshot(q, async (snapshot) => {
-        const data = snapshot.docs.map((docSnapshot) => ({
-          id: docSnapshot.id,
-          ...docSnapshot.data(),
-        }))
-        
-        setCourses(data)
-        setLoadingCourses(false)
+    const unsub = onSnapshot(q, async (snapshot) => {
+      const data = snapshot.docs.map((docSnapshot) => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data(),
+      }))
+      
+      setCourses(data)
+      setLoadingCourses(false)
         retryCount = 0
         
         // Salvar no cache
@@ -138,8 +138,8 @@ const PublicHome = () => {
         } catch (err) {
           console.warn('Erro ao salvar cache de cursos:', err)
         }
-      }, (error) => {
-        console.error('Erro ao carregar cursos:', error)
+    }, (error) => {
+      console.error('Erro ao carregar cursos:', error)
         
         // Retry logic
         if (retryCount < maxRetries) {
@@ -148,13 +148,13 @@ const PublicHome = () => {
             loadData()
           }, 1000 * retryCount)
         } else {
-          setCourses([])
-          setLoadingCourses(false)
+      setCourses([])
+      setLoadingCourses(false)
         }
-      })
+    })
       return unsub
     }
-    
+
     const unsub = loadData()
     return () => unsub()
   }, [])
