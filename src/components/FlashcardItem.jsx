@@ -69,7 +69,7 @@ const FlashcardItem = ({
       </AnimatePresence>
 
       <motion.div
-        className="relative h-[400px] sm:h-[450px] w-full cursor-pointer group"
+        className="relative h-[400px] sm:h-[450px] w-full cursor-pointer group overflow-hidden"
         style={{ perspective: 1200 }}
         onClick={toggle}
         whileHover={{ scale: 1.02 }}
@@ -77,7 +77,7 @@ const FlashcardItem = ({
       >
         {/* Frente do Card - Design Tecnológico */}
         <motion.div
-          className="absolute inset-0 flex flex-col justify-between rounded-3xl bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-slate-800 dark:via-blue-900/20 dark:to-purple-900/20 p-6 shadow-2xl border-4 border-blue-500/50 dark:border-blue-400/50 backdrop-blur-sm"
+          className="absolute inset-0 flex flex-col justify-between rounded-3xl bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-slate-800 dark:via-blue-900/20 dark:to-purple-900/20 p-6 shadow-2xl border-4 border-blue-500/50 dark:border-blue-400/50 backdrop-blur-sm overflow-hidden"
           animate={{ 
             rotateY: flipped ? 180 : 0
           }}
@@ -119,22 +119,22 @@ const FlashcardItem = ({
             )}
 
             {/* Badges de matéria/modulo */}
-            <div className="mb-4 flex items-center gap-2 mt-12">
+            <div className="mb-4 flex items-center gap-2 mt-12 flex-wrap overflow-hidden">
               {card.materia && (
-                <span className="rounded-full bg-gradient-to-r from-blue-500/20 to-cyan-500/20 dark:from-blue-500/30 dark:to-cyan-500/30 border border-blue-500/30 dark:border-blue-400/30 px-3 py-1 text-xs font-bold text-blue-700 dark:text-blue-300 backdrop-blur-sm">
+                <span className="rounded-full bg-gradient-to-r from-blue-500/20 to-cyan-500/20 dark:from-blue-500/30 dark:to-cyan-500/30 border border-blue-500/30 dark:border-blue-400/30 px-3 py-1 text-xs font-bold text-blue-700 dark:text-blue-300 backdrop-blur-sm break-words max-w-full" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                   {card.materia}
                 </span>
               )}
               {card.modulo && (
-                <span className="rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 dark:from-purple-500/30 dark:to-pink-500/30 border border-purple-500/30 dark:border-purple-400/30 px-3 py-1 text-xs font-bold text-purple-700 dark:text-purple-300 backdrop-blur-sm">
+                <span className="rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 dark:from-purple-500/30 dark:to-pink-500/30 border border-purple-500/30 dark:border-purple-400/30 px-3 py-1 text-xs font-bold text-purple-700 dark:text-purple-300 backdrop-blur-sm break-words max-w-full" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                   {card.modulo}
                 </span>
               )}
             </div>
             
             {/* Pergunta */}
-            <div className="flex-1 flex items-center justify-center min-h-[200px]">
-              <h3 className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 dark:text-white text-center px-4 leading-tight break-words overflow-wrap-anywhere">
+            <div className="flex-1 flex items-center justify-center min-h-[200px] overflow-hidden">
+              <h3 className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 dark:text-white text-center px-4 leading-tight break-words overflow-wrap-anywhere max-w-full" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                 {card.pergunta}
               </h3>
             </div>
@@ -152,7 +152,7 @@ const FlashcardItem = ({
 
         {/* Verso do Card - Design Tecnológico */}
         <motion.div
-          className="absolute inset-0 flex flex-col justify-between rounded-3xl bg-gradient-to-br from-blue-600 via-purple-600 to-cyan-600 dark:from-blue-700 dark:via-purple-700 dark:to-cyan-700 p-6 text-white shadow-2xl border-4 border-blue-400 dark:border-blue-500 backdrop-blur-sm"
+          className="absolute inset-0 flex flex-col justify-between rounded-3xl bg-gradient-to-br from-blue-600 via-purple-600 to-cyan-600 dark:from-blue-700 dark:via-purple-700 dark:to-cyan-700 p-6 text-white shadow-2xl border-4 border-blue-400 dark:border-blue-500 backdrop-blur-sm overflow-hidden"
           animate={{ 
             rotateY: flipped ? 0 : -180
           }}
@@ -166,7 +166,7 @@ const FlashcardItem = ({
           <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-white/5 rounded-3xl"></div>
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1),transparent_50%)] rounded-3xl"></div>
           
-          <div className="relative z-10">
+          <div className="relative z-10 h-full flex flex-col overflow-hidden">
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs font-black uppercase tracking-widest text-white/90">
                 ✓ Resposta
@@ -174,8 +174,8 @@ const FlashcardItem = ({
             </div>
             
             {/* Resposta */}
-            <div className="flex-1 flex items-center justify-center min-h-[200px]">
-              <p className="text-lg sm:text-xl md:text-2xl font-black text-center px-4 leading-tight drop-shadow-lg break-words overflow-wrap-anywhere">
+            <div className="flex-1 flex items-center justify-center min-h-[200px] overflow-hidden">
+              <p className="text-lg sm:text-xl md:text-2xl font-black text-center px-4 leading-tight drop-shadow-lg break-words overflow-wrap-anywhere max-w-full" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                 {card.resposta}
               </p>
             </div>
