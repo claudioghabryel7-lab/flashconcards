@@ -2038,27 +2038,54 @@ REGRAS CRÍTICAS:
       let lastError = null
       
       // Para API paga, tentar usar o melhor modelo primeiro
+      // Simplificar: apenas criar o modelo e usar (sem teste prévio que pode falhar)
       for (const modelName of modelNames) {
         try {
           model = genAI.getGenerativeModel({ model: modelName })
-          // Testar se o modelo funciona com uma chamada simples
-          const testResult = await model.generateContent('test')
-          if (testResult && testResult.response) {
-            console.log(`✅ Usando modelo pago: ${modelName}`)
-            break
-          }
+          console.log(`✅ Tentando usar modelo: ${modelName}`)
+          // Não testar antes - usar diretamente e deixar falhar na primeira chamada real se necessário
+          // Isso evita falsos negativos no teste
+          break
         } catch (err) {
-          // Se for erro de modelo não encontrado, tentar próximo
+          // Se nem conseguir criar o modelo, tentar próximo
           const errorMsg = err.message?.toLowerCase() || ''
           if (errorMsg.includes('not found') || errorMsg.includes('404') || errorMsg.includes('not available')) {
             console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
             lastError = err
             continue
           } else {
-            // Se for outro erro (quota, auth, etc), usar este modelo mesmo assim
-            console.log(`✅ Usando modelo: ${modelName} (pode ter limitações)`)
+            // Se for outro erro, ainda tentar usar
+            console.log(`⚠️ Aviso ao criar modelo ${modelName}, mas tentando usar mesmo assim...`)
+            model = genAI.getGenerativeModel({ model: modelName })
             break
           }
+        }
+      }
+      
+      if (!model) {
+        // Se nenhum modelo funcionou, tentar listar modelos disponíveis da API
+        try {
+          console.log('🔍 Listando modelos disponíveis da API...')
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+          )
+          
+          if (response.ok) {
+            const data = await response.json()
+            const models = data.models || []
+            const generateModels = models.filter((m) => {
+              return (m.supportedGenerationMethods || []).includes('generateContent')
+            })
+            
+            if (generateModels.length > 0) {
+              // Usar o primeiro modelo disponível
+              const firstModelName = generateModels[0].name.replace('models/', '')
+              model = genAI.getGenerativeModel({ model: firstModelName })
+              console.log(`✅ Usando modelo descoberto: ${firstModelName}`)
+            }
+          }
+        } catch (listErr) {
+          console.warn('⚠️ Erro ao listar modelos:', listErr)
         }
       }
       
@@ -2069,7 +2096,7 @@ REGRAS CRÍTICAS:
           console.log('⚠️ Nenhum modelo Gemini disponível, usando Groq como fallback...')
           // Continuar com Groq (será usado mais tarde se necessário)
         } else {
-          throw new Error('Nenhum modelo de IA disponível. Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
+          throw new Error('Nenhum modelo de IA disponível. Verifique se VITE_GEMINI_API_KEY está configurada corretamente no arquivo .env')
         }
       }
 
@@ -2133,8 +2160,35 @@ IMPORTANTE: Retorne TODAS as matérias e TODOS os módulos. Não deixe nada falt
         throw new Error('Modelo de IA não disponível. Verifique as configurações da API.')
       }
 
-      const analysisResult = await model.generateContent(analysisPrompt)
-      let analysisText = analysisResult.response.text().trim()
+      // Tentar usar o modelo - se falhar, tentar próximo modelo
+      let analysisResult = null
+      let analysisText = ''
+      
+      try {
+        analysisResult = await model.generateContent(analysisPrompt)
+        analysisText = analysisResult.response.text().trim()
+      } catch (modelErr) {
+        // Se o modelo falhar na primeira chamada real, tentar outros modelos
+        console.warn('⚠️ Primeiro modelo falhou, tentando outros...', modelErr.message)
+        
+        for (const fallbackModelName of modelNames.slice(1)) {
+          try {
+            const fallbackModel = genAI.getGenerativeModel({ model: fallbackModelName })
+            analysisResult = await fallbackModel.generateContent(analysisPrompt)
+            analysisText = analysisResult.response.text().trim()
+            model = fallbackModel // Usar este modelo para as próximas chamadas
+            console.log(`✅ Usando modelo alternativo: ${fallbackModelName}`)
+            break
+          } catch (fallbackErr) {
+            console.warn(`⚠️ Modelo ${fallbackModelName} também falhou, tentando próximo...`)
+            continue
+          }
+        }
+        
+        if (!analysisResult) {
+          throw new Error('Nenhum modelo de IA funcionou. Verifique sua API key e permissões.')
+        }
+      }
       
       // Limpar markdown se houver
       if (analysisText.startsWith('```json')) {
@@ -2457,24 +2511,53 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       let lastError = null
       
       // Para API paga, tentar usar o melhor modelo primeiro
+      // Simplificar: apenas criar o modelo e usar (sem teste prévio)
       for (const modelName of modelNames) {
         try {
           model = genAI.getGenerativeModel({ model: modelName })
-          await model.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
-          console.log(`✅ Usando modelo pago: ${modelName}`)
+          console.log(`✅ Tentando usar modelo: ${modelName}`)
+          // Não testar antes - usar diretamente
           break
         } catch (err) {
-          // Se for erro de modelo não encontrado, tentar próximo
+          // Se nem conseguir criar o modelo, tentar próximo
           const errorMsg = err.message?.toLowerCase() || ''
           if (errorMsg.includes('not found') || errorMsg.includes('404') || errorMsg.includes('not available')) {
             console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
             lastError = err
             continue
           } else {
-            // Se for outro erro (quota, auth, etc), usar este modelo mesmo assim
-            console.log(`✅ Usando modelo: ${modelName} (pode ter limitações)`)
+            // Se for outro erro, ainda tentar usar
+            console.log(`⚠️ Aviso ao criar modelo ${modelName}, mas tentando usar mesmo assim...`)
+            model = genAI.getGenerativeModel({ model: modelName })
             break
           }
+        }
+      }
+      
+      if (!model) {
+        // Se nenhum modelo funcionou, tentar listar modelos disponíveis da API
+        try {
+          console.log('🔍 Listando modelos disponíveis da API...')
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+          )
+          
+          if (response.ok) {
+            const data = await response.json()
+            const models = data.models || []
+            const generateModels = models.filter((m) => {
+              return (m.supportedGenerationMethods || []).includes('generateContent')
+            })
+            
+            if (generateModels.length > 0) {
+              // Usar o primeiro modelo disponível
+              const firstModelName = generateModels[0].name.replace('models/', '')
+              model = genAI.getGenerativeModel({ model: firstModelName })
+              console.log(`✅ Usando modelo descoberto: ${firstModelName}`)
+            }
+          }
+        } catch (listErr) {
+          console.warn('⚠️ Erro ao listar modelos:', listErr)
         }
       }
       
