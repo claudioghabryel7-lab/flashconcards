@@ -2164,29 +2164,86 @@ IMPORTANTE: Retorne TODAS as matérias e TODOS os módulos. Não deixe nada falt
       let analysisResult = null
       let analysisText = ''
       
+      // Função auxiliar para detectar erro de quota
+      const isQuotaError = (err) => {
+        const errorMsg = err.message?.toLowerCase() || ''
+        const errorString = JSON.stringify(err) || ''
+        return (
+          errorMsg.includes('429') ||
+          errorMsg.includes('quota') ||
+          errorMsg.includes('quota exceeded') ||
+          errorMsg.includes('free_tier_requests') ||
+          errorMsg.includes('too many requests') ||
+          errorMsg.includes('resource_exhausted') ||
+          errorMsg.includes('rate limit') ||
+          errorString.includes('429') ||
+          errorString.includes('quota') ||
+          errorString.includes('free_tier_requests') ||
+          err.status === 429 ||
+          err.code === 429
+        )
+      }
+      
+      // Função auxiliar para extrair tempo de espera do erro
+      const extractWaitTime = (err) => {
+        const errorMsg = err.message || ''
+        const retryMatch = errorMsg.match(/retry in ([\d.]+)/i) || 
+                          errorMsg.match(/(\d+\.?\d*)\s*seconds?/i)
+        return retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : null
+      }
+      
       try {
         analysisResult = await model.generateContent(analysisPrompt)
         analysisText = analysisResult.response.text().trim()
       } catch (modelErr) {
-        // Se o modelo falhar na primeira chamada real, tentar outros modelos
-        console.warn('⚠️ Primeiro modelo falhou, tentando outros...', modelErr.message)
-        
-        for (const fallbackModelName of modelNames.slice(1)) {
+        // Verificar se é erro de quota
+        if (isQuotaError(modelErr)) {
+          const waitTime = extractWaitTime(modelErr)
+          const waitSeconds = waitTime || 60
+          
+          setFullCourseProgress(`⏳ Quota excedida. Aguardando ${waitSeconds} segundos antes de tentar novamente...`)
+          
+          // Aguardar o tempo sugerido
+          await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
+          
+          // Tentar novamente uma vez
           try {
-            const fallbackModel = genAI.getGenerativeModel({ model: fallbackModelName })
-            analysisResult = await fallbackModel.generateContent(analysisPrompt)
+            analysisResult = await model.generateContent(analysisPrompt)
             analysisText = analysisResult.response.text().trim()
-            model = fallbackModel // Usar este modelo para as próximas chamadas
-            console.log(`✅ Usando modelo alternativo: ${fallbackModelName}`)
-            break
-          } catch (fallbackErr) {
-            console.warn(`⚠️ Modelo ${fallbackModelName} também falhou, tentando próximo...`)
-            continue
+            setFullCourseProgress('✅ Retry bem-sucedido após aguardar quota!')
+          } catch (retryErr) {
+            if (isQuotaError(retryErr)) {
+              throw new Error(`Quota da API excedida. Você atingiu o limite de 200 requisições/dia do plano gratuito. Aguarde até amanhã ou faça upgrade para um plano pago em https://ai.google.dev/pricing`)
+            }
+            throw retryErr
           }
-        }
-        
-        if (!analysisResult) {
-          throw new Error('Nenhum modelo de IA funcionou. Verifique sua API key e permissões.')
+        } else {
+          // Se não for erro de quota, tentar outros modelos
+          console.warn('⚠️ Primeiro modelo falhou, tentando outros...', modelErr.message)
+          
+          for (const fallbackModelName of modelNames.slice(1)) {
+            try {
+              const fallbackModel = genAI.getGenerativeModel({ model: fallbackModelName })
+              analysisResult = await fallbackModel.generateContent(analysisPrompt)
+              analysisText = analysisResult.response.text().trim()
+              model = fallbackModel // Usar este modelo para as próximas chamadas
+              console.log(`✅ Usando modelo alternativo: ${fallbackModelName}`)
+              break
+            } catch (fallbackErr) {
+              // Se for erro de quota no fallback, parar e informar
+              if (isQuotaError(fallbackErr)) {
+                const waitTime = extractWaitTime(fallbackErr)
+                const waitSeconds = waitTime || 60
+                throw new Error(`Quota da API excedida. Aguarde ${waitSeconds} segundos ou faça upgrade para um plano pago em https://ai.google.dev/pricing`)
+              }
+              console.warn(`⚠️ Modelo ${fallbackModelName} também falhou, tentando próximo...`)
+              continue
+            }
+          }
+          
+          if (!analysisResult) {
+            throw new Error('Nenhum modelo de IA funcionou. Verifique sua API key e permissões.')
+          }
         }
       }
       
@@ -2361,8 +2418,31 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
             if (!model) {
               throw new Error('Modelo de IA não disponível. Verifique as configurações.')
             }
-            const flashcardsResult = await model.generateContent(flashcardsPrompt)
-            let flashcardsText = flashcardsResult.response.text().trim()
+            
+            let flashcardsResult = null
+            let flashcardsText = ''
+            
+            // Tentar gerar flashcards com tratamento de quota
+            try {
+              flashcardsResult = await model.generateContent(flashcardsPrompt)
+              flashcardsText = flashcardsResult.response.text().trim()
+            } catch (quotaErr) {
+              // Se for erro de quota, aguardar e tentar novamente
+              if (isQuotaError(quotaErr)) {
+                const waitTime = extractWaitTime(quotaErr)
+                const waitSeconds = waitTime || 60
+                
+                setFullCourseProgress(`⏳ Quota excedida. Aguardando ${waitSeconds} segundos antes de continuar...`)
+                await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
+                
+                // Tentar novamente
+                flashcardsResult = await model.generateContent(flashcardsPrompt)
+                flashcardsText = flashcardsResult.response.text().trim()
+                setFullCourseProgress(`📝 Retomando geração de flashcards para ${materia.nome} - ${modulo.nome}...`)
+              } else {
+                throw quotaErr
+              }
+            }
             
             // Limpar markdown se houver
             if (flashcardsText.startsWith('```json')) {
@@ -2383,7 +2463,21 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                 if (!model) {
                   throw new Error('Modelo de IA não disponível.')
                 }
-                const retryResult = await model.generateContent(flashcardsPrompt)
+                
+                let retryResult = null
+                try {
+                  retryResult = await model.generateContent(flashcardsPrompt)
+                } catch (retryQuotaErr) {
+                  if (isQuotaError(retryQuotaErr)) {
+                    const waitTime = extractWaitTime(retryQuotaErr)
+                    const waitSeconds = waitTime || 60
+                    setFullCourseProgress(`⏳ Quota excedida no retry. Aguardando ${waitSeconds} segundos...`)
+                    await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
+                    retryResult = await model.generateContent(flashcardsPrompt)
+                  } else {
+                    throw retryQuotaErr
+                  }
+                }
                 let retryText = retryResult.response.text().trim()
                 if (retryText.startsWith('```json')) {
                   retryText = retryText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
@@ -2567,15 +2661,34 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
 
       // 1. Buscar matérias existentes no curso
       setVerificationProgress('📋 Verificando matérias existentes no curso...')
-      const subjectsRef = collection(db, 'courses', courseId, 'subjects')
+      // Usar courseId original para buscar subjects (não o normalizado)
+      const courseIdForSubjects = courseId === 'alego-default' ? 'alego-default' : courseId
+      const subjectsRef = collection(db, 'courses', courseIdForSubjects, 'subjects')
       const existingSubjectsSnapshot = await getDocs(subjectsRef)
       const existingSubjects = existingSubjectsSnapshot.docs.map(doc => doc.data().name)
       
       // 2. Buscar flashcards existentes para verificar módulos
       const cardsRef = collection(db, 'flashcards')
-      const existingCardsQuery = query(cardsRef, where('courseId', '==', courseId))
-      const existingCardsSnapshot = await getDocs(existingCardsQuery)
-      const existingCards = existingCardsSnapshot.docs.map(doc => doc.data())
+      // Normalizar courseId para busca: se for 'alego-default', usar null
+      const normalizedCourseId = (courseId && courseId.trim() && courseId !== 'alego-default') 
+        ? courseId.trim() 
+        : null
+      
+      // Buscar flashcards: se normalizedCourseId for null, buscar todos sem courseId
+      let existingCards = []
+      if (normalizedCourseId) {
+        const existingCardsQuery = query(cardsRef, where('courseId', '==', normalizedCourseId))
+        const existingCardsSnapshot = await getDocs(existingCardsQuery)
+        existingCards = existingCardsSnapshot.docs.map(doc => doc.data())
+      } else {
+        // Para ALEGO padrão, buscar flashcards sem courseId (null, undefined, string vazia)
+        const allCardsSnapshot = await getDocs(cardsRef)
+        existingCards = allCardsSnapshot.docs
+          .map(doc => doc.data())
+          .filter(card => !card.courseId || card.courseId === '' || card.courseId === null || card.courseId === undefined)
+      }
+      
+      console.log(`📊 Encontrados ${existingCards.length} flashcard(s) existente(s) para o curso`)
       
       // Agrupar módulos existentes por matéria
       const existingModulesBySubject = {}
@@ -2729,9 +2842,31 @@ Retorne APENAS um JSON válido:
 
 Retorne APENAS o JSON, sem markdown, sem explicações.`
 
+          try {
+            let flashcardsResult = null
+            let flashcardsText = ''
+            
+            // Tentar gerar flashcards com tratamento de quota
             try {
-              const flashcardsResult = await model.generateContent(flashcardsPrompt)
-              let flashcardsText = flashcardsResult.response.text().trim()
+              flashcardsResult = await model.generateContent(flashcardsPrompt)
+              flashcardsText = flashcardsResult.response.text().trim()
+            } catch (quotaErr) {
+              // Se for erro de quota, aguardar e tentar novamente
+              if (isQuotaError(quotaErr)) {
+                const waitTime = extractWaitTime(quotaErr)
+                const waitSeconds = waitTime || 60
+                
+                setFullCourseProgress(`⏳ Quota excedida ao gerar flashcards. Aguardando ${waitSeconds} segundos...`)
+                await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
+                
+                // Tentar novamente
+                flashcardsResult = await model.generateContent(flashcardsPrompt)
+                flashcardsText = flashcardsResult.response.text().trim()
+                setFullCourseProgress(`📝 Retomando geração de flashcards para ${materia.nome} - ${modulo.nome}...`)
+              } else {
+                throw quotaErr
+              }
+            }
               
               if (flashcardsText.startsWith('```json')) {
                 flashcardsText = flashcardsText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
@@ -2743,17 +2878,27 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
               const flashcards = flashcardsData.flashcards || []
 
               if (flashcards.length > 0) {
+                // Normalizar courseId: se for 'alego-default' ou string vazia, usar null
+                const normalizedCourseId = (courseId && courseId.trim() && courseId !== 'alego-default') 
+                  ? courseId.trim() 
+                  : null
+                
+                console.log(`📝 Criando ${flashcards.length} flashcard(s) para ${materia.nome} - ${modulo.nome} com courseId:`, normalizedCourseId)
+                
                 for (const flashcard of flashcards) {
                   if (flashcard.pergunta && flashcard.resposta) {
-                    await addDoc(cardsRef, {
+                    const flashcardData = {
                       pergunta: flashcard.pergunta.trim(),
                       resposta: flashcard.resposta.trim(),
                       materia: materia.nome,
                       modulo: modulo.nome,
-                      courseId: courseId,
+                      courseId: normalizedCourseId,
                       tags: [],
-                    })
+                    }
+                    
+                    await addDoc(cardsRef, flashcardData)
                     flashcardsCriados++
+                    console.log(`✅ Flashcard criado: "${flashcard.pergunta.substring(0, 50)}..." (courseId: ${normalizedCourseId || 'null'})`)
                   }
                 }
                 setVerificationProgress(`✅ ${flashcards.length} flashcard(s) criado(s) para ${materia.nome} - ${modulo.nome}`)
