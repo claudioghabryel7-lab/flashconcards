@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import {
   addDoc,
   collection,
@@ -143,6 +143,8 @@ const AdminPanel = () => {
   const [uploadingCourse, setUploadingCourse] = useState(false)
   const [editingCourseImage, setEditingCourseImage] = useState(null) // ID do curso sendo editado
   const [newCourseImage, setNewCourseImage] = useState(null) // Nova imagem em base64
+  const [recentlyDeletedCourses, setRecentlyDeletedCourses] = useState(new Set()) // IDs de cursos deletados recentemente
+  const recentlyDeletedCoursesRef = useRef(new Set()) // Ref para acessar no onSnapshot
   
   // Estados para geração completa de curso com IA
   const [generatingFullCourse, setGeneratingFullCourse] = useState(false)
@@ -152,6 +154,7 @@ const AdminPanel = () => {
   const [selectedCourseForFullGeneration, setSelectedCourseForFullGeneration] = useState(null)
   const [showFullGenerationModal, setShowFullGenerationModal] = useState(false)
   const [cargoForGeneration, setCargoForGeneration] = useState('') // Cargo específico para filtrar matérias
+  const [regeneratingCourse, setRegeneratingCourse] = useState(false) // Se está regenerando curso existente
 
   // Configurar PDF.js worker
   useEffect(() => {
@@ -509,48 +512,20 @@ const AdminPanel = () => {
 
     // Carregar cursos
     const coursesRef = collection(db, 'courses')
-    const unsubCourses = onSnapshot(coursesRef, async (snapshot) => {
+    const unsubCourses = onSnapshot(coursesRef, (snapshot) => {
       const data = snapshot.docs.map((docSnapshot) => ({
         id: docSnapshot.id,
         ...docSnapshot.data(),
       }))
       
-      // Verificar se o curso ALEGO padrão existe
-      const alegoCourse = data.find(c => c.id === 'alego-default')
+      // NÃO recriar curso ALEGO padrão automaticamente
+      // Se foi deletado pelo admin, deve permanecer deletado
+      // Removida a lógica de criação automática
       
-      if (!alegoCourse) {
-        // Criar curso ALEGO padrão se não existir
-        try {
-          const alegoRef = doc(db, 'courses', 'alego-default')
-          await setDoc(alegoRef, {
-            name: 'Polícia Legislativa ALEGO',
-            description: 'Mentoria completa para o concurso da Polícia Legislativa ALEGO com flashcards, questões e IA personalizada.',
-            price: 99.90,
-            originalPrice: 149.99,
-            competition: 'ALEGO - Polícia Legislativa',
-            active: true,
-            isDefault: true, // Marcar como curso padrão
-            createdAt: serverTimestamp(),
-          }, { merge: true })
-          
-          // Adicionar à lista
-          data.unshift({
-            id: 'alego-default',
-            name: 'Polícia Legislativa ALEGO',
-            description: 'Mentoria completa para o concurso da Polícia Legislativa ALEGO com flashcards, questões e IA personalizada.',
-            price: 99.90,
-            originalPrice: 149.99,
-            competition: 'ALEGO - Polícia Legislativa',
-            active: true,
-            isDefault: true,
-            createdAt: serverTimestamp(),
-          })
-        } catch (err) {
-          console.error('Erro ao criar curso ALEGO padrão:', err)
-        }
-      }
+      // Filtrar cursos que foram deletados recentemente (evitar recriação)
+      const filteredData = data.filter(course => !recentlyDeletedCoursesRef.current.has(course.id))
       
-      const sortedCourses = data.sort((a, b) => {
+      const sortedCourses = filteredData.sort((a, b) => {
         // Colocar curso padrão primeiro
         if (a.id === 'alego-default') return -1
         if (b.id === 'alego-default') return 1
@@ -1699,12 +1674,6 @@ REGRAS CRÍTICAS:
   }
 
   const updateCourse = async (courseId, updates) => {
-    // Proteger curso ALEGO padrão contra desativação
-    if (courseId === 'alego-default' && updates.active === false) {
-      setMessage('❌ O curso ALEGO padrão não pode ser desativado.')
-      return
-    }
-    
     try {
       await updateDoc(doc(db, 'courses', courseId), {
         ...updates,
@@ -1718,18 +1687,20 @@ REGRAS CRÍTICAS:
   }
 
   const deleteCourse = async (courseId) => {
-    // Proteger curso ALEGO padrão contra exclusão
-    if (courseId === 'alego-default') {
-      setMessage('❌ O curso ALEGO padrão não pode ser excluído.')
-      return
-    }
+    console.log('🗑️ deleteCourse chamado com courseId:', courseId, 'tipo:', typeof courseId)
     
     if (!courseId) {
       setMessage('❌ ID do curso não fornecido.')
+      console.error('❌ courseId é falsy:', courseId)
       return
     }
     
-    if (!confirm(`⚠️ ATENÇÃO: Deseja excluir este curso DEFINITIVAMENTE?\n\nIsso vai DELETAR:\n- Todos os flashcards do curso\n- Todos os prompts (edital e questões)\n- Todas as matérias do curso\n- Todo o progresso dos usuários neste curso\n\nEsta ação NÃO pode ser desfeita!`)) return
+    const confirmMessage = `⚠️ ATENÇÃO: Deseja excluir este curso DEFINITIVAMENTE?\n\nIsso vai DELETAR:\n- Todos os flashcards do curso\n- Todos os prompts (edital e questões)\n- Todas as matérias do curso\n- Todo o progresso dos usuários neste curso\n\nEsta ação NÃO pode ser desfeita!`
+    
+    if (!window.confirm(confirmMessage)) {
+      console.log('❌ Usuário cancelou a exclusão')
+      return
+    }
 
     try {
       setMessage('🗑️ Deletando dados do curso...')
@@ -1865,15 +1836,27 @@ REGRAS CRÍTICAS:
       }
       
       await deleteDoc(courseRef)
-      console.log('✅ Curso deletado')
+      console.log('✅ Curso deletado do Firestore')
       
-      // Recarregar lista de cursos
-      const coursesRef = collection(db, 'courses')
-      const coursesSnapshot = await getDocs(coursesRef)
-      setCourses(coursesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+      // Marcar curso como deletado recentemente para evitar recriação automática
+      const newSet = new Set(recentlyDeletedCoursesRef.current)
+      newSet.add(courseId)
+      recentlyDeletedCoursesRef.current = newSet
+      setRecentlyDeletedCourses(newSet)
+      
+      // Remover da lista de deletados após 10 segundos (tempo suficiente para o onSnapshot atualizar)
+      setTimeout(() => {
+        const updatedSet = new Set(recentlyDeletedCoursesRef.current)
+        updatedSet.delete(courseId)
+        recentlyDeletedCoursesRef.current = updatedSet
+        setRecentlyDeletedCourses(updatedSet)
+      }, 10000)
+      
+      // O onSnapshot vai atualizar automaticamente a lista
+      // Não precisamos recarregar manualmente
       
       const totalDeleted = cardsToDelete.length
-      setMessage(`✅ Curso excluído com sucesso! ${totalDeleted} flashcard(s) e todos os dados relacionados foram removidos.`)
+      setMessage(`✅ Curso excluído com sucesso! ${totalDeleted} flashcard(s) e todos os dados relacionados foram removidos. A lista será atualizada automaticamente.`)
     } catch (err) {
       console.error('Erro ao excluir curso:', err)
       console.error('Detalhes do erro:', {
@@ -1893,7 +1876,7 @@ REGRAS CRÍTICAS:
   }
 
   // Gerar automaticamente módulos e flashcards completos a partir do PDF do edital
-  const generateFullCourseFromEdital = async (courseId) => {
+  const generateFullCourseFromEdital = async (courseId, isRegenerating = false) => {
     if (!editalPdfTextForGeneration.trim()) {
       setMessage('❌ Faça upload do PDF do edital primeiro.')
       return
@@ -1904,8 +1887,32 @@ REGRAS CRÍTICAS:
       return
     }
 
-    if (!window.confirm(`⚠️ ATENÇÃO: Isso vai gerar AUTOMATICAMENTE:\n\n- Todas as matérias do cargo: ${cargoForGeneration}\n- Todos os módulos de cada matéria\n- Todos os flashcards de cada módulo\n\nBaseado no edital do PDF.\n\nIsso pode demorar vários minutos. Deseja continuar?`)) {
+    const confirmMessage = isRegenerating 
+      ? `⚠️ ATENÇÃO: Isso vai REGENERAR o curso:\n\n- Deletar TODOS os flashcards existentes\n- Manter as matérias e módulos existentes\n- Gerar novos flashcards focados no CONTEÚDO (não no cargo)\n\nBaseado no edital do PDF.\n\nIsso pode demorar vários minutos. Deseja continuar?`
+      : `⚠️ ATENÇÃO: Isso vai gerar AUTOMATICAMENTE:\n\n- Todas as matérias do cargo: ${cargoForGeneration}\n- Todos os módulos de cada matéria\n- Todos os flashcards de cada módulo (focados no CONTEÚDO)\n\nBaseado no edital do PDF.\n\nIsso pode demorar vários minutos. Deseja continuar?`
+
+    if (!window.confirm(confirmMessage)) {
       return
+    }
+
+    // Se estiver regenerando, deletar flashcards antigos primeiro
+    if (isRegenerating) {
+      setFullCourseProgress('🗑️ Deletando flashcards antigos...')
+      try {
+        const cardsRef = collection(db, 'flashcards')
+        const cardsQuery = query(cardsRef, where('courseId', '==', courseId))
+        const cardsSnapshot = await getDocs(cardsQuery)
+        const cardsToDelete = cardsSnapshot.docs
+        
+        if (cardsToDelete.length > 0) {
+          const deletePromises = cardsToDelete.map(cardDoc => deleteDoc(cardDoc.ref))
+          await Promise.all(deletePromises)
+          setFullCourseProgress(`✅ ${cardsToDelete.length} flashcard(s) antigo(s) deletado(s). Gerando novos...`)
+        }
+      } catch (err) {
+        console.warn('Erro ao deletar flashcards antigos:', err)
+        setFullCourseProgress('⚠️ Erro ao deletar flashcards antigos, continuando...')
+      }
     }
 
     setGeneratingFullCourse(true)
@@ -1954,13 +1961,16 @@ CARGO ESPECÍFICO: ${cargoForGeneration}
 EDITAL:
 ${editalPdfTextForGeneration.substring(0, 100000)}${editalPdfTextForGeneration.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}
 
-TAREFA CRÍTICA:
-1. Identifique APENAS as matérias que serão cobradas para o cargo "${cargoForGeneration}"
+TAREFA CRÍTICA - EXTRAIR TODAS AS MATÉRIAS E MÓDULOS:
+1. Identifique TODAS as matérias que serão cobradas para o cargo "${cargoForGeneration}"
 2. IGNORE completamente matérias de outros cargos que possam estar no edital
 3. Procure no edital a seção específica do cargo "${cargoForGeneration}" e suas matérias
-4. Para cada matéria identificada, encontre os tópicos/conteúdos principais
-5. Organize os tópicos em módulos lógicos (3-8 módulos por matéria, dependendo do tamanho)
+4. Para CADA matéria identificada, encontre TODOS os tópicos/conteúdos principais mencionados no edital
+5. Organize os tópicos em módulos lógicos (4-8 módulos por matéria, dependendo do tamanho)
 6. Cada módulo deve ter um nome descritivo e claro
+7. NÃO deixe nenhuma matéria sem módulos
+8. NÃO deixe nenhum módulo sem tópicos
+9. Seja COMPLETO e EXAUSTIVO - extraia TUDO que está no edital para este cargo
 
 IMPORTANTE - FILTRO POR CARGO:
 - O edital pode conter múltiplos cargos (ex: Policial, Escrivão, Delegado, etc.)
@@ -1972,6 +1982,8 @@ IMPORTANTE - FILTRO POR CARGO:
 - Baseie-se EXCLUSIVAMENTE no conteúdo do edital
 - Organize de forma lógica e pedagógica
 - Módulos devem ter tamanho similar (não muito grandes, não muito pequenos)
+- GARANTA que TODAS as matérias do edital para este cargo sejam incluídas
+- GARANTA que CADA matéria tenha pelo menos 3 módulos
 
 Retorne APENAS um JSON válido no seguinte formato:
 {
@@ -1981,18 +1993,18 @@ Retorne APENAS um JSON válido no seguinte formato:
       "modulos": [
         {
           "nome": "Nome do Módulo 1",
-          "topicos": ["tópico 1", "tópico 2", ...]
+          "topicos": ["tópico 1", "tópico 2", "tópico 3", ...]
         },
         {
           "nome": "Nome do Módulo 2",
-          "topicos": ["tópico 1", "tópico 2", ...]
+          "topicos": ["tópico 1", "tópico 2", "tópico 3", ...]
         }
       ]
     }
   ]
 }
 
-Retorne APENAS o JSON, sem markdown, sem explicações.`
+IMPORTANTE: Retorne TODAS as matérias e TODOS os módulos. Não deixe nada faltando. Retorne APENAS o JSON, sem markdown, sem explicações.`
 
       const analysisResult = await model.generateContent(analysisPrompt)
       let analysisText = analysisResult.response.text().trim()
@@ -2011,41 +2023,102 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
         throw new Error('Nenhuma matéria foi identificada no edital.')
       }
 
-      setFullCourseProgress(`✅ ${materias.length} matéria(s) identificada(s). Iniciando criação...`)
+      // Validar que todas as matérias têm módulos
+      const materiasComModulos = materias.filter(m => m.modulos && m.modulos.length > 0)
+      if (materiasComModulos.length < materias.length) {
+        const materiasSemModulos = materias.filter(m => !m.modulos || m.modulos.length === 0)
+        console.warn('⚠️ Algumas matérias não têm módulos:', materiasSemModulos.map(m => m.nome))
+        setFullCourseProgress(`⚠️ ${materiasSemModulos.length} matéria(s) sem módulos detectada(s). Continuando com as que têm módulos...`)
+      }
 
-      // 2. Criar matérias no curso
+      setFullCourseProgress(`✅ ${materiasComModulos.length} matéria(s) identificada(s) com módulos. Iniciando criação...`)
+
+      // 2. Criar matérias no curso (apenas se não estiver regenerando)
       const subjectsRef = collection(db, 'courses', courseId, 'subjects')
       const createdSubjects = []
       
-      for (const materia of materias) {
-        try {
-          await addDoc(subjectsRef, {
-            name: materia.nome,
-            createdAt: serverTimestamp(),
-          })
-          createdSubjects.push(materia.nome)
-          setFullCourseProgress(`✅ Matéria "${materia.nome}" criada. Criando módulos...`)
-        } catch (err) {
-          console.warn(`Erro ao criar matéria ${materia.nome}:`, err)
-          // Continuar mesmo se falhar
+      if (!isRegenerating) {
+        for (const materia of materiasComModulos) {
+          try {
+            // Verificar se a matéria já existe
+            const existingSubjectsSnapshot = await getDocs(subjectsRef)
+            const existingSubject = existingSubjectsSnapshot.docs.find(doc => doc.data().name === materia.nome)
+            
+            if (!existingSubject) {
+              await addDoc(subjectsRef, {
+                name: materia.nome,
+                createdAt: serverTimestamp(),
+              })
+              createdSubjects.push(materia.nome)
+              setFullCourseProgress(`✅ Matéria "${materia.nome}" criada (${materia.modulos.length} módulos).`)
+            } else {
+              createdSubjects.push(materia.nome)
+              setFullCourseProgress(`✅ Matéria "${materia.nome}" já existe (${materia.modulos.length} módulos).`)
+            }
+          } catch (err) {
+            console.error(`Erro ao criar matéria ${materia.nome}:`, err)
+            setFullCourseProgress(`⚠️ Erro ao criar matéria "${materia.nome}": ${err.message}`)
+            // Continuar mesmo se falhar
+          }
         }
+      } else {
+        // Se regenerando, apenas listar matérias existentes
+        const existingSubjectsSnapshot = await getDocs(subjectsRef)
+        createdSubjects.push(...existingSubjectsSnapshot.docs.map(doc => doc.data().name))
+        setFullCourseProgress(`✅ Usando ${createdSubjects.length} matéria(s) existente(s). Gerando flashcards...`)
       }
 
       // 3. Gerar flashcards para cada módulo
       const cardsRef = collection(db, 'flashcards')
       let totalFlashcardsCreated = 0
-      const totalModulos = materias.reduce((acc, m) => acc + m.modulos.length, 0)
+      
+      // Usar apenas matérias que têm módulos
+      let materiasToProcess = materiasComModulos
+      
+      // Se regenerando, usar matérias existentes do curso
+      if (isRegenerating) {
+        // Buscar matérias existentes e mapear com os módulos do edital
+        const existingSubjectsSnapshot = await getDocs(subjectsRef)
+        const existingSubjects = existingSubjectsSnapshot.docs.map(doc => doc.data().name)
+        
+        // Filtrar apenas matérias que existem no curso E têm módulos
+        materiasToProcess = materiasComModulos.filter(m => existingSubjects.includes(m.nome))
+        
+        if (materiasToProcess.length === 0) {
+          throw new Error('Nenhuma matéria do edital corresponde às matérias existentes no curso.')
+        }
+        
+        setFullCourseProgress(`✅ ${materiasToProcess.length} matéria(s) encontrada(s) com módulos. Gerando flashcards...`)
+      }
+      
+      // Validar que todas as matérias têm módulos
+      const materiasValidas = materiasToProcess.filter(m => m.modulos && m.modulos.length > 0)
+      if (materiasValidas.length < materiasToProcess.length) {
+        const semModulos = materiasToProcess.filter(m => !m.modulos || m.modulos.length === 0)
+        console.warn('⚠️ Matérias sem módulos serão puladas:', semModulos.map(m => m.nome))
+        setFullCourseProgress(`⚠️ ${semModulos.length} matéria(s) sem módulos será(ão) pulada(s).`)
+      }
+      
+      const totalModulos = materiasValidas.reduce((acc, m) => acc + (m.modulos?.length || 0), 0)
       let currentModulo = 0
 
-      for (const materia of materias) {
+      for (const materia of materiasValidas) {
+        if (!materia.modulos || materia.modulos.length === 0) {
+          console.warn(`⚠️ Matéria "${materia.nome}" não tem módulos, pulando...`)
+          continue
+        }
+        
         for (const modulo of materia.modulos) {
+          if (!modulo.topicos || modulo.topicos.length === 0) {
+            console.warn(`⚠️ Módulo "${modulo.nome}" da matéria "${materia.nome}" não tem tópicos, pulando...`)
+            continue
+          }
+          
           currentModulo++
           setFullCourseProgress(`📝 Gerando flashcards para ${materia.nome} - ${modulo.nome} (${currentModulo}/${totalModulos})...`)
 
           // Gerar flashcards para este módulo
-          const flashcardsPrompt = `Você é um especialista em criar flashcards educacionais para concursos públicos.
-
-CARGO ESPECÍFICO: ${cargoForGeneration}
+          const flashcardsPrompt = `Você é um especialista em criar flashcards educacionais para concursos públicos, seguindo o padrão de questões objetivas e diretas.
 
 EDITAL DO CONCURSO:
 ${editalPdfTextForGeneration.substring(0, 50000)}${editalPdfTextForGeneration.length > 50000 ? '\n\n[... conteúdo truncado ...]' : ''}
@@ -2055,25 +2128,48 @@ MÓDULO: ${modulo.nome}
 TÓPICOS DO MÓDULO: ${modulo.topicos.join(', ')}
 
 TAREFA:
-Crie flashcards específicos para este módulo baseado EXCLUSIVAMENTE no edital e nos tópicos acima.
+Crie flashcards educacionais focados EXCLUSIVAMENTE no CONTEÚDO da matéria e módulo acima. Baseie-se no edital para entender o que será cobrado e crie flashcards no padrão de questões objetivas de concurso.
 
-REGRAS PARA OS FLASHCARDS:
-- Estilo Noji: perguntas objetivas e respostas claras (2-4 frases)
-- Baseie-se PRIMARIAMENTE no conteúdo do edital
-- Seja ESPECÍFICO da banca, do concurso e do cargo "${cargoForGeneration}" mencionado no edital
-- Os flashcards devem ser ESPECÍFICOS para o cargo "${cargoForGeneration}"
-- Crie 15-25 flashcards por módulo (dependendo do tamanho do módulo)
-- Cada flashcard deve cobrir um tópico específico
-- Perguntas devem ser diretas e práticas
-- Respostas devem ser completas mas concisas
-- Foque no que é relevante para o cargo "${cargoForGeneration}"
+REGRAS CRÍTICAS PARA OS FLASHCARDS:
+- FOCE 100% NO CONTEÚDO EDUCACIONAL: Os flashcards devem ENSINAR o conteúdo, como se fossem questões objetivas de concurso
+- Estilo de questões objetivas: perguntas diretas e respostas claras e completas (2-4 frases)
+- Baseie-se EXCLUSIVAMENTE no conteúdo do edital para identificar o que será cobrado
+- Crie 18-25 flashcards por módulo (garanta cobertura completa de todos os tópicos)
+- Cada flashcard deve cobrir um tópico/conceito específico do conteúdo
+- Perguntas devem ser diretas, objetivas e práticas sobre o CONTEÚDO (como questões de prova)
+- Respostas devem explicar o CONTEÚDO de forma clara, educacional e completa
+- NÃO mencione o cargo (ex: evite "para policial legislativo", "para o cargo X")
+- NÃO mencione a banca repetidamente (ex: evite "cai muito na FGV", "a banca X sempre cobra")
+- Pode mencionar a banca APENAS quando for absolutamente necessário para contextualizar (ex: "A banca X costuma cobrar este tema de forma..."), mas máximo 1-2 vezes em todos os flashcards
+- O foco deve ser 100% ENSINAR O CONTEÚDO, como se fosse uma questão de prova objetiva
+- Seja natural: flashcards que ensinam o conteúdo, não que ficam repetindo informações sobre o concurso
+- Use linguagem técnica e precisa, como em questões de concurso
+- As perguntas devem ser formuladas como questões objetivas (ex: "O que é...?", "Quais são...?", "Explique...", "Qual a diferença entre...?")
+
+EXEMPLOS DO QUE NÃO FAZER (ERRADO):
+❌ "Por que estudar geopolítica para policial legislativo?"
+❌ "Cai muito na FGV sobre geopolítica para policial legislativo"
+❌ "Para policial legislativo, é importante saber sobre geopolítica porque..."
+❌ "A banca FGV sempre cobra geopolítica para este cargo"
+
+EXEMPLOS DO QUE FAZER (CORRETO):
+✅ "O que é geopolítica?"
+✅ "Quais são os principais fatores geopolíticos que influenciam as relações internacionais?"
+✅ "Explique o conceito de poder geopolítico e sua importância nas relações entre Estados."
+✅ "Qual a diferença entre geopolítica e geografia política?"
+
+IMPORTANTE:
+- Crie flashcards para TODOS os tópicos do módulo
+- Não deixe nenhum tópico sem flashcard
+- Garanta cobertura completa do conteúdo do módulo
+- Os flashcards devem ser úteis para estudo, como questões de prova
 
 Retorne APENAS um JSON válido:
 {
   "flashcards": [
     {
-      "pergunta": "Pergunta objetiva e direta",
-      "resposta": "Resposta clara e concisa (2-4 frases)"
+      "pergunta": "Pergunta objetiva sobre o CONTEÚDO (estilo questão de prova)",
+      "resposta": "Resposta educacional clara e completa explicando o CONTEÚDO (2-4 frases)"
     }
   ]
 }
@@ -2094,22 +2190,62 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
             const flashcardsData = JSON.parse(flashcardsText)
             const flashcards = flashcardsData.flashcards || []
 
-            // Criar flashcards no Firestore
-            for (const flashcard of flashcards) {
-              if (flashcard.pergunta && flashcard.resposta) {
-                await addDoc(cardsRef, {
-                  pergunta: flashcard.pergunta.trim(),
-                  resposta: flashcard.resposta.trim(),
-                  materia: materia.nome,
-                  modulo: modulo.nome,
-                  courseId: courseId,
-                  tags: [],
-                })
-                totalFlashcardsCreated++
+            if (flashcards.length === 0) {
+              console.warn(`⚠️ Nenhum flashcard gerado para ${materia.nome} - ${modulo.nome}`)
+              setFullCourseProgress(`⚠️ Nenhum flashcard gerado para ${materia.nome} - ${modulo.nome}. Tentando novamente...`)
+              
+              // Tentar novamente uma vez
+              try {
+                const retryResult = await model.generateContent(flashcardsPrompt)
+                let retryText = retryResult.response.text().trim()
+                if (retryText.startsWith('```json')) {
+                  retryText = retryText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+                } else if (retryText.startsWith('```')) {
+                  retryText = retryText.replace(/```\n?/g, '').trim()
+                }
+                const retryData = JSON.parse(retryText)
+                const retryFlashcards = retryData.flashcards || []
+                
+                if (retryFlashcards.length > 0) {
+                  for (const flashcard of retryFlashcards) {
+                    if (flashcard.pergunta && flashcard.resposta) {
+                      await addDoc(cardsRef, {
+                        pergunta: flashcard.pergunta.trim(),
+                        resposta: flashcard.resposta.trim(),
+                        materia: materia.nome,
+                        modulo: modulo.nome,
+                        courseId: courseId,
+                        tags: [],
+                      })
+                      totalFlashcardsCreated++
+                    }
+                  }
+                  setFullCourseProgress(`✅ ${retryFlashcards.length} flashcard(s) criado(s) para ${materia.nome} - ${modulo.nome} (tentativa 2)`)
+                } else {
+                  setFullCourseProgress(`⚠️ Nenhum flashcard gerado para ${materia.nome} - ${modulo.nome} mesmo após retry`)
+                }
+              } catch (retryErr) {
+                console.error(`Erro no retry para ${materia.nome} - ${modulo.nome}:`, retryErr)
+                setFullCourseProgress(`⚠️ Erro ao gerar flashcards para ${materia.nome} - ${modulo.nome}: ${retryErr.message}`)
               }
-            }
+            } else {
+              // Criar flashcards no Firestore
+              for (const flashcard of flashcards) {
+                if (flashcard.pergunta && flashcard.resposta) {
+                  await addDoc(cardsRef, {
+                    pergunta: flashcard.pergunta.trim(),
+                    resposta: flashcard.resposta.trim(),
+                    materia: materia.nome,
+                    modulo: modulo.nome,
+                    courseId: courseId,
+                    tags: [],
+                  })
+                  totalFlashcardsCreated++
+                }
+              }
 
-            setFullCourseProgress(`✅ ${flashcards.length} flashcard(s) criado(s) para ${materia.nome} - ${modulo.nome}`)
+              setFullCourseProgress(`✅ ${flashcards.length} flashcard(s) criado(s) para ${materia.nome} - ${modulo.nome}`)
+            }
           } catch (err) {
             console.error(`Erro ao gerar flashcards para ${materia.nome} - ${modulo.nome}:`, err)
             setFullCourseProgress(`⚠️ Erro ao gerar flashcards para ${materia.nome} - ${modulo.nome}: ${err.message}`)
@@ -3908,6 +4044,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                         onClick={() => {
                                           setSelectedCourseForFullGeneration(course.id)
                                           setShowFullGenerationModal(true)
+                                          setRegeneratingCourse(false)
                                         }}
                                         className="rounded-lg bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-200"
                                         title="Gerar módulos e flashcards automaticamente a partir do PDF do edital"
@@ -3916,14 +4053,39 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                       </button>
                                       <button
                                         type="button"
-                                        onClick={() => deleteCourse(course.id)}
-                                        disabled={course.id === 'alego-default'}
-                                        className={`rounded-lg px-3 py-1 text-xs font-semibold ${
-                                          course.id === 'alego-default'
-                                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                            : 'bg-rose-100 text-rose-700 hover:bg-rose-200'
-                                        }`}
-                                        title={course.id === 'alego-default' ? 'Curso padrão não pode ser excluído' : 'Excluir curso'}
+                                        onClick={(e) => {
+                                          e.preventDefault()
+                                          e.stopPropagation()
+                                          console.log('🔄 Botão Regenerar clicado para curso:', course.id, 'tipo:', typeof course.id)
+                                          try {
+                                            setSelectedCourseForFullGeneration(course.id)
+                                            setShowFullGenerationModal(true)
+                                            setRegeneratingCourse(true)
+                                          } catch (err) {
+                                            console.error('Erro ao abrir modal de regeneração:', err)
+                                            setMessage(`❌ Erro ao abrir modal: ${err.message}`)
+                                          }
+                                        }}
+                                        className="rounded-lg bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-200"
+                                        title="Regenerar flashcards do curso (deleta antigos e gera novos focados no conteúdo)"
+                                      >
+                                        🔄 Regenerar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.preventDefault()
+                                          e.stopPropagation()
+                                          console.log('🗑️ Botão Excluir clicado para curso:', course.id, 'tipo:', typeof course.id)
+                                          try {
+                                            deleteCourse(course.id)
+                                          } catch (err) {
+                                            console.error('Erro ao deletar curso:', err)
+                                            setMessage(`❌ Erro ao deletar curso: ${err.message}`)
+                                          }
+                                        }}
+                                        className="rounded-lg bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-200"
+                                        title="Excluir curso"
                                       >
                                         <TrashIcon className="h-4 w-4 inline" /> Excluir
                                       </button>
@@ -3939,13 +4101,29 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                   </div>
                 </div>
 
+                {/* Debug: Mostrar IDs dos cursos */}
+                {process.env.NODE_ENV === 'development' && courses.length > 0 && (
+                  <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-xs font-semibold text-yellow-800 mb-2">🔍 Debug - IDs dos Cursos:</p>
+                    <ul className="text-xs text-yellow-700 space-y-1">
+                      {courses.map(course => (
+                        <li key={course.id}>
+                          ID: <strong>{course.id}</strong> ({typeof course.id}) | Nome: {course.name} | 
+                          É alego-default? {String(course.id === 'alego-default')} | 
+                          String é alego-default? {String(String(course.id) === 'alego-default')}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* Modal para Geração Completa com IA */}
                 {showFullGenerationModal && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                     <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-slate-200 p-6 max-h-[90vh] overflow-y-auto">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-bold text-slate-800">
-                          🤖 Gerar Curso Completo com IA
+                          {regeneratingCourse ? '🔄 Regenerar Curso com IA' : '🤖 Gerar Curso Completo com IA'}
                         </h3>
                         <button
                           type="button"
@@ -3955,6 +4133,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                             setEditalPdfForGeneration(null)
                             setEditalPdfTextForGeneration('')
                             setCargoForGeneration('')
+                            setRegeneratingCourse(false)
                             setFullCourseProgress('')
                           }}
                           className="text-slate-400 hover:text-slate-600"
@@ -3967,12 +4146,24 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                       <div className="space-y-4">
                         <div>
                           <p className="text-sm text-slate-600 mb-4">
-                            Informe o cargo específico e faça upload do PDF do edital. A IA vai analisar o documento e gerar automaticamente:
+                            {regeneratingCourse 
+                              ? 'Informe o cargo específico e faça upload do PDF do edital. A IA vai REGENERAR os flashcards focados no CONTEÚDO (não no cargo):'
+                              : 'Informe o cargo específico e faça upload do PDF do edital. A IA vai analisar o documento e gerar automaticamente:'}
                           </p>
                           <ul className="text-xs text-slate-500 space-y-1 mb-4 ml-4 list-disc">
-                            <li>Apenas as matérias do cargo informado (filtrando outras matérias de outros cargos)</li>
-                            <li>Todos os módulos de cada matéria</li>
-                            <li>Todos os flashcards de cada módulo (15-25 por módulo)</li>
+                            {regeneratingCourse ? (
+                              <>
+                                <li>Deletar todos os flashcards antigos do curso</li>
+                                <li>Gerar novos flashcards focados no CONTEÚDO das matérias</li>
+                                <li>Flashcards educacionais que ensinam, não que ficam repetindo o cargo/banca</li>
+                              </>
+                            ) : (
+                              <>
+                                <li>Apenas as matérias do cargo informado (filtrando outras matérias de outros cargos)</li>
+                                <li>Todos os módulos de cada matéria</li>
+                                <li>Todos os flashcards de cada módulo focados no CONTEÚDO (15-25 por módulo)</li>
+                              </>
+                            )}
                           </ul>
                         </div>
 
@@ -4032,13 +4223,13 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                             type="button"
                             onClick={() => {
                               if (selectedCourseForFullGeneration) {
-                                generateFullCourseFromEdital(selectedCourseForFullGeneration)
+                                generateFullCourseFromEdital(selectedCourseForFullGeneration, regeneratingCourse)
                               }
                             }}
                             disabled={!editalPdfTextForGeneration || !cargoForGeneration.trim() || generatingFullCourse || extractingPdf}
                             className="flex-1 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {generatingFullCourse ? 'Gerando...' : '🚀 Gerar Curso Completo'}
+                            {generatingFullCourse ? 'Gerando...' : (regeneratingCourse ? '🔄 Regenerar Flashcards' : '🚀 Gerar Curso Completo')}
                           </button>
                           <button
                             type="button"
