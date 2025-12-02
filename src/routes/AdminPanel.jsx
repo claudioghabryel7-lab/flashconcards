@@ -155,6 +155,12 @@ const AdminPanel = () => {
   const [showFullGenerationModal, setShowFullGenerationModal] = useState(false)
   const [cargoForGeneration, setCargoForGeneration] = useState('') // Cargo específico para filtrar matérias
   const [regeneratingCourse, setRegeneratingCourse] = useState(false) // Se está regenerando curso existente
+  
+  // Estados para verificar e completar conteúdos
+  const [materiasTextInput, setMateriasTextInput] = useState('') // Texto com matérias para verificar
+  const [selectedCourseForVerification, setSelectedCourseForVerification] = useState('alego-default') // Curso para verificar
+  const [verifyingContents, setVerifyingContents] = useState(false) // Se está verificando/completando
+  const [verificationProgress, setVerificationProgress] = useState('') // Progresso da verificação
 
   // Configurar PDF.js worker
   useEffect(() => {
@@ -2268,6 +2274,267 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     }
   }
 
+  // Verificar e completar conteúdos do curso
+  const verifyAndCompleteContents = async (courseId) => {
+    if (!materiasTextInput.trim()) {
+      setMessage('❌ Cole as matérias em texto primeiro.')
+      return
+    }
+
+    if (!courseId) {
+      setMessage('❌ Selecione um curso.')
+      return
+    }
+
+    setVerifyingContents(true)
+    setVerificationProgress('🔍 Iniciando verificação...')
+    setMessage('')
+
+    try {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      
+      // Tentar modelos válidos
+      const modelNames = ['gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash']
+      let model = null
+      let lastError = null
+      
+      for (const modelName of modelNames) {
+        try {
+          model = genAI.getGenerativeModel({ model: modelName })
+          await model.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
+          console.log(`✅ Usando modelo: ${modelName}`)
+          break
+        } catch (err) {
+          console.warn(`⚠️ Modelo ${modelName} não disponível:`, err.message)
+          lastError = err
+          continue
+        }
+      }
+      
+      if (!model) {
+        throw new Error(`Nenhum modelo Gemini disponível. Último erro: ${lastError?.message || 'Desconhecido'}`)
+      }
+
+      // 1. Buscar matérias existentes no curso
+      setVerificationProgress('📋 Verificando matérias existentes no curso...')
+      const subjectsRef = collection(db, 'courses', courseId, 'subjects')
+      const existingSubjectsSnapshot = await getDocs(subjectsRef)
+      const existingSubjects = existingSubjectsSnapshot.docs.map(doc => doc.data().name)
+      
+      // 2. Buscar flashcards existentes para verificar módulos
+      const cardsRef = collection(db, 'flashcards')
+      const existingCardsQuery = query(cardsRef, where('courseId', '==', courseId))
+      const existingCardsSnapshot = await getDocs(existingCardsQuery)
+      const existingCards = existingCardsSnapshot.docs.map(doc => doc.data())
+      
+      // Agrupar módulos existentes por matéria
+      const existingModulesBySubject = {}
+      existingCards.forEach(card => {
+        if (card.materia && card.modulo) {
+          if (!existingModulesBySubject[card.materia]) {
+            existingModulesBySubject[card.materia] = new Set()
+          }
+          existingModulesBySubject[card.materia].add(card.modulo)
+        }
+      })
+
+      // 3. Analisar o texto das matérias e identificar o que falta
+      setVerificationProgress('🤖 Analisando matérias e identificando o que falta...')
+      const analysisPrompt = `Você é um especialista em análise de conteúdos de cursos preparatórios.
+
+MATÉRIAS FORNECIDAS (texto do usuário):
+${materiasTextInput}
+
+MATÉRIAS JÁ EXISTENTES NO CURSO:
+${existingSubjects.join(', ') || 'Nenhuma'}
+
+MÓDULOS JÁ EXISTENTES POR MATÉRIA:
+${Object.entries(existingModulesBySubject).map(([materia, modulos]) => 
+  `${materia}: ${Array.from(modulos).join(', ')}`
+).join('\n') || 'Nenhum'}
+
+TAREFA:
+1. Analise as matérias fornecidas pelo usuário
+2. Identifique quais matérias FALTAM no curso (não estão na lista de existentes)
+3. Para cada matéria (nova ou existente), identifique quais módulos FALTAM
+4. Organize os módulos faltantes de forma lógica (4-8 módulos por matéria)
+5. Para cada módulo, liste os tópicos principais que devem ser cobertos
+
+IMPORTANTE:
+- Foque apenas no que FALTA, não recrie o que já existe
+- Se uma matéria já existe mas não tem módulos/flashcards, crie módulos para ela
+- Se uma matéria não existe, crie ela e seus módulos
+- Organize de forma lógica e pedagógica
+- Módulos devem ter tamanho similar (não muito grandes, não muito pequenos)
+
+Retorne APENAS um JSON válido:
+{
+  "materiasParaAdicionar": [
+    {
+      "nome": "Nome da Matéria",
+      "ehNova": true/false,
+      "modulos": [
+        {
+          "nome": "Nome do Módulo",
+          "topicos": ["tópico 1", "tópico 2", ...]
+        }
+      ]
+    }
+  ]
+}
+
+Retorne APENAS o JSON, sem markdown, sem explicações.`
+
+      const analysisResult = await model.generateContent(analysisPrompt)
+      let analysisText = analysisResult.response.text().trim()
+      
+      // Limpar markdown se houver
+      if (analysisText.startsWith('```json')) {
+        analysisText = analysisText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      } else if (analysisText.startsWith('```')) {
+        analysisText = analysisText.replace(/```\n?/g, '').trim()
+      }
+
+      const analysis = JSON.parse(analysisText)
+      const materiasParaAdicionar = analysis.materiasParaAdicionar || []
+
+      if (materiasParaAdicionar.length === 0) {
+        setVerificationProgress('✅ Todos os conteúdos já estão adicionados! Nada a fazer.')
+        setMessage('✅ Verificação concluída! Todos os conteúdos já estão no curso.')
+        return
+      }
+
+      setVerificationProgress(`📝 Encontradas ${materiasParaAdicionar.length} matéria(s) para adicionar/completar. Iniciando...`)
+
+      // 4. Criar matérias que faltam
+      let materiasCriadas = 0
+      let modulosProcessados = 0
+      let flashcardsCriados = 0
+      const totalModulos = materiasParaAdicionar.reduce((acc, m) => acc + (m.modulos?.length || 0), 0)
+
+      for (const materia of materiasParaAdicionar) {
+        // Criar matéria se for nova
+        if (materia.ehNova) {
+          try {
+            // Verificar se já existe
+            const alreadyExists = existingSubjects.includes(materia.nome)
+            if (!alreadyExists) {
+              await addDoc(subjectsRef, {
+                name: materia.nome,
+                createdAt: serverTimestamp(),
+              })
+              materiasCriadas++
+              setVerificationProgress(`✅ Matéria "${materia.nome}" criada.`)
+            }
+          } catch (err) {
+            console.warn(`Erro ao criar matéria ${materia.nome}:`, err)
+          }
+        }
+
+        // Gerar flashcards para cada módulo
+        if (materia.modulos && materia.modulos.length > 0) {
+          for (const modulo of materia.modulos) {
+            modulosProcessados++
+            setVerificationProgress(`📝 Gerando flashcards para ${materia.nome} - ${modulo.nome} (${modulosProcessados}/${totalModulos})...`)
+
+            // Verificar se já existem flashcards para este módulo
+            const existingCardsForModule = existingCards.filter(
+              card => card.materia === materia.nome && card.modulo === modulo.nome
+            )
+
+            if (existingCardsForModule.length > 0) {
+              setVerificationProgress(`⏭️ Módulo "${modulo.nome}" já tem ${existingCardsForModule.length} flashcard(s). Pulando...`)
+              continue
+            }
+
+            // Gerar flashcards para este módulo
+            const flashcardsPrompt = `Você é um especialista em criar flashcards educacionais para concursos públicos.
+
+MATÉRIA: ${materia.nome}
+MÓDULO: ${modulo.nome}
+TÓPICOS DO MÓDULO: ${modulo.topicos?.join(', ') || 'Conteúdo geral do módulo'}
+
+TAREFA:
+Crie flashcards educacionais focados EXCLUSIVAMENTE no CONTEÚDO da matéria e módulo acima.
+
+REGRAS CRÍTICAS:
+- FOCE 100% NO CONTEÚDO EDUCACIONAL: flashcards que ENSINAM o conteúdo, como questões objetivas
+- Estilo de questões objetivas: perguntas diretas e respostas claras (2-4 frases)
+- Crie 18-25 flashcards por módulo (garanta cobertura completa)
+- Cada flashcard deve cobrir um tópico/conceito específico
+- Perguntas devem ser diretas, objetivas e práticas (ex: "O que é...?", "Quais são...?", "Explique...")
+- Respostas devem explicar o CONTEÚDO de forma clara e completa
+- NÃO mencione cargo ou banca repetidamente
+- Use linguagem técnica e precisa, como em questões de concurso
+
+Retorne APENAS um JSON válido:
+{
+  "flashcards": [
+    {
+      "pergunta": "Pergunta objetiva sobre o CONTEÚDO",
+      "resposta": "Resposta educacional clara e completa (2-4 frases)"
+    }
+  ]
+}
+
+Retorne APENAS o JSON, sem markdown, sem explicações.`
+
+            try {
+              const flashcardsResult = await model.generateContent(flashcardsPrompt)
+              let flashcardsText = flashcardsResult.response.text().trim()
+              
+              if (flashcardsText.startsWith('```json')) {
+                flashcardsText = flashcardsText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+              } else if (flashcardsText.startsWith('```')) {
+                flashcardsText = flashcardsText.replace(/```\n?/g, '').trim()
+              }
+
+              const flashcardsData = JSON.parse(flashcardsText)
+              const flashcards = flashcardsData.flashcards || []
+
+              if (flashcards.length > 0) {
+                for (const flashcard of flashcards) {
+                  if (flashcard.pergunta && flashcard.resposta) {
+                    await addDoc(cardsRef, {
+                      pergunta: flashcard.pergunta.trim(),
+                      resposta: flashcard.resposta.trim(),
+                      materia: materia.nome,
+                      modulo: modulo.nome,
+                      courseId: courseId,
+                      tags: [],
+                    })
+                    flashcardsCriados++
+                  }
+                }
+                setVerificationProgress(`✅ ${flashcards.length} flashcard(s) criado(s) para ${materia.nome} - ${modulo.nome}`)
+              }
+            } catch (err) {
+              console.error(`Erro ao gerar flashcards para ${materia.nome} - ${modulo.nome}:`, err)
+              setVerificationProgress(`⚠️ Erro ao gerar flashcards para ${materia.nome} - ${modulo.nome}: ${err.message}`)
+            }
+
+            // Pequeno delay
+            await new Promise(resolve => setTimeout(resolve, 1000))
+          }
+        }
+      }
+
+      setVerificationProgress('')
+      setMessage(`✅ Verificação e completude concluídas! ${materiasCriadas} matéria(s) criada(s), ${modulosProcessados} módulo(s) processado(s) e ${flashcardsCriados} flashcard(s) criado(s).`)
+    } catch (err) {
+      console.error('Erro ao verificar e completar conteúdos:', err)
+      setMessage(`❌ Erro ao verificar e completar conteúdos: ${err.message}`)
+      setVerificationProgress('')
+    } finally {
+      setVerifyingContents(false)
+    }
+  }
+
   // Extrair texto do PDF para geração completa
   const extractPdfForFullGeneration = async (file) => {
     setExtractingPdf(true)
@@ -4260,6 +4527,74 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                     </div>
                   </div>
                 )}
+
+                {/* Seção: Verificar e Completar Conteúdos */}
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 mt-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-green-500/5 to-emerald-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
+                      <DocumentTextIcon className="h-5 w-5" />
+                      Verificar e Completar Conteúdos
+                    </p>
+                    <p className="text-xs text-slate-500 mb-6">
+                      Cole as matérias em texto e a IA vai verificar o que falta e adicionar automaticamente (matérias, módulos e flashcards).
+                    </p>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                          Curso para Verificar *
+                        </label>
+                        <select
+                          value={selectedCourseForVerification}
+                          onChange={(e) => setSelectedCourseForVerification(e.target.value)}
+                          disabled={verifyingContents}
+                          className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                        >
+                          {courses.map((course) => (
+                            <option key={course.id} value={course.id}>
+                              {course.name} {course.id === 'alego-default' ? '(Padrão)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                          Matérias (uma por linha ou separadas por vírgula) *
+                        </label>
+                        <textarea
+                          value={materiasTextInput}
+                          onChange={(e) => setMateriasTextInput(e.target.value)}
+                          placeholder="Exemplo:&#10;Português&#10;Matemática&#10;Direito Constitucional&#10;Direito Administrativo&#10;&#10;Ou: Português, Matemática, Direito Constitucional, Direito Administrativo"
+                          rows={8}
+                          disabled={verifyingContents}
+                          className="w-full rounded-lg border border-slate-300 p-3 text-sm font-mono"
+                        />
+                        <p className="text-xs text-slate-500 mt-1">
+                          Cole ou digite as matérias que devem estar no curso. A IA vai verificar o que falta e adicionar automaticamente.
+                        </p>
+                      </div>
+
+                      {verificationProgress && (
+                        <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+                          <p className="text-sm text-blue-800 whitespace-pre-wrap">
+                            {verificationProgress}
+                          </p>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => verifyAndCompleteContents(selectedCourseForVerification)}
+                        disabled={!materiasTextInput.trim() || verifyingContents}
+                        className="w-full rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {verifyingContents ? 'Verificando e Completando...' : '✅ Verificar e Completar Conteúdos'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
