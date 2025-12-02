@@ -11,7 +11,31 @@ const Ranking = () => {
   const [users, setUsers] = useState([])
   const [userProgress, setUserProgress] = useState({}) // { uid: { totalDays, totalHours, studiedCards } }
   const [loading, setLoading] = useState(true)
+  const [selectedCourseId, setSelectedCourseId] = useState(null) // Curso selecionado do perfil
+  const [allCards, setAllCards] = useState([]) // Todos os flashcards para filtrar por curso
 
+  // Usar curso selecionado do perfil
+  useEffect(() => {
+    if (!profile) return
+    
+    // Usar curso selecionado do perfil (pode ser null para ALEGO padrão)
+    const courseFromProfile = profile.selectedCourseId !== undefined ? profile.selectedCourseId : null
+    setSelectedCourseId(courseFromProfile)
+  }, [profile])
+  
+  // Carregar flashcards para filtrar por curso
+  useEffect(() => {
+    const cardsRef = collection(db, 'flashcards')
+    const unsub = onSnapshot(cardsRef, (snapshot) => {
+      const data = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      setAllCards(data)
+    })
+    return () => unsub()
+  }, [])
+  
   // Carregar todos os usuários
   useEffect(() => {
     const usersRef = collection(db, 'users')
@@ -26,18 +50,37 @@ const Ranking = () => {
     return () => unsub()
   }, [])
 
-  // Carregar progresso de todos os usuários (dias e horas)
+  // Carregar progresso de todos os usuários (dias e horas) - filtrado por curso
   useEffect(() => {
+    if (selectedCourseId === null && selectedCourseId !== null) return // Aguardar curso ser carregado
+    
     const progressRef = collection(db, 'progress')
     const unsub = onSnapshot(progressRef, (snapshot) => {
       const progressData = {}
       const userDates = {} // Para rastrear dias únicos por usuário
       
-      // Agrupar por uid e calcular totais
+      // Filtrar por curso selecionado
+      const selectedCourse = (selectedCourseId || '').trim()
+      
+      // Agrupar por uid e calcular totais (apenas do curso selecionado)
       snapshot.docs.forEach((doc) => {
         const data = doc.data()
         const uid = data.uid
         if (!uid) return
+        
+        // Filtrar por curso
+        const itemCourseId = data.courseId
+        if (selectedCourse) {
+          // Se tem curso selecionado, mostrar apenas progresso desse curso
+          if (itemCourseId !== selectedCourse && String(itemCourseId) !== String(selectedCourse)) {
+            return // Pular este item
+          }
+        } else {
+          // Se não tem curso selecionado, mostrar apenas progresso sem courseId (ALEGO padrão)
+          if (itemCourseId && itemCourseId !== '' && itemCourseId !== null && itemCourseId !== undefined) {
+            return // Pular este item
+          }
+        }
         
         if (!progressData[uid]) {
           progressData[uid] = { totalDays: 0, totalHours: 0, studiedCards: 0 }
@@ -75,19 +118,40 @@ const Ranking = () => {
       })
     })
     return () => unsub()
-  }, [])
+  }, [selectedCourseId])
 
-  // Carregar progresso de cards estudados
+  // Carregar progresso de cards estudados (filtrado por curso selecionado)
   useEffect(() => {
+    if (!selectedCourseId && selectedCourseId !== null) return // Aguardar curso ser carregado
+    
     const userProgressRef = collection(db, 'userProgress')
     const unsub = onSnapshot(userProgressRef, (snapshot) => {
       snapshot.docs.forEach((docSnapshot) => {
         const data = docSnapshot.data()
         const uid = docSnapshot.id
         const cardProgress = data.cardProgress || {}
-        const studiedCards = Object.keys(cardProgress).filter(
-          cardId => cardProgress[cardId].reviewCount > 0
-        ).length
+        
+        // Filtrar cards estudados apenas do curso selecionado
+        const studiedCards = Object.keys(cardProgress).filter(cardId => {
+          const progress = cardProgress[cardId]
+          if (!progress || progress.reviewCount === 0) return false
+          
+          // Encontrar o card nos flashcards carregados
+          const card = allCards.find(c => c.id === cardId)
+          if (!card) return false
+          
+          // Filtrar por curso selecionado
+          const selectedCourse = (selectedCourseId || '').trim()
+          if (selectedCourse) {
+            // Se tem curso selecionado, mostrar apenas cards desse curso
+            const cardCourseId = card.courseId || null
+            return cardCourseId === selectedCourse || String(cardCourseId) === String(selectedCourse)
+          } else {
+            // Se não tem curso selecionado, mostrar apenas cards sem courseId (ALEGO padrão)
+            const cardCourseId = card.courseId
+            return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined
+          }
+        }).length
         
         setUserProgress(prev => ({
           ...prev,
@@ -100,7 +164,7 @@ const Ranking = () => {
       })
     })
     return () => unsub()
-  }, [])
+  }, [selectedCourseId, allCards])
 
   // Calcular ranking
   const ranking = useMemo(() => {

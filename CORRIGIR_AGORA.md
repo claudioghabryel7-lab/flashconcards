@@ -56,3 +56,6 @@ Invoke-WebRequest -Uri "https://us-central1-plegi-d84c2.cloudfunctions.net/webho
 Depois desses 3 passos, tudo deve funcionar! 🎉
 
 
+
+
+

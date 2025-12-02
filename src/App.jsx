@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Header from './components/Header'
 import FloatingAIChat from './components/FloatingAIChat'
 import SupportButton from './components/SupportButton'
+import PopupBanner from './components/PopupBanner'
 import { useAuth } from './hooks/useAuth'
 import { useDarkMode } from './hooks/useDarkMode.jsx'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
@@ -16,9 +17,10 @@ import FlashQuestoes from './routes/FlashQuestoes'
 import QuestionView from './routes/QuestionView'
 import ResetPassword from './routes/ResetPassword'
 import Payment from './routes/Payment'
+import CourseSelector from './components/CourseSelector'
 
-const ProtectedRoute = ({ children, adminOnly = false }) => {
-  const { user, loading, isAdmin } = useAuth()
+const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
+  const { user, profile, loading, isAdmin } = useAuth()
 
   if (loading) {
     return (
@@ -34,6 +36,11 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
 
   if (adminOnly && !isAdmin) {
     return <Navigate to="/dashboard" replace />
+  }
+
+  // Se precisa de seleção de curso e ainda não selecionou, redirecionar
+  if (requireCourseSelection && profile && profile.selectedCourseId === undefined) {
+    return <Navigate to="/select-course" replace />
   }
 
   return children
@@ -87,9 +94,17 @@ function App() {
             }
           />
           <Route
-            path="/dashboard"
+            path="/select-course"
             element={
               <ProtectedRoute>
+                <CourseSelector />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute requireCourseSelection>
                 <Dashboard />
               </ProtectedRoute>
             }
@@ -97,7 +112,7 @@ function App() {
           <Route
             path="/flashcards"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requireCourseSelection>
                 <FlashcardView />
               </ProtectedRoute>
             }
@@ -105,7 +120,7 @@ function App() {
           <Route
             path="/ranking"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requireCourseSelection>
                 <Ranking />
               </ProtectedRoute>
             }
@@ -113,7 +128,7 @@ function App() {
           <Route
             path="/flashquestoes"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requireCourseSelection>
                 <FlashQuestoes />
               </ProtectedRoute>
             }
@@ -129,7 +144,7 @@ function App() {
           <Route
             path="/admin"
             element={
-              <ProtectedRoute adminOnly>
+              <ProtectedRoute adminOnly requireCourseSelection={false}>
                 <AdminPanel />
               </ProtectedRoute>
             }
@@ -149,6 +164,7 @@ function App() {
       </footer>
       <FloatingAIChat />
       <SupportButton />
+      <PopupBanner />
     </div>
   )
 }

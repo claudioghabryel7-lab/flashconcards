@@ -93,3 +93,5 @@ Após o deploy das funções:
 
 - Mercado Pago PIX API: https://www.mercadopago.com.br/developers/pt/docs/checkout-api/integration-configuration/pix
 
+
+

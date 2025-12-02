@@ -1,5 +1,8 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
+import { collection, doc, onSnapshot, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
+import { db } from '../firebase/config'
 import { 
   ShieldCheckIcon, 
   SparklesIcon, 
@@ -17,6 +20,7 @@ import {
 import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
 import Reviews from '../components/Reviews'
+import FakeTestimonials from '../components/FakeTestimonials'
 
 const features = [
   {
@@ -28,7 +32,7 @@ const features = [
   {
     icon: QuestionMarkCircleIcon,
     title: 'FlashQuestões',
-    description: 'Questões fictícias no estilo FGV ALEGO geradas por IA. 10 questões por módulo com explicações detalhadas (BIZUs) e índice de acerto.',
+    description: 'Questões fictícias no estilo das principais bancas geradas por IA. 10 questões por módulo com explicações detalhadas (BIZUs) e índice de acerto.',
     color: 'from-purple-500 to-purple-600'
   },
   {
@@ -71,7 +75,7 @@ const features = [
 
 const benefits = [
   'Flashcards com sistema de repetição espaçada (SRS)',
-  'FlashQuestões geradas por IA no estilo FGV ALEGO',
+  'FlashQuestões geradas por IA no estilo das principais bancas',
   'Flash Mentor - IA que responde dúvidas sobre o edital',
   'Bot "Como Estudar?" - guia personalizado de estudos',
   'Ranking em tempo real com outros alunos',
@@ -83,69 +87,172 @@ const benefits = [
 const PublicHome = () => {
   // Número do WhatsApp (formato: código do país + DDD + número, sem espaços ou caracteres especiais)
   const whatsappNumber = '5562981841878'
-  const whatsappMessage = encodeURIComponent('Olá! Gostaria de garantir a promoção de R$ 99,90 para a mentoria ALEGO Policial Legislativo.')
+  const whatsappMessage = encodeURIComponent('Olá! Gostaria de saber mais sobre os cursos preparatórios disponíveis.')
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`
+  
+  // Carregar cursos
+  const [courses, setCourses] = useState([])
+  const [loadingCourses, setLoadingCourses] = useState(true)
+
+  useEffect(() => {
+    const coursesRef = collection(db, 'courses')
+    const q = query(coursesRef, where('active', '==', true))
+    
+    const unsub = onSnapshot(q, async (snapshot) => {
+      const data = snapshot.docs.map((docSnapshot) => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data(),
+      }))
+      
+      // Verificar se o curso ALEGO padrão existe
+      const alegoCourse = data.find(c => c.id === 'alego-default')
+      
+      if (!alegoCourse) {
+        // Criar curso ALEGO padrão se não existir
+        try {
+          const alegoRef = doc(db, 'courses', 'alego-default')
+          await setDoc(alegoRef, {
+            name: 'Polícia Legislativa ALEGO',
+            description: 'Mentoria completa para o concurso da Polícia Legislativa ALEGO com flashcards, questões e IA personalizada.',
+            price: 99.90,
+            originalPrice: 149.99,
+            competition: 'ALEGO - Polícia Legislativa',
+            active: true,
+            isDefault: true, // Marcar como curso padrão
+            createdAt: serverTimestamp(),
+          }, { merge: true })
+          
+          // Adicionar à lista
+          data.unshift({
+            id: 'alego-default',
+            name: 'Polícia Legislativa ALEGO',
+            description: 'Mentoria completa para o concurso da Polícia Legislativa ALEGO com flashcards, questões e IA personalizada.',
+            price: 99.90,
+            originalPrice: 149.99,
+            competition: 'ALEGO - Polícia Legislativa',
+            active: true,
+            isDefault: true,
+          })
+        } catch (err) {
+          console.error('Erro ao criar curso ALEGO padrão:', err)
+        }
+      }
+      
+      setCourses(data)
+      setLoadingCourses(false)
+    }, (error) => {
+      console.error('Erro ao carregar cursos:', error)
+      setCourses([])
+      setLoadingCourses(false)
+    })
+
+    return () => unsub()
+  }, [])
+
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value)
+  }
 
   return (
     <section className="space-y-6 sm:space-y-8 md:space-y-12 px-2 sm:px-0">
       {/* Carrossel de Banners */}
       <HomeBanner />
       
-      {/* Promoção */}
-      <motion.div 
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-rose-600 p-6 sm:p-8 shadow-xl"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div className="relative z-10 text-center">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-1.5 text-xs sm:text-sm font-bold text-white backdrop-blur-sm">
-            <ClockIcon className="h-4 w-4 animate-pulse" />
-            <span>PROMOÇÃO POR TEMPO LIMITADO</span>
-          </div>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white mb-4">
-            De <span className="line-through opacity-70">R$ 149,99</span> por apenas
-          </h2>
-          <div className="mb-4">
-            <span className="text-5xl sm:text-6xl md:text-7xl font-black text-white">R$ 99,90</span>
-            <p className="mt-2 text-sm sm:text-base text-white/90">
-              Economize <span className="font-bold text-white">R$ 50,09</span> agora!
+      {/* Cursos Disponíveis - Movido para o início */}
+      {courses.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="space-y-6"
+        >
+          <div className="text-center">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-alego-700 dark:text-alego-300 mb-3">
+              Cursos Preparatórios Disponíveis
+            </h2>
+            <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
+              Escolha o curso ideal para sua aprovação
             </p>
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-red-500/90 px-4 py-1.5 text-xs sm:text-sm font-bold text-white">
-              <span>🔥 SOMENTE 100 VAGAS</span>
-            </div>
           </div>
-          <Link
-            to="/pagamento"
-            onClick={trackButtonClick}
-            className="inline-block rounded-full bg-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-rose-600 shadow-2xl hover:bg-rose-50 transition-all transform hover:scale-105"
-          >
-            Garantir Promoção Agora
-          </Link>
-          <p className="mt-4 text-xs sm:text-sm text-white/80">
-            ⚡ Oferta válida por tempo limitado. Não perca esta oportunidade!
-          </p>
-        </div>
-        <motion.div 
-          className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-full bg-white/10 blur-2xl"
-          animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
-          transition={{ duration: 4, repeat: Infinity }}
-        ></motion.div>
-        <motion.div 
-          className="absolute bottom-0 left-0 -mb-4 -ml-4 h-24 w-24 rounded-full bg-white/10 blur-xl"
-          animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.5, 0.3] }}
-          transition={{ duration: 5, repeat: Infinity, delay: 1 }}
-        ></motion.div>
-      </motion.div>
+          <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {courses.map((course, index) => (
+              <motion.div
+                key={course.id}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                className="group relative overflow-hidden rounded-2xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl shadow-lg hover:shadow-2xl border border-slate-200/50 dark:border-slate-700/50"
+                whileHover={{ scale: 1.03, y: -8 }}
+              >
+                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 opacity-10 rounded-full blur-2xl group-hover:opacity-30 transition-all duration-500"></div>
+                <div className="relative z-10">
+                  {/* Imagem do curso */}
+                  {(course.imageBase64 || course.imageUrl) && (
+                    <div className="w-full h-48 overflow-hidden rounded-t-2xl">
+                      <img
+                        src={course.imageBase64 || course.imageUrl}
+                        alt={course.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
+                    </div>
+                  )}
+                  
+                  <div className="p-6">
+                    <div className="mb-3">
+                      <span className="inline-block rounded-full bg-blue-100 dark:bg-blue-900/50 px-3 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">
+                        {course.competition}
+                      </span>
+                    </div>
+                    
+                    <h3 className="text-xl font-bold text-alego-700 dark:text-alego-300 mb-2">
+                      {course.name}
+                    </h3>
+                    
+                    {course.description && (
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 line-clamp-2">
+                        {course.description}
+                      </p>
+                    )}
+                    
+                    <div className="mb-4">
+                      {course.originalPrice && course.originalPrice > course.price && (
+                        <p className="text-sm text-slate-400 line-through mb-1">
+                          {formatCurrency(course.originalPrice)}
+                        </p>
+                      )}
+                      <p className="text-2xl font-black text-alego-600 dark:text-alego-400">
+                        {formatCurrency(course.price || 99.90)}
+                      </p>
+                    </div>
+                    
+                    <Link
+                      to={`/pagamento?course=${course.id}`}
+                      onClick={trackButtonClick}
+                      className="block w-full rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 text-center text-sm font-bold text-white shadow-lg hover:shadow-xl hover:from-blue-500 hover:to-purple-500 transition-all transform hover:scale-105"
+                    >
+                      Comprar Agora
+                    </Link>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Hero Section */}
       <div className="grid gap-6 sm:gap-8 rounded-3xl bg-gradient-to-br from-alego-700 via-alego-600 to-alego-500 p-6 sm:p-8 md:p-10 text-white md:grid-cols-2 shadow-xl border border-alego-600/20">
         <div>
           <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.3em] text-alego-100">
-            Mentoria Intensiva
+            Plataforma Completa
           </p>
           <h1 className="mt-3 sm:mt-4 text-2xl sm:text-3xl md:text-4xl font-black leading-tight">
-            Polícia Legislativa ALEGO
+            Plataforma de Estudos Completa
           </h1>
           <p className="mt-4 sm:mt-6 text-base sm:text-lg text-alego-50">
             Plataforma completa com IA, flashcards inteligentes, questões personalizadas,
@@ -241,6 +348,9 @@ const PublicHome = () => {
         </div>
       </motion.div>
 
+      {/* Depoimentos de Compra Recente - Agora é um popup flutuante */}
+      <FakeTestimonials />
+
       {/* Avaliações dos Alunos */}
       <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 sm:p-8 shadow-sm">
         <Reviews />
@@ -253,7 +363,7 @@ const PublicHome = () => {
           Pronto para começar sua jornada?
         </h2>
         <p className="text-alego-100 mb-6 text-sm sm:text-base max-w-2xl mx-auto">
-          Junte-se a centenas de alunos que já estão se preparando para a ALEGO com nossa plataforma completa.
+          Junte-se a centenas de alunos que já estão se preparando para seus concursos com nossa plataforma completa.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
           <Link

@@ -61,6 +61,16 @@
         allow create, update, delete: if isAdmin();
       }
       
+      // 🔔 Popup Banner (configuração especial)
+      match /config/popupBanner {
+        // Permitir leitura pública (para mostrar popup na página inicial)
+        allow read: if true;
+        // Admin pode criar, atualizar e deletar
+        allow create, update, delete: if isAuthenticated() && 
+                                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
       match /homeBanners/{bannerId} {
         // Permitir leitura pública (sem autenticação) para banners na página inicial
         allow read: if true;
@@ -74,6 +84,30 @@
         allow delete: if isAuthenticated() && 
                         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      // 🎓 Cursos Preparatórios
+      match /courses/{courseId} {
+        // Permitir leitura pública de cursos ativos (para página inicial)
+        allow read: if true;
+        // Admin pode criar, atualizar e deletar
+        allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow update: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow delete: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        
+        // Matérias do curso (subcoleção)
+        match /subjects/{subjectId} {
+          allow read: if isAuthenticated();
+          allow create, update, delete: if isAuthenticated() && 
+                                          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        }
       }
       
       match /reviews/{reviewId} {

@@ -31,7 +31,7 @@ const MATERIAS = [
 
 const FlashQuestoes = () => {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { darkMode } = useDarkMode()
   const [cards, setCards] = useState([])
   const [selectedMateria, setSelectedMateria] = useState(null)
@@ -49,19 +49,87 @@ const FlashQuestoes = () => {
   const [editalPrompt, setEditalPrompt] = useState('')
   const [questoesConfigPrompt, setQuestoesConfigPrompt] = useState('')
   const [bizuConfigPrompt, setBizuConfigPrompt] = useState('')
+  const [selectedCourseId, setSelectedCourseId] = useState(null) // Curso selecionado (null = ALEGO padrão)
+  const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
+  const [selectedCourse, setSelectedCourse] = useState(null) // Dados completos do curso selecionado
 
-  // Carregar flashcards para obter módulos
+  // Usar curso selecionado do perfil do usuário
   useEffect(() => {
+    if (!profile) return
+    
+    // Usar curso selecionado do perfil (pode ser null para ALEGO padrão)
+    const courseFromProfile = profile.selectedCourseId !== undefined ? profile.selectedCourseId : null
+    setSelectedCourseId(courseFromProfile)
+    
+    // Carregar lista de cursos disponíveis (para mostrar no seletor de troca)
+    const purchasedCourses = profile.purchasedCourses || []
+    const isAdmin = profile.role === 'admin'
+    
+    const coursesRef = collection(db, 'courses')
+    const unsub = onSnapshot(coursesRef, (snapshot) => {
+      const allCourses = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      
+      // Filtrar apenas cursos comprados (ou todos se admin)
+      const filtered = isAdmin 
+        ? allCourses.filter(c => c.active !== false)
+        : allCourses.filter(c => purchasedCourses.includes(c.id) && c.active !== false)
+      
+      setAvailableCourses(filtered)
+      
+      // Encontrar curso selecionado
+      if (courseFromProfile) {
+        const course = allCourses.find(c => c.id === courseFromProfile)
+        setSelectedCourse(course || null)
+      } else {
+        setSelectedCourse(null) // ALEGO padrão
+      }
+    }, (error) => {
+      console.error('Erro ao carregar cursos:', error)
+      setAvailableCourses([])
+      setSelectedCourse(null)
+    })
+    
+    return () => unsub()
+  }, [profile])
+  
+  // Carregar flashcards para obter módulos (filtrado por curso)
+  useEffect(() => {
+    if (!user || !profile) return
+    
     const cardsRef = collection(db, 'flashcards')
     const unsub = onSnapshot(cardsRef, (snapshot) => {
-      const data = snapshot.docs.map((docSnapshot) => ({
+      const purchasedCourses = profile.purchasedCourses || []
+      const isAdmin = profile.role === 'admin'
+      
+      let data = snapshot.docs.map((docSnapshot) => ({
         id: docSnapshot.id,
         ...docSnapshot.data(),
       }))
+      
+      // Filtrar por curso selecionado
+      if (selectedCourseId) {
+        // Mostrar apenas flashcards do curso selecionado
+        data = data.filter(card => card.courseId === selectedCourseId)
+      } else {
+        // Mostrar apenas flashcards sem courseId (ALEGO padrão)
+        data = data.filter(card => !card.courseId)
+      }
+      
+      // Admin vê todos, mas ainda filtra por curso selecionado
+      if (!isAdmin && selectedCourseId) {
+        // Verificar se o usuário comprou o curso selecionado
+        if (!purchasedCourses.includes(selectedCourseId)) {
+          data = []
+        }
+      }
+      
       setCards(data)
     })
     return () => unsub()
-  }, [])
+  }, [user, profile, selectedCourseId])
 
   // Carregar edital/PDF
   useEffect(() => {
@@ -111,17 +179,27 @@ const FlashQuestoes = () => {
     fetchQuestoesConfig()
   }, [])
 
-  // Carregar estatísticas do usuário
+  // Carregar estatísticas do usuário (por curso)
   useEffect(() => {
-    if (!user) return
-    const statsRef = doc(db, 'questoesStats', user.uid)
+    if (!user || (selectedCourseId === null && selectedCourseId !== null)) return // Aguardar curso ser carregado
+    
+    const courseKey = selectedCourseId || 'alego' // 'alego' para curso padrão
+    const statsRef = doc(db, 'questoesStats', `${user.uid}_${courseKey}`)
     const unsub = onSnapshot(statsRef, (snapshot) => {
       if (snapshot.exists()) {
-        setStats(snapshot.data())
+        const data = snapshot.data()
+        // Verificar se é do curso correto
+        if (data.courseId === selectedCourseId || (!data.courseId && !selectedCourseId)) {
+          setStats(data)
+        } else {
+          setStats({ correct: 0, wrong: 0, byMateria: {} })
+        }
+      } else {
+        setStats({ correct: 0, wrong: 0, byMateria: {} })
       }
     })
     return () => unsub()
-  }, [user])
+  }, [user, selectedCourseId])
 
 
   // Organizar módulos por matéria
@@ -459,10 +537,11 @@ CRÍTICO:
 
     setStats(newStats)
 
-    // Salvar no Firestore
+    // Salvar no Firestore (por curso)
     if (user) {
-      const statsRef = doc(db, 'questoesStats', user.uid)
-      setDoc(statsRef, newStats, { merge: true })
+      const courseKey = selectedCourseId || 'alego' // 'alego' para curso padrão
+      const statsRef = doc(db, 'questoesStats', `${user.uid}_${courseKey}`)
+      setDoc(statsRef, { ...newStats, courseId: selectedCourseId }, { merge: true })
     }
   }
 
@@ -740,7 +819,9 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
             FLASHQUESTÕES
           </h1>
           <p className="stark-text-secondary text-sm sm:text-base">
-            Pratique com questões fictícias geradas por IA no estilo FGV
+            {selectedCourse 
+              ? `Pratique com questões fictícias geradas por IA para ${selectedCourse.name}`
+              : 'Pratique com questões fictícias geradas por IA no estilo FGV'}
           </p>
         </div>
         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-full blur-3xl"></div>

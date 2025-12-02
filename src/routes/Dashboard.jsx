@@ -54,17 +54,97 @@ const Dashboard = () => {
   const [suggestedModule, setSuggestedModule] = useState(null) // { materia, modulo }
   const [studyPhase, setStudyPhase] = useState(1) // Fase atual (1, 2, 3...)
   const [expandedMaterias, setExpandedMaterias] = useState({}) // { materia: true/false }
+  const [selectedCourseId, setSelectedCourseId] = useState(null) // Curso selecionado (null = ALEGO padrão)
+  const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
+  const [selectedCourse, setSelectedCourse] = useState(null) // Dados completos do curso selecionado
 
-  // Carregar todos os flashcards
+  // Usar curso selecionado do perfil do usuário
   useEffect(() => {
+    if (!profile) return
+    
+    // Usar curso selecionado do perfil (pode ser null para ALEGO padrão)
+    const courseFromProfile = profile.selectedCourseId !== undefined ? profile.selectedCourseId : null
+    setSelectedCourseId(courseFromProfile)
+    
+    // Carregar lista de cursos disponíveis (para mostrar no seletor de troca)
+    const purchasedCourses = profile.purchasedCourses || []
+    const isAdmin = profile.role === 'admin'
+    
+    const coursesRef = collection(db, 'courses')
+    const unsub = onSnapshot(coursesRef, (snapshot) => {
+      const allCourses = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      
+      // Filtrar apenas cursos comprados (ou todos se admin)
+      const filtered = isAdmin 
+        ? allCourses.filter(c => c.active !== false)
+        : allCourses.filter(c => purchasedCourses.includes(c.id) && c.active !== false)
+      
+      setAvailableCourses(filtered)
+      
+      // Encontrar curso selecionado
+      if (courseFromProfile) {
+        const course = allCourses.find(c => c.id === courseFromProfile)
+        setSelectedCourse(course || null)
+      } else {
+        setSelectedCourse(null) // ALEGO padrão
+      }
+    }, (error) => {
+      console.error('Erro ao carregar cursos:', error)
+      setAvailableCourses([])
+      setSelectedCourse(null)
+    })
+    
+    return () => unsub()
+  }, [profile])
+  
+  // Carregar flashcards filtrados por curso selecionado
+  useEffect(() => {
+    if (!user || !profile) return
+    
     const cardsRef = collection(db, 'flashcards')
     const unsub = onSnapshot(
       cardsRef,
       (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({
+        const purchasedCourses = profile.purchasedCourses || []
+        const isAdmin = profile.role === 'admin'
+        
+        let data = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         }))
+        
+        // Filtrar por curso selecionado
+        const selectedCourse = (selectedCourseId || '').trim()
+        
+        if (selectedCourse) {
+          // Mostrar apenas flashcards do curso selecionado
+          // Comparar tanto com string quanto com null/undefined
+          data = data.filter(card => {
+            const cardCourseId = card.courseId || null
+            return cardCourseId === selectedCourse || String(cardCourseId) === String(selectedCourse)
+          })
+          console.log(`🔍 Dashboard - Filtrado por curso "${selectedCourse}": ${data.length} flashcards`)
+        } else {
+          // Mostrar apenas flashcards sem courseId (ALEGO padrão)
+          // Incluir null, undefined e string vazia
+          data = data.filter(card => {
+            const cardCourseId = card.courseId
+            return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined
+          })
+          console.log(`🔍 Dashboard - Filtrado para ALEGO padrão: ${data.length} flashcards`)
+        }
+        
+        // Admin vê todos, mas ainda filtra por curso selecionado
+        if (!isAdmin && selectedCourseId) {
+          // Verificar se o usuário comprou o curso selecionado
+          if (!purchasedCourses.includes(selectedCourseId)) {
+            data = []
+          }
+        }
+        
         setAllCards(data)
         setLoading(false)
       },
@@ -75,7 +155,7 @@ const Dashboard = () => {
       }
     )
     return () => unsub()
-  }, [])
+  }, [user, profile, selectedCourseId])
 
   // Carregar progresso dos cards do usuário
   useEffect(() => {
@@ -123,7 +203,21 @@ const Dashboard = () => {
           id: docSnapshot.id,
           ...docSnapshot.data(),
         }))
-        setProgressData(data)
+        
+        // Filtrar por curso selecionado
+        const selectedCourse = (selectedCourseId || '').trim()
+        const filtered = data.filter(item => {
+          const itemCourseId = item.courseId
+          if (selectedCourse) {
+            // Se tem curso selecionado, mostrar apenas progresso desse curso
+            return itemCourseId === selectedCourse || String(itemCourseId) === String(selectedCourse)
+          } else {
+            // Se não tem curso selecionado, mostrar apenas progresso sem courseId (ALEGO padrão)
+            return !itemCourseId || itemCourseId === '' || itemCourseId === null || itemCourseId === undefined
+          }
+        })
+        
+        setProgressData(filtered)
       },
       (error) => {
         // Se der erro de índice, tentar sem orderBy
@@ -137,12 +231,24 @@ const Dashboard = () => {
                 id: docSnapshot.id,
                 ...docSnapshot.data(),
               }))
+              
+              // Filtrar por curso selecionado
+              const selectedCourse = (selectedCourseId || '').trim()
+              const filtered = data.filter(item => {
+                const itemCourseId = item.courseId
+                if (selectedCourse) {
+                  return itemCourseId === selectedCourse || String(itemCourseId) === String(selectedCourse)
+                } else {
+                  return !itemCourseId || itemCourseId === '' || itemCourseId === null || itemCourseId === undefined
+                }
+              })
+              
               // Ordenar manualmente por data
-              data.sort((a, b) => {
+              filtered.sort((a, b) => {
                 if (!a.date || !b.date) return 0
                 return b.date.localeCompare(a.date)
               })
-              setProgressData(data)
+              setProgressData(filtered)
             },
             (err) => console.error('Erro ao carregar progresso:', err)
           )
@@ -153,7 +259,7 @@ const Dashboard = () => {
     )
     
     return () => unsub()
-  }, [user])
+  }, [user, selectedCourseId])
 
   // Organizar matérias e módulos dos flashcards
   const organizedModules = useMemo(() => {
@@ -237,7 +343,18 @@ const Dashboard = () => {
     }
 
     // Encontrar o primeiro módulo não estudado, seguindo ordem das matérias e módulos
-    for (const materia of MATERIAS) {
+    // Usar matérias reais dos flashcards, não a lista fixa MATERIAS
+    const materiasReais = Object.keys(organizedModules).sort((a, b) => {
+      // Ordenar: primeiro as que estão em MATERIAS (na ordem original), depois as outras alfabeticamente
+      const indexA = MATERIAS.indexOf(a)
+      const indexB = MATERIAS.indexOf(b)
+      if (indexA !== -1 && indexB !== -1) return indexA - indexB
+      if (indexA !== -1) return -1
+      if (indexB !== -1) return 1
+      return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+    })
+    
+    for (const materia of materiasReais) {
       const modulos = organizedModules[materia] || []
       if (modulos.length === 0) continue
 
@@ -251,7 +368,7 @@ const Dashboard = () => {
     }
 
     // Se todos foram estudados, sugerir o primeiro módulo da primeira matéria
-    const firstMateria = MATERIAS.find(m => organizedModules[m]?.length > 0)
+    const firstMateria = materiasReais.find(m => organizedModules[m]?.length > 0)
     if (firstMateria && organizedModules[firstMateria]?.length > 0) {
       setSuggestedModule({
         materia: firstMateria,
@@ -356,9 +473,19 @@ const Dashboard = () => {
       }
     })
     
-    // Contar cards por matéria e calcular progresso
+    // Contar cards por matéria e calcular progresso (já filtrado por curso em allCards)
     allCards.forEach((card) => {
-      if (card.materia && stats.bySubject[card.materia]) {
+      if (card.materia) {
+        // Usar matérias reais dos flashcards, não apenas MATERIAS fixas
+        if (!stats.bySubject[card.materia]) {
+          stats.bySubject[card.materia] = {
+            days: 0,
+            hours: 0,
+            totalCards: 0,
+            studiedCards: 0,
+            percentage: 0,
+          }
+        }
         stats.bySubject[card.materia].totalCards += 1
         const progress = cardProgress[card.id]
         if (progress && progress.reviewCount > 0) {
@@ -424,7 +551,9 @@ const Dashboard = () => {
     try {
       const todayKey = dayjs().format('YYYY-MM-DD')
       const now = dayjs()
-      const progressDoc = doc(db, 'progress', `${user.uid}_${todayKey}`)
+      // Incluir courseId no ID do documento para separar por curso
+      const courseKey = selectedCourseId || 'alego'
+      const progressDoc = doc(db, 'progress', `${user.uid}_${courseKey}_${todayKey}`)
       
       const existing = progressData.find((p) => p.date === todayKey)
       const currentHours = existing?.hours || 0
@@ -436,6 +565,7 @@ const Dashboard = () => {
           uid: user.uid,
           date: todayKey,
           hours: newHours,
+          courseId: selectedCourseId || null, // null para ALEGO padrão
           lastUpdated: now.format('HH:mm'),
           createdAt: existing?.createdAt || serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -469,7 +599,9 @@ const Dashboard = () => {
           Bem-vindo(a), {profile?.displayName || user?.email || 'Aluno'}
         </p>
         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white mb-6">
-          Sua mentoria para a Polícia Legislativa está organizada aqui.
+          {selectedCourse 
+            ? `Sua mentoria para ${selectedCourse.name} está organizada aqui.`
+            : 'Sua mentoria para a Polícia Legislativa está organizada aqui.'}
         </h1>
         <div className="flex flex-col sm:flex-row gap-3">
           <Link
@@ -535,7 +667,25 @@ const Dashboard = () => {
                 Favoritos
               </p>
               <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-                {profile?.favorites?.length || 0}
+                {(() => {
+                  // Filtrar favoritos apenas dos cards do curso selecionado
+                  if (!profile?.favorites || !allCards.length) return 0
+                  const selectedCourse = (selectedCourseId || '').trim()
+                  const courseCardIds = allCards.map(c => c.id)
+                  const courseFavorites = profile.favorites.filter(favId => {
+                    // Verificar se o favorito é um card do curso atual
+                    if (!courseCardIds.includes(favId)) return false
+                    // Se não tem curso selecionado, mostrar apenas favoritos de cards sem courseId
+                    if (!selectedCourse) {
+                      const card = allCards.find(c => c.id === favId)
+                      return card && (!card.courseId || card.courseId === '' || card.courseId === null || card.courseId === undefined)
+                    }
+                    // Se tem curso selecionado, mostrar apenas favoritos de cards desse curso
+                    const card = allCards.find(c => c.id === favId)
+                    return card && (card.courseId === selectedCourse || String(card.courseId) === String(selectedCourse))
+                  })
+                  return courseFavorites.length
+                })()}
               </p>
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-5">
@@ -714,7 +864,18 @@ const Dashboard = () => {
                 <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600 to-transparent"></div>
               </div>
               <div className="space-y-3">
-                {MATERIAS.map((materia) => {
+                {/* Usar matérias reais dos flashcards, não a lista fixa MATERIAS */}
+                {Object.keys(organizedModules)
+                  .sort((a, b) => {
+                    // Ordenar: primeiro as que estão em MATERIAS (na ordem original), depois as outras alfabeticamente
+                    const indexA = MATERIAS.indexOf(a)
+                    const indexB = MATERIAS.indexOf(b)
+                    if (indexA !== -1 && indexB !== -1) return indexA - indexB
+                    if (indexA !== -1) return -1
+                    if (indexB !== -1) return 1
+                    return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+                  })
+                  .map((materia) => {
                   const modulos = organizedModules[materia] || []
                   if (modulos.length === 0) return null
 
@@ -831,7 +992,18 @@ const Dashboard = () => {
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {MATERIAS.map((materia) => {
+            {/* Usar matérias reais dos flashcards, não a lista fixa MATERIAS */}
+            {Object.keys(organizedModules)
+              .sort((a, b) => {
+                // Ordenar: primeiro as que estão em MATERIAS (na ordem original), depois as outras alfabeticamente
+                const indexA = MATERIAS.indexOf(a)
+                const indexB = MATERIAS.indexOf(b)
+                if (indexA !== -1 && indexB !== -1) return indexA - indexB
+                if (indexA !== -1) return -1
+                if (indexB !== -1) return 1
+                return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+              })
+              .map((materia) => {
               const stats = studyStats.bySubject[materia] || { days: 0, hours: 0, percentage: 0, studiedCards: 0, totalCards: 0 }
               const progress = stats.percentage || 0
               const hasProgress = stats.totalCards > 0

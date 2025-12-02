@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   CreditCardIcon,
@@ -19,6 +19,7 @@ import { trackGoogleAdsConversion } from '../utils/googleAds'
 const Payment = () => {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   
   // Estados
   const [email, setEmail] = useState(user?.email || '')
@@ -32,6 +33,7 @@ const Payment = () => {
   const [pixCode, setPixCode] = useState('') // Código PIX copia-e-cola para exibir
   const [pixQrCodeBase64, setPixQrCodeBase64] = useState('') // Imagem base64 do QR Code
   const [currentTransactionId, setCurrentTransactionId] = useState('') // ID da transação atual
+  const [selectedCourse, setSelectedCourse] = useState(null) // Curso selecionado
   
   // Dados do cartão
   const [cardData, setCardData] = useState({
@@ -42,12 +44,43 @@ const Payment = () => {
     installments: 1
   })
   
-  // Dados do produto
-  const product = {
+  // Carregar curso se houver courseId na URL
+  useEffect(() => {
+    const courseId = searchParams.get('course')
+    if (courseId) {
+      const loadCourse = async () => {
+        try {
+          const courseRef = doc(db, 'courses', courseId)
+          const courseDoc = await getDoc(courseRef)
+          if (courseDoc.exists()) {
+            setSelectedCourse({
+              id: courseDoc.id,
+              ...courseDoc.data()
+            })
+          }
+        } catch (error) {
+          console.error('Erro ao carregar curso:', error)
+        }
+      }
+      loadCourse()
+    }
+  }, [searchParams])
+  
+  // Dados do produto (usa curso selecionado ou padrão ALEGO)
+  const product = selectedCourse ? {
+    name: selectedCourse.name,
+    originalPrice: selectedCourse.originalPrice || 149.99,
+    price: selectedCourse.price || 99.90,
+    discount: (selectedCourse.originalPrice || 149.99) - (selectedCourse.price || 99.90),
+    courseId: selectedCourse.id,
+    competition: selectedCourse.competition
+  } : {
     name: 'Mentoria Policial Legislativo ALEGO',
     originalPrice: 149.99,
     price: 99.90,
-    discount: 50.09
+    discount: 50.09,
+    courseId: null,
+    competition: 'ALEGO'
   }
 
   // Opções de parcelamento
@@ -79,9 +112,31 @@ const Payment = () => {
         if (status === 'paid') {
           console.log('Pagamento confirmado! Atualizando página...')
           
-          // Buscar credenciais do usuário criado
+          // Atualizar acesso ao curso no perfil do usuário
           const userId = transactionData.userId
+          if (userId && transactionData.courseId) {
+            try {
+              const userRef = doc(db, 'users', userId)
+              const userDoc = await getDoc(userRef)
+              
+              if (userDoc.exists()) {
+                const currentData = userDoc.data()
+                const purchasedCourses = currentData.purchasedCourses || []
+                
+                // Adicionar curso comprado se não estiver na lista
+                if (!purchasedCourses.includes(transactionData.courseId)) {
+                  purchasedCourses.push(transactionData.courseId)
+                  await setDoc(userRef, {
+                    purchasedCourses: purchasedCourses
+                  }, { merge: true })
+                }
+              }
+            } catch (error) {
+              console.error('Erro ao atualizar acesso ao curso:', error)
+            }
+          }
           
+          // Buscar credenciais do usuário criado
           if (userId) {
             // Buscar usuário para pegar email
             const userRef = doc(db, 'users', userId)
@@ -247,6 +302,8 @@ const Payment = () => {
         status: 'pending',
         createdAt: serverTimestamp(),
         transactionId,
+        courseId: product.courseId, // ID do curso comprado
+        competition: product.competition, // Nome do concurso
         // Para cartão, salvar últimos 4 dígitos
         ...(paymentMethod === 'card' && {
           cardLastDigits: cardData.number.slice(-4)
@@ -486,14 +543,24 @@ const Payment = () => {
             userId: accountResult.uid || accountResult.userId,
           }, { merge: true })
 
-          // Ativar acesso
+          // Ativar acesso ao curso específico
           const userId = accountResult.uid || accountResult.userId
           if (userId) {
             const userRef = doc(db, 'users', userId)
+            const userDoc = await getDoc(userRef)
+            const currentData = userDoc.exists() ? userDoc.data() : {}
+            const purchasedCourses = currentData.purchasedCourses || []
+            
+            // Adicionar curso comprado se não estiver na lista
+            if (transactionData.courseId && !purchasedCourses.includes(transactionData.courseId)) {
+              purchasedCourses.push(transactionData.courseId)
+            }
+            
             await setDoc(userRef, {
               hasActiveSubscription: true,
               subscriptionStartDate: serverTimestamp(),
-              lastPaymentDate: serverTimestamp()
+              lastPaymentDate: serverTimestamp(),
+              purchasedCourses: purchasedCourses
             }, { merge: true })
           }
 
@@ -507,15 +574,24 @@ const Payment = () => {
           setErrorMessage('Pagamento aprovado, mas houve erro ao criar conta. Entre em contato com o suporte.')
         }
       } else {
-        // Usuário já logado - apenas ativar acesso
+        // Usuário já logado - apenas ativar acesso ao curso específico
         const userRef = doc(db, 'users', user.uid)
         const userDoc = await getDoc(userRef)
         if (userDoc.exists()) {
+          const currentData = userDoc.data()
+          const purchasedCourses = currentData.purchasedCourses || []
+          
+          // Adicionar curso comprado se não estiver na lista
+          if (transactionData.courseId && !purchasedCourses.includes(transactionData.courseId)) {
+            purchasedCourses.push(transactionData.courseId)
+          }
+          
           await setDoc(userRef, {
-            ...userDoc.data(),
+            ...currentData,
             hasActiveSubscription: true,
             subscriptionStartDate: serverTimestamp(),
-            lastPaymentDate: serverTimestamp()
+            lastPaymentDate: serverTimestamp(),
+            purchasedCourses: purchasedCourses
           }, { merge: true })
         }
       }

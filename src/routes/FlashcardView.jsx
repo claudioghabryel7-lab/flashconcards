@@ -37,7 +37,7 @@ const STAGES = [
 ]
 
 const FlashcardView = () => {
-  const { user, favorites, updateFavorites } = useAuth()
+  const { user, favorites, updateFavorites, profile } = useAuth()
   const { darkMode } = useDarkMode()
   const [searchParams] = useSearchParams()
   const [cards, setCards] = useState([])
@@ -58,19 +58,89 @@ const FlashcardView = () => {
     card: null,
   })
   const [editalPrompt, setEditalPrompt] = useState('')
+  const [selectedCourseId, setSelectedCourseId] = useState(null) // Curso selecionado (null = ALEGO padrão)
+  const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
   
   // Timer de estudo - ativo quando um módulo está selecionado
   const isStudying = !!selectedMateria && !!selectedModulo
-  const { formattedTime, elapsedSeconds } = useStudyTimer(isStudying, user?.uid)
+  const { formattedTime, elapsedSeconds } = useStudyTimer(isStudying, user?.uid, selectedCourseId)
 
-  // Carregar flashcards do Firestore
+  // Usar curso selecionado do perfil do usuário
   useEffect(() => {
+    if (!profile) return
+    
+    // Usar curso selecionado do perfil (pode ser null para ALEGO padrão)
+    const courseFromProfile = profile.selectedCourseId !== undefined ? profile.selectedCourseId : null
+    setSelectedCourseId(courseFromProfile)
+    
+    // Carregar lista de cursos disponíveis (para mostrar no seletor de troca)
+    const purchasedCourses = profile.purchasedCourses || []
+    const isAdmin = profile.role === 'admin'
+    
+    const coursesRef = collection(db, 'courses')
+    const unsub = onSnapshot(coursesRef, (snapshot) => {
+      const allCourses = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      
+      // Filtrar apenas cursos comprados (ou todos se admin)
+      const filtered = isAdmin 
+        ? allCourses.filter(c => c.active !== false)
+        : allCourses.filter(c => purchasedCourses.includes(c.id) && c.active !== false)
+      
+      setAvailableCourses(filtered)
+    }, (error) => {
+      console.error('Erro ao carregar cursos:', error)
+      setAvailableCourses([])
+    })
+    
+    return () => unsub()
+  }, [profile])
+  
+  // Carregar flashcards do Firestore - filtrar por curso selecionado
+  useEffect(() => {
+    if (!user || !profile) return
+    
     const cardsRef = collection(db, 'flashcards')
     const unsub = onSnapshot(cardsRef, (snapshot) => {
-      const data = snapshot.docs.map((docSnapshot) => ({
+      const purchasedCourses = profile.purchasedCourses || []
+      const isAdmin = profile.role === 'admin'
+      
+      let data = snapshot.docs.map((docSnapshot) => ({
         id: docSnapshot.id,
         ...docSnapshot.data(),
       }))
+      
+      // Filtrar por curso selecionado
+      const selectedCourse = (selectedCourseId || '').trim()
+      
+      if (selectedCourse) {
+        // Mostrar apenas flashcards do curso selecionado
+        // Comparar tanto com string quanto com null/undefined
+        data = data.filter(card => {
+          const cardCourseId = card.courseId || null
+          return cardCourseId === selectedCourse || String(cardCourseId) === String(selectedCourse)
+        })
+        console.log(`🔍 FlashcardView - Filtrado por curso "${selectedCourse}": ${data.length} flashcards`)
+      } else {
+        // Mostrar apenas flashcards sem courseId (ALEGO padrão)
+        // Incluir null, undefined e string vazia
+        data = data.filter(card => {
+          const cardCourseId = card.courseId
+          return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined
+        })
+        console.log(`🔍 FlashcardView - Filtrado para ALEGO padrão: ${data.length} flashcards`)
+      }
+      
+      // Admin vê todos, mas ainda filtra por curso selecionado
+      if (!isAdmin && selectedCourseId) {
+        // Verificar se o usuário comprou o curso selecionado
+        if (!purchasedCourses.includes(selectedCourseId)) {
+          data = []
+        }
+      }
+      
       data.sort((a, b) => {
         if (a.materia !== b.materia) {
           const indexA = MATERIAS.indexOf(a.materia || '')
@@ -85,7 +155,7 @@ const FlashcardView = () => {
       setCards(data)
     })
     return () => unsub()
-  }, [])
+  }, [user, profile, selectedCourseId])
 
   useEffect(() => {
     const fetchPrompt = async () => {
@@ -609,7 +679,18 @@ Regras:
               </p>
             </div>
           <div className="space-y-2">
-            {MATERIAS.map((materia) => {
+            {/* Usar matérias dos flashcards organizados, não a lista fixa MATERIAS */}
+            {Object.keys(organizedCards)
+              .sort((a, b) => {
+                // Ordenar: primeiro as que estão em MATERIAS (na ordem original), depois as outras alfabeticamente
+                const indexA = MATERIAS.indexOf(a)
+                const indexB = MATERIAS.indexOf(b)
+                if (indexA !== -1 && indexB !== -1) return indexA - indexB
+                if (indexA !== -1) return -1
+                if (indexB !== -1) return 1
+                return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+              })
+              .map((materia) => {
               const modulos = organizedCards[materia] ? Object.keys(organizedCards[materia]) : []
               const isExpanded = expandedMaterias[materia]
               const isSelected = selectedMateria === materia

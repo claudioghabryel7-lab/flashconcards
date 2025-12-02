@@ -304,3 +304,6 @@ firebase functions:log
 **Pronto! Suas funções Firebase estão deployadas! 🎉**
 
 
+
+
+

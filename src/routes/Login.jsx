@@ -24,7 +24,8 @@ const Login = () => {
     setLoading(true)
     try {
       await login(form.email, form.password)
-      navigate('/dashboard')
+      // Redirecionar para seleção de curso (o componente verifica se já tem curso selecionado)
+      navigate('/select-course')
     } catch (err) {
       console.error('Erro no login:', err)
       setError(err.message || 'Credenciais inválidas. Confira e tente novamente.')

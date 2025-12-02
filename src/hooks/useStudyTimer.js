@@ -7,7 +7,7 @@ import { db } from '../firebase/config'
  * Hook para rastrear tempo de estudo em tempo real
  * Salva automaticamente no Firestore a cada minuto
  */
-export const useStudyTimer = (isActive, userId) => {
+export const useStudyTimer = (isActive, userId, courseId = null) => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const startTimeRef = useRef(null)
   const intervalRef = useRef(null)
@@ -46,7 +46,9 @@ export const useStudyTimer = (isActive, userId) => {
           
           if (elapsedMinutes > 0) {
             const todayKey = dayjs().format('YYYY-MM-DD')
-            const progressDoc = doc(db, 'progress', `${userId}_${todayKey}`)
+            // Incluir courseId no ID do documento para separar por curso
+            const courseKey = courseId || 'alego'
+            const progressDoc = doc(db, 'progress', `${userId}_${courseKey}_${todayKey}`)
             
             const existing = await getDoc(progressDoc)
             const currentHours = existing.exists() ? (existing.data().hours || 0) : 0
@@ -58,6 +60,7 @@ export const useStudyTimer = (isActive, userId) => {
                 uid: userId,
                 date: todayKey,
                 hours: newHours,
+                courseId: courseId || null, // null para ALEGO padrão
                 lastUpdated: dayjs().format('HH:mm'),
                 updatedAt: serverTimestamp(),
               },
@@ -79,7 +82,7 @@ export const useStudyTimer = (isActive, userId) => {
       }
       clearInterval(saveInterval)
     }
-  }, [isActive, userId])
+  }, [isActive, userId, courseId])
 
 
   // Formatar tempo decorrido

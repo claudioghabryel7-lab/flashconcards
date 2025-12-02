@@ -23,7 +23,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 const QuestionView = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   
   // Receber dados via location state
   const { 
@@ -46,17 +46,28 @@ const QuestionView = () => {
   const [bizuRatings, setBizuRatings] = useState({})
   const [bizuCacheInfo, setBizuCacheInfo] = useState({})
   
-  // Carregar estatísticas do usuário
+  // Carregar estatísticas do usuário (por curso)
   useEffect(() => {
-    if (!user) return
-    const statsRef = doc(db, 'questoesStats', user.uid)
+    if (!user || !profile) return
+    
+    const selectedCourseId = profile.selectedCourseId !== undefined ? profile.selectedCourseId : null
+    const courseKey = selectedCourseId || 'alego' // 'alego' para curso padrão
+    const statsRef = doc(db, 'questoesStats', `${user.uid}_${courseKey}`)
     const unsub = onSnapshot(statsRef, (snapshot) => {
       if (snapshot.exists()) {
-        setStats(snapshot.data())
+        const data = snapshot.data()
+        // Verificar se é do curso correto
+        if (data.courseId === selectedCourseId || (!data.courseId && !selectedCourseId)) {
+          setStats(data)
+        } else {
+          setStats({ correct: 0, wrong: 0, byMateria: {} })
+        }
+      } else {
+        setStats({ correct: 0, wrong: 0, byMateria: {} })
       }
     })
     return () => unsub()
-  }, [user])
+  }, [user, profile])
   
   // Redirecionar se não houver questões
   useEffect(() => {
@@ -88,10 +99,12 @@ const QuestionView = () => {
     
     setStats(newStats)
     
-    // Salvar no Firestore
-    if (user) {
-      const statsRef = doc(db, 'questoesStats', user.uid)
-      setDoc(statsRef, newStats, { merge: true })
+    // Salvar no Firestore (por curso)
+    if (user && profile) {
+      const selectedCourseId = profile.selectedCourseId !== undefined ? profile.selectedCourseId : null
+      const courseKey = selectedCourseId || 'alego' // 'alego' para curso padrão
+      const statsRef = doc(db, 'questoesStats', `${user.uid}_${courseKey}`)
+      setDoc(statsRef, { ...newStats, courseId: selectedCourseId }, { merge: true })
     }
     
     // Scroll suave para o resultado

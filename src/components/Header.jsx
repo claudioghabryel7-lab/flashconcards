@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import {
   AcademicCapIcon,
   ArrowLeftOnRectangleIcon,
@@ -7,6 +7,7 @@ import {
   UserCircleIcon,
   MoonIcon,
   SunIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
@@ -15,8 +16,9 @@ const navClass =
   'rounded-full px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold transition-all duration-200'
 
 const Header = () => {
-  const { user, logout, isAdmin } = useAuth()
+  const { user, logout, isAdmin, profile } = useAuth()
   const { darkMode, toggleDarkMode } = useDarkMode()
+  const navigate = useNavigate()
 
   const links = useMemo(
     () => [
@@ -47,11 +49,11 @@ const Header = () => {
                 <div className="absolute inset-0 bg-alego-600/20 dark:bg-alego-400/20 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity"></div>
               </div>
               <div className="hidden sm:block">
-                <p className="text-lg sm:text-xl font-black text-alego-700 dark:text-alego-300 leading-tight">Mentoria ALEGO</p>
-                <p className="text-xs uppercase tracking-wider text-alego-500 dark:text-alego-400 font-semibold">Polícia Legislativa</p>
+                <p className="text-lg sm:text-xl font-black text-alego-700 dark:text-alego-300 leading-tight">FlashConCards</p>
+                <p className="text-xs uppercase tracking-wider text-alego-500 dark:text-alego-400 font-semibold">Flashcards e Flashquestões</p>
               </div>
               <div className="sm:hidden">
-                <p className="text-base font-black text-alego-700 dark:text-alego-300">ALEGO</p>
+                <p className="text-base font-black text-alego-700 dark:text-alego-300">FlashConCards</p>
               </div>
             </Link>
             {user ? (
@@ -114,6 +116,15 @@ const Header = () => {
                 <>
                   <button
                     type="button"
+                    onClick={() => navigate('/select-course')}
+                    className="hidden items-center gap-1.5 rounded-full border border-blue-500 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition-all hover:bg-blue-100 dark:border-blue-400 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30 sm:flex"
+                    title="Trocar curso"
+                  >
+                    <ArrowPathIcon className="h-4 w-4" />
+                    Trocar Curso
+                  </button>
+                  <button
+                    type="button"
                     onClick={logout}
                     className="hidden items-center gap-1.5 rounded-full bg-gradient-to-r from-alego-600 to-alego-700 px-4 py-2 text-xs font-semibold text-white shadow-md transition-all hover:from-alego-700 hover:to-alego-800 hover:shadow-lg dark:from-alego-700 dark:to-alego-800 sm:flex"
                   >
@@ -126,7 +137,12 @@ const Header = () => {
                       <p className="max-w-[120px] truncate font-bold text-alego-700 dark:text-alego-300">
                         {user.displayName || user.email?.split('@')[0]}
                       </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{isAdmin ? 'Admin' : 'Aluno'}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        {isAdmin ? 'Admin' : 'Aluno'}
+                        {profile?.selectedCourseId !== undefined && (
+                          <span className="ml-1">• {profile.selectedCourseId ? 'Curso' : 'ALEGO'}</span>
+                        )}
+                      </p>
                     </div>
                   </div>
                 </>

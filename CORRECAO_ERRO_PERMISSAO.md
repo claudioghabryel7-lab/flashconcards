@@ -60,3 +60,6 @@ match /transactions/{transactionId} {
 **Agora deve funcionar sem erros!** 🚀
 
 
+
+
+

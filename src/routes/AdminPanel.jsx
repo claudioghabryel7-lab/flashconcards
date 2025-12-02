@@ -13,7 +13,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore'
-import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline'
+import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon } from '@heroicons/react/24/outline'
 import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
 import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { auth, db, storage } from '../firebase/config'
@@ -35,7 +35,7 @@ const MATERIAS = [
 
 
 const AdminPanel = () => {
-  const { isAdmin, user: currentAdminUser } = useAuth()
+  const { isAdmin, user: currentAdminUser, profile } = useAuth()
   const [cards, setCards] = useState([])
   const [users, setUsers] = useState([])
   const [presence, setPresence] = useState({}) // { uid: { status, lastSeen } }
@@ -48,13 +48,23 @@ const AdminPanel = () => {
   const [newModuleName, setNewModuleName] = useState('')
   const [modules, setModules] = useState({}) // { materia: [modulos] }
   
+  // Estado para gerenciar matérias por curso
+  const [courseSubjects, setCourseSubjects] = useState({}) // { courseId: [materias] }
+  const [newSubjectName, setNewSubjectName] = useState('')
+  const [selectedSubjectForModule, setSelectedSubjectForModule] = useState('')
+  
   // Estado para criação de flashcards
   const [flashcardForm, setFlashcardForm] = useState({
     materia: '',
     modulo: '',
     pergunta: '',
     resposta: '',
+    courseId: '', // ID do curso ao qual o flashcard pertence
   })
+  const [aiContentInput, setAiContentInput] = useState('') // Conteúdo para gerar flashcards por IA
+  const [flashcardsQuantity, setFlashcardsQuantity] = useState(15) // Quantidade de flashcards a gerar
+  const [generatingFlashcards, setGeneratingFlashcards] = useState(false)
+  const [flashcardGenProgress, setFlashcardGenProgress] = useState('')
   const [editalPrompt, setEditalPrompt] = useState('')
   const [savingPrompt, setSavingPrompt] = useState(false)
   const [promptStatus, setPromptStatus] = useState(null)
@@ -100,6 +110,36 @@ const AdminPanel = () => {
   
   // Estado para controle de tabs
   const [activeTab, setActiveTab] = useState('config')
+  
+  // Estado para curso selecionado no gerenciamento de flashcards
+  const [selectedCourseForFlashcards, setSelectedCourseForFlashcards] = useState('alego-default') // 'alego-default' = ALEGO padrão, 'courseId' = curso específico
+  
+  // Estado para gerenciar popup banner
+  const [popupBanner, setPopupBanner] = useState({
+    active: false,
+    imageBase64: '',
+    imageUrl: '',
+    title: '',
+    link: '',
+    openInNewTab: true,
+  })
+  const [uploadingPopupBanner, setUploadingPopupBanner] = useState(false)
+  
+  // Estado para gerenciar cursos
+  const [courses, setCourses] = useState([])
+  const [courseForm, setCourseForm] = useState({
+    name: '',
+    description: '',
+    price: 99.90,
+    originalPrice: 149.99,
+    competition: '',
+    imageBase64: '',
+    imageUrl: '',
+    active: true,
+  })
+  const [uploadingCourse, setUploadingCourse] = useState(false)
+  const [editingCourseImage, setEditingCourseImage] = useState(null) // ID do curso sendo editado
+  const [newCourseImage, setNewCourseImage] = useState(null) // Nova imagem em base64
 
   // Configurar PDF.js worker
   useEffect(() => {
@@ -277,15 +317,49 @@ const AdminPanel = () => {
   useEffect(() => {
     const cardsRef = collection(db, 'flashcards')
     const unsubCards = onSnapshot(cardsRef, (snapshot) => {
-      const data = snapshot.docs.map((docSnapshot) => ({
+      const allData = snapshot.docs.map((docSnapshot) => ({
         id: docSnapshot.id,
         ...docSnapshot.data(),
       }))
-      setCards(data)
       
-      // Extrair módulos únicos por matéria dos cards existentes
+      // Filtrar flashcards por curso selecionado
+      let filteredData = allData
+      const selectedCourse = (selectedCourseForFlashcards || '').trim()
+      
+      if (selectedCourse) {
+        // Se tem curso selecionado
+        if (selectedCourse === 'alego-default') {
+          // Se é o curso ALEGO padrão, mostrar flashcards sem courseId OU com courseId = 'alego-default'
+          filteredData = allData.filter(card => {
+            const cardCourseId = card.courseId
+            // Incluir flashcards sem courseId (antigos) OU com courseId = 'alego-default'
+            return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined || cardCourseId === 'alego-default' || String(cardCourseId) === String('alego-default')
+          })
+          console.log(`🔍 Filtrado para ALEGO padrão (alego-default): ${filteredData.length} flashcards encontrados`)
+        } else {
+          // Se é outro curso, mostrar apenas flashcards desse curso específico
+          filteredData = allData.filter(card => {
+            const cardCourseId = card.courseId || null
+            return cardCourseId === selectedCourse || String(cardCourseId) === String(selectedCourse)
+          })
+          console.log(`🔍 Filtrado por curso "${selectedCourse}": ${filteredData.length} flashcards encontrados`)
+        }
+      } else {
+        // Se não tem curso selecionado (string vazia), mostrar apenas flashcards sem courseId (ALEGO padrão)
+        // Incluir null, undefined e string vazia
+        filteredData = allData.filter(card => {
+          const cardCourseId = card.courseId
+          return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined
+        })
+        console.log(`🔍 Filtrado para ALEGO padrão (sem curso selecionado): ${filteredData.length} flashcards encontrados`)
+      }
+      
+      // Salvar todos os cards (para uso em outras partes) e os filtrados
+      setCards(filteredData)
+      
+      // Extrair módulos únicos por matéria dos cards filtrados
       const modulesByMateria = {}
-      data.forEach((card) => {
+      filteredData.forEach((card) => {
         if (card.materia && card.modulo) {
           if (!modulesByMateria[card.materia]) {
             modulesByMateria[card.materia] = []
@@ -304,7 +378,37 @@ const AdminPanel = () => {
 
       setModules(modulesByMateria)
     })
+    
+    return () => unsubCards()
+  }, [selectedCourseForFlashcards])
+  
+  // Carregar matérias do curso selecionado
+  useEffect(() => {
+    if (!selectedCourseForFlashcards) {
+      // Se não tem curso selecionado, usar MATERIAS padrão do ALEGO
+      setCourseSubjects({})
+      return
+    }
+    
+    const courseSubjectsRef = collection(db, 'courses', selectedCourseForFlashcards, 'subjects')
+    const unsub = onSnapshot(courseSubjectsRef, (snapshot) => {
+      const subjects = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      setCourseSubjects({
+        [selectedCourseForFlashcards]: subjects.map(s => s.name)
+      })
+    }, (error) => {
+      console.error('Erro ao carregar matérias do curso:', error)
+      setCourseSubjects({})
+    })
+    
+    return () => unsub()
+  }, [selectedCourseForFlashcards])
 
+  // Carregar usuários, banners, etc.
+  useEffect(() => {
     const usersRef = collection(db, 'users')
     const unsubUsers = onSnapshot(usersRef, (snapshot) => {
       const data = snapshot.docs.map((docSnapshot) => ({
@@ -352,6 +456,93 @@ const AdminPanel = () => {
       setBanners([])
     })
 
+    // Carregar popup banner
+    const popupBannerRef = doc(db, 'config', 'popupBanner')
+    const unsubPopupBanner = onSnapshot(popupBannerRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setPopupBanner(snapshot.data())
+      }
+    }, (error) => {
+      console.error('Erro ao carregar popup banner:', error)
+    })
+
+    // Carregar cursos
+    const coursesRef = collection(db, 'courses')
+    const unsubCourses = onSnapshot(coursesRef, async (snapshot) => {
+      const data = snapshot.docs.map((docSnapshot) => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data(),
+      }))
+      
+      // Verificar se o curso ALEGO padrão existe
+      const alegoCourse = data.find(c => c.id === 'alego-default')
+      
+      if (!alegoCourse) {
+        // Criar curso ALEGO padrão se não existir
+        try {
+          const alegoRef = doc(db, 'courses', 'alego-default')
+          await setDoc(alegoRef, {
+            name: 'Polícia Legislativa ALEGO',
+            description: 'Mentoria completa para o concurso da Polícia Legislativa ALEGO com flashcards, questões e IA personalizada.',
+            price: 99.90,
+            originalPrice: 149.99,
+            competition: 'ALEGO - Polícia Legislativa',
+            active: true,
+            isDefault: true, // Marcar como curso padrão
+            createdAt: serverTimestamp(),
+          }, { merge: true })
+          
+          // Adicionar à lista
+          data.unshift({
+            id: 'alego-default',
+            name: 'Polícia Legislativa ALEGO',
+            description: 'Mentoria completa para o concurso da Polícia Legislativa ALEGO com flashcards, questões e IA personalizada.',
+            price: 99.90,
+            originalPrice: 149.99,
+            competition: 'ALEGO - Polícia Legislativa',
+            active: true,
+            isDefault: true,
+            createdAt: serverTimestamp(),
+          })
+        } catch (err) {
+          console.error('Erro ao criar curso ALEGO padrão:', err)
+        }
+      }
+      
+      const sortedCourses = data.sort((a, b) => {
+        // Colocar curso padrão primeiro
+        if (a.id === 'alego-default') return -1
+        if (b.id === 'alego-default') return 1
+        const dateA = a.createdAt?.toDate?.() || new Date(0)
+        const dateB = b.createdAt?.toDate?.() || new Date(0)
+        return dateB - dateA
+      })
+      
+      setCourses(sortedCourses)
+      
+      // Se o admin não tem curso selecionado, selecionar o ALEGO padrão automaticamente
+      if (profile && profile.selectedCourseId === undefined && sortedCourses.length > 0) {
+        const alegoCourse = sortedCourses.find(c => c.id === 'alego-default')
+        if (alegoCourse && selectedCourseForFlashcards === 'alego-default') {
+          // Já está selecionado, não precisa fazer nada
+        } else if (alegoCourse) {
+          setSelectedCourseForFlashcards('alego-default')
+        }
+      } else if (profile && profile.selectedCourseId !== undefined) {
+        // Sincronizar com curso do perfil
+        const courseId = profile.selectedCourseId === null ? 'alego-default' : profile.selectedCourseId
+        if (courseId && sortedCourses.find(c => c.id === courseId)) {
+          setSelectedCourseForFlashcards(courseId)
+        } else {
+          // Se o curso do perfil não existe mais, usar ALEGO padrão
+          setSelectedCourseForFlashcards('alego-default')
+        }
+      }
+    }, (error) => {
+      console.error('Erro ao carregar cursos:', error)
+      setCourses([])
+    })
+
     // Carregar avaliações
     const reviewsRef = collection(db, 'reviews')
     const unsubReviews = onSnapshot(reviewsRef, (snapshot) => {
@@ -392,10 +583,11 @@ const AdminPanel = () => {
     })
 
     return () => {
-      unsubCards()
       unsubUsers()
       unsubPresence()
       unsubBanners()
+      unsubPopupBanner()
+      unsubCourses()
       unsubReviews()
     }
   }, [])
@@ -440,6 +632,55 @@ const AdminPanel = () => {
     }))
   }
 
+  // Adicionar matéria a um curso
+  const addSubjectToCourse = async () => {
+    if (!selectedCourseForFlashcards) {
+      setMessage('❌ Selecione um curso primeiro.')
+      return
+    }
+    
+    if (!newSubjectName.trim()) {
+      setMessage('❌ Digite o nome da matéria.')
+      return
+    }
+
+    const subjectName = newSubjectName.trim()
+    
+    // Verificar se a matéria já existe no curso
+    const existingSubjects = courseSubjects[selectedCourseForFlashcards] || []
+    if (existingSubjects.includes(subjectName)) {
+      setMessage('❌ Esta matéria já existe neste curso.')
+      return
+    }
+
+    try {
+      await addDoc(collection(db, 'courses', selectedCourseForFlashcards, 'subjects'), {
+        name: subjectName,
+        createdAt: serverTimestamp(),
+      })
+      
+      setNewSubjectName('')
+      setMessage(`✅ Matéria "${subjectName}" adicionada ao curso!`)
+    } catch (err) {
+      console.error('Erro ao adicionar matéria:', err)
+      setMessage(`❌ Erro ao adicionar matéria: ${err.message}`)
+    }
+  }
+  
+  // Remover matéria de um curso
+  const removeSubjectFromCourse = async (subjectId, subjectName) => {
+    if (!selectedCourseForFlashcards) return
+    if (!confirm(`Deseja remover a matéria "${subjectName}" deste curso?`)) return
+    
+    try {
+      await deleteDoc(doc(db, 'courses', selectedCourseForFlashcards, 'subjects', subjectId))
+      setMessage(`✅ Matéria "${subjectName}" removida!`)
+    } catch (err) {
+      console.error('Erro ao remover matéria:', err)
+      setMessage(`❌ Erro ao remover matéria: ${err.message}`)
+    }
+  }
+
   // Adicionar módulo a uma matéria
   const addModule = () => {
     if (!selectedMateriaForModule || !newModuleName.trim()) {
@@ -475,6 +716,177 @@ const AdminPanel = () => {
     setMessage(`Módulo "${modulo}" removido!`)
   }
 
+  // Gerar flashcards por IA a partir de conteúdo colado (estilo Noji)
+  const generateFlashcardsFromContent = async () => {
+    if (!flashcardForm.materia || !flashcardForm.modulo || !aiContentInput.trim()) {
+      setMessage('❌ Selecione matéria, módulo e cole o conteúdo.')
+      return
+    }
+
+    if (flashcardsQuantity < 5 || flashcardsQuantity > 50) {
+      setMessage('❌ A quantidade deve estar entre 5 e 50 flashcards.')
+      return
+    }
+
+    setGeneratingFlashcards(true)
+    setFlashcardGenProgress('Iniciando geração de flashcards...')
+    setMessage('')
+
+    try {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+      
+      if (!apiKey && !groqApiKey) {
+        throw new Error('Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
+      }
+
+      const courseIdToUse = (flashcardForm.courseId || selectedCourseForFlashcards || '').trim() || null
+      const materia = flashcardForm.materia
+      const modulo = flashcardForm.modulo
+
+      // Carregar edital se disponível
+      let editalInfo = ''
+      try {
+        const editalDoc = await getDoc(doc(db, 'config', 'edital'))
+        if (editalDoc.exists()) {
+          const data = editalDoc.data()
+          editalInfo = data.prompt || ''
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar edital:', err)
+      }
+
+      setFlashcardGenProgress('Analisando conteúdo e gerando flashcards...')
+
+      // Prompt estilo Noji
+      const prompt = `Você é um especialista em criar flashcards educacionais no estilo Noji (perguntas objetivas e respostas claras e diretas).
+
+TAREFA: Analisar o conteúdo fornecido abaixo e criar flashcards para o módulo "${modulo}" da matéria "${materia}".
+
+${editalInfo ? `CONTEXTO DO EDITAL:\n${editalInfo}\n\n` : ''}
+
+CONTEÚDO PARA ANÁLISE:
+${aiContentInput}
+
+INSTRUÇÕES PARA OS FLASHCARDS (ESTILO NOJI):
+1. Cada flashcard deve ter:
+   - Pergunta: Objetiva, direta, focada em um conceito específico
+   - Resposta: Clara, concisa, sem enrolação, com informações essenciais
+
+2. Estilo Noji:
+   - Perguntas devem ser diretas e práticas
+   - Respostas devem ser curtas mas completas (2-4 frases)
+   - Foco em conceitos importantes e aplicáveis
+   - Linguagem simples e profissional
+   - Evitar informações desnecessárias
+
+3. Quantidade:
+   - Crie exatamente ${flashcardsQuantity} flashcards baseados no conteúdo fornecido
+   - Priorize os conceitos mais importantes
+   - Garanta cobertura completa do conteúdo
+   - Se o conteúdo for extenso, distribua os flashcards de forma equilibrada
+
+4. Qualidade:
+   - Cada flashcard deve ser independente e completo
+   - Perguntas devem testar compreensão real do conceito
+   - Respostas devem ser úteis para revisão rápida
+
+FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
+Retorne APENAS um objeto JSON válido no seguinte formato:
+
+{
+  "flashcards": [
+    {
+      "pergunta": "Pergunta objetiva e direta",
+      "resposta": "Resposta clara e concisa (2-4 frases)"
+    },
+    {
+      "pergunta": "Outra pergunta",
+      "resposta": "Outra resposta"
+    }
+  ]
+}
+
+REGRAS CRÍTICAS:
+- Retorne APENAS o JSON, sem markdown (sem \`\`\`json)
+- Sem explicações antes ou depois
+- Sem texto adicional
+- Apenas o objeto JSON puro começando com { e terminando com }
+- Baseie-se EXCLUSIVAMENTE no conteúdo fornecido acima`
+
+      let responseText = ''
+      
+      if (apiKey) {
+        try {
+          setFlashcardGenProgress('Chamando Gemini API...')
+          const genAI = new GoogleGenerativeAI(apiKey)
+          const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' })
+          const result = await model.generateContent(prompt)
+          responseText = result.response.text()
+        } catch (geminiError) {
+          console.warn('Erro com Gemini, tentando Groq...', geminiError)
+          if (groqApiKey) {
+            setFlashcardGenProgress('Chamando Groq API...')
+            responseText = await callGroqAPI(prompt)
+          } else {
+            throw geminiError
+          }
+        }
+      } else if (groqApiKey) {
+        setFlashcardGenProgress('Chamando Groq API...')
+        responseText = await callGroqAPI(prompt)
+      }
+
+      setFlashcardGenProgress('Processando resposta da IA...')
+
+      // Limpar resposta (remover markdown se houver)
+      let cleanedResponse = responseText.trim()
+      if (cleanedResponse.startsWith('```json')) {
+        cleanedResponse = cleanedResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      } else if (cleanedResponse.startsWith('```')) {
+        cleanedResponse = cleanedResponse.replace(/```\n?/g, '').trim()
+      }
+
+      // Parsear JSON
+      const parsed = JSON.parse(cleanedResponse)
+      const flashcards = parsed.flashcards || []
+
+      if (flashcards.length === 0) {
+        throw new Error('Nenhum flashcard foi gerado pela IA.')
+      }
+
+      setFlashcardGenProgress(`Criando ${flashcards.length} flashcards no banco de dados...`)
+
+      // Criar flashcards no Firestore
+      const cardsRef = collection(db, 'flashcards')
+      let createdCount = 0
+
+      for (const card of flashcards) {
+        if (card.pergunta && card.resposta) {
+          await addDoc(cardsRef, {
+            pergunta: card.pergunta.trim(),
+            resposta: card.resposta.trim(),
+            materia: materia,
+            modulo: modulo,
+            courseId: courseIdToUse,
+            tags: [],
+          })
+          createdCount++
+        }
+      }
+
+      setMessage(`✅ ${createdCount} flashcard(s) gerado(s) com sucesso no módulo "${modulo}"!`)
+      setAiContentInput('') // Limpar campo após sucesso
+      setFlashcardGenProgress('')
+    } catch (err) {
+      console.error('Erro ao gerar flashcards:', err)
+      setMessage(`❌ Erro ao gerar flashcards: ${err.message}`)
+      setFlashcardGenProgress('')
+    } finally {
+      setGeneratingFlashcards(false)
+    }
+  }
+
   // Criar flashcard
   const createFlashcard = async () => {
     if (!flashcardForm.materia || !flashcardForm.modulo || !flashcardForm.pergunta || !flashcardForm.resposta) {
@@ -484,11 +896,23 @@ const AdminPanel = () => {
 
     try {
       const cardsRef = collection(db, 'flashcards')
+      // Usar curso selecionado no seletor se não tiver no formulário
+      // Converter string vazia para null
+      const courseIdToUse = (flashcardForm.courseId || selectedCourseForFlashcards || '').trim() || null
+      
+      console.log('📝 Criando flashcard:', {
+        materia: flashcardForm.materia,
+        modulo: flashcardForm.modulo,
+        courseId: courseIdToUse,
+        selectedCourseForFlashcards
+      })
+      
       await addDoc(cardsRef, {
         pergunta: flashcardForm.pergunta,
         resposta: flashcardForm.resposta,
         materia: flashcardForm.materia,
         modulo: flashcardForm.modulo,
+        courseId: courseIdToUse, // ID do curso ao qual pertence (null para ALEGO padrão)
         tags: [],
       })
       
@@ -497,11 +921,12 @@ const AdminPanel = () => {
         modulo: flashcardForm.modulo, // Mantém o módulo selecionado
         pergunta: '',
         resposta: '',
+        courseId: courseIdToUse || '', // Mantém o curso selecionado
       })
-      setMessage('Flashcard criado com sucesso! Todos os usuários poderão vê-lo.')
+      setMessage(`✅ Flashcard criado com sucesso! ${courseIdToUse ? `(Curso: ${courses.find(c => c.id === courseIdToUse)?.name || 'Selecionado'})` : '(Curso Padrão ALEGO)'}`)
     } catch (err) {
-      setMessage('Erro ao criar flashcard.')
-      console.error(err)
+      setMessage('❌ Erro ao criar flashcard.')
+      console.error('Erro ao criar flashcard:', err)
     }
   }
 
@@ -510,16 +935,21 @@ const AdminPanel = () => {
       const parsed = JSON.parse(jsonInput)
       const list = Array.isArray(parsed) ? parsed : [parsed]
       const cardsRef = collection(db, 'flashcards')
+      // Usar curso selecionado se não tiver courseId no JSON
+      const courseIdToUse = selectedCourseForFlashcards || null
+      
       await Promise.all(
         list.map((card) =>
           addDoc(cardsRef, {
             ...card,
             tags: normalizeTags(card.tags),
+            courseId: card.courseId || courseIdToUse, // Usar courseId do JSON ou do seletor
           }),
         ),
       )
       setJsonInput('')
-      setMessage('Flashcards importados com sucesso!')
+      const courseName = courseIdToUse ? courses.find(c => c.id === courseIdToUse)?.name : 'Curso Padrão (ALEGO)'
+      setMessage(`✅ ${list.length} flashcards importados com sucesso! (Curso: ${courseName})`)
     } catch (err) {
       setMessage('JSON inválido. Verifique a estrutura.')
     }
@@ -863,6 +1293,224 @@ const AdminPanel = () => {
     } catch (err) {
       console.error('Erro ao excluir banner:', err)
       setMessage(`❌ Erro ao excluir banner: ${err.message}`)
+    }
+  }
+
+  // Funções para gerenciar popup banner
+  const handlePopupBannerImageUpload = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setMessage('❌ Por favor, selecione uma imagem.')
+      return
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setMessage('❌ A imagem é muito grande. Máximo: 2MB.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setPopupBanner(prev => ({
+        ...prev,
+        imageBase64: e.target.result
+      }))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const savePopupBanner = async () => {
+    if (!isAdmin) {
+      setMessage('❌ Apenas administradores podem salvar popup banner.')
+      return
+    }
+
+    if (!popupBanner.imageBase64 && !popupBanner.imageUrl) {
+      setMessage('❌ Por favor, adicione uma imagem.')
+      return
+    }
+
+    setUploadingPopupBanner(true)
+    try {
+      await setDoc(doc(db, 'config', 'popupBanner'), {
+        ...popupBanner,
+        updatedAt: serverTimestamp(),
+      })
+
+      setMessage('✅ Popup banner salvo com sucesso!')
+    } catch (err) {
+      console.error('Erro ao salvar popup banner:', err)
+      setMessage(`❌ Erro ao salvar popup banner: ${err.message}`)
+    } finally {
+      setUploadingPopupBanner(false)
+    }
+  }
+
+  // Funções para gerenciar cursos
+  // Handler para editar imagem de curso existente
+  const handleEditCourseImage = (event, courseId) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setMessage('❌ Por favor, selecione apenas imagens.')
+      return
+    }
+
+    // Limitar tamanho (máximo 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setMessage('❌ A imagem é muito grande. Máximo: 2MB.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setNewCourseImage(e.target.result)
+      setEditingCourseImage(courseId)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Salvar nova imagem do curso
+  const saveCourseImage = async (courseId) => {
+    if (!newCourseImage) {
+      setMessage('❌ Nenhuma imagem selecionada.')
+      return
+    }
+
+    setUploadingCourse(true)
+    try {
+      await updateDoc(doc(db, 'courses', courseId), {
+        imageBase64: newCourseImage,
+        imageUrl: '', // Limpar URL se houver
+        updatedAt: serverTimestamp(),
+      })
+      setMessage('✅ Imagem do curso atualizada com sucesso!')
+      setEditingCourseImage(null)
+      setNewCourseImage(null)
+    } catch (err) {
+      console.error('Erro ao atualizar imagem do curso:', err)
+      setMessage(`❌ Erro ao atualizar imagem: ${err.message}`)
+    } finally {
+      setUploadingCourse(false)
+    }
+  }
+
+  // Cancelar edição de imagem
+  const cancelEditCourseImage = () => {
+    setEditingCourseImage(null)
+    setNewCourseImage(null)
+  }
+
+  const handleCourseImageUpload = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setMessage('❌ Por favor, selecione uma imagem.')
+      return
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setMessage('❌ A imagem é muito grande. Máximo: 2MB.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setCourseForm(prev => ({
+        ...prev,
+        imageBase64: e.target.result
+      }))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const addCourse = async () => {
+    if (!isAdmin) {
+      setMessage('❌ Apenas administradores podem adicionar cursos.')
+      return
+    }
+
+    if (!courseForm.name || !courseForm.competition) {
+      setMessage('❌ Por favor, preencha nome e concurso.')
+      return
+    }
+
+    if (!courseForm.imageBase64 && !courseForm.imageUrl) {
+      setMessage('❌ Por favor, adicione uma imagem.')
+      return
+    }
+
+    setUploadingCourse(true)
+    try {
+      await addDoc(collection(db, 'courses'), {
+        name: courseForm.name,
+        description: courseForm.description || '',
+        price: parseFloat(courseForm.price) || 99.90,
+        originalPrice: parseFloat(courseForm.originalPrice) || 149.99,
+        competition: courseForm.competition,
+        imageBase64: courseForm.imageBase64 || '',
+        imageUrl: courseForm.imageUrl || '',
+        active: courseForm.active !== false,
+        createdAt: serverTimestamp(),
+      })
+
+      setMessage('✅ Curso adicionado com sucesso!')
+      setCourseForm({
+        name: '',
+        description: '',
+        price: 99.90,
+        originalPrice: 149.99,
+        competition: '',
+        imageBase64: '',
+        imageUrl: '',
+        active: true,
+      })
+    } catch (err) {
+      console.error('Erro ao adicionar curso:', err)
+      setMessage(`❌ Erro ao adicionar curso: ${err.message}`)
+    } finally {
+      setUploadingCourse(false)
+    }
+  }
+
+  const updateCourse = async (courseId, updates) => {
+    // Proteger curso ALEGO padrão contra desativação
+    if (courseId === 'alego-default' && updates.active === false) {
+      setMessage('❌ O curso ALEGO padrão não pode ser desativado.')
+      return
+    }
+    
+    try {
+      await updateDoc(doc(db, 'courses', courseId), {
+        ...updates,
+        updatedAt: serverTimestamp(),
+      })
+      setMessage('✅ Curso atualizado com sucesso!')
+    } catch (err) {
+      console.error('Erro ao atualizar curso:', err)
+      setMessage(`❌ Erro ao atualizar curso: ${err.message}`)
+    }
+  }
+
+  const deleteCourse = async (courseId) => {
+    // Proteger curso ALEGO padrão contra exclusão
+    if (courseId === 'alego-default') {
+      setMessage('❌ O curso ALEGO padrão não pode ser excluído.')
+      return
+    }
+    
+    if (!confirm('Tem certeza que deseja excluir este curso?')) return
+
+    try {
+      await deleteDoc(doc(db, 'courses', courseId))
+      setMessage('✅ Curso excluído com sucesso!')
+    } catch (err) {
+      console.error('Erro ao excluir curso:', err)
+      setMessage(`❌ Erro ao excluir curso: ${err.message}`)
     }
   }
 
@@ -1423,15 +2071,19 @@ CRÍTICO:
           }
 
           try {
+            // Usar curso selecionado se houver
+            const courseIdToUse = (selectedCourseForFlashcards || '').trim() || null
+            
             await addDoc(cardsRef, {
               pergunta: card.pergunta.trim(),
               resposta: card.resposta.trim(),
               materia: materia,
               modulo: moduloNome,
+              courseId: courseIdToUse, // Associar ao curso selecionado
               tags: [],
             })
             totalCreated++
-            console.log(`  ✅ Flashcard ${cardIndex + 1} criado: "${card.pergunta.substring(0, 50)}..."`)
+            console.log(`  ✅ Flashcard ${cardIndex + 1} criado: "${card.pergunta.substring(0, 50)}..." ${courseIdToUse ? `(Curso: ${courseIdToUse})` : '(ALEGO padrão)'}`)
             return true
           } catch (err) {
             console.error(`  ❌ Erro ao criar flashcard ${cardIndex + 1}:`, err)
@@ -1489,6 +2141,8 @@ CRÍTICO:
     { id: 'flashcards', label: '📚 Flashcards', icon: '📚' },
     { id: 'users', label: '👥 Usuários', icon: '👥' },
     { id: 'banners', label: '🖼️ Banners', icon: '🖼️' },
+    { id: 'popup', label: '🔔 Popup Banner', icon: '🔔' },
+    { id: 'courses', label: '🎓 Cursos', icon: '🎓' },
     { id: 'reviews', label: '⭐ Avaliações', icon: '⭐' },
   ]
 
@@ -2001,6 +2655,358 @@ ESTRUTURA SUGERIDA:
               </div>
             )}
 
+            {/* Tab: Popup Banner */}
+            {activeTab === 'popup' && (
+              <div className="space-y-6">
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
+                      <DocumentTextIcon className="h-5 w-5" />
+                      Gerenciar Popup Banner
+                    </p>
+                    <p className="text-xs text-slate-500 mb-6">
+                      Configure o banner que aparece quando o usuário abre o site pela primeira vez no dia.
+                    </p>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-2">
+                          Imagem (máximo 2MB)
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePopupBannerImageUpload}
+                          className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                        />
+                        {(popupBanner.imageBase64 || popupBanner.imageUrl) && (
+                          <div className="mt-2">
+                            <img
+                              src={popupBanner.imageBase64 || popupBanner.imageUrl}
+                              alt="Preview"
+                              className="max-h-48 rounded-lg border border-slate-200"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-2">
+                          Título (opcional)
+                        </label>
+                        <input
+                          type="text"
+                          value={popupBanner.title}
+                          onChange={(e) => setPopupBanner(prev => ({ ...prev, title: e.target.value }))}
+                          placeholder="Ex: Promoção Especial"
+                          className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-2">
+                          Link de destino (opcional)
+                        </label>
+                        <input
+                          type="text"
+                          value={popupBanner.link}
+                          onChange={(e) => setPopupBanner(prev => ({ ...prev, link: e.target.value }))}
+                          placeholder="Ex: /pagamento ou https://..."
+                          className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={popupBanner.openInNewTab}
+                          onChange={(e) => setPopupBanner(prev => ({ ...prev, openInNewTab: e.target.checked }))}
+                          className="rounded"
+                        />
+                        <label className="text-xs text-slate-600">Abrir link em nova aba</label>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={popupBanner.active}
+                          onChange={(e) => setPopupBanner(prev => ({ ...prev, active: e.target.checked }))}
+                          className="rounded"
+                        />
+                        <label className="text-xs text-slate-600">Popup ativo</label>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={savePopupBanner}
+                        disabled={uploadingPopupBanner || (!popupBanner.imageBase64 && !popupBanner.imageUrl)}
+                        className="w-full rounded-lg bg-alego-600 px-4 py-2 text-sm font-semibold text-white hover:bg-alego-700 disabled:opacity-50"
+                      >
+                        {uploadingPopupBanner ? 'Salvando...' : 'Salvar Popup Banner'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Cursos */}
+            {activeTab === 'courses' && (
+              <div className="space-y-6">
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
+                      <DocumentTextIcon className="h-5 w-5" />
+                      Gerenciar Cursos Preparatórios
+                    </p>
+                    <p className="text-xs text-slate-500 mb-6">
+                      Adicione cursos preparatórios para concursos específicos. Cada curso aparecerá na página inicial como um card clicável.
+                    </p>
+
+                    {/* Formulário para adicionar curso */}
+                    <div className="mb-6 rounded-xl border border-slate-200 p-4">
+                      <h3 className="text-sm font-semibold text-alego-700 mb-4">Adicionar Novo Curso</h3>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-2">
+                            Nome do Curso *
+                          </label>
+                          <input
+                            type="text"
+                            value={courseForm.name}
+                            onChange={(e) => setCourseForm(prev => ({ ...prev, name: e.target.value }))}
+                            placeholder="Ex: Polícia Legislativa ALEGO"
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-2">
+                            Concurso/Competição *
+                          </label>
+                          <input
+                            type="text"
+                            value={courseForm.competition}
+                            onChange={(e) => setCourseForm(prev => ({ ...prev, competition: e.target.value }))}
+                            placeholder="Ex: ALEGO, TRT, etc."
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-2">
+                            Descrição
+                          </label>
+                          <textarea
+                            value={courseForm.description}
+                            onChange={(e) => setCourseForm(prev => ({ ...prev, description: e.target.value }))}
+                            placeholder="Descrição do curso..."
+                            rows={3}
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-2">
+                            Imagem (máximo 2MB) *
+                          </label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleCourseImageUpload}
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          />
+                          {courseForm.imageBase64 && (
+                            <div className="mt-2">
+                              <img
+                                src={courseForm.imageBase64}
+                                alt="Preview"
+                                className="max-h-32 rounded-lg border border-slate-200"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-2">
+                              Preço (R$)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={courseForm.price}
+                              onChange={(e) => setCourseForm(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                              className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-2">
+                              Preço Original (R$)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={courseForm.originalPrice}
+                              onChange={(e) => setCourseForm(prev => ({ ...prev, originalPrice: parseFloat(e.target.value) || 0 }))}
+                              className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={courseForm.active}
+                            onChange={(e) => setCourseForm(prev => ({ ...prev, active: e.target.checked }))}
+                            className="rounded"
+                          />
+                          <label className="text-xs text-slate-600">Curso ativo</label>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={addCourse}
+                          disabled={uploadingCourse || !courseForm.name || !courseForm.competition || (!courseForm.imageBase64 && !courseForm.imageUrl)}
+                          className="w-full rounded-lg bg-alego-600 px-4 py-2 text-sm font-semibold text-white hover:bg-alego-700 disabled:opacity-50"
+                        >
+                          {uploadingCourse ? 'Adicionando...' : 'Adicionar Curso'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Lista de cursos existentes */}
+                    <div>
+                      <h3 className="text-sm font-semibold text-alego-700 mb-4">
+                        Cursos Existentes ({courses.length})
+                      </h3>
+                      
+                      {courses.length === 0 ? (
+                        <p className="text-sm text-slate-500">Nenhum curso adicionado ainda.</p>
+                      ) : (
+                        <div className="space-y-4">
+                          {courses.map((course) => (
+                            <div
+                              key={course.id}
+                              className="rounded-xl border border-slate-200 p-4"
+                            >
+                              <div className="flex items-start gap-4">
+                                <div className="relative">
+                                  {(course.imageBase64 || course.imageUrl) && (
+                                    <img
+                                      src={editingCourseImage === course.id && newCourseImage 
+                                        ? newCourseImage 
+                                        : (course.imageBase64 || course.imageUrl)}
+                                      alt={course.name}
+                                      className="h-24 w-32 rounded-lg border border-slate-200 object-cover"
+                                    />
+                                  )}
+                                  {editingCourseImage === course.id ? (
+                                    <div className="mt-2 space-y-2">
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => handleEditCourseImage(e, course.id)}
+                                        className="text-xs"
+                                        disabled={uploadingCourse}
+                                      />
+                                      {newCourseImage && (
+                                        <div className="flex gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => saveCourseImage(course.id)}
+                                            disabled={uploadingCourse}
+                                            className="rounded-lg bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                                          >
+                                            {uploadingCourse ? 'Salvando...' : 'Salvar'}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={cancelEditCourseImage}
+                                            disabled={uploadingCourse}
+                                            className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                          >
+                                            Cancelar
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingCourseImage(course.id)}
+                                      className="mt-2 w-full rounded-lg border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                                    >
+                                      📷 Trocar Foto
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="flex items-start justify-between">
+                                    <div>
+                                      <p className="text-sm font-semibold text-slate-700">
+                                        {course.name}
+                                      </p>
+                                      <p className="text-xs text-slate-500 mt-1">
+                                        Concurso: {course.competition} • R$ {course.price?.toFixed(2) || '0.00'}
+                                        {course.originalPrice && course.originalPrice > course.price && (
+                                          <span className="line-through ml-2">R$ {course.originalPrice.toFixed(2)}</span>
+                                        )}
+                                      </p>
+                                      {course.description && (
+                                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                                          {course.description}
+                                        </p>
+                                      )}
+                                      <div className="mt-2 flex items-center gap-2">
+                                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                                          course.active !== false
+                                            ? 'bg-emerald-100 text-emerald-700'
+                                            : 'bg-slate-100 text-slate-600'
+                                        }`}>
+                                          {course.active !== false ? 'Ativo' : 'Inativo'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => updateCourse(course.id, { active: !(course.active !== false) })}
+                                        className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                      >
+                                        {course.active !== false ? 'Desativar' : 'Ativar'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => deleteCourse(course.id)}
+                                        disabled={course.id === 'alego-default'}
+                                        className={`rounded-lg px-3 py-1 text-xs font-semibold ${
+                                          course.id === 'alego-default'
+                                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                            : 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                                        }`}
+                                        title={course.id === 'alego-default' ? 'Curso padrão não pode ser excluído' : 'Excluir curso'}
+                                      >
+                                        <TrashIcon className="h-4 w-4 inline" /> Excluir
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Tab: Avaliações */}
             {activeTab === 'reviews' && (
               <div className="space-y-6">
@@ -2298,6 +3304,182 @@ ESTRUTURA SUGERIDA:
             {/* Tab: Flashcards */}
             {activeTab === 'flashcards' && (
               <div className="space-y-6">
+                {/* Seletor de Curso */}
+                <div className="relative overflow-hidden bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl shadow-xl border border-blue-400 p-6">
+                  <div className="relative z-10">
+                    <p className="flex items-center gap-2 text-lg font-bold text-white mb-4">
+                      <AcademicCapIcon className="h-6 w-6" />
+                      Selecionar Curso para Gerenciar
+                    </p>
+                    <p className="text-sm text-blue-100 mb-4">
+                      Escolha o curso para adicionar flashcards. Os flashcards serão associados ao curso selecionado.
+                    </p>
+                    <div className="flex items-center gap-4">
+                      <select
+                        value={selectedCourseForFlashcards}
+                        onChange={async (e) => {
+                          const newCourseId = e.target.value
+                          setSelectedCourseForFlashcards(newCourseId)
+                          // Limpar seleção de matéria/módulo ao trocar de curso
+                          setFlashcardForm(prev => ({ ...prev, materia: '', modulo: '', courseId: newCourseId || '' }))
+                          
+                          // Salvar curso selecionado no perfil do admin
+                          if (currentAdminUser) {
+                            try {
+                              const userRef = doc(db, 'users', currentAdminUser.uid)
+                              // Converter 'alego-default' para null para compatibilidade com outras páginas
+                              const courseIdToSave = newCourseId === 'alego-default' ? null : newCourseId
+                              await setDoc(userRef, {
+                                selectedCourseId: courseIdToSave || null,
+                              }, { merge: true })
+                            } catch (err) {
+                              console.error('Erro ao salvar curso selecionado:', err)
+                            }
+                          }
+                        }}
+                        className="flex-1 rounded-xl border-2 border-white/30 bg-white/90 px-4 py-3 text-sm font-semibold text-slate-800 focus:border-white focus:bg-white focus:outline-none"
+                      >
+                        {courses.filter(c => c.active !== false).map((course) => (
+                          <option key={course.id} value={course.id}>
+                            {course.id === 'alego-default' ? '📚' : '🎓'} {course.name} - {course.competition}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedCourseForFlashcards && (
+                        <div className="rounded-lg bg-white/20 backdrop-blur-sm px-4 py-2">
+                          <p className="text-xs font-semibold text-white">
+                            {(() => {
+                              const course = courses.find(c => c.id === selectedCourseForFlashcards)
+                              return course ? `${course.competition}` : ''
+                            })()}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    {selectedCourseForFlashcards && (
+                      <div className="mt-4 rounded-lg bg-white/20 backdrop-blur-sm p-3">
+                        <p className="text-xs text-white">
+                          <strong>Curso selecionado:</strong> {courses.find(c => c.id === selectedCourseForFlashcards)?.name}
+                        </p>
+                        <p className="text-xs text-blue-100 mt-1">
+                          Todos os flashcards criados abaixo serão associados a este curso.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Estatísticas do Curso Selecionado */}
+                {selectedCourseForFlashcards && (() => {
+                  const courseCards = cards.filter(card => card.courseId === selectedCourseForFlashcards)
+                  const courseName = courses.find(c => c.id === selectedCourseForFlashcards)?.name || 'Curso'
+                  return (
+                    <div className="relative overflow-hidden bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-2xl shadow-xl border border-green-200 dark:border-green-700 p-6">
+                      <div className="relative">
+                        <p className="flex items-center gap-2 text-lg font-bold text-green-700 dark:text-green-300 mb-4">
+                          📊 Estatísticas do Curso: {courseName}
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-green-200 dark:border-green-700">
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total de Flashcards</p>
+                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{courseCards.length}</p>
+                          </div>
+                          <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-green-200 dark:border-green-700">
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Matérias</p>
+                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                              {new Set(courseCards.map(c => c.materia).filter(Boolean)).size}
+                            </p>
+                          </div>
+                          <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-green-200 dark:border-green-700">
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Módulos</p>
+                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                              {new Set(courseCards.map(c => `${c.materia}::${c.modulo}`).filter(Boolean)).size}
+                            </p>
+                          </div>
+                          <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-green-200 dark:border-green-700">
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Status</p>
+                            <p className="text-sm font-bold text-green-600 dark:text-green-400">✅ Ativo</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Gerenciar Matérias do Curso (apenas para cursos personalizados) */}
+                {selectedCourseForFlashcards && (
+                  <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-purple-500/5 to-pink-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                    <div className="relative">
+                      <p className="flex items-center gap-2 text-lg font-bold text-purple-700 dark:text-purple-300">
+                        <PlusIcon className="h-6 w-6" />
+                        Gerenciar Matérias do Curso
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Adicione as matérias específicas deste curso. Cada curso tem suas próprias matérias independentes.
+                      </p>
+
+                      <div className="mt-6 flex gap-2">
+                        <input
+                          type="text"
+                          value={newSubjectName}
+                          onChange={(e) => setNewSubjectName(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && addSubjectToCourse()}
+                          placeholder="Ex: Direito Constitucional, Matemática..."
+                          className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-purple-400 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={addSubjectToCourse}
+                          disabled={!newSubjectName.trim()}
+                          className="rounded-xl bg-purple-600 px-6 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          Adicionar Matéria
+                        </button>
+                      </div>
+
+                      {/* Lista de matérias do curso */}
+                      <div className="mt-4">
+                        <p className="text-sm font-semibold text-slate-700 mb-2">
+                          Matérias do Curso ({courseSubjects[selectedCourseForFlashcards]?.length || 0})
+                        </p>
+                        {courseSubjects[selectedCourseForFlashcards]?.length > 0 ? (
+                          <div className="space-y-2">
+                            {courseSubjects[selectedCourseForFlashcards].map((subject) => (
+                              <div
+                                key={subject}
+                                className="flex items-center justify-between rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 px-4 py-2"
+                              >
+                                <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+                                  {subject}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    // Buscar ID da matéria para deletar
+                                    const courseSubjectsRef = collection(db, 'courses', selectedCourseForFlashcards, 'subjects')
+                                    getDocs(courseSubjectsRef).then(snapshot => {
+                                      const subjectDoc = snapshot.docs.find(doc => doc.data().name === subject)
+                                      if (subjectDoc) {
+                                        removeSubjectFromCourse(subjectDoc.id, subject)
+                                      }
+                                    })
+                                  }}
+                                  className="text-xs text-red-600 hover:text-red-700 font-semibold"
+                                >
+                                  Remover
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-500">Nenhuma matéria adicionada ainda. Adicione matérias acima.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Gerenciar Módulos */}
                 <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
                   <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
@@ -2307,7 +3489,9 @@ ESTRUTURA SUGERIDA:
                       Gerenciar Módulos por Matéria
                     </p>
                     <p className="mt-1 text-sm text-slate-500">
-                      Primeiro, adicione os módulos dentro de cada matéria. Depois você poderá criar flashcards atribuindo-os aos módulos.
+                      {selectedCourseForFlashcards 
+                        ? 'Adicione os módulos dentro de cada matéria do curso selecionado.'
+                        : 'Primeiro, adicione os módulos dentro de cada matéria. Depois você poderá criar flashcards atribuindo-os aos módulos.'}
                     </p>
 
                     <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -2319,12 +3503,23 @@ ESTRUTURA SUGERIDA:
                           className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none"
                         >
                           <option value="">Selecione a matéria</option>
-                          {MATERIAS.map((materia) => (
-                            <option key={materia} value={materia}>
-                              {materia}
-                            </option>
-                          ))}
+                          {selectedCourseForFlashcards 
+                            ? (courseSubjects[selectedCourseForFlashcards] || []).map((materia) => (
+                                <option key={materia} value={materia}>
+                                  {materia}
+                                </option>
+                              ))
+                            : MATERIAS.map((materia) => (
+                                <option key={materia} value={materia}>
+                                  {materia}
+                                </option>
+                              ))}
                         </select>
+                        {selectedCourseForFlashcards && (!courseSubjects[selectedCourseForFlashcards] || courseSubjects[selectedCourseForFlashcards].length === 0) && (
+                          <p className="mt-1 text-xs text-amber-600">
+                            Adicione matérias ao curso primeiro na seção acima.
+                          </p>
+                        )}
                       </label>
                       <label className="block text-sm font-semibold text-slate-700">
                         Nome do Módulo
@@ -2351,7 +3546,10 @@ ESTRUTURA SUGERIDA:
 
                     {/* Lista de módulos por matéria */}
                     <div className="mt-6 space-y-4">
-                      {MATERIAS.map((materia) => {
+                      {(selectedCourseForFlashcards 
+                        ? (courseSubjects[selectedCourseForFlashcards] || [])
+                        : MATERIAS
+                      ).map((materia) => {
                         const modulos = modules[materia] || []
                         if (modulos.length === 0) return null
                         
@@ -2378,9 +3576,18 @@ ESTRUTURA SUGERIDA:
                           return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
                         })
                         
-                        // Contar flashcards por módulo
+                        // Contar flashcards por módulo (filtrado por curso selecionado)
                         const getFlashcardCount = (moduloName) => {
-                          return cards.filter(card => card.materia === materia && card.modulo === moduloName).length
+                          return cards.filter(card => {
+                            const matchesMateria = card.materia === materia
+                            const matchesModulo = card.modulo === moduloName
+                            // Se nenhum curso selecionado, mostrar apenas flashcards sem courseId (ALEGO padrão)
+                            // Se curso selecionado, mostrar apenas flashcards desse curso
+                            const matchesCourse = selectedCourseForFlashcards 
+                              ? card.courseId === selectedCourseForFlashcards
+                              : !card.courseId // ALEGO padrão não tem courseId
+                            return matchesMateria && matchesModulo && matchesCourse
+                          }).length
                         }
                         
                         return (
@@ -2448,14 +3655,26 @@ ESTRUTURA SUGERIDA:
                             setFlashcardForm((prev) => ({ ...prev, materia: e.target.value, modulo: '' }))
                           }}
                           className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none"
+                          disabled={selectedCourseForFlashcards && (!courseSubjects[selectedCourseForFlashcards] || courseSubjects[selectedCourseForFlashcards].length === 0)}
                         >
                           <option value="">Selecione a matéria</option>
-                          {MATERIAS.map((materia) => (
-                            <option key={materia} value={materia}>
-                              {materia}
-                            </option>
-                          ))}
+                          {selectedCourseForFlashcards 
+                            ? (courseSubjects[selectedCourseForFlashcards] || []).map((materia) => (
+                                <option key={materia} value={materia}>
+                                  {materia}
+                                </option>
+                              ))
+                            : MATERIAS.map((materia) => (
+                                <option key={materia} value={materia}>
+                                  {materia}
+                                </option>
+                              ))}
                         </select>
+                        {selectedCourseForFlashcards && (!courseSubjects[selectedCourseForFlashcards] || courseSubjects[selectedCourseForFlashcards].length === 0) && (
+                          <p className="mt-1 text-xs text-amber-600">
+                            Adicione matérias ao curso primeiro na seção "Gerenciar Matérias do Curso".
+                          </p>
+                        )}
                       </label>
                       <label className="block text-sm font-semibold text-slate-700">
                         Módulo *
@@ -2500,6 +3719,19 @@ ESTRUTURA SUGERIDA:
                           </p>
                         )}
                       </label>
+                      <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 p-3">
+                        <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">
+                          Curso Selecionado:
+                        </p>
+                        <p className="text-sm font-bold text-blue-900 dark:text-blue-100">
+                          {selectedCourseForFlashcards 
+                            ? courses.find(c => c.id === selectedCourseForFlashcards)?.name || 'Carregando...'
+                            : '📚 Curso Padrão (ALEGO)'}
+                        </p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                          O flashcard será adicionado ao curso selecionado acima.
+                        </p>
+                      </div>
                     </div>
 
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -2532,6 +3764,127 @@ ESTRUTURA SUGERIDA:
                       className="mt-4 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50"
                     >
                       Criar Flashcard
+                    </button>
+                  </div>
+                </div>
+
+                {/* Gerar Flashcards por IA - Estilo Noji */}
+                <div className="relative overflow-hidden bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-2xl shadow-xl border border-purple-200 dark:border-purple-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <p className="flex items-center gap-2 text-lg font-bold text-purple-700 dark:text-purple-300 mb-2">
+                      <SparklesIcon className="h-6 w-6" />
+                      Gerar Flashcards por IA (Estilo Noji)
+                    </p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                      Cole o conteúdo abaixo e a IA gerará flashcards automaticamente para o módulo selecionado.
+                    </p>
+
+                    <div className="mb-4 grid gap-4 md:grid-cols-3">
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        Matéria *
+                        <select
+                          value={flashcardForm.materia}
+                          onChange={(e) => {
+                            setFlashcardForm((prev) => ({ ...prev, materia: e.target.value, modulo: '' }))
+                          }}
+                          className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm focus:border-purple-400 focus:outline-none bg-white dark:bg-slate-800"
+                          disabled={selectedCourseForFlashcards && (!courseSubjects[selectedCourseForFlashcards] || courseSubjects[selectedCourseForFlashcards].length === 0)}
+                        >
+                          <option value="">Selecione a matéria</option>
+                          {selectedCourseForFlashcards 
+                            ? (courseSubjects[selectedCourseForFlashcards] || []).map((materia) => (
+                                <option key={materia} value={materia}>
+                                  {materia}
+                                </option>
+                              ))
+                            : MATERIAS.map((materia) => (
+                                <option key={materia} value={materia}>
+                                  {materia}
+                                </option>
+                              ))}
+                        </select>
+                      </label>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        Módulo *
+                        <select
+                          value={flashcardForm.modulo}
+                          onChange={(e) => setFlashcardForm((prev) => ({ ...prev, modulo: e.target.value }))}
+                          disabled={!flashcardForm.materia}
+                          className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm focus:border-purple-400 focus:outline-none disabled:bg-slate-50 dark:disabled:bg-slate-900 bg-white dark:bg-slate-800"
+                        >
+                          <option value="">{flashcardForm.materia ? 'Selecione o módulo' : 'Primeiro selecione a matéria'}</option>
+                          {flashcardForm.materia && (modules[flashcardForm.materia] || [])
+                            .sort((a, b) => {
+                              const extractNumber = (str) => {
+                                const match = str.match(/\d+/)
+                                return match ? parseInt(match[0], 10) : 999
+                              }
+                              const numA = extractNumber(a)
+                              const numB = extractNumber(b)
+                              if (numA !== 999 && numB !== 999) return numA - numB
+                              if (numA !== 999) return -1
+                              if (numB !== 999) return 1
+                              return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+                            })
+                            .map((modulo) => (
+                            <option key={modulo} value={modulo}>
+                              {modulo}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        Quantidade de Flashcards *
+                        <input
+                          type="number"
+                          min="5"
+                          max="50"
+                          value={flashcardsQuantity}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 15
+                            setFlashcardsQuantity(Math.max(5, Math.min(50, value)))
+                          }}
+                          className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm focus:border-purple-400 focus:outline-none bg-white dark:bg-slate-800"
+                          placeholder="15"
+                          disabled={generatingFlashcards}
+                        />
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          Entre 5 e 50 flashcards
+                        </p>
+                      </label>
+                    </div>
+
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                      Cole o conteúdo aqui *
+                    </label>
+                    <textarea
+                      value={aiContentInput}
+                      onChange={(e) => setAiContentInput(e.target.value)}
+                      rows={8}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm focus:border-purple-400 focus:outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                      placeholder="Cole aqui o conteúdo do qual você quer gerar flashcards. Pode ser texto de PDF, apostila, resumo, etc..."
+                      disabled={generatingFlashcards}
+                    />
+                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                      💡 A IA analisará o conteúdo e criará flashcards no estilo Noji (perguntas objetivas e respostas claras).
+                    </p>
+
+                    {flashcardGenProgress && (
+                      <div className="mt-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 p-3">
+                        <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                          {flashcardGenProgress}
+                        </p>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={generateFlashcardsFromContent}
+                      disabled={!flashcardForm.materia || !flashcardForm.modulo || !aiContentInput.trim() || generatingFlashcards || flashcardsQuantity < 5 || flashcardsQuantity > 50}
+                      className="mt-4 w-full rounded-full bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed hover:from-purple-700 hover:to-pink-700 transition-all"
+                    >
+                      {generatingFlashcards ? `Gerando ${flashcardsQuantity} flashcards...` : `✨ Gerar ${flashcardsQuantity} Flashcards por IA`}
                     </button>
                   </div>
                 </div>
