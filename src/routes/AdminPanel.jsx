@@ -2915,7 +2915,36 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       }
 
       setVerificationProgress('')
-      setMessage(`✅ Verificação e completude concluídas! ${materiasCriadas} matéria(s) criada(s), ${modulosProcessados} módulo(s) processado(s) e ${flashcardsCriados} flashcard(s) criado(s).`)
+      
+      // Mensagem detalhada com instruções
+      const courseName = courses.find(c => c.id === courseId)?.name || courseId
+      const message = `✅ Verificação e completude concluídas!
+
+📊 Resumo:
+- ${materiasCriadas} matéria(s) criada(s)
+- ${modulosProcessados} módulo(s) processado(s)  
+- ${flashcardsCriados} flashcard(s) criado(s)
+
+💡 IMPORTANTE: Para ver os flashcards criados, certifique-se de que o curso "${courseName}" está selecionado no seletor de flashcards acima. Os flashcards devem aparecer automaticamente na lista.`
+      
+      setMessage(message)
+      
+      // Log detalhado para debug
+      console.log('📊 Resumo da verificação:', {
+        courseId: courseId,
+        normalizedCourseId: normalizedCourseId || 'null (ALEGO padrão)',
+        courseName: courseName,
+        materiasCriadas,
+        modulosProcessados,
+        flashcardsCriados,
+        selectedCourseForFlashcards: selectedCourseForFlashcards
+      })
+      
+      // Se o curso selecionado no seletor de flashcards for diferente, avisar
+      if (selectedCourseForFlashcards !== courseId) {
+        console.warn(`⚠️ ATENÇÃO: O curso selecionado no seletor de flashcards ("${selectedCourseForFlashcards}") é diferente do curso usado na verificação ("${courseId}"). Os flashcards foram criados para o curso "${courseId}".`)
+        setMessage(message + `\n\n⚠️ ATENÇÃO: O curso selecionado no seletor de flashcards é diferente. Selecione "${courseName}" no seletor acima para ver os flashcards criados.`)
+      }
     } catch (err) {
       console.error('Erro ao verificar e completar conteúdos:', err)
       setMessage(`❌ Erro ao verificar e completar conteúdos: ${err.message}`)
