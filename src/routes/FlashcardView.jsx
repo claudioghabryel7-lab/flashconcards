@@ -60,6 +60,7 @@ const FlashcardView = () => {
   const [editalPrompt, setEditalPrompt] = useState('')
   const [selectedCourseId, setSelectedCourseId] = useState(null) // Curso selecionado (null = ALEGO padrão)
   const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
+  const [cardsLoading, setCardsLoading] = useState(true) // Estado para evitar flash de cards
   
   // Timer de estudo - ativo quando um módulo está selecionado
   const isStudying = !!selectedMateria && !!selectedModulo
@@ -100,7 +101,16 @@ const FlashcardView = () => {
   
   // Carregar flashcards do Firestore - filtrar por curso selecionado
   useEffect(() => {
-    if (!user || !profile) return
+    if (!user || !profile) {
+      // Limpar cards se não tiver usuário/perfil
+      setCards([])
+      setCardsLoading(false)
+      return
+    }
+    
+    // Limpar cards e marcar como loading imediatamente quando mudar de curso
+    setCards([])
+    setCardsLoading(true)
     
     const cardsRef = collection(db, 'flashcards')
     const unsub = onSnapshot(cardsRef, (snapshot) => {
@@ -112,7 +122,7 @@ const FlashcardView = () => {
         ...docSnapshot.data(),
       }))
       
-      // Filtrar por curso selecionado
+      // Filtrar por curso selecionado ANTES de setar
       const selectedCourse = (selectedCourseId || '').trim()
       
       if (selectedCourse) {
@@ -152,15 +162,25 @@ const FlashcardView = () => {
         }
         return 0
       })
+      
+      // Só atualizar após filtrar completamente e marcar como não loading
       setCards(data)
+      setCardsLoading(false)
     })
     return () => unsub()
   }, [user, profile, selectedCourseId])
 
   useEffect(() => {
+    // Limpar prompt primeiro quando mudar de curso
+    setEditalPrompt('')
+    
     const fetchPrompt = async () => {
       try {
-        const promptDoc = await getDoc(doc(db, 'config', 'edital'))
+        // Usar courseId do curso selecionado
+        const courseId = selectedCourseId || 'alego-default'
+        const promptRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+        const promptDoc = await getDoc(promptRef)
+        
         if (promptDoc.exists()) {
           const data = promptDoc.data()
           // Combinar texto digitado + texto do PDF
@@ -185,14 +205,19 @@ const FlashcardView = () => {
             combinedText += `CONTEÚDO DO PDF DO EDITAL:\n${limitedPdfText}`
           }
           setEditalPrompt(combinedText)
+        } else {
+          // Se não encontrar, deixar vazio (não carregar de outros cursos)
+          setEditalPrompt('')
         }
       } catch (err) {
         console.error('Erro ao carregar prompt do edital:', err)
+        // Em caso de erro, limpar
+        setEditalPrompt('')
       }
     }
 
     fetchPrompt()
-  }, [])
+  }, [selectedCourseId])
 
   // Carregar progresso dos cards do usuário
   useEffect(() => {
@@ -472,6 +497,40 @@ const FlashcardView = () => {
       throw new Error('API do Gemini não configurada.')
     }
 
+    // Buscar prompt do curso correto do flashcard
+    let courseEditalPrompt = ''
+    try {
+      const cardCourseId = card.courseId || selectedCourseId || 'alego-default'
+      const promptRef = doc(db, 'courses', cardCourseId, 'prompts', 'edital')
+      const promptDoc = await getDoc(promptRef)
+      
+      if (promptDoc.exists()) {
+        const data = promptDoc.data()
+        let combinedText = ''
+        if (data.prompt || data.content) {
+          combinedText += data.prompt || data.content || ''
+        }
+        if (data.pdfText) {
+          if (combinedText) combinedText += '\n\n'
+          const totalLength = data.pdfText.length
+          let limitedPdfText = ''
+          if (totalLength <= 20000) {
+            limitedPdfText = data.pdfText
+          } else {
+            const inicio = data.pdfText.substring(0, 15000)
+            const fim = data.pdfText.substring(totalLength - 5000)
+            limitedPdfText = `${inicio}\n\n[... conteúdo intermediário omitido ...]\n\n${fim}`
+          }
+          combinedText += `CONTEÚDO DO PDF DO EDITAL:\n${limitedPdfText}`
+        }
+        courseEditalPrompt = combinedText
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar prompt do curso para explicação:', err)
+      // Usar editalPrompt como fallback se houver
+      courseEditalPrompt = editalPrompt || ''
+    }
+
     const preferredModel = import.meta.env.VITE_GEMINI_MODEL || 'gemini-1.5-flash-latest'
     const fallbackModels = ['gemini-2.0-flash', 'gemini-1.5-pro-latest']
     const candidates = [preferredModel, ...fallbackModels].filter(
@@ -486,7 +545,7 @@ Módulo: ${card.modulo || 'Não informado'}
 Pergunta do flashcard: "${card.pergunta}"
 Resposta correta: "${card.resposta}"
 
-${editalPrompt ? `Contexto do concurso ALEGO:\n${editalPrompt}` : ''}
+${courseEditalPrompt ? `Contexto do concurso:\n${courseEditalPrompt}` : ''}
 
 Regras:
 - Seja didático, direto e motivador.
@@ -679,6 +738,13 @@ Regras:
               </p>
             </div>
           <div className="space-y-2">
+            {/* Não renderizar enquanto está carregando para evitar flash */}
+            {cardsLoading ? (
+              <div className="text-center py-8">
+                <p className="text-sm text-slate-500 dark:text-slate-400">Carregando...</p>
+              </div>
+            ) : (
+              <>
             {/* Usar matérias dos flashcards organizados, não a lista fixa MATERIAS */}
             {Object.keys(organizedCards)
               .sort((a, b) => {
@@ -792,6 +858,8 @@ Regras:
                 </div>
               )
             })}
+              </>
+            )}
           </div>
           </div>
         </div>

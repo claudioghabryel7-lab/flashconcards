@@ -47,6 +47,7 @@ const FloatingAIChat = () => {
   const [quotaCooldown, setQuotaCooldown] = useState(0) // Tempo restante de cooldown por quota
   const [quotaDailyLimit, setQuotaDailyLimit] = useState(false) // Limite diário atingido
   const [usingGroq, setUsingGroq] = useState(false) // Se está usando Groq como fallback
+  const [courseName, setCourseName] = useState('ALEGO') // Nome do curso para exibição
   const MIN_REQUEST_INTERVAL = 5000 // Mínimo de 5 segundos entre requisições (aumentado)
   
   // Dados de progresso para análise
@@ -58,6 +59,29 @@ const FloatingAIChat = () => {
     totalHours: 0,
     bySubject: {},
   })
+  
+  // Carregar nome do curso
+  useEffect(() => {
+    const loadCourseName = async () => {
+      try {
+        const courseId = profile?.selectedCourseId || 'alego-default'
+        if (courseId !== 'alego-default') {
+          const courseDoc = await getDoc(doc(db, 'courses', courseId))
+          if (courseDoc.exists()) {
+            const name = courseDoc.data().name || courseDoc.data().competition || 'ALEGO'
+            setCourseName(name)
+          }
+        } else {
+          setCourseName('ALEGO')
+        }
+      } catch (err) {
+        console.error('Erro ao carregar nome do curso:', err)
+      }
+    }
+    if (profile) {
+      loadCourseName()
+    }
+  }, [profile])
 
   // Carregar flashcards
   useEffect(() => {
@@ -374,7 +398,7 @@ const FloatingAIChat = () => {
       try {
         console.log('🚀 Gerando análise inicial...')
         setInitialMessageSent(true)
-        const analysis = analyzeProgress()
+        const analysis = await analyzeProgress()
         console.log('📊 Análise gerada, tamanho:', analysis.length, 'caracteres')
         console.log('📤 Enviando análise para IA...')
         await sendAIMessage(analysis, true)
@@ -396,7 +420,23 @@ const FloatingAIChat = () => {
   }, [isOpen, user, availableModel, initialMessageSent, messages.length])
 
   // Analisar progresso e gerar texto
-  const analyzeProgress = () => {
+  const analyzeProgress = async () => {
+    // Buscar nome do curso
+    let courseName = 'o concurso'
+    try {
+      const courseId = profile?.selectedCourseId || 'alego-default'
+      if (courseId !== 'alego-default') {
+        const courseDoc = await getDoc(doc(db, 'courses', courseId))
+        if (courseDoc.exists()) {
+          courseName = courseDoc.data().name || courseDoc.data().competition || 'o concurso'
+        }
+      } else {
+        courseName = 'ALEGO Policial Legislativo'
+      }
+    } catch (err) {
+      console.error('Erro ao buscar nome do curso:', err)
+    }
+    
     const subjects = MATERIAS.map((materia) => {
       const stats = studyStats.bySubject[materia] || {}
       return {
@@ -420,7 +460,7 @@ const FloatingAIChat = () => {
     const worst = sortedByDifficulty[0] || sortedByPending[sortedByPending.length - 1] || subjects[0]
     const mostPending = sortedByPending[0] || subjects[0]
 
-    return `Analise meu progresso no concurso ALEGO Policial Legislativo:
+    return `Analise meu progresso em ${courseName}:
 
 DADOS GERAIS:
 - Dias estudados: ${studyStats.totalDays}
@@ -511,11 +551,15 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: availableModel })
 
-      // Carregar prompt do admin e texto do PDF
+      // Carregar prompt do admin e texto do PDF (por curso)
       let editalPrompt = null
       let pdfText = null
+      let courseName = 'o concurso'
       try {
-        const editalDoc = await getDoc(doc(db, 'config', 'edital'))
+        const courseId = profile?.selectedCourseId || 'alego-default'
+        const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+        const editalDoc = await getDoc(editalRef)
+        
         if (editalDoc.exists()) {
           const data = editalDoc.data()
           editalPrompt = data.prompt || data.content || ''
@@ -523,6 +567,7 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
           
           // Log para debug
           console.log('📋 Edital carregado para o chat:')
+          console.log('  - Curso:', courseId)
           console.log('  - Texto digitado:', editalPrompt ? `${editalPrompt.length} caracteres` : 'não há')
           console.log('  - Texto do PDF:', pdfText ? `${pdfText.length} caracteres` : 'não há')
           
@@ -530,7 +575,25 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
             console.warn('⚠️ ATENÇÃO: Nenhum edital/PDF encontrado no Firestore!')
           }
         } else {
-          console.warn('⚠️ Documento config/edital não existe no Firestore!')
+          // Fallback para config antigo (migração)
+          const oldEditalDoc = await getDoc(doc(db, 'config', 'edital'))
+          if (oldEditalDoc.exists()) {
+            const data = oldEditalDoc.data()
+            editalPrompt = data.prompt || data.content || ''
+            pdfText = data.pdfText || ''
+          } else {
+            console.warn('⚠️ Documento de edital não existe no Firestore!')
+          }
+        }
+        
+        // Buscar nome do curso
+        if (courseId !== 'alego-default') {
+          const courseDoc = await getDoc(doc(db, 'courses', courseId))
+          if (courseDoc.exists()) {
+            courseName = courseDoc.data().name || courseDoc.data().competition || 'o concurso'
+          }
+        } else {
+          courseName = 'ALEGO Policial Legislativo'
         }
       } catch (err) {
         console.error('❌ Erro ao carregar configuração:', err)
@@ -540,7 +603,7 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
       let editalContext = ''
       if (editalPrompt || pdfText) {
         editalContext = '\n\n═══════════════════════════════════════════════════════════\n'
-        editalContext += '📋 INFORMAÇÕES COMPLETAS DO CONCURSO ALEGO POLICIAL LEGISLATIVO\n'
+        editalContext += `📋 INFORMAÇÕES COMPLETAS DO CONCURSO: ${courseName}\n`
         editalContext += '═══════════════════════════════════════════════════════════\n\n'
         
         if (editalPrompt) {
@@ -588,14 +651,14 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
         console.warn('⚠️ Nenhum edital/PDF carregado para o chat')
       }
 
-      const mentorPrompt = `Você é o "Flash Mentor", mentor do concurso ALEGO Policial Legislativo.
+      const mentorPrompt = `Você é o "Flash Mentor", mentor ${courseName}.
 
 REGRAS DE RESPOSTA:
 - Respostas COMPLETAS e OBJETIVAS: 3-6 frases bem formadas
 - Seja DIRETO mas COMPLETO - termine suas frases
 - Foque em AÇÕES práticas
 - SEMPRE termine suas respostas com pontuação final
-- Responda APENAS sobre o concurso ALEGO Policial Legislativo
+- Responda APENAS sobre ${courseName}
 
 ${editalContext}
 
@@ -973,7 +1036,7 @@ O chat estará disponível novamente amanhã ou após configurar um plano pago.`
                 <p className={`text-lg font-bold ${
                   darkMode ? 'text-alego-300' : 'text-alego-700'
                 }`}>
-                  Mentor do Concurso ALEGO
+                  Mentor do Concurso {courseName}
                 </p>
                 {usingGroq && (
                   <p className={`text-xs ${

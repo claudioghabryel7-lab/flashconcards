@@ -131,11 +131,14 @@ const FlashQuestoes = () => {
     return () => unsub()
   }, [user, profile, selectedCourseId])
 
-  // Carregar edital/PDF
+  // Carregar edital/PDF (por curso)
   useEffect(() => {
     const fetchPrompt = async () => {
       try {
-        const promptDoc = await getDoc(doc(db, 'config', 'edital'))
+        const courseId = selectedCourseId || 'alego-default'
+        const promptRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+        const promptDoc = await getDoc(promptRef)
+        
         if (promptDoc.exists()) {
           const data = promptDoc.data()
           let combinedText = ''
@@ -154,30 +157,63 @@ const FlashQuestoes = () => {
             }
           }
           setEditalPrompt(combinedText)
+        } else {
+          // Fallback para config antigo (migração)
+          const oldPromptDoc = await getDoc(doc(db, 'config', 'edital'))
+          if (oldPromptDoc.exists()) {
+            const data = oldPromptDoc.data()
+            let combinedText = ''
+            if (data.prompt || data.content) {
+              combinedText += data.prompt || data.content || ''
+            }
+            if (data.pdfText) {
+              if (combinedText) combinedText += '\n\n'
+              const totalLength = data.pdfText.length
+              if (totalLength <= 20000) {
+                combinedText += data.pdfText
+              } else {
+                const inicio = data.pdfText.substring(0, 15000)
+                const fim = data.pdfText.substring(totalLength - 5000)
+                combinedText += `${inicio}\n\n[... conteúdo intermediário omitido ...]\n\n${fim}`
+              }
+            }
+            setEditalPrompt(combinedText)
+          }
         }
       } catch (err) {
         console.error('Erro ao carregar edital:', err)
       }
     }
     fetchPrompt()
-  }, [])
+  }, [selectedCourseId])
 
-  // Carregar configurações de questões e BIZUs
+  // Carregar configurações de questões e BIZUs (por curso)
   useEffect(() => {
     const fetchQuestoesConfig = async () => {
       try {
-        const questoesDoc = await getDoc(doc(db, 'config', 'questoes'))
+        const courseId = selectedCourseId || 'alego-default'
+        const questoesRef = doc(db, 'courses', courseId, 'prompts', 'questoes')
+        const questoesDoc = await getDoc(questoesRef)
+        
         if (questoesDoc.exists()) {
           const data = questoesDoc.data()
           setQuestoesConfigPrompt(data.prompt || '')
           setBizuConfigPrompt(data.bizuPrompt || '')
+        } else {
+          // Fallback para config antigo (migração)
+          const oldQuestoesDoc = await getDoc(doc(db, 'config', 'questoes'))
+          if (oldQuestoesDoc.exists()) {
+            const data = oldQuestoesDoc.data()
+            setQuestoesConfigPrompt(data.prompt || '')
+            setBizuConfigPrompt(data.bizuPrompt || '')
+          }
         }
       } catch (err) {
         console.error('Erro ao carregar configuração de questões:', err)
       }
     }
     fetchQuestoesConfig()
-  }, [])
+  }, [selectedCourseId])
 
   // Carregar estatísticas do usuário (por curso)
   useEffect(() => {

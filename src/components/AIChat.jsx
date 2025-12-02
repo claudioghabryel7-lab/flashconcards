@@ -292,11 +292,15 @@ const AIChat = () => {
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: availableModel })
 
-      // Carregar prompt/configuração do edital e texto do PDF
+      // Carregar prompt/configuração do edital e texto do PDF (por curso)
       let editalPrompt = null
       let pdfText = null
+      let courseName = 'o concurso'
       try {
-        const editalDoc = await getDoc(doc(db, 'config', 'edital'))
+        const courseId = profile?.selectedCourseId || 'alego-default'
+        const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+        const editalDoc = await getDoc(editalRef)
+        
         if (editalDoc.exists()) {
           const data = editalDoc.data()
           editalPrompt = data.prompt || data.content || ''
@@ -304,6 +308,7 @@ const AIChat = () => {
           
           // Log para debug
           console.log('📋 Edital carregado para o chat:')
+          console.log('  - Curso:', courseId)
           console.log('  - Texto digitado:', editalPrompt ? `${editalPrompt.length} caracteres` : 'não há')
           console.log('  - Texto do PDF:', pdfText ? `${pdfText.length} caracteres` : 'não há')
           
@@ -311,7 +316,25 @@ const AIChat = () => {
             console.warn('⚠️ ATENÇÃO: Nenhum edital/PDF encontrado no Firestore!')
           }
         } else {
-          console.warn('⚠️ Documento config/edital não existe no Firestore!')
+          // Fallback para config antigo (migração)
+          const oldEditalDoc = await getDoc(doc(db, 'config', 'edital'))
+          if (oldEditalDoc.exists()) {
+            const data = oldEditalDoc.data()
+            editalPrompt = data.prompt || data.content || ''
+            pdfText = data.pdfText || ''
+          } else {
+            console.warn('⚠️ Documento de edital não existe no Firestore!')
+          }
+        }
+        
+        // Buscar nome do curso
+        if (courseId !== 'alego-default') {
+          const courseDoc = await getDoc(doc(db, 'courses', courseId))
+          if (courseDoc.exists()) {
+            courseName = courseDoc.data().name || courseDoc.data().competition || 'o concurso'
+          }
+        } else {
+          courseName = 'ALEGO Policial Legislativo'
         }
       } catch (err) {
         console.error('❌ Erro ao carregar configuração:', err)
@@ -326,7 +349,7 @@ const AIChat = () => {
       let editalContext = ''
       if (editalPrompt || pdfText) {
         editalContext = '\n\n═══════════════════════════════════════════════════════════\n'
-        editalContext += '📋 INFORMAÇÕES COMPLETAS DO CONCURSO ALEGO POLICIAL LEGISLATIVO\n'
+        editalContext += `📋 INFORMAÇÕES COMPLETAS DO CONCURSO: ${courseName}\n`
         editalContext += '═══════════════════════════════════════════════════════════\n\n'
         
         if (editalPrompt) {
@@ -374,13 +397,13 @@ const AIChat = () => {
         console.warn('⚠️ Nenhum edital/PDF carregado para o chat')
       }
 
-      const mentorPrompt = `Você é o "Flash Mentor", mentor do concurso ALEGO Policial Legislativo.
+      const mentorPrompt = `Você é o "Flash Mentor", mentor ${courseName}.
 
 REGRAS DE RESPOSTA:
 - Respostas CURTAS: máximo 3-4 frases
 - Seja DIRETO e OBJETIVO
 - Foque em AÇÕES práticas
-- Responda APENAS sobre o concurso ALEGO Policial Legislativo
+- Responda APENAS sobre ${courseName}
 
 ${editalContext}
 
