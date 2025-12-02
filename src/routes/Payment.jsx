@@ -673,15 +673,16 @@ const Payment = () => {
 
               {/* Método de pagamento selecionado */}
               {paymentMethod === 'card' && installments > 1 && (
-                <div className="mt-4 pt-4 border-t border-white/20">
-                  <p className="text-xs opacity-90 mb-1">
+                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">
                     {installments}x de {formatCurrency(calculateInstallmentValue(product.price, installments))}
                   </p>
-                  <p className="text-xs opacity-75">
+                  <p className="text-xs text-slate-500 dark:text-slate-500">
                     Total: {formatCurrency(calculateInstallmentValue(product.price, installments) * installments)}
                   </p>
                 </div>
               )}
+              </div>
             </motion.div>
           </div>
 
