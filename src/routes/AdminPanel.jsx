@@ -2560,7 +2560,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       
       setMessage('📄 Carregando PDF...')
       
-      // Ler o arquivo e criar uma cópia do ArrayBuffer para evitar detached
+      // Ler o arquivo e criar uma cópia independente do ArrayBuffer para evitar detached
       const arrayBuffer = await file.arrayBuffer()
       
       // Validar que o ArrayBuffer não está vazio
@@ -2568,8 +2568,11 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
         throw new Error('O arquivo PDF está vazio ou corrompido. Tente fazer upload novamente.')
       }
       
-      // Criar uma cópia do ArrayBuffer para evitar detached
-      const bufferCopy = new Uint8Array(arrayBuffer).buffer
+      // Criar uma cópia completamente independente do ArrayBuffer
+      // Isso evita o erro "detached ArrayBuffer"
+      const uint8Array = new Uint8Array(arrayBuffer)
+      const bufferCopy = new ArrayBuffer(uint8Array.length)
+      new Uint8Array(bufferCopy).set(uint8Array)
       
       setMessage('📄 Processando PDF (pode demorar para arquivos grandes)...')
       
@@ -2587,8 +2590,9 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
         }).promise
       } catch (workerErr) {
         console.warn('Erro com worker, tentando sem worker...', workerErr)
-        // Tentar com uma nova cópia do buffer
-        const bufferCopy2 = new Uint8Array(arrayBuffer).buffer
+        // Criar uma nova cópia independente para o fallback
+        const bufferCopy2 = new ArrayBuffer(uint8Array.length)
+        new Uint8Array(bufferCopy2).set(uint8Array)
         pdfjsLib.GlobalWorkerOptions.workerSrc = ''
         pdf = await pdfjsLib.getDocument({ 
           data: bufferCopy2,
