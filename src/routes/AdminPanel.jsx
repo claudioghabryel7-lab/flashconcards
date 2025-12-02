@@ -13,7 +13,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore'
-import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon } from '@heroicons/react/24/outline'
+import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon } from '@heroicons/react/24/outline'
 import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
 import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { auth, db, storage } from '../firebase/config'
@@ -4305,6 +4305,36 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                         className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                       >
                                         {course.active !== false ? 'Desativar' : 'Ativar'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={async (e) => {
+                                          e.preventDefault()
+                                          e.stopPropagation()
+                                          const shareUrl = `${window.location.origin}/curso/${course.id}`
+                                          
+                                          if (navigator.share) {
+                                            try {
+                                              await navigator.share({
+                                                title: course.name,
+                                                text: course.description || `Confira o curso ${course.name}`,
+                                                url: shareUrl,
+                                              })
+                                            } catch (err) {
+                                              if (err.name !== 'AbortError') {
+                                                await navigator.clipboard.writeText(shareUrl)
+                                                setMessage('✅ Link copiado para a área de transferência!')
+                                              }
+                                            }
+                                          } else {
+                                            await navigator.clipboard.writeText(shareUrl)
+                                            setMessage('✅ Link copiado para a área de transferência!')
+                                          }
+                                        }}
+                                        className="rounded-lg bg-green-100 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-200"
+                                        title="Compartilhar curso"
+                                      >
+                                        <ShareIcon className="h-4 w-4 inline" /> Compartilhar
                                       </button>
                                       <button
                                         type="button"

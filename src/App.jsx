@@ -18,6 +18,7 @@ import QuestionView from './routes/QuestionView'
 import ResetPassword from './routes/ResetPassword'
 import Payment from './routes/Payment'
 import CourseSelector from './components/CourseSelector'
+import CourseShare from './routes/CourseShare'
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()
@@ -153,6 +154,8 @@ function App() {
           <Route path="/reset/:token" element={<ResetPassword />} />
           {/* Página de Pagamento - Acessível sem login */}
           <Route path="/pagamento" element={<Payment />} />
+          {/* Página de Compartilhamento de Curso - Acessível sem login */}
+          <Route path="/curso/:courseId" element={<CourseShare />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

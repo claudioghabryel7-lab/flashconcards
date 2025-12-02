@@ -15,7 +15,8 @@ import {
   CalendarIcon,
   ChatBubbleLeftRightIcon,
   BookOpenIcon,
-  RocketLaunchIcon
+  RocketLaunchIcon,
+  ShareIcon
 } from '@heroicons/react/24/solid'
 import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
@@ -200,13 +201,46 @@ const PublicHome = () => {
                       </p>
                     </div>
                     
-                    <Link
-                      to={`/pagamento?course=${course.id}`}
-                      onClick={trackButtonClick}
-                      className="block w-full rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 text-center text-sm font-bold text-white shadow-lg hover:shadow-xl hover:from-blue-500 hover:to-purple-500 transition-all transform hover:scale-105"
-                    >
-                      Comprar Agora
-                    </Link>
+                    <div className="flex gap-2">
+                      <Link
+                        to={`/pagamento?course=${course.id}`}
+                        onClick={trackButtonClick}
+                        className="flex-1 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 text-center text-sm font-bold text-white shadow-lg hover:shadow-xl hover:from-blue-500 hover:to-purple-500 transition-all transform hover:scale-105"
+                      >
+                        Comprar Agora
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.preventDefault()
+                          const shareUrl = `${window.location.origin}/curso/${course.id}`
+                          
+                          if (navigator.share) {
+                            try {
+                              await navigator.share({
+                                title: course.name,
+                                text: course.description || `Confira o curso ${course.name}`,
+                                url: shareUrl,
+                              })
+                            } catch (err) {
+                              if (err.name !== 'AbortError') {
+                                // Se falhar ou não suportar, copiar para clipboard
+                                await navigator.clipboard.writeText(shareUrl)
+                                alert('Link copiado para a área de transferência!')
+                              }
+                            }
+                          } else {
+                            // Fallback: copiar para clipboard
+                            await navigator.clipboard.writeText(shareUrl)
+                            alert('Link copiado para a área de transferência!')
+                          }
+                        }}
+                        className="rounded-full bg-slate-100 hover:bg-slate-200 px-4 py-3 text-slate-700 transition-all flex items-center justify-center"
+                        title="Compartilhar curso"
+                      >
+                        <ShareIcon className="h-5 w-5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </motion.div>

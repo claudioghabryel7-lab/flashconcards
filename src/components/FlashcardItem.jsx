@@ -134,7 +134,7 @@ const FlashcardItem = ({
             
             {/* Pergunta */}
             <div className="flex-1 flex items-center justify-center min-h-[200px]">
-              <h3 className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 dark:text-white text-center px-4 leading-tight">
+              <h3 className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 dark:text-white text-center px-4 leading-tight break-words overflow-wrap-anywhere">
                 {card.pergunta}
               </h3>
             </div>
@@ -175,7 +175,7 @@ const FlashcardItem = ({
             
             {/* Resposta */}
             <div className="flex-1 flex items-center justify-center min-h-[200px]">
-              <p className="text-lg sm:text-xl md:text-2xl font-black text-center px-4 leading-tight drop-shadow-lg">
+              <p className="text-lg sm:text-xl md:text-2xl font-black text-center px-4 leading-tight drop-shadow-lg break-words overflow-wrap-anywhere">
                 {card.resposta}
               </p>
             </div>
