@@ -158,6 +158,9 @@ const CourseShare = () => {
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
                   to={`/pagamento?course=${courseId}`}
+                  onClick={() => {
+                    console.log('Navegando para pagamento com courseId:', courseId)
+                  }}
                   className="flex-1 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-4 text-center text-lg font-bold text-white shadow-lg hover:shadow-xl hover:from-blue-500 hover:to-purple-500 transition-all transform hover:scale-105"
                 >
                   Comprar Agora
