@@ -50,11 +50,11 @@ const FlashcardList = ({
       )}
 
       {/* Navegação - Tech */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-2 sm:gap-4">
         <button
           type="button"
           onClick={onPrev}
-          className="group/btn relative inline-flex items-center justify-center gap-2 rounded-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-2 border-blue-500/30 dark:border-blue-400/30 px-5 py-3 text-sm font-bold text-blue-600 dark:text-blue-400 shadow-lg hover:shadow-xl hover:border-blue-500 dark:hover:border-blue-400 hover:scale-105 transition-all overflow-hidden"
+          className="group/btn relative inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-2 border-blue-500/30 dark:border-blue-400/30 px-3 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400 shadow-lg hover:shadow-xl hover:border-blue-500 dark:hover:border-blue-400 hover:scale-105 transition-all overflow-hidden"
         >
           <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
           <span className="relative z-10">← Anterior</span>
@@ -62,8 +62,8 @@ const FlashcardList = ({
         
         <div className="relative">
           <div className="absolute inset-0 bg-purple-500/20 rounded-full blur-md"></div>
-          <div className="relative px-6 py-2.5 rounded-full bg-gradient-to-r from-purple-500/10 to-blue-500/10 dark:from-purple-500/20 dark:to-blue-500/20 border border-purple-500/30 dark:border-purple-400/30 backdrop-blur-sm">
-            <p className="text-sm font-black bg-gradient-to-r from-purple-600 to-blue-600 dark:from-purple-400 dark:to-blue-400 bg-clip-text text-transparent">
+          <div className="relative px-4 sm:px-6 py-2 sm:py-2.5 rounded-full bg-gradient-to-r from-purple-500/10 to-blue-500/10 dark:from-purple-500/20 dark:to-blue-500/20 border border-purple-500/30 dark:border-purple-400/30 backdrop-blur-sm">
+            <p className="text-xs sm:text-sm font-black bg-gradient-to-r from-purple-600 to-blue-600 dark:from-purple-400 dark:to-blue-400 bg-clip-text text-transparent">
               {currentIndex + 1} / {cards.length}
             </p>
           </div>
@@ -72,7 +72,7 @@ const FlashcardList = ({
         <button
           type="button"
           onClick={onNext}
-          className="group/btn relative inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:shadow-blue-500/50 hover:scale-105 transition-all overflow-hidden"
+          className="group/btn relative inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-3 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-bold text-white shadow-lg hover:shadow-xl hover:shadow-blue-500/50 hover:scale-105 transition-all overflow-hidden"
         >
           <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000"></div>
           <span className="relative z-10">Próximo →</span>
