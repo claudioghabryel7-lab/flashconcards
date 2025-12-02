@@ -2538,10 +2538,42 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
   // Extrair texto do PDF para geração completa
   const extractPdfForFullGeneration = async (file) => {
     setExtractingPdf(true)
-    setMessage('📄 Extraindo texto do PDF...')
+    setMessage('📄 Validando arquivo PDF...')
+    
     try {
+      // Validar arquivo
+      if (!file) {
+        throw new Error('Nenhum arquivo selecionado')
+      }
+      
+      if (file.type !== 'application/pdf') {
+        throw new Error('O arquivo deve ser um PDF (.pdf)')
+      }
+      
+      if (file.size === 0) {
+        throw new Error('O arquivo PDF está vazio (0 bytes). Verifique se o arquivo não está corrompido.')
+      }
+      
+      if (file.size > 50 * 1024 * 1024) { // 50MB
+        throw new Error('O arquivo PDF é muito grande (máximo 50MB). Tente um arquivo menor.')
+      }
+      
+      setMessage('📄 Carregando PDF...')
+      
+      // Ler o arquivo e criar uma cópia do ArrayBuffer para evitar detached
       const arrayBuffer = await file.arrayBuffer()
       
+      // Validar que o ArrayBuffer não está vazio
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        throw new Error('O arquivo PDF está vazio ou corrompido. Tente fazer upload novamente.')
+      }
+      
+      // Criar uma cópia do ArrayBuffer para evitar detached
+      const bufferCopy = new Uint8Array(arrayBuffer).buffer
+      
+      setMessage('📄 Processando PDF (pode demorar para arquivos grandes)...')
+      
+      // Configurar worker antes de processar
       if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
         pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
       }
@@ -2549,18 +2581,25 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       let pdf
       try {
         pdf = await pdfjsLib.getDocument({ 
-          data: arrayBuffer,
+          data: bufferCopy,
           useSystemFonts: true,
           verbosity: 0,
         }).promise
       } catch (workerErr) {
         console.warn('Erro com worker, tentando sem worker...', workerErr)
+        // Tentar com uma nova cópia do buffer
+        const bufferCopy2 = new Uint8Array(arrayBuffer).buffer
         pdfjsLib.GlobalWorkerOptions.workerSrc = ''
         pdf = await pdfjsLib.getDocument({ 
-          data: arrayBuffer,
+          data: bufferCopy2,
           useSystemFonts: true,
           verbosity: 0,
         }).promise
+      }
+
+      // Validar que o PDF foi carregado
+      if (!pdf || !pdf.numPages || pdf.numPages === 0) {
+        throw new Error('O PDF não contém páginas válidas. Verifique se o arquivo não está corrompido.')
       }
 
       let fullText = ''
@@ -2582,15 +2621,35 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
           }
         } catch (pageErr) {
           console.warn(`Erro ao processar página ${pageNum}:`, pageErr)
+          // Continuar com próxima página
+          continue
         }
       }
 
-      setEditalPdfTextForGeneration(fullText)
+      // Validar que extraímos algum texto
+      if (!fullText.trim()) {
+        throw new Error('Não foi possível extrair texto do PDF. O arquivo pode estar protegido ou ser uma imagem. Tente converter para PDF com texto selecionável.')
+      }
+
+      setEditalPdfTextForGeneration(fullText.trim())
       setEditalPdfForGeneration(file)
-      setMessage(`✅ PDF processado! ${fullText.length} caracteres extraídos.`)
+      setMessage(`✅ PDF processado! ${fullText.trim().length.toLocaleString()} caracteres extraídos de ${numPages} página(s).`)
     } catch (err) {
       console.error('Erro ao extrair PDF:', err)
-      setMessage(`❌ Erro ao extrair PDF: ${err.message}`)
+      let errorMsg = err.message || 'Erro desconhecido ao processar PDF'
+      
+      // Mensagens de erro mais amigáveis
+      if (errorMsg.includes('empty') || errorMsg.includes('zero bytes')) {
+        errorMsg = 'O arquivo PDF está vazio. Verifique se o arquivo não está corrompido e tente fazer upload novamente.'
+      } else if (errorMsg.includes('detached') || errorMsg.includes('ArrayBuffer')) {
+        errorMsg = 'Erro ao processar o arquivo. Tente fazer upload novamente ou use um PDF menor.'
+      } else if (errorMsg.includes('worker') || errorMsg.includes('Failed to fetch')) {
+        errorMsg = 'Erro ao carregar biblioteca de PDF. Tente novamente ou recarregue a página.'
+      }
+      
+      setMessage(`❌ ${errorMsg}`)
+      setEditalPdfTextForGeneration('')
+      setEditalPdfForGeneration(null)
     } finally {
       setExtractingPdf(false)
     }
@@ -5688,3 +5747,4 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
 }
 
 export default AdminPanel
+
