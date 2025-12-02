@@ -104,39 +104,9 @@ const PublicHome = () => {
         ...docSnapshot.data(),
       }))
       
-      // Verificar se o curso ALEGO padrão existe
-      const alegoCourse = data.find(c => c.id === 'alego-default')
-      
-      if (!alegoCourse) {
-        // Criar curso ALEGO padrão se não existir
-        try {
-          const alegoRef = doc(db, 'courses', 'alego-default')
-          await setDoc(alegoRef, {
-            name: 'Polícia Legislativa ALEGO',
-            description: 'Mentoria completa para o concurso da Polícia Legislativa ALEGO com flashcards, questões e IA personalizada.',
-            price: 99.90,
-            originalPrice: 149.99,
-            competition: 'ALEGO - Polícia Legislativa',
-            active: true,
-            isDefault: true, // Marcar como curso padrão
-            createdAt: serverTimestamp(),
-          }, { merge: true })
-          
-          // Adicionar à lista
-          data.unshift({
-            id: 'alego-default',
-            name: 'Polícia Legislativa ALEGO',
-            description: 'Mentoria completa para o concurso da Polícia Legislativa ALEGO com flashcards, questões e IA personalizada.',
-            price: 99.90,
-            originalPrice: 149.99,
-            competition: 'ALEGO - Polícia Legislativa',
-            active: true,
-            isDefault: true,
-          })
-        } catch (err) {
-          console.error('Erro ao criar curso ALEGO padrão:', err)
-        }
-      }
+      // Não recriar curso ALEGO padrão automaticamente
+      // Se foi deletado pelo admin, não deve aparecer na página inicial
+      // Apenas mostrar os cursos que realmente existem e estão ativos
       
       setCourses(data)
       setLoadingCourses(false)
