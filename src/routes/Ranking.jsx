@@ -214,20 +214,20 @@ const Ranking = () => {
         <div className="absolute bottom-0 left-0 w-72 h-72 bg-gradient-to-tr from-purple-500/10 to-pink-500/10 rounded-full blur-3xl -ml-36 -mb-36"></div>
         
         <div className="relative">
-          <div className="flex items-center gap-4 mb-3">
+          <div className="flex flex-col sm:flex-row items-center sm:items-center gap-3 sm:gap-4 mb-3">
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-r from-amber-500 to-yellow-500 rounded-2xl blur-lg opacity-50 animate-pulse"></div>
-              <div className="relative rounded-2xl bg-gradient-to-br from-amber-500 to-yellow-500 p-4 shadow-lg">
-                <TrophyIcon className="h-8 w-8 text-white" />
+              <div className="relative rounded-2xl bg-gradient-to-br from-amber-500 to-yellow-500 p-3 sm:p-4 shadow-lg">
+                <TrophyIcon className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
               </div>
             </div>
-            <div className="flex-1">
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black mb-2">
+            <div className="flex-1 text-center sm:text-left">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black mb-2">
                 <span className="bg-gradient-to-r from-amber-600 via-yellow-600 to-orange-600 dark:from-amber-400 dark:via-yellow-400 dark:to-orange-400 bg-clip-text text-transparent">
                   Ranking de Alunos
                 </span>
               </h1>
-              <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 px-2 sm:px-0">
                 Classificação baseada em dias estudados, horas e cards revisados
               </p>
             </div>
@@ -251,84 +251,84 @@ const Ranking = () => {
             </div>
             
             {/* Pódio Visual */}
-            <div className="flex items-end justify-center gap-2 sm:gap-4 mb-8">
+            <div className="flex items-end justify-center gap-1 sm:gap-2 md:gap-4 mb-6 sm:mb-8 px-2">
               {/* 2º Lugar */}
               {top3[1] && (
-                <div className="group relative flex-1 max-w-[200px] animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                  <div className="relative bg-gradient-to-br from-slate-300 to-slate-400 dark:from-slate-600 dark:to-slate-700 rounded-t-xl p-4 pb-8 border-2 border-slate-400 dark:border-slate-600 h-32 flex flex-col items-center justify-end">
-                    <div className="absolute -top-6 left-1/2 transform -translate-x-1/2">
+                <div className="group relative flex-1 max-w-[100px] sm:max-w-[150px] md:max-w-[200px] animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                  <div className="relative bg-gradient-to-br from-slate-300 to-slate-400 dark:from-slate-600 dark:to-slate-700 rounded-t-xl p-2 sm:p-3 md:p-4 pb-6 sm:pb-8 border-2 border-slate-400 dark:border-slate-600 h-24 sm:h-28 md:h-32 flex flex-col items-center justify-end">
+                    <div className="absolute -top-4 sm:-top-5 md:-top-6 left-1/2 transform -translate-x-1/2">
                       <div className="relative">
                         <div className="absolute inset-0 bg-slate-400 rounded-full blur-md opacity-50 group-hover:opacity-75 transition-opacity"></div>
-                        <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center shadow-lg border-4 border-white dark:border-slate-800">
-                          <span className="text-2xl">🥈</span>
+                        <div className="relative w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center shadow-lg border-2 sm:border-2 md:border-4 border-white dark:border-slate-800">
+                          <span className="text-xl sm:text-2xl">🥈</span>
                         </div>
                       </div>
                     </div>
-                    <p className="text-xs font-black text-white mb-1">2º</p>
-                    <p className="text-sm font-bold text-white truncate w-full text-center">{top3[1].displayName || top3[1].email?.split('@')[0]}</p>
-                    <p className="text-xs font-bold text-white/90">{top3[1].score} pts</p>
+                    <p className="text-[10px] sm:text-xs font-black text-white mb-0.5 sm:mb-1">2º</p>
+                    <p className="text-[10px] sm:text-xs md:text-sm font-bold text-white truncate w-full text-center px-1">{top3[1].displayName || top3[1].email?.split('@')[0]}</p>
+                    <p className="text-[9px] sm:text-xs font-bold text-white/90">{top3[1].score} pts</p>
                   </div>
                 </div>
               )}
               
               {/* 1º Lugar - MAIOR */}
               {top3[0] && (
-                <div className="group relative flex-1 max-w-[220px] animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                  <div className="relative bg-gradient-to-br from-amber-400 via-yellow-400 to-orange-400 rounded-t-xl p-4 pb-12 border-2 border-amber-500 dark:border-amber-400 h-40 flex flex-col items-center justify-end shadow-2xl">
+                <div className="group relative flex-1 max-w-[120px] sm:max-w-[180px] md:max-w-[220px] animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                  <div className="relative bg-gradient-to-br from-amber-400 via-yellow-400 to-orange-400 rounded-t-xl p-2 sm:p-3 md:p-4 pb-8 sm:pb-10 md:pb-12 border-2 border-amber-500 dark:border-amber-400 h-32 sm:h-36 md:h-40 flex flex-col items-center justify-end shadow-2xl">
                     {/* Coroa */}
-                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2">
+                    <div className="absolute -top-6 sm:-top-7 md:-top-8 left-1/2 transform -translate-x-1/2">
                       <div className="relative">
                         <div className="absolute inset-0 bg-yellow-500 rounded-full blur-xl opacity-50 animate-pulse"></div>
-                        <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-yellow-400 via-amber-400 to-orange-400 flex items-center justify-center shadow-2xl border-4 border-white dark:border-slate-800 animate-bounce">
-                          <span className="text-3xl">👑</span>
+                        <div className="relative w-16 h-16 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-yellow-400 via-amber-400 to-orange-400 flex items-center justify-center shadow-2xl border-2 sm:border-2 md:border-4 border-white dark:border-slate-800 animate-bounce">
+                          <span className="text-2xl sm:text-2xl md:text-3xl">👑</span>
                         </div>
-                        <div className="absolute -top-1 -right-1">
-                          <StarIcon className="h-4 w-4 text-yellow-300 animate-spin" style={{ animationDuration: '3s' }} />
+                        <div className="absolute -top-1 -right-1 hidden sm:block">
+                          <StarIcon className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-300 animate-spin" style={{ animationDuration: '3s' }} />
                         </div>
                       </div>
                     </div>
-                    <p className="text-sm font-black text-white mb-1">1º</p>
-                    <p className="text-base font-black text-white truncate w-full text-center">{top3[0].displayName || top3[0].email?.split('@')[0]}</p>
-                    <p className="text-sm font-black text-white/90">{top3[0].score} pts</p>
+                    <p className="text-xs sm:text-sm font-black text-white mb-0.5 sm:mb-1">1º</p>
+                    <p className="text-xs sm:text-sm md:text-base font-black text-white truncate w-full text-center px-1">{top3[0].displayName || top3[0].email?.split('@')[0]}</p>
+                    <p className="text-[10px] sm:text-xs md:text-sm font-black text-white/90">{top3[0].score} pts</p>
                   </div>
                 </div>
               )}
               
               {/* 3º Lugar */}
               {top3[2] && (
-                <div className="group relative flex-1 max-w-[200px] animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-                  <div className="relative bg-gradient-to-br from-amber-700 to-amber-800 dark:from-amber-800 dark:to-amber-900 rounded-t-xl p-4 pb-6 border-2 border-amber-600 dark:border-amber-700 h-28 flex flex-col items-center justify-end">
-                    <div className="absolute -top-6 left-1/2 transform -translate-x-1/2">
+                <div className="group relative flex-1 max-w-[100px] sm:max-w-[150px] md:max-w-[200px] animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+                  <div className="relative bg-gradient-to-br from-amber-700 to-amber-800 dark:from-amber-800 dark:to-amber-900 rounded-t-xl p-2 sm:p-3 md:p-4 pb-4 sm:pb-6 border-2 border-amber-600 dark:border-amber-700 h-20 sm:h-24 md:h-28 flex flex-col items-center justify-end">
+                    <div className="absolute -top-4 sm:-top-5 md:-top-6 left-1/2 transform -translate-x-1/2">
                       <div className="relative">
                         <div className="absolute inset-0 bg-amber-600 rounded-full blur-md opacity-50 group-hover:opacity-75 transition-opacity"></div>
-                        <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-amber-600 to-amber-700 flex items-center justify-center shadow-lg border-4 border-white dark:border-slate-800">
-                          <span className="text-2xl">🥉</span>
+                        <div className="relative w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-amber-600 to-amber-700 flex items-center justify-center shadow-lg border-2 sm:border-2 md:border-4 border-white dark:border-slate-800">
+                          <span className="text-xl sm:text-2xl">🥉</span>
                         </div>
                       </div>
                     </div>
-                    <p className="text-xs font-black text-white mb-1">3º</p>
-                    <p className="text-sm font-bold text-white truncate w-full text-center">{top3[2].displayName || top3[2].email?.split('@')[0]}</p>
-                    <p className="text-xs font-bold text-white/90">{top3[2].score} pts</p>
+                    <p className="text-[10px] sm:text-xs font-black text-white mb-0.5 sm:mb-1">3º</p>
+                    <p className="text-[10px] sm:text-xs md:text-sm font-bold text-white truncate w-full text-center px-1">{top3[2].displayName || top3[2].email?.split('@')[0]}</p>
+                    <p className="text-[9px] sm:text-xs font-bold text-white/90">{top3[2].score} pts</p>
                   </div>
                 </div>
               )}
             </div>
             
             {/* Stats do Top 3 */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 md:gap-4">
               {top3.map((userRank, idx) => (
-                <div key={userRank.uid} className="text-center space-y-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                  <div className="flex items-center justify-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-                    <FireIcon className="h-4 w-4 text-orange-500" />
-                    <span className="font-bold">{userRank.progress.totalDays} dias</span>
+                <div key={userRank.uid} className="text-center space-y-1 sm:space-y-2 p-2 sm:p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-slate-600 dark:text-slate-400">
+                    <FireIcon className="h-3 w-3 sm:h-4 sm:w-4 text-orange-500" />
+                    <span className="font-bold whitespace-nowrap">{userRank.progress.totalDays} dias</span>
                   </div>
-                  <div className="flex items-center justify-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-                    <ClockIcon className="h-4 w-4 text-blue-500" />
-                    <span className="font-bold">{userRank.progress.totalHours.toFixed(1)}h</span>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-slate-600 dark:text-slate-400">
+                    <ClockIcon className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500" />
+                    <span className="font-bold whitespace-nowrap">{userRank.progress.totalHours.toFixed(1)}h</span>
                   </div>
-                  <div className="flex items-center justify-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-                    <ChartBarIcon className="h-4 w-4 text-emerald-500" />
-                    <span className="font-bold">{userRank.progress.studiedCards} cards</span>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-slate-600 dark:text-slate-400">
+                    <ChartBarIcon className="h-3 w-3 sm:h-4 sm:w-4 text-emerald-500" />
+                    <span className="font-bold whitespace-nowrap">{userRank.progress.studiedCards} cards</span>
                   </div>
                 </div>
               ))}
@@ -355,29 +355,29 @@ const Ranking = () => {
                 Sua Posição
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex flex-col gap-4">
               <div className="flex items-center gap-4">
-                <div>
-                  <p className="text-xl font-black text-slate-900 dark:text-white">
+                <div className="flex-1 min-w-0">
+                  <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white truncate">
                     {currentUserRank.displayName || currentUserRank.email}
                   </p>
-                  <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">
+                  <p className="text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">
                     {currentUserRank.score} pontos
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/50 dark:bg-slate-800/50">
-                  <FireIcon className="h-4 w-4 text-orange-500" />
-                  <span className="font-bold text-slate-700 dark:text-slate-300">{currentUserRank.progress.totalDays} dias</span>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4 text-xs sm:text-sm">
+                <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/50 dark:bg-slate-800/50">
+                  <FireIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-orange-500 flex-shrink-0" />
+                  <span className="font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">{currentUserRank.progress.totalDays} dias</span>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/50 dark:bg-slate-800/50">
-                  <ClockIcon className="h-4 w-4 text-blue-500" />
-                  <span className="font-bold text-slate-700 dark:text-slate-300">{currentUserRank.progress.totalHours.toFixed(1)}h</span>
+                <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/50 dark:bg-slate-800/50">
+                  <ClockIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500 flex-shrink-0" />
+                  <span className="font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">{currentUserRank.progress.totalHours.toFixed(1)}h</span>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/50 dark:bg-slate-800/50">
-                  <ChartBarIcon className="h-4 w-4 text-emerald-500" />
-                  <span className="font-bold text-slate-700 dark:text-slate-300">{currentUserRank.progress.studiedCards} cards</span>
+                <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/50 dark:bg-slate-800/50">
+                  <ChartBarIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-500 flex-shrink-0" />
+                  <span className="font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">{currentUserRank.progress.studiedCards} cards</span>
                 </div>
               </div>
             </div>
@@ -408,7 +408,7 @@ const Ranking = () => {
                 return (
                   <div
                     key={userRank.uid}
-                    className={`group relative flex items-center gap-4 rounded-xl p-4 transition-all ${
+                    className={`group relative flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 rounded-xl p-3 sm:p-4 transition-all ${
                       isCurrentUser 
                         ? 'bg-gradient-to-r from-blue-500/10 via-cyan-500/10 to-purple-500/10 dark:from-blue-500/20 dark:via-cyan-500/20 dark:to-purple-500/20 border-2 border-blue-500/50 dark:border-blue-400/50 shadow-lg' 
                         : 'bg-slate-50/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 hover:border-purple-500/50 dark:hover:border-purple-400/50 hover:shadow-md'
@@ -420,7 +420,7 @@ const Ranking = () => {
                     )}
                     
                     {/* Posição */}
-                    <div className={`relative flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center font-black text-white ${
+                    <div className={`relative flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center font-black text-white ${
                       isCurrentUser
                         ? 'bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg'
                         : 'bg-gradient-to-br from-slate-400 to-slate-500 dark:from-slate-600 dark:to-slate-700'
@@ -428,12 +428,12 @@ const Ranking = () => {
                       {isCurrentUser && (
                         <div className="absolute inset-0 bg-blue-500 rounded-xl blur-md opacity-50 animate-pulse"></div>
                       )}
-                      <span className="relative text-sm">#{userRank.position}</span>
+                      <span className="relative text-xs sm:text-sm">#{userRank.position}</span>
                     </div>
                     
                     {/* Info do usuário */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0 w-full sm:w-auto">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mb-2 sm:mb-0">
                         <p className={`text-sm sm:text-base font-bold truncate ${
                           isCurrentUser 
                             ? 'text-blue-700 dark:text-blue-300' 
@@ -442,37 +442,37 @@ const Ranking = () => {
                           {userRank.displayName || userRank.email}
                         </p>
                         {isCurrentUser && (
-                          <span className="px-2 py-0.5 text-xs font-black bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full">
+                          <span className="px-2 py-0.5 text-[10px] sm:text-xs font-black bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full self-start sm:self-auto whitespace-nowrap">
                             VOCÊ
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 mt-1.5">
-                        <div className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
-                          <FireIcon className="h-3.5 w-3.5 text-orange-500" />
-                          <span className="font-semibold">{userRank.progress.totalDays}</span>
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <div className="flex items-center gap-1 text-[10px] sm:text-xs text-slate-600 dark:text-slate-400">
+                          <FireIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-orange-500 flex-shrink-0" />
+                          <span className="font-semibold whitespace-nowrap">{userRank.progress.totalDays} dias</span>
                         </div>
-                        <div className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
-                          <ClockIcon className="h-3.5 w-3.5 text-blue-500" />
-                          <span className="font-semibold">{userRank.progress.totalHours.toFixed(1)}h</span>
+                        <div className="flex items-center gap-1 text-[10px] sm:text-xs text-slate-600 dark:text-slate-400">
+                          <ClockIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-blue-500 flex-shrink-0" />
+                          <span className="font-semibold whitespace-nowrap">{userRank.progress.totalHours.toFixed(1)}h</span>
                         </div>
-                        <div className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
-                          <ChartBarIcon className="h-3.5 w-3.5 text-emerald-500" />
-                          <span className="font-semibold">{userRank.progress.studiedCards}</span>
+                        <div className="flex items-center gap-1 text-[10px] sm:text-xs text-slate-600 dark:text-slate-400">
+                          <ChartBarIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-emerald-500 flex-shrink-0" />
+                          <span className="font-semibold whitespace-nowrap">{userRank.progress.studiedCards} cards</span>
                         </div>
                       </div>
                     </div>
                     
                     {/* Pontuação */}
                     {showScore && (
-                      <div className="flex-shrink-0 text-right">
+                      <div className="flex-shrink-0 w-full sm:w-auto flex justify-end sm:justify-start">
                         <div className="relative">
                           <div className="absolute inset-0 bg-purple-500/20 rounded-lg blur-md"></div>
-                          <div className="relative px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500/10 to-blue-500/10 dark:from-purple-500/20 dark:to-blue-500/20 border border-purple-500/30 dark:border-purple-400/30">
-                            <p className="text-lg font-black bg-gradient-to-r from-purple-600 to-blue-600 dark:from-purple-400 dark:to-blue-400 bg-clip-text text-transparent">
+                          <div className="relative px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-purple-500/10 to-blue-500/10 dark:from-purple-500/20 dark:to-blue-500/20 border border-purple-500/30 dark:border-purple-400/30">
+                            <p className="text-base sm:text-lg font-black bg-gradient-to-r from-purple-600 to-blue-600 dark:from-purple-400 dark:to-blue-400 bg-clip-text text-transparent">
                               {userRank.score}
                             </p>
-                            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                               pts
                             </p>
                           </div>
