@@ -26,6 +26,7 @@ const SalesChat = () => {
   const [courses, setCourses] = useState([])
   const [initialMessageSent, setInitialMessageSent] = useState(false)
   const [mentionedCourse, setMentionedCourse] = useState(null) // Curso mencionado na conversa
+  const [userClosedManually, setUserClosedManually] = useState(false) // Rastrear se usuário fechou manualmente
 
   // Função para detectar qual curso está sendo mencionado na conversa
   const detectMentionedCourse = (allMessages) => {
@@ -117,9 +118,9 @@ const SalesChat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Abrir chat automaticamente para visitantes
+  // Abrir chat automaticamente para visitantes (apenas na primeira vez)
   useEffect(() => {
-    if (!user && !isOpen) {
+    if (!user && !isOpen && !userClosedManually) {
       // Pequeno delay para melhorar a experiência
       const timer = setTimeout(() => {
         setIsOpen(true)
@@ -127,7 +128,7 @@ const SalesChat = () => {
       }, 1500) // Abre após 1.5 segundos
       return () => clearTimeout(timer)
     }
-  }, [user, isOpen])
+  }, [user, isOpen, userClosedManually])
 
   // Carregar modelo Gemini disponível
   useEffect(() => {
@@ -162,20 +163,23 @@ const SalesChat = () => {
     findAvailableModel()
   }, [])
 
-  // Abrir chat automaticamente para visitantes quando acessar o site
+  // Abrir chat automaticamente para visitantes quando acessar o site (apenas na primeira vez)
   useEffect(() => {
-    if (!user) {
+    if (!user && !userClosedManually) {
       // Pequeno delay para melhorar a experiência (dá tempo da página carregar)
       const timer = setTimeout(() => {
-        setIsOpen(true)
-        setIsMinimized(false)
+        if (!userClosedManually) {
+          setIsOpen(true)
+          setIsMinimized(false)
+        }
       }, 1500) // Abre após 1.5 segundos
       return () => clearTimeout(timer)
-    } else {
+    } else if (user) {
       // Se o usuário fizer login, fechar o chat de vendas
       setIsOpen(false)
+      setUserClosedManually(false) // Reset quando usuário faz login
     }
-  }, [user]) // Só executa quando o status do usuário muda
+  }, [user, userClosedManually]) // Só executa quando o status do usuário muda
 
   // Enviar mensagem inicial quando abrir
   useEffect(() => {
@@ -499,6 +503,7 @@ Responda como o Flash Atendente (sem prefixo, responda diretamente de forma ENTU
           onClick={() => {
             setIsOpen(true)
             setIsMinimized(false)
+            setUserClosedManually(false) // Reset ao abrir novamente
           }}
           className="fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-purple-600 shadow-lg transition hover:scale-110 sm:bottom-6 sm:right-6 sm:h-16 sm:w-16 animate-pulse"
           aria-label="Falar com atendente"
@@ -514,7 +519,7 @@ Responda como o Flash Atendente (sem prefixo, responda diretamente de forma ENTU
 
       {/* Chat Container */}
       {isOpen && (
-        <div className={`fixed bottom-4 right-4 z-50 flex flex-col ${isMinimized ? 'h-16' : 'h-[600px]'} w-full max-w-md rounded-2xl shadow-2xl transition-all duration-300 sm:bottom-6 sm:right-6 ${darkMode ? 'bg-slate-800' : 'bg-white'} border-2 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+        <div className={`fixed bottom-0 right-0 left-0 sm:left-auto sm:bottom-4 sm:right-4 z-50 flex flex-col ${isMinimized ? 'h-16' : 'h-[85vh] sm:h-[600px]'} w-full sm:w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl transition-all duration-300 ${darkMode ? 'bg-slate-800' : 'bg-white'} border-2 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
           {/* Header */}
           <div className={`flex items-center justify-between rounded-t-2xl px-5 py-4 ${darkMode ? 'bg-gradient-to-r from-blue-600 to-purple-600' : 'bg-gradient-to-r from-blue-600 to-purple-600'}`}>
             <div className="flex items-center gap-3">
@@ -548,6 +553,7 @@ Responda como o Flash Atendente (sem prefixo, responda diretamente de forma ENTU
                 onClick={() => {
                   setIsOpen(false)
                   setIsMinimized(false)
+                  setUserClosedManually(true) // Marcar que usuário fechou manualmente
                 }}
                 className="rounded-full p-2 text-white hover:bg-white/20 transition"
                 aria-label="Fechar"
