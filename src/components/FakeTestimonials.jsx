@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircleIcon, XMarkIcon } from '@heroicons/react/24/solid'
 
@@ -29,6 +29,8 @@ const getRandomTime = () => {
 const FakeTestimonials = () => {
   const [currentTestimonial, setCurrentTestimonial] = useState(null)
   const [show, setShow] = useState(true)
+  const [isActive, setIsActive] = useState(true)
+  const startTimeRef = useRef(Date.now())
 
   const generateTestimonial = () => {
     const name = names[Math.floor(Math.random() * names.length)]
@@ -44,30 +46,60 @@ const FakeTestimonials = () => {
     // Gerar primeiro depoimento
     setCurrentTestimonial(generateTestimonial())
     setShow(true)
+    startTimeRef.current = Date.now()
+    setIsActive(true)
 
-    // Mostrar novo depoimento a cada 5 segundos
+    // Timer para parar após 30 segundos
+    const stopTimer = setTimeout(() => {
+      setIsActive(false)
+      setShow(false) // Fechar o pop-up atual
+    }, 30000) // 30 segundos
+
+    // Mostrar novo depoimento a cada 5 segundos (apenas enquanto estiver ativo)
     const interval = setInterval(() => {
+      const elapsed = Date.now() - startTimeRef.current
+      if (elapsed >= 30000) {
+        clearInterval(interval)
+        setIsActive(false)
+        setShow(false)
+        return
+      }
+
       setShow(false)
       // Aguardar animação de saída antes de mostrar novo
       setTimeout(() => {
-        setCurrentTestimonial(generateTestimonial())
-        setShow(true)
+        const elapsedCheck = Date.now() - startTimeRef.current
+        if (elapsedCheck < 30000) {
+          setCurrentTestimonial(generateTestimonial())
+          setShow(true)
+        }
       }, 300)
     }, 5000) // 5 segundos
 
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      clearTimeout(stopTimer)
+    }
   }, [])
 
   const handleClose = () => {
     setShow(false)
-    // Gerar novo após 5 segundos
-    setTimeout(() => {
-      setCurrentTestimonial(generateTestimonial())
-      setShow(true)
-    }, 5000)
+    // Gerar novo após 5 segundos (apenas se ainda estiver nos 30 segundos)
+    if (isActive) {
+      setTimeout(() => {
+        const elapsed = Date.now() - startTimeRef.current
+        if (elapsed < 30000 && isActive) {
+          setCurrentTestimonial(generateTestimonial())
+          setShow(true)
+        }
+      }, 5000)
+    }
   }
 
-  if (!currentTestimonial) return null
+  // Não mostrar se não estiver ativo ou não tiver depoimento
+  if (!currentTestimonial || !isActive) {
+    return null
+  }
 
   return (
     <AnimatePresence>
