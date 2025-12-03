@@ -144,6 +144,8 @@ const AdminPanel = () => {
   const [uploadingCourse, setUploadingCourse] = useState(false)
   const [editingCourseImage, setEditingCourseImage] = useState(null) // ID do curso sendo editado
   const [newCourseImage, setNewCourseImage] = useState(null) // Nova imagem em base64
+  const [editingCourse, setEditingCourse] = useState(null) // ID do curso sendo editado (formulário completo)
+  const [editingCourseData, setEditingCourseData] = useState(null) // Dados do curso em edição
   const [recentlyDeletedCourses, setRecentlyDeletedCourses] = useState(new Set()) // IDs de cursos deletados recentemente
   const recentlyDeletedCoursesRef = useRef(new Set()) // Ref para acessar no onSnapshot
   
@@ -1781,6 +1783,50 @@ REGRAS CRÍTICAS:
     } catch (err) {
       console.error('Erro ao atualizar curso:', err)
       setMessage(`❌ Erro ao atualizar curso: ${err.message}`)
+    }
+  }
+
+  // Funções para editar curso completo
+  const startEditingCourse = (course) => {
+    setEditingCourse(course.id)
+    setEditingCourseData({
+      name: course.name || '',
+      description: course.description || '',
+      price: course.price || 99.90,
+      originalPrice: course.originalPrice || 149.99,
+      competition: course.competition || '',
+      courseDuration: course.courseDuration || '',
+      active: course.active !== false,
+    })
+  }
+
+  const cancelEditingCourse = () => {
+    setEditingCourse(null)
+    setEditingCourseData(null)
+  }
+
+  const saveCourseEdit = async (courseId) => {
+    if (!editingCourseData) return
+
+    if (!editingCourseData.name || !editingCourseData.competition) {
+      setMessage('❌ Por favor, preencha nome e concurso.')
+      return
+    }
+
+    try {
+      await updateCourse(courseId, {
+        name: editingCourseData.name.trim(),
+        description: editingCourseData.description?.trim() || '',
+        price: parseFloat(editingCourseData.price) || 99.90,
+        originalPrice: parseFloat(editingCourseData.originalPrice) || 149.99,
+        competition: editingCourseData.competition.trim(),
+        courseDuration: editingCourseData.courseDuration?.trim() || '',
+        active: editingCourseData.active,
+      })
+      cancelEditingCourse()
+    } catch (err) {
+      console.error('Erro ao salvar edição do curso:', err)
+      setMessage(`❌ Erro ao salvar edição: ${err.message}`)
     }
   }
 
@@ -4773,42 +4819,166 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                 </div>
                                 <div className="flex-1">
                                   <div className="flex items-start justify-between">
-                                    <div>
-                                      <p className="text-sm font-semibold text-slate-700">
-                                        {course.name}
-                                      </p>
-                                      <p className="text-xs text-slate-500 mt-1">
-                                        Concurso: {course.competition} • R$ {course.price?.toFixed(2) || '0.00'}
-                                        {course.originalPrice && course.originalPrice > course.price && (
-                                          <span className="line-through ml-2">R$ {course.originalPrice.toFixed(2)}</span>
-                                        )}
-                                        {course.courseDuration && (
-                                          <span className="ml-2">• Duração: {course.courseDuration}</span>
-                                        )}
-                                      </p>
-                                      {course.description && (
-                                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                                          {course.description}
-                                        </p>
-                                      )}
-                                      <div className="mt-2 flex items-center gap-2">
-                                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                                          course.active !== false
-                                            ? 'bg-emerald-100 text-emerald-700'
-                                            : 'bg-slate-100 text-slate-600'
-                                        }`}>
-                                          {course.active !== false ? 'Ativo' : 'Inativo'}
-                                        </span>
+                                    {editingCourse === course.id ? (
+                                      // Formulário de edição
+                                      <div className="flex-1 space-y-3">
+                                        <div>
+                                          <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                            Nome do Curso *
+                                          </label>
+                                          <input
+                                            type="text"
+                                            value={editingCourseData?.name || ''}
+                                            onChange={(e) => setEditingCourseData(prev => ({ ...prev, name: e.target.value }))}
+                                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                                            placeholder="Nome do curso"
+                                          />
+                                        </div>
+                                        
+                                        <div>
+                                          <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                            Descrição
+                                          </label>
+                                          <textarea
+                                            value={editingCourseData?.description || ''}
+                                            onChange={(e) => setEditingCourseData(prev => ({ ...prev, description: e.target.value }))}
+                                            rows={3}
+                                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                                            placeholder="Descrição do curso"
+                                          />
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-3">
+                                          <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                              Preço (R$) *
+                                            </label>
+                                            <input
+                                              type="number"
+                                              step="0.01"
+                                              value={editingCourseData?.price || 0}
+                                              onChange={(e) => setEditingCourseData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                                              className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                                            />
+                                          </div>
+                                          
+                                          <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                              Preço Original (R$)
+                                            </label>
+                                            <input
+                                              type="number"
+                                              step="0.01"
+                                              value={editingCourseData?.originalPrice || 0}
+                                              onChange={(e) => setEditingCourseData(prev => ({ ...prev, originalPrice: parseFloat(e.target.value) || 0 }))}
+                                              className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                                            />
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-3">
+                                          <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                              Concurso *
+                                            </label>
+                                            <input
+                                              type="text"
+                                              value={editingCourseData?.competition || ''}
+                                              onChange={(e) => setEditingCourseData(prev => ({ ...prev, competition: e.target.value }))}
+                                              className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                                              placeholder="Ex: ALEGO 2024"
+                                            />
+                                          </div>
+                                          
+                                          <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                              Duração
+                                            </label>
+                                            <input
+                                              type="text"
+                                              value={editingCourseData?.courseDuration || ''}
+                                              onChange={(e) => setEditingCourseData(prev => ({ ...prev, courseDuration: e.target.value }))}
+                                              className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                                              placeholder="Ex: 6 meses"
+                                            />
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-2">
+                                          <input
+                                            type="checkbox"
+                                            checked={editingCourseData?.active !== false}
+                                            onChange={(e) => setEditingCourseData(prev => ({ ...prev, active: e.target.checked }))}
+                                            className="rounded"
+                                          />
+                                          <label className="text-xs text-slate-600">Curso ativo</label>
+                                        </div>
+                                        
+                                        <div className="flex gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => saveCourseEdit(course.id)}
+                                            disabled={!editingCourseData?.name || !editingCourseData?.competition}
+                                            className="rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                                          >
+                                            💾 Salvar
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={cancelEditingCourse}
+                                            className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                          >
+                                            ❌ Cancelar
+                                          </button>
+                                        </div>
                                       </div>
-                                    </div>
-                                    <div className="flex gap-2 flex-wrap">
-                                      <button
-                                        type="button"
-                                        onClick={() => updateCourse(course.id, { active: !(course.active !== false) })}
-                                        className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                                      >
-                                        {course.active !== false ? 'Desativar' : 'Ativar'}
-                                      </button>
+                                    ) : (
+                                      // Visualização normal
+                                      <>
+                                        <div>
+                                          <p className="text-sm font-semibold text-slate-700">
+                                            {course.name}
+                                          </p>
+                                          <p className="text-xs text-slate-500 mt-1">
+                                            Concurso: {course.competition} • R$ {course.price?.toFixed(2) || '0.00'}
+                                            {course.originalPrice && course.originalPrice > course.price && (
+                                              <span className="line-through ml-2">R$ {course.originalPrice.toFixed(2)}</span>
+                                            )}
+                                            {course.courseDuration && (
+                                              <span className="ml-2">• Duração: {course.courseDuration}</span>
+                                            )}
+                                          </p>
+                                          {course.description && (
+                                            <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                                              {course.description}
+                                            </p>
+                                          )}
+                                          <div className="mt-2 flex items-center gap-2">
+                                            <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                                              course.active !== false
+                                                ? 'bg-emerald-100 text-emerald-700'
+                                                : 'bg-slate-100 text-slate-600'
+                                            }`}>
+                                              {course.active !== false ? 'Ativo' : 'Inativo'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="flex gap-2 flex-wrap">
+                                          <button
+                                            type="button"
+                                            onClick={() => startEditingCourse(course)}
+                                            className="rounded-lg bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-200"
+                                            title="Editar curso"
+                                          >
+                                            ✏️ Editar
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => updateCourse(course.id, { active: !(course.active !== false) })}
+                                            className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                          >
+                                            {course.active !== false ? 'Desativar' : 'Ativar'}
+                                          </button>
                                       <button
                                         type="button"
                                         onClick={async (e) => {
@@ -4890,6 +5060,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                         <TrashIcon className="h-4 w-4 inline" /> Excluir
                                       </button>
                                     </div>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                               </div>

@@ -5,10 +5,24 @@ import { doc, getDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import LazyImage from './LazyImage'
 
+// Função para validar imagem base64 (fora do componente para evitar re-criações)
+const isValidBase64Image = (base64String) => {
+  if (!base64String || typeof base64String !== 'string') return false
+  // Remover prefixo data:image se houver
+  const base64 = base64String.replace(/^data:image\/[a-z]+;base64,/, '')
+  // Verificar se é base64 válido
+  const base64Regex = /^[A-Za-z0-9+/=]+$/
+  if (!base64Regex.test(base64)) return false
+  // Verificar tamanho mínimo (pelo menos alguns bytes)
+  if (base64.length < 100) return false
+  return true
+}
+
 const PopupBanner = () => {
   const [banner, setBanner] = useState(null)
   const [show, setShow] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [imageError, setImageError] = useState(false)
 
   useEffect(() => {
     // Tentar carregar do cache primeiro
@@ -20,6 +34,12 @@ const PopupBanner = () => {
         const now = Date.now()
         if (now - timestamp < 5 * 60 * 1000 && cachedData) {
           if (cachedData.active && (cachedData.imageUrl || cachedData.imageBase64)) {
+            // Validar imagem base64 do cache também
+            if (cachedData.imageBase64 && !isValidBase64Image(cachedData.imageBase64)) {
+              console.warn('⚠️ Imagem base64 do cache inválida. Ignorando cache.')
+              setLoading(false)
+              return
+            }
             setBanner(cachedData)
             const lastShown = localStorage.getItem('popupBannerLastShown')
             const today = new Date().toDateString()
@@ -46,6 +66,17 @@ const PopupBanner = () => {
           if (snapshot.exists()) {
             const data = snapshot.data()
             if (data.active && (data.imageUrl || data.imageBase64)) {
+              // Validar imagem base64 se houver
+              if (data.imageBase64 && !isValidBase64Image(data.imageBase64)) {
+                console.error('❌ Imagem base64 do popup banner inválida. Ignorando.')
+                setBanner(null)
+                setShow(false)
+                setImageError(true)
+                setLoading(false)
+                return
+              }
+              
+              setImageError(false)
               setBanner(data)
               // Verificar se já foi mostrado hoje
               const lastShown = localStorage.getItem('popupBannerLastShown')
@@ -107,7 +138,8 @@ const PopupBanner = () => {
     }
   }
 
-  if (loading || !banner || !show) {
+  // Se houver erro na imagem ou não houver banner válido, não renderizar
+  if (loading || !banner || !show || imageError) {
     return null
   }
 
@@ -158,11 +190,15 @@ const PopupBanner = () => {
                   />
                 ) : banner.imageBase64 ? (
                   <LazyImage
-                    src={`data:image/png;base64,${banner.imageBase64}`}
+                    src={banner.imageBase64.startsWith('data:') 
+                      ? banner.imageBase64 
+                      : `data:image/png;base64,${banner.imageBase64}`}
                     alt={banner.title || 'Banner'}
                     className="w-full h-auto max-h-[90vh] object-contain"
                     onError={() => {
-                      console.error('Erro ao carregar imagem base64 do banner')
+                      console.error('❌ Erro ao carregar imagem base64 do banner')
+                      setImageError(true)
+                      setShow(false) // Fechar popup automaticamente em caso de erro
                     }}
                   />
                 ) : null}
