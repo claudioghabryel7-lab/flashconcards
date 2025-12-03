@@ -123,24 +123,40 @@ const FlashcardView = () => {
       }))
       
       // Filtrar por curso selecionado ANTES de setar
-      const selectedCourse = (selectedCourseId || '').trim()
+      // Normalizar: null ou undefined = ALEGO padrão (flashcards sem courseId)
+      const selectedCourse = selectedCourseId && selectedCourseId !== 'alego-default' 
+        ? String(selectedCourseId).trim() 
+        : null
+      
+      console.log(`🔍 FlashcardView - Total de flashcards no banco: ${data.length}`)
+      console.log(`🔍 FlashcardView - Curso selecionado: ${selectedCourse || 'null (ALEGO padrão)'}`)
       
       if (selectedCourse) {
         // Mostrar apenas flashcards do curso selecionado
-        // Comparar tanto com string quanto com null/undefined
-        data = data.filter(card => {
-          const cardCourseId = card.courseId || null
-          return cardCourseId === selectedCourse || String(cardCourseId) === String(selectedCourse)
-        })
-        console.log(`🔍 FlashcardView - Filtrado por curso "${selectedCourse}": ${data.length} flashcards`)
-      } else {
-        // Mostrar apenas flashcards sem courseId (ALEGO padrão)
-        // Incluir null, undefined e string vazia
+        // Comparar de forma mais robusta: string, null, undefined
         data = data.filter(card => {
           const cardCourseId = card.courseId
-          return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined
+          // Normalizar cardCourseId: null, undefined, string vazia ou 'alego-default' = null
+          const normalizedCardCourseId = (!cardCourseId || cardCourseId === '' || cardCourseId === 'alego-default')
+            ? null
+            : String(cardCourseId).trim()
+          
+          // Comparar o curso normalizado
+          return normalizedCardCourseId === selectedCourse
         })
-        console.log(`🔍 FlashcardView - Filtrado para ALEGO padrão: ${data.length} flashcards`)
+        console.log(`🔍 FlashcardView - Filtrado por curso "${selectedCourse}": ${data.length} flashcards encontrados`)
+        console.log(`🔍 FlashcardView - Exemplos de courseId nos flashcards:`, 
+          data.slice(0, 3).map(c => ({ id: c.id, courseId: c.courseId, materia: c.materia })))
+      } else {
+        // Mostrar apenas flashcards sem courseId (ALEGO padrão)
+        // Incluir null, undefined, string vazia e 'alego-default'
+        data = data.filter(card => {
+          const cardCourseId = card.courseId
+          return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined || cardCourseId === 'alego-default'
+        })
+        console.log(`🔍 FlashcardView - Filtrado para ALEGO padrão: ${data.length} flashcards encontrados`)
+        console.log(`🔍 FlashcardView - Exemplos de courseId nos flashcards:`, 
+          data.slice(0, 3).map(c => ({ id: c.id, courseId: c.courseId, materia: c.materia })))
       }
       
       // Admin vê todos, mas ainda filtra por curso selecionado

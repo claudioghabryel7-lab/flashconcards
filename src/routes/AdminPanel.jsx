@@ -2879,11 +2879,14 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
 
               if (flashcards.length > 0) {
                 // Normalizar courseId: se for 'alego-default' ou string vazia, usar null
+                // Garantir que o normalizedCourseId seja o mesmo definido no início da função
                 const normalizedCourseId = (courseId && courseId.trim() && courseId !== 'alego-default') 
                   ? courseId.trim() 
                   : null
                 
-                console.log(`📝 Criando ${flashcards.length} flashcard(s) para ${materia.nome} - ${modulo.nome} com courseId:`, normalizedCourseId)
+                console.log(`📝 Criando ${flashcards.length} flashcard(s) para ${materia.nome} - ${modulo.nome}`)
+                console.log(`   - Curso original: ${courseId}`)
+                console.log(`   - CourseId normalizado para salvar: ${normalizedCourseId || 'null (ALEGO padrão)'}`)
                 
                 for (const flashcard of flashcards) {
                   if (flashcard.pergunta && flashcard.resposta) {
@@ -2892,16 +2895,15 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                       resposta: flashcard.resposta.trim(),
                       materia: materia.nome,
                       modulo: modulo.nome,
-                      courseId: normalizedCourseId,
+                      courseId: normalizedCourseId, // null para ALEGO padrão, string para curso específico
                       tags: [],
                     }
                     
                     await addDoc(cardsRef, flashcardData)
                     flashcardsCriados++
-                    console.log(`✅ Flashcard criado: "${flashcard.pergunta.substring(0, 50)}..." (courseId: ${normalizedCourseId || 'null'})`)
                   }
                 }
-                setVerificationProgress(`✅ ${flashcards.length} flashcard(s) criado(s) para ${materia.nome} - ${modulo.nome}`)
+                setVerificationProgress(`✅ ${flashcards.length} flashcard(s) criado(s) para ${materia.nome} - ${modulo.nome} (curso: ${normalizedCourseId || 'ALEGO padrão'})`)
               }
             } catch (err) {
               console.error(`Erro ao gerar flashcards para ${materia.nome} - ${modulo.nome}:`, err)
