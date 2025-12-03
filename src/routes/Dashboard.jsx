@@ -601,13 +601,42 @@ const Dashboard = () => {
     setStudyStats(stats)
   }, [allCards, cardProgress, progressData])
 
+  // Extrair datas únicas do progressData e normalizar para YYYY-MM-DD
   const progressDates = useMemo(() => {
-    return progressData.map((item) => item.date).filter(Boolean)
+    const datesSet = new Set()
+    
+    progressData.forEach((item) => {
+      if (item.date) {
+        // Normalizar data para formato YYYY-MM-DD
+        let normalizedDate = item.date
+        if (typeof normalizedDate === 'string') {
+          // Se já está no formato YYYY-MM-DD, usar direto
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+            // Tentar parsear com dayjs
+            const parsed = dayjs(normalizedDate)
+            if (parsed.isValid()) {
+              normalizedDate = parsed.format('YYYY-MM-DD')
+            }
+          }
+        }
+        datesSet.add(normalizedDate)
+      }
+    })
+    
+    // Retornar array ordenado de datas únicas
+    return Array.from(datesSet).sort()
   }, [progressData])
 
+  // Calcular sequência (streak) de dias consecutivos
   const streak = useMemo(() => {
     if (progressDates.length === 0) return 0
-    const studiedSet = new Set(progressDates)
+    
+    const studiedSet = new Set(progressDates.map(date => {
+      // Garantir que a data está no formato correto
+      const parsed = dayjs(date)
+      return parsed.isValid() ? parsed.format('YYYY-MM-DD') : date
+    }))
+    
     let count = 0
     let cursor = dayjs().startOf('day')
     
@@ -618,7 +647,7 @@ const Dashboard = () => {
       cursor = cursor.subtract(1, 'day')
     }
     
-    // Contar dias consecutivos retrocedendo
+    // Contar dias consecutivos retrocedendo até encontrar um dia sem estudo
     while (studiedSet.has(cursor.format('YYYY-MM-DD'))) {
       count += 1
       cursor = cursor.subtract(1, 'day')
@@ -803,7 +832,11 @@ const Dashboard = () => {
           </div>
 
           {/* Calendário - Já tem seu próprio card */}
-          <ProgressCalendar dates={progressDates} streak={streak} />
+          <ProgressCalendar 
+            dates={progressDates} 
+            streak={streak} 
+            bySubject={studyStats.bySubject}
+          />
         </div>
       </div>
 
