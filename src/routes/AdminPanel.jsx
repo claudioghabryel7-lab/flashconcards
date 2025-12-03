@@ -140,6 +140,7 @@ const AdminPanel = () => {
     imageBase64: '',
     imageUrl: '',
     active: true,
+    featured: false, // Curso em destaque (aparece no topo)
   })
   const [uploadingCourse, setUploadingCourse] = useState(false)
   const [editingCourseImage, setEditingCourseImage] = useState(null) // ID do curso sendo editado
@@ -1791,6 +1792,7 @@ REGRAS CRÍTICAS:
         imageBase64: courseForm.imageBase64 || '',
         imageUrl: courseForm.imageUrl || '',
         active: courseForm.active !== false,
+        featured: courseForm.featured === true, // Curso em destaque
         createdAt: serverTimestamp(),
       })
 
@@ -1805,6 +1807,7 @@ REGRAS CRÍTICAS:
         imageBase64: '',
         imageUrl: '',
         active: true,
+        featured: false,
       })
     } catch (err) {
       console.error('Erro ao adicionar curso:', err)
@@ -1838,6 +1841,7 @@ REGRAS CRÍTICAS:
       competition: course.competition || '',
       courseDuration: course.courseDuration || '',
       active: course.active !== false,
+      featured: course.featured === true, // Curso em destaque
     })
   }
 
@@ -1863,6 +1867,7 @@ REGRAS CRÍTICAS:
         competition: editingCourseData.competition.trim(),
         courseDuration: editingCourseData.courseDuration?.trim() || '',
         active: editingCourseData.active,
+        featured: editingCourseData.featured === true,
       })
       cancelEditingCourse()
     } catch (err) {
@@ -4784,14 +4789,26 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={courseForm.active}
-                            onChange={(e) => setCourseForm(prev => ({ ...prev, active: e.target.checked }))}
-                            className="rounded"
-                          />
-                          <label className="text-xs text-slate-600">Curso ativo</label>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={courseForm.active}
+                              onChange={(e) => setCourseForm(prev => ({ ...prev, active: e.target.checked }))}
+                              className="rounded"
+                            />
+                            <label className="text-xs text-slate-600">Curso ativo</label>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={courseForm.featured}
+                              onChange={(e) => setCourseForm(prev => ({ ...prev, featured: e.target.checked }))}
+                              className="rounded"
+                            />
+                            <label className="text-xs text-slate-600">⭐ Em destaque (Mais Vendido)</label>
+                          </div>
                         </div>
 
                         <button
@@ -4958,14 +4975,26 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                           </div>
                                         </div>
                                         
-                                        <div className="flex items-center gap-2">
-                                          <input
-                                            type="checkbox"
-                                            checked={editingCourseData?.active !== false}
-                                            onChange={(e) => setEditingCourseData(prev => ({ ...prev, active: e.target.checked }))}
-                                            className="rounded"
-                                          />
-                                          <label className="text-xs text-slate-600">Curso ativo</label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                          <div className="flex items-center gap-2">
+                                            <input
+                                              type="checkbox"
+                                              checked={editingCourseData?.active !== false}
+                                              onChange={(e) => setEditingCourseData(prev => ({ ...prev, active: e.target.checked }))}
+                                              className="rounded"
+                                            />
+                                            <label className="text-xs text-slate-600">Curso ativo</label>
+                                          </div>
+                                          
+                                          <div className="flex items-center gap-2">
+                                            <input
+                                              type="checkbox"
+                                              checked={editingCourseData?.featured === true}
+                                              onChange={(e) => setEditingCourseData(prev => ({ ...prev, featured: e.target.checked }))}
+                                              className="rounded"
+                                            />
+                                            <label className="text-xs text-slate-600">⭐ Em destaque (Mais Vendido)</label>
+                                          </div>
                                         </div>
                                         
                                         <div className="flex gap-2">

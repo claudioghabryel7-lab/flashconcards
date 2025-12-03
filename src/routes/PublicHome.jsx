@@ -105,7 +105,13 @@ const PublicHome = () => {
         const { data: cachedData, timestamp } = JSON.parse(cached)
         const now = Date.now()
         if (now - timestamp < 5 * 60 * 1000 && cachedData) {
-          setCourses(cachedData)
+          // Ordenar: cursos em destaque primeiro, depois os outros
+          const sortedCached = cachedData.sort((a, b) => {
+            if (a.featured === true && b.featured !== true) return -1
+            if (a.featured !== true && b.featured === true) return 1
+            return 0
+          })
+          setCourses(sortedCached)
           setLoadingCourses(false)
         }
       }
@@ -125,14 +131,23 @@ const PublicHome = () => {
         ...docSnapshot.data(),
       }))
       
-      setCourses(data)
+      // Ordenar: cursos em destaque primeiro, depois os outros
+      const sortedData = data.sort((a, b) => {
+        // Cursos destacados primeiro
+        if (a.featured === true && b.featured !== true) return -1
+        if (a.featured !== true && b.featured === true) return 1
+        // Se ambos destacados ou ambos não destacados, manter ordem original
+        return 0
+      })
+      
+      setCourses(sortedData)
       setLoadingCourses(false)
         retryCount = 0
         
-        // Salvar no cache
+        // Salvar no cache (com ordenação)
         try {
           localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
-            data,
+            data: sortedData,
             timestamp: Date.now(),
           }))
         } catch (err) {
@@ -213,7 +228,12 @@ const PublicHome = () => {
                   )}
                   
                   <div className="p-6">
-                    <div className="mb-3">
+                    <div className="mb-3 flex items-center gap-2 flex-wrap">
+                      {course.featured && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 px-3 py-1 text-xs font-black text-white shadow-lg animate-pulse">
+                          ⭐ Mais Vendido
+                        </span>
+                      )}
                       <span className="inline-block rounded-full bg-blue-100 dark:bg-blue-900/50 px-3 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">
                         {course.competition}
                       </span>
