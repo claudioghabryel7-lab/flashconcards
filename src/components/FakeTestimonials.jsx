@@ -109,7 +109,7 @@ const FakeTestimonials = () => {
           animate={{ opacity: 1, x: 0, y: 0 }}
           exit={{ opacity: 0, x: -100, y: 0 }}
           transition={{ duration: 0.4, ease: 'easeOut' }}
-          className="fixed bottom-4 left-4 z-[9997] max-w-xs w-full"
+          className="fixed bottom-4 left-4 z-30 max-w-xs w-full sm:bottom-4 sm:left-4"
         >
           <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-green-200 dark:border-green-700 p-4 backdrop-blur-sm">
             {/* Botão fechar */}
