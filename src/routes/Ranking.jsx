@@ -171,8 +171,8 @@ const Ranking = () => {
     return users
       .map((user) => {
         const progress = userProgress[user.uid] || { totalDays: 0, totalHours: 0, studiedCards: 0 }
-        // Pontuação: dias * 10 + horas * 5 + cards estudados * 2
-        const score = progress.totalDays * 10 + progress.totalHours * 5 + progress.studiedCards * 2
+        // Pontuação: apenas 1 ponto por flashcard estudado
+        const score = progress.studiedCards || 0
         
         return {
           ...user,

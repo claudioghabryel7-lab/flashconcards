@@ -1,9 +1,20 @@
 import dayjs from 'dayjs'
+import 'dayjs/locale/pt-br'
+import { useEffect, useState } from 'react'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { CalendarIcon, FireIcon } from '@heroicons/react/24/outline'
 
+// Configurar locale para português
+dayjs.locale('pt-br')
+
 const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {} }) => {
   const { darkMode } = useDarkMode()
+  const [forceUpdate, setForceUpdate] = useState(0)
+  
+  // Forçar atualização quando dates mudarem
+  useEffect(() => {
+    setForceUpdate(prev => prev + 1)
+  }, [dates])
   
   // Normalizar datas para formato YYYY-MM-DD para comparação
   const studied = new Set(dates.map(date => {
@@ -66,7 +77,7 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {} }) => {
               Calendário de Progresso
             </h3>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Últimos 28 dias
+              {today.format('MMMM [de] YYYY').replace(/^\w/, (c) => c.toUpperCase())} • Últimos 28 dias
             </p>
           </div>
         </div>

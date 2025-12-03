@@ -311,6 +311,13 @@ const Dashboard = () => {
           }
         })
         
+        console.log('📅 ProgressData atualizado:', { 
+          total: data.length, 
+          filtered: filtered.length, 
+          selectedCourse,
+          dates: filtered.map(p => p.date).slice(0, 5)
+        })
+        
         setProgressData(filtered)
       },
       (error) => {
@@ -624,7 +631,14 @@ const Dashboard = () => {
     })
     
     // Retornar array ordenado de datas únicas
-    return Array.from(datesSet).sort()
+    const dates = Array.from(datesSet).sort()
+    
+    console.log('📆 ProgressDates recalculado:', { 
+      totalDates: dates.length, 
+      dates: dates.slice(-5) // Últimas 5 datas
+    })
+    
+    return dates
   }, [progressData])
 
   // Calcular sequência (streak) de dias consecutivos
@@ -678,9 +692,52 @@ const Dashboard = () => {
       const courseKey = selectedCourseId || 'alego'
       const progressDoc = doc(db, 'progress', `${user.uid}_${courseKey}_${todayKey}`)
       
-      const existing = progressData.find((p) => p.date === todayKey)
+      const existing = progressData.find((p) => {
+        // Comparar também o courseId para garantir que é do mesmo curso
+        const itemCourseId = p.courseId || null
+        const selectedCourse = selectedCourseId || null
+        const courseMatches = itemCourseId === selectedCourse || 
+          (!itemCourseId && !selectedCourse) ||
+          String(itemCourseId) === String(selectedCourse)
+        return p.date === todayKey && courseMatches
+      })
+      
       const currentHours = existing?.hours || 0
       const newHours = currentHours + 0.5 // Adiciona 30 minutos
+      
+      console.log('💾 Salvando progresso de hoje:', { 
+        todayKey, 
+        courseKey, 
+        existing: !!existing, 
+        newHours,
+        courseId: selectedCourseId || null
+      })
+      
+      // Atualização otimista - adicionar à lista imediatamente
+      const newProgressItem = {
+        id: progressDoc.id,
+        uid: user.uid,
+        date: todayKey,
+        hours: newHours,
+        courseId: selectedCourseId || null,
+        lastUpdated: now.format('HH:mm'),
+        createdAt: existing?.createdAt || null,
+        updatedAt: null,
+      }
+      
+      // Adicionar ao progressData otimisticamente
+      setProgressData(prev => {
+        // Remover item existente se houver
+        const filtered = prev.filter(p => {
+          const itemCourseId = p.courseId || null
+          const selectedCourse = selectedCourseId || null
+          const courseMatches = itemCourseId === selectedCourse || 
+            (!itemCourseId && !selectedCourse) ||
+            String(itemCourseId) === String(selectedCourse)
+          return !(p.date === todayKey && courseMatches)
+        })
+        return [...filtered, newProgressItem]
+      })
       
       await setDoc(
         progressDoc,
@@ -695,8 +752,10 @@ const Dashboard = () => {
         },
         { merge: true },
       )
+      
+      console.log('✅ Progresso salvo com sucesso!')
     } catch (err) {
-      console.error('Erro ao salvar progresso:', err)
+      console.error('❌ Erro ao salvar progresso:', err)
     } finally {
       setSaving(false)
     }
