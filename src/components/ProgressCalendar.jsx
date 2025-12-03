@@ -1,6 +1,6 @@
 import dayjs from 'dayjs'
 import 'dayjs/locale/pt-br'
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { CalendarIcon, FireIcon } from '@heroicons/react/24/outline'
 
@@ -9,27 +9,41 @@ dayjs.locale('pt-br')
 
 const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {} }) => {
   const { darkMode } = useDarkMode()
-  const [forceUpdate, setForceUpdate] = useState(0)
   
-  // Forçar atualização quando dates mudarem
-  useEffect(() => {
-    setForceUpdate(prev => prev + 1)
+  // Log quando recebe novas datas
+  useMemo(() => {
+    console.log('📅 ProgressCalendar recebeu novas datas:', { 
+      count: dates.length, 
+      dates: dates.slice(-3) 
+    })
   }, [dates])
   
   // Normalizar datas para formato YYYY-MM-DD para comparação
-  const studied = new Set(dates.map(date => {
-    if (!date) return null
-    // Se já está no formato YYYY-MM-DD, retorna direto
-    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return date
-    }
-    // Caso contrário, tenta parsear com dayjs
-    const parsed = dayjs(date)
-    if (parsed.isValid()) {
-      return parsed.format('YYYY-MM-DD')
-    }
-    return null
-  }).filter(Boolean))
+  const studied = useMemo(() => {
+    const normalized = dates.map(date => {
+      if (!date) return null
+      // Se já está no formato YYYY-MM-DD, retorna direto
+      if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return date
+      }
+      // Caso contrário, tenta parsear com dayjs
+      const parsed = dayjs(date)
+      if (parsed.isValid()) {
+        return parsed.format('YYYY-MM-DD')
+      }
+      return null
+    }).filter(Boolean)
+    
+    const studiedSet = new Set(normalized)
+    console.log('📅 Calendário - Datas estudadas:', { 
+      total: studiedSet.size, 
+      dates: Array.from(studiedSet).slice(-5),
+      today: dayjs().format('YYYY-MM-DD'),
+      hasToday: studiedSet.has(dayjs().format('YYYY-MM-DD'))
+    })
+    
+    return studiedSet
+  }, [dates])
   
   // Criar calendário com últimos 28 dias incluindo hoje
   const today = dayjs().startOf('day')
@@ -135,8 +149,10 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {} }) => {
             const done = studied.has(key)
             const isToday = day.isSame(today, 'day')
             const isFuture = day.isAfter(today, 'day')
+            // Incluir hoje sempre no range, mesmo que esteja fora dos 28 dias
             const isInRange = (day.isAfter(firstDay, 'day') || day.isSame(firstDay, 'day')) && 
-                              (day.isBefore(lastDay, 'day') || day.isSame(lastDay, 'day'))
+                              (day.isBefore(lastDay, 'day') || day.isSame(lastDay, 'day')) ||
+                              isToday
             
             // Determinar cor baseado no estado
             let bgColor = 'bg-slate-200 dark:bg-slate-700'
@@ -172,8 +188,8 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {} }) => {
                 } ${!isInRange && !isFuture ? 'opacity-30' : ''}`}
                 title={isInRange ? `${day.format('DD/MM/YYYY')}${done ? ' - Estudou' : ' - Sem estudo'}` : day.format('DD/MM/YYYY')}
               >
-                {/* Número do dia - aparece apenas em dias dentro do range */}
-                {isInRange && (
+                {/* Número do dia - aparece sempre para dias no range ou para hoje */}
+                {(isInRange || isToday) && (
                   <div className={`absolute top-1 left-1 text-[9px] sm:text-[10px] font-semibold ${
                     done ? 'text-white/70' : 'text-slate-600 dark:text-slate-400'
                   }`}>

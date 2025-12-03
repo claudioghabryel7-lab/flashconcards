@@ -725,7 +725,7 @@ const Dashboard = () => {
         updatedAt: null,
       }
       
-      // Adicionar ao progressData otimisticamente
+      // Atualização otimista - adicionar à lista imediatamente
       setProgressData(prev => {
         // Remover item existente se houver
         const filtered = prev.filter(p => {
@@ -736,7 +736,14 @@ const Dashboard = () => {
             String(itemCourseId) === String(selectedCourse)
           return !(p.date === todayKey && courseMatches)
         })
-        return [...filtered, newProgressItem]
+        const updated = [...filtered, newProgressItem]
+        console.log('🔄 Atualização otimista:', { 
+          before: prev.length, 
+          after: updated.length, 
+          todayKey,
+          newItem: newProgressItem
+        })
+        return updated
       })
       
       await setDoc(
