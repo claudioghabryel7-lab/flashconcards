@@ -342,3 +342,94 @@ export const autoRemoveBadCache = async (collectionName, docId) => {
   }
 }
 
+/**
+ * Obter ou criar cache de mapa mental para um módulo
+ */
+export const getOrCreateMindMapCache = async (courseId, materia, modulo) => {
+  try {
+    const cacheId = `${courseId || 'alego-default'}_${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    const cacheRef = doc(db, 'mindMapsCache', cacheId)
+    const cacheSnap = await getDoc(cacheRef)
+    
+    if (cacheSnap.exists()) {
+      const data = cacheSnap.data()
+      
+      // Verificar score
+      const score = calculateScore(data.likes || 0, data.dislikes || 0)
+      
+      // Se score < 70% e tem pelo menos 3 avaliações, considerar ruim
+      if (score < 70 && (data.likes + data.dislikes) >= 3) {
+        console.log(`⚠️ Mapa mental marcado como ruim (score: ${score}%)`)
+        return null
+      }
+      
+      return {
+        id: cacheSnap.id,
+        structure: data.structure || {},
+        likes: data.likes || 0,
+        dislikes: data.dislikes || 0,
+        score,
+        createdAt: data.createdAt,
+        cached: true
+      }
+    }
+    
+    return null
+  } catch (error) {
+    console.error('Erro ao buscar cache de mapa mental:', error)
+    return null
+  }
+}
+
+/**
+ * Salvar mapa mental no cache
+ */
+export const saveMindMapCache = async (courseId, materia, modulo, structure) => {
+  try {
+    const cacheId = `${courseId || 'alego-default'}_${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    const cacheRef = doc(db, 'mindMapsCache', cacheId)
+    
+    await setDoc(cacheRef, {
+      courseId: courseId || 'alego-default',
+      materia,
+      modulo,
+      structure,
+      likes: 0,
+      dislikes: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: false })
+    
+    console.log(`✅ Mapa mental salvo no cache: ${cacheId}`)
+    return true
+  } catch (error) {
+    console.error('Erro ao salvar mapa mental no cache:', error)
+    throw error
+  }
+}
+
+/**
+ * Avaliar mapa mental (like/dislike)
+ */
+export const rateMindMapCache = async (courseId, materia, modulo, isLike) => {
+  try {
+    const cacheId = `${courseId || 'alego-default'}_${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    const cacheRef = doc(db, 'mindMapsCache', cacheId)
+    
+    const update = {
+      updatedAt: serverTimestamp(),
+    }
+    
+    if (isLike) {
+      update.likes = increment(1)
+    } else {
+      update.dislikes = increment(1)
+    }
+    
+    await updateDoc(cacheRef, update)
+    console.log(`✅ Avaliação de mapa mental registrada: ${isLike ? 'like' : 'dislike'}`)
+  } catch (error) {
+    console.error('Erro ao avaliar mapa mental:', error)
+  }
+}
+

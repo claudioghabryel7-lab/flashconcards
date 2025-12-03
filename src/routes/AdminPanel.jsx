@@ -4569,14 +4569,14 @@ ESTRUTURA SUGERIDA:
                       </div>
 
                       <div className="flex gap-3">
-                        <button
-                          type="button"
-                          onClick={savePopupBanner}
-                          disabled={uploadingPopupBanner || (!popupBanner.imageBase64 && !popupBanner.imageUrl)}
+                      <button
+                        type="button"
+                        onClick={savePopupBanner}
+                        disabled={uploadingPopupBanner || (!popupBanner.imageBase64 && !popupBanner.imageUrl)}
                           className="flex-1 rounded-lg bg-alego-600 px-4 py-2 text-sm font-semibold text-white hover:bg-alego-700 disabled:opacity-50"
-                        >
-                          {uploadingPopupBanner ? 'Salvando...' : 'Salvar Popup Banner'}
-                        </button>
+                      >
+                        {uploadingPopupBanner ? 'Salvando...' : 'Salvar Popup Banner'}
+                      </button>
                         {(popupBanner.imageBase64 || popupBanner.imageUrl) && (
                           <button
                             type="button"
@@ -4790,14 +4790,14 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={courseForm.active}
-                              onChange={(e) => setCourseForm(prev => ({ ...prev, active: e.target.checked }))}
-                              className="rounded"
-                            />
-                            <label className="text-xs text-slate-600">Curso ativo</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={courseForm.active}
+                            onChange={(e) => setCourseForm(prev => ({ ...prev, active: e.target.checked }))}
+                            className="rounded"
+                          />
+                          <label className="text-xs text-slate-600">Curso ativo</label>
                           </div>
                           
                           <div className="flex items-center gap-2">
@@ -5018,35 +5018,35 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                     ) : (
                                       // Visualização normal
                                       <>
-                                        <div>
-                                          <p className="text-sm font-semibold text-slate-700">
-                                            {course.name}
-                                          </p>
-                                          <p className="text-xs text-slate-500 mt-1">
-                                            Concurso: {course.competition} • R$ {course.price?.toFixed(2) || '0.00'}
-                                            {course.originalPrice && course.originalPrice > course.price && (
-                                              <span className="line-through ml-2">R$ {course.originalPrice.toFixed(2)}</span>
-                                            )}
-                                            {course.courseDuration && (
-                                              <span className="ml-2">• Duração: {course.courseDuration}</span>
-                                            )}
-                                          </p>
-                                          {course.description && (
-                                            <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                                              {course.description}
-                                            </p>
-                                          )}
-                                          <div className="mt-2 flex items-center gap-2">
-                                            <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                                              course.active !== false
-                                                ? 'bg-emerald-100 text-emerald-700'
-                                                : 'bg-slate-100 text-slate-600'
-                                            }`}>
-                                              {course.active !== false ? 'Ativo' : 'Inativo'}
-                                            </span>
-                                          </div>
-                                        </div>
-                                        <div className="flex gap-2 flex-wrap">
+                                    <div>
+                                      <p className="text-sm font-semibold text-slate-700">
+                                        {course.name}
+                                      </p>
+                                      <p className="text-xs text-slate-500 mt-1">
+                                        Concurso: {course.competition} • R$ {course.price?.toFixed(2) || '0.00'}
+                                        {course.originalPrice && course.originalPrice > course.price && (
+                                          <span className="line-through ml-2">R$ {course.originalPrice.toFixed(2)}</span>
+                                        )}
+                                        {course.courseDuration && (
+                                          <span className="ml-2">• Duração: {course.courseDuration}</span>
+                                        )}
+                                      </p>
+                                      {course.description && (
+                                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                                          {course.description}
+                                        </p>
+                                      )}
+                                      <div className="mt-2 flex items-center gap-2">
+                                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                                          course.active !== false
+                                            ? 'bg-emerald-100 text-emerald-700'
+                                            : 'bg-slate-100 text-slate-600'
+                                        }`}>
+                                          {course.active !== false ? 'Ativo' : 'Inativo'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="flex gap-2 flex-wrap">
                                           <button
                                             type="button"
                                             onClick={() => startEditingCourse(course)}
@@ -5055,13 +5055,13 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                           >
                                             ✏️ Editar
                                           </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => updateCourse(course.id, { active: !(course.active !== false) })}
-                                            className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                                          >
-                                            {course.active !== false ? 'Desativar' : 'Ativar'}
-                                          </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => updateCourse(course.id, { active: !(course.active !== false) })}
+                                        className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                      >
+                                        {course.active !== false ? 'Desativar' : 'Ativar'}
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={async (e) => {

@@ -20,6 +20,7 @@ import ResetPassword from './routes/ResetPassword'
 import Payment from './routes/Payment'
 import CourseSelector from './components/CourseSelector'
 import CourseShare from './routes/CourseShare'
+import MindMapView from './routes/MindMapView'
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()
@@ -140,6 +141,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <QuestionView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/mapas-mentais"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <MindMapView />
               </ProtectedRoute>
             }
           />

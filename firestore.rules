@@ -197,6 +197,16 @@
         allow delete: if isAdmin();
       }
       
+      // 🔥 NOVO: Cache de Mapas Mentais (compartilhado entre alunos)
+      match /mindMapsCache/{cacheId} {
+        // Todos autenticados podem ler (para usar mapas do cache)
+        allow read: if isAuthenticated();
+        // Apenas sistema pode criar/atualizar (via código)
+        allow create, update: if isAuthenticated();
+        // Admin pode deletar
+        allow delete: if isAdmin();
+      }
+      
       // 💳 Transações de Pagamento
       match /transactions/{transactionId} {
         // Permitir criação de transações por qualquer pessoa (checkout público)
