@@ -1642,6 +1642,47 @@ REGRAS CRÍTICAS:
     }
   }
 
+  const deletePopupBanner = async () => {
+    if (!isAdmin) {
+      setMessage('❌ Apenas administradores podem excluir popup banner.')
+      return
+    }
+
+    if (!window.confirm('⚠️ Tem certeza que deseja excluir o popup banner? Esta ação não pode ser desfeita.')) {
+      return
+    }
+
+    setUploadingPopupBanner(true)
+    try {
+      await deleteDoc(doc(db, 'config', 'popupBanner'))
+      
+      // Limpar estado local
+      setPopupBanner({
+        title: '',
+        imageBase64: '',
+        imageUrl: '',
+        link: '',
+        openInNewTab: true,
+        active: false,
+      })
+      
+      // Limpar cache do localStorage
+      try {
+        localStorage.removeItem('firebase_cache_popupBanner')
+        localStorage.removeItem('popupBannerLastShown')
+      } catch (err) {
+        console.warn('Erro ao limpar cache:', err)
+      }
+      
+      setMessage('✅ Popup banner excluído com sucesso!')
+    } catch (err) {
+      console.error('Erro ao excluir popup banner:', err)
+      setMessage(`❌ Erro ao excluir popup banner: ${err.message}`)
+    } finally {
+      setUploadingPopupBanner(false)
+    }
+  }
+
   // Funções para gerenciar cursos
   // Handler para editar imagem de curso existente
   const handleEditCourseImage = (event, courseId) => {
@@ -4522,14 +4563,27 @@ ESTRUTURA SUGERIDA:
                         <label className="text-xs text-slate-600">Popup ativo</label>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={savePopupBanner}
-                        disabled={uploadingPopupBanner || (!popupBanner.imageBase64 && !popupBanner.imageUrl)}
-                        className="w-full rounded-lg bg-alego-600 px-4 py-2 text-sm font-semibold text-white hover:bg-alego-700 disabled:opacity-50"
-                      >
-                        {uploadingPopupBanner ? 'Salvando...' : 'Salvar Popup Banner'}
-                      </button>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={savePopupBanner}
+                          disabled={uploadingPopupBanner || (!popupBanner.imageBase64 && !popupBanner.imageUrl)}
+                          className="flex-1 rounded-lg bg-alego-600 px-4 py-2 text-sm font-semibold text-white hover:bg-alego-700 disabled:opacity-50"
+                        >
+                          {uploadingPopupBanner ? 'Salvando...' : 'Salvar Popup Banner'}
+                        </button>
+                        {(popupBanner.imageBase64 || popupBanner.imageUrl) && (
+                          <button
+                            type="button"
+                            onClick={deletePopupBanner}
+                            disabled={uploadingPopupBanner}
+                            className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50 flex items-center gap-2"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                            Excluir
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
