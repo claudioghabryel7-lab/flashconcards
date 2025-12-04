@@ -238,9 +238,13 @@
         allow create: if isAuthenticated() && 
                        request.resource.data.authorId == request.auth.uid;
         
-        // Apenas o autor pode atualizar ou deletar seu próprio post
+        // Atualizações: qualquer usuário autenticado pode atualizar posts
+        // Isso permite curtir, comentar e compartilhar
+        // Protegendo apenas o authorId para não permitir mudança de autor
         allow update: if isAuthenticated() && 
-                       resource.data.authorId == request.auth.uid;
+                       request.resource.data.authorId == resource.data.authorId;
+        
+        // Apenas o autor ou admin pode deletar
         allow delete: if isAuthenticated() && 
                        (resource.data.authorId == request.auth.uid || isAdmin());
       }
