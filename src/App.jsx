@@ -23,6 +23,7 @@ import CourseShare from './routes/CourseShare'
 import MindMapView from './routes/MindMapView'
 import SocialFeed from './routes/SocialFeed'
 import UserProfile from './routes/UserProfile'
+import NewsView from './routes/NewsView'
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()
@@ -184,6 +185,8 @@ function App() {
           <Route path="/pagamento" element={<Payment />} />
           {/* Página de Compartilhamento de Curso - Acessível sem login */}
           <Route path="/curso/:courseId" element={<CourseShare />} />
+          {/* Página de Leitura de Notícia - Acessível sem login */}
+          <Route path="/noticia/:postId" element={<NewsView />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

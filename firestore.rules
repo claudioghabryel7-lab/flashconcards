@@ -231,18 +231,23 @@
       
       // 📱 Feed Social - Posts
       match /posts/{postId} {
-        // Todos autenticados podem ler posts
-        allow read: if isAuthenticated();
+        // Permitir leitura pública de notícias, ou posts para autenticados
+        // Esta regra permite que qualquer pessoa leia posts marcados como notícia
+        // e usuários autenticados podem ler todos os posts
+        allow read: if resource.data.isNews == true || isAuthenticated();
         
         // Usuários autenticados podem criar posts
         allow create: if isAuthenticated() && 
-                       request.resource.data.authorId == request.auth.uid;
+                       request.resource.data.authorId == request.auth.uid &&
+                       (request.resource.data.isNews == null || isAdmin());
         
         // Atualizações: qualquer usuário autenticado pode atualizar posts
         // Isso permite curtir, comentar e compartilhar
         // Protegendo apenas o authorId para não permitir mudança de autor
+        // Admin pode marcar/desmarcar como notícia
         allow update: if isAuthenticated() && 
-                       request.resource.data.authorId == resource.data.authorId;
+                       request.resource.data.authorId == resource.data.authorId &&
+                       (request.resource.data.isNews == resource.data.isNews || isAdmin());
         
         // Apenas o autor ou admin pode deletar
         allow delete: if isAuthenticated() && 

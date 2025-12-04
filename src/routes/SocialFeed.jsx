@@ -30,7 +30,7 @@ import NotificationToast from '../components/NotificationToast'
 import StoriesBar from '../components/StoriesBar'
 
 const SocialFeed = () => {
-  const { user, profile } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { darkMode } = useDarkMode()
   const [posts, setPosts] = useState([])
   const [newPost, setNewPost] = useState('')
@@ -43,6 +43,9 @@ const SocialFeed = () => {
   const [notifications, setNotifications] = useState([])
   const fileInputRef = useRef(null)
   const previousPostsLength = useRef(0)
+  
+  // Verificar se usuário tem acesso a curso
+  const hasCourseAccess = profile && (profile.selectedCourseId !== undefined || profile.purchasedCourses?.length > 0 || isAdmin)
 
   // Carregar posts em tempo real
   useEffect(() => {
@@ -214,9 +217,12 @@ const SocialFeed = () => {
     }
   }
 
-  // Curtir/descurtir post
+  // Curtir/descurtir post (apenas usuários com curso)
   const toggleLike = async (postId, currentLikes) => {
-    if (!user) return
+    if (!user || !hasCourseAccess) {
+      setError('Você precisa ter acesso a um curso para interagir com as publicações.')
+      return
+    }
     
     const postRef = doc(db, 'posts', postId)
     const likes = currentLikes || []
@@ -231,13 +237,19 @@ const SocialFeed = () => {
       })
     } catch (err) {
       console.error('Erro ao curtir post:', err)
+      setError('Erro ao curtir post. Você precisa ter acesso a um curso.')
     }
   }
 
-  // Adicionar comentário
+  // Adicionar comentário (apenas usuários com curso)
   const addComment = async (postId) => {
     const commentText = commentInputs[postId]
     if (!commentText?.trim() || !user) return
+    
+    if (!hasCourseAccess) {
+      setError('Você precisa ter acesso a um curso para comentar.')
+      return
+    }
     
     try {
       const postRef = doc(db, 'posts', postId)
@@ -267,9 +279,14 @@ const SocialFeed = () => {
     }
   }
 
-  // Compartilhar post
+  // Compartilhar post (apenas usuários com curso)
   const sharePost = async (postId, postText) => {
     if (!user) return
+    
+    if (!hasCourseAccess) {
+      setError('Você precisa ter acesso a um curso para compartilhar.')
+      return
+    }
 
     try {
       const postRef = doc(db, 'posts', postId)
@@ -587,15 +604,43 @@ const SocialFeed = () => {
                     </p>
                   </div>
                 </Link>
-                {isAuthor && (
-                  <button
-                    type="button"
-                    onClick={() => deletePost(post.id)}
-                    className="text-rose-500 hover:text-rose-600 transition"
-                  >
-                    <TrashIcon className="h-5 w-5" />
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {/* Badge de Notícia */}
+                  {post.isNews && (
+                    <span className="px-2 py-1 text-xs font-semibold bg-blue-600 text-white rounded-full">
+                      📰 Notícia
+                    </span>
+                  )}
+                  {/* Opção para admin marcar como notícia */}
+                  {isAdmin && !post.isNews && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await updateDoc(doc(db, 'posts', post.id), {
+                            isNews: true,
+                          })
+                        } catch (err) {
+                          console.error('Erro ao marcar como notícia:', err)
+                          setError('Erro ao marcar como notícia')
+                        }
+                      }}
+                      className="px-2 py-1 text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition"
+                      title="Marcar como notícia"
+                    >
+                      📰 Notícia
+                    </button>
+                  )}
+                  {isAuthor && (
+                    <button
+                      type="button"
+                      onClick={() => deletePost(post.id)}
+                      className="text-rose-500 hover:text-rose-600 transition"
+                    >
+                      <TrashIcon className="h-5 w-5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Imagem do post (base64 ou URL) - Estilo Instagram */}
@@ -624,7 +669,13 @@ const SocialFeed = () => {
                   <button
                     type="button"
                     onClick={() => toggleLike(post.id, post.likes)}
-                    className="flex items-center gap-2 hover:opacity-70 transition"
+                    disabled={!hasCourseAccess}
+                    className={`flex items-center gap-2 transition ${
+                      hasCourseAccess 
+                        ? 'hover:opacity-70' 
+                        : 'opacity-50 cursor-not-allowed'
+                    }`}
+                    title={!hasCourseAccess ? 'Você precisa ter acesso a um curso para interagir' : ''}
                   >
                     {isLiked ? (
                       <HeartIcon className="h-6 w-6 text-rose-500" />
@@ -718,14 +769,23 @@ const SocialFeed = () => {
                         ...prev,
                         [post.id]: e.target.value
                       }))}
-                      onKeyPress={(e) => e.key === 'Enter' && addComment(post.id)}
-                      placeholder="Escreva um comentário..."
-                      className="flex-1 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-2 text-sm focus:border-alego-400 focus:outline-none"
+                      onKeyPress={(e) => e.key === 'Enter' && hasCourseAccess && addComment(post.id)}
+                      placeholder={hasCourseAccess ? "Escreva um comentário..." : "Você precisa ter acesso a um curso para comentar"}
+                      disabled={!hasCourseAccess}
+                      className={`flex-1 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-2 text-sm focus:border-alego-400 focus:outline-none ${
+                        !hasCourseAccess ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     />
                     <button
                       type="button"
                       onClick={() => addComment(post.id)}
-                      className="rounded-full bg-alego-600 px-4 py-2 text-sm font-semibold text-white hover:bg-alego-700 transition"
+                      disabled={!hasCourseAccess}
+                      className={`rounded-full bg-alego-600 px-4 py-2 text-sm font-semibold text-white transition ${
+                        hasCourseAccess 
+                          ? 'hover:bg-alego-700' 
+                          : 'opacity-50 cursor-not-allowed'
+                      }`}
+                      title={!hasCourseAccess ? 'Você precisa ter acesso a um curso para comentar' : ''}
                     >
                       Enviar
                     </button>

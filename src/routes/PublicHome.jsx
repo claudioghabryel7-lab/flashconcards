@@ -23,6 +23,7 @@ import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
 import Reviews from '../components/Reviews'
 import FakeTestimonials from '../components/FakeTestimonials'
+import NewsSection from '../components/NewsSection'
 
 const features = [
   {
@@ -457,6 +458,16 @@ const PublicHome = () => {
           </a>
         </div>
       </div>
+
+      {/* Seção de Notícias - No final da página */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+      >
+        <NewsSection />
+      </motion.div>
     </section>
   )
 }
