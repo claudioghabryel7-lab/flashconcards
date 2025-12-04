@@ -21,6 +21,8 @@ import Payment from './routes/Payment'
 import CourseSelector from './components/CourseSelector'
 import CourseShare from './routes/CourseShare'
 import MindMapView from './routes/MindMapView'
+import SocialFeed from './routes/SocialFeed'
+import UserProfile from './routes/UserProfile'
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()
@@ -149,6 +151,22 @@ function App() {
             element={
               <ProtectedRoute requireCourseSelection>
                 <MindMapView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/feed"
+            element={
+              <ProtectedRoute requireCourseSelection={false}>
+                <SocialFeed />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile/:userId"
+            element={
+              <ProtectedRoute requireCourseSelection={false}>
+                <UserProfile />
               </ProtectedRoute>
             }
           />

@@ -229,6 +229,38 @@
         allow delete: if isAdmin();
       }
       
+      // 📱 Feed Social - Posts
+      match /posts/{postId} {
+        // Todos autenticados podem ler posts
+        allow read: if isAuthenticated();
+        
+        // Usuários autenticados podem criar posts
+        allow create: if isAuthenticated() && 
+                       request.resource.data.authorId == request.auth.uid;
+        
+        // Apenas o autor pode atualizar ou deletar seu próprio post
+        allow update: if isAuthenticated() && 
+                       resource.data.authorId == request.auth.uid;
+        allow delete: if isAuthenticated() && 
+                       (resource.data.authorId == request.auth.uid || isAdmin());
+      }
+      
+      // 📸 Stories - FlashSocial
+      match /stories/{storyId} {
+        // Todos autenticados podem ler stories não expiradas
+        allow read: if isAuthenticated();
+        
+        // Usuários autenticados podem criar suas próprias stories
+        allow create: if isAuthenticated() && 
+                       request.resource.data.authorId == request.auth.uid;
+        
+        // Apenas o autor pode deletar sua própria story
+        allow delete: if isAuthenticated() && 
+                       (resource.data.authorId == request.auth.uid || isAdmin());
+        // Stories não podem ser atualizadas (só criadas/deletadas)
+        allow update: if false;
+      }
+      
       match /{document=**} {
         allow read, write: if false;
       }
