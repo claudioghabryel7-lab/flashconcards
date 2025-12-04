@@ -118,13 +118,13 @@ const SalesChat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Abrir chat automaticamente para visitantes (apenas na primeira vez)
+  // Abrir chat automaticamente para visitantes (apenas na primeira vez) - MINIMIZADO
   useEffect(() => {
     if (!user && !isOpen && !userClosedManually) {
       // Pequeno delay para melhorar a experiência
       const timer = setTimeout(() => {
         setIsOpen(true)
-        setIsMinimized(false)
+        setIsMinimized(true) // Abrir minimizado por padrão
       }, 1500) // Abre após 1.5 segundos
       return () => clearTimeout(timer)
     }
@@ -163,14 +163,14 @@ const SalesChat = () => {
     findAvailableModel()
   }, [])
 
-  // Abrir chat automaticamente para visitantes quando acessar o site (apenas na primeira vez)
+  // Abrir chat automaticamente para visitantes quando acessar o site (apenas na primeira vez) - MINIMIZADO
   useEffect(() => {
     if (!user && !userClosedManually) {
       // Pequeno delay para melhorar a experiência (dá tempo da página carregar)
       const timer = setTimeout(() => {
         if (!userClosedManually) {
           setIsOpen(true)
-          setIsMinimized(false)
+          setIsMinimized(true) // Abrir minimizado por padrão
         }
       }, 1500) // Abre após 1.5 segundos
       return () => clearTimeout(timer)
