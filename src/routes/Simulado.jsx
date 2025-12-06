@@ -313,6 +313,37 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
       }
 
       const parsed = JSON.parse(jsonText)
+      
+      // Validar e filtrar matérias - APENAS as que estão no curso
+      if (parsed.materias && Array.isArray(parsed.materias)) {
+        if (courseMaterias.length > 0) {
+          // Filtrar apenas matérias do curso
+          const validMaterias = parsed.materias.filter(m => 
+            courseMaterias.some(cm => 
+              cm.toLowerCase().trim() === m.nome.toLowerCase().trim()
+            )
+          )
+          
+          if (validMaterias.length === 0) {
+            throw new Error(`Nenhuma matéria válida encontrada. Matérias do curso: ${courseMaterias.join(', ')}. Matérias do edital: ${parsed.materias.map(m => m.nome).join(', ')}`)
+          }
+          
+          // Recalcular distribuição se necessário
+          const totalQuestoes = parsed.totalQuestoes || 50
+          const questoesPorMateria = Math.floor(totalQuestoes / validMaterias.length)
+          const resto = totalQuestoes % validMaterias.length
+          
+          parsed.materias = validMaterias.map((m, idx) => ({
+            ...m,
+            quantidadeQuestoes: questoesPorMateria + (idx < resto ? 1 : 0)
+          }))
+          
+          parsed.totalQuestoes = parsed.materias.reduce((sum, m) => sum + m.quantidadeQuestoes, 0)
+          
+          console.log('✅ Matérias filtradas:', parsed.materias.map(m => `${m.nome} (${m.quantidadeQuestoes})`).join(', '))
+        }
+      }
+      
       setSimuladoInfo(parsed)
     } catch (err) {
       console.error('Erro ao analisar edital:', err)
