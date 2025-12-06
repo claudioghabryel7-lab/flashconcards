@@ -217,17 +217,21 @@ const FlashQuestoes = () => {
 
   // Carregar estatísticas do usuário (por curso)
   useEffect(() => {
-    if (!user || (selectedCourseId === null && selectedCourseId !== null)) return // Aguardar curso ser carregado
+    if (!user || selectedCourseId === undefined) return // Aguardar curso ser carregado
     
     const courseKey = selectedCourseId || 'alego' // 'alego' para curso padrão
     const statsRef = doc(db, 'questoesStats', `${user.uid}_${courseKey}`)
     const unsub = onSnapshot(statsRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data()
-        // Verificar se é do curso correto
-        if (data.courseId === selectedCourseId || (!data.courseId && !selectedCourseId)) {
+        // Verificar se é do curso correto (comparação mais robusta)
+        const dataCourseId = data.courseId || null
+        const currentCourseId = selectedCourseId || null
+        
+        if (dataCourseId === currentCourseId || (dataCourseId === null && currentCourseId === null)) {
           setStats(data)
         } else {
+          // Se não é do curso correto, inicializar estatísticas vazias
           setStats({ correct: 0, wrong: 0, byMateria: {} })
         }
       } else {
@@ -341,9 +345,9 @@ const FlashQuestoes = () => {
     setQuestionScores({})
 
     try {
-      // 🔥 NOVO: VERIFICAR CACHE PRIMEIRO
-      console.log('🔍 Verificando cache de questões...')
-      const cachedData = await getOrCreateQuestionsCache(selectedMateria, selectedModulo)
+      // 🔥 NOVO: VERIFICAR CACHE PRIMEIRO (com courseId)
+      console.log('🔍 Verificando cache de questões...', { selectedMateria, selectedModulo, selectedCourseId })
+      const cachedData = await getOrCreateQuestionsCache(selectedMateria, selectedModulo, selectedCourseId)
       
       if (cachedData && cachedData.questoes && cachedData.questoes.length > 0) {
         console.log(`✅ Cache encontrado! Usando ${cachedData.questoes.length} questões do cache.`)
@@ -354,8 +358,9 @@ const FlashQuestoes = () => {
           cached: true
         }
         
-        // Verificar se precisa remover por score baixo
-        await autoRemoveBadCache('questoesCache', `${selectedMateria}_${selectedModulo}`.replace(/[^a-zA-Z0-9_]/g, '_'))
+        // Verificar se precisa remover por score baixo (com courseId)
+        const courseKey = selectedCourseId || 'alego-default'
+        await autoRemoveBadCache('questoesCache', `${courseKey}_${selectedMateria}_${selectedModulo}`.replace(/[^a-zA-Z0-9_]/g, '_'))
         
         setGenerating(false)
         
@@ -549,9 +554,9 @@ CRÍTICO:
         throw new Error('A IA não gerou nenhuma questão. Tente novamente.')
       }
 
-      // 🔥 NOVO: SALVAR NO CACHE
-      console.log('💾 Salvando questões no cache...')
-      await saveQuestionsCache(selectedMateria, selectedModulo, parsedData.questoes)
+      // 🔥 NOVO: SALVAR NO CACHE (com courseId)
+      console.log('💾 Salvando questões no cache...', { selectedMateria, selectedModulo, selectedCourseId })
+      await saveQuestionsCache(selectedMateria, selectedModulo, parsedData.questoes, selectedCourseId)
       const newCacheInfo = { likes: 0, dislikes: 0, score: 100, cached: false }
 
       // Navegar para a página de responder questões
@@ -579,7 +584,7 @@ CRÍTICO:
     setQuestionsRating(newRating)
     
     try {
-      await rateQuestionsCache(selectedMateria, selectedModulo, isLike)
+      await rateQuestionsCache(selectedMateria, selectedModulo, isLike, selectedCourseId)
       
       // Atualizar cacheInfo
       if (cacheInfo) {
@@ -635,7 +640,7 @@ CRÍTICO:
     }))
     
     try {
-      const result = await rateIndividualQuestion(selectedMateria, selectedModulo, questionIndex, isLike)
+      const result = await rateIndividualQuestion(selectedMateria, selectedModulo, questionIndex, isLike, selectedCourseId)
       
       if (result.removed || result.cacheDeleted) {
         // Questão foi removida do banco - remover também do array local

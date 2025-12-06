@@ -9,9 +9,11 @@ import { db } from '../firebase/config'
 /**
  * Obter ou criar cache de questões para um módulo
  */
-export const getOrCreateQuestionsCache = async (materia, modulo) => {
+export const getOrCreateQuestionsCache = async (materia, modulo, courseId = null) => {
   try {
-    const cacheId = `${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    // Incluir courseId no cacheId para separar questões por curso
+    const courseKey = courseId || 'alego-default'
+    const cacheId = `${courseKey}_${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
     const cacheRef = doc(db, 'questoesCache', cacheId)
     const cacheSnap = await getDoc(cacheRef)
     
@@ -27,12 +29,21 @@ export const getOrCreateQuestionsCache = async (materia, modulo) => {
         return null // Retornar null para forçar nova geração
       }
       
+      // Verificar se o cache é do curso correto
+      const cacheCourseId = data.courseId || 'alego-default'
+      const requestedCourseId = courseId || 'alego-default'
+      if (cacheCourseId !== requestedCourseId) {
+        console.log(`⚠️ Cache de outro curso (${cacheCourseId} vs ${requestedCourseId})`)
+        return null
+      }
+      
       return {
         id: cacheSnap.id,
         questoes: data.questoes || [],
         likes: data.likes || 0,
         dislikes: data.dislikes || 0,
         score,
+        courseId: cacheCourseId,
         createdAt: data.createdAt,
         cached: true
       }
@@ -48,12 +59,15 @@ export const getOrCreateQuestionsCache = async (materia, modulo) => {
 /**
  * Salvar questões no cache
  */
-export const saveQuestionsCache = async (materia, modulo, questoes) => {
+export const saveQuestionsCache = async (materia, modulo, questoes, courseId = null) => {
   try {
-    const cacheId = `${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    // Incluir courseId no cacheId para separar questões por curso
+    const courseKey = courseId || 'alego-default'
+    const cacheId = `${courseKey}_${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
     const cacheRef = doc(db, 'questoesCache', cacheId)
     
     await setDoc(cacheRef, {
+      courseId: courseKey,
       materia,
       modulo,
       questoes,
@@ -74,9 +88,10 @@ export const saveQuestionsCache = async (materia, modulo, questoes) => {
 /**
  * Avaliar cache de questões (like/dislike)
  */
-export const rateQuestionsCache = async (materia, modulo, isLike) => {
+export const rateQuestionsCache = async (materia, modulo, isLike, courseId = null) => {
   try {
-    const cacheId = `${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    const courseKey = courseId || 'alego-default'
+    const cacheId = `${courseKey}_${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
     const cacheRef = doc(db, 'questoesCache', cacheId)
     
     const update = {
@@ -194,9 +209,10 @@ const calculateScore = (likes, dislikes) => {
 /**
  * Avaliar questão individual
  */
-export const rateIndividualQuestion = async (materia, modulo, questionIndex, isLike) => {
+export const rateIndividualQuestion = async (materia, modulo, questionIndex, isLike, courseId = null) => {
   try {
-    const cacheId = `${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    const courseKey = courseId || 'alego-default'
+    const cacheId = `${courseKey}_${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
     const cacheRef = doc(db, 'questoesCache', cacheId)
     const cacheSnap = await getDoc(cacheRef)
     
@@ -252,9 +268,10 @@ export const rateIndividualQuestion = async (materia, modulo, questionIndex, isL
 /**
  * Remover questão ruim do array
  */
-export const removeBadQuestion = async (materia, modulo, questionIndex) => {
+export const removeBadQuestion = async (materia, modulo, questionIndex, courseId = null) => {
   try {
-    const cacheId = `${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    const courseKey = courseId || 'alego-default'
+    const cacheId = `${courseKey}_${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
     const cacheRef = doc(db, 'questoesCache', cacheId)
     const cacheSnap = await getDoc(cacheRef)
     

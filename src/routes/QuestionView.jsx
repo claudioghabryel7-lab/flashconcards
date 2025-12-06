@@ -56,10 +56,14 @@ const QuestionView = () => {
     const unsub = onSnapshot(statsRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data()
-        // Verificar se é do curso correto
-        if (data.courseId === selectedCourseId || (!data.courseId && !selectedCourseId)) {
+        // Verificar se é do curso correto (comparação mais robusta)
+        const dataCourseId = data.courseId || null
+        const currentCourseId = selectedCourseId || null
+        
+        if (dataCourseId === currentCourseId || (dataCourseId === null && currentCourseId === null)) {
           setStats(data)
         } else {
+          // Se não é do curso correto, inicializar estatísticas vazias
           setStats({ correct: 0, wrong: 0, byMateria: {} })
         }
       } else {
@@ -123,7 +127,8 @@ const QuestionView = () => {
     }))
     
     try {
-      const result = await rateIndividualQuestion(selectedMateria, selectedModulo, questionIndex, isLike)
+      const selectedCourseId = profile?.selectedCourseId !== undefined ? profile.selectedCourseId : null
+      const result = await rateIndividualQuestion(selectedMateria, selectedModulo, questionIndex, isLike, selectedCourseId)
       
       if (result.removed || result.cacheDeleted) {
         alert('Questão removida por baixa qualidade. Continuando com as questões restantes.')
