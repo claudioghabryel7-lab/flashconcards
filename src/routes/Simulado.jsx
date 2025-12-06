@@ -361,61 +361,6 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
     }
   }
 
-  // Finalizar simulado
-  const finishSimulado = () => {
-    setIsRunning(false)
-    setIsFinished(true)
-
-    let correct = 0
-    let wrong = 0
-    const byMateria = {}
-
-    questions.forEach((question, index) => {
-      const userAnswer = answers[index]
-      const isCorrect = userAnswer === question.correta
-
-      if (isCorrect) {
-        correct++
-      } else {
-        wrong++
-      }
-
-      const materia = question.materia || 'Outras'
-      if (!byMateria[materia]) {
-        byMateria[materia] = { correct: 0, wrong: 0 }
-      }
-      byMateria[materia].correct += isCorrect ? 1 : 0
-      byMateria[materia].wrong += !isCorrect ? 1 : 0
-    })
-
-    const total = questions.length
-    const accuracy = total > 0 ? ((correct / total) * 100).toFixed(1) : 0
-
-    const resultsData = {
-      correct,
-      wrong,
-      total,
-      accuracy: parseFloat(accuracy),
-      byMateria,
-      timeSpent: simuladoInfo.tempoMinutos * 60 - timeLeft,
-      completedAt: new Date().toISOString(),
-    }
-
-    setResults(resultsData)
-
-    // Salvar resultados no Firestore
-    if (user) {
-      const courseKey = selectedCourseId || 'alego'
-      const statsRef = doc(db, 'questoesStats', `${user.uid}_${courseKey}`)
-      setDoc(statsRef, {
-        ...resultsData,
-        courseId: selectedCourseId,
-        type: 'simulado',
-        updatedAt: serverTimestamp(),
-      }, { merge: true })
-    }
-  }
-
   // Formatar tempo
   const formatTime = (seconds) => {
     const hours = Math.floor(seconds / 3600)
