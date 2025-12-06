@@ -246,11 +246,13 @@ ${materiasContext}
 ⚠️ REGRA CRÍTICA: Use APENAS as matérias listadas acima. NÃO invente matérias que não estão no curso.
 
 INSTRUÇÕES IMPORTANTES:
-- Este simulado é ESPECÍFICO para o concurso ${courseName || 'mencionado'}
+- Este simulado é ESPECÍFICO para o concurso ${courseName || 'mencionado'}${courseCompetition ? ` (${courseCompetition})` : ''}
 - Você DEVE analisar o edital pensando APENAS neste concurso específico
 - NÃO use informações genéricas de outros concursos
 - Baseie-se EXCLUSIVAMENTE no edital fornecido abaixo
-- Se necessário, considere informações conhecidas sobre este concurso específico (formato de prova, estilo da banca, etc)
+- Se você tiver conhecimento sobre este concurso específico (de plataformas como GRAN, QConcurso, etc), use esse conhecimento para complementar a análise
+- Considere o formato de prova, estilo da banca, e características específicas deste concurso
+- Se o edital não especificar algo, use informações conhecidas sobre este concurso específico
 
 Analise o edital abaixo e extraia as seguintes informações sobre a prova:
 
@@ -368,11 +370,17 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
 
 CONCURSO ESPECÍFICO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
 
-⚠️ ATENÇÃO CRÍTICA: Este simulado é para o concurso ${courseName || 'especificado'}. 
+⚠️ ATENÇÃO CRÍTICA: Este simulado é para o concurso ${courseName || 'especificado'}${courseCompetition ? ` (${courseCompetition})` : ''}. 
 Você DEVE criar questões ESPECÍFICAS para este concurso, baseadas no edital fornecido.
 NÃO use conteúdo genérico ou de outros concursos.
 
-Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}" do concurso ${courseName || 'especificado'}.
+INSTRUÇÕES ESPECIAIS:
+- Se você tiver conhecimento sobre este concurso específico (de plataformas como GRAN, QConcurso, Estratégia Concursos, etc), use esse conhecimento
+- Considere o estilo da banca examinadora deste concurso
+- Questões devem refletir o nível de dificuldade e formato típico deste concurso
+- Use terminologia e contexto específicos deste concurso quando aplicável
+
+Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}" do concurso ${courseName || 'especificado'}${courseCompetition ? ` (${courseCompetition})` : ''}.
 
 ${editalText ? `CONTEXTO DO EDITAL DO CONCURSO ${courseName || ''}:\n${editalText.substring(0, 50000)}\n\n` : ''}
 
