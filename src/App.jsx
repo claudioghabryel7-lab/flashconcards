@@ -24,6 +24,7 @@ import MindMapView from './routes/MindMapView'
 import SocialFeed from './routes/SocialFeed'
 import UserProfile from './routes/UserProfile'
 import NewsView from './routes/NewsView'
+import Simulado from './routes/Simulado'
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()
@@ -144,6 +145,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <QuestionView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/simulado"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <Simulado />
               </ProtectedRoute>
             }
           />

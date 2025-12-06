@@ -1,0 +1,734 @@
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { GoogleGenerativeAI } from '@google/generative-ai'
+import { db } from '../firebase/config'
+import { useAuth } from '../hooks/useAuth'
+import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import {
+  ClockIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  PlayIcon,
+  PauseIcon,
+  ArrowRightIcon,
+  ArrowLeftIcon,
+  TrophyIcon,
+} from '@heroicons/react/24/outline'
+
+const Simulado = () => {
+  const navigate = useNavigate()
+  const { user, profile } = useAuth()
+  const { darkMode } = useDarkMode()
+  const [loading, setLoading] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [simuladoInfo, setSimuladoInfo] = useState(null) // { totalQuestoes, tempoMinutos, materias, descricao }
+  const [questions, setQuestions] = useState([])
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [answers, setAnswers] = useState({}) // { questionIndex: 'A' }
+  const [timeLeft, setTimeLeft] = useState(0) // em segundos
+  const [isRunning, setIsRunning] = useState(false)
+  const [isFinished, setIsFinished] = useState(false)
+  const [results, setResults] = useState(null)
+  const [selectedCourseId, setSelectedCourseId] = useState(null)
+  const [courseName, setCourseName] = useState('')
+
+  // Carregar curso selecionado
+  useEffect(() => {
+    if (!profile) return
+    
+    const courseFromProfile = profile.selectedCourseId !== undefined ? profile.selectedCourseId : null
+    setSelectedCourseId(courseFromProfile)
+    
+    // Carregar nome do curso
+    if (courseFromProfile) {
+      const loadCourseName = async () => {
+        try {
+          const courseDoc = await getDoc(doc(db, 'courses', courseFromProfile))
+          if (courseDoc.exists()) {
+            setCourseName(courseDoc.data().name || courseDoc.data().competition || '')
+          }
+        } catch (err) {
+          console.error('Erro ao carregar nome do curso:', err)
+        }
+      }
+      loadCourseName()
+    } else {
+      setCourseName('ALEGO Policial Legislativo')
+    }
+  }, [profile])
+
+  // Finalizar simulado
+  const finishSimulado = () => {
+    setIsRunning(false)
+    setIsFinished(true)
+
+    let correct = 0
+    let wrong = 0
+    const byMateria = {}
+
+    questions.forEach((question, index) => {
+      const userAnswer = answers[index]
+      const isCorrect = userAnswer === question.correta
+
+      if (isCorrect) {
+        correct++
+      } else {
+        wrong++
+      }
+
+      const materia = question.materia || 'Outras'
+      if (!byMateria[materia]) {
+        byMateria[materia] = { correct: 0, wrong: 0 }
+      }
+      byMateria[materia].correct += isCorrect ? 1 : 0
+      byMateria[materia].wrong += !isCorrect ? 1 : 0
+    })
+
+    const total = questions.length
+    const accuracy = total > 0 ? ((correct / total) * 100).toFixed(1) : 0
+
+    const resultsData = {
+      correct,
+      wrong,
+      total,
+      accuracy: parseFloat(accuracy),
+      byMateria,
+      timeSpent: simuladoInfo.tempoMinutos * 60 - timeLeft,
+      completedAt: new Date().toISOString(),
+    }
+
+    setResults(resultsData)
+
+    // Salvar resultados no Firestore
+    if (user) {
+      const courseKey = selectedCourseId || 'alego'
+      const statsRef = doc(db, 'questoesStats', `${user.uid}_${courseKey}`)
+      setDoc(statsRef, {
+        ...resultsData,
+        courseId: selectedCourseId,
+        type: 'simulado',
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+    }
+  }
+
+  // Timer
+  useEffect(() => {
+    if (!isRunning || timeLeft <= 0) {
+      if (timeLeft === 0 && isRunning && questions.length > 0) {
+        finishSimulado()
+      }
+      return
+    }
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          setIsRunning(false)
+          if (questions.length > 0) {
+            finishSimulado()
+          }
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [isRunning, timeLeft, questions.length])
+
+  // Analisar edital e extrair informações do simulado
+  const analyzeEdital = async () => {
+    if (!selectedCourseId && selectedCourseId !== null) {
+      alert('Selecione um curso primeiro')
+      return
+    }
+
+    setAnalyzing(true)
+    setLoading(true)
+
+    try {
+      const courseId = selectedCourseId || 'alego-default'
+      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+      const editalDoc = await getDoc(editalRef)
+
+      let editalText = ''
+      if (editalDoc.exists()) {
+        const data = editalDoc.data()
+        editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
+      } else {
+        // Fallback
+        const oldEditalDoc = await getDoc(doc(db, 'config', 'edital'))
+        if (oldEditalDoc.exists()) {
+          const data = oldEditalDoc.data()
+          editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
+        }
+      }
+
+      if (!editalText.trim()) {
+        throw new Error('Edital não encontrado. Configure o edital do curso primeiro no painel administrativo.')
+      }
+
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        throw new Error('VITE_GEMINI_API_KEY não configurada')
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+
+      const analysisPrompt = `Você é um especialista em análise de editais de concursos públicos.
+
+Analise o edital abaixo e extraia as seguintes informações sobre a prova:
+
+EDITAL:
+${editalText.substring(0, 100000)}${editalText.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}
+
+TAREFA: Extrair informações sobre a prova objetiva do concurso:
+
+1. NÚMERO TOTAL DE QUESTÕES da prova objetiva
+2. TEMPO DETERMINADO para a prova (em minutos)
+3. MATÉRIAS que serão cobradas (lista completa)
+4. DISTRIBUIÇÃO DE QUESTÕES por matéria (quantas questões de cada matéria)
+5. DESCRIÇÃO breve do formato da prova
+
+IMPORTANTE:
+- Se o edital não especificar o tempo, use 4 horas (240 minutos) como padrão
+- Se não especificar número de questões, use 50 questões como padrão
+- Liste TODAS as matérias mencionadas no edital
+- Se não houver distribuição específica, distribua igualmente entre as matérias
+
+Retorne APENAS um objeto JSON válido no seguinte formato:
+
+{
+  "totalQuestoes": 50,
+  "tempoMinutos": 240,
+  "materias": [
+    {
+      "nome": "Português",
+      "quantidadeQuestoes": 10
+    },
+    {
+      "nome": "Matemática",
+      "quantidadeQuestoes": 10
+    }
+  ],
+  "descricao": "Prova objetiva com 50 questões, tempo de 4 horas"
+}
+
+CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
+
+      const result = await model.generateContent(analysisPrompt)
+      const responseText = result.response.text().trim()
+
+      // Extrair JSON
+      let jsonText = responseText
+      if (jsonText.includes('```json')) {
+        jsonText = jsonText.split('```json')[1].split('```')[0].trim()
+      } else if (jsonText.includes('```')) {
+        jsonText = jsonText.split('```')[1].split('```')[0].trim()
+      }
+
+      const firstBrace = jsonText.indexOf('{')
+      const lastBrace = jsonText.lastIndexOf('}')
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        jsonText = jsonText.substring(firstBrace, lastBrace + 1)
+      }
+
+      const parsed = JSON.parse(jsonText)
+      setSimuladoInfo(parsed)
+    } catch (err) {
+      console.error('Erro ao analisar edital:', err)
+      alert(`Erro ao analisar edital: ${err.message}`)
+    } finally {
+      setAnalyzing(false)
+      setLoading(false)
+    }
+  }
+
+  // Gerar questões do simulado
+  const generateSimulado = async () => {
+    if (!simuladoInfo) return
+
+    setLoading(true)
+
+    try {
+      const courseId = selectedCourseId || 'alego-default'
+      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+      const editalDoc = await getDoc(editalRef)
+
+      let editalText = ''
+      if (editalDoc.exists()) {
+        const data = editalDoc.data()
+        editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
+      }
+
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        throw new Error('VITE_GEMINI_API_KEY não configurada')
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+
+      // Gerar questões para cada matéria
+      const allQuestions = []
+      
+      for (const materia of simuladoInfo.materias) {
+        const materiaPrompt = `Você é um especialista em criar questões de concursos públicos.
+
+Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}".
+
+${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 50000)}\n\n` : ''}
+
+REGRAS:
+- Estilo FGV: questões objetivas, claras, com alternativas bem elaboradas
+- Cada questão deve ter 5 alternativas (A, B, C, D, E)
+- Apenas UMA alternativa está correta
+- As alternativas incorretas devem ser plausíveis (distratores inteligentes)
+- Baseie-se no conteúdo do edital fornecido
+- Questões devem ser FICTÍCIAS (não são questões reais de provas anteriores)
+- Dificuldade: nível FGV (intermediário a avançado)
+- Enunciados claros e objetivos
+
+FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
+Retorne APENAS um objeto JSON válido:
+
+{
+  "questoes": [
+    {
+      "enunciado": "Texto completo da questão",
+      "alternativas": {
+        "A": "Texto da alternativa A",
+        "B": "Texto da alternativa B",
+        "C": "Texto da alternativa C",
+        "D": "Texto da alternativa D",
+        "E": "Texto da alternativa E"
+      },
+      "correta": "A",
+      "materia": "${materia.nome}"
+    }
+  ]
+}
+
+CRÍTICO: Retorne APENAS o JSON, sem markdown.`
+
+        try {
+          const result = await model.generateContent(materiaPrompt)
+          const responseText = result.response.text().trim()
+
+          let jsonText = responseText
+          if (jsonText.includes('```json')) {
+            jsonText = jsonText.split('```json')[1].split('```')[0].trim()
+          } else if (jsonText.includes('```')) {
+            jsonText = jsonText.split('```')[1].split('```')[0].trim()
+          }
+
+          const firstBrace = jsonText.indexOf('{')
+          const lastBrace = jsonText.lastIndexOf('}')
+          if (firstBrace !== -1 && lastBrace !== -1) {
+            jsonText = jsonText.substring(firstBrace, lastBrace + 1)
+          }
+
+          const parsed = JSON.parse(jsonText)
+          if (parsed.questoes && Array.isArray(parsed.questoes)) {
+            allQuestions.push(...parsed.questoes)
+          }
+        } catch (err) {
+          console.error(`Erro ao gerar questões de ${materia.nome}:`, err)
+        }
+      }
+
+      if (allQuestions.length === 0) {
+        throw new Error('Nenhuma questão foi gerada. Tente novamente.')
+      }
+
+      // Embaralhar questões
+      const shuffled = allQuestions.sort(() => Math.random() - 0.5)
+      setQuestions(shuffled)
+      setTimeLeft(simuladoInfo.tempoMinutos * 60)
+      setIsRunning(true)
+      setCurrentQuestionIndex(0)
+      setAnswers({})
+      setIsFinished(false)
+      setResults(null)
+    } catch (err) {
+      console.error('Erro ao gerar simulado:', err)
+      alert(`Erro ao gerar simulado: ${err.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Finalizar simulado
+  const finishSimulado = () => {
+    setIsRunning(false)
+    setIsFinished(true)
+
+    let correct = 0
+    let wrong = 0
+    const byMateria = {}
+
+    questions.forEach((question, index) => {
+      const userAnswer = answers[index]
+      const isCorrect = userAnswer === question.correta
+
+      if (isCorrect) {
+        correct++
+      } else {
+        wrong++
+      }
+
+      const materia = question.materia || 'Outras'
+      if (!byMateria[materia]) {
+        byMateria[materia] = { correct: 0, wrong: 0 }
+      }
+      byMateria[materia].correct += isCorrect ? 1 : 0
+      byMateria[materia].wrong += !isCorrect ? 1 : 0
+    })
+
+    const total = questions.length
+    const accuracy = total > 0 ? ((correct / total) * 100).toFixed(1) : 0
+
+    const resultsData = {
+      correct,
+      wrong,
+      total,
+      accuracy: parseFloat(accuracy),
+      byMateria,
+      timeSpent: simuladoInfo.tempoMinutos * 60 - timeLeft,
+      completedAt: new Date().toISOString(),
+    }
+
+    setResults(resultsData)
+
+    // Salvar resultados no Firestore
+    if (user) {
+      const courseKey = selectedCourseId || 'alego'
+      const statsRef = doc(db, 'questoesStats', `${user.uid}_${courseKey}`)
+      setDoc(statsRef, {
+        ...resultsData,
+        courseId: selectedCourseId,
+        type: 'simulado',
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+    }
+  }
+
+  // Formatar tempo
+  const formatTime = (seconds) => {
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const currentQuestion = questions[currentQuestionIndex]
+  const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0
+  const answeredCount = Object.keys(answers).length
+
+  // Tela de análise do edital
+  if (!simuladoInfo && !analyzing) {
+    return (
+      <div className="min-h-screen py-8">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className={`rounded-2xl p-8 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
+            <h1 className="text-3xl font-bold mb-2 text-alego-600">Simulado</h1>
+            <p className="text-slate-600 dark:text-slate-400 mb-6">
+              {courseName ? `Simulado para ${courseName}` : 'Simulado baseado no edital do curso'}
+            </p>
+
+            <div className="space-y-4">
+              <p className="text-slate-700 dark:text-slate-300">
+                A IA irá analisar o edital do curso e extrair informações sobre:
+              </p>
+              <ul className="list-disc list-inside space-y-2 text-slate-600 dark:text-slate-400 ml-4">
+                <li>Número total de questões da prova</li>
+                <li>Tempo determinado para a prova</li>
+                <li>Matérias que serão cobradas</li>
+                <li>Distribuição de questões por matéria</li>
+              </ul>
+
+              <button
+                onClick={analyzeEdital}
+                disabled={loading || analyzing}
+                className="w-full mt-6 bg-alego-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {analyzing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                    Analisando edital...
+                  </>
+                ) : (
+                  <>
+                    <PlayIcon className="h-5 w-5" />
+                    Analisar Edital e Preparar Simulado
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Tela de informações do simulado
+  if (simuladoInfo && questions.length === 0) {
+    return (
+      <div className="min-h-screen py-8">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className={`rounded-2xl p-8 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
+            <h1 className="text-3xl font-bold mb-2 text-alego-600">Simulado Preparado</h1>
+            <p className="text-slate-600 dark:text-slate-400 mb-6">{simuladoInfo.descricao}</p>
+
+            <div className="space-y-4 mb-6">
+              <div className="flex items-center gap-2">
+                <ClockIcon className="h-5 w-5 text-alego-600" />
+                <span className="font-semibold">Tempo: {simuladoInfo.tempoMinutos} minutos</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <TrophyIcon className="h-5 w-5 text-alego-600" />
+                <span className="font-semibold">Total de questões: {simuladoInfo.totalQuestoes}</span>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="font-semibold mb-3">Matérias e distribuição:</h3>
+              <div className="space-y-2">
+                {simuladoInfo.materias.map((materia, idx) => (
+                  <div key={idx} className="flex justify-between items-center p-3 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                    <span>{materia.nome}</span>
+                    <span className="font-semibold">{materia.quantidadeQuestoes} questões</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={generateSimulado}
+              disabled={loading}
+              className="w-full bg-alego-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                  Gerando simulado...
+                </>
+              ) : (
+                <>
+                  <PlayIcon className="h-5 w-5" />
+                  Iniciar Simulado
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Tela de resultados
+  if (isFinished && results) {
+    return (
+      <div className="min-h-screen py-8">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className={`rounded-2xl p-8 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
+            <h1 className="text-3xl font-bold mb-2 text-alego-600">Resultados do Simulado</h1>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
+              <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Taxa de Acerto</p>
+                <p className="text-3xl font-bold text-green-600">{results.accuracy}%</p>
+              </div>
+              <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Acertos</p>
+                <p className="text-3xl font-bold text-blue-600">{results.correct}</p>
+              </div>
+              <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-xl">
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Erros</p>
+                <p className="text-3xl font-bold text-red-600">{results.wrong}</p>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="font-semibold mb-3">Desempenho por Matéria:</h3>
+              <div className="space-y-2">
+                {Object.entries(results.byMateria).map(([materia, data]) => {
+                  const total = data.correct + data.wrong
+                  const accuracy = total > 0 ? ((data.correct / total) * 100).toFixed(1) : 0
+                  return (
+                    <div key={materia} className="p-3 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-semibold">{materia}</span>
+                        <span className="text-sm">{accuracy}%</span>
+                      </div>
+                      <div className="flex gap-2 text-sm">
+                        <span className="text-green-600">✓ {data.correct}</span>
+                        <span className="text-red-600">✗ {data.wrong}</span>
+                        <span className="text-slate-500">Total: {total}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setSimuladoInfo(null)
+                  setQuestions([])
+                  setResults(null)
+                  setIsFinished(false)
+                  setAnswers({})
+                }}
+                className="flex-1 bg-alego-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-alego-700"
+              >
+                Fazer Novo Simulado
+              </button>
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="flex-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-6 py-3 rounded-xl font-semibold hover:bg-slate-300 dark:hover:bg-slate-600"
+              >
+                Voltar ao Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Tela do simulado em andamento
+  return (
+    <div className="min-h-screen py-4">
+      <div className="max-w-4xl mx-auto px-4">
+        {/* Header com timer e progresso */}
+        <div className={`rounded-xl p-4 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <ClockIcon className={`h-5 w-5 ${timeLeft < 300 ? 'text-red-500' : 'text-alego-600'}`} />
+              <span className={`font-bold text-lg ${timeLeft < 300 ? 'text-red-500' : ''}`}>
+                {formatTime(timeLeft)}
+              </span>
+            </div>
+            <button
+              onClick={() => setIsRunning(!isRunning)}
+              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+            >
+              {isRunning ? <PauseIcon className="h-5 w-5" /> : <PlayIcon className="h-5 w-5" />}
+            </button>
+          </div>
+          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+            <div
+              className="bg-alego-600 h-2 rounded-full transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+            Questão {currentQuestionIndex + 1} de {questions.length} • {answeredCount} respondidas
+          </p>
+        </div>
+
+        {/* Questão atual */}
+        {currentQuestion && (
+          <div className={`rounded-xl p-6 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
+            <div className="mb-4">
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                {currentQuestion.materia}
+              </span>
+              <h2 className="text-xl font-bold mt-2">{currentQuestion.enunciado}</h2>
+            </div>
+
+            <div className="space-y-3">
+              {Object.entries(currentQuestion.alternativas).map(([letra, texto]) => {
+                const isSelected = answers[currentQuestionIndex] === letra
+                const isCorrect = letra === currentQuestion.correta
+                const showResult = isFinished
+
+                return (
+                  <button
+                    key={letra}
+                    onClick={() => {
+                      if (!showResult) {
+                        setAnswers({ ...answers, [currentQuestionIndex]: letra })
+                      }
+                    }}
+                    disabled={showResult}
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                      isSelected
+                        ? showResult
+                          ? isCorrect
+                            ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                            : 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                          : 'border-alego-600 bg-alego-50 dark:bg-alego-900/20'
+                        : showResult && isCorrect
+                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                        : 'border-slate-200 dark:border-slate-700 hover:border-alego-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-alego-600">{letra})</span>
+                      <span>{texto}</span>
+                      {showResult && isCorrect && (
+                        <CheckCircleIcon className="h-5 w-5 text-green-500 ml-auto" />
+                      )}
+                      {showResult && isSelected && !isCorrect && (
+                        <XCircleIcon className="h-5 w-5 text-red-500 ml-auto" />
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Navegação */}
+        <div className="flex gap-4">
+          <button
+            onClick={() => {
+              if (currentQuestionIndex > 0) {
+                setCurrentQuestionIndex(currentQuestionIndex - 1)
+              }
+            }}
+            disabled={currentQuestionIndex === 0}
+            className="flex-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-6 py-3 rounded-xl font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            <ArrowLeftIcon className="h-5 w-5" />
+            Anterior
+          </button>
+          {currentQuestionIndex < questions.length - 1 ? (
+            <button
+              onClick={() => {
+                if (currentQuestionIndex < questions.length - 1) {
+                  setCurrentQuestionIndex(currentQuestionIndex + 1)
+                }
+              }}
+              className="flex-1 bg-alego-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-alego-700 flex items-center justify-center gap-2"
+            >
+              Próxima
+              <ArrowRightIcon className="h-5 w-5" />
+            </button>
+          ) : (
+            <button
+              onClick={finishSimulado}
+              className="flex-1 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-700 flex items-center justify-center gap-2"
+            >
+              Finalizar Simulado
+              <TrophyIcon className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default Simulado
+
