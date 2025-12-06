@@ -245,6 +245,13 @@ ${materiasContext}
 
 ⚠️ REGRA CRÍTICA: Use APENAS as matérias listadas acima. NÃO invente matérias que não estão no curso.
 
+INSTRUÇÕES IMPORTANTES:
+- Este simulado é ESPECÍFICO para o concurso ${courseName || 'mencionado'}
+- Você DEVE analisar o edital pensando APENAS neste concurso específico
+- NÃO use informações genéricas de outros concursos
+- Baseie-se EXCLUSIVAMENTE no edital fornecido abaixo
+- Se necessário, considere informações conhecidas sobre este concurso específico (formato de prova, estilo da banca, etc)
+
 Analise o edital abaixo e extraia as seguintes informações sobre a prova:
 
 EDITAL:
@@ -361,6 +368,10 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
 
 CONCURSO ESPECÍFICO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
 
+⚠️ ATENÇÃO CRÍTICA: Este simulado é para o concurso ${courseName || 'especificado'}. 
+Você DEVE criar questões ESPECÍFICAS para este concurso, baseadas no edital fornecido.
+NÃO use conteúdo genérico ou de outros concursos.
+
 Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}" do concurso ${courseName || 'especificado'}.
 
 ${editalText ? `CONTEXTO DO EDITAL DO CONCURSO ${courseName || ''}:\n${editalText.substring(0, 50000)}\n\n` : ''}
@@ -368,6 +379,7 @@ ${editalText ? `CONTEXTO DO EDITAL DO CONCURSO ${courseName || ''}:\n${editalTex
 REGRAS CRÍTICAS:
 - Questões devem ser ESPECÍFICAS para o concurso ${courseName || 'mencionado'}
 - Baseie-se EXCLUSIVAMENTE no edital fornecido acima
+- NÃO use conteúdo de outros concursos ou matérias genéricas
 - Estilo FGV: questões objetivas, claras, com alternativas bem elaboradas
 - Cada questão deve ter 5 alternativas (A, B, C, D, E)
 - Apenas UMA alternativa está correta
@@ -376,6 +388,7 @@ REGRAS CRÍTICAS:
 - Dificuldade: nível FGV (intermediário a avançado)
 - Enunciados claros e objetivos
 - Foque no conteúdo específico do edital deste concurso
+- Se o edital mencionar tópicos específicos para "${materia.nome}", use APENAS esses tópicos
 
 FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
 Retorne APENAS um objeto JSON válido:
