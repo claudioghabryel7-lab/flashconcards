@@ -13,7 +13,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 
 const navClass =
-  'rounded-full px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold transition-all duration-200'
+  'rounded-xl px-4 sm:px-5 md:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold transition-all duration-200'
 
 const Header = () => {
   const { user, logout, isAdmin, profile } = useAuth()
@@ -27,6 +27,7 @@ const Header = () => {
       { to: '/flashcards', label: 'Flashcards', auth: true },
       { to: '/flashquestoes', label: 'FlashQuestões', auth: true },
       { to: '/simulado', label: 'Simulado', auth: true },
+      { to: '/treino-redacao', label: 'Treino Redação', auth: true },
       { to: '/mapas-mentais', label: 'Mapas Mentais', auth: true },
       { to: '/ranking', label: 'Ranking', auth: true },
       { to: '/feed', label: 'FlashSocial', auth: true },
@@ -37,50 +38,38 @@ const Header = () => {
 
   return (
     <header
-      className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-md shadow-sm dark:border-slate-700/80 dark:bg-slate-900/95"
+      className="sticky top-0 z-50 border-b-2 border-slate-300/60 bg-white/98 backdrop-blur-xl shadow-lg dark:border-slate-600/60 dark:bg-slate-900/98"
       style={{
-        backgroundColor: darkMode ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-        borderColor: darkMode ? 'rgba(51, 65, 85, 0.8)' : 'rgba(226, 232, 240, 0.8)',
+        backgroundColor: darkMode ? 'rgba(15, 23, 42, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+        borderColor: darkMode ? 'rgba(71, 85, 105, 0.6)' : 'rgba(203, 213, 225, 0.6)',
       }}
     >
-      <div className="mx-auto w-full max-w-7xl px-4 py-3 sm:px-6 sm:py-4">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <Link to="/" className="flex items-center gap-2 sm:gap-3 group">
+      <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex flex-col gap-4">
+          {/* Logo Centralizada */}
+          <div className="flex items-center justify-center">
+            <Link to="/" className="flex flex-col items-center gap-2 group">
               <div className="relative">
-                <AcademicCapIcon className="h-7 w-7 sm:h-9 sm:w-9 text-alego-600 dark:text-alego-400 transition-transform group-hover:scale-110" />
-                <div className="absolute inset-0 bg-alego-600/20 dark:bg-alego-400/20 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-alego-600/30 to-alego-700/30 dark:from-alego-400/30 dark:to-alego-500/30 rounded-xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative bg-gradient-to-br from-alego-600 to-alego-700 dark:from-alego-500 dark:to-alego-600 rounded-xl p-2.5 sm:p-3 shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                  <AcademicCapIcon className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+                </div>
               </div>
-              <div className="hidden sm:block">
-                <p className="text-lg sm:text-xl font-black text-alego-700 dark:text-alego-300 leading-tight">FlashConCards</p>
-                <p className="text-xs uppercase tracking-wider text-alego-500 dark:text-alego-400 font-semibold">Flashcards e Flashquestões</p>
-              </div>
-              <div className="sm:hidden">
-                <p className="text-base font-black text-alego-700 dark:text-alego-300">FlashConCards</p>
+              <div className="text-center">
+                <p className="text-xl sm:text-2xl font-black text-alego-700 dark:text-alego-300 leading-tight tracking-tight">
+                  FlashConCards
+                </p>
+                <p className="text-xs sm:text-sm uppercase tracking-widest text-alego-500 dark:text-alego-400 font-bold mt-0.5">
+                  Flashcards & FlashQuestões
+                </p>
               </div>
             </Link>
-            {user ? (
-              <button
-                type="button"
-                onClick={logout}
-                className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-alego-600 to-alego-700 px-4 py-2 text-xs font-semibold text-white shadow-md transition-all hover:from-alego-700 hover:to-alego-800 sm:hidden"
-              >
-                <ArrowLeftOnRectangleIcon className="h-4 w-4" />
-                Sair
-              </button>
-            ) : (
-              <Link
-                to="/login"
-                className="flex items-center gap-1.5 rounded-full border-2 border-alego-600 px-4 py-2 text-xs font-bold text-alego-600 transition-all hover:bg-alego-50 dark:border-alego-500 dark:text-alego-400 sm:hidden"
-              >
-                <ArrowRightOnRectangleIcon className="h-4 w-4" />
-                Entrar
-              </Link>
-            )}
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <nav className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          {/* Navegação e Ações Centralizadas */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
+            {/* Menu de Navegação */}
+            <nav className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
               {links
                 .filter((item) => {
                   if (item.admin && !isAdmin) return false
@@ -95,8 +84,8 @@ const Header = () => {
                     className={({ isActive }) =>
                       `${navClass} ${
                         isActive 
-                          ? 'bg-gradient-to-r from-alego-600 to-alego-700 text-white shadow-md dark:from-alego-700 dark:to-alego-800' 
-                          : 'text-alego-600 dark:text-alego-400 hover:bg-alego-50 dark:hover:bg-alego-900/50'
+                          ? 'bg-gradient-to-br from-alego-600 to-alego-700 text-white shadow-lg shadow-alego-600/30 dark:from-alego-700 dark:to-alego-800 dark:shadow-alego-700/30 scale-105' 
+                          : 'text-alego-600 dark:text-alego-400 hover:bg-gradient-to-br hover:from-alego-50 hover:to-alego-100/50 dark:hover:from-alego-900/50 dark:hover:to-alego-800/30 border border-slate-200/60 dark:border-slate-700/60 hover:border-alego-300 dark:hover:border-alego-600 hover:shadow-md'
                       }`
                     }
                   >
@@ -105,11 +94,12 @@ const Header = () => {
                 ))}
             </nav>
 
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* Botões de Ação - Centralizados */}
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
               <button
                 type="button"
                 onClick={toggleDarkMode}
-                className="flex items-center justify-center rounded-full p-2.5 text-alego-600 transition-all hover:bg-alego-100 hover:scale-110 dark:text-alego-400 dark:hover:bg-alego-900"
+                className="flex items-center justify-center rounded-xl p-2.5 sm:p-3 text-alego-600 dark:text-alego-400 border border-slate-200/60 dark:border-slate-700/60 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm transition-all hover:bg-alego-50 dark:hover:bg-alego-900/50 hover:scale-105 hover:shadow-md"
                 aria-label="Alternar modo escuro"
               >
                 {darkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
@@ -120,7 +110,7 @@ const Header = () => {
                   <button
                     type="button"
                     onClick={() => navigate('/select-course')}
-                    className="hidden items-center gap-1.5 rounded-full border border-blue-500 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition-all hover:bg-blue-100 dark:border-blue-400 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30 sm:flex"
+                    className="hidden items-center gap-1.5 rounded-xl border-2 border-blue-500 bg-blue-50 px-4 py-2.5 text-xs font-semibold text-blue-700 transition-all hover:bg-blue-100 hover:shadow-md hover:scale-105 dark:border-blue-400 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30 sm:flex"
                     title="Trocar curso"
                   >
                     <ArrowPathIcon className="h-4 w-4" />
@@ -129,34 +119,54 @@ const Header = () => {
                   <button
                     type="button"
                     onClick={logout}
-                    className="hidden items-center gap-1.5 rounded-full bg-gradient-to-r from-alego-600 to-alego-700 px-4 py-2 text-xs font-semibold text-white shadow-md transition-all hover:from-alego-700 hover:to-alego-800 hover:shadow-lg dark:from-alego-700 dark:to-alego-800 sm:flex"
+                    className="flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-alego-600 to-alego-700 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-alego-600/30 transition-all hover:from-alego-700 hover:to-alego-800 hover:shadow-xl hover:scale-105 dark:from-alego-700 dark:to-alego-800 dark:shadow-alego-700/30 sm:hidden"
                   >
                     <ArrowLeftOnRectangleIcon className="h-4 w-4" />
                     Sair
                   </button>
-                  <div className="flex items-center gap-2.5 rounded-full border border-slate-200/80 bg-white/80 backdrop-blur-sm px-3 py-2 text-xs shadow-sm dark:border-slate-700/80 dark:bg-slate-800/80">
-                    <UserCircleIcon className="h-5 w-5 text-alego-500 dark:text-alego-400 flex-shrink-0" />
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="hidden items-center gap-1.5 rounded-xl bg-gradient-to-br from-alego-600 to-alego-700 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-alego-600/30 transition-all hover:from-alego-700 hover:to-alego-800 hover:shadow-xl hover:scale-105 dark:from-alego-700 dark:to-alego-800 dark:shadow-alego-700/30 sm:flex"
+                  >
+                    <ArrowLeftOnRectangleIcon className="h-4 w-4" />
+                    Sair
+                  </button>
+                  <div className="flex items-center gap-2.5 rounded-xl border-2 border-slate-200/80 dark:border-slate-700/80 bg-gradient-to-br from-white/90 to-slate-50/90 dark:from-slate-800/90 dark:to-slate-900/90 backdrop-blur-sm px-3.5 py-2.5 text-xs shadow-md hover:shadow-lg transition-all hover:scale-105">
+                    <div className="relative">
+                      <UserCircleIcon className="h-5 w-5 text-alego-500 dark:text-alego-400 flex-shrink-0" />
+                      <div className="absolute top-0 right-0 h-2 w-2 bg-green-500 rounded-full border-2 border-white dark:border-slate-800"></div>
+                    </div>
                     <div className="text-left min-w-0">
                       <p className="max-w-[120px] truncate font-bold text-alego-700 dark:text-alego-300">
                         {user.displayName || user.email?.split('@')[0]}
                       </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
                         {isAdmin ? 'Admin' : 'Aluno'}
                         {profile?.selectedCourseId !== undefined && (
-                          <span className="ml-1">• {profile.selectedCourseId ? 'Curso' : 'ALEGO'}</span>
+                          <span className="ml-1.5">• {profile.selectedCourseId ? 'Curso' : 'ALEGO'}</span>
                         )}
                       </p>
                     </div>
                   </div>
                 </>
               ) : (
-                <Link
-                  to="/login"
-                  className="hidden items-center gap-1.5 rounded-full border-2 border-alego-600 px-4 py-2 text-xs font-bold text-alego-600 transition-all hover:bg-alego-50 hover:border-alego-700 dark:border-alego-500 dark:text-alego-400 dark:hover:bg-alego-900/50 sm:flex"
-                >
-                  <ArrowRightOnRectangleIcon className="h-4 w-4" />
-                  Entrar
-                </Link>
+                <>
+                  <Link
+                    to="/login"
+                    className="flex items-center gap-1.5 rounded-xl border-2 border-alego-600 px-4 py-2.5 text-xs font-bold text-alego-600 transition-all hover:bg-gradient-to-br hover:from-alego-50 hover:to-alego-100/50 hover:border-alego-700 hover:shadow-md hover:scale-105 dark:border-alego-500 dark:text-alego-400 dark:hover:bg-alego-900/50 sm:hidden"
+                  >
+                    <ArrowRightOnRectangleIcon className="h-4 w-4" />
+                    Entrar
+                  </Link>
+                  <Link
+                    to="/login"
+                    className="hidden items-center gap-1.5 rounded-xl border-2 border-alego-600 px-4 py-2.5 text-xs font-bold text-alego-600 transition-all hover:bg-gradient-to-br hover:from-alego-50 hover:to-alego-100/50 hover:border-alego-700 hover:shadow-md hover:scale-105 dark:border-alego-500 dark:text-alego-400 dark:hover:bg-alego-900/50 sm:flex"
+                  >
+                    <ArrowRightOnRectangleIcon className="h-4 w-4" />
+                    Entrar
+                  </Link>
+                </>
               )}
             </div>
           </div>

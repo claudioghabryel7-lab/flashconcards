@@ -25,6 +25,7 @@ import SocialFeed from './routes/SocialFeed'
 import UserProfile from './routes/UserProfile'
 import NewsView from './routes/NewsView'
 import Simulado from './routes/Simulado'
+import TreinoRedacao from './routes/TreinoRedacao'
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()
@@ -157,6 +158,14 @@ function App() {
             }
           />
           <Route
+            path="/treino-redacao"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <TreinoRedacao />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/mapas-mentais"
             element={
               <ProtectedRoute requireCourseSelection>
@@ -201,7 +210,7 @@ function App() {
       </main>
       <footer className="mx-auto w-full max-w-6xl px-4 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400">
         <p>
-          © {new Date().getFullYear()} Plegimentoria Mentoria para Polícia Legislativa ALEGO. Todos os direitos reservados.
+          © {new Date().getFullYear()} FlashConCards. Todos os direitos reservados.
           É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.
         </p>
       </footer>

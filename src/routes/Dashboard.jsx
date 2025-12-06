@@ -792,7 +792,7 @@ const Dashboard = () => {
             ? `Sua mentoria para ${selectedCourse.name} está organizada aqui.`
             : 'Sua mentoria para a Polícia Legislativa está organizada aqui.'}
         </h1>
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row gap-3 mb-6">
           <Link
             to="/flashcards"
             className="inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-blue-600 transition-all shadow-md hover:shadow-lg"
@@ -807,6 +807,135 @@ const Dashboard = () => {
           >
             {saving ? 'Salvando...' : 'Marcar estudo de hoje'}
           </button>
+        </div>
+
+        {/* Seção "Como estudar?" - Movida para dentro do header */}
+        <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl blur-lg opacity-50 animate-pulse"></div>
+                <div className="relative rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 p-3 shadow-lg">
+                  <AcademicCapIcon className="h-6 w-6 text-white" />
+                </div>
+              </div>
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black bg-gradient-to-r from-blue-600 to-cyan-600 dark:from-blue-400 dark:to-cyan-400 bg-clip-text text-transparent">
+                  Como estudar?
+                </h2>
+                {studyPhase > 1 && (
+                  <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1">
+                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 dark:bg-blue-900/50 text-xs">↻</span>
+                    Estudando pela {studyPhase}ª vez
+                  </p>
+                )}
+              </div>
+            </div>
+            {modulesStats.total > 0 && (
+              <div className="flex items-center gap-3">
+                {modulesStats.daysRemaining > 0 ? (
+                  <div className="group relative inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 dark:from-blue-500/20 dark:to-cyan-500/20 rounded-lg border border-blue-500/30 dark:border-blue-400/30 backdrop-blur-sm hover:border-blue-500/50 dark:hover:border-blue-400/50 transition-all">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-blue-500 rounded-full blur-md opacity-50 group-hover:opacity-75 transition-opacity"></div>
+                      <span className="relative text-blue-600 dark:text-blue-400 font-black text-xl">{modulesStats.daysRemaining}</span>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      {modulesStats.daysRemaining === 1 ? 'dia restante' : 'dias restantes'}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500/10 to-emerald-500/10 dark:from-green-500/20 dark:to-emerald-500/20 rounded-lg border border-green-500/30 dark:border-green-400/30 backdrop-blur-sm">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-green-500 rounded-full blur-md opacity-50 animate-pulse"></div>
+                      <span className="relative text-green-600 dark:text-green-400 font-bold">✓</span>
+                    </div>
+                    <span className="text-xs font-semibold text-green-600 dark:text-green-400">Todos completos!</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {suggestedModule ? (
+            <div className="space-y-4">
+              <div className="relative group overflow-hidden bg-gradient-to-br from-blue-500/10 via-cyan-500/5 to-indigo-500/10 dark:from-blue-500/20 dark:via-cyan-500/10 dark:to-indigo-500/20 rounded-xl border border-blue-500/30 dark:border-blue-400/30 backdrop-blur-sm p-5 hover:border-blue-500/50 dark:hover:border-blue-400/50 transition-all duration-300">
+                <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full">
+                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+                  <span className="text-xs font-bold text-white">RECOMENDADO</span>
+                </div>
+                
+                <div className="relative space-y-4 pr-20">
+                  <p className="text-base text-slate-900 dark:text-white font-medium leading-relaxed">
+                    Olá! Que tal estudarmos o{' '}
+                    <span className="font-black bg-gradient-to-r from-blue-600 to-cyan-600 dark:from-blue-400 dark:to-cyan-400 bg-clip-text text-transparent">
+                      {suggestedModule.modulo}
+                    </span>
+                    {' '}de{' '}
+                    <span className="font-black bg-gradient-to-r from-blue-600 to-cyan-600 dark:from-blue-400 dark:to-cyan-400 bg-clip-text text-transparent">
+                      {suggestedModule.materia}
+                    </span>
+                    {' '}hoje?
+                  </p>
+                  
+                  {moduleProgress.total > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-xs font-bold text-blue-600 dark:text-blue-400">
+                            {moduleProgress.studied}
+                          </span>
+                          / {moduleProgress.total} cards estudados
+                        </span>
+                        <span className="text-lg font-black bg-gradient-to-r from-blue-600 to-cyan-600 dark:from-blue-400 dark:to-cyan-400 bg-clip-text text-transparent">
+                          {moduleProgress.percentage}%
+                        </span>
+                      </div>
+                      <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-200/50 dark:bg-slate-700/50 backdrop-blur-sm border border-slate-300/50 dark:border-slate-600/50">
+                        <div
+                          className="relative h-full bg-gradient-to-r from-blue-500 via-cyan-500 to-blue-500 transition-all duration-700 ease-out rounded-full shadow-lg"
+                          style={{ width: `${moduleProgress.percentage}%` }}
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer-slide"></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    <Link
+                      to={`/flashcards?materia=${encodeURIComponent(suggestedModule.materia)}&modulo=${encodeURIComponent(suggestedModule.modulo)}`}
+                      className="group/btn relative flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-xl hover:from-blue-500 hover:to-cyan-500 transition-all shadow-lg hover:shadow-xl hover:shadow-blue-500/50 hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000"></div>
+                      <span className="relative z-10 flex items-center gap-2">
+                        <BookOpenIcon className="h-5 w-5" />
+                        Ir estudar
+                      </span>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={markModuleAsStudied}
+                      disabled={moduleProgress.studied < moduleProgress.total || moduleProgress.total === 0}
+                      className="group/btn relative flex items-center justify-center gap-2 px-5 py-3 border-2 border-green-500 text-green-600 dark:text-green-400 font-bold rounded-xl bg-green-50/50 dark:bg-green-900/20 hover:bg-green-500 hover:text-white dark:hover:bg-green-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-50/50 disabled:hover:text-green-600 overflow-hidden"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-green-500/0 via-green-500/10 to-green-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700 disabled:translate-x-[-100%]"></div>
+                      <CheckCircleIcon className="h-5 w-5 relative z-10" />
+                      <span className="relative z-10">Estudado</span>
+                    </button>
+                  </div>
+                  {moduleProgress.studied < moduleProgress.total && moduleProgress.total > 0 && (
+                    <p className="text-xs text-center text-slate-500 dark:text-slate-400 font-medium">
+                      Complete todos os <span className="font-bold text-blue-600 dark:text-blue-400">{moduleProgress.total}</span> cards para marcar como estudado
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+              <p>Carregando módulos...</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -906,270 +1035,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Seção "Como estudar?" - Design Tecnológico STARK */}
-      <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
-        {/* Background gradient decorativo */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-indigo-500/10 to-purple-500/10 rounded-full blur-3xl -ml-24 -mb-24"></div>
-        
-        <div className="relative">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl blur-lg opacity-50 animate-pulse"></div>
-                <div className="relative rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 p-4 shadow-lg">
-                  <AcademicCapIcon className="h-7 w-7 text-white" />
-                </div>
-              </div>
-              <div>
-                <h2 className="text-2xl sm:text-3xl font-black bg-gradient-to-r from-blue-600 to-cyan-600 dark:from-blue-400 dark:to-cyan-400 bg-clip-text text-transparent">
-                  Como estudar?
-                </h2>
-                {studyPhase > 1 && (
-                  <p className="text-sm font-semibold text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1">
-                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-xs">↻</span>
-                    Estudando pela {studyPhase}ª vez
-                  </p>
-                )}
-              </div>
-            </div>
-            {modulesStats.total > 0 && (
-              <div className="flex items-center gap-3">
-                {modulesStats.daysRemaining > 0 ? (
-                  <div className="group relative inline-flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 dark:from-blue-500/20 dark:to-cyan-500/20 rounded-xl border border-blue-500/30 dark:border-blue-400/30 backdrop-blur-sm hover:border-blue-500/50 dark:hover:border-blue-400/50 transition-all">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-blue-500 rounded-full blur-md opacity-50 group-hover:opacity-75 transition-opacity"></div>
-                      <span className="relative text-blue-600 dark:text-blue-400 font-black text-2xl">{modulesStats.daysRemaining}</span>
-                    </div>
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      {modulesStats.daysRemaining === 1 ? 'dia restante' : 'dias restantes'}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="inline-flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-green-500/10 to-emerald-500/10 dark:from-green-500/20 dark:to-emerald-500/20 rounded-xl border border-green-500/30 dark:border-green-400/30 backdrop-blur-sm">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-green-500 rounded-full blur-md opacity-50 animate-pulse"></div>
-                      <span className="relative text-green-600 dark:text-green-400 font-bold text-xl">✓</span>
-                    </div>
-                    <span className="text-sm font-semibold text-green-600 dark:text-green-400">Todos completos!</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {suggestedModule ? (
-          <div className="space-y-6">
-            {/* Card Módulo Sugerido - Design Tecnológico */}
-            <div className="relative group overflow-hidden bg-gradient-to-br from-blue-500/10 via-cyan-500/5 to-indigo-500/10 dark:from-blue-500/20 dark:via-cyan-500/10 dark:to-indigo-500/20 rounded-2xl border border-blue-500/30 dark:border-blue-400/30 backdrop-blur-sm p-6 sm:p-8 hover:border-blue-500/50 dark:hover:border-blue-400/50 transition-all duration-300">
-              {/* Efeito de brilho animado */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              
-              {/* Badge "Recomendado" */}
-              <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full">
-                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
-                <span className="text-xs font-bold text-white">RECOMENDADO</span>
-              </div>
-              
-              <div className="relative space-y-6">
-                <p className="text-lg sm:text-xl text-slate-900 dark:text-white font-medium leading-relaxed pr-20">
-                  Olá! Que tal estudarmos o{' '}
-                  <span className="relative inline-block">
-                    <span className="relative z-10 font-black bg-gradient-to-r from-blue-600 to-cyan-600 dark:from-blue-400 dark:to-cyan-400 bg-clip-text text-transparent">
-                      {suggestedModule.modulo}
-                    </span>
-                    <span className="absolute bottom-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500/30 to-cyan-500/30 dark:from-blue-400/30 dark:to-cyan-400/30 -z-0"></span>
-                  </span>
-                  {' '}de{' '}
-                  <span className="font-black bg-gradient-to-r from-blue-600 to-cyan-600 dark:from-blue-400 dark:to-cyan-400 bg-clip-text text-transparent">
-                    {suggestedModule.materia}
-                  </span>
-                  {' '}hoje?
-                </p>
-                
-                {/* Barra de progresso tecnológica */}
-                {moduleProgress.total > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/50 text-xs font-bold text-blue-600 dark:text-blue-400">
-                          {moduleProgress.studied}
-                        </span>
-                        / {moduleProgress.total} cards estudados
-                      </span>
-                      <span className="relative">
-                        <span className="absolute inset-0 bg-blue-500/20 rounded-full blur-md"></span>
-                        <span className="relative text-2xl font-black bg-gradient-to-r from-blue-600 to-cyan-600 dark:from-blue-400 dark:to-cyan-400 bg-clip-text text-transparent">
-                          {moduleProgress.percentage}%
-                        </span>
-                      </span>
-                    </div>
-                    <div className="relative h-4 w-full overflow-hidden rounded-full bg-slate-200/50 dark:bg-slate-700/50 backdrop-blur-sm border border-slate-300/50 dark:border-slate-600/50">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-cyan-500/20"></div>
-                      <div
-                        className="relative h-full bg-gradient-to-r from-blue-500 via-cyan-500 to-blue-500 transition-all duration-700 ease-out rounded-full shadow-lg"
-                        style={{ width: `${moduleProgress.percentage}%` }}
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer-slide"></div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Botões tecnológicos */}
-                <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <Link
-                    to={`/flashcards?materia=${encodeURIComponent(suggestedModule.materia)}&modulo=${encodeURIComponent(suggestedModule.modulo)}`}
-                    className="group/btn relative flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-xl hover:from-blue-500 hover:to-cyan-500 transition-all shadow-lg hover:shadow-xl hover:shadow-blue-500/50 hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000"></div>
-                    <span className="relative z-10 flex items-center gap-2">
-                      <BookOpenIcon className="h-5 w-5" />
-                      Ir estudar
-                    </span>
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={markModuleAsStudied}
-                    disabled={moduleProgress.studied < moduleProgress.total || moduleProgress.total === 0}
-                    className="group/btn relative flex items-center justify-center gap-2 px-6 py-4 border-2 border-green-500 text-green-600 dark:text-green-400 font-bold rounded-xl bg-green-50/50 dark:bg-green-900/20 hover:bg-green-500 hover:text-white dark:hover:bg-green-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-50/50 disabled:hover:text-green-600 overflow-hidden"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-green-500/0 via-green-500/10 to-green-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700 disabled:translate-x-[-100%]"></div>
-                    <CheckCircleIcon className="h-5 w-5 relative z-10" />
-                    <span className="relative z-10">Estudado</span>
-                  </button>
-                </div>
-                {moduleProgress.studied < moduleProgress.total && moduleProgress.total > 0 && (
-                  <p className="text-xs text-center text-slate-500 dark:text-slate-400 font-medium">
-                    Complete todos os <span className="font-bold text-blue-600 dark:text-blue-400">{moduleProgress.total}</span> cards para marcar como estudado
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Lista de módulos - Design Tecnológico */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600 to-transparent"></div>
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 bg-gradient-to-r from-blue-600 to-cyan-600 dark:from-blue-400 dark:to-cyan-400 bg-clip-text text-transparent">
-                  Módulos Disponíveis
-                </h3>
-                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600 to-transparent"></div>
-              </div>
-              <div className="space-y-3">
-                {/* Usar matérias reais dos flashcards, não a lista fixa MATERIAS */}
-                {Object.keys(organizedModules)
-                  .sort((a, b) => {
-                    // Ordenar: primeiro as que estão em MATERIAS (na ordem original), depois as outras alfabeticamente
-                    const indexA = MATERIAS.indexOf(a)
-                    const indexB = MATERIAS.indexOf(b)
-                    if (indexA !== -1 && indexB !== -1) return indexA - indexB
-                    if (indexA !== -1) return -1
-                    if (indexB !== -1) return 1
-                    return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
-                  })
-                  .map((materia) => {
-                  const modulos = organizedModules[materia] || []
-                  if (modulos.length === 0) return null
-
-                  const isExpanded = expandedMaterias[materia] || false
-                  const completedModules = modulos.filter(mod => studiedModules[materia]?.[mod] === true).length
-                  const progressPercentage = Math.round((completedModules / modulos.length) * 100)
-
-                  return (
-                    <div key={materia} className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setExpandedMaterias(prev => ({
-                            ...prev,
-                            [materia]: !prev[materia]
-                          }))
-                        }}
-                        className="group relative flex items-center justify-between w-full text-left bg-gradient-to-r from-slate-50 to-slate-100/50 dark:from-slate-800/50 dark:to-slate-700/50 border border-slate-200/50 dark:border-slate-600/50 rounded-xl p-4 hover:border-blue-500/50 dark:hover:border-blue-400/50 hover:shadow-lg transition-all overflow-hidden"
-                      >
-                        {/* Background gradient hover */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/5 to-cyan-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                        
-                        <div className="relative z-10 flex items-center gap-4 flex-1">
-                          <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg">
-                            <BookOpenIcon className="h-5 w-5 text-white" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-black text-slate-900 dark:text-white truncate">
-                              {materia}
-                            </h4>
-                            <div className="flex items-center gap-3 mt-1">
-                              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                                {modulos.length} módulos
-                              </span>
-                              {completedModules > 0 && (
-                                <>
-                                  <span className="text-xs text-slate-400">•</span>
-                                  <span className="text-xs font-bold text-green-600 dark:text-green-400">
-                                    {completedModules} completos
-                                  </span>
-                                  <div className="flex-1 max-w-24 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                                    <div 
-                                      className="h-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500"
-                                      style={{ width: `${progressPercentage}%` }}
-                                    ></div>
-                                  </div>
-                                  <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                                    {progressPercentage}%
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="relative z-10 flex items-center gap-2">
-                          <span className={`text-slate-400 text-sm font-bold transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`}>
-                            ▶
-                          </span>
-                        </div>
-                      </button>
-                      {isExpanded && (
-                        <div className="flex flex-wrap gap-2 pl-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                          {modulos.map((modulo) => {
-                            const isStudied = studiedModules[materia]?.[modulo] === true
-                            return (
-                              <Link
-                                key={modulo}
-                                to={`/flashcards?materia=${encodeURIComponent(materia)}&modulo=${encodeURIComponent(modulo)}`}
-                                className={`group/module relative inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all hover:scale-105 ${
-                                  isStudied
-                                    ? 'bg-gradient-to-r from-green-500/10 to-emerald-500/10 dark:from-green-500/20 dark:to-emerald-500/20 text-green-700 dark:text-green-400 border border-green-500/30 dark:border-green-400/30 hover:border-green-500/50 dark:hover:border-green-400/50'
-                                    : 'bg-white/50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-blue-500/50 dark:hover:border-blue-400/50 hover:bg-blue-50/50 dark:hover:bg-blue-900/20'
-                                }`}
-                              >
-                                {isStudied && (
-                                  <CheckCircleIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
-                                )}
-                                <span>{modulo}</span>
-                                {!isStudied && (
-                                  <span className="opacity-0 group-hover/module:opacity-100 transition-opacity text-blue-600 dark:text-blue-400">→</span>
-                                )}
-                              </Link>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <p className="text-slate-500 dark:text-slate-400">
-              Carregando sugestões de estudo...
-            </p>
-          </div>
-        )}
-        </div>
-      </div>
+      {/* Seção "Como estudar?" foi movida para dentro do header acima */}
 
       {/* Progresso por Matéria - Compacto e Tecnológico */}
       <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">

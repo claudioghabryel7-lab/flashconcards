@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { doc, getDoc, setDoc, serverTimestamp, collection, onSnapshot } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -14,6 +14,7 @@ import {
   ArrowRightIcon,
   ArrowLeftIcon,
   TrophyIcon,
+  ArrowDownIcon,
 } from '@heroicons/react/24/outline'
 
 const Simulado = () => {
@@ -35,6 +36,16 @@ const Simulado = () => {
   const [courseCompetition, setCourseCompetition] = useState('')
   const [courseMaterias, setCourseMaterias] = useState([]) // Matérias do curso (dos flashcards)
   const [loadingTip, setLoadingTip] = useState('')
+  
+  // Estados para redação
+  const [showRedacao, setShowRedacao] = useState(false)
+  const [redacaoTema, setRedacaoTema] = useState('')
+  const [redacaoTexto, setRedacaoTexto] = useState('')
+  const [redacaoTimeLeft, setRedacaoTimeLeft] = useState(0)
+  const [redacaoIsRunning, setRedacaoIsRunning] = useState(false)
+  const [redacaoNota, setRedacaoNota] = useState(null)
+  const [analizingRedacao, setAnalizingRedacao] = useState(false)
+  const redacaoTextareaRef = useRef(null)
 
   // Dicas durante o carregamento
   const tips = [
@@ -113,10 +124,229 @@ const Simulado = () => {
     loadCourseData()
   }, [profile])
 
-  // Finalizar simulado
-  const finishSimulado = () => {
+  // Finalizar questões objetivas e ir para redação
+  const finishObjectiveQuestions = async () => {
     setIsRunning(false)
+    
+    // Calcular resultados das questões objetivas
+    let correct = 0
+    let wrong = 0
+    const byMateria = {}
+
+    questions.forEach((question, index) => {
+      const userAnswer = answers[index]
+      const isCorrect = userAnswer === question.correta
+
+      if (isCorrect) {
+        correct++
+      } else {
+        wrong++
+      }
+
+      const materia = question.materia || 'Outras'
+      if (!byMateria[materia]) {
+        byMateria[materia] = { correct: 0, wrong: 0 }
+      }
+      byMateria[materia].correct += isCorrect ? 1 : 0
+      byMateria[materia].wrong += !isCorrect ? 1 : 0
+    })
+
+    // Gerar tema de redação e iniciar redação
+    await generateRedacaoTheme()
+    
+    // Definir tempo da redação (padrão: 1 hora = 3600 segundos)
+    setRedacaoTimeLeft(3600)
+    setRedacaoIsRunning(true)
+    setShowRedacao(true)
+  }
+
+  // Gerar tema de redação baseado no curso
+  const generateRedacaoTheme = async () => {
+    try {
+      const courseId = selectedCourseId || 'alego-default'
+      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+      const editalDoc = await getDoc(editalRef)
+
+      let editalText = ''
+      if (editalDoc.exists()) {
+        const data = editalDoc.data()
+        editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
+      }
+
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        throw new Error('VITE_GEMINI_API_KEY não configurada')
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+
+      const themePrompt = `Você é um especialista em criar temas de redação para concursos públicos.
+
+CONCURSO ESPECÍFICO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
+CARGO: ${courseCompetition || courseName || 'Cargo público'}
+
+${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 30000)}\n\n` : ''}
+
+Crie um tema de redação ESPECÍFICO e relevante para o concurso ${courseName || 'mencionado'}${courseCompetition ? ` (${courseCompetition})` : ''}.
+
+INSTRUÇÕES:
+- O tema deve ser atual e relevante para o cargo/concurso
+- Deve estar relacionado com questões sociais, políticas ou administrativas pertinentes ao cargo
+- Seja específico: não use temas genéricos
+- O tema deve permitir uma dissertação argumentativa de 25-30 linhas
+- Se você tiver conhecimento sobre este concurso específico, use temas típicos dessa área
+
+Retorne APENAS o tema da redação, sem explicações, sem aspas, sem formatação especial.
+O tema deve ser claro e direto.
+
+CRÍTICO: Retorne APENAS o tema, nada mais.`
+
+      const result = await model.generateContent(themePrompt)
+      let theme = result.response.text().trim()
+      
+      // Limpar formatação
+      theme = theme.replace(/TEMA:/gi, '').trim()
+      theme = theme.replace(/"/g, '').trim()
+      theme = theme.replace(/^[-•]\s*/, '').trim()
+      
+      setRedacaoTema(theme)
+    } catch (err) {
+      console.error('Erro ao gerar tema de redação:', err)
+      setRedacaoTema(`A importância da eficiência no serviço público para o cargo de ${courseCompetition || courseName || 'servidor público'}`)
+    }
+  }
+
+  // Timer para redação
+  useEffect(() => {
+    if (!redacaoIsRunning || redacaoTimeLeft <= 0 || !showRedacao) {
+      if (redacaoTimeLeft === 0 && redacaoIsRunning && showRedacao) {
+        finishRedacao()
+      }
+      return
+    }
+
+    const timer = setInterval(() => {
+      setRedacaoTimeLeft((prev) => {
+        if (prev <= 1) {
+          setRedacaoIsRunning(false)
+          finishRedacao()
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [redacaoIsRunning, redacaoTimeLeft, showRedacao])
+
+  // Analisar e corrigir redação
+  const analyzeRedacao = async () => {
+    if (!redacaoTexto.trim()) {
+      alert('Por favor, escreva sua redação antes de finalizar.')
+      return
+    }
+
+    setAnalizingRedacao(true)
+
+    try {
+      const courseId = selectedCourseId || 'alego-default'
+      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+      const editalDoc = await getDoc(editalRef)
+
+      let editalText = ''
+      if (editalDoc.exists()) {
+        const data = editalDoc.data()
+        editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
+      }
+
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        throw new Error('VITE_GEMINI_API_KEY não configurada')
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+
+      const analysisPrompt = `Você é um corretor especializado em redações de concursos públicos.
+
+CONCURSO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
+TEMA DA REDAÇÃO: ${redacaoTema}
+
+${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 30000)}\n\n` : ''}
+
+Analise a seguinte redação e atribua uma nota de 0 a 1000, seguindo os critérios típicos de concursos públicos:
+
+CRITÉRIOS DE AVALIAÇÃO:
+1. Domínio da modalidade escrita (0-200 pontos): ortografia, acentuação, pontuação, uso adequado da língua
+2. Compreensão do tema (0-200 pontos): adequação ao tema proposto, compreensão da proposta
+3. Argumentação (0-200 pontos): qualidade dos argumentos, coerência, capacidade de defender pontos de vista
+4. Estrutura textual (0-200 pontos): organização do texto, parágrafos, introdução, desenvolvimento, conclusão
+5. Conhecimento sobre o cargo/concurso (0-200 pontos): demonstração de conhecimento sobre a área, atualidade, relevância
+
+REDAÇÃO DO CANDIDATO:
+${redacaoTexto}
+
+Retorne APENAS um objeto JSON válido no seguinte formato:
+
+{
+  "nota": 750,
+  "criterios": {
+    "dominio": 160,
+    "compreensao": 170,
+    "argumentacao": 180,
+    "estrutura": 150,
+    "conhecimento": 90
+  },
+  "feedback": "Feedback geral sobre a redação, destacando pontos positivos e áreas de melhoria (máximo 200 palavras)"
+}
+
+CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
+
+      const result = await model.generateContent(analysisPrompt)
+      let responseText = result.response.text().trim()
+
+      // Extrair JSON
+      let jsonText = responseText
+      if (jsonText.includes('```json')) {
+        jsonText = jsonText.split('```json')[1].split('```')[0].trim()
+      } else if (jsonText.includes('```')) {
+        jsonText = jsonText.split('```')[1].split('```')[0].trim()
+      }
+
+      const firstBrace = jsonText.indexOf('{')
+      const lastBrace = jsonText.lastIndexOf('}')
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        jsonText = jsonText.substring(firstBrace, lastBrace + 1)
+      }
+
+      const parsed = JSON.parse(jsonText)
+      setRedacaoNota(parsed)
+      
+      // Finalizar com nota da redação
+      finishSimulado(parsed)
+    } catch (err) {
+      console.error('Erro ao analisar redação:', err)
+      alert('Erro ao analisar redação. Tente novamente.')
+      setAnalizingRedacao(false)
+    }
+  }
+
+  // Finalizar redação (chamado quando tempo acaba ou usuário finaliza)
+  const finishRedacao = () => {
+    setRedacaoIsRunning(false)
+    if (redacaoTexto.trim()) {
+      analyzeRedacao()
+    } else {
+      // Se não escreveu nada, finalizar sem nota de redação
+      finishSimulado(null)
+    }
+  }
+
+  // Finalizar simulado completo (objetivo + redação)
+  const finishSimulado = (redacaoResult = null) => {
     setIsFinished(true)
+    setShowRedacao(false)
 
     let correct = 0
     let wrong = 0
@@ -141,15 +371,35 @@ const Simulado = () => {
     })
 
     const total = questions.length
-    const accuracy = total > 0 ? ((correct / total) * 100).toFixed(1) : 0
+    const objectiveAccuracy = total > 0 ? ((correct / total) * 100).toFixed(1) : 0
+    
+    // Nota objetiva (0-1000) baseada na porcentagem de acerto
+    const objectiveScore = (correct / total) * 1000
+
+    // Nota final combinada
+    let finalScore = objectiveScore
+    let finalScoreText = 'Apenas objetiva'
+    
+    if (redacaoResult && redacaoResult.nota) {
+      // Média ponderada: 70% objetiva + 30% redação
+      const objectiveWeight = 0.7
+      const redacaoWeight = 0.3
+      finalScore = (objectiveScore * objectiveWeight) + (redacaoResult.nota * redacaoWeight)
+      finalScoreText = 'Objetiva (70%) + Redação (30%)'
+    }
 
     const resultsData = {
       correct,
       wrong,
       total,
-      accuracy: parseFloat(accuracy),
+      accuracy: parseFloat(objectiveAccuracy),
+      objectiveScore: objectiveScore.toFixed(0),
+      redacao: redacaoResult,
+      finalScore: finalScore.toFixed(0),
+      finalScoreText,
       byMateria,
       timeSpent: simuladoInfo.tempoMinutos * 60 - timeLeft,
+      redacaoTimeSpent: 3600 - redacaoTimeLeft,
       completedAt: new Date().toISOString(),
     }
 
@@ -166,6 +416,8 @@ const Simulado = () => {
         updatedAt: serverTimestamp(),
       }, { merge: true })
     }
+    
+    setAnalizingRedacao(false)
   }
 
   // Timer
@@ -509,6 +761,32 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
     return `${minutes}:${secs.toString().padStart(2, '0')}`
   }
 
+  // Função para inserir texto na posição do cursor
+  const insertTextAtCursor = (textToInsert) => {
+    const textarea = redacaoTextareaRef.current
+    if (!textarea) return
+
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const textBefore = redacaoTexto.substring(0, start)
+    const textAfter = redacaoTexto.substring(end)
+    const newText = textBefore + textToInsert + textAfter
+
+    setRedacaoTexto(newText)
+
+    // Reposicionar cursor após o texto inserido
+    setTimeout(() => {
+      const newPosition = start + textToInsert.length
+      textarea.focus()
+      textarea.setSelectionRange(newPosition, newPosition)
+    }, 0)
+  }
+
+  // Função para adicionar quebra de linha simples
+  const addLineBreak = () => {
+    insertTextAtCursor('\n')
+  }
+
   const currentQuestion = questions[currentQuestionIndex]
   const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0
   const answeredCount = Object.keys(answers).length
@@ -641,6 +919,95 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
     )
   }
 
+  // Tela de redação
+  if (showRedacao && !isFinished) {
+    const wordCount = redacaoTexto.trim() ? redacaoTexto.trim().split(/\s+/).length : 0
+    const charCount = redacaoTexto.length
+
+    return (
+      <div className="min-h-screen py-4">
+        <div className="max-w-4xl mx-auto px-4">
+          {/* Header com timer */}
+          <div className={`rounded-xl p-4 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <ClockIcon className={`h-5 w-5 ${redacaoTimeLeft < 600 ? 'text-red-500' : 'text-alego-600'}`} />
+                <span className={`font-bold text-lg ${redacaoTimeLeft < 600 ? 'text-red-500' : ''}`}>
+                  {formatTime(redacaoTimeLeft)}
+                </span>
+              </div>
+              <button
+                onClick={() => setRedacaoIsRunning(!redacaoIsRunning)}
+                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                {redacaoIsRunning ? <PauseIcon className="h-5 w-5" /> : <PlayIcon className="h-5 w-5" />}
+              </button>
+            </div>
+            <div className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400 mt-2">
+              <span>{charCount} caracteres</span>
+              <span>{wordCount} palavras</span>
+            </div>
+          </div>
+
+          {/* Tema da redação */}
+          <div className={`rounded-xl p-6 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg border-2 border-alego-600`}>
+            <h2 className="text-xl font-bold mb-2 text-alego-600">Tema da Redação</h2>
+            <p className="text-lg font-medium text-slate-700 dark:text-slate-300">
+              {redacaoTema || 'Carregando tema...'}
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+              Escreva uma dissertação argumentativa de 25 a 30 linhas sobre o tema proposto.
+            </p>
+          </div>
+
+          {/* Editor de redação */}
+          <div className={`rounded-xl p-6 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
+            <label className="block text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">
+              Sua Redação
+            </label>
+            <textarea
+              ref={redacaoTextareaRef}
+              value={redacaoTexto}
+              onChange={(e) => setRedacaoTexto(e.target.value)}
+              placeholder="Comece a escrever sua redação aqui..."
+              className="w-full h-96 p-4 rounded-lg border-2 border-slate-300 dark:border-slate-600 focus:border-alego-500 focus:outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-base leading-relaxed resize-none font-serif"
+              disabled={analizingRedacao || redacaoTimeLeft === 0}
+            />
+            <div className="mt-4 flex items-center justify-between text-sm">
+              <span className="text-slate-500 dark:text-slate-400">
+                Mínimo recomendado: 25 linhas
+              </span>
+              <span className={`font-semibold ${wordCount < 200 ? 'text-orange-500' : wordCount > 500 ? 'text-blue-500' : 'text-green-500'}`}>
+                {wordCount >= 200 && wordCount <= 500 ? '✓ Tamanho adequado' : wordCount < 200 ? '⚠ Muito curta' : '⚠ Muito longa'}
+              </span>
+            </div>
+          </div>
+
+          {/* Botões */}
+          <div className="flex gap-4">
+            <button
+              onClick={finishRedacao}
+              disabled={analizingRedacao || !redacaoTexto.trim()}
+              className="flex-1 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {analizingRedacao ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                  Analisando redação...
+                </>
+              ) : (
+                <>
+                  <TrophyIcon className="h-5 w-5" />
+                  Finalizar Redação e Ver Resultado
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Tela de resultados
   if (isFinished && results) {
     return (
@@ -649,20 +1016,79 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
           <div className={`rounded-2xl p-8 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
             <h1 className="text-3xl font-bold mb-2 text-alego-600">Resultados do Simulado</h1>
 
+            {/* Nota Final */}
+            <div className="mb-6 p-6 bg-gradient-to-r from-alego-600 to-alego-700 rounded-xl text-white">
+              <p className="text-sm opacity-90 mb-1">Nota Final</p>
+              <p className="text-5xl font-black mb-2">{results.finalScore}</p>
+              <p className="text-sm opacity-80">{results.finalScoreText}</p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
               <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Taxa de Acerto</p>
-                <p className="text-3xl font-bold text-green-600">{results.accuracy}%</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Nota Objetiva</p>
+                <p className="text-3xl font-bold text-green-600">{results.objectiveScore}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{results.accuracy}% de acerto</p>
               </div>
+              {results.redacao ? (
+                <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Nota Redação</p>
+                  <p className="text-3xl font-bold text-purple-600">{results.redacao.nota}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">de 1000 pontos</p>
+                </div>
+              ) : (
+                <div className="text-center p-4 bg-slate-100 dark:bg-slate-700 rounded-xl">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Nota Redação</p>
+                  <p className="text-2xl font-bold text-slate-400">-</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Não realizada</p>
+                </div>
+              )}
               <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
                 <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Acertos</p>
-                <p className="text-3xl font-bold text-blue-600">{results.correct}</p>
-              </div>
-              <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-xl">
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Erros</p>
-                <p className="text-3xl font-bold text-red-600">{results.wrong}</p>
+                <p className="text-3xl font-bold text-blue-600">{results.correct}/{results.total}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Questões objetivas</p>
               </div>
             </div>
+
+            {/* Feedback da Redação */}
+            {results.redacao && (
+              <div className="mb-6 p-6 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
+                <h3 className="text-xl font-bold mb-4 text-purple-700 dark:text-purple-300">
+                  Análise da Redação
+                </h3>
+                
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                  <div className="text-center p-3 bg-white dark:bg-slate-800 rounded-lg">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Domínio</p>
+                    <p className="text-lg font-bold text-purple-600">{results.redacao.criterios.dominio}</p>
+                  </div>
+                  <div className="text-center p-3 bg-white dark:bg-slate-800 rounded-lg">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Compreensão</p>
+                    <p className="text-lg font-bold text-purple-600">{results.redacao.criterios.compreensao}</p>
+                  </div>
+                  <div className="text-center p-3 bg-white dark:bg-slate-800 rounded-lg">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Argumentação</p>
+                    <p className="text-lg font-bold text-purple-600">{results.redacao.criterios.argumentacao}</p>
+                  </div>
+                  <div className="text-center p-3 bg-white dark:bg-slate-800 rounded-lg">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Estrutura</p>
+                    <p className="text-lg font-bold text-purple-600">{results.redacao.criterios.estrutura}</p>
+                  </div>
+                  <div className="text-center p-3 bg-white dark:bg-slate-800 rounded-lg">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Conhecimento</p>
+                    <p className="text-lg font-bold text-purple-600">{results.redacao.criterios.conhecimento}</p>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white dark:bg-slate-800 rounded-lg">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Feedback:
+                  </p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap">
+                    {results.redacao.feedback}
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="mb-6">
               <h3 className="font-semibold mb-3">Desempenho por Matéria:</h3>
@@ -695,6 +1121,13 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
                   setResults(null)
                   setIsFinished(false)
                   setAnswers({})
+                  setShowRedacao(false)
+                  setRedacaoTema('')
+                  setRedacaoTexto('')
+                  setRedacaoTimeLeft(0)
+                  setRedacaoIsRunning(false)
+                  setRedacaoNota(null)
+                  setAnalizingRedacao(false)
                 }}
                 className="flex-1 bg-alego-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-alego-700"
               >
@@ -826,11 +1259,11 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
             </button>
           ) : (
             <button
-              onClick={finishSimulado}
+              onClick={finishObjectiveQuestions}
               className="flex-1 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-700 flex items-center justify-center gap-2"
             >
-              Finalizar Simulado
-              <TrophyIcon className="h-5 w-5" />
+              Finalizar Questões Objetivas e Ir para Redação
+              <ArrowRightIcon className="h-5 w-5" />
             </button>
           )}
         </div>

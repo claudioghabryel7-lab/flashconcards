@@ -76,6 +76,22 @@ const HomeBanner = () => {
     return () => unsub()
   }, [])
 
+  // Preload das próximas imagens do banner
+  useEffect(() => {
+    if (banners.length <= 1) return
+
+    // Preload do próximo banner
+    const nextIndex = (currentIndex + 1) % banners.length
+    const nextBanner = banners[nextIndex]
+    if (nextBanner && (nextBanner.imageUrl || nextBanner.imageBase64)) {
+      const link = document.createElement('link')
+      link.rel = 'preload'
+      link.as = 'image'
+      link.href = nextBanner.imageUrl || nextBanner.imageBase64
+      document.head.appendChild(link)
+    }
+  }, [banners, currentIndex])
+
   // Auto-play do carrossel
   useEffect(() => {
     if (banners.length <= 1) return
@@ -93,7 +109,7 @@ const HomeBanner = () => {
   // Mostrar skeleton enquanto carrega para evitar flash
   if (loading) {
     return (
-      <div className="relative w-full overflow-hidden rounded-3xl shadow-xl mb-6 sm:mb-8 border border-slate-200 dark:border-slate-700" style={{ height: '320px' }}>
+      <div className="relative w-full overflow-hidden rounded-3xl shadow-xl mb-6 sm:mb-8 border border-slate-200 dark:border-slate-700 h-[200px] sm:h-[300px] md:h-[400px] lg:h-[500px]">
         <div className="w-full h-full bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 animate-pulse" />
       </div>
     )
@@ -106,7 +122,7 @@ const HomeBanner = () => {
   const currentBanner = banners[currentIndex]
 
   return (
-    <div className="relative w-full overflow-hidden rounded-3xl shadow-xl mb-6 sm:mb-8 border border-slate-200/50 dark:border-slate-700/50" style={{ height: '320px' }}>
+    <div className="relative w-full overflow-hidden rounded-3xl shadow-xl mb-6 sm:mb-8 border border-slate-200/50 dark:border-slate-700/50 h-[200px] sm:h-[300px] md:h-[400px] lg:h-[500px]">
       <AnimatePresence mode="wait">
         <motion.div
           key={currentBanner.id}
@@ -123,6 +139,7 @@ const HomeBanner = () => {
                 alt={currentBanner.title || 'Banner'}
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                 style={{ objectFit: 'cover', objectPosition: 'center' }}
+                priority={true}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </Link>
@@ -132,6 +149,7 @@ const HomeBanner = () => {
               alt={currentBanner.title || 'Banner'}
               className="w-full h-full object-cover"
               style={{ objectFit: 'cover', objectPosition: 'center' }}
+              priority={true}
             />
           )}
         </motion.div>

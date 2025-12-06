@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import LazyImage from './LazyImage'
 
 const NewsSection = () => {
   const { darkMode } = useDarkMode()
@@ -145,7 +146,7 @@ const NewsSection = () => {
               {/* Imagem da notícia */}
               {item.imageBase64 && (
                 <div className="w-full h-48 overflow-hidden bg-black">
-                  <img
+                  <LazyImage
                     src={item.imageBase64}
                     alt={item.text || 'Notícia'}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
