@@ -45,7 +45,8 @@ const SocialFeed = () => {
   const previousPostsLength = useRef(0)
   
   // Verificar se usuário tem acesso a curso
-  const hasCourseAccess = profile && (profile.selectedCourseId !== undefined || profile.purchasedCourses?.length > 0 || isAdmin)
+  // Permitir que usuários autenticados publiquem (mesmo sem curso comprado)
+  const hasCourseAccess = profile && (profile.selectedCourseId !== undefined || profile.purchasedCourses?.length > 0 || isAdmin || profile.hasActiveSubscription)
 
   // Carregar posts em tempo real
   useEffect(() => {

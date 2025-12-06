@@ -52,7 +52,7 @@ const Ranking = () => {
 
   // Carregar progresso de todos os usuários (dias e horas) - filtrado por curso
   useEffect(() => {
-    if (selectedCourseId === null && selectedCourseId !== null) return // Aguardar curso ser carregado
+    if (selectedCourseId === undefined) return // Aguardar curso ser carregado
     
     const progressRef = collection(db, 'progress')
     const unsub = onSnapshot(progressRef, (snapshot) => {
@@ -122,7 +122,7 @@ const Ranking = () => {
 
   // Carregar progresso de cards estudados (filtrado por curso selecionado)
   useEffect(() => {
-    if (!selectedCourseId && selectedCourseId !== null) return // Aguardar curso ser carregado
+    if (selectedCourseId === undefined) return // Aguardar curso ser carregado
     
     const userProgressRef = collection(db, 'userProgress')
     const unsub = onSnapshot(userProgressRef, (snapshot) => {

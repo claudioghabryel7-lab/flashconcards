@@ -297,7 +297,15 @@ const AIChat = () => {
       let pdfText = null
       let courseName = 'o concurso'
       try {
-        const courseId = profile?.selectedCourseId || 'alego-default'
+        // Usar curso selecionado do perfil, ou primeiro curso comprado, ou alego-default
+        let courseId = profile?.selectedCourseId
+        if (!courseId && profile?.purchasedCourses?.length > 0) {
+          courseId = profile.purchasedCourses[0]
+        }
+        courseId = courseId || 'alego-default'
+        
+        console.log('📋 Carregando edital para curso:', courseId, 'do perfil:', profile?.selectedCourseId)
+        
         const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
         const editalDoc = await getDoc(editalRef)
         
