@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, serverTimestamp, collection, onSnapshot } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -32,30 +32,85 @@ const Simulado = () => {
   const [results, setResults] = useState(null)
   const [selectedCourseId, setSelectedCourseId] = useState(null)
   const [courseName, setCourseName] = useState('')
+  const [courseCompetition, setCourseCompetition] = useState('')
+  const [courseMaterias, setCourseMaterias] = useState([]) // Matérias do curso (dos flashcards)
+  const [loadingTip, setLoadingTip] = useState('')
 
-  // Carregar curso selecionado
+  // Dicas durante o carregamento
+  const tips = [
+    'Relaxe e respire fundo',
+    'Leia as questões com atenção',
+    'Não se apresse, você tem tempo',
+    'Confie no seu conhecimento',
+    'Mantenha a calma durante a prova',
+    'Revise suas respostas se sobrar tempo',
+    'Foque no que você sabe',
+    'Não se preocupe com questões difíceis',
+  ]
+
+  useEffect(() => {
+    if (loading || analyzing) {
+      const interval = setInterval(() => {
+        setLoadingTip(tips[Math.floor(Math.random() * tips.length)])
+      }, 3000)
+      return () => clearInterval(interval)
+    } else {
+      setLoadingTip('')
+    }
+  }, [loading, analyzing])
+
+  // Carregar curso selecionado e matérias
   useEffect(() => {
     if (!profile) return
     
     const courseFromProfile = profile.selectedCourseId !== undefined ? profile.selectedCourseId : null
     setSelectedCourseId(courseFromProfile)
     
-    // Carregar nome do curso
-    if (courseFromProfile) {
-      const loadCourseName = async () => {
-        try {
-          const courseDoc = await getDoc(doc(db, 'courses', courseFromProfile))
-          if (courseDoc.exists()) {
-            setCourseName(courseDoc.data().name || courseDoc.data().competition || '')
-          }
-        } catch (err) {
-          console.error('Erro ao carregar nome do curso:', err)
+    const loadCourseData = async () => {
+      try {
+        const courseId = courseFromProfile || 'alego-default'
+        const courseDoc = await getDoc(doc(db, 'courses', courseId))
+        
+        if (courseDoc.exists()) {
+          const courseData = courseDoc.data()
+          setCourseName(courseData.name || courseData.competition || '')
+          setCourseCompetition(courseData.competition || courseData.name || '')
+        } else {
+          setCourseName('ALEGO Policial Legislativo')
+          setCourseCompetition('ALEGO')
         }
+
+        // Carregar matérias do curso (dos flashcards)
+        const cardsRef = collection(db, 'flashcards')
+        const unsub = onSnapshot(cardsRef, (snapshot) => {
+          const cards = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+
+          // Filtrar flashcards do curso
+          const courseCards = courseFromProfile
+            ? cards.filter(card => card.courseId === courseFromProfile)
+            : cards.filter(card => !card.courseId)
+
+          // Extrair matérias únicas
+          const materiasSet = new Set()
+          courseCards.forEach(card => {
+            if (card.materia) {
+              materiasSet.add(card.materia)
+            }
+          })
+          
+          setCourseMaterias(Array.from(materiasSet))
+        })
+
+        return () => unsub()
+      } catch (err) {
+        console.error('Erro ao carregar dados do curso:', err)
       }
-      loadCourseName()
-    } else {
-      setCourseName('ALEGO Policial Legislativo')
     }
+    
+    loadCourseData()
   }, [profile])
 
   // Finalizar simulado
@@ -178,26 +233,38 @@ const Simulado = () => {
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
 
+      // Informações do curso para contexto
+      const courseContext = courseName ? `\n\nCONCURSO ESPECÍFICO: ${courseName}${courseCompetition && courseCompetition !== courseName ? ` (${courseCompetition})` : ''}` : ''
+      const materiasContext = courseMaterias.length > 0 ? `\n\nMATÉRIAS DO CURSO (USE APENAS ESTAS): ${courseMaterias.join(', ')}` : ''
+
       const analysisPrompt = `Você é um especialista em análise de editais de concursos públicos.
+
+${courseContext}
+
+${materiasContext}
+
+⚠️ REGRA CRÍTICA: Use APENAS as matérias listadas acima. NÃO invente matérias que não estão no curso.
 
 Analise o edital abaixo e extraia as seguintes informações sobre a prova:
 
 EDITAL:
 ${editalText.substring(0, 100000)}${editalText.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}
 
-TAREFA: Extrair informações sobre a prova objetiva do concurso:
+TAREFA: Extrair informações sobre a prova objetiva do concurso ${courseName || 'especificado'}:
 
 1. NÚMERO TOTAL DE QUESTÕES da prova objetiva
 2. TEMPO DETERMINADO para a prova (em minutos)
-3. MATÉRIAS que serão cobradas (lista completa)
+3. MATÉRIAS que serão cobradas - APENAS as matérias que estão na lista acima
 4. DISTRIBUIÇÃO DE QUESTÕES por matéria (quantas questões de cada matéria)
 5. DESCRIÇÃO breve do formato da prova
 
 IMPORTANTE:
 - Se o edital não especificar o tempo, use 4 horas (240 minutos) como padrão
 - Se não especificar número de questões, use 50 questões como padrão
-- Liste TODAS as matérias mencionadas no edital
-- Se não houver distribuição específica, distribua igualmente entre as matérias
+- Liste APENAS as matérias que estão na lista de matérias do curso acima
+- NÃO inclua matérias que não estão na lista
+- Se não houver distribuição específica, distribua igualmente entre as matérias do curso
+- Se o edital mencionar outras matérias que não estão na lista, IGNORE-AS
 
 Retorne APENAS um objeto JSON válido no seguinte formato:
 
@@ -272,25 +339,43 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
 
-      // Gerar questões para cada matéria
+      // Filtrar matérias - APENAS as que estão no curso
+      const validMaterias = simuladoInfo.materias.filter(m => 
+        courseMaterias.length === 0 || courseMaterias.includes(m.nome)
+      )
+
+      if (validMaterias.length === 0) {
+        throw new Error(`Nenhuma matéria válida encontrada. Matérias do curso: ${courseMaterias.join(', ') || 'nenhuma'}`)
+      }
+
+      // Gerar questões para cada matéria válida
       const allQuestions = []
       
-      for (const materia of simuladoInfo.materias) {
+      for (const materia of validMaterias) {
+        if (!courseMaterias.includes(materia.nome) && courseMaterias.length > 0) {
+          console.warn(`⚠️ Matéria "${materia.nome}" não está no curso, pulando...`)
+          continue
+        }
+
         const materiaPrompt = `Você é um especialista em criar questões de concursos públicos.
 
-Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}".
+CONCURSO ESPECÍFICO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
 
-${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 50000)}\n\n` : ''}
+Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}" do concurso ${courseName || 'especificado'}.
 
-REGRAS:
+${editalText ? `CONTEXTO DO EDITAL DO CONCURSO ${courseName || ''}:\n${editalText.substring(0, 50000)}\n\n` : ''}
+
+REGRAS CRÍTICAS:
+- Questões devem ser ESPECÍFICAS para o concurso ${courseName || 'mencionado'}
+- Baseie-se EXCLUSIVAMENTE no edital fornecido acima
 - Estilo FGV: questões objetivas, claras, com alternativas bem elaboradas
 - Cada questão deve ter 5 alternativas (A, B, C, D, E)
 - Apenas UMA alternativa está correta
 - As alternativas incorretas devem ser plausíveis (distratores inteligentes)
-- Baseie-se no conteúdo do edital fornecido
 - Questões devem ser FICTÍCIAS (não são questões reais de provas anteriores)
 - Dificuldade: nível FGV (intermediário a avançado)
 - Enunciados claros e objetivos
+- Foque no conteúdo específico do edital deste concurso
 
 FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
 Retorne APENAS um objeto JSON válido:
@@ -389,14 +474,25 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
 
             <div className="space-y-4">
               <p className="text-slate-700 dark:text-slate-300">
-                A IA irá analisar o edital do curso e extrair informações sobre:
+                A IA irá analisar o edital do curso <strong>{courseName || 'selecionado'}</strong> e extrair informações sobre:
               </p>
               <ul className="list-disc list-inside space-y-2 text-slate-600 dark:text-slate-400 ml-4">
                 <li>Número total de questões da prova</li>
                 <li>Tempo determinado para a prova</li>
-                <li>Matérias que serão cobradas</li>
+                <li>Matérias que serão cobradas (apenas do curso)</li>
                 <li>Distribuição de questões por matéria</li>
               </ul>
+
+              {courseMaterias.length > 0 && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <p className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2">
+                    Matérias do curso:
+                  </p>
+                  <p className="text-sm text-blue-600 dark:text-blue-400">
+                    {courseMaterias.join(', ')}
+                  </p>
+                </div>
+              )}
 
               <button
                 onClick={analyzeEdital}
@@ -415,6 +511,14 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
                   </>
                 )}
               </button>
+
+              {analyzing && loadingTip && (
+                <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <p className="text-sm text-green-700 dark:text-green-300 text-center font-medium">
+                    💡 {loadingTip}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -471,6 +575,14 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
                 </>
               )}
             </button>
+
+            {loading && loadingTip && (
+              <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <p className="text-sm text-green-700 dark:text-green-300 text-center font-medium">
+                  💡 {loadingTip}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
