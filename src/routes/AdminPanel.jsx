@@ -6592,8 +6592,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                         <option value="not_contacted">Não contatados</option>
                         <option value="contacted">Contatados</option>
                       </select>
-                    </div>
-                  </div>
+          </div>
+        </div>
 
                   {leads.length === 0 ? (
                     <p className="text-center text-slate-500 dark:text-slate-400 py-8">
