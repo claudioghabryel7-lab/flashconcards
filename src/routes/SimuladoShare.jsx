@@ -594,6 +594,10 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
           console.error('Erro ao enviar email:', emailErr)
           // Não bloquear se o email falhar
         }
+        } catch (emailErr) {
+          console.error('Erro ao enviar email:', emailErr)
+          // Não bloquear se o email falhar
+        }
       }
     } catch (err) {
       console.error('Erro ao salvar resultado:', err)
