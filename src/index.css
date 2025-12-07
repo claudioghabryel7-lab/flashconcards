@@ -1,9 +1,9 @@
+@import './styles/design-system.css';
+@import './styles/stark-design-system.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import './styles/design-system.css';
-@import './styles/stark-design-system.css';
 
 * {
   box-sizing: border-box;

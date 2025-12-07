@@ -54,6 +54,8 @@ const SimuladoShare = () => {
   const navigate = useNavigate()
   const { darkMode } = useDarkMode()
   const [loading, setLoading] = useState(true)
+  const [loadingStatus, setLoadingStatus] = useState('Carregando simulado...')
+  const [loadingProgress, setLoadingProgress] = useState(0)
   const [error, setError] = useState('')
   const [userEmail, setUserEmail] = useState('')
   const [emailSubmitted, setEmailSubmitted] = useState(false)
@@ -91,10 +93,14 @@ const SimuladoShare = () => {
 
       try {
         // Gerar identificador do visitante
+        setLoadingStatus('Gerando identificador...')
+        setLoadingProgress(10)
         const vid = await generateVisitorId()
         setVisitorId(vid)
 
         // Carregar simulado do Firestore
+        setLoadingStatus('Carregando dados do simulado...')
+        setLoadingProgress(30)
         const simuladoRef = doc(db, 'sharedSimulados', simuladoId)
         const simuladoDoc = await getDoc(simuladoRef)
 
@@ -107,6 +113,8 @@ const SimuladoShare = () => {
         const data = simuladoDoc.data()
         
         // Verificar se já tentou
+        setLoadingStatus('Verificando permissões...')
+        setLoadingProgress(50)
         const attempts = data.attempts || []
         const hasAttempted = attempts.some(a => a.visitorId === vid)
         
@@ -123,11 +131,13 @@ const SimuladoShare = () => {
           // Gerar questões agora
           await generateQuestionsForSharedSimulado(data)
         } else {
+          setLoadingStatus('Preparando questões...')
+          setLoadingProgress(80)
           setQuestions(data.questions)
+          setLoadingProgress(100)
+          setTimeLeft((data.simuladoInfo?.tempoMinutos || 240) * 60)
+          setLoading(false)
         }
-        
-        setTimeLeft((data.simuladoInfo?.tempoMinutos || 240) * 60)
-        setLoading(false)
       } catch (err) {
         console.error('Erro ao carregar simulado:', err)
         setError('Erro ao carregar simulado. Tente novamente.')
@@ -189,8 +199,12 @@ const SimuladoShare = () => {
   // Gerar questões para simulado compartilhado (quando não tem questões ainda)
   const generateQuestionsForSharedSimulado = async (simuladoData) => {
     setLoading(true)
+    setLoadingStatus('Carregando configurações...')
+    setLoadingProgress(5)
     try {
       const courseId = simuladoData.courseId || 'alego-default'
+      setLoadingStatus('Carregando edital...')
+      setLoadingProgress(10)
       const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
       const editalDoc = await getDoc(editalRef)
 
@@ -200,6 +214,8 @@ const SimuladoShare = () => {
         editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
       }
 
+      setLoadingStatus('Inicializando gerador de questões...')
+      setLoadingProgress(15)
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
       if (!apiKey) {
         throw new Error('VITE_GEMINI_API_KEY não configurada')
@@ -216,8 +232,15 @@ const SimuladoShare = () => {
       }
 
       const allQuestions = []
+      const totalMaterias = validMaterias.length
       
-      for (const materia of validMaterias) {
+      for (let i = 0; i < validMaterias.length; i++) {
+        const materia = validMaterias[i]
+        const progressBase = 20
+        const progressPerMateria = 70 / totalMaterias
+        const currentProgress = progressBase + (i * progressPerMateria)
+        setLoadingProgress(Math.round(currentProgress))
+        setLoadingStatus(`Gerando questões de ${materia.nome}... (${i + 1}/${totalMaterias})`)
         const materiaPrompt = `Você é um especialista em criar questões de concursos públicos.
 
 CONCURSO ESPECÍFICO: ${simuladoData.courseName || 'Concurso'}
@@ -285,9 +308,13 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       }
 
       // Manter questões organizadas por matéria (sem embaralhar)
+      setLoadingStatus('Organizando questões...')
+      setLoadingProgress(90)
       setQuestions(allQuestions)
       
       // Atualizar simulado no Firestore com as questões geradas
+      setLoadingStatus('Salvando questões...')
+      setLoadingProgress(95)
       try {
         const simuladoRef = doc(db, 'sharedSimulados', simuladoId)
         await updateDoc(simuladoRef, {
@@ -297,6 +324,10 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
         console.error('Erro ao atualizar questões no Firestore (pode ser problema de permissão):', updateErr)
         // Continuar mesmo se não conseguir atualizar (as questões já estão no estado)
       }
+      
+      setLoadingStatus('Finalizando...')
+      setLoadingProgress(100)
+      setTimeLeft((simuladoData.simuladoInfo?.tempoMinutos || 240) * 60)
     } catch (err) {
       console.error('Erro ao gerar questões:', err)
       setError('Erro ao gerar questões do simulado. Tente novamente.')
@@ -594,10 +625,6 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
           console.error('Erro ao enviar email:', emailErr)
           // Não bloquear se o email falhar
         }
-        } catch (emailErr) {
-          console.error('Erro ao enviar email:', emailErr)
-          // Não bloquear se o email falhar
-        }
       }
     } catch (err) {
       console.error('Erro ao salvar resultado:', err)
@@ -621,10 +648,24 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
   // Loading
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-alego-600 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-slate-600 dark:text-slate-400">Carregando simulado...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 dark:from-slate-900 dark:to-slate-800 p-4">
+        <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-alego-600 border-t-transparent mx-auto mb-6"></div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Carregando Simulado</h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-6">{loadingStatus}</p>
+          
+          {/* Barra de progresso */}
+          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3 mb-2">
+            <div
+              className="bg-gradient-to-r from-alego-600 to-alego-700 h-3 rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${loadingProgress}%` }}
+            />
+          </div>
+          
+          {/* Porcentagem */}
+          <p className="text-sm font-semibold text-alego-600 dark:text-alego-400">
+            {loadingProgress}%
+          </p>
         </div>
       </div>
     )
