@@ -333,24 +333,57 @@ const SimuladoShare = () => {
         
         const materiaPrompt = `Você é um especialista em criar questões de concursos públicos.
 
+═══════════════════════════════════════════════════════════════════════════════
+🚨 REGRA CRÍTICA ABSOLUTA - LEIA COM MUITA ATENÇÃO 🚨
+═══════════════════════════════════════════════════════════════════════════════
+
 CONCURSO ESPECÍFICO: ${simuladoData.courseName || 'Concurso'}
+CURSO ID: ${courseId}
+
+⚠️⚠️⚠️ PROIBIÇÃO ABSOLUTA ⚠️⚠️⚠️
+- NÃO use conteúdo de OUTROS concursos
+- NÃO use conhecimento genérico de concursos públicos
+- NÃO invente conteúdo que não esteja nos flashcards ou edital deste curso específico
+- NÃO misture informações de diferentes concursos
+- NÃO use exemplos ou contextos de outros cursos
+- NÃO use questões ou temas de outros concursos públicos
+
+✅✅✅ O QUE VOCÊ DEVE FAZER ✅✅✅
+- Use APENAS o conteúdo dos flashcards deste curso específico (${simuladoData.courseName || courseId})
+- Use APENAS o edital deste curso específico
+- Use APENAS o link de referência deste curso específico
+- Crie questões ESPECÍFICAS para ${simuladoData.courseName || courseId}
+- Baseie-se EXCLUSIVAMENTE no contexto fornecido abaixo
+- Cada questão DEVE estar relacionada APENAS a este curso
+
+═══════════════════════════════════════════════════════════════════════════════
 
 ${flashcardsContext}
 
 ${flashcardsText}
 
 REGRAS CRÍTICAS PARA CRIAÇÃO DAS QUESTÕES:
-1. BASEIE-SE PRINCIPALMENTE nos flashcards acima - as questões devem testar o conhecimento presente nos flashcards
-2. Use o conteúdo dos flashcards como referência principal para criar questões relacionadas
-3. As questões devem cobrir os mesmos tópicos e conceitos presentes nos flashcards
+1. BASEIE-SE EXCLUSIVAMENTE nos flashcards acima - APENAS flashcards do curso ${simuladoData.courseName || courseId}
+2. Use o conteúdo dos flashcards como ÚNICA referência para criar questões
+3. As questões devem testar APENAS o conhecimento presente nos flashcards deste curso
 4. Se houver flashcards específicos da matéria "${materia.nome}", use APENAS esses como base
-5. Se não houver flashcards específicos da matéria, use os flashcards gerais do curso
-
-Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}".
+5. Se não houver flashcards específicos da matéria, use APENAS os flashcards gerais deste curso
+6. NÃO use conhecimento de outros cursos ou concursos genéricos
+7. NÃO invente conteúdo que não esteja nos flashcards ou edital acima
 
 ${linkContext}
 
-${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 30000)}\n\n` : ''}
+${editalText ? `CONTEXTO DO EDITAL DO CONCURSO ${simuladoData.courseName || courseId} (USE APENAS ESTE EDITAL):\n${editalText.substring(0, 30000)}\n\n` : ''}
+
+INSTRUÇÕES FINAIS:
+- Questões devem ser ESPECÍFICAS para ${simuladoData.courseName || courseId}
+- NÃO use conteúdo de outros concursos
+- NÃO invente informações que não estejam nos flashcards ou edital acima
+- Cada questão deve testar conhecimento presente nos flashcards deste curso
+
+Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}" do concurso ${simuladoData.courseName || courseId}.
+
+Lembre-se: Use APENAS o contexto fornecido acima. NÃO use conhecimento de outros cursos.
 
 REGRAS CRÍTICAS:
 - Questões devem ser ESPECÍFICAS para o concurso ${simuladoData.courseName || 'mencionado'}
@@ -508,12 +541,40 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
 
-      const themePrompt = `Crie um tema de redação para o concurso ${simuladoData?.courseName || 'mencionado'}.
+      const themePrompt = `Você é um especialista em criar temas de redação para concursos públicos.
+
+═══════════════════════════════════════════════════════════════════════════════
+🚨 REGRA CRÍTICA ABSOLUTA - LEIA COM MUITA ATENÇÃO 🚨
+═══════════════════════════════════════════════════════════════════════════════
+
+CONCURSO ESPECÍFICO: ${simuladoData?.courseName || 'Concurso'}
+CURSO ID: ${courseId}
+
+⚠️⚠️⚠️ PROIBIÇÃO ABSOLUTA ⚠️⚠️⚠️
+- NÃO use temas de OUTROS concursos
+- NÃO use temas genéricos de concursos públicos
+- NÃO invente temas que não estejam relacionados a este curso específico
+- NÃO misture informações de diferentes concursos
+- NÃO use temas típicos de outros concursos
+
+✅✅✅ O QUE VOCÊ DEVE FAZER ✅✅✅
+- Crie um tema ESPECÍFICO para ${simuladoData?.courseName || courseId}
+- Baseie-se EXCLUSIVAMENTE no contexto deste curso
+- O tema deve estar relacionado ao concurso ${simuladoData?.courseName || courseId}
 
 ${linkContext}
 
-Retorne APENAS o tema, sem explicações, sem aspas, sem formatação especial.
-O tema deve ser claro e direto, relacionado ao concurso mencionado.`
+INSTRUÇÕES:
+- O tema deve ser ESPECÍFICO para ${simuladoData?.courseName || courseId}
+- Deve estar relacionado com questões sociais, políticas ou administrativas pertinentes a este curso específico
+- NÃO use temas genéricos ou de outros concursos
+- O tema deve permitir uma dissertação argumentativa de 25-30 linhas
+- Baseie-se APENAS no contexto deste curso
+
+Retorne APENAS o tema da redação, sem explicações, sem aspas, sem formatação especial.
+O tema deve ser claro e direto, relacionado APENAS ao concurso ${simuladoData?.courseName || courseId}.
+
+CRÍTICO: Retorne APENAS o tema, nada mais.`
 
       const result = await model.generateContent(themePrompt)
       let theme = result.response.text().trim()

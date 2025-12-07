@@ -5,6 +5,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import CourseAdScreen from '../components/CourseAdScreen'
 import {
   ClockIcon,
   CheckCircleIcon,
@@ -41,6 +42,7 @@ const Simulado = () => {
   const [questionsToReview, setQuestionsToReview] = useState([]) // Questões para revisar
   const [regeneratingQuestion, setRegeneratingQuestion] = useState(null) // ID da questão sendo regenerada
   const [questionFeedback, setQuestionFeedback] = useState({}) // Feedback por questão
+  const [message, setMessage] = useState('') // Mensagens de feedback
   
   // Estados para redação
   const [showRedacao, setShowRedacao] = useState(false)
@@ -66,122 +68,7 @@ const Simulado = () => {
   ]
 
   useEffect(() => {
-    // Tela de revisão de questões (admin)
-  if (showQuestionReview && profile?.role === 'admin') {
-    return (
-      <div className="min-h-screen py-8">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className={`rounded-2xl p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg mb-6`}>
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h1 className="text-2xl font-bold text-alego-600 mb-2">Revisão de Questões</h1>
-                <p className="text-slate-600 dark:text-slate-400">
-                  Revise todas as questões antes de compartilhar o simulado. Se alguma questão estiver errada ou não estiver de acordo com o curso/edital, você pode regenerá-la.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowQuestionReview(false)}
-                className="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
-              >
-                Voltar
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              {questionsToReview.map((question, index) => (
-                <div
-                  key={index}
-                  className={`rounded-xl p-6 border-2 ${
-                    darkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="px-3 py-1 rounded-lg bg-alego-600 text-white font-semibold text-sm">
-                          Questão {index + 1}
-                        </span>
-                        <span className="px-3 py-1 rounded-lg bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 text-sm">
-                          {question.materia || 'Geral'}
-                        </span>
-                      </div>
-                      <h3 className="text-lg font-semibold mb-3 mt-2">{question.enunciado}</h3>
-                      
-                      <div className="space-y-2 mb-4">
-                        {Object.entries(question.alternativas || {}).map(([letra, texto]) => (
-                          <div
-                            key={letra}
-                            className={`p-3 rounded-lg ${
-                              letra === question.correta
-                                ? 'bg-green-100 dark:bg-green-900 border-2 border-green-500'
-                                : darkMode ? 'bg-slate-600' : 'bg-white'
-                            }`}
-                          >
-                            <span className="font-bold text-alego-600 mr-2">{letra})</span>
-                            <span className={letra === question.correta ? 'font-semibold text-green-700 dark:text-green-300' : ''}>
-                              {texto}
-                              {letra === question.correta && ' ✓'}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-4 border-t border-slate-300 dark:border-slate-600">
-                    <label className="block text-sm font-semibold mb-2">
-                      Se a questão estiver errada, informe o motivo:
-                    </label>
-                    <textarea
-                      value={questionFeedback[index] || ''}
-                      onChange={(e) => setQuestionFeedback({ ...questionFeedback, [index]: e.target.value })}
-                      placeholder="Ex: A questão não está de acordo com o edital, está muito genérica, não testa o conhecimento dos flashcards, etc..."
-                      rows={3}
-                      className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 mb-3"
-                    />
-                    <button
-                      onClick={() => regenerateQuestion(index, questionFeedback[index])}
-                      disabled={!questionFeedback[index]?.trim() || regeneratingQuestion === index}
-                      className="px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {regeneratingQuestion === index ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                          Regenerando...
-                        </>
-                      ) : (
-                        <>
-                          🔄 Regenerar Questão
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-8 flex gap-4">
-              <button
-                onClick={() => setShowQuestionReview(false)}
-                className="flex-1 px-6 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 font-semibold"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={shareReviewedSimulado}
-                className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800 font-semibold flex items-center justify-center gap-2"
-              >
-                <ShareIcon className="h-5 w-5" />
-                Aprovar e Compartilhar
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (loading || analyzing) {
+    if (loading || analyzing) {
       const interval = setInterval(() => {
         setLoadingTip(tips[Math.floor(Math.random() * tips.length)])
       }, 3000)
@@ -894,33 +781,57 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
 
         const materiaPrompt = `Você é um especialista em criar questões de concursos públicos.
 
-CONCURSO ESPECÍFICO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
+═══════════════════════════════════════════════════════════════════════════════
+🚨 REGRA CRÍTICA ABSOLUTA - LEIA COM MUITA ATENÇÃO 🚨
+═══════════════════════════════════════════════════════════════════════════════
 
-⚠️ ATENÇÃO CRÍTICA: Este simulado é para o concurso ${courseName || 'especificado'}${courseCompetition ? ` (${courseCompetition})` : ''}. 
-Você DEVE criar questões ESPECÍFICAS para este concurso, baseadas PRINCIPALMENTE nos flashcards do curso.
+CONCURSO ESPECÍFICO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
+CURSO ID: ${courseId}
+
+⚠️⚠️⚠️ PROIBIÇÃO ABSOLUTA ⚠️⚠️⚠️
+- NÃO use conteúdo de OUTROS concursos
+- NÃO use conhecimento genérico de concursos públicos
+- NÃO invente conteúdo que não esteja nos flashcards ou edital deste curso específico
+- NÃO misture informações de diferentes concursos
+- NÃO use exemplos ou contextos de outros cursos
+- NÃO use questões ou temas de outros concursos públicos
+
+✅✅✅ O QUE VOCÊ DEVE FAZER ✅✅✅
+- Use APENAS o conteúdo dos flashcards deste curso específico (${courseName || courseId})
+- Use APENAS o edital deste curso específico
+- Use APENAS o link de referência deste curso específico
+- Crie questões ESPECÍFICAS para ${courseName || courseId}
+- Baseie-se EXCLUSIVAMENTE no contexto fornecido abaixo
+- Cada questão DEVE estar relacionada APENAS a este curso
+
+═══════════════════════════════════════════════════════════════════════════════
 
 ${flashcardsContext}
 
 ${flashcardsText}
 
 REGRAS CRÍTICAS PARA CRIAÇÃO DAS QUESTÕES:
-1. BASEIE-SE PRINCIPALMENTE nos flashcards acima - as questões devem testar o conhecimento presente nos flashcards
-2. Use o conteúdo dos flashcards como referência principal para criar questões relacionadas
-3. As questões devem cobrir os mesmos tópicos e conceitos presentes nos flashcards
+1. BASEIE-SE EXCLUSIVAMENTE nos flashcards acima - APENAS flashcards do curso ${courseName || courseId}
+2. Use o conteúdo dos flashcards como ÚNICA referência para criar questões
+3. As questões devem testar APENAS o conhecimento presente nos flashcards deste curso
 4. Se houver flashcards específicos da matéria "${materia.nome}", use APENAS esses como base
-5. Se não houver flashcards específicos da matéria, use os flashcards gerais do curso
-
-INSTRUÇÕES ESPECIAIS:
-- Se você tiver conhecimento sobre este concurso específico (de plataformas como GRAN, QConcurso, Estratégia Concursos, etc), use esse conhecimento
-- Considere o estilo da banca examinadora deste concurso
-- Questões devem refletir o nível de dificuldade e formato típico deste concurso
-- Use terminologia e contexto específicos deste concurso quando aplicável
-
-Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}" do concurso ${courseName || 'especificado'}${courseCompetition ? ` (${courseCompetition})` : ''}.
+5. Se não houver flashcards específicos da matéria, use APENAS os flashcards gerais deste curso
+6. NÃO use conhecimento de outros cursos ou concursos genéricos
+7. NÃO invente conteúdo que não esteja nos flashcards ou edital acima
 
 ${linkContext}
 
-${editalText ? `CONTEXTO DO EDITAL DO CONCURSO ${courseName || ''}:\n${editalText.substring(0, 30000)}\n\n` : ''}
+${editalText ? `CONTEXTO DO EDITAL DO CONCURSO ${courseName || courseId} (USE APENAS ESTE EDITAL):\n${editalText.substring(0, 30000)}\n\n` : ''}
+
+INSTRUÇÕES FINAIS:
+- Questões devem ser ESPECÍFICAS para ${courseName || courseId}
+- NÃO use conteúdo de outros concursos
+- NÃO invente informações que não estejam nos flashcards ou edital acima
+- Cada questão deve testar conhecimento presente nos flashcards deste curso
+
+Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}" do concurso ${courseName || courseId}${courseCompetition ? ` (${courseCompetition})` : ''}.
+
+Lembre-se: Use APENAS o contexto fornecido acima. NÃO use conhecimento de outros cursos.
 
 REGRAS CRÍTICAS:
 - Questões devem ser ESPECÍFICAS para o concurso ${courseName || 'mencionado'}
@@ -988,8 +899,37 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
         throw new Error('Nenhuma questão foi gerada. Tente novamente.')
       }
 
-      // Manter questões organizadas por matéria (sem embaralhar)
-      setQuestions(allQuestions)
+      // Organizar questões por matéria na ordem definida no simuladoInfo
+      const organizedQuestions = []
+      const questionsByMateria = {}
+      
+      // Agrupar questões por matéria
+      allQuestions.forEach(question => {
+        const materia = question.materia || 'Outras'
+        if (!questionsByMateria[materia]) {
+          questionsByMateria[materia] = []
+        }
+        questionsByMateria[materia].push(question)
+      })
+      
+      // Organizar na ordem das matérias do simuladoInfo
+      if (simuladoInfo && simuladoInfo.materias) {
+        simuladoInfo.materias.forEach(materiaInfo => {
+          const materiaNome = materiaInfo.nome
+          if (questionsByMateria[materiaNome]) {
+            organizedQuestions.push(...questionsByMateria[materiaNome])
+            delete questionsByMateria[materiaNome]
+          }
+        })
+      }
+      
+      // Adicionar questões de matérias que não estão no simuladoInfo (caso existam)
+      Object.values(questionsByMateria).forEach(materiaQuestions => {
+        organizedQuestions.push(...materiaQuestions)
+      })
+
+      // Definir questões organizadas por matéria
+      setQuestions(organizedQuestions)
       setTimeLeft(simuladoInfo.tempoMinutos * 60)
       setIsRunning(true)
       setCurrentQuestionIndex(0)
@@ -1059,7 +999,28 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
 
       const regeneratePrompt = `Você é um especialista em criar questões de concursos públicos.
 
+═══════════════════════════════════════════════════════════════════════════════
+🚨 REGRA CRÍTICA ABSOLUTA - LEIA COM MUITA ATENÇÃO 🚨
+═══════════════════════════════════════════════════════════════════════════════
+
 CONCURSO ESPECÍFICO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
+CURSO ID: ${courseId}
+
+⚠️⚠️⚠️ PROIBIÇÃO ABSOLUTA ⚠️⚠️⚠️
+- NÃO use conteúdo de OUTROS concursos
+- NÃO use conhecimento genérico de concursos públicos
+- NÃO invente conteúdo que não esteja nos flashcards ou edital deste curso específico
+- NÃO misture informações de diferentes concursos
+- NÃO use exemplos ou contextos de outros cursos
+
+✅✅✅ O QUE VOCÊ DEVE FAZER ✅✅✅
+- Use APENAS o conteúdo dos flashcards deste curso específico (${courseName || courseId})
+- Use APENAS o edital deste curso específico
+- Use APENAS o link de referência deste curso específico
+- Crie questões ESPECÍFICAS para ${courseName || courseId}
+- Baseie-se EXCLUSIVAMENTE no contexto fornecido abaixo
+
+═══════════════════════════════════════════════════════════════════════════════
 
 ${window.flashcardsContext || ''}
 
@@ -1067,7 +1028,7 @@ ${flashcardsText}
 
 ${linkContext}
 
-${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 30000)}\n\n` : ''}
+${editalText ? `CONTEXTO DO EDITAL DO CONCURSO ${courseName || courseId} (USE APENAS ESTE EDITAL):\n${editalText.substring(0, 30000)}\n\n` : ''}
 
 ⚠️ QUESTÃO ANTERIOR QUE FOI REJEITADA:
 Enunciado: ${question.enunciado}
@@ -1080,10 +1041,11 @@ ${feedback}
 REGRAS CRÍTICAS:
 1. A questão anterior foi REJEITADA pelo administrador pelo motivo acima
 2. Você DEVE criar uma NOVA questão completamente diferente
-3. A nova questão DEVE estar de acordo com o curso ${courseName || 'mencionado'} e o edital
-4. BASEIE-SE nos flashcards acima como referência principal
-5. A questão deve ser ESPECÍFICA para este concurso, não genérica
+3. A nova questão DEVE estar de acordo APENAS com o curso ${courseName || courseId} e o edital
+4. BASEIE-SE EXCLUSIVAMENTE nos flashcards acima como referência principal
+5. A questão deve ser ESPECÍFICA para este concurso ${courseName || courseId}, não genérica
 6. Use o feedback do administrador para evitar os mesmos erros
+7. NÃO use conteúdo de outros concursos
 
 Crie APENAS UMA questão FICTÍCIA de múltipla escolha no estilo FGV para a matéria "${materia}".
 
@@ -1225,6 +1187,170 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
   const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0
   const answeredCount = Object.keys(answers).length
 
+  // Calcular informações por matéria para exibição
+  const getMateriaInfo = () => {
+    if (!simuladoInfo || !simuladoInfo.materias || questions.length === 0) return null
+    
+    let currentMateriaStartIndex = 0
+    let currentMateria = null
+    let currentMateriaIndex = 0
+    
+    for (let i = 0; i < simuladoInfo.materias.length; i++) {
+      const materia = simuladoInfo.materias[i]
+      const materiaQuestions = questions.filter(q => q.materia === materia.nome)
+      
+      if (currentQuestionIndex >= currentMateriaStartIndex && 
+          currentQuestionIndex < currentMateriaStartIndex + materiaQuestions.length) {
+        currentMateria = materia
+        currentMateriaIndex = i + 1
+        break
+      }
+      
+      currentMateriaStartIndex += materiaQuestions.length
+    }
+    
+    if (!currentMateria) {
+      // Se não encontrou, usar a matéria da questão atual
+      currentMateria = { nome: currentQuestion?.materia || 'Geral', quantidadeQuestoes: 0 }
+    }
+    
+    const materiaQuestions = questions.filter(q => q.materia === currentMateria.nome)
+    const materiaStartIndex = questions.findIndex(q => q.materia === currentMateria.nome)
+    const materiaQuestionNumber = currentQuestionIndex - materiaStartIndex + 1
+    
+    return {
+      materia: currentMateria,
+      materiaIndex: currentMateriaIndex,
+      totalMaterias: simuladoInfo.materias.length,
+      materiaQuestionNumber,
+      totalMateriaQuestions: materiaQuestions.length,
+      materiaStartIndex
+    }
+  }
+  
+  const materiaInfo = getMateriaInfo()
+
+  // Tela de revisão de questões (admin) - DEVE estar antes de outros returns
+  if (showQuestionReview && profile?.role === 'admin') {
+    return (
+      <div className="min-h-screen py-8">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className={`rounded-2xl p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg mb-6`}>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-2xl font-bold text-alego-600 mb-2">Revisão de Questões</h1>
+                <p className="text-slate-600 dark:text-slate-400">
+                  Revise todas as questões antes de compartilhar o simulado. Se alguma questão estiver errada ou não estiver de acordo com o curso/edital, você pode regenerá-la.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowQuestionReview(false)}
+                className="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+              >
+                Voltar
+              </button>
+            </div>
+
+            {message && (
+              <div className={`mb-4 p-3 rounded-lg ${message.includes('✅') ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'}`}>
+                {message}
+              </div>
+            )}
+
+            <div className="space-y-6">
+              {questionsToReview.map((question, index) => (
+                <div
+                  key={index}
+                  className={`rounded-xl p-6 border-2 ${
+                    darkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="px-3 py-1 rounded-lg bg-alego-600 text-white font-semibold text-sm">
+                          Questão {index + 1}
+                        </span>
+                        <span className="px-3 py-1 rounded-lg bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 text-sm">
+                          {question.materia || 'Geral'}
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-semibold mb-3 mt-2">{question.enunciado}</h3>
+                      
+                      <div className="space-y-2 mb-4">
+                        {Object.entries(question.alternativas || {}).map(([letra, texto]) => (
+                          <div
+                            key={letra}
+                            className={`p-3 rounded-lg ${
+                              letra === question.correta
+                                ? 'bg-green-100 dark:bg-green-900 border-2 border-green-500'
+                                : darkMode ? 'bg-slate-600' : 'bg-white'
+                            }`}
+                          >
+                            <span className="font-bold text-alego-600 mr-2">{letra})</span>
+                            <span className={letra === question.correta ? 'font-semibold text-green-700 dark:text-green-300' : ''}>
+                              {texto}
+                              {letra === question.correta && ' ✓'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-slate-300 dark:border-slate-600">
+                    <label className="block text-sm font-semibold mb-2">
+                      Se a questão estiver errada, informe o motivo:
+                    </label>
+                    <textarea
+                      value={questionFeedback[index] || ''}
+                      onChange={(e) => setQuestionFeedback({ ...questionFeedback, [index]: e.target.value })}
+                      placeholder="Ex: A questão não está de acordo com o edital, está muito genérica, não testa o conhecimento dos flashcards, etc..."
+                      rows={3}
+                      className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 mb-3"
+                    />
+                    <button
+                      onClick={() => regenerateQuestion(index, questionFeedback[index])}
+                      disabled={!questionFeedback[index]?.trim() || regeneratingQuestion === index}
+                      className="px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {regeneratingQuestion === index ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                          Regenerando...
+                        </>
+                      ) : (
+                        <>
+                          🔄 Regenerar Questão
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 flex gap-4">
+              <button
+                onClick={() => setShowQuestionReview(false)}
+                className="flex-1 px-6 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={shareReviewedSimulado}
+                className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800 font-semibold flex items-center justify-center gap-2"
+              >
+                <ShareIcon className="h-5 w-5" />
+                Aprovar e Compartilhar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Tela de análise do edital
   if (!simuladoInfo && !analyzing) {
     return (
@@ -1325,20 +1451,39 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
             <div className="flex flex-col sm:flex-row gap-3">
               {profile?.role === 'admin' && (
                 <button
-                  onClick={() => {
-                    // Abrir tela de revisão de questões
-                    setQuestionsToReview([...questions])
-                    setShowQuestionReview(true)
+                  onClick={async () => {
+                    // Primeiro gerar as questões, depois abrir revisão
+                    if (questions.length === 0) {
+                      // Gerar questões primeiro
+                      await generateSimulado()
+                      // Aguardar um pouco para as questões serem geradas
+                      setTimeout(() => {
+                        if (questions.length > 0) {
+                          setQuestionsToReview([...questions])
+                          setShowQuestionReview(true)
+                        }
+                      }, 1000)
+                    } else {
+                      // Se já tem questões, abrir revisão direto
+                      setQuestionsToReview([...questions])
+                      setShowQuestionReview(true)
+                    }
                   }}
-                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl transition-all"
+                  disabled={loading}
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ShareIcon className="h-5 w-5" />
-                  Revisar e Compartilhar Simulado
+                  {loading ? 'Gerando questões...' : 'Revisar e Compartilhar Simulado'}
                 </button>
               )}
               <button
                 onClick={() => {
-                  setShowAdScreen(true)
+                  if (questions.length === 0) {
+                    setShowAdScreen(true)
+                  } else {
+                    // Se já tem questões, iniciar direto
+                    setIsRunning(true)
+                  }
                 }}
                 disabled={loading}
                 className="flex-1 bg-alego-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -1675,18 +1820,42 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-            Questão {currentQuestionIndex + 1} de {questions.length} • {answeredCount} respondidas
-          </p>
+          <div className="mt-2 space-y-1">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Questão {currentQuestionIndex + 1} de {questions.length} • {answeredCount} respondidas
+            </p>
+            {materiaInfo && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold px-2 py-1 rounded bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300">
+                  {materiaInfo.materia.nome}
+                </span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  Questão {materiaInfo.materiaQuestionNumber} de {materiaInfo.totalMateriaQuestions} desta matéria
+                </span>
+                {materiaInfo.totalMaterias > 1 && (
+                  <span className="text-xs text-slate-400 dark:text-slate-500">
+                    • Matéria {materiaInfo.materiaIndex} de {materiaInfo.totalMaterias}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Questão atual */}
         {currentQuestion && (
           <div className={`rounded-xl p-6 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
             <div className="mb-4">
-              <span className="text-sm text-slate-500 dark:text-slate-400">
-                {currentQuestion.materia}
-              </span>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300">
+                  {currentQuestion.materia}
+                </span>
+                {materiaInfo && materiaInfo.totalMaterias > 1 && (
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    Matéria {materiaInfo.materiaIndex} de {materiaInfo.totalMaterias}
+                  </span>
+                )}
+              </div>
               <h2 className="text-xl font-bold mt-2">{currentQuestion.enunciado}</h2>
             </div>
 
