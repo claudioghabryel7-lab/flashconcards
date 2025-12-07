@@ -15,6 +15,7 @@ import {
   ArrowRightIcon,
   ArrowLeftIcon,
   TrophyIcon,
+  ArrowDownIcon,
 } from '@heroicons/react/24/outline'
 
 // Função para gerar identificador único do visitante
@@ -82,6 +83,21 @@ const SimuladoShare = () => {
   const [redacaoNota, setRedacaoNota] = useState(null)
   const [analizingRedacao, setAnalizingRedacao] = useState(false)
   const [showAdScreen, setShowAdScreen] = useState(false)
+  const redacaoTextareaRef = useRef(null)
+
+  // Função para detectar parágrafos (4 espaços no início da linha)
+  const detectParagraphs = (text) => {
+    if (!text) return 0
+    const lines = text.split('\n')
+    let paragraphCount = 0
+    lines.forEach((line) => {
+      // Verifica se a linha começa com exatamente 4 espaços (não mais, não menos)
+      if (line.length >= 4 && line.substring(0, 4) === '    ' && (line.length === 4 || line[4] !== ' ')) {
+        paragraphCount++
+      }
+    })
+    return paragraphCount
+  }
 
   // Carregar simulado e verificar tentativas
   useEffect(() => {
@@ -983,6 +999,8 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
   if (showRedacao && !isFinished) {
     const wordCount = redacaoTexto.trim() ? redacaoTexto.trim().split(/\s+/).length : 0
     const charCount = redacaoTexto.length
+    const paragraphCount = detectParagraphs(redacaoTexto)
+    const lines = redacaoTexto.split('\n').length
 
     return (
       <div className="min-h-screen py-4">
@@ -1005,6 +1023,8 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
             <div className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400 mt-2">
               <span>{charCount} caracteres</span>
               <span>{wordCount} palavras</span>
+              <span>{paragraphCount} parágrafos</span>
+              <span>{lines} linhas</span>
             </div>
           </div>
 
@@ -1013,19 +1033,67 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
             <p className="text-lg font-medium text-slate-700 dark:text-slate-300">
               {redacaoTema || 'Carregando tema...'}
             </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+              Escreva uma dissertação argumentativa de 25 a 30 linhas sobre o tema proposto.
+            </p>
+            <p className="text-sm text-alego-600 dark:text-alego-400 mt-2 font-semibold">
+              💡 Dica: Use 4 espaços no início de uma linha para criar um parágrafo.
+            </p>
           </div>
 
           <div className={`rounded-xl p-6 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
-            <label className="block text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">
-              Sua Redação
-            </label>
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                Sua Redação
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const textarea = redacaoTextareaRef.current
+                  if (!textarea) return
+                  const start = textarea.selectionStart
+                  const end = textarea.selectionEnd
+                  const textBefore = redacaoTexto.substring(0, start)
+                  const textAfter = redacaoTexto.substring(end)
+                  const newText = textBefore + '\n' + textAfter
+                  setRedacaoTexto(newText)
+                  setTimeout(() => {
+                    const newPosition = start + 1
+                    textarea.focus()
+                    textarea.setSelectionRange(newPosition, newPosition)
+                  }, 0)
+                }}
+                disabled={analizingRedacao || redacaoTimeLeft === 0}
+                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Inserir quebra de linha"
+              >
+                <ArrowDownIcon className="h-4 w-4" />
+                Quebra de Linha
+              </button>
+            </div>
             <textarea
+              ref={redacaoTextareaRef}
               value={redacaoTexto}
               onChange={(e) => setRedacaoTexto(e.target.value)}
-              placeholder="Comece a escrever sua redação aqui..."
-              className="w-full h-96 p-4 rounded-lg border-2 border-slate-300 dark:border-slate-600 focus:border-alego-500 focus:outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-base leading-relaxed resize-none"
+              placeholder="Comece a escrever sua redação aqui...
+
+Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
+
+    Exemplo: Este é um parágrafo porque começa com 4 espaços."
+              className="w-full h-96 p-4 rounded-lg border-2 border-slate-300 dark:border-slate-600 focus:border-alego-500 focus:outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-base leading-relaxed resize-none font-serif font-mono"
               disabled={analizingRedacao || redacaoTimeLeft === 0}
+              style={{
+                tabSize: 4,
+              }}
             />
+            <div className="mt-4 flex items-center justify-between text-sm">
+              <span className="text-slate-500 dark:text-slate-400">
+                Mínimo recomendado: 25 linhas | Parágrafos: {paragraphCount}
+              </span>
+              <span className={`font-semibold ${wordCount < 200 ? 'text-orange-500' : wordCount > 500 ? 'text-blue-500' : 'text-green-500'}`}>
+                {wordCount >= 200 && wordCount <= 500 ? '✓ Tamanho adequado' : wordCount < 200 ? '⚠ Muito curta' : '⚠ Muito longa'}
+              </span>
+            </div>
           </div>
 
           <button
@@ -1041,7 +1109,7 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
             ) : (
               <>
                 <TrophyIcon className="h-5 w-5" />
-                Finalizar Redação
+                Finalizar e Ver Resultado
               </>
             )}
           </button>
