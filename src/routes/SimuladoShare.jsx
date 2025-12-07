@@ -126,18 +126,21 @@ const SimuladoShare = () => {
 
         setSimuladoData(data)
         
-        // Se não tem questões, precisa gerar (simulado compartilhado antes de fazer)
-        if (!data.questions || data.questions.length === 0) {
-          // Gerar questões agora
-          await generateQuestionsForSharedSimulado(data)
-        } else {
-          setLoadingStatus('Preparando questões...')
-          setLoadingProgress(80)
-          setQuestions(data.questions)
-          setLoadingProgress(100)
-          setTimeLeft((data.simuladoInfo?.tempoMinutos || 240) * 60)
+        // Se o simulado foi revisado pelo admin, usar as questões aprovadas
+        // Se não tem questões ou não foi revisado, não permitir acesso (admin deve revisar primeiro)
+        if (!data.questions || data.questions.length === 0 || !data.reviewed) {
+          setError('Este simulado ainda não foi revisado e aprovado pelo administrador. Por favor, aguarde.')
           setLoading(false)
+          return
         }
+        
+        // Usar questões já aprovadas pelo admin
+        setLoadingStatus('Carregando questões aprovadas...')
+        setLoadingProgress(90)
+        setQuestions(data.questions)
+        setLoadingProgress(100)
+        setTimeLeft((data.simuladoInfo?.tempoMinutos || 240) * 60)
+        setLoading(false)
       } catch (err) {
         console.error('Erro ao carregar simulado:', err)
         setError('Erro ao carregar simulado. Tente novamente.')

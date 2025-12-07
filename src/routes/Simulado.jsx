@@ -37,6 +37,10 @@ const Simulado = () => {
   const [courseCompetition, setCourseCompetition] = useState('')
   const [courseMaterias, setCourseMaterias] = useState([]) // Matérias do curso (dos flashcards)
   const [loadingTip, setLoadingTip] = useState('')
+  const [showQuestionReview, setShowQuestionReview] = useState(false) // Mostrar tela de revisão
+  const [questionsToReview, setQuestionsToReview] = useState([]) // Questões para revisar
+  const [regeneratingQuestion, setRegeneratingQuestion] = useState(null) // ID da questão sendo regenerada
+  const [questionFeedback, setQuestionFeedback] = useState({}) // Feedback por questão
   
   // Estados para redação
   const [showRedacao, setShowRedacao] = useState(false)
@@ -62,7 +66,122 @@ const Simulado = () => {
   ]
 
   useEffect(() => {
-    if (loading || analyzing) {
+    // Tela de revisão de questões (admin)
+  if (showQuestionReview && profile?.role === 'admin') {
+    return (
+      <div className="min-h-screen py-8">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className={`rounded-2xl p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg mb-6`}>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-2xl font-bold text-alego-600 mb-2">Revisão de Questões</h1>
+                <p className="text-slate-600 dark:text-slate-400">
+                  Revise todas as questões antes de compartilhar o simulado. Se alguma questão estiver errada ou não estiver de acordo com o curso/edital, você pode regenerá-la.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowQuestionReview(false)}
+                className="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+              >
+                Voltar
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {questionsToReview.map((question, index) => (
+                <div
+                  key={index}
+                  className={`rounded-xl p-6 border-2 ${
+                    darkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="px-3 py-1 rounded-lg bg-alego-600 text-white font-semibold text-sm">
+                          Questão {index + 1}
+                        </span>
+                        <span className="px-3 py-1 rounded-lg bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 text-sm">
+                          {question.materia || 'Geral'}
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-semibold mb-3 mt-2">{question.enunciado}</h3>
+                      
+                      <div className="space-y-2 mb-4">
+                        {Object.entries(question.alternativas || {}).map(([letra, texto]) => (
+                          <div
+                            key={letra}
+                            className={`p-3 rounded-lg ${
+                              letra === question.correta
+                                ? 'bg-green-100 dark:bg-green-900 border-2 border-green-500'
+                                : darkMode ? 'bg-slate-600' : 'bg-white'
+                            }`}
+                          >
+                            <span className="font-bold text-alego-600 mr-2">{letra})</span>
+                            <span className={letra === question.correta ? 'font-semibold text-green-700 dark:text-green-300' : ''}>
+                              {texto}
+                              {letra === question.correta && ' ✓'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-slate-300 dark:border-slate-600">
+                    <label className="block text-sm font-semibold mb-2">
+                      Se a questão estiver errada, informe o motivo:
+                    </label>
+                    <textarea
+                      value={questionFeedback[index] || ''}
+                      onChange={(e) => setQuestionFeedback({ ...questionFeedback, [index]: e.target.value })}
+                      placeholder="Ex: A questão não está de acordo com o edital, está muito genérica, não testa o conhecimento dos flashcards, etc..."
+                      rows={3}
+                      className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 mb-3"
+                    />
+                    <button
+                      onClick={() => regenerateQuestion(index, questionFeedback[index])}
+                      disabled={!questionFeedback[index]?.trim() || regeneratingQuestion === index}
+                      className="px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {regeneratingQuestion === index ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                          Regenerando...
+                        </>
+                      ) : (
+                        <>
+                          🔄 Regenerar Questão
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 flex gap-4">
+              <button
+                onClick={() => setShowQuestionReview(false)}
+                className="flex-1 px-6 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={shareReviewedSimulado}
+                className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800 font-semibold flex items-center justify-center gap-2"
+              >
+                <ShareIcon className="h-5 w-5" />
+                Aprovar e Compartilhar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (loading || analyzing) {
       const interval = setInterval(() => {
         setLoadingTip(tips[Math.floor(Math.random() * tips.length)])
       }, 3000)
@@ -885,6 +1004,186 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
     }
   }
 
+  // Regenerar questão individual com feedback (apenas admin)
+  const regenerateQuestion = async (questionIndex, feedback) => {
+    // Verificar se é admin
+    if (profile?.role !== 'admin') {
+      alert('❌ Apenas administradores podem regenerar questões.')
+      return
+    }
+
+    if (!feedback || !feedback.trim()) {
+      alert('Por favor, informe o motivo pelo qual a questão está errada.')
+      return
+    }
+
+    setRegeneratingQuestion(questionIndex)
+    try {
+      const question = questionsToReview[questionIndex]
+      const materia = question.materia || 'Geral'
+      
+      // Buscar contexto necessário
+      const courseId = selectedCourseId || 'alego-default'
+      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+      const editalDoc = await getDoc(editalRef)
+      let editalText = ''
+      if (editalDoc.exists()) {
+        const data = editalDoc.data()
+        editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
+      }
+      
+      const courseRef = doc(db, 'courses', courseId)
+      const courseDoc = await getDoc(courseRef)
+      const courseData = courseDoc.exists() ? courseDoc.data() : null
+      const referenceLink = courseData?.referenceLink || ''
+      const { getLinkContextForAI } = await import('../utils/linkContent.js')
+      const linkContext = referenceLink ? await getLinkContextForAI(referenceLink) : ''
+      
+      // Buscar flashcards da matéria
+      const materiaFlashcards = window.getFlashcardsForMateria 
+        ? window.getFlashcardsForMateria(materia)
+        : []
+      const flashcardsText = materiaFlashcards.length > 0
+        ? `\n\n📚 FLASHCARDS DA MATÉRIA "${materia}" (USE ESTES COMO BASE PRINCIPAL):\n${window.formatFlashcardsForContext ? window.formatFlashcardsForContext(materiaFlashcards, 30) : ''}\n\n`
+        : (window.courseFlashcards && window.courseFlashcards.length > 0
+            ? `\n\n📚 FLASHCARDS DO CURSO (USE COMO BASE):\n${window.formatFlashcardsForContext ? window.formatFlashcardsForContext(window.courseFlashcards.slice(0, 30), 30) : ''}\n\n`
+            : '')
+
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        throw new Error('VITE_GEMINI_API_KEY não configurada')
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+
+      const regeneratePrompt = `Você é um especialista em criar questões de concursos públicos.
+
+CONCURSO ESPECÍFICO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
+
+${window.flashcardsContext || ''}
+
+${flashcardsText}
+
+${linkContext}
+
+${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 30000)}\n\n` : ''}
+
+⚠️ QUESTÃO ANTERIOR QUE FOI REJEITADA:
+Enunciado: ${question.enunciado}
+Alternativas: ${JSON.stringify(question.alternativas)}
+Resposta correta: ${question.correta}
+
+❌ FEEDBACK DO ADMINISTRADOR (POR QUE ESTÁ ERRADA):
+${feedback}
+
+REGRAS CRÍTICAS:
+1. A questão anterior foi REJEITADA pelo administrador pelo motivo acima
+2. Você DEVE criar uma NOVA questão completamente diferente
+3. A nova questão DEVE estar de acordo com o curso ${courseName || 'mencionado'} e o edital
+4. BASEIE-SE nos flashcards acima como referência principal
+5. A questão deve ser ESPECÍFICA para este concurso, não genérica
+6. Use o feedback do administrador para evitar os mesmos erros
+
+Crie APENAS UMA questão FICTÍCIA de múltipla escolha no estilo FGV para a matéria "${materia}".
+
+FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
+{
+  "questoes": [
+    {
+      "enunciado": "Texto completo da questão",
+      "alternativas": {
+        "A": "Texto da alternativa A",
+        "B": "Texto da alternativa B",
+        "C": "Texto da alternativa C",
+        "D": "Texto da alternativa D",
+        "E": "Texto da alternativa E"
+      },
+      "correta": "A",
+      "materia": "${materia}"
+    }
+  ]
+}
+
+CRÍTICO: Retorne APENAS o JSON, sem markdown.`
+
+      const result = await model.generateContent(regeneratePrompt)
+      const responseText = result.response.text().trim()
+
+      let jsonText = responseText
+      if (jsonText.includes('```json')) {
+        jsonText = jsonText.split('```json')[1].split('```')[0].trim()
+      } else if (jsonText.includes('```')) {
+        jsonText = jsonText.split('```')[1].split('```')[0].trim()
+      }
+
+      const firstBrace = jsonText.indexOf('{')
+      const lastBrace = jsonText.lastIndexOf('}')
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        jsonText = jsonText.substring(firstBrace, lastBrace + 1)
+      }
+
+      const parsed = JSON.parse(jsonText)
+      if (parsed.questoes && Array.isArray(parsed.questoes) && parsed.questoes.length > 0) {
+        const newQuestion = parsed.questoes[0]
+        // Substituir a questão na lista
+        const updatedQuestions = [...questionsToReview]
+        updatedQuestions[questionIndex] = newQuestion
+        setQuestionsToReview(updatedQuestions)
+        setQuestionFeedback({ ...questionFeedback, [questionIndex]: '' })
+        alert('✅ Questão regenerada com sucesso!')
+      } else {
+        throw new Error('Resposta da IA não contém questão válida')
+      }
+    } catch (err) {
+      console.error('Erro ao regenerar questão:', err)
+      alert(`❌ Erro ao regenerar questão: ${err.message}`)
+    } finally {
+      setRegeneratingQuestion(null)
+    }
+  }
+
+  // Compartilhar simulado após revisão (apenas admin)
+  const shareReviewedSimulado = async () => {
+    // Verificar se é admin
+    if (profile?.role !== 'admin') {
+      alert('❌ Apenas administradores podem compartilhar simulados.')
+      return
+    }
+
+    try {
+      // Salvar simulado no Firestore com questões aprovadas
+      const sharedSimuladoRef = collection(db, 'sharedSimulados')
+      const simuladoDoc = await addDoc(sharedSimuladoRef, {
+        simuladoInfo: simuladoInfo,
+        courseId: selectedCourseId,
+        courseName: courseName || courseCompetition,
+        hasRedacao: true,
+        sharedBy: user.uid,
+        sharedAt: serverTimestamp(),
+        attempts: [],
+        maxAttempts: 1,
+        questions: questionsToReview, // Salvar questões aprovadas
+        reviewed: true, // Marcar como revisado
+      })
+
+      // Criar link compartilhável
+      const shareUrl = `${window.location.origin}/simulado-share/${simuladoDoc.id}`
+      
+      // Texto para WhatsApp
+      const whatsappText = `📝 Simulado: ${courseName || courseCompetition || 'Concurso'}\n\n${simuladoInfo?.totalQuestoes || questionsToReview.length} questões | ${simuladoInfo?.tempoMinutos || 240} minutos\n\nFaça o simulado: ${shareUrl}`
+      
+      // Abrir WhatsApp
+      window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, '_blank')
+      
+      setMessage('✅ Simulado revisado e compartilhado! Link copiado para o WhatsApp.')
+      setShowQuestionReview(false)
+    } catch (err) {
+      console.error('Erro ao compartilhar simulado:', err)
+      setMessage('❌ Erro ao compartilhar simulado. Tente novamente.')
+    }
+  }
+
   // Formatar tempo
   const formatTime = (seconds) => {
     const hours = Math.floor(seconds / 3600)
@@ -1026,41 +1325,15 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
             <div className="flex flex-col sm:flex-row gap-3">
               {profile?.role === 'admin' && (
                 <button
-                  onClick={async () => {
-                    try {
-                      // Salvar simulado no Firestore para compartilhamento (sem questões ainda)
-                      const sharedSimuladoRef = collection(db, 'sharedSimulados')
-                      const simuladoDoc = await addDoc(sharedSimuladoRef, {
-                        simuladoInfo: simuladoInfo,
-                        courseId: selectedCourseId,
-                        courseName: courseName || courseCompetition,
-                        hasRedacao: true, // Assumir que tem redação
-                        sharedBy: user.uid,
-                        sharedAt: serverTimestamp(),
-                        attempts: [],
-                        maxAttempts: 1,
-                        questions: null, // Questões serão geradas quando alguém acessar
-                      })
-
-                      // Criar link compartilhável
-                      const shareUrl = `${window.location.origin}/simulado-share/${simuladoDoc.id}`
-                      
-                      // Texto para WhatsApp
-                      const whatsappText = `📝 Simulado: ${courseName || courseCompetition || 'Concurso'}\n\n${simuladoInfo?.totalQuestoes || 0} questões | ${simuladoInfo?.tempoMinutos || 240} minutos\n\nFaça o simulado: ${shareUrl}`
-                      
-                      // Abrir WhatsApp
-                      window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, '_blank')
-                      
-                      setMessage('✅ Simulado compartilhado! Link copiado para o WhatsApp.')
-                    } catch (err) {
-                      console.error('Erro ao compartilhar simulado:', err)
-                      setMessage('❌ Erro ao compartilhar simulado. Tente novamente.')
-                    }
+                  onClick={() => {
+                    // Abrir tela de revisão de questões
+                    setQuestionsToReview([...questions])
+                    setShowQuestionReview(true)
                   }}
                   className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl transition-all"
                 >
                   <ShareIcon className="h-5 w-5" />
-                  Compartilhar Simulado
+                  Revisar e Compartilhar Simulado
                 </button>
               )}
               <button
