@@ -258,6 +258,8 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
     // Validar tamanho mínimo da redação
     const wordCount = redacaoTexto.trim().split(/\s+/).length
     const charCount = redacaoTexto.trim().length
+    const paragraphCount = detectParagraphs(redacaoTexto)
+    const lines = redacaoTexto.split('\n').length
     
     if (wordCount < 50 || charCount < 200) {
       // Redação muito curta - dar nota zero
@@ -305,6 +307,13 @@ TEMA DA REDAÇÃO: ${redacaoTema}
 
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 30000)}\n\n` : ''}
 
+IMPORTANTE: Esta redação usa 4 espaços no início da linha para indicar parágrafos. Linhas que começam com 4 espaços são parágrafos.
+
+INFORMAÇÕES DA REDAÇÃO:
+- Número de parágrafos (linhas com 4 espaços no início): ${paragraphCount}
+- Total de linhas: ${lines}
+- Total de palavras: ${wordCount}
+
 IMPORTANTE: A redação deve ter no mínimo 200 palavras. Se a redação for muito curta, incompleta ou não desenvolver o tema, atribua nota ZERO.
 
 Analise a seguinte redação e atribua uma nota de 0 a 10 (escala de 0 a 10, não 0 a 1000), seguindo os critérios típicos de concursos públicos:
@@ -313,7 +322,7 @@ CRITÉRIOS DE AVALIAÇÃO (cada um de 0 a 2 pontos, totalizando 0 a 10):
 1. Domínio da modalidade escrita (0-2 pontos): ortografia, acentuação, pontuação, uso adequado da língua
 2. Compreensão do tema (0-2 pontos): adequação ao tema proposto, compreensão da proposta
 3. Argumentação (0-2 pontos): qualidade dos argumentos, coerência, capacidade de defender pontos de vista
-4. Estrutura textual (0-2 pontos): organização do texto, parágrafos, introdução, desenvolvimento, conclusão
+4. Estrutura textual (0-2 pontos): organização do texto, parágrafos (linhas com 4 espaços), introdução, desenvolvimento, conclusão
 5. Conhecimento sobre o cargo/concurso (0-2 pontos): demonstração de conhecimento sobre a área, atualidade, relevância
 
 REDAÇÃO DO CANDIDATO:
@@ -1157,30 +1166,18 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
     return `${minutes}:${secs.toString().padStart(2, '0')}`
   }
 
-  // Função para inserir texto na posição do cursor
-  const insertTextAtCursor = (textToInsert) => {
-    const textarea = redacaoTextareaRef.current
-    if (!textarea) return
-
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const textBefore = redacaoTexto.substring(0, start)
-    const textAfter = redacaoTexto.substring(end)
-    const newText = textBefore + textToInsert + textAfter
-
-    setRedacaoTexto(newText)
-
-    // Reposicionar cursor após o texto inserido
-    setTimeout(() => {
-      const newPosition = start + textToInsert.length
-      textarea.focus()
-      textarea.setSelectionRange(newPosition, newPosition)
-    }, 0)
-  }
-
-  // Função para adicionar quebra de linha simples
-  const addLineBreak = () => {
-    insertTextAtCursor('\n')
+  // Função para detectar parágrafos (4 espaços no início da linha)
+  const detectParagraphs = (text) => {
+    if (!text) return 0
+    const lines = text.split('\n')
+    let paragraphCount = 0
+    lines.forEach((line) => {
+      // Verifica se a linha começa com exatamente 4 espaços (não mais, não menos)
+      if (line.length >= 4 && line.substring(0, 4) === '    ' && (line.length === 4 || line[4] !== ' ')) {
+        paragraphCount++
+      }
+    })
+    return paragraphCount
   }
 
   const currentQuestion = questions[currentQuestionIndex]
@@ -1519,6 +1516,8 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
   if (showRedacao && !isFinished) {
     const wordCount = redacaoTexto.trim() ? redacaoTexto.trim().split(/\s+/).length : 0
     const charCount = redacaoTexto.length
+    const paragraphCount = detectParagraphs(redacaoTexto)
+    const lines = redacaoTexto.split('\n').length
 
     return (
       <div className="min-h-screen py-4">
@@ -1542,36 +1541,76 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
             <div className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400 mt-2">
               <span>{charCount} caracteres</span>
               <span>{wordCount} palavras</span>
+              <span>{paragraphCount} parágrafos</span>
+              <span>{lines} linhas</span>
             </div>
           </div>
 
           {/* Tema da redação */}
           <div className={`rounded-xl p-6 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg border-2 border-alego-600`}>
-            <h2 className="text-xl font-bold mb-2 text-alego-600">Tema da Redação</h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-xl font-bold text-alego-600">Tema da Redação</h2>
+            </div>
             <p className="text-lg font-medium text-slate-700 dark:text-slate-300">
               {redacaoTema || 'Carregando tema...'}
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
               Escreva uma dissertação argumentativa de 25 a 30 linhas sobre o tema proposto.
             </p>
+            <p className="text-sm text-alego-600 dark:text-alego-400 mt-2 font-semibold">
+              💡 Dica: Use 4 espaços no início de uma linha para criar um parágrafo.
+            </p>
           </div>
 
           {/* Editor de redação */}
           <div className={`rounded-xl p-6 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
-            <label className="block text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">
-              Sua Redação
-            </label>
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                Sua Redação
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const textarea = redacaoTextareaRef.current
+                  if (!textarea) return
+                  const start = textarea.selectionStart
+                  const end = textarea.selectionEnd
+                  const textBefore = redacaoTexto.substring(0, start)
+                  const textAfter = redacaoTexto.substring(end)
+                  const newText = textBefore + '\n' + textAfter
+                  setRedacaoTexto(newText)
+                  setTimeout(() => {
+                    const newPosition = start + 1
+                    textarea.focus()
+                    textarea.setSelectionRange(newPosition, newPosition)
+                  }, 0)
+                }}
+                disabled={analizingRedacao || redacaoTimeLeft === 0}
+                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Inserir quebra de linha"
+              >
+                <ArrowDownIcon className="h-4 w-4" />
+                Quebra de Linha
+              </button>
+            </div>
             <textarea
               ref={redacaoTextareaRef}
               value={redacaoTexto}
               onChange={(e) => setRedacaoTexto(e.target.value)}
-              placeholder="Comece a escrever sua redação aqui..."
-              className="w-full h-96 p-4 rounded-lg border-2 border-slate-300 dark:border-slate-600 focus:border-alego-500 focus:outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-base leading-relaxed resize-none font-serif"
+              placeholder="Comece a escrever sua redação aqui...
+
+Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
+
+    Exemplo: Este é um parágrafo porque começa com 4 espaços."
+              className="w-full h-96 p-4 rounded-lg border-2 border-slate-300 dark:border-slate-600 focus:border-alego-500 focus:outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-base leading-relaxed resize-none font-serif font-mono"
               disabled={analizingRedacao || redacaoTimeLeft === 0}
+              style={{
+                tabSize: 4,
+              }}
             />
             <div className="mt-4 flex items-center justify-between text-sm">
               <span className="text-slate-500 dark:text-slate-400">
-                Mínimo recomendado: 25 linhas
+                Mínimo recomendado: 25 linhas | Parágrafos: {paragraphCount}
               </span>
               <span className={`font-semibold ${wordCount < 200 ? 'text-orange-500' : wordCount > 500 ? 'text-blue-500' : 'text-green-500'}`}>
                 {wordCount >= 200 && wordCount <= 500 ? '✓ Tamanho adequado' : wordCount < 200 ? '⚠ Muito curta' : '⚠ Muito longa'}
@@ -1594,7 +1633,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
               ) : (
                 <>
                   <TrophyIcon className="h-5 w-5" />
-                  Finalizar Redação e Ver Resultado
+                  Finalizar e Ver Resultado
                 </>
               )}
             </button>
