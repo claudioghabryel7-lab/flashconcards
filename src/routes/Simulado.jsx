@@ -774,9 +774,8 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
         throw new Error('Nenhuma questão foi gerada. Tente novamente.')
       }
 
-      // Embaralhar questões
-      const shuffled = allQuestions.sort(() => Math.random() - 0.5)
-      setQuestions(shuffled)
+      // Manter questões organizadas por matéria (sem embaralhar)
+      setQuestions(allQuestions)
       setTimeLeft(simuladoInfo.tempoMinutos * 60)
       setIsRunning(true)
       setCurrentQuestionIndex(0)

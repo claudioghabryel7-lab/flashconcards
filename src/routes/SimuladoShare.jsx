@@ -284,15 +284,14 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
         throw new Error('Nenhuma questão foi gerada. Tente novamente.')
       }
 
-      // Embaralhar questões
-      const shuffled = allQuestions.sort(() => Math.random() - 0.5)
-      setQuestions(shuffled)
+      // Manter questões organizadas por matéria (sem embaralhar)
+      setQuestions(allQuestions)
       
       // Atualizar simulado no Firestore com as questões geradas
       try {
         const simuladoRef = doc(db, 'sharedSimulados', simuladoId)
         await updateDoc(simuladoRef, {
-          questions: shuffled,
+          questions: allQuestions,
         })
       } catch (updateErr) {
         console.error('Erro ao atualizar questões no Firestore (pode ser problema de permissão):', updateErr)
