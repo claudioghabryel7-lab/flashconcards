@@ -3937,7 +3937,34 @@ CRÍTICO:
     { id: 'courses', label: '🎓 Cursos', icon: '🎓' },
     { id: 'reviews', label: '⭐ Avaliações', icon: '⭐' },
     { id: 'leads', label: '📋 Leads', icon: '📋' },
+    { id: 'simulados', label: '📝 Simulados', icon: '📝' },
   ]
+  
+  // Estado para gerenciar simulados compartilhados
+  const [sharedSimulados, setSharedSimulados] = useState([])
+  const [selectedSimulado, setSelectedSimulado] = useState(null)
+  
+  // Carregar simulados compartilhados
+  useEffect(() => {
+    if (!isAdmin) return
+    
+    const simuladosRef = collection(db, 'sharedSimulados')
+    const unsubscribe = onSnapshot(simuladosRef, (snapshot) => {
+      const simulados = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      // Ordenar por data de compartilhamento (mais recente primeiro)
+      simulados.sort((a, b) => {
+        const dateA = a.sharedAt?.toDate?.() || new Date(a.sharedAt || 0)
+        const dateB = b.sharedAt?.toDate?.() || new Date(b.sharedAt || 0)
+        return dateB - dateA
+      })
+      setSharedSimulados(simulados)
+    })
+    
+    return () => unsubscribe()
+  }, [isAdmin])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 dark:from-slate-900 dark:via-blue-900/20 dark:to-purple-900/20">
@@ -6762,6 +6789,190 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Simulados Compartilhados */}
+            {activeTab === 'simulados' && (
+              <div className="space-y-6">
+                <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                      📝 Simulados Compartilhados
+                    </h2>
+                  </div>
+
+                  {sharedSimulados.length === 0 ? (
+                    <p className="text-center text-slate-500 dark:text-slate-400 py-8">
+                      Nenhum simulado compartilhado ainda.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {sharedSimulados.map((simulado) => {
+                        const shareUrl = `${window.location.origin}/simulado-share/${simulado.id}`
+                        const attempts = simulado.attempts || []
+                        const completedAttempts = attempts.filter(a => a.completed).length
+                        const totalQuestions = simulado.questions?.length || simulado.simuladoInfo?.totalQuestoes || 0
+                        
+                        return (
+                          <div
+                            key={simulado.id}
+                            className={`rounded-xl p-4 border-2 ${
+                              simulado.ativo === false
+                                ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                                : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600'
+                            }`}
+                          >
+                            <div className="flex flex-col gap-4">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                                      {simulado.courseName || 'Simulado'}
+                                    </h3>
+                                    {simulado.ativo === false ? (
+                                      <span className="px-2 py-1 text-xs font-bold rounded-full bg-red-500 text-white">
+                                        Desativado
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-1 text-xs font-bold rounded-full bg-green-500 text-white">
+                                        Ativo
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                                    {totalQuestions} questões • {simulado.simuladoInfo?.tempoMinutos || 240} minutos
+                                  </p>
+                                  <p className="text-xs text-slate-500 dark:text-slate-500 mb-2">
+                                    Compartilhado em: {simulado.sharedAt?.toDate?.()?.toLocaleString('pt-BR') || 'Data não disponível'}
+                                  </p>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                                      {completedAttempts} tentativa(s) concluída(s) de {attempts.length} total
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="text"
+                                      readOnly
+                                      value={shareUrl}
+                                      className="flex-1 px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                    />
+                                    <button
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(shareUrl)
+                                        setMessage('Link copiado!')
+                                      }}
+                                      className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors"
+                                    >
+                                      📋 Copiar
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="flex gap-2 flex-wrap">
+                                <button
+                                  onClick={() => {
+                                    if (selectedSimulado?.id === simulado.id) {
+                                      setSelectedSimulado(null)
+                                    } else {
+                                      setSelectedSimulado(simulado)
+                                    }
+                                  }}
+                                  className="px-4 py-2 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition-colors"
+                                >
+                                  {selectedSimulado?.id === simulado.id ? '👁️ Ocultar' : '👥 Ver Tentativas'}
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const simuladoRef = doc(db, 'sharedSimulados', simulado.id)
+                                      await updateDoc(simuladoRef, {
+                                        ativo: simulado.ativo === false ? true : false,
+                                      })
+                                      setMessage(simulado.ativo === false ? 'Simulado ativado!' : 'Simulado desativado!')
+                                    } catch (err) {
+                                      console.error('Erro ao atualizar simulado:', err)
+                                      setMessage('Erro ao atualizar simulado.')
+                                    }
+                                  }}
+                                  className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${
+                                    simulado.ativo === false
+                                      ? 'bg-green-600 text-white hover:bg-green-700'
+                                      : 'bg-red-600 text-white hover:bg-red-700'
+                                  }`}
+                                >
+                                  {simulado.ativo === false ? '✅ Ativar' : '❌ Desativar'}
+                                </button>
+                              </div>
+
+                              {/* Lista de tentativas */}
+                              {selectedSimulado?.id === simulado.id && (
+                                <div className="mt-4 pt-4 border-t border-slate-300 dark:border-slate-600">
+                                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-3">
+                                    Tentativas ({attempts.length})
+                                  </h4>
+                                  {attempts.length === 0 ? (
+                                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                                      Nenhuma tentativa ainda.
+                                    </p>
+                                  ) : (
+                                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                                      {attempts.map((attempt, idx) => (
+                                        <div
+                                          key={idx}
+                                          className={`p-3 rounded-lg ${
+                                            attempt.completed
+                                              ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                                              : 'bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600'
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between mb-1">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                                {attempt.email || 'Email não informado'}
+                                              </span>
+                                              {attempt.completed && (
+                                                <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-green-500 text-white">
+                                                  Concluído
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          {attempt.phone && (
+                                            <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">
+                                              📱 {attempt.phone}
+                                            </p>
+                                          )}
+                                          {attempt.startedAt && (
+                                            <p className="text-xs text-slate-500 dark:text-slate-500">
+                                              Iniciado: {new Date(attempt.startedAt).toLocaleString('pt-BR')}
+                                            </p>
+                                          )}
+                                          {attempt.completed && attempt.results && (
+                                            <div className="mt-2 pt-2 border-t border-slate-300 dark:border-slate-600">
+                                              <p className="text-xs text-slate-600 dark:text-slate-400">
+                                                Nota: {attempt.results.finalScore || attempt.results.objectiveScore || 'N/A'} / 10
+                                              </p>
+                                              <p className="text-xs text-slate-600 dark:text-slate-400">
+                                                Acertos: {attempt.results.correct || 0} / {attempt.results.total || 0}
+                                              </p>
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>

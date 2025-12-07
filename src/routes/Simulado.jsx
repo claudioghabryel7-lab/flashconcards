@@ -1136,6 +1136,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
         maxAttempts: 1,
         questions: questionsToReview, // Salvar questões aprovadas
         reviewed: true, // Marcar como revisado
+        ativo: true, // Simulado ativo por padrão
       })
 
       // Criar link compartilhável
@@ -1765,6 +1766,7 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
                         sharedAt: serverTimestamp(),
                         attempts: [],
                         maxAttempts: 1,
+                        ativo: true, // Simulado ativo por padrão
                       })
 
                       // Criar link compartilhável

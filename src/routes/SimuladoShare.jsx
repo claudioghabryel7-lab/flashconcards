@@ -58,6 +58,7 @@ const SimuladoShare = () => {
   const [loadingProgress, setLoadingProgress] = useState(0)
   const [error, setError] = useState('')
   const [userEmail, setUserEmail] = useState('')
+  const [userPhone, setUserPhone] = useState('')
   const [emailSubmitted, setEmailSubmitted] = useState(false)
   const [visitorId, setVisitorId] = useState(null)
   const [alreadyAttempted, setAlreadyAttempted] = useState(false)
@@ -111,6 +112,13 @@ const SimuladoShare = () => {
         }
 
         const data = simuladoDoc.data()
+        
+        // Verificar se o simulado está ativo
+        if (data.ativo === false) {
+          setError('Este simulado foi desativado pelo administrador.')
+          setLoading(false)
+          return
+        }
         
         // Verificar se já tentou
         setLoadingStatus('Verificando permissões...')
@@ -478,6 +486,18 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       alert('Por favor, insira um email válido.')
       return
     }
+    
+    if (!userPhone.trim()) {
+      alert('Por favor, insira seu telefone.')
+      return
+    }
+    
+    // Validar formato básico de telefone (pelo menos 10 dígitos)
+    const phoneDigits = userPhone.replace(/\D/g, '')
+    if (phoneDigits.length < 10) {
+      alert('Por favor, insira um telefone válido (com DDD).')
+      return
+    }
 
     try {
       // Salvar tentativa no simulado
@@ -486,6 +506,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
         attempts: arrayUnion({
           visitorId,
           email: userEmail.trim(),
+          phone: userPhone.trim(),
           startedAt: new Date().toISOString(),
           completed: false,
         }),
@@ -769,9 +790,9 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
       const simuladoRef = doc(db, 'sharedSimulados', simuladoId)
       const simuladoDoc = await getDoc(simuladoRef)
       const attempts = simuladoDoc.data().attempts || []
-      const updatedAttempts = attempts.map(a => 
+      const updatedAttempts = attempts.map(a =>
         a.visitorId === visitorId 
-          ? { ...a, completed: true, finishedAt: new Date().toISOString(), results: resultsData }
+          ? { ...a, completed: true, finishedAt: new Date().toISOString(), results: resultsData, phone: userPhone || a.phone }
           : a
       )
       await updateDoc(simuladoRef, { attempts: updatedAttempts })
@@ -905,15 +926,43 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
             Simulado {simuladoData?.courseName ? `para ${simuladoData.courseName}` : ''}
           </h1>
           <p className="text-slate-700 dark:text-slate-300 mb-6">
-            Informe seu email para receber o resultado do simulado.
+            Informe seu email e telefone para iniciar o simulado.
           </p>
           <form onSubmit={handleEmailSubmit} className="space-y-4">
             <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 text-left">
+                Seu Email
+              </label>
               <input
                 type="email"
-                placeholder="Seu Email"
+                placeholder="seu@email.com"
                 value={userEmail}
                 onChange={(e) => setUserEmail(e.target.value)}
+                className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 text-left">
+                Seu Telefone (com DDD)
+              </label>
+              <input
+                type="tel"
+                placeholder="(00) 00000-0000"
+                value={userPhone}
+                onChange={(e) => {
+                  let value = e.target.value.replace(/\D/g, '')
+                  if (value.length <= 11) {
+                    if (value.length > 10) {
+                      value = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
+                    } else if (value.length > 6) {
+                      value = value.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3')
+                    } else if (value.length > 2) {
+                      value = value.replace(/(\d{2})(\d{0,5})/, '($1) $2')
+                    }
+                    setUserPhone(value)
+                  }
+                }}
                 className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
