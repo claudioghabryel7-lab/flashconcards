@@ -690,3 +690,116 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
     }
   })
 })
+
+// Função para enviar email com resultado do simulado compartilhado
+exports.sendSimuladoResultEmail = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Método não permitido' })
+    }
+
+    try {
+      const { email, results, simuladoName, courseName } = req.body
+
+      if (!email || !results) {
+        return res.status(400).json({ error: 'Email e resultados são obrigatórios' })
+      }
+
+      const transporter = createEmailTransporter()
+      if (!transporter) {
+        return res.status(500).json({ error: 'Serviço de email não configurado' })
+      }
+
+      // Formatar resultados
+      const accuracy = results.accuracy || 0
+      const finalScore = results.finalScore || 0
+      const objectiveScore = results.objectiveScore || 0
+      const redacaoNota = results.redacao?.nota || null
+      const correct = results.correct || 0
+      const total = results.total || 0
+
+      const mailOptions = {
+        from: `"FlashConCards" <${functions.config().email?.user || process.env.EMAIL_USER || 'flashconcards@gmail.com'}>`,
+        to: email.toLowerCase().trim(),
+        subject: `📊 Resultado do Simulado: ${simuladoName || courseName || 'Simulado'}`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+              .score-box { background: white; border: 3px solid #667eea; border-radius: 12px; padding: 30px; margin: 20px 0; text-align: center; }
+              .final-score { font-size: 48px; font-weight: bold; color: #667eea; margin: 10px 0; }
+              .score-label { font-size: 18px; color: #666; }
+              .details { background: white; border-radius: 8px; padding: 20px; margin: 15px 0; }
+              .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+              .detail-row:last-child { border-bottom: none; }
+              .detail-label { font-weight: bold; color: #667eea; }
+              .detail-value { color: #333; }
+              .redacao-box { background: #f0f4ff; border-left: 4px solid #667eea; padding: 15px; margin: 15px 0; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>🎉 Parabéns!</h1>
+                <p>Você concluiu o simulado</p>
+              </div>
+              <div class="content">
+                <p>Olá!</p>
+                
+                <p>Segue abaixo o resultado do seu simulado <strong>${simuladoName || courseName || 'Simulado'}</strong>:</p>
+                
+                <div class="score-box">
+                  <div class="score-label">Nota Final</div>
+                  <div class="final-score">${finalScore}</div>
+                  <div class="score-label">de 10 pontos</div>
+                </div>
+
+                <div class="details">
+                  <div class="detail-row">
+                    <span class="detail-label">Nota Objetiva:</span>
+                    <span class="detail-value">${objectiveScore}/10</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Acertos:</span>
+                    <span class="detail-value">${correct} de ${total} questões</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Taxa de Acerto:</span>
+                    <span class="detail-value">${accuracy.toFixed(1)}%</span>
+                  </div>
+                  ${redacaoNota ? `
+                  <div class="redacao-box">
+                    <div class="detail-row">
+                      <span class="detail-label">Nota da Redação:</span>
+                      <span class="detail-value"><strong>${redacaoNota}/10</strong></span>
+                    </div>
+                  </div>
+                  ` : ''}
+                </div>
+
+                <p style="margin-top: 30px;">Continue estudando e boa sorte na sua aprovação! 🚀</p>
+                
+                <p>Atenciosamente,<br><strong>Equipe FlashConCards</strong></p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      }
+
+      await transporter.sendMail(mailOptions)
+      console.log(`Email de resultado enviado para ${email}`)
+      
+      return res.status(200).json({ success: true, message: 'Email enviado com sucesso' })
+    } catch (error) {
+      console.error('Erro ao enviar email de resultado:', error)
+      return res.status(500).json({ error: 'Erro ao enviar email', details: error.message })
+    }
+  })
+})
