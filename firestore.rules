@@ -111,8 +111,8 @@
         
         // Prompts do curso (subcoleção) - edital e questões
         match /prompts/{promptId} {
-          // Permitir leitura para usuários autenticados
-          allow read: if isAuthenticated();
+          // Permitir leitura pública (para gerar questões de simulados compartilhados)
+          allow read: if true;
           // Apenas admin pode criar, atualizar e deletar - VERIFICAÇÃO EXPANDIDA
           allow create: if isAuthenticated() && 
                         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
@@ -276,16 +276,20 @@
         allow read: if true;
         // Apenas admin pode criar (compartilhar)
         allow create: if isAuthenticated() && 
-                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-        // Apenas admin pode atualizar (para rastrear tentativas)
-        allow update: if isAuthenticated() && 
-                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        // Admin pode atualizar OU qualquer pessoa pode atualizar apenas 'attempts' e 'questions'
+        allow update: if (isAuthenticated() && 
+                          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+                     || 
+                     (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attempts']) ||
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['questions']) ||
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attempts', 'questions']));
         // Apenas admin pode deletar
         allow delete: if isAuthenticated() && 
-                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       }
       
       // 📋 Leads de Simulados

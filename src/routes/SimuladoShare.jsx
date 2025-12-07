@@ -128,12 +128,6 @@ const SimuladoShare = () => {
         
         setTimeLeft((data.simuladoInfo?.tempoMinutos || 240) * 60)
         setLoading(false)
-        
-        // Se deve iniciar após gerar questões
-        if (shouldStartSimulado && questions.length > 0) {
-          setShowAdScreen(true)
-          setShouldStartSimulado(false)
-        }
       } catch (err) {
         console.error('Erro ao carregar simulado:', err)
         setError('Erro ao carregar simulado. Tente novamente.')
@@ -295,10 +289,15 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       setQuestions(shuffled)
       
       // Atualizar simulado no Firestore com as questões geradas
-      const simuladoRef = doc(db, 'sharedSimulados', simuladoId)
-      await updateDoc(simuladoRef, {
-        questions: shuffled,
-      })
+      try {
+        const simuladoRef = doc(db, 'sharedSimulados', simuladoId)
+        await updateDoc(simuladoRef, {
+          questions: shuffled,
+        })
+      } catch (updateErr) {
+        console.error('Erro ao atualizar questões no Firestore (pode ser problema de permissão):', updateErr)
+        // Continuar mesmo se não conseguir atualizar (as questões já estão no estado)
+      }
     } catch (err) {
       console.error('Erro ao gerar questões:', err)
       setError('Erro ao gerar questões do simulado. Tente novamente.')
