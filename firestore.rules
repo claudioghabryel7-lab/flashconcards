@@ -270,6 +270,42 @@
         allow update: if false;
       }
       
+      // 📝 Simulados Compartilhados
+      match /sharedSimulados/{simuladoId} {
+        // Leitura pública (para acessar simulado compartilhado)
+        allow read: if true;
+        // Apenas admin pode criar (compartilhar)
+        allow create: if isAuthenticated() && 
+                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        // Apenas admin pode atualizar (para rastrear tentativas)
+        allow update: if isAuthenticated() && 
+                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        // Apenas admin pode deletar
+        allow delete: if isAuthenticated() && 
+                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      // 📋 Leads de Simulados
+      match /leads/{leadId} {
+        // Apenas admin pode ler leads
+        allow read: if isAuthenticated() && 
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        // Qualquer pessoa pode criar lead (formulário público)
+        allow create: if true;
+        // Apenas admin pode atualizar (marcar como contatado, adicionar notas)
+        allow update: if isAuthenticated() && 
+                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        // Apenas admin pode deletar
+        allow delete: if isAuthenticated() && 
+                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
       match /{document=**} {
         allow read, write: if false;
       }

@@ -25,6 +25,7 @@ import SocialFeed from './routes/SocialFeed'
 import UserProfile from './routes/UserProfile'
 import NewsView from './routes/NewsView'
 import Simulado from './routes/Simulado'
+import SimuladoShare from './routes/SimuladoShare'
 import TreinoRedacao from './routes/TreinoRedacao'
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
@@ -205,6 +206,8 @@ function App() {
           <Route path="/curso/:courseId" element={<CourseShare />} />
           {/* Página de Leitura de Notícia - Acessível sem login */}
           <Route path="/noticia/:postId" element={<NewsView />} />
+          {/* Página de Simulado Compartilhado - Acessível sem login */}
+          <Route path="/simulado-share/:simuladoId" element={<SimuladoShare />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

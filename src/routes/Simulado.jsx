@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { doc, getDoc, setDoc, serverTimestamp, collection, onSnapshot } from 'firebase/firestore'
+import { doc, getDoc, setDoc, serverTimestamp, collection, onSnapshot, addDoc } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -15,6 +15,7 @@ import {
   ArrowLeftIcon,
   TrophyIcon,
   ArrowDownIcon,
+  ShareIcon,
 } from '@heroicons/react/24/outline'
 
 const Simulado = () => {
@@ -46,6 +47,7 @@ const Simulado = () => {
   const [redacaoNota, setRedacaoNota] = useState(null)
   const [analizingRedacao, setAnalizingRedacao] = useState(false)
   const redacaoTextareaRef = useRef(null)
+  const [showAdScreen, setShowAdScreen] = useState(false)
 
   // Dicas durante o carregamento
   const tips = [
@@ -247,6 +249,28 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       return
     }
 
+    // Validar tamanho mínimo da redação
+    const wordCount = redacaoTexto.trim().split(/\s+/).length
+    const charCount = redacaoTexto.trim().length
+    
+    if (wordCount < 50 || charCount < 200) {
+      // Redação muito curta - dar nota zero
+      const zeroResult = {
+        nota: 0,
+        criterios: {
+          dominio: 0,
+          compreensao: 0,
+          argumentacao: 0,
+          estrutura: 0,
+          conhecimento: 0
+        },
+        feedback: `A redação está muito curta (${wordCount} palavras, ${charCount} caracteres). Uma redação de concurso público deve ter no mínimo 200 palavras e desenvolver adequadamente o tema proposto.`
+      }
+      setRedacaoNota(zeroResult)
+      finishSimulado(zeroResult)
+      return
+    }
+
     setAnalizingRedacao(true)
 
     try {
@@ -275,33 +299,39 @@ TEMA DA REDAÇÃO: ${redacaoTema}
 
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 30000)}\n\n` : ''}
 
-Analise a seguinte redação e atribua uma nota de 0 a 1000, seguindo os critérios típicos de concursos públicos:
+IMPORTANTE: A redação deve ter no mínimo 200 palavras. Se a redação for muito curta, incompleta ou não desenvolver o tema, atribua nota ZERO.
 
-CRITÉRIOS DE AVALIAÇÃO:
-1. Domínio da modalidade escrita (0-200 pontos): ortografia, acentuação, pontuação, uso adequado da língua
-2. Compreensão do tema (0-200 pontos): adequação ao tema proposto, compreensão da proposta
-3. Argumentação (0-200 pontos): qualidade dos argumentos, coerência, capacidade de defender pontos de vista
-4. Estrutura textual (0-200 pontos): organização do texto, parágrafos, introdução, desenvolvimento, conclusão
-5. Conhecimento sobre o cargo/concurso (0-200 pontos): demonstração de conhecimento sobre a área, atualidade, relevância
+Analise a seguinte redação e atribua uma nota de 0 a 10 (escala de 0 a 10, não 0 a 1000), seguindo os critérios típicos de concursos públicos:
+
+CRITÉRIOS DE AVALIAÇÃO (cada um de 0 a 2 pontos, totalizando 0 a 10):
+1. Domínio da modalidade escrita (0-2 pontos): ortografia, acentuação, pontuação, uso adequado da língua
+2. Compreensão do tema (0-2 pontos): adequação ao tema proposto, compreensão da proposta
+3. Argumentação (0-2 pontos): qualidade dos argumentos, coerência, capacidade de defender pontos de vista
+4. Estrutura textual (0-2 pontos): organização do texto, parágrafos, introdução, desenvolvimento, conclusão
+5. Conhecimento sobre o cargo/concurso (0-2 pontos): demonstração de conhecimento sobre a área, atualidade, relevância
 
 REDAÇÃO DO CANDIDATO:
 ${redacaoTexto}
 
-Retorne APENAS um objeto JSON válido no seguinte formato:
+Retorne APENAS um objeto JSON válido no seguinte formato (NOTA DE 0 A 10):
 
 {
-  "nota": 750,
+  "nota": 7.5,
   "criterios": {
-    "dominio": 160,
-    "compreensao": 170,
-    "argumentacao": 180,
-    "estrutura": 150,
-    "conhecimento": 90
+    "dominio": 1.6,
+    "compreensao": 1.7,
+    "argumentacao": 1.8,
+    "estrutura": 1.5,
+    "conhecimento": 0.9
   },
   "feedback": "Feedback geral sobre a redação, destacando pontos positivos e áreas de melhoria (máximo 200 palavras)"
 }
 
-CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
+CRÍTICO: 
+- A nota total deve ser de 0 a 10 (não 0 a 1000)
+- Cada critério deve ser de 0 a 2 pontos
+- Se a redação for muito curta ou não desenvolver o tema, dê nota ZERO
+- Retorne APENAS o JSON, sem markdown, sem explicações.`
 
       const result = await model.generateContent(analysisPrompt)
       let responseText = result.response.text().trim()
@@ -373,18 +403,26 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
     const total = questions.length
     const objectiveAccuracy = total > 0 ? ((correct / total) * 100).toFixed(1) : 0
     
-    // Nota objetiva (0-1000) baseada na porcentagem de acerto
-    const objectiveScore = (correct / total) * 1000
+    // Nota objetiva (0-10) baseada na porcentagem de acerto
+    const objectiveScore = total > 0 ? ((correct / total) * 10).toFixed(2) : 0
 
     // Nota final combinada
-    let finalScore = objectiveScore
+    let finalScore = parseFloat(objectiveScore)
     let finalScoreText = 'Apenas objetiva'
     
-    if (redacaoResult && redacaoResult.nota) {
+    if (redacaoResult && redacaoResult.nota !== undefined) {
+      // Converter nota da redação para escala 0-10 se necessário
+      let redacaoNota = parseFloat(redacaoResult.nota)
+      
+      // Se a nota vier em escala 0-1000, converter para 0-10
+      if (redacaoNota > 10) {
+        redacaoNota = redacaoNota / 100
+      }
+      
       // Média ponderada: 70% objetiva + 30% redação
       const objectiveWeight = 0.7
       const redacaoWeight = 0.3
-      finalScore = (objectiveScore * objectiveWeight) + (redacaoResult.nota * redacaoWeight)
+      finalScore = (parseFloat(objectiveScore) * objectiveWeight) + (redacaoNota * redacaoWeight)
       finalScoreText = 'Objetiva (70%) + Redação (30%)'
     }
 
@@ -393,9 +431,12 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
       wrong,
       total,
       accuracy: parseFloat(objectiveAccuracy),
-      objectiveScore: objectiveScore.toFixed(0),
-      redacao: redacaoResult,
-      finalScore: finalScore.toFixed(0),
+      objectiveScore: parseFloat(objectiveScore).toFixed(2),
+      redacao: redacaoResult ? {
+        ...redacaoResult,
+        nota: redacaoResult.nota > 10 ? (redacaoResult.nota / 100).toFixed(2) : parseFloat(redacaoResult.nota).toFixed(2)
+      } : null,
+      finalScore: finalScore.toFixed(2),
       finalScoreText,
       byMateria,
       timeSpent: simuladoInfo.tempoMinutos * 60 - timeLeft,
@@ -888,23 +929,66 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
               </div>
             </div>
 
-            <button
-              onClick={generateSimulado}
-              disabled={loading}
-              className="w-full bg-alego-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                  Gerando simulado...
-                </>
-              ) : (
-                <>
-                  <PlayIcon className="h-5 w-5" />
-                  Iniciar Simulado
-                </>
+            <div className="flex flex-col sm:flex-row gap-3">
+              {profile?.role === 'admin' && (
+                <button
+                  onClick={async () => {
+                    try {
+                      // Salvar simulado no Firestore para compartilhamento (sem questões ainda)
+                      const sharedSimuladoRef = collection(db, 'sharedSimulados')
+                      const simuladoDoc = await addDoc(sharedSimuladoRef, {
+                        simuladoInfo: simuladoInfo,
+                        courseId: selectedCourseId,
+                        courseName: courseName || courseCompetition,
+                        hasRedacao: true, // Assumir que tem redação
+                        sharedBy: user.uid,
+                        sharedAt: serverTimestamp(),
+                        attempts: [],
+                        maxAttempts: 1,
+                        questions: null, // Questões serão geradas quando alguém acessar
+                      })
+
+                      // Criar link compartilhável
+                      const shareUrl = `${window.location.origin}/simulado-share/${simuladoDoc.id}`
+                      
+                      // Texto para WhatsApp
+                      const whatsappText = `📝 Simulado: ${courseName || courseCompetition || 'Concurso'}\n\n${simuladoInfo?.totalQuestoes || 0} questões | ${simuladoInfo?.tempoMinutos || 240} minutos\n\nFaça o simulado: ${shareUrl}`
+                      
+                      // Abrir WhatsApp
+                      window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, '_blank')
+                      
+                      setMessage('✅ Simulado compartilhado! Link copiado para o WhatsApp.')
+                    } catch (err) {
+                      console.error('Erro ao compartilhar simulado:', err)
+                      setMessage('❌ Erro ao compartilhar simulado. Tente novamente.')
+                    }
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl transition-all"
+                >
+                  <ShareIcon className="h-5 w-5" />
+                  Compartilhar Simulado
+                </button>
               )}
-            </button>
+              <button
+                onClick={() => {
+                  setShowAdScreen(true)
+                }}
+                disabled={loading}
+                className="flex-1 bg-alego-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                    Gerando simulado...
+                  </>
+                ) : (
+                  <>
+                    <PlayIcon className="h-5 w-5" />
+                    Iniciar Simulado
+                  </>
+                )}
+              </button>
+            </div>
 
             {loading && loadingTip && (
               <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
@@ -1033,7 +1117,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
                 <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
                   <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Nota Redação</p>
                   <p className="text-3xl font-bold text-purple-600">{results.redacao.nota}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">de 1000 pontos</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">de 10 pontos</p>
                 </div>
               ) : (
                 <div className="text-center p-4 bg-slate-100 dark:bg-slate-700 rounded-xl">
@@ -1114,6 +1198,45 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
             </div>
 
             <div className="flex gap-4">
+              {profile?.role === 'admin' && (
+                <button
+                  onClick={async () => {
+                    try {
+                      // Salvar simulado no Firestore para compartilhamento
+                      const sharedSimuladoRef = collection(db, 'sharedSimulados')
+                      const simuladoDoc = await addDoc(sharedSimuladoRef, {
+                        questions: questions,
+                        simuladoInfo: simuladoInfo,
+                        courseId: selectedCourseId,
+                        courseName: courseName || courseCompetition,
+                        hasRedacao: !!results.redacao,
+                        sharedBy: user.uid,
+                        sharedAt: serverTimestamp(),
+                        attempts: [],
+                        maxAttempts: 1,
+                      })
+
+                      // Criar link compartilhável
+                      const shareUrl = `${window.location.origin}/simulado-share/${simuladoDoc.id}`
+                      
+                      // Texto para WhatsApp
+                      const whatsappText = `📝 Simulado: ${courseName || courseCompetition || 'Concurso'}\n\n${simuladoInfo?.totalQuestoes || questions.length} questões | ${simuladoInfo?.tempoMinutos || 240} minutos\n\nFaça o simulado: ${shareUrl}`
+                      
+                      // Abrir WhatsApp
+                      window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, '_blank')
+                      
+                      alert('✅ Simulado compartilhado! Link copiado para o WhatsApp.')
+                    } catch (err) {
+                      console.error('Erro ao compartilhar simulado:', err)
+                      alert('❌ Erro ao compartilhar simulado. Tente novamente.')
+                    }
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl transition-all"
+                >
+                  <ShareIcon className="h-5 w-5" />
+                  Compartilhar Simulado
+                </button>
+              )}
               <button
                 onClick={() => {
                   setSimuladoInfo(null)
@@ -1143,6 +1266,19 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
           </div>
         </div>
       </div>
+    )
+  }
+
+  // Tela de publicidade de cursos (antes de iniciar)
+  if (showAdScreen && !loading && questions.length === 0) {
+    return (
+      <CourseAdScreen
+        onSkip={() => {
+          setShowAdScreen(false)
+          generateSimulado()
+        }}
+        duration={10}
+      />
     )
   }
 
