@@ -4,7 +4,6 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion, collection
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import LeadCapture from '../components/LeadCapture'
 import ResultExport from '../components/ResultExport'
 import CourseAdScreen from '../components/CourseAdScreen'
 import {
@@ -56,7 +55,8 @@ const SimuladoShare = () => {
   const { darkMode } = useDarkMode()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [lead, setLead] = useState(null)
+  const [userEmail, setUserEmail] = useState('')
+  const [emailSubmitted, setEmailSubmitted] = useState(false)
   const [visitorId, setVisitorId] = useState(null)
   const [alreadyAttempted, setAlreadyAttempted] = useState(false)
   
@@ -306,40 +306,33 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
     }
   }
 
-  // Capturar lead
-  const handleLeadCapture = async (leadData) => {
-    try {
-      // Salvar lead no Firestore
-      const leadRef = doc(db, 'leads', `${simuladoId}_${visitorId}`)
-      await setDoc(leadRef, {
-        ...leadData,
-        simuladoId,
-        visitorId,
-        courseId: simuladoData?.courseId || null,
-        courseName: simuladoData?.courseName || '',
-        createdAt: serverTimestamp(),
-        contacted: false,
-        notes: '',
-      })
+  // Capturar email e iniciar simulado
+  const handleEmailSubmit = async (e) => {
+    e.preventDefault()
+    if (!userEmail.trim() || !userEmail.includes('@')) {
+      alert('Por favor, insira um email válido.')
+      return
+    }
 
+    try {
       // Salvar tentativa no simulado
       const simuladoRef = doc(db, 'sharedSimulados', simuladoId)
       await updateDoc(simuladoRef, {
         attempts: arrayUnion({
           visitorId,
-          leadData,
-          startedAt: new Date().toISOString(), // Usar timestamp manual pois serverTimestamp() não funciona dentro de arrayUnion()
+          email: userEmail.trim(),
+          startedAt: new Date().toISOString(),
           completed: false,
         }),
       })
 
-      setLead(leadData)
+      setEmailSubmitted(true)
       // Mostrar tela de publicidade antes de iniciar (se já tiver questões)
       if (questions.length > 0) {
         setShowAdScreen(true)
       }
     } catch (err) {
-      console.error('Erro ao salvar lead:', err)
+      console.error('Erro ao salvar email:', err)
       alert('Erro ao salvar dados. Tente novamente.')
     }
   }
@@ -577,12 +570,32 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
       )
       await updateDoc(simuladoRef, { attempts: updatedAttempts })
 
-      // Atualizar lead com resultado
-      const leadRef = doc(db, 'leads', `${simuladoId}_${visitorId}`)
-      await updateDoc(leadRef, {
-        finalScore: resultsData.finalScore,
-        completedAt: serverTimestamp(),
-      })
+      // Enviar email com resultado
+      // Buscar email dos attempts caso não esteja no estado
+      const attemptWithEmail = updatedAttempts.find(a => a.visitorId === visitorId && a.email)
+      const emailToSend = userEmail || attemptWithEmail?.email
+      
+      if (emailToSend) {
+        try {
+          const emailFunctionUrl = 'https://us-central1-plegi-d84c2.cloudfunctions.net/sendSimuladoResultEmail'
+          await fetch(emailFunctionUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: emailToSend,
+              results: resultsData,
+              simuladoName: simuladoData?.simuladoInfo?.descricao || '',
+              courseName: simuladoData?.courseName || '',
+            }),
+          })
+          console.log('Email de resultado enviado para:', emailToSend)
+        } catch (emailErr) {
+          console.error('Erro ao enviar email:', emailErr)
+          // Não bloquear se o email falhar
+        }
+      }
     } catch (err) {
       console.error('Erro ao salvar resultado:', err)
     }
@@ -650,8 +663,8 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
     )
   }
 
-  // Tela de publicidade (após capturar lead e ter questões)
-  if (showAdScreen && lead && questions.length > 0 && !isRunning) {
+  // Tela de publicidade (após capturar email e ter questões)
+  if (showAdScreen && emailSubmitted && questions.length > 0 && !isRunning) {
     return (
       <CourseAdScreen
         onSkip={() => {
@@ -663,13 +676,37 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
     )
   }
 
-  // Captura de lead
-  if (!lead) {
+  // Captura de email
+  if (!emailSubmitted) {
     return (
-      <LeadCapture
-        onSubmit={handleLeadCapture}
-        courseName={simuladoData?.courseName}
-      />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 dark:from-slate-900 dark:to-slate-800 p-4">
+        <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8 text-center">
+          <h1 className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-4">
+            Simulado {simuladoData?.courseName ? `para ${simuladoData.courseName}` : ''}
+          </h1>
+          <p className="text-slate-700 dark:text-slate-300 mb-6">
+            Informe seu email para receber o resultado do simulado.
+          </p>
+          <form onSubmit={handleEmailSubmit} className="space-y-4">
+            <div>
+              <input
+                type="email"
+                placeholder="Seu Email"
+                value={userEmail}
+                onChange={(e) => setUserEmail(e.target.value)}
+                className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full bg-blue-600 text-white p-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+            >
+              Iniciar Simulado
+            </button>
+          </form>
+        </div>
+      </div>
     )
   }
 
