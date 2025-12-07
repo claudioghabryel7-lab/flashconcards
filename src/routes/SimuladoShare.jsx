@@ -328,7 +328,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
         attempts: arrayUnion({
           visitorId,
           leadData,
-          startedAt: serverTimestamp(),
+          startedAt: new Date().toISOString(), // Usar timestamp manual pois serverTimestamp() não funciona dentro de arrayUnion()
           completed: false,
         }),
       })
@@ -572,7 +572,7 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
       const attempts = simuladoDoc.data().attempts || []
       const updatedAttempts = attempts.map(a => 
         a.visitorId === visitorId 
-          ? { ...a, completed: true, finishedAt: serverTimestamp(), results: resultsData }
+          ? { ...a, completed: true, finishedAt: new Date().toISOString(), results: resultsData }
           : a
       )
       await updateDoc(simuladoRef, { attempts: updatedAttempts })
