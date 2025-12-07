@@ -855,7 +855,7 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
               <ResultExport
                 results={results}
                 courseName={simuladoData?.courseName}
-                leadName={lead.nome}
+                leadName={userEmail ? userEmail.split('@')[0] : 'Candidato'}
               />
             </div>
 
