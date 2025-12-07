@@ -6908,6 +6908,28 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                 >
                                   {simulado.ativo === false ? '✅ Ativar' : '❌ Desativar'}
                                 </button>
+                                {attempts.length > 0 && (
+                                  <button
+                                    onClick={async () => {
+                                      if (!confirm(`Tem certeza que deseja resetar todas as ${attempts.length} tentativas deste simulado? Isso permitirá que todos façam o simulado novamente.`)) {
+                                        return
+                                      }
+                                      try {
+                                        const simuladoRef = doc(db, 'sharedSimulados', simulado.id)
+                                        await updateDoc(simuladoRef, {
+                                          attempts: [],
+                                        })
+                                        setMessage(`✅ ${attempts.length} tentativa(s) resetada(s)! Todos podem fazer o simulado novamente.`)
+                                      } catch (err) {
+                                        console.error('Erro ao resetar tentativas:', err)
+                                        setMessage('Erro ao resetar tentativas.')
+                                      }
+                                    }}
+                                    className="px-4 py-2 bg-orange-600 text-white rounded-xl font-bold text-sm hover:bg-orange-700 transition-colors"
+                                  >
+                                    🔄 Resetar Tentativas
+                                  </button>
+                                )}
                               </div>
 
                               {/* Lista de tentativas */}
