@@ -146,6 +146,7 @@ const AdminPanel = () => {
     imageUrl: '',
     active: true,
     featured: false, // Curso em destaque (aparece no topo)
+    referenceLink: '', // Link de referência para a IA analisar o concurso
   })
   const [uploadingCourse, setUploadingCourse] = useState(false)
   const [editingCourseImage, setEditingCourseImage] = useState(null) // ID do curso sendo editado
@@ -1813,6 +1814,7 @@ REGRAS CRÍTICAS:
         imageUrl: courseForm.imageUrl || '',
         active: courseForm.active !== false,
         featured: courseForm.featured === true, // Curso em destaque
+        referenceLink: courseForm.referenceLink?.trim() || '', // Link de referência
         createdAt: serverTimestamp(),
       })
 
@@ -1828,6 +1830,7 @@ REGRAS CRÍTICAS:
         imageUrl: '',
         active: true,
         featured: false,
+        referenceLink: '',
       })
     } catch (err) {
       console.error('Erro ao adicionar curso:', err)
@@ -1862,6 +1865,7 @@ REGRAS CRÍTICAS:
       courseDuration: course.courseDuration || '',
       active: course.active !== false,
       featured: course.featured === true, // Curso em destaque
+      referenceLink: course.referenceLink || '', // Link de referência
     })
   }
 
@@ -1888,6 +1892,7 @@ REGRAS CRÍTICAS:
         courseDuration: editingCourseData.courseDuration?.trim() || '',
         active: editingCourseData.active,
         featured: editingCourseData.featured === true,
+        referenceLink: editingCourseData.referenceLink?.trim() || '',
       })
       cancelEditingCourse()
     } catch (err) {
@@ -4782,6 +4787,22 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                           </p>
                         </div>
 
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-2">
+                            🔗 Link de Referência do Concurso
+                          </label>
+                          <input
+                            type="url"
+                            value={courseForm.referenceLink}
+                            onChange={(e) => setCourseForm(prev => ({ ...prev, referenceLink: e.target.value }))}
+                            placeholder="https://exemplo.com/edital-concurso"
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          />
+                          <p className="text-xs text-slate-500 mt-1">
+                            Cole aqui um link (edital, site do concurso, etc). A IA usará este link como base para gerar questões, redações e responder perguntas sobre o concurso.
+                          </p>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-xs font-semibold text-slate-600 mb-2">
@@ -4994,6 +5015,22 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                               placeholder="Ex: 6 meses"
                                             />
                                           </div>
+                                        </div>
+                                        
+                                        <div>
+                                          <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                            🔗 Link de Referência do Concurso
+                                          </label>
+                                          <input
+                                            type="url"
+                                            value={editingCourseData?.referenceLink || ''}
+                                            onChange={(e) => setEditingCourseData(prev => ({ ...prev, referenceLink: e.target.value }))}
+                                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                                            placeholder="https://exemplo.com/edital-concurso"
+                                          />
+                                          <p className="text-xs text-slate-500 mt-1">
+                                            A IA usará este link como base para gerar questões, redações e responder perguntas.
+                                          </p>
                                         </div>
                                         
                                         <div className="grid grid-cols-2 gap-3">

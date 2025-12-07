@@ -655,6 +655,14 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
 
     try {
       const courseId = selectedCourseId || 'alego-default'
+      
+      // Buscar dados do curso (incluindo link de referência)
+      const courseRef = doc(db, 'courses', courseId)
+      const courseDoc = await getDoc(courseRef)
+      const courseData = courseDoc.exists() ? courseDoc.data() : null
+      const referenceLink = courseData?.referenceLink || ''
+      
+      // Buscar edital
       const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
       const editalDoc = await getDoc(editalRef)
 
@@ -663,6 +671,10 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
         const data = editalDoc.data()
         editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
       }
+      
+      // Obter contexto do link de referência
+      const { getLinkContextForAI } = await import('../utils/linkContent.js')
+      const linkContext = referenceLink ? await getLinkContextForAI(referenceLink) : ''
 
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
       if (!apiKey) {
@@ -705,6 +717,8 @@ INSTRUÇÕES ESPECIAIS:
 - Use terminologia e contexto específicos deste concurso quando aplicável
 
 Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}" do concurso ${courseName || 'especificado'}${courseCompetition ? ` (${courseCompetition})` : ''}.
+
+${linkContext}
 
 ${editalText ? `CONTEXTO DO EDITAL DO CONCURSO ${courseName || ''}:\n${editalText.substring(0, 50000)}\n\n` : ''}
 

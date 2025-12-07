@@ -336,11 +336,22 @@ const AIChat = () => {
         }
         
         // Buscar nome do curso
+        // Buscar dados do curso (incluindo link de referência)
+        let referenceLink = ''
         if (courseId !== 'alego-default') {
           const courseDoc = await getDoc(doc(db, 'courses', courseId))
           if (courseDoc.exists()) {
-            courseName = courseDoc.data().name || courseDoc.data().competition || 'o concurso'
+            const courseData = courseDoc.data()
+            courseName = courseData.name || courseData.competition || 'o concurso'
+            referenceLink = courseData.referenceLink || ''
           }
+        }
+        
+        // Obter contexto do link de referência
+        let linkContext = ''
+        if (referenceLink) {
+          const { getLinkContextForAI } = await import('../utils/linkContent.js')
+          linkContext = await getLinkContextForAI(referenceLink)
         } else {
           courseName = 'ALEGO Policial Legislativo'
         }
@@ -353,12 +364,17 @@ const AIChat = () => {
         ? `Progresso: ${userProgress.totalDays} dias, ${userProgress.totalHours.toFixed(1)}h, ${userProgress.studiedCards} cards.`
         : 'Aluno iniciante.'
 
-      // Combinar texto digitado + texto do PDF
+      // Combinar texto digitado + texto do PDF + link de referência
       let editalContext = ''
-      if (editalPrompt || pdfText) {
+      if (editalPrompt || pdfText || linkContext) {
         editalContext = '\n\n═══════════════════════════════════════════════════════════\n'
         editalContext += `📋 INFORMAÇÕES COMPLETAS DO CONCURSO: ${courseName}\n`
         editalContext += '═══════════════════════════════════════════════════════════\n\n'
+        
+        // Adicionar contexto do link de referência primeiro (mais importante)
+        if (linkContext) {
+          editalContext += linkContext + '\n'
+        }
         
         if (editalPrompt) {
           editalContext += `📝 TEXTO CONFIGURADO PELO ADMIN:\n${editalPrompt}\n\n`

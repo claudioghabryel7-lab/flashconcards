@@ -203,6 +203,15 @@ const SimuladoShare = () => {
     setLoadingProgress(5)
     try {
       const courseId = simuladoData.courseId || 'alego-default'
+      
+      // Buscar dados do curso (incluindo link de referência)
+      setLoadingStatus('Carregando informações do curso...')
+      setLoadingProgress(8)
+      const courseRef = doc(db, 'courses', courseId)
+      const courseDoc = await getDoc(courseRef)
+      const courseData = courseDoc.exists() ? courseDoc.data() : null
+      const referenceLink = courseData?.referenceLink || ''
+      
       setLoadingStatus('Carregando edital...')
       setLoadingProgress(10)
       const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
@@ -213,6 +222,10 @@ const SimuladoShare = () => {
         const data = editalDoc.data()
         editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
       }
+      
+      // Obter contexto do link de referência
+      const { getLinkContextForAI } = await import('../utils/linkContent.js')
+      const linkContext = referenceLink ? await getLinkContextForAI(referenceLink) : ''
 
       setLoadingStatus('Inicializando gerador de questões...')
       setLoadingProgress(15)
@@ -246,6 +259,8 @@ const SimuladoShare = () => {
 CONCURSO ESPECÍFICO: ${simuladoData.courseName || 'Concurso'}
 
 Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}".
+
+${linkContext}
 
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 50000)}\n\n` : ''}
 
@@ -391,13 +406,26 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
         return
       }
 
+      // Buscar link de referência do curso
+      const courseId = simuladoData?.courseId || 'alego-default'
+      const courseRef = doc(db, 'courses', courseId)
+      const courseDoc = await getDoc(courseRef)
+      const courseData = courseDoc.exists() ? courseDoc.data() : null
+      const referenceLink = courseData?.referenceLink || ''
+      
+      // Obter contexto do link
+      const { getLinkContextForAI } = await import('../utils/linkContent.js')
+      const linkContext = referenceLink ? await getLinkContextForAI(referenceLink) : ''
+
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
 
       const themePrompt = `Crie um tema de redação para o concurso ${simuladoData?.courseName || 'mencionado'}.
-      
+
+${linkContext}
+
 Retorne APENAS o tema, sem explicações, sem aspas, sem formatação especial.
-O tema deve ser claro e direto.`
+O tema deve ser claro e direto, relacionado ao concurso mencionado.`
 
       const result = await model.generateContent(themePrompt)
       let theme = result.response.text().trim()
