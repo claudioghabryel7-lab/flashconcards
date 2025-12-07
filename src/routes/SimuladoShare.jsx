@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion, collection, onSnapshot, query, where } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion, collection, onSnapshot, query, where, getDocs } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
@@ -226,6 +226,69 @@ const SimuladoShare = () => {
       // Obter contexto do link de referência
       const { getLinkContextForAI } = await import('../utils/linkContent.js')
       const linkContext = referenceLink ? await getLinkContextForAI(referenceLink) : ''
+      
+      // Buscar flashcards do curso para usar como base
+      let flashcardsContext = ''
+      try {
+        setLoadingStatus('Carregando flashcards do curso...')
+        setLoadingProgress(12)
+        const flashcardsRef = collection(db, 'flashcards')
+        const flashcardsSnapshot = await getDocs(flashcardsRef)
+        const allFlashcards = flashcardsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        
+        // Filtrar flashcards do curso
+        let courseFlashcards = []
+        if (courseId === 'alego-default') {
+          // Para ALEGO padrão, buscar flashcards sem courseId
+          courseFlashcards = allFlashcards.filter(card => 
+            !card.courseId || card.courseId === '' || card.courseId === 'alego-default'
+          )
+        } else {
+          // Para outros cursos, buscar flashcards com o courseId correspondente
+          courseFlashcards = allFlashcards.filter(card => 
+            card.courseId === courseId
+          )
+        }
+        
+        // Filtrar flashcards da matéria atual (se houver)
+        const getFlashcardsForMateria = (materiaNome) => {
+          return courseFlashcards.filter(card => {
+            const cardMateria = card.materia || ''
+            // Comparação flexível (case-insensitive, remove espaços)
+            return cardMateria.toLowerCase().trim() === materiaNome.toLowerCase().trim() ||
+                   cardMateria.toLowerCase().includes(materiaNome.toLowerCase()) ||
+                   materiaNome.toLowerCase().includes(cardMateria.toLowerCase())
+          })
+        }
+        
+        // Formatar flashcards para contexto (limitar quantidade para não exceder tokens)
+        const formatFlashcardsForContext = (flashcards, maxFlashcards = 50) => {
+          const limited = flashcards.slice(0, maxFlashcards)
+          return limited.map((card, index) => {
+            const pergunta = card.pergunta || card.front || ''
+            const resposta = card.resposta || card.back || ''
+            return `${index + 1}. Pergunta: ${pergunta}\n   Resposta: ${resposta}`
+          }).join('\n\n')
+        }
+        
+        // Armazenar função para usar dentro do loop
+        window.getFlashcardsForMateria = getFlashcardsForMateria
+        window.formatFlashcardsForContext = formatFlashcardsForContext
+        window.courseFlashcards = courseFlashcards
+        
+        if (courseFlashcards.length > 0) {
+          flashcardsContext = `\n\n📚 FLASHCARDS DO CURSO (BASE PRINCIPAL PARA AS QUESTÕES):\n`
+          flashcardsContext += `Total de ${courseFlashcards.length} flashcards encontrados no curso.\n`
+          flashcardsContext += `IMPORTANTE: Use o conteúdo dos flashcards acima como BASE PRINCIPAL para criar as questões.\n`
+          flashcardsContext += `As questões devem testar o conhecimento presente nos flashcards do curso.\n\n`
+        }
+      } catch (flashcardsErr) {
+        console.error('Erro ao buscar flashcards:', flashcardsErr)
+        // Continuar mesmo se não conseguir buscar flashcards
+      }
 
       setLoadingStatus('Inicializando gerador de questões...')
       setLoadingProgress(15)
@@ -254,15 +317,37 @@ const SimuladoShare = () => {
         const currentProgress = progressBase + (i * progressPerMateria)
         setLoadingProgress(Math.round(currentProgress))
         setLoadingStatus(`Gerando questões de ${materia.nome}... (${i + 1}/${totalMaterias})`)
+        
+        // Buscar flashcards específicos da matéria
+        const materiaFlashcards = window.getFlashcardsForMateria 
+          ? window.getFlashcardsForMateria(materia.nome)
+          : []
+        const flashcardsText = materiaFlashcards.length > 0
+          ? `\n\n📚 FLASHCARDS DA MATÉRIA "${materia.nome}" (USE ESTES COMO BASE PRINCIPAL):\n${window.formatFlashcardsForContext ? window.formatFlashcardsForContext(materiaFlashcards, 30) : ''}\n\n`
+          : (window.courseFlashcards && window.courseFlashcards.length > 0
+              ? `\n\n📚 FLASHCARDS DO CURSO (USE COMO BASE):\n${window.formatFlashcardsForContext ? window.formatFlashcardsForContext(window.courseFlashcards.slice(0, 30), 30) : ''}\n\n`
+              : '')
+        
         const materiaPrompt = `Você é um especialista em criar questões de concursos públicos.
 
 CONCURSO ESPECÍFICO: ${simuladoData.courseName || 'Concurso'}
+
+${flashcardsContext}
+
+${flashcardsText}
+
+REGRAS CRÍTICAS PARA CRIAÇÃO DAS QUESTÕES:
+1. BASEIE-SE PRINCIPALMENTE nos flashcards acima - as questões devem testar o conhecimento presente nos flashcards
+2. Use o conteúdo dos flashcards como referência principal para criar questões relacionadas
+3. As questões devem cobrir os mesmos tópicos e conceitos presentes nos flashcards
+4. Se houver flashcards específicos da matéria "${materia.nome}", use APENAS esses como base
+5. Se não houver flashcards específicos da matéria, use os flashcards gerais do curso
 
 Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}".
 
 ${linkContext}
 
-${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 50000)}\n\n` : ''}
+${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 30000)}\n\n` : ''}
 
 REGRAS CRÍTICAS:
 - Questões devem ser ESPECÍFICAS para o concurso ${simuladoData.courseName || 'mencionado'}
