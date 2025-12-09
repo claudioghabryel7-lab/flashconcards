@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { useMemo, useState, useRef, useEffect } from 'react'
+import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   AcademicCapIcon,
   ArrowLeftOnRectangleIcon,
@@ -8,6 +8,11 @@ import {
   MoonIcon,
   SunIcon,
   ArrowPathIcon,
+  Bars3Icon,
+  XMarkIcon,
+  BookOpenIcon,
+  UsersIcon,
+  ShieldCheckIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
@@ -19,20 +24,78 @@ const Header = () => {
   const { user, logout, isAdmin, profile } = useAuth()
   const { darkMode, toggleDarkMode } = useDarkMode()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const menuRef = useRef(null)
 
-  const links = useMemo(
-    () => [
-      { to: '/', label: 'Início', guest: true },
-      { to: '/dashboard', label: 'Painel', auth: true },
-      { to: '/flashcards', label: 'Flashcards', auth: true },
-      { to: '/flashquestoes', label: 'FlashQuestões', auth: true },
-      { to: '/simulado', label: 'Simulado', auth: true },
-      { to: '/treino-redacao', label: 'Treino Redação', auth: true },
-      { to: '/mapas-mentais', label: 'Mapas Mentais', auth: true },
-      { to: '/ranking', label: 'Ranking', auth: true },
-      { to: '/feed', label: 'FlashSocial', auth: true },
-      { to: '/admin', label: 'Admin', auth: true, admin: true },
-    ],
+  // Fechar menu ao clicar fora ou mudar de rota
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsMenuOpen(false)
+      }
+    }
+
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isMenuOpen])
+
+  useEffect(() => {
+    setIsMenuOpen(false)
+  }, [location.pathname])
+
+  const menuCategories = useMemo(() => {
+    const categories = {
+      estudo: {
+        label: 'Estudo',
+        icon: BookOpenIcon,
+        items: [
+          { to: '/dashboard', label: 'Painel', auth: true },
+          { to: '/flashcards', label: 'Flashcards', auth: true },
+          { to: '/flashquestoes', label: 'FlashQuestões', auth: true },
+          { to: '/simulado', label: 'Simulado', auth: true },
+          { to: '/treino-redacao', label: 'Treino Redação', auth: true },
+          { to: '/mapas-mentais', label: 'Mapas Mentais', auth: true },
+        ],
+      },
+      social: {
+        label: 'Social',
+        icon: UsersIcon,
+        items: [
+          { to: '/ranking', label: 'Ranking', auth: true },
+          { to: '/feed', label: 'FlashSocial', auth: true },
+        ],
+      },
+      admin: {
+        label: 'Admin',
+        icon: ShieldCheckIcon,
+        items: [
+          { to: '/admin', label: 'Admin', auth: true, admin: true },
+        ],
+      },
+    }
+
+    // Filtrar categorias e itens baseado no usuário
+    const filteredCategories = {}
+    Object.keys(categories).forEach((key) => {
+      const category = categories[key]
+      const filteredItems = category.items.filter((item) => {
+        if (item.admin && !isAdmin) return false
+        if (item.auth && !user) return false
+        return true
+      })
+      if (filteredItems.length > 0) {
+        filteredCategories[key] = { ...category, items: filteredItems }
+      }
+    })
+
+    return filteredCategories
+  }, [user, isAdmin])
+
+  const guestLinks = useMemo(
+    () => [{ to: '/', label: 'Início', guest: true }],
     [],
   )
 
@@ -68,16 +131,10 @@ const Header = () => {
 
           {/* Navegação e Ações Centralizadas */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
-            {/* Menu de Navegação */}
-            <nav className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
-              {links
-                .filter((item) => {
-                  if (item.admin && !isAdmin) return false
-                  if (item.auth && !user) return false
-                  if (item.guest && user) return false
-                  return true
-                })
-                .map((item) => (
+            {/* Menu Dropdown ou Links para Guest */}
+            {!user ? (
+              <nav className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
+                {guestLinks.map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}
@@ -92,7 +149,72 @@ const Header = () => {
                     {item.label}
                   </NavLink>
                 ))}
-            </nav>
+              </nav>
+            ) : (
+              <>
+                {/* Overlay quando menu está aberto */}
+                {isMenuOpen && (
+                  <div
+                    className="fixed inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm z-40"
+                    onClick={() => setIsMenuOpen(false)}
+                  />
+                )}
+                
+                <div className="relative" ref={menuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsMenuOpen(!isMenuOpen)}
+                    className="flex items-center gap-2 rounded-xl px-4 sm:px-5 md:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold transition-all duration-200 bg-gradient-to-br from-alego-600 to-alego-700 text-white shadow-lg shadow-alego-600/30 dark:from-alego-700 dark:to-alego-800 dark:shadow-alego-700/30 hover:from-alego-700 hover:to-alego-800 hover:shadow-xl hover:scale-105"
+                  >
+                    {isMenuOpen ? (
+                      <XMarkIcon className="h-5 w-5" />
+                    ) : (
+                      <Bars3Icon className="h-5 w-5" />
+                    )}
+                    <span>Menu</span>
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {isMenuOpen && (
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 sm:w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border-2 border-slate-200/60 dark:border-slate-700/60 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="p-3 max-h-[70vh] overflow-y-auto">
+                        {Object.entries(menuCategories).map(([key, category]) => {
+                          const Icon = category.icon
+                          return (
+                            <div key={key} className="mb-4 last:mb-0">
+                              <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-alego-50/50 dark:bg-alego-900/20 rounded-lg">
+                                <Icon className="h-4 w-4 text-alego-600 dark:text-alego-400" />
+                                <h3 className="text-xs font-bold uppercase tracking-wider text-alego-600 dark:text-alego-400">
+                                  {category.label}
+                                </h3>
+                              </div>
+                              <div className="space-y-1.5">
+                                {category.items.map((item) => (
+                                  <NavLink
+                                    key={item.to}
+                                    to={item.to}
+                                    onClick={() => setIsMenuOpen(false)}
+                                    className={({ isActive }) =>
+                                      `flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                                        isActive
+                                          ? 'bg-gradient-to-br from-alego-600 to-alego-700 text-white shadow-md scale-[1.02]'
+                                          : 'text-slate-700 dark:text-slate-300 hover:bg-alego-50 dark:hover:bg-alego-900/30 hover:scale-[1.01]'
+                                      }`
+                                    }
+                                  >
+                                    {item.label}
+                                  </NavLink>
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* Botões de Ação - Centralizados */}
             <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">

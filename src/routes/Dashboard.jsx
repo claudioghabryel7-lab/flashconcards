@@ -24,6 +24,8 @@ import {
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import { useSubjectOrder } from '../hooks/useSubjectOrder'
+import { applySubjectOrder } from '../utils/subjectOrder'
 import ProgressCalendar from '../components/ProgressCalendar'
 
 const MATERIAS = [
@@ -362,6 +364,9 @@ const Dashboard = () => {
     return () => unsub()
   }, [user, selectedCourseId])
 
+  // Carregar ordem de matérias e módulos
+  const { subjectOrderConfig } = useSubjectOrder(selectedCourseId, user?.uid)
+
   // Organizar matérias e módulos dos flashcards
   const organizedModules = useMemo(() => {
     const organized = {}
@@ -444,16 +449,8 @@ const Dashboard = () => {
     }
 
     // Encontrar o primeiro módulo não estudado, seguindo ordem das matérias e módulos
-    // Usar matérias reais dos flashcards, não a lista fixa MATERIAS
-    const materiasReais = Object.keys(organizedModules).sort((a, b) => {
-      // Ordenar: primeiro as que estão em MATERIAS (na ordem original), depois as outras alfabeticamente
-      const indexA = MATERIAS.indexOf(a)
-      const indexB = MATERIAS.indexOf(b)
-      if (indexA !== -1 && indexB !== -1) return indexA - indexB
-      if (indexA !== -1) return -1
-      if (indexB !== -1) return 1
-      return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
-    })
+    // Usar ordem personalizada
+    const materiasReais = applySubjectOrder(organizedModules, subjectOrderConfig)
     
     for (const materia of materiasReais) {
       const modulos = organizedModules[materia] || []
@@ -499,6 +496,9 @@ const Dashboard = () => {
         currentStudiedModules[suggestedModule.materia] = {}
       }
       currentStudiedModules[suggestedModule.materia][suggestedModule.modulo] = true
+
+      // Atualização otimista - atualizar estado local imediatamente para sincronizar dias restantes
+      setStudiedModules({ ...currentStudiedModules })
 
       // Verificar se todos os módulos foram estudados (após marcar o atual)
       let allStudied = true
@@ -1051,18 +1051,8 @@ const Dashboard = () => {
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* Usar matérias reais dos flashcards, não a lista fixa MATERIAS */}
-            {Object.keys(organizedModules)
-              .sort((a, b) => {
-                // Ordenar: primeiro as que estão em MATERIAS (na ordem original), depois as outras alfabeticamente
-                const indexA = MATERIAS.indexOf(a)
-                const indexB = MATERIAS.indexOf(b)
-                if (indexA !== -1 && indexB !== -1) return indexA - indexB
-                if (indexA !== -1) return -1
-                if (indexB !== -1) return 1
-                return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
-              })
-              .map((materia) => {
+            {/* Usar matérias reais dos flashcards com ordem personalizada */}
+            {applySubjectOrder(organizedModules, subjectOrderConfig).map((materia) => {
               const stats = studyStats.bySubject[materia] || { days: 0, hours: 0, percentage: 0, studiedCards: 0, totalCards: 0 }
               const progress = stats.percentage || 0
               const hasProgress = stats.totalCards > 0

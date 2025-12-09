@@ -7,6 +7,8 @@ import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useStudyTimer } from '../hooks/useStudyTimer'
+import { useSubjectOrder } from '../hooks/useSubjectOrder'
+import { applySubjectOrder, applyModuleOrder, getModuleOrder } from '../utils/subjectOrder'
 import { FolderIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon } from '@heroicons/react/24/outline'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import {
@@ -61,10 +63,14 @@ const FlashcardView = () => {
   const [selectedCourseId, setSelectedCourseId] = useState(null) // Curso selecionado (null = ALEGO padrão)
   const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
   const [cardsLoading, setCardsLoading] = useState(true) // Estado para evitar flash de cards
+  const [timerActive, setTimerActive] = useState(false) // Timer só inicia quando usuário clicar no relógio
   
-  // Timer de estudo - ativo quando um módulo está selecionado
+  // Timer de estudo - ativo apenas quando usuário clicar no relógio
   const isStudying = !!selectedMateria && !!selectedModulo
-  const { formattedTime, elapsedSeconds } = useStudyTimer(isStudying, user?.uid, selectedCourseId)
+  const { formattedTime, elapsedSeconds } = useStudyTimer(timerActive && isStudying, user?.uid, selectedCourseId)
+  
+  // Carregar ordem de matérias e módulos
+  const { subjectOrderConfig, moduleOrderConfigs, loadModuleOrder } = useSubjectOrder(selectedCourseId, user?.uid)
 
   // Usar curso selecionado do perfil do usuário
   useEffect(() => {
@@ -268,6 +274,16 @@ const FlashcardView = () => {
     return organized
   }, [cards])
 
+  // Carregar ordens de módulos para todas as matérias quando necessário
+  useEffect(() => {
+    if (!subjectOrderConfig || !organizedCards) return
+    Object.keys(organizedCards).forEach(materia => {
+      if (!moduleOrderConfigs[materia]) {
+        loadModuleOrder(materia).catch(err => console.error('Erro ao carregar ordem de módulos:', err))
+      }
+    })
+  }, [organizedCards, subjectOrderConfig, moduleOrderConfigs, loadModuleOrder])
+
   // Selecionar matéria e módulo baseado em query params
   useEffect(() => {
     const materiaParam = searchParams.get('materia')
@@ -294,6 +310,8 @@ const FlashcardView = () => {
   useEffect(() => {
     setSessionRatings({})
     setModuleCompleted(false)
+    // Resetar timer quando mudar de módulo
+    setTimerActive(false)
   }, [selectedMateria, selectedModulo, studyMode])
 
   const checkModuleCompletion = (ratingsSnapshot) => {
@@ -723,18 +741,41 @@ Regras:
               </p>
             </div>
             {isStudying && (
-              <div className="relative group inline-flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 rounded-xl border border-blue-500/30 dark:border-blue-400/30 backdrop-blur-sm hover:border-blue-500/50 dark:hover:border-blue-400/50 transition-all">
+              <button
+                type="button"
+                onClick={() => setTimerActive(!timerActive)}
+                className={`relative group inline-flex items-center gap-3 px-5 py-3 rounded-xl border backdrop-blur-sm transition-all cursor-pointer ${
+                  timerActive
+                    ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 dark:from-green-500/30 dark:to-emerald-500/30 border-green-500/50 dark:border-green-400/50 hover:border-green-500/70 dark:hover:border-green-400/70'
+                    : 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 border-blue-500/30 dark:border-blue-400/30 hover:border-blue-500/50 dark:hover:border-blue-400/50'
+                }`}
+                title={timerActive ? 'Clique para pausar o timer' : 'Clique para iniciar o timer'}
+              >
                 <div className="relative">
-                  <div className="absolute inset-0 bg-blue-500 rounded-full blur-md opacity-50 group-hover:opacity-75 transition-opacity animate-pulse"></div>
-                  <ClockIcon className="relative h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  <div className={`absolute inset-0 rounded-full blur-md transition-opacity ${
+                    timerActive 
+                      ? 'bg-green-500 opacity-50 group-hover:opacity-75 animate-pulse' 
+                      : 'bg-blue-500 opacity-50 group-hover:opacity-75'
+                  }`}></div>
+                  <ClockIcon className={`relative h-6 w-6 ${
+                    timerActive 
+                      ? 'text-green-600 dark:text-green-400' 
+                      : 'text-blue-600 dark:text-blue-400'
+                  }`} />
                 </div>
                 <div>
-                  <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Tempo</p>
-                  <p className="text-xl font-black bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent">
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                    {timerActive ? 'Contando...' : 'Clique para contar'}
+                  </p>
+                  <p className={`text-xl font-black bg-clip-text text-transparent ${
+                    timerActive
+                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 dark:from-green-400 dark:to-emerald-400'
+                      : 'bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400'
+                  }`}>
                     {formattedTime}
                   </p>
                 </div>
-              </div>
+              </button>
             )}
           </div>
         </div>
@@ -761,18 +802,10 @@ Regras:
               </div>
             ) : (
               <>
-            {/* Usar matérias dos flashcards organizados, não a lista fixa MATERIAS */}
-            {Object.keys(organizedCards)
-              .sort((a, b) => {
-                // Ordenar: primeiro as que estão em MATERIAS (na ordem original), depois as outras alfabeticamente
-                const indexA = MATERIAS.indexOf(a)
-                const indexB = MATERIAS.indexOf(b)
-                if (indexA !== -1 && indexB !== -1) return indexA - indexB
-                if (indexA !== -1) return -1
-                if (indexB !== -1) return 1
-                return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
-              })
-              .map((materia) => {
+            {/* Usar matérias dos flashcards organizados com ordem personalizada */}
+            {(() => {
+              const orderedSubjects = applySubjectOrder(organizedCards, subjectOrderConfig)
+              return orderedSubjects.map((materia) => {
               const modulos = organizedCards[materia] ? Object.keys(organizedCards[materia]) : []
               const isExpanded = expandedMaterias[materia]
               const isSelected = selectedMateria === materia
@@ -811,22 +844,11 @@ Regras:
                   
                   {isExpanded && (
                     <div className="ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-700 space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                      {modulos
-                        .sort((a, b) => {
-                          const extractNumber = (str) => {
-                            const match = str.match(/\d+/)
-                            return match ? parseInt(match[0], 10) : 999
-                          }
-                          const numA = extractNumber(a)
-                          const numB = extractNumber(b)
-                          if (numA !== 999 && numB !== 999) {
-                            return numA - numB
-                          }
-                          if (numA !== 999) return -1
-                          if (numB !== 999) return 1
-                          return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
-                        })
-                        .map((modulo) => {
+                      {(() => {
+                        // Usar ordem de módulos carregada
+                        const moduleOrderConfig = moduleOrderConfigs[materia] || { order: null, source: 'default', isCustom: false }
+                        const orderedModules = applyModuleOrder(modulos, moduleOrderConfig)
+                        return orderedModules.map((modulo) => {
                         const cardsInModulo = organizedCards[materia][modulo] || []
                         const isModuloSelected =
                           studyMode === 'module' &&
@@ -857,7 +879,7 @@ Regras:
                             )}
                           </button>
                         )
-                      })}
+                      })})()}
                       <button
                         type="button"
                         onClick={() => startMiniSim(materia)}
@@ -873,7 +895,7 @@ Regras:
                   )}
                 </div>
               )
-            })}
+            })})()}
               </>
             )}
           </div>

@@ -5,7 +5,7 @@ import { db } from '../firebase/config'
 
 /**
  * Hook para rastrear tempo de estudo em tempo real
- * Salva automaticamente no Firestore a cada minuto
+ * Salva automaticamente no Firestore a cada 10 segundos para sincronização
  */
 export const useStudyTimer = (isActive, userId, courseId = null) => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
@@ -16,12 +16,49 @@ export const useStudyTimer = (isActive, userId, courseId = null) => {
   // Iniciar timer quando isActive muda para true
   useEffect(() => {
     if (!isActive || !userId) {
+      // Parar timer e salvar horas finais antes de parar
+      if (startTimeRef.current && lastSaveRef.current) {
+        const saveFinalTime = async () => {
+          try {
+            const now = Date.now()
+            const elapsedSeconds = Math.floor((now - lastSaveRef.current) / 1000)
+            
+            if (elapsedSeconds > 0) {
+              const todayKey = dayjs().format('YYYY-MM-DD')
+              const courseKey = courseId || 'alego'
+              const progressDoc = doc(db, 'progress', `${userId}_${courseKey}_${todayKey}`)
+              
+              const existing = await getDoc(progressDoc)
+              const currentHours = existing.exists() ? (existing.data().hours || 0) : 0
+              const newHours = currentHours + (elapsedSeconds / 3600)
+              
+              await setDoc(
+                progressDoc,
+                {
+                  uid: userId,
+                  date: todayKey,
+                  hours: newHours,
+                  courseId: courseId || null,
+                  lastUpdated: dayjs().format('HH:mm:ss'),
+                  updatedAt: serverTimestamp(),
+                },
+                { merge: true }
+              )
+            }
+          } catch (err) {
+            console.error('Erro ao salvar tempo final:', err)
+          }
+        }
+        saveFinalTime()
+      }
+      
       // Parar timer
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
         intervalRef.current = null
       }
       startTimeRef.current = null
+      lastSaveRef.current = null
       return
     }
 
@@ -37,14 +74,15 @@ export const useStudyTimer = (isActive, userId, courseId = null) => {
       }
     }, 1000)
 
-    // Salvar no Firestore a cada minuto (60 segundos)
+    // Salvar no Firestore a cada 10 segundos para sincronização em tempo real
     const saveInterval = setInterval(async () => {
       if (startTimeRef.current && userId && lastSaveRef.current) {
         try {
           const now = Date.now()
-          const elapsedMinutes = Math.floor((now - lastSaveRef.current) / 60000)
+          const elapsedSeconds = Math.floor((now - lastSaveRef.current) / 1000)
           
-          if (elapsedMinutes > 0) {
+          // Salvar mesmo que seja menos de 1 minuto, para sincronização em tempo real
+          if (elapsedSeconds > 0) {
             const todayKey = dayjs().format('YYYY-MM-DD')
             // Incluir courseId no ID do documento para separar por curso
             const courseKey = courseId || 'alego'
@@ -52,7 +90,8 @@ export const useStudyTimer = (isActive, userId, courseId = null) => {
             
             const existing = await getDoc(progressDoc)
             const currentHours = existing.exists() ? (existing.data().hours || 0) : 0
-            const newHours = currentHours + (elapsedMinutes / 60) // Adicionar minutos como horas
+            // Adicionar segundos como horas (elapsedSeconds / 3600)
+            const newHours = currentHours + (elapsedSeconds / 3600)
             
             await setDoc(
               progressDoc,
@@ -61,7 +100,7 @@ export const useStudyTimer = (isActive, userId, courseId = null) => {
                 date: todayKey,
                 hours: newHours,
                 courseId: courseId || null, // null para ALEGO padrão
-                lastUpdated: dayjs().format('HH:mm'),
+                lastUpdated: dayjs().format('HH:mm:ss'),
                 updatedAt: serverTimestamp(),
               },
               { merge: true }
@@ -74,7 +113,7 @@ export const useStudyTimer = (isActive, userId, courseId = null) => {
           console.error('Erro ao salvar tempo de estudo:', err)
         }
       }
-    }, 60000) // Salvar a cada 60 segundos
+    }, 10000) // Salvar a cada 10 segundos para sincronização em tempo real
 
     return () => {
       if (intervalRef.current) {
