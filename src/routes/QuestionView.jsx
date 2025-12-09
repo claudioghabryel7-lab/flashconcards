@@ -61,7 +61,14 @@ const QuestionView = () => {
         const currentCourseId = selectedCourseId || null
         
         if (dataCourseId === currentCourseId || (dataCourseId === null && currentCourseId === null)) {
-          setStats(data)
+          // Garantir que byMateria existe
+          const loadedStats = {
+            correct: data.correct || 0,
+            wrong: data.wrong || 0,
+            byMateria: data.byMateria || {}
+          }
+          console.log('📊 Estatísticas carregadas do Firestore:', loadedStats)
+          setStats(loadedStats)
         } else {
           // Se não é do curso correto, inicializar estatísticas vazias
           setStats({ correct: 0, wrong: 0, byMateria: {} })
@@ -83,6 +90,10 @@ const QuestionView = () => {
   // Responder questão
   const handleAnswer = (answer) => {
     if (showResult) return
+    if (!selectedMateria) {
+      console.error('selectedMateria não está definido!')
+      return
+    }
     
     setSelectedAnswer(answer)
     setShowResult(true)
@@ -90,11 +101,17 @@ const QuestionView = () => {
     const currentQuestion = questions[currentQuestionIndex]
     const isCorrect = answer === currentQuestion.correta
     
-    // Atualizar estatísticas
-    const newStats = { ...stats }
-    newStats.correct = (newStats.correct || 0) + (isCorrect ? 1 : 0)
-    newStats.wrong = (newStats.wrong || 0) + (isCorrect ? 0 : 1)
+    // Atualizar estatísticas - garantir que byMateria existe
+    const newStats = { 
+      correct: stats.correct || 0, 
+      wrong: stats.wrong || 0, 
+      byMateria: stats.byMateria || {} 
+    }
     
+    newStats.correct = newStats.correct + (isCorrect ? 1 : 0)
+    newStats.wrong = newStats.wrong + (isCorrect ? 0 : 1)
+    
+    // Garantir que byMateria[selectedMateria] existe
     if (!newStats.byMateria[selectedMateria]) {
       newStats.byMateria[selectedMateria] = { correct: 0, wrong: 0 }
     }
@@ -108,7 +125,29 @@ const QuestionView = () => {
       const selectedCourseId = profile.selectedCourseId !== undefined ? profile.selectedCourseId : null
       const courseKey = selectedCourseId || 'alego' // 'alego' para curso padrão
       const statsRef = doc(db, 'questoesStats', `${user.uid}_${courseKey}`)
-      setDoc(statsRef, { ...newStats, courseId: selectedCourseId }, { merge: true })
+      
+      // Garantir que todos os campos estão presentes
+      const dataToSave = {
+        correct: newStats.correct,
+        wrong: newStats.wrong,
+        byMateria: newStats.byMateria,
+        courseId: selectedCourseId
+      }
+      
+      console.log('💾 Salvando estatísticas:', {
+        selectedMateria,
+        isCorrect,
+        dataToSave,
+        courseKey
+      })
+      
+      setDoc(statsRef, dataToSave, { merge: true })
+        .then(() => {
+          console.log('✅ Estatísticas salvas com sucesso:', dataToSave)
+        })
+        .catch((error) => {
+          console.error('❌ Erro ao salvar estatísticas:', error)
+        })
     }
     
     // Scroll suave para o resultado

@@ -124,6 +124,22 @@
                         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
         }
+        
+        // Configurações do curso (subcoleção) - ordem de matérias e módulos
+        match /config/{configId} {
+          // Permitir leitura para usuários autenticados
+          allow read: if isAuthenticated();
+          // Apenas admin pode criar, atualizar e deletar
+          allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          allow update: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          allow delete: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        }
       }
       
       match /reviews/{reviewId} {
@@ -152,9 +168,17 @@
         allow update, delete: if false;
       }
       
-      match /questoesStats/{userId} {
-        allow read: if isAuthenticated() && (userId == request.auth.uid || isAdmin());
-        allow create, update: if isAuthenticated() && userId == request.auth.uid;
+      match /questoesStats/{docId} {
+        // O docId pode ser apenas userId ou userId_courseKey
+        // Verificar se começa com o uid do usuário autenticado
+        function isOwnerDoc() {
+          return isAuthenticated() && 
+                 (docId == request.auth.uid || 
+                  docId.matches('^' + request.auth.uid + '_.*'));
+        }
+        
+        allow read: if isAuthenticated() && (isOwnerDoc() || isAdmin());
+        allow create, update: if isAuthenticated() && isOwnerDoc();
         allow delete: if isAdmin();
       }
       
