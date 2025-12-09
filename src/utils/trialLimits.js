@@ -25,67 +25,45 @@ export function getTrialData() {
 }
 
 /**
- * Verifica se pode acessar uma matéria específica (teste permite apenas 1)
+ * Verifica se pode acessar uma matéria específica (teste permite todas do curso)
  */
 export function canAccessMateria(materia) {
-  if (!isTrialMode()) return true
-  const trialData = getTrialData()
-  if (!trialData) return false
-  // Se não tem matéria definida, permite a primeira que tentar acessar
-  if (!trialData.materia) {
-    // Salvar a primeira matéria acessada
-    trialData.materia = materia
-    localStorage.setItem('trialData', JSON.stringify(trialData))
-    return true
-  }
-  return trialData.materia === materia
+  // No novo sistema, trial dá acesso completo ao curso, então todas as matérias são permitidas
+  return true
 }
 
 /**
- * Verifica se pode acessar um módulo (teste permite apenas 1)
+ * Verifica se pode acessar um módulo (teste permite todos do curso)
  */
 export function canAccessModulo(materia, modulo) {
-  if (!isTrialMode()) return true
-  if (!canAccessMateria(materia)) return false
-  const trialData = getTrialData()
-  if (!trialData) return false
-  // Se não tem módulo definido, permite o primeiro que tentar acessar
-  if (!trialData.modulo) {
-    trialData.modulo = modulo
-    localStorage.setItem('trialData', JSON.stringify(trialData))
-    return true
-  }
-  return trialData.modulo === modulo && trialData.materia === materia
+  // No novo sistema, trial dá acesso completo ao curso, então todos os módulos são permitidos
+  return true
 }
 
 /**
- * Verifica se pode gerar mais questões (limite de 10 por matéria)
+ * Verifica se pode gerar mais questões (teste permite ilimitadas)
  */
-let questionCounts = {}
 export function canGenerateQuestions(materia) {
-  if (!isTrialMode()) return true
-  if (!canAccessMateria(materia)) return false
-  const count = questionCounts[materia] || 0
-  return count < 10
+  // No novo sistema, trial dá acesso completo ao curso, então questões são ilimitadas
+  return true
 }
 
 export function incrementQuestionCount(materia) {
-  if (!isTrialMode()) return
-  questionCounts[materia] = (questionCounts[materia] || 0) + 1
+  // Não precisa mais contar questões no trial
+  return
 }
 
 /**
- * Verifica se pode fazer simulado (limite de 1)
+ * Verifica se pode fazer simulado (teste permite ilimitados)
  */
-let simuladoCount = 0
 export function canDoSimulado() {
-  if (!isTrialMode()) return true
-  return simuladoCount < 1
+  // No novo sistema, trial dá acesso completo ao curso, então simulados são ilimitados
+  return true
 }
 
 export function incrementSimuladoCount() {
-  if (!isTrialMode()) return
-  simuladoCount++
+  // Não precisa mais contar simulados no trial
+  return
 }
 
 /**
@@ -102,7 +80,8 @@ export function canAccessRedacao() {
 export function clearTrialData() {
   localStorage.removeItem('trialToken')
   localStorage.removeItem('trialData')
-  questionCounts = {}
-  simuladoCount = 0
 }
+
+
+
 

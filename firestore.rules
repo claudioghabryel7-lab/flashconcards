@@ -192,8 +192,12 @@
       match /testTrials/{trialId} {
         // Leitura pública (para validar token)
         allow read: if true;
-        // Apenas admin pode criar, atualizar e deletar
-        allow create, update, delete: if isAdmin();
+        // Admin pode criar e deletar
+        allow create, delete: if isAdmin();
+        // Admin pode atualizar tudo, usuários autenticados podem atualizar apenas registeredUsers
+        allow update: if isAdmin() || 
+                      (isAuthenticated() && 
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredUsers', 'accessCount', 'lastAccessedAt']));
       }
       
       match /passwordResetTokens/{tokenId} {

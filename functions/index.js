@@ -803,3 +803,67 @@ exports.sendSimuladoResultEmail = functions.https.onRequest((req, res) => {
     }
   })
 })
+
+// Função agendada para expirar usuários trial automaticamente
+// Roda diariamente às 00:00 UTC (21:00 horário de Brasília)
+exports.expireTrialUsers = functions.pubsub.schedule('0 0 * * *').timeZone('America/Sao_Paulo').onRun(async (context) => {
+  console.log('Iniciando verificação de usuários trial expirados...')
+  
+  try {
+    const now = new Date()
+    const db = admin.firestore()
+    
+    // Buscar todos os usuários com trialExpiresAt
+    const usersRef = db.collection('users')
+    const usersSnapshot = await usersRef
+      .where('trialExpiresAt', '!=', null)
+      .get()
+    
+    let deletedCount = 0
+    let errorCount = 0
+    
+    for (const userDoc of usersSnapshot.docs) {
+      try {
+        const userData = userDoc.data()
+        const trialExpiresAt = userData.trialExpiresAt
+        
+        if (!trialExpiresAt) continue
+        
+        // Converter para Date se for string
+        const expiresAt = typeof trialExpiresAt === 'string' 
+          ? new Date(trialExpiresAt) 
+          : trialExpiresAt.toDate()
+        
+        // Se expirou, deletar usuário
+        if (expiresAt < now) {
+          const userId = userDoc.id
+          console.log(`Deletando usuário trial expirado: ${userId} (${userData.email})`)
+          
+          // Deletar do Firebase Authentication
+          try {
+            await admin.auth().deleteUser(userId)
+            console.log(`Usuário ${userId} deletado do Authentication`)
+          } catch (authError) {
+            console.error(`Erro ao deletar usuário ${userId} do Authentication:`, authError)
+            // Continuar mesmo se falhar no Auth, pois pode já ter sido deletado
+          }
+          
+          // Deletar do Firestore
+          await userDoc.ref.delete()
+          console.log(`Usuário ${userId} deletado do Firestore`)
+          
+          deletedCount++
+        }
+      } catch (err) {
+        console.error(`Erro ao processar usuário ${userDoc.id}:`, err)
+        errorCount++
+      }
+    }
+    
+    console.log(`Verificação concluída. ${deletedCount} usuários deletados, ${errorCount} erros`)
+    return null
+  } catch (error) {
+    console.error('Erro na função de expiração de trial:', error)
+    throw error
+  }
+})

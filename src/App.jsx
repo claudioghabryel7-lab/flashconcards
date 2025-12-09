@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Header from './components/Header'
 import SupportButton from './components/SupportButton'
 import PopupBanner from './components/PopupBanner'
@@ -60,6 +60,9 @@ const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = 
 
 const GuestOnlyRoute = ({ children }) => {
   const { user, loading } = useAuth()
+  const location = useLocation()
+  const searchParams = new URLSearchParams(location.search)
+  const trialToken = searchParams.get('trial')
 
   if (loading) {
     return (
@@ -69,7 +72,9 @@ const GuestOnlyRoute = ({ children }) => {
     )
   }
 
-  if (user) {
+  // Se há token de trial, permitir acesso mesmo se usuário estiver autenticado
+  // (para permitir que usuários já autenticados se registrem no trial)
+  if (user && !trialToken) {
     return <Navigate to="/dashboard" replace />
   }
 
@@ -223,6 +228,8 @@ function App() {
           <Route path="/noticia/:postId" element={<NewsView />} />
           {/* Página de Simulado Compartilhado - Acessível sem login */}
           <Route path="/simulado-share/:simuladoId" element={<SimuladoShare />} />
+          {/* Página de Teste Gratuito - Acessível sem login */}
+          <Route path="/teste/:token" element={<TestTrial />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>

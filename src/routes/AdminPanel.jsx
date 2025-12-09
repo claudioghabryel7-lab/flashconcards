@@ -137,8 +137,9 @@ const AdminPanel = () => {
   // Estado para gerenciar testes gratuitos
   const [testTrials, setTestTrials] = useState([])
   const [trialForm, setTrialForm] = useState({
-    materia: '',
+    courseId: '',
     expiresInDays: 7,
+    maxUsers: 10,
   })
   
   // Estado para curso selecionado no gerenciamento de flashcards
@@ -7755,23 +7756,29 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                     <div className="space-y-4">
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-2">
-                          Matéria Sugerida (opcional)
+                          Curso Gratuito *
                         </label>
                         <select
-                          value={trialForm.materia}
-                          onChange={(e) => setTrialForm({ ...trialForm, materia: e.target.value })}
+                          value={trialForm.courseId}
+                          onChange={(e) => setTrialForm({ ...trialForm, courseId: e.target.value })}
                           className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          required
                         >
-                          <option value="">Qualquer matéria (usuário escolhe)</option>
-                          {MATERIAS.map((m) => (
-                            <option key={m} value={m}>{m}</option>
+                          <option value="">Selecione um curso</option>
+                          {courses.filter(c => c.active !== false).map((course) => (
+                            <option key={course.id} value={course.id}>
+                              {course.name} {course.id === 'alego-default' ? '(Padrão)' : ''}
+                            </option>
                           ))}
                         </select>
+                        <p className="text-xs text-slate-500 mt-1">
+                          O usuário terá acesso completo a este curso durante o período de teste
+                        </p>
                       </div>
 
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-2">
-                          Expira em (dias)
+                          Expira em (dias) *
                         </label>
                         <input
                           type="number"
@@ -7780,12 +7787,39 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                           value={trialForm.expiresInDays}
                           onChange={(e) => setTrialForm({ ...trialForm, expiresInDays: parseInt(e.target.value) || 7 })}
                           className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          required
                         />
+                        <p className="text-xs text-slate-500 mt-1">
+                          Após este período, o usuário será automaticamente removido
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-2">
+                          Limite de Usuários *
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={trialForm.maxUsers}
+                          onChange={(e) => setTrialForm({ ...trialForm, maxUsers: parseInt(e.target.value) || 10 })}
+                          className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          required
+                        />
+                        <p className="text-xs text-slate-500 mt-1">
+                          Quantidade máxima de pessoas que podem se cadastrar com este link
+                        </p>
                       </div>
 
                       <button
                         type="button"
                         onClick={async () => {
+                          if (!trialForm.courseId) {
+                            setMessage('❌ Selecione um curso para o teste gratuito')
+                            return
+                          }
+                          
                           try {
                             // Gerar token único
                             const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
@@ -7798,9 +7832,11 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                             const trialRef = doc(db, 'testTrials', token)
                             await setDoc(trialRef, {
                               token,
-                              materia: trialForm.materia || null,
+                              courseId: trialForm.courseId,
                               expiresAt: Timestamp.fromDate(expiresAt),
                               expiresInDays: trialForm.expiresInDays || 7,
+                              maxUsers: trialForm.maxUsers || 10,
+                              registeredUsers: [], // Array de UIDs que se cadastraram
                               active: true,
                               accessCount: 0,
                               createdAt: serverTimestamp(),
@@ -7814,10 +7850,11 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                             setMessage(`✅ Link de teste gerado e copiado! ${shareUrl}`)
                             
                             // Limpar formulário
-                            setTrialForm({ materia: '', expiresInDays: 7 })
+                            setTrialForm({ courseId: '', expiresInDays: 7, maxUsers: 10 })
                             
                             // Abrir WhatsApp para compartilhar
-                            const whatsappText = `🎁 Teste Gratuito da Plataforma!\n\nAcesse e experimente:\n${shareUrl}\n\n✨ Acesso limitado por ${trialForm.expiresInDays || 7} dias`
+                            const courseName = courses.find(c => c.id === trialForm.courseId)?.name || 'Curso'
+                            const whatsappText = `🎁 Teste Gratuito da Plataforma!\n\nAcesse e experimente:\n${shareUrl}\n\n✨ Acesso ao curso ${courseName} por ${trialForm.expiresInDays || 7} dias\n👥 Limite de ${trialForm.maxUsers || 10} usuários`
                             window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, '_blank')
                           } catch (err) {
                             console.error('Erro ao gerar link de teste:', err)
@@ -7859,7 +7896,13 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                   /teste/{trial.token}
                                 </p>
                                 <p className="text-xs text-slate-600 dark:text-slate-400">
-                                  {trial.materia || 'Qualquer matéria'} • {trial.accessCount || 0} acessos
+                                  {(() => {
+                                    const course = courses.find(c => c.id === trial.courseId)
+                                    return course ? course.name : (trial.courseId || 'Curso não definido')
+                                  })()}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  👥 {trial.registeredUsers?.length || 0} / {trial.maxUsers || 10} usuários cadastrados
                                 </p>
                                 {trial.expiresAt && (
                                   <p className="text-xs text-slate-500">

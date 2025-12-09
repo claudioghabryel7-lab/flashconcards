@@ -27,6 +27,7 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder } from '../utils/subjectOrder'
 import ProgressCalendar from '../components/ProgressCalendar'
+import { isTrialMode, getTrialData } from '../utils/trialLimits'
 
 const MATERIAS = [
   'Português',
@@ -60,6 +61,8 @@ const Dashboard = () => {
   const [selectedCourseId, setSelectedCourseId] = useState(null) // Curso selecionado (null = ALEGO padrão)
   const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
   const [selectedCourse, setSelectedCourse] = useState(null) // Dados completos do curso selecionado
+  const [trialCourse, setTrialCourse] = useState(null) // Curso do trial para banner de conversão
+  const [trialDaysLeft, setTrialDaysLeft] = useState(null) // Dias restantes do trial
 
   // Usar curso selecionado do perfil do usuário
   useEffect(() => {
@@ -102,6 +105,49 @@ const Dashboard = () => {
     
     return () => unsub()
   }, [profile])
+
+  // Carregar informações do trial e curso para banner de conversão
+  useEffect(() => {
+    if (!isTrialMode() || !profile) {
+      setTrialCourse(null)
+      setTrialDaysLeft(null)
+      return
+    }
+
+    const trialData = getTrialData()
+    if (!trialData?.courseId) {
+      setTrialCourse(null)
+      setTrialDaysLeft(null)
+      return
+    }
+
+    // Calcular dias restantes
+    if (trialData.expiresAt) {
+      const expiresAt = new Date(trialData.expiresAt)
+      const now = new Date()
+      const diffTime = expiresAt - now
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      setTrialDaysLeft(diffDays > 0 ? diffDays : 0)
+    }
+
+    // Carregar informações do curso
+    const loadTrialCourse = async () => {
+      try {
+        const courseRef = doc(db, 'courses', trialData.courseId)
+        const courseDoc = await getDoc(courseRef)
+        if (courseDoc.exists()) {
+          setTrialCourse({
+            id: courseDoc.id,
+            ...courseDoc.data()
+          })
+        }
+      } catch (err) {
+        console.error('Erro ao carregar curso do trial:', err)
+      }
+    }
+
+    loadTrialCourse()
+  }, [profile])
   
   // Carregar flashcards filtrados por curso selecionado com cache
   useEffect(() => {
@@ -117,8 +163,8 @@ const Dashboard = () => {
         // Usar cache se tiver menos de 5 minutos
         if (now - timestamp < 5 * 60 * 1000 && cachedData) {
           startTransition(() => {
-            setAllCards(cachedData)
-            setLoading(false)
+          setAllCards(cachedData)
+          setLoading(false)
             setIsInitialLoad(false) // Permitir scroll imediatamente
           })
         }
@@ -174,13 +220,13 @@ const Dashboard = () => {
         
         // Usar startTransition para atualizações não críticas
         startTransition(() => {
-          setAllCards(data)
-          setLoading(false)
+        setAllCards(data)
+        setLoading(false)
           setIsInitialLoad(false)
         })
         
-        retryCount = 0
-        
+          retryCount = 0
+          
         // Salvar no cache de forma assíncrona para não bloquear
         setTimeout(() => {
           try {
@@ -228,9 +274,9 @@ const Dashboard = () => {
         const now = Date.now()
         if (now - timestamp < 5 * 60 * 1000 && cachedData) {
           startTransition(() => {
-            setCardProgress(cachedData.cardProgress || {})
-            setStudiedModules(cachedData.studiedModules || {})
-            setStudyPhase(cachedData.studyPhase || 1)
+          setCardProgress(cachedData.cardProgress || {})
+          setStudiedModules(cachedData.studiedModules || {})
+          setStudyPhase(cachedData.studyPhase || 1)
           })
         }
       }
@@ -249,31 +295,31 @@ const Dashboard = () => {
         if (snapshot.exists()) {
           const data = snapshot.data()
           startTransition(() => {
-            setCardProgress(data.cardProgress || {})
-            setStudiedModules(data.studiedModules || {})
-            setStudyPhase(data.studyPhase || 1)
+          setCardProgress(data.cardProgress || {})
+          setStudiedModules(data.studiedModules || {})
+          setStudyPhase(data.studyPhase || 1)
           })
             
             // Salvar no cache de forma assíncrona
             setTimeout(() => {
-              try {
-                localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
-                  data: {
-                    cardProgress: data.cardProgress || {},
-                    studiedModules: data.studiedModules || {},
-                    studyPhase: data.studyPhase || 1,
-                  },
-                  timestamp: Date.now(),
-                }))
-              } catch (err) {
-                console.warn('Erro ao salvar cache de progresso:', err)
-              }
+            try {
+              localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
+                data: {
+                  cardProgress: data.cardProgress || {},
+                  studiedModules: data.studiedModules || {},
+                  studyPhase: data.studyPhase || 1,
+                },
+                timestamp: Date.now(),
+              }))
+            } catch (err) {
+              console.warn('Erro ao salvar cache de progresso:', err)
+            }
             }, 0)
         } else {
           startTransition(() => {
-            setCardProgress({})
-            setStudiedModules({})
-            setStudyPhase(1)
+          setCardProgress({})
+          setStudiedModules({})
+          setStudyPhase(1)
           })
         }
           retryCount = 0
@@ -578,66 +624,66 @@ const Dashboard = () => {
         // Usar setTimeout para adiar cálculos pesados e não bloquear o thread principal
         const timeoutId = setTimeout(() => {
           startTransition(() => {
-            // Horas dos dias registrados (tempo real rastreado)
-            const hoursFromDays = progressData.reduce((sum, item) => {
-              const hours = parseFloat(item.hours || 0)
-              return sum + hours
-            }, 0)
-            
-            console.log('📊 Atualizando estatísticas:', { 
-              progressDataLength: progressData.length, 
-              hoursFromDays: hoursFromDays.toFixed(2) 
-            })
-            
-            const stats = {
-              totalDays: progressData.length,
-              totalHours: hoursFromDays, // Usar apenas horas reais do Firestore (rastreadas pelo timer)
-              bySubject: {},
-            }
+        // Horas dos dias registrados (tempo real rastreado)
+        const hoursFromDays = progressData.reduce((sum, item) => {
+          const hours = parseFloat(item.hours || 0)
+          return sum + hours
+        }, 0)
         
-            // Inicializar todas as matérias
-            MATERIAS.forEach((materia) => {
-              stats.bySubject[materia] = {
-                days: 0,
-                hours: 0,
-                totalCards: 0,
-                studiedCards: 0,
-                percentage: 0,
-              }
-            })
-            
-            // Contar cards por matéria e calcular progresso (já filtrado por curso em allCards)
-            allCards.forEach((card) => {
-              if (card.materia) {
-                // Usar matérias reais dos flashcards, não apenas MATERIAS fixas
-                if (!stats.bySubject[card.materia]) {
-                  stats.bySubject[card.materia] = {
-                    days: 0,
-                    hours: 0,
-                    totalCards: 0,
-                    studiedCards: 0,
-                    percentage: 0,
-                  }
-                }
-                stats.bySubject[card.materia].totalCards += 1
-                const progress = cardProgress[card.id]
-                if (progress && progress.reviewCount > 0) {
-                  stats.bySubject[card.materia].studiedCards += 1
-                  // Horas por matéria serão calculadas proporcionalmente ao tempo total
-                  // Por enquanto, não adicionamos horas por matéria individualmente
-                }
-              }
-            })
-            
-            // Calcular porcentagem por matéria
-            MATERIAS.forEach((materia) => {
-              const subj = stats.bySubject[materia]
-              if (subj.totalCards > 0) {
-                subj.percentage = Math.round((subj.studiedCards / subj.totalCards) * 100)
-              }
-            })
-            
-            setStudyStats(stats)
+        console.log('📊 Atualizando estatísticas:', { 
+          progressDataLength: progressData.length, 
+          hoursFromDays: hoursFromDays.toFixed(2) 
+        })
+        
+        const stats = {
+          totalDays: progressData.length,
+          totalHours: hoursFromDays, // Usar apenas horas reais do Firestore (rastreadas pelo timer)
+          bySubject: {},
+        }
+    
+    // Inicializar todas as matérias
+    MATERIAS.forEach((materia) => {
+      stats.bySubject[materia] = {
+        days: 0,
+        hours: 0,
+        totalCards: 0,
+        studiedCards: 0,
+        percentage: 0,
+      }
+    })
+    
+    // Contar cards por matéria e calcular progresso (já filtrado por curso em allCards)
+    allCards.forEach((card) => {
+      if (card.materia) {
+        // Usar matérias reais dos flashcards, não apenas MATERIAS fixas
+        if (!stats.bySubject[card.materia]) {
+          stats.bySubject[card.materia] = {
+            days: 0,
+            hours: 0,
+            totalCards: 0,
+            studiedCards: 0,
+            percentage: 0,
+          }
+        }
+        stats.bySubject[card.materia].totalCards += 1
+        const progress = cardProgress[card.id]
+        if (progress && progress.reviewCount > 0) {
+          stats.bySubject[card.materia].studiedCards += 1
+          // Horas por matéria serão calculadas proporcionalmente ao tempo total
+          // Por enquanto, não adicionamos horas por matéria individualmente
+        }
+      }
+    })
+    
+    // Calcular porcentagem por matéria
+    MATERIAS.forEach((materia) => {
+      const subj = stats.bySubject[materia]
+      if (subj.totalCards > 0) {
+        subj.percentage = Math.round((subj.studiedCards / subj.totalCards) * 100)
+      }
+    })
+    
+    setStudyStats(stats)
           })
         }, isInitialLoad ? 100 : 0) // Adiar um pouco no carregamento inicial
         
@@ -820,6 +866,80 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
+      {/* Banner de Conversão para Usuários Trial */}
+      {isTrialMode() && trialCourse && trialDaysLeft !== null && (
+        <div className="relative overflow-hidden bg-gradient-to-r from-alego-600 via-alego-700 to-alego-800 rounded-2xl shadow-2xl border-2 border-alego-500">
+          <div className="absolute inset-0 bg-black/10"></div>
+          <div className="relative p-6 sm:p-8">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-white text-xs font-bold uppercase tracking-wider">
+                    ⚡ Teste Gratuito
+                  </span>
+                  {trialDaysLeft > 0 && (
+                    <span className="px-3 py-1 bg-red-500/90 rounded-full text-white text-xs font-bold">
+                      {trialDaysLeft} {trialDaysLeft === 1 ? 'dia restante' : 'dias restantes'}
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black text-white mb-2">
+                  🎯 Não perca seu acesso ao {trialCourse.name}!
+                </h2>
+                <p className="text-alego-100 text-base sm:text-lg mb-4">
+                  {trialDaysLeft > 0 
+                    ? `Você tem ${trialDaysLeft} ${trialDaysLeft === 1 ? 'dia' : 'dias'} para garantir seu acesso completo. Compre agora e continue estudando sem interrupções!`
+                    : 'Seu período de teste está expirando! Garanta seu acesso completo agora e continue estudando sem interrupções.'
+                  }
+                </p>
+                <div className="flex flex-wrap items-center gap-4 text-white/90 text-sm">
+                  <span className="flex items-center gap-2">
+                    <CheckCircleIcon className="h-5 w-5 text-green-300" />
+                    Acesso permanente
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <CheckCircleIcon className="h-5 w-5 text-green-300" />
+                    Todos os recursos desbloqueados
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <CheckCircleIcon className="h-5 w-5 text-green-300" />
+                    Suporte completo
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 min-w-[200px]">
+                {trialCourse.price && (
+                  <div className="text-center mb-2">
+                    {trialCourse.originalPrice && trialCourse.originalPrice > trialCourse.price && (
+                      <p className="text-alego-200 text-sm line-through mb-1">
+                        De R$ {trialCourse.originalPrice.toFixed(2)}
+                      </p>
+                    )}
+                    <p className="text-3xl font-black text-white">
+                      R$ {trialCourse.price.toFixed(2)}
+                    </p>
+                    {trialCourse.originalPrice && trialCourse.originalPrice > trialCourse.price && (
+                      <p className="text-green-300 text-xs font-semibold mt-1">
+                        Economia de R$ {(trialCourse.originalPrice - trialCourse.price).toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <Link
+                  to={`/pagamento?course=${trialCourse.id}`}
+                  className="w-full px-6 py-4 bg-white text-alego-700 rounded-xl font-black text-lg text-center hover:bg-alego-50 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
+                >
+                  Comprar Agora
+                </Link>
+                <p className="text-alego-200 text-xs text-center">
+                  💳 Pagamento seguro • Acesso imediato
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Limpo */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
         <p className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">

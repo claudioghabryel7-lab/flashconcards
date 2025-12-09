@@ -25,26 +25,33 @@ const TestTrial = () => {
 
   useEffect(() => {
     const loadTrial = async () => {
+      console.log('TestTrial: Carregando trial com token:', token)
+      
       if (!token) {
+        console.log('TestTrial: Token inválido')
         setError('Token inválido')
         setLoading(false)
         return
       }
 
       try {
+        console.log('TestTrial: Buscando trial no Firestore...')
         const trialRef = doc(db, 'testTrials', token)
         const trialDoc = await getDoc(trialRef)
 
         if (!trialDoc.exists()) {
+          console.log('TestTrial: Trial não encontrado')
           setError('Link de teste não encontrado ou expirado')
           setLoading(false)
           return
         }
 
         const data = trialDoc.data()
+        console.log('TestTrial: Dados do trial:', data)
         
         // Verificar se está ativo
         if (data.active === false) {
+          console.log('TestTrial: Trial desativado')
           setError('Este link de teste foi desativado')
           setLoading(false)
           return
@@ -54,20 +61,57 @@ const TestTrial = () => {
         if (data.expiresAt) {
           const expiresAt = data.expiresAt.toDate()
           if (expiresAt < new Date()) {
+            console.log('TestTrial: Trial expirado')
             setError('Este link de teste expirou')
             setLoading(false)
             return
           }
         }
 
+        // Verificar se o limite de usuários foi atingido
+        const registeredUsers = data.registeredUsers || []
+        const maxUsers = data.maxUsers || 10
+        if (registeredUsers.length >= maxUsers) {
+          console.log('TestTrial: Limite de usuários atingido')
+          setError('Este link de teste atingiu o limite máximo de usuários')
+          setLoading(false)
+          return
+        }
+
         setTrialData(data)
+
+        // Se o usuário não está autenticado, redirecionar para login/cadastro
+        if (!user) {
+          console.log('TestTrial: Usuário não autenticado, redirecionando para login...')
+          // Salvar token no localStorage temporariamente
+          localStorage.setItem('trialToken', token)
+          // Redirecionar para login com o token na URL
+          navigate(`/login?trial=${token}`, { replace: true })
+          setLoading(false)
+          return
+        }
+
+        console.log('TestTrial: Usuário autenticado:', user.uid)
+
+        // Se o usuário está autenticado, verificar se já se cadastrou com este token
+        const userRegistered = registeredUsers.includes(user.uid)
+        if (!userRegistered) {
+          console.log('TestTrial: Usuário não registrado neste trial, redirecionando...')
+          // Usuário autenticado mas não cadastrado com este token - redirecionar para cadastro
+          navigate(`/login?trial=${token}`, { replace: true })
+          setLoading(false)
+          return
+        }
+
+        console.log('TestTrial: Usuário registrado, mostrando página de teste')
+        // Usuário autenticado e cadastrado - mostrar página de teste
         setTrialActive(true)
 
         // Salvar no localStorage para verificar limitações
         localStorage.setItem('trialToken', token)
         localStorage.setItem('trialData', JSON.stringify({
           token,
-          materia: data.materia || null,
+          courseId: data.courseId || null,
           expiresAt: data.expiresAt?.toDate().toISOString() || null,
         }))
 
@@ -86,31 +130,52 @@ const TestTrial = () => {
     }
 
     loadTrial()
-  }, [token])
+  }, [token, user, navigate])
+
+  // Carregar informações do curso
+  const [courseInfo, setCourseInfo] = useState(null)
+  
+  useEffect(() => {
+    if (!trialData?.courseId) return
+    
+    const loadCourse = async () => {
+      try {
+        const courseRef = doc(db, 'courses', trialData.courseId)
+        const courseDoc = await getDoc(courseRef)
+        if (courseDoc.exists()) {
+          setCourseInfo({ id: courseDoc.id, ...courseDoc.data() })
+        }
+      } catch (err) {
+        console.error('Erro ao carregar curso:', err)
+      }
+    }
+    
+    loadCourse()
+  }, [trialData?.courseId])
 
   const limitations = [
     {
       icon: BookOpenIcon,
-      title: '1 Matéria Completa',
-      description: 'Acesso completo a uma matéria escolhida',
+      title: 'Acesso Completo ao Curso',
+      description: courseInfo ? `Acesso completo ao curso ${courseInfo.name}` : 'Acesso completo ao curso selecionado',
       available: true,
     },
     {
       icon: BookOpenIcon,
-      title: '1 Módulo de Flashcards',
-      description: 'Estude um módulo completo de flashcards',
+      title: 'Todos os Flashcards',
+      description: 'Estude todos os flashcards do curso',
       available: true,
     },
     {
       icon: QuestionMarkCircleIcon,
-      title: '10 Questões por Matéria',
-      description: 'Pratique com questões limitadas',
+      title: 'Questões Ilimitadas',
+      description: 'Pratique com questões ilimitadas',
       available: true,
     },
     {
       icon: ClipboardDocumentCheckIcon,
-      title: '1 Simulado (Objetiva)',
-      description: 'Faça um simulado completo sem redação',
+      title: 'Simulados Ilimitados',
+      description: 'Faça simulados completos',
       available: true,
     },
     {
@@ -284,4 +349,7 @@ const TestTrial = () => {
 }
 
 export default TestTrial
+
+
+
 
