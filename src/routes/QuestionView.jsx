@@ -766,7 +766,6 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.`
                     </div>
                   </div>
                 )}
-                </div>
               </div>
             )}
           </div>
