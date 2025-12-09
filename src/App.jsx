@@ -1,8 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Header from './components/Header'
-import FloatingAIChat from './components/FloatingAIChat'
-import SalesChat from './components/SalesChat'
 import SupportButton from './components/SupportButton'
 import PopupBanner from './components/PopupBanner'
 import { useAuth } from './hooks/useAuth'
@@ -235,8 +233,6 @@ function App() {
           É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.
         </p>
       </footer>
-      <FloatingAIChat />
-      <SalesChat />
       <SupportButton />
       <PopupBanner />
     </div>

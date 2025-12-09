@@ -9,6 +9,16 @@ const SupportButton = () => {
   const [showInfo, setShowInfo] = useState(false)
   const [hasError, setHasError] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [isVisible, setIsVisible] = useState(true)
+
+  // Esconder botão após 10 segundos
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(false)
+    }, 10000) // 10 segundos
+
+    return () => clearTimeout(timer)
+  }, [])
 
   // Detectar erros no console e na aplicação
   useEffect(() => {
@@ -16,12 +26,16 @@ const SupportButton = () => {
     const handleError = (event) => {
       setHasError(true)
       setErrorMessage(event.message || 'Erro detectado na aplicação')
+      // Mostrar botão novamente se houver erro
+      setIsVisible(true)
     }
 
     // Listener para promises rejeitadas
     const handleRejection = (event) => {
       setHasError(true)
       setErrorMessage(event.reason?.message || 'Erro na aplicação')
+      // Mostrar botão novamente se houver erro
+      setIsVisible(true)
     }
 
     window.addEventListener('error', handleError)
@@ -44,8 +58,12 @@ const SupportButton = () => {
     window.open(url, '_blank')
   }
 
+  if (!isVisible && !hasError) {
+    return null
+  }
+
   return (
-    <div className="fixed bottom-6 left-6 z-50">
+    <div className={`fixed bottom-6 left-6 z-50 transition-opacity duration-500 ${isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
       {/* Alerta de Erro (se houver) */}
       {hasError && (
         <div
