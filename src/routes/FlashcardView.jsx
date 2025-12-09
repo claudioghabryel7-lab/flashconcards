@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import dayjs from 'dayjs'
 import FlashcardList from '../components/FlashcardList'
@@ -9,7 +9,8 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useStudyTimer } from '../hooks/useStudyTimer'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder, applyModuleOrder, getModuleOrder } from '../utils/subjectOrder'
-import { FolderIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon } from '@heroicons/react/24/outline'
+import { FolderIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon, LockClosedIcon } from '@heroicons/react/24/outline'
+import { canAccessMateria, canAccessModulo, isTrialMode } from '../utils/trialLimits'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import {
   getOrCreateExplanationCache,
@@ -359,6 +360,18 @@ const FlashcardView = () => {
   }
 
   const selectModulo = (materia, modulo) => {
+    // Verificar limitações de teste
+    if (isTrialMode()) {
+      if (!canAccessMateria(materia)) {
+        alert('⚠️ No teste gratuito você pode acessar apenas 1 matéria. Desbloqueie o plano completo para acessar todas as matérias!')
+        return
+      }
+      if (!canAccessModulo(materia, modulo)) {
+        alert('⚠️ No teste gratuito você pode acessar apenas 1 módulo. Desbloqueie o plano completo para acessar todos os módulos!')
+        return
+      }
+    }
+    
     setStudyMode('module')
     setMiniSimCards([])
     setSelectedMateria(materia)
@@ -704,6 +717,24 @@ Regras:
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
+      {/* Banner de Conversão para Teste */}
+      {isTrialMode() && (
+        <div className="rounded-2xl p-4 bg-gradient-to-r from-alego-600 to-alego-700 text-white shadow-xl">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <p className="font-bold text-lg mb-1">🎁 Você está no Teste Gratuito</p>
+              <p className="text-sm text-alego-100">Acesso limitado: 1 matéria e 1 módulo</p>
+            </div>
+            <Link
+              to="/pagamento"
+              className="px-6 py-2 bg-white text-alego-600 rounded-xl font-bold hover:bg-alego-50 transition-colors whitespace-nowrap"
+            >
+              Desbloquear Completo →
+            </Link>
+          </div>
+        </div>
+      )}
+      
       {/* Header Tecnológico */}
       <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
         {/* Background gradient decorativo */}
@@ -854,14 +885,18 @@ Regras:
                           studyMode === 'module' &&
                           selectedMateria === materia &&
                           selectedModulo === modulo
+                        const canAccessMod = !isTrialMode() || canAccessModulo(materia, modulo)
                         
                         return (
                           <button
                             key={modulo}
                             type="button"
                             onClick={() => selectModulo(materia, modulo)}
+                            disabled={!canAccessMod && !isModuloSelected}
                             className={`group/module relative flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold transition-all ${
-                              isModuloSelected
+                              !canAccessMod && !isModuloSelected
+                                ? 'opacity-50 cursor-not-allowed'
+                                : isModuloSelected
                                 ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
                                 : 'text-slate-600 dark:text-slate-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 border border-transparent hover:border-blue-500/30'
                             }`}

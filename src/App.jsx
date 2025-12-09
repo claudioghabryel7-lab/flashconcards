@@ -31,6 +31,7 @@ const Simulado = lazy(() => import('./routes/Simulado'))
 const SimuladoShare = lazy(() => import('./routes/SimuladoShare'))
 const TreinoRedacao = lazy(() => import('./routes/TreinoRedacao'))
 const GuiaEstudos = lazy(() => import('./routes/GuiaEstudos'))
+const TestTrial = lazy(() => import('./routes/TestTrial'))
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()

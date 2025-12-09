@@ -188,6 +188,14 @@
         allow delete: if false;
       }
       
+      // 🎁 Testes Gratuitos
+      match /testTrials/{trialId} {
+        // Leitura pública (para validar token)
+        allow read: if true;
+        // Apenas admin pode criar, atualizar e deletar
+        allow create, update, delete: if isAdmin();
+      }
+      
       match /passwordResetTokens/{tokenId} {
         // Apenas admin pode criar tokens
         allow create: if isAuthenticated() && 

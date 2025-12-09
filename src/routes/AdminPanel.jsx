@@ -27,6 +27,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   where,
 } from 'firebase/firestore'
@@ -132,6 +133,13 @@ const AdminPanel = () => {
   
   // Estado para controle de tabs
   const [activeTab, setActiveTab] = useState('config')
+  
+  // Estado para gerenciar testes gratuitos
+  const [testTrials, setTestTrials] = useState([])
+  const [trialForm, setTrialForm] = useState({
+    materia: '',
+    expiresInDays: 7,
+  })
   
   // Estado para curso selecionado no gerenciamento de flashcards
   const [selectedCourseForFlashcards, setSelectedCourseForFlashcards] = useState('alego-default') // 'alego-default' = ALEGO padrão, 'courseId' = curso específico
@@ -613,6 +621,25 @@ const AdminPanel = () => {
       setCourses([])
     })
 
+    // Carregar testes gratuitos
+    const trialsRef = collection(db, 'testTrials')
+    const unsubTrials = onSnapshot(trialsRef, (snapshot) => {
+      const data = snapshot.docs.map((docSnapshot) => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data(),
+      }))
+      // Ordenar por data de criação (mais recente primeiro)
+      data.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(0)
+        const dateB = b.createdAt?.toDate?.() || new Date(0)
+        return dateB - dateA
+      })
+      setTestTrials(data)
+    }, (error) => {
+      console.error('Erro ao carregar testes:', error)
+      setTestTrials([])
+    })
+
     // Carregar avaliações
     const reviewsRef = collection(db, 'reviews')
     // Carregar leads
@@ -674,6 +701,7 @@ const AdminPanel = () => {
       unsubCourses()
       unsubReviews()
       unsubLeads()
+      unsubTrials()
     }
   }, [])
 
@@ -4458,6 +4486,7 @@ CRÍTICO:
     { id: 'reviews', label: '⭐ Avaliações', icon: '⭐' },
     { id: 'leads', label: '📋 Leads', icon: '📋' },
     { id: 'simulados', label: '📝 Simulados', icon: '📝' },
+    { id: 'trials', label: '🎁 Testes Gratuitos', icon: '🎁' },
   ]
   
   // Estado para gerenciar simulados compartilhados
@@ -7700,6 +7729,184 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                   )}
                                 </div>
                               )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Testes Gratuitos */}
+            {activeTab === 'trials' && (
+              <div className="space-y-6">
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
+                      🎁 Gerar Link de Teste Gratuito
+                    </p>
+                    <p className="text-xs text-slate-500 mb-6">
+                      Gere links para compartilhar acesso limitado à plataforma. Ideal para marketing e conversão.
+                    </p>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-2">
+                          Matéria Sugerida (opcional)
+                        </label>
+                        <select
+                          value={trialForm.materia}
+                          onChange={(e) => setTrialForm({ ...trialForm, materia: e.target.value })}
+                          className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                        >
+                          <option value="">Qualquer matéria (usuário escolhe)</option>
+                          {MATERIAS.map((m) => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-2">
+                          Expira em (dias)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="30"
+                          value={trialForm.expiresInDays}
+                          onChange={(e) => setTrialForm({ ...trialForm, expiresInDays: parseInt(e.target.value) || 7 })}
+                          className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            // Gerar token único
+                            const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+                            
+                            // Calcular data de expiração
+                            const expiresAt = new Date()
+                            expiresAt.setDate(expiresAt.getDate() + (trialForm.expiresInDays || 7))
+                            
+                            // Salvar no Firestore
+                            const trialRef = doc(db, 'testTrials', token)
+                            await setDoc(trialRef, {
+                              token,
+                              materia: trialForm.materia || null,
+                              expiresAt: Timestamp.fromDate(expiresAt),
+                              expiresInDays: trialForm.expiresInDays || 7,
+                              active: true,
+                              accessCount: 0,
+                              createdAt: serverTimestamp(),
+                              createdBy: currentAdminUser.uid,
+                            })
+
+                            const shareUrl = `${window.location.origin}/teste/${token}`
+                            
+                            // Copiar para clipboard
+                            await navigator.clipboard.writeText(shareUrl)
+                            setMessage(`✅ Link de teste gerado e copiado! ${shareUrl}`)
+                            
+                            // Limpar formulário
+                            setTrialForm({ materia: '', expiresInDays: 7 })
+                            
+                            // Abrir WhatsApp para compartilhar
+                            const whatsappText = `🎁 Teste Gratuito da Plataforma!\n\nAcesse e experimente:\n${shareUrl}\n\n✨ Acesso limitado por ${trialForm.expiresInDays || 7} dias`
+                            window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, '_blank')
+                          } catch (err) {
+                            console.error('Erro ao gerar link de teste:', err)
+                            setMessage('❌ Erro ao gerar link. Tente novamente.')
+                          }
+                        }}
+                        className="w-full rounded-lg bg-alego-600 px-4 py-2 text-sm font-semibold text-white hover:bg-alego-700"
+                      >
+                        🎁 Gerar Link de Teste
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Lista de Testes Criados */}
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
+                    📋 Testes Criados
+                  </p>
+                  {testTrials.length === 0 ? (
+                    <p className="text-sm text-slate-500">Nenhum teste criado ainda.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {testTrials.map((trial) => {
+                        const isExpired = trial.expiresAt?.toDate() < new Date()
+                        const isActive = trial.active && !isExpired
+                        return (
+                          <div
+                            key={trial.id}
+                            className={`p-4 rounded-lg border ${
+                              isActive
+                                ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                                : 'bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-600'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                  /teste/{trial.token}
+                                </p>
+                                <p className="text-xs text-slate-600 dark:text-slate-400">
+                                  {trial.materia || 'Qualquer matéria'} • {trial.accessCount || 0} acessos
+                                </p>
+                                {trial.expiresAt && (
+                                  <p className="text-xs text-slate-500">
+                                    Expira: {trial.expiresAt.toDate().toLocaleDateString('pt-BR')}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-1 text-xs font-bold rounded-full ${
+                                  isActive
+                                    ? 'bg-green-500 text-white'
+                                    : 'bg-red-500 text-white'
+                                }`}>
+                                  {isActive ? 'Ativo' : 'Inativo'}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    const url = `${window.location.origin}/teste/${trial.token}`
+                                    navigator.clipboard.writeText(url)
+                                    setMessage('Link copiado!')
+                                  }}
+                                  className="px-3 py-1 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700"
+                                >
+                                  Copiar
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const trialRef = doc(db, 'testTrials', trial.id)
+                                      await updateDoc(trialRef, {
+                                        active: !trial.active,
+                                      })
+                                      setMessage(trial.active ? 'Teste desativado!' : 'Teste ativado!')
+                                    } catch (err) {
+                                      console.error('Erro ao atualizar teste:', err)
+                                      setMessage('Erro ao atualizar teste.')
+                                    }
+                                  }}
+                                  className={`px-3 py-1 rounded-lg text-xs font-semibold ${
+                                    trial.active
+                                      ? 'bg-red-600 text-white hover:bg-red-700'
+                                      : 'bg-green-600 text-white hover:bg-green-700'
+                                  }`}
+                                >
+                                  {trial.active ? 'Desativar' : 'Ativar'}
+                                </button>
+                              </div>
                             </div>
                           </div>
                         )

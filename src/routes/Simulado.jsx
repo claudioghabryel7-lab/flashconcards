@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { canDoSimulado, incrementSimuladoCount, canAccessRedacao, isTrialMode } from '../utils/trialLimits'
 import { doc, getDoc, setDoc, serverTimestamp, collection, onSnapshot, addDoc, getDocs, query, where } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
@@ -390,6 +391,11 @@ CRÍTICO:
 
   // Finalizar simulado completo (objetivo + redação)
   const finishSimulado = (redacaoResult = null) => {
+    // Incrementar contador de simulados se estiver em modo trial
+    if (isTrialMode()) {
+      incrementSimuladoCount()
+    }
+    
     setIsFinished(true)
     setShowRedacao(false)
 

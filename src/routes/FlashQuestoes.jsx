@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { canGenerateQuestions, incrementQuestionCount, canAccessMateria, isTrialMode } from '../utils/trialLimits'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
@@ -356,6 +357,18 @@ const FlashQuestoes = () => {
       return
     }
 
+    // Verificar limitações de teste
+    if (isTrialMode()) {
+      if (!canAccessMateria(selectedMateria)) {
+        alert('⚠️ No teste gratuito você pode acessar apenas 1 matéria. Desbloqueie o plano completo!')
+        return
+      }
+      if (!canGenerateQuestions(selectedMateria)) {
+        alert('⚠️ No teste gratuito você pode gerar apenas 10 questões por matéria. Desbloqueie o plano completo para questões ilimitadas!')
+        return
+      }
+    }
+
     setGenerating(true)
     setQuestions([])
     setCurrentQuestionIndex(0)
@@ -581,6 +594,11 @@ CRÍTICO:
       console.log('💾 Salvando questões no cache...', { selectedMateria, selectedModulo, selectedCourseId })
       await saveQuestionsCache(selectedMateria, selectedModulo, parsedData.questoes, selectedCourseId)
       const newCacheInfo = { likes: 0, dislikes: 0, score: 100, cached: false }
+
+      // Incrementar contador de questões se estiver em modo trial
+      if (isTrialMode()) {
+        incrementQuestionCount(selectedMateria)
+      }
 
       // Navegar para a página de responder questões
       navigate('/flashquestoes/responder', {
