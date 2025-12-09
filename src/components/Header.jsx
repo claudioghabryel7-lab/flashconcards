@@ -53,6 +53,7 @@ const Header = () => {
         icon: BookOpenIcon,
         items: [
           { to: '/dashboard', label: 'Painel', auth: true },
+          { to: '/guia-estudos', label: 'Guia de Estudos', auth: false },
           { to: '/flashcards', label: 'Flashcards', auth: true },
           { to: '/flashquestoes', label: 'FlashQuestões', auth: true },
           { to: '/simulado', label: 'Simulado', auth: true },
@@ -101,10 +102,11 @@ const Header = () => {
 
   return (
     <header
-      className="sticky top-0 z-50 border-b-2 border-slate-300/60 bg-white/98 backdrop-blur-xl shadow-lg dark:border-slate-600/60 dark:bg-slate-900/98"
+      className="sticky top-0 z-[60] border-b-2 border-slate-300/60 bg-white/98 backdrop-blur-xl shadow-lg dark:border-slate-600/60 dark:bg-slate-900/98"
       style={{
         backgroundColor: darkMode ? 'rgba(15, 23, 42, 0.98)' : 'rgba(255, 255, 255, 0.98)',
         borderColor: darkMode ? 'rgba(71, 85, 105, 0.6)' : 'rgba(203, 213, 225, 0.6)',
+        isolation: 'isolate', // Cria novo contexto de empilhamento
       }}
     >
       <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-5">
@@ -155,7 +157,10 @@ const Header = () => {
                 {/* Overlay quando menu está aberto */}
                 {isMenuOpen && (
                   <div
-                    className="fixed inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm z-40"
+                    className="fixed inset-0 bg-black/20 dark:bg-black/40 z-40"
+                    style={{
+                      top: 'var(--header-height, 0px)', // Começar abaixo do header
+                    }}
                     onClick={() => setIsMenuOpen(false)}
                   />
                 )}
@@ -176,7 +181,7 @@ const Header = () => {
 
                   {/* Dropdown Menu */}
                   {isMenuOpen && (
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 sm:w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border-2 border-slate-200/60 dark:border-slate-700/60 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 sm:w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border-2 border-slate-200/60 dark:border-slate-700/60 overflow-hidden z-[70] animate-in fade-in slide-in-from-top-2 duration-200">
                       <div className="p-3 max-h-[70vh] overflow-y-auto">
                         {Object.entries(menuCategories).map(([key, category]) => {
                           const Icon = category.icon

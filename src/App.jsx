@@ -30,6 +30,7 @@ const NewsView = lazy(() => import('./routes/NewsView'))
 const Simulado = lazy(() => import('./routes/Simulado'))
 const SimuladoShare = lazy(() => import('./routes/SimuladoShare'))
 const TreinoRedacao = lazy(() => import('./routes/TreinoRedacao'))
+const GuiaEstudos = lazy(() => import('./routes/GuiaEstudos'))
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()
@@ -107,6 +108,7 @@ function App() {
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
           <Route path="/" element={<PublicHome />} />
+          <Route path="/guia-estudos" element={<GuiaEstudos />} />
           <Route path="/setup" element={<SetupUser />} />
           <Route
             path="/login"
