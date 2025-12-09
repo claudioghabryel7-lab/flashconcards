@@ -291,24 +291,35 @@
   animation: stark-glow-pulse 2s ease-in-out infinite;
 }
 
-/* Scrollbar STARK */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Scrollbar STARK - Ocultar no desktop */
+@media (min-width: 1024px) {
+  ::-webkit-scrollbar {
+    width: 0px;
+    height: 0px;
+    background: transparent;
+  }
 }
 
-::-webkit-scrollbar-track {
-  background: var(--stark-bg-secondary);
-  border-radius: 4px;
-}
+/* Scrollbar para mobile/tablet */
+@media (max-width: 1023px) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: var(--gradient-stark-1);
-  border-radius: 4px;
-}
+  ::-webkit-scrollbar-track {
+    background: var(--stark-bg-secondary);
+    border-radius: 4px;
+  }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--gradient-stark-2);
+  ::-webkit-scrollbar-thumb {
+    background: var(--gradient-stark-1);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--gradient-stark-2);
+  }
 }
 
 /* Grid STARK */
@@ -382,6 +393,10 @@
     padding: 12px;
   }
 }
+
+
+
+
 
 
 
