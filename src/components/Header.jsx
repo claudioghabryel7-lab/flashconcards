@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from 'react'
+import { useMemo, useState, useRef, useEffect, memo } from 'react'
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   AcademicCapIcon,
@@ -298,4 +298,5 @@ const Header = () => {
   )
 }
 
-export default Header
+// Memoizar Header para evitar re-renders desnecessários
+export default memo(Header)

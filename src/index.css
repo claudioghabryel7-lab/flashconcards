@@ -32,11 +32,35 @@ body {
 /* Melhorias de Performance */
 img, video {
   content-visibility: auto;
+  will-change: auto;
 }
 
-/* Transições suaves para tema escuro */
+/* Otimizações de renderização */
+* {
+  /* Usar GPU para animações */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Containment para melhor performance */
+.container-optimized {
+  contain: layout style paint;
+}
+
+/* Lazy loading de imagens */
+img[loading="lazy"] {
+  content-visibility: auto;
+}
+
+/* Transições suaves para tema escuro - otimizado */
 * {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* Desabilitar transições durante scroll para melhor performance */
+.scrolling * {
+  transition: none !important;
 }
 
 /* Animações para FlashSocial */

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Header from './components/Header'
 import FloatingAIChat from './components/FloatingAIChat'
@@ -7,26 +8,28 @@ import PopupBanner from './components/PopupBanner'
 import { useAuth } from './hooks/useAuth'
 import { useDarkMode } from './hooks/useDarkMode.jsx'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
-import AdminPanel from './routes/AdminPanel'
-import Dashboard from './routes/Dashboard'
-import FlashcardView from './routes/FlashcardView'
-import Login from './routes/Login'
-import PublicHome from './routes/PublicHome'
-import Ranking from './routes/Ranking'
-import SetupUser from './routes/SetupUser'
-import FlashQuestoes from './routes/FlashQuestoes'
-import QuestionView from './routes/QuestionView'
-import ResetPassword from './routes/ResetPassword'
-import Payment from './routes/Payment'
-import CourseSelector from './components/CourseSelector'
-import CourseShare from './routes/CourseShare'
-import MindMapView from './routes/MindMapView'
-import SocialFeed from './routes/SocialFeed'
-import UserProfile from './routes/UserProfile'
-import NewsView from './routes/NewsView'
-import Simulado from './routes/Simulado'
-import SimuladoShare from './routes/SimuladoShare'
-import TreinoRedacao from './routes/TreinoRedacao'
+
+// Lazy load de rotas pesadas
+const AdminPanel = lazy(() => import('./routes/AdminPanel'))
+const Dashboard = lazy(() => import('./routes/Dashboard'))
+const FlashcardView = lazy(() => import('./routes/FlashcardView'))
+const Login = lazy(() => import('./routes/Login'))
+const PublicHome = lazy(() => import('./routes/PublicHome'))
+const Ranking = lazy(() => import('./routes/Ranking'))
+const SetupUser = lazy(() => import('./routes/SetupUser'))
+const FlashQuestoes = lazy(() => import('./routes/FlashQuestoes'))
+const QuestionView = lazy(() => import('./routes/QuestionView'))
+const ResetPassword = lazy(() => import('./routes/ResetPassword'))
+const Payment = lazy(() => import('./routes/Payment'))
+const CourseSelector = lazy(() => import('./components/CourseSelector'))
+const CourseShare = lazy(() => import('./routes/CourseShare'))
+const MindMapView = lazy(() => import('./routes/MindMapView'))
+const SocialFeed = lazy(() => import('./routes/SocialFeed'))
+const UserProfile = lazy(() => import('./routes/UserProfile'))
+const NewsView = lazy(() => import('./routes/NewsView'))
+const Simulado = lazy(() => import('./routes/Simulado'))
+const SimuladoShare = lazy(() => import('./routes/SimuladoShare'))
+const TreinoRedacao = lazy(() => import('./routes/TreinoRedacao'))
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()
@@ -80,6 +83,16 @@ function App() {
   // Rastrear status online/offline
   useOnlineStatus()
   
+  // Loading component otimizado
+  const LoadingFallback = () => (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="text-center">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-alego-600 border-t-transparent"></div>
+        <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Carregando...</p>
+      </div>
+    </div>
+  )
+
   return (
     <div 
       className="min-h-screen transition-colors"
@@ -91,7 +104,8 @@ function App() {
     >
       <Header />
       <main className="mx-auto w-full max-w-6xl px-2 sm:px-4 py-4 sm:py-6 md:py-8 overflow-x-hidden">
-        <Routes>
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
           <Route path="/" element={<PublicHome />} />
           <Route path="/setup" element={<SetupUser />} />
           <Route
@@ -210,6 +224,7 @@ function App() {
           <Route path="/simulado-share/:simuladoId" element={<SimuladoShare />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </main>
       <footer className="mx-auto w-full max-w-6xl px-4 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400">
         <p>

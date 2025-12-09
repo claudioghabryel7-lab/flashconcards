@@ -3,6 +3,8 @@ import { collection, onSnapshot, doc, getDoc, setDoc, updateDoc, increment, serv
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
+import { useSubjectOrder } from '../hooks/useSubjectOrder'
+import { applySubjectOrder, applyModuleOrder } from '../utils/subjectOrder'
 import { FolderIcon, ChevronRightIcon, SparklesIcon, ArrowDownTrayIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
 
 const MindMapView = () => {
@@ -129,6 +131,19 @@ const MindMapView = () => {
       [cardId]: !prev[cardId],
     }))
   }
+
+  // Carregar ordem de matérias e módulos
+  const { subjectOrderConfig, moduleOrderConfigs, loadModuleOrder } = useSubjectOrder(selectedCourseId, user?.uid)
+  
+  // Carregar ordens de módulos quando necessário
+  useEffect(() => {
+    if (!subjectOrderConfig || !organizedCards) return
+    Object.keys(organizedCards).forEach(materia => {
+      if (!moduleOrderConfigs[materia]) {
+        loadModuleOrder(materia).catch(err => console.error('Erro ao carregar ordem de módulos:', err))
+      }
+    })
+  }, [organizedCards, subjectOrderConfig])
 
   // Gerar mapa mental interativo
   const generateMindMap = async (materia, modulo) => {
@@ -479,9 +494,9 @@ IMPORTANTE: Use os índices dos cards (1, 2, 3...) conforme numerados acima.`
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {Object.keys(organizedCards)
-                    .sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }))
-                    .map((materia) => {
+                  {(() => {
+                    const orderedSubjects = applySubjectOrder(organizedCards, subjectOrderConfig)
+                    return orderedSubjects.map((materia) => {
                       const modulos = organizedCards[materia] ? Object.keys(organizedCards[materia]) : []
                       const isExpanded = expandedMaterias[materia]
                       
@@ -508,7 +523,10 @@ IMPORTANTE: Use os índices dos cards (1, 2, 3...) conforme numerados acima.`
                           
                           {isExpanded && (
                             <div className="ml-4 space-y-1">
-                              {modulos.map((modulo) => {
+                              {(() => {
+                                const moduleOrderConfig = moduleOrderConfigs[materia] || { order: null, source: 'default', isCustom: false }
+                                const orderedModules = applyModuleOrder(modulos, moduleOrderConfig)
+                                return orderedModules.map((modulo) => {
                                 const isSelected = selectedMateria === materia && selectedModulo === modulo
                                 const cardCount = organizedCards[materia][modulo].length
                                 
@@ -530,12 +548,13 @@ IMPORTANTE: Use os índices dos cards (1, 2, 3...) conforme numerados acima.`
                                     </div>
                                   </button>
                                 )
-                              })}
+                              })})()}
                             </div>
                           )}
                         </div>
                       )
-                    })}
+                    })
+                  })()}
                 </div>
               )}
             </div>

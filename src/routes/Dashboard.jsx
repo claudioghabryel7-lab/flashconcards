@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, startTransition } from 'react'
 import { Link } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
@@ -47,6 +47,7 @@ const Dashboard = () => {
   const [cardProgress, setCardProgress] = useState({})
   const [allCards, setAllCards] = useState([])
   const [loading, setLoading] = useState(true)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [studyStats, setStudyStats] = useState({
     totalDays: 0,
     totalHours: 0,
@@ -115,8 +116,11 @@ const Dashboard = () => {
         const now = Date.now()
         // Usar cache se tiver menos de 5 minutos
         if (now - timestamp < 5 * 60 * 1000 && cachedData) {
-          setAllCards(cachedData)
-          setLoading(false)
+          startTransition(() => {
+            setAllCards(cachedData)
+            setLoading(false)
+            setIsInitialLoad(false) // Permitir scroll imediatamente
+          })
         }
       }
     } catch (err) {
@@ -168,11 +172,17 @@ const Dashboard = () => {
           }
         }
         
-        setAllCards(data)
-        setLoading(false)
-          retryCount = 0
-          
-          // Salvar no cache
+        // Usar startTransition para atualizações não críticas
+        startTransition(() => {
+          setAllCards(data)
+          setLoading(false)
+          setIsInitialLoad(false)
+        })
+        
+        retryCount = 0
+        
+        // Salvar no cache de forma assíncrona para não bloquear
+        setTimeout(() => {
           try {
             localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
               data,
@@ -181,6 +191,7 @@ const Dashboard = () => {
           } catch (err) {
             console.warn('Erro ao salvar cache:', err)
           }
+        }, 0)
       },
       (error) => {
         console.error('Erro ao carregar flashcards:', error)
@@ -216,9 +227,11 @@ const Dashboard = () => {
         const { data: cachedData, timestamp } = JSON.parse(cached)
         const now = Date.now()
         if (now - timestamp < 5 * 60 * 1000 && cachedData) {
-          setCardProgress(cachedData.cardProgress || {})
-          setStudiedModules(cachedData.studiedModules || {})
-          setStudyPhase(cachedData.studyPhase || 1)
+          startTransition(() => {
+            setCardProgress(cachedData.cardProgress || {})
+            setStudiedModules(cachedData.studiedModules || {})
+            setStudyPhase(cachedData.studyPhase || 1)
+          })
         }
       }
     } catch (err) {
@@ -235,27 +248,33 @@ const Dashboard = () => {
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data()
-          setCardProgress(data.cardProgress || {})
-          setStudiedModules(data.studiedModules || {})
-          setStudyPhase(data.studyPhase || 1)
+          startTransition(() => {
+            setCardProgress(data.cardProgress || {})
+            setStudiedModules(data.studiedModules || {})
+            setStudyPhase(data.studyPhase || 1)
+          })
             
-            // Salvar no cache
-            try {
-              localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
-                data: {
-                  cardProgress: data.cardProgress || {},
-                  studiedModules: data.studiedModules || {},
-                  studyPhase: data.studyPhase || 1,
-                },
-                timestamp: Date.now(),
-              }))
-            } catch (err) {
-              console.warn('Erro ao salvar cache de progresso:', err)
-            }
+            // Salvar no cache de forma assíncrona
+            setTimeout(() => {
+              try {
+                localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
+                  data: {
+                    cardProgress: data.cardProgress || {},
+                    studiedModules: data.studiedModules || {},
+                    studyPhase: data.studyPhase || 1,
+                  },
+                  timestamp: Date.now(),
+                }))
+              } catch (err) {
+                console.warn('Erro ao salvar cache de progresso:', err)
+              }
+            }, 0)
         } else {
-          setCardProgress({})
-          setStudiedModules({})
-          setStudyPhase(1)
+          startTransition(() => {
+            setCardProgress({})
+            setStudiedModules({})
+            setStudyPhase(1)
+          })
         }
           retryCount = 0
       },
@@ -367,8 +386,13 @@ const Dashboard = () => {
   // Carregar ordem de matérias e módulos
   const { subjectOrderConfig } = useSubjectOrder(selectedCourseId, user?.uid)
 
-  // Organizar matérias e módulos dos flashcards
+  // Organizar matérias e módulos dos flashcards (otimizado)
   const organizedModules = useMemo(() => {
+    // Se ainda está carregando e não há cards, retornar objeto vazio
+    if (loading && allCards.length === 0) {
+      return {}
+    }
+    
     const organized = {}
     allCards.forEach((card) => {
       if (card.materia && card.modulo) {
@@ -391,7 +415,7 @@ const Dashboard = () => {
       })
     })
     return result
-  }, [allCards])
+  }, [allCards, loading])
 
   // Calcular estatísticas de módulos
   const modulesStats = useMemo(() => {
@@ -544,69 +568,81 @@ const Dashboard = () => {
     }
   }
 
-      // Calcular estatísticas baseadas em cards estudados
+      // Calcular estatísticas baseadas em cards estudados (deferido para não bloquear)
       useEffect(() => {
-        // Horas dos dias registrados (tempo real rastreado)
-        const hoursFromDays = progressData.reduce((sum, item) => {
-          const hours = parseFloat(item.hours || 0)
-          return sum + hours
-        }, 0)
+        // Se ainda está carregando inicialmente, adiar o cálculo
+        if (isInitialLoad && loading) {
+          return
+        }
         
-        console.log('📊 Atualizando estatísticas:', { 
-          progressDataLength: progressData.length, 
-          hoursFromDays: hoursFromDays.toFixed(2) 
-        })
+        // Usar setTimeout para adiar cálculos pesados e não bloquear o thread principal
+        const timeoutId = setTimeout(() => {
+          startTransition(() => {
+            // Horas dos dias registrados (tempo real rastreado)
+            const hoursFromDays = progressData.reduce((sum, item) => {
+              const hours = parseFloat(item.hours || 0)
+              return sum + hours
+            }, 0)
+            
+            console.log('📊 Atualizando estatísticas:', { 
+              progressDataLength: progressData.length, 
+              hoursFromDays: hoursFromDays.toFixed(2) 
+            })
+            
+            const stats = {
+              totalDays: progressData.length,
+              totalHours: hoursFromDays, // Usar apenas horas reais do Firestore (rastreadas pelo timer)
+              bySubject: {},
+            }
         
-        const stats = {
-          totalDays: progressData.length,
-          totalHours: hoursFromDays, // Usar apenas horas reais do Firestore (rastreadas pelo timer)
-          bySubject: {},
-        }
-    
-    // Inicializar todas as matérias
-    MATERIAS.forEach((materia) => {
-      stats.bySubject[materia] = {
-        days: 0,
-        hours: 0,
-        totalCards: 0,
-        studiedCards: 0,
-        percentage: 0,
-      }
-    })
-    
-    // Contar cards por matéria e calcular progresso (já filtrado por curso em allCards)
-    allCards.forEach((card) => {
-      if (card.materia) {
-        // Usar matérias reais dos flashcards, não apenas MATERIAS fixas
-        if (!stats.bySubject[card.materia]) {
-          stats.bySubject[card.materia] = {
-            days: 0,
-            hours: 0,
-            totalCards: 0,
-            studiedCards: 0,
-            percentage: 0,
-          }
-        }
-        stats.bySubject[card.materia].totalCards += 1
-        const progress = cardProgress[card.id]
-        if (progress && progress.reviewCount > 0) {
-          stats.bySubject[card.materia].studiedCards += 1
-          // Horas por matéria serão calculadas proporcionalmente ao tempo total
-          // Por enquanto, não adicionamos horas por matéria individualmente
-        }
-      }
-    })
-    
-    // Calcular porcentagem por matéria
-    MATERIAS.forEach((materia) => {
-      const subj = stats.bySubject[materia]
-      if (subj.totalCards > 0) {
-        subj.percentage = Math.round((subj.studiedCards / subj.totalCards) * 100)
-      }
-    })
-    
-    setStudyStats(stats)
-  }, [allCards, cardProgress, progressData])
+            // Inicializar todas as matérias
+            MATERIAS.forEach((materia) => {
+              stats.bySubject[materia] = {
+                days: 0,
+                hours: 0,
+                totalCards: 0,
+                studiedCards: 0,
+                percentage: 0,
+              }
+            })
+            
+            // Contar cards por matéria e calcular progresso (já filtrado por curso em allCards)
+            allCards.forEach((card) => {
+              if (card.materia) {
+                // Usar matérias reais dos flashcards, não apenas MATERIAS fixas
+                if (!stats.bySubject[card.materia]) {
+                  stats.bySubject[card.materia] = {
+                    days: 0,
+                    hours: 0,
+                    totalCards: 0,
+                    studiedCards: 0,
+                    percentage: 0,
+                  }
+                }
+                stats.bySubject[card.materia].totalCards += 1
+                const progress = cardProgress[card.id]
+                if (progress && progress.reviewCount > 0) {
+                  stats.bySubject[card.materia].studiedCards += 1
+                  // Horas por matéria serão calculadas proporcionalmente ao tempo total
+                  // Por enquanto, não adicionamos horas por matéria individualmente
+                }
+              }
+            })
+            
+            // Calcular porcentagem por matéria
+            MATERIAS.forEach((materia) => {
+              const subj = stats.bySubject[materia]
+              if (subj.totalCards > 0) {
+                subj.percentage = Math.round((subj.studiedCards / subj.totalCards) * 100)
+              }
+            })
+            
+            setStudyStats(stats)
+          })
+        }, isInitialLoad ? 100 : 0) // Adiar um pouco no carregamento inicial
+        
+        return () => clearTimeout(timeoutId)
+      }, [allCards, cardProgress, progressData, isInitialLoad, loading])
 
   // Extrair datas únicas do progressData e normalizar para YYYY-MM-DD
   const progressDates = useMemo(() => {
@@ -768,7 +804,9 @@ const Dashboard = () => {
     }
   }
 
-  if (loading) {
+  // Mostrar loading apenas no carregamento inicial muito rápido
+  // Após isso, permitir scroll mesmo com dados ainda carregando
+  if (loading && isInitialLoad && allCards.length === 0) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">

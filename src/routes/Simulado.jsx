@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState, useRef, useMemo } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
 import { doc, getDoc, setDoc, serverTimestamp, collection, onSnapshot, addDoc, getDocs, query, where } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
@@ -1644,6 +1644,39 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
     )
   }
 
+  // Calcular estatísticas detalhadas por matéria
+  const materiasStats = useMemo(() => {
+    if (!results || !results.byMateria) return []
+    
+    const materias = []
+    Object.entries(results.byMateria).forEach(([materia, data]) => {
+      const total = (data.correct || 0) + (data.wrong || 0)
+      if (total > 0) {
+        const accuracy = (data.correct || 0) / total
+        materias.push({
+          materia,
+          accuracy: (accuracy * 100).toFixed(1),
+          correct: data.correct || 0,
+          wrong: data.wrong || 0,
+          total,
+          needsCalibration: accuracy < 0.7, // Menos de 70% precisa calibrar
+        })
+      }
+    })
+    return materias.sort((a, b) => parseFloat(a.accuracy) - parseFloat(b.accuracy))
+  }, [results])
+
+  // Matérias que precisam calibrar (prioridade: mais erros primeiro)
+  const needsCalibration = useMemo(() => {
+    return materiasStats
+      .filter(m => m.needsCalibration)
+      .sort((a, b) => {
+        // Ordenar por: 1) mais erros, 2) menor taxa de acerto
+        if (b.wrong !== a.wrong) return b.wrong - a.wrong
+        return parseFloat(a.accuracy) - parseFloat(b.accuracy)
+      })
+  }, [materiasStats])
+
   // Tela de resultados
   if (isFinished && results) {
     return (
@@ -1726,28 +1759,112 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
               </div>
             )}
 
-            <div className="mb-6">
-              <h3 className="font-semibold mb-3">Desempenho por Matéria:</h3>
-              <div className="space-y-2">
-                {Object.entries(results.byMateria).map(([materia, data]) => {
-                  const total = data.correct + data.wrong
-                  const accuracy = total > 0 ? ((data.correct / total) * 100).toFixed(1) : 0
-                  return (
-                    <div key={materia} className="p-3 bg-slate-100 dark:bg-slate-700 rounded-lg">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="font-semibold">{materia}</span>
-                        <span className="text-sm">{accuracy}%</span>
+            {/* Desempenho por Matéria */}
+            {materiasStats.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-xl font-bold mb-4 text-slate-700 dark:text-slate-300">
+                  📊 Desempenho por Matéria
+                </h3>
+                <div className="space-y-3">
+                  {materiasStats.map((item) => {
+                    const accuracyNum = parseFloat(item.accuracy)
+                    const isGood = accuracyNum >= 70
+                    const isWarning = accuracyNum >= 50 && accuracyNum < 70
+                    const isCritical = accuracyNum < 50
+                    
+                    return (
+                      <div
+                        key={item.materia}
+                        className={`p-4 rounded-xl border-2 transition-all ${
+                          isCritical
+                            ? 'bg-red-500/10 border-red-500/30 dark:bg-red-900/20'
+                            : isWarning
+                            ? 'bg-orange-500/10 border-orange-500/30 dark:bg-orange-900/20'
+                            : 'bg-green-500/10 border-green-500/30 dark:bg-green-900/20'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="font-bold text-base dark:text-slate-200">{item.materia}</p>
+                          <p className={`font-black text-xl ${
+                            isCritical
+                              ? 'text-red-500'
+                              : isWarning
+                              ? 'text-orange-500'
+                              : 'text-green-500'
+                          }`}>
+                            {item.accuracy}%
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm mb-3">
+                          <span className="text-green-600 dark:text-green-400 font-semibold">✓ {item.correct} acertos</span>
+                          <span className="text-red-600 dark:text-red-400 font-semibold">✗ {item.wrong} erros</span>
+                          <span className="text-slate-500 dark:text-slate-400">Total: {item.total}</span>
+                        </div>
+                        {/* Barra de progresso visual */}
+                        <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-500 ${
+                              isCritical
+                                ? 'bg-gradient-to-r from-red-500 to-red-600'
+                                : isWarning
+                                ? 'bg-gradient-to-r from-orange-500 to-orange-600'
+                                : 'bg-gradient-to-r from-green-500 to-green-600'
+                            }`}
+                            style={{ width: `${item.accuracy}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="flex gap-2 text-sm">
-                        <span className="text-green-600">✓ {data.correct}</span>
-                        <span className="text-red-600">✗ {data.wrong}</span>
-                        <span className="text-slate-500">Total: {total}</span>
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* O que precisa calibrar */}
+            {needsCalibration.length > 0 && (
+              <div className="mb-6 p-6 rounded-xl border-2 border-orange-500/50 bg-gradient-to-br from-orange-500/10 via-red-500/5 to-orange-500/10 dark:from-orange-900/20 dark:via-red-900/10 dark:to-orange-900/20">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-3xl">🎯</span>
+                  <div>
+                    <p className="text-xl font-black text-slate-700 dark:text-slate-200">
+                      O que precisa calibrar os estudos
+                    </p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                      Foque nestas matérias para melhorar seu desempenho
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {needsCalibration.map((item, idx) => {
+                    const priority = idx + 1
+                    return (
+                      <Link
+                        key={item.materia}
+                        to="/flashquestoes"
+                        className="block p-4 bg-white/50 dark:bg-slate-800/50 rounded-lg border border-orange-300 dark:border-orange-700 hover:bg-white dark:hover:bg-slate-800 transition-all"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className="flex items-center justify-center w-8 h-8 rounded-full bg-orange-500 text-white font-bold text-sm">
+                              {priority}
+                            </span>
+                            <div>
+                              <p className="font-bold text-slate-700 dark:text-slate-200">{item.materia}</p>
+                              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                                {item.wrong} erros • {item.accuracy}% de acerto • {item.total} questões
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-orange-600 dark:text-orange-400 font-semibold text-sm">
+                            Estudar →
+                          </span>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-4">
               {profile?.role === 'admin' && (

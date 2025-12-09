@@ -1,5 +1,22 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
   addDoc,
   collection,
   deleteDoc,
@@ -175,6 +192,23 @@ const AdminPanel = () => {
   // Estado para gerenciar cursos de usuários
   const [selectedUserForCourse, setSelectedUserForCourse] = useState(null) // Usuário selecionado para adicionar curso
   const [addingCourseToUser, setAddingCourseToUser] = useState(false) // Se está adicionando curso
+  
+  // Estados para organização de matérias
+  const [organizingSubjects, setOrganizingSubjects] = useState(false) // Se está organizando com IA
+  const [organizingProgress, setOrganizingProgress] = useState('') // Progresso da organização
+  const [manualEditMode, setManualEditMode] = useState(false) // Modo de edição manual
+  const [tempSubjectOrder, setTempSubjectOrder] = useState([]) // Ordem temporária para edição manual
+  const [tempModuleOrder, setTempModuleOrder] = useState({}) // Ordem temporária de módulos
+  const [expandedMateriaForModules, setExpandedMateriaForModules] = useState(null) // Matéria expandida para editar módulos
+  const [activeId, setActiveId] = useState(null) // ID do item sendo arrastado
+  
+  // Sensores para drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
 
   // Configurar PDF.js worker
   useEffect(() => {
@@ -751,6 +785,492 @@ const AdminPanel = () => {
       console.error('Erro ao remover matéria:', err)
       setMessage(`❌ Erro ao remover matéria: ${err.message}`)
     }
+  }
+
+  // Organizar matérias com IA
+  const organizeSubjectsWithAI = async () => {
+    if (!selectedCourseForFlashcards) {
+      setMessage('❌ Selecione um curso primeiro.')
+      return
+    }
+
+    setOrganizingSubjects(true)
+    setOrganizingProgress('Carregando edital do curso...')
+
+    try {
+      const courseId = selectedCourseForFlashcards || 'alego-default'
+      
+      // 1. Carregar edital do curso
+      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+      const editalDoc = await getDoc(editalRef)
+      
+      let editalText = ''
+      if (editalDoc.exists()) {
+        const data = editalDoc.data()
+        editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
+      }
+
+      if (!editalText.trim()) {
+        setMessage('❌ Edital não encontrado. Configure o edital do curso primeiro.')
+        setOrganizingSubjects(false)
+        return
+      }
+
+      // 2. Obter matérias disponíveis do curso
+      const courseSubjectsList = courseSubjects[courseId] || []
+      const allSubjects = courseSubjectsList.length > 0 
+        ? courseSubjectsList 
+        : Object.keys(modules).filter(m => modules[m] && modules[m].length > 0)
+
+      if (allSubjects.length === 0) {
+        setMessage('❌ Nenhuma matéria encontrada no curso.')
+        setOrganizingSubjects(false)
+        return
+      }
+
+      setOrganizingProgress('Analisando edital com IA...')
+
+      // 3. Chamar IA para organizar
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        throw new Error('VITE_GEMINI_API_KEY não configurada')
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+
+      const courseName = courses.find(c => c.id === courseId)?.name || 'o curso'
+      
+      const organizationPrompt = `Você é um especialista em organização de conteúdo educacional para concursos públicos.
+
+Analise o edital abaixo e organize as matérias na ordem ideal de estudo para o curso: ${courseName}
+
+EDITAL DO CONCURSO:
+${editalText.substring(0, 50000)} ${editalText.length > 50000 ? '\n[... conteúdo adicional omitido ...]' : ''}
+
+MATÉRIAS DISPONÍVEIS NO CURSO:
+${allSubjects.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+
+INSTRUÇÕES:
+1. Analise o edital e identifique a ordem de importância das matérias
+2. Considere a sequência lógica de aprendizado
+3. Considere dependências entre matérias (ex: Direito Constitucional antes de Direito Administrativo)
+4. Considere o peso de questões por matéria no edital
+5. Organize as matérias na ordem ideal de estudo
+
+Retorne APENAS um JSON válido com a seguinte estrutura:
+{
+  "subjectOrder": ["matéria1", "matéria2", "matéria3", ...],
+  "reasoning": "Breve explicação da ordem escolhida"
+}
+
+IMPORTANTE:
+- Use EXATAMENTE os nomes das matérias fornecidas acima
+- Inclua TODAS as matérias na ordem
+- Retorne APENAS o JSON, sem texto adicional`
+
+      const result = await model.generateContent(organizationPrompt)
+      const response = result.response
+      const text = response.text()
+
+      // Extrair JSON da resposta
+      let jsonText = text.trim()
+      if (jsonText.includes('```json')) {
+        jsonText = jsonText.split('```json')[1].split('```')[0].trim()
+      } else if (jsonText.includes('```')) {
+        jsonText = jsonText.split('```')[1].split('```')[0].trim()
+      }
+
+      const parsed = JSON.parse(jsonText)
+      const suggestedOrder = parsed.subjectOrder || []
+
+      if (suggestedOrder.length === 0) {
+        throw new Error('IA não retornou uma ordem válida')
+      }
+
+      // 4. Organizar módulos também com IA
+      setOrganizingProgress('Organizando módulos com IA...')
+      
+      const moduleOrder = {}
+      for (const materia of suggestedOrder) {
+        const modulos = modules[materia] || []
+        if (modulos.length > 0) {
+          // Se tiver poucos módulos, ordenar numericamente
+          if (modulos.length <= 3) {
+            moduleOrder[materia] = [...modulos].sort((a, b) => {
+              const extractNumber = (str) => {
+                const match = str.match(/\d+/)
+                return match ? parseInt(match[0], 10) : 999
+              }
+              const numA = extractNumber(a)
+              const numB = extractNumber(b)
+              if (numA !== 999 && numB !== 999) return numA - numB
+              if (numA !== 999) return -1
+              if (numB !== 999) return 1
+              return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+            })
+          } else {
+            // Se tiver muitos módulos, pedir para IA organizar
+            try {
+              const modulePrompt = `Você é um especialista em organização de conteúdo educacional.
+
+Analise o edital abaixo e organize os módulos da matéria "${materia}" na ordem ideal de estudo.
+
+EDITAL DO CONCURSO:
+${editalText.substring(0, 30000)} ${editalText.length > 30000 ? '\n[... conteúdo adicional omitido ...]' : ''}
+
+MÓDULOS DISPONÍVEIS:
+${modulos.map((m, i) => `${i + 1}. ${m}`).join('\n')}
+
+INSTRUÇÕES:
+1. Analise o edital e identifique a ordem lógica dos tópicos
+2. Organize os módulos na sequência ideal de aprendizado
+3. Considere dependências entre tópicos
+
+Retorne APENAS um JSON válido:
+{
+  "moduleOrder": ["módulo1", "módulo2", "módulo3", ...]
+}
+
+Use EXATAMENTE os nomes dos módulos fornecidos acima.`
+
+              const moduleResult = await model.generateContent(modulePrompt)
+              const moduleResponse = moduleResult.response.text()
+              
+              let moduleJsonText = moduleResponse.trim()
+              if (moduleJsonText.includes('```json')) {
+                moduleJsonText = moduleJsonText.split('```json')[1].split('```')[0].trim()
+              } else if (moduleJsonText.includes('```')) {
+                moduleJsonText = moduleJsonText.split('```')[1].split('```')[0].trim()
+              }
+              
+              const moduleParsed = JSON.parse(moduleJsonText)
+              if (moduleParsed.moduleOrder && moduleParsed.moduleOrder.length > 0) {
+                moduleOrder[materia] = moduleParsed.moduleOrder
+              } else {
+                // Fallback: ordenação numérica
+                moduleOrder[materia] = [...modulos].sort((a, b) => {
+                  const extractNumber = (str) => {
+                    const match = str.match(/\d+/)
+                    return match ? parseInt(match[0], 10) : 999
+                  }
+                  const numA = extractNumber(a)
+                  const numB = extractNumber(b)
+                  if (numA !== 999 && numB !== 999) return numA - numB
+                  if (numA !== 999) return -1
+                  if (numB !== 999) return 1
+                  return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+                })
+              }
+            } catch (err) {
+              console.warn(`Erro ao organizar módulos de ${materia} com IA, usando ordenação padrão:`, err)
+              // Fallback: ordenação numérica
+              moduleOrder[materia] = [...modulos].sort((a, b) => {
+                const extractNumber = (str) => {
+                  const match = str.match(/\d+/)
+                  return match ? parseInt(match[0], 10) : 999
+                }
+                const numA = extractNumber(a)
+                const numB = extractNumber(b)
+                if (numA !== 999 && numB !== 999) return numA - numB
+                if (numA !== 999) return -1
+                if (numB !== 999) return 1
+                return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+              })
+            }
+          }
+        }
+      }
+
+      // 5. Salvar ordem no Firestore
+      setOrganizingProgress('Salvando ordem...')
+      const { saveAdminOrder } = await import('../utils/subjectOrder')
+      await saveAdminOrder(courseId, suggestedOrder, moduleOrder)
+
+      setMessage(`✅ Matérias organizadas com sucesso! ${parsed.reasoning ? `\n\n💡 ${parsed.reasoning}` : ''}`)
+      setOrganizingSubjects(false)
+      setOrganizingProgress('')
+    } catch (err) {
+      console.error('Erro ao organizar com IA:', err)
+      setMessage(`❌ Erro ao organizar: ${err.message}`)
+      setOrganizingSubjects(false)
+      setOrganizingProgress('')
+    }
+  }
+
+  // Salvar ordem manual
+  const saveManualOrder = async () => {
+    if (!selectedCourseForFlashcards) {
+      setMessage('❌ Selecione um curso primeiro.')
+      return
+    }
+
+    try {
+      const courseId = selectedCourseForFlashcards || 'alego-default'
+      const { saveAdminOrder } = await import('../utils/subjectOrder')
+      
+      // 1. Carregar ordem atual do Firestore para mesclar
+      const courseConfigRef = doc(db, 'courses', courseId, 'config', 'order')
+      const courseConfigDoc = await getDoc(courseConfigRef)
+      
+      let currentSubjectOrder = []
+      let currentModuleOrder = {}
+      
+      if (courseConfigDoc.exists()) {
+        const config = courseConfigDoc.data()
+        currentSubjectOrder = config.subjectOrder || []
+        currentModuleOrder = config.moduleOrder || {}
+      }
+      
+      // 2. Usar ordem temporária se foi editada, senão usar ordem atual do Firestore, senão usar ordem padrão
+      const subjectOrder = tempSubjectOrder.length > 0 
+        ? tempSubjectOrder 
+        : (currentSubjectOrder.length > 0
+          ? currentSubjectOrder
+          : (courseSubjects[courseId] || Object.keys(modules).filter(m => modules[m] && modules[m].length > 0)))
+      
+      // 3. Mesclar ordem de módulos: usar tempModuleOrder para matérias editadas, manter ordem atual para outras
+      const finalModuleOrder = { ...currentModuleOrder }
+      
+      // Adicionar/atualizar módulos das matérias que foram editadas
+      if (tempModuleOrder && Object.keys(tempModuleOrder).length > 0) {
+        Object.keys(tempModuleOrder).forEach(materia => {
+          finalModuleOrder[materia] = tempModuleOrder[materia]
+        })
+      }
+      
+      // Garantir que todas as matérias tenham ordem de módulos (mesmo que não editadas)
+      subjectOrder.forEach(materia => {
+        if (!finalModuleOrder[materia] || finalModuleOrder[materia].length === 0) {
+          const modulos = modules[materia] || []
+          if (modulos.length > 0) {
+            // Se não tem ordem salva, usar ordem atual dos módulos
+            finalModuleOrder[materia] = [...modulos]
+          }
+        }
+      })
+
+      await saveAdminOrder(courseId, subjectOrder, finalModuleOrder)
+      setMessage('✅ Ordem salva com sucesso!')
+      setManualEditMode(false)
+      setTempSubjectOrder([])
+      setTempModuleOrder({})
+      setExpandedMateriaForModules(null)
+    } catch (err) {
+      console.error('Erro ao salvar ordem:', err)
+      setMessage(`❌ Erro ao salvar ordem: ${err.message}`)
+    }
+  }
+
+  // Mover matéria para cima/baixo (edição manual)
+  const moveSubject = (index, direction) => {
+    const currentOrder = tempSubjectOrder.length > 0 
+      ? tempSubjectOrder 
+      : (courseSubjects[selectedCourseForFlashcards] || Object.keys(modules).filter(m => modules[m] && modules[m].length > 0))
+    
+    const newOrder = [...currentOrder]
+    const newIndex = direction === 'up' ? index - 1 : index + 1
+    
+    if (newIndex < 0 || newIndex >= newOrder.length) return
+    
+    [newOrder[index], newOrder[newIndex]] = [newOrder[newIndex], newOrder[index]]
+    setTempSubjectOrder(newOrder)
+  }
+
+  // Iniciar edição manual
+  const startManualEdit = async () => {
+    const courseId = selectedCourseForFlashcards || 'alego-default'
+    
+    // Carregar ordem atual do Firestore
+    const courseConfigRef = doc(db, 'courses', courseId, 'config', 'order')
+    const courseConfigDoc = await getDoc(courseConfigRef)
+    
+    let currentSubjects = []
+    let currentModuleOrder = {}
+    
+    if (courseConfigDoc.exists()) {
+      const config = courseConfigDoc.data()
+      currentSubjects = config.subjectOrder || []
+      currentModuleOrder = config.moduleOrder || {}
+    }
+    
+    // Se não tem ordem salva, usar ordem padrão
+    if (currentSubjects.length === 0) {
+      currentSubjects = courseSubjects[courseId] || Object.keys(modules).filter(m => modules[m] && modules[m].length > 0)
+    }
+    
+    setTempSubjectOrder([...currentSubjects])
+    
+    // Inicializar ordem de módulos: usar ordem salva se existir, senão usar ordem atual
+    const initialModuleOrder = {}
+    currentSubjects.forEach(materia => {
+      const modulos = modules[materia] || []
+      if (modulos.length > 0) {
+        // Se tem ordem salva para esta matéria, usar ela, senão usar ordem atual
+        if (currentModuleOrder[materia] && currentModuleOrder[materia].length > 0) {
+          initialModuleOrder[materia] = [...currentModuleOrder[materia]]
+        } else {
+          initialModuleOrder[materia] = [...modulos]
+        }
+      }
+    })
+    setTempModuleOrder(initialModuleOrder)
+    
+    setManualEditMode(true)
+  }
+
+  // Mover módulo dentro de uma matéria
+  const moveModule = (materia, index, direction) => {
+    const currentModules = tempModuleOrder[materia] || modules[materia] || []
+    const newOrder = [...currentModules]
+    const newIndex = direction === 'up' ? index - 1 : index + 1
+    
+    if (newIndex < 0 || newIndex >= newOrder.length) return
+    
+    [newOrder[index], newOrder[newIndex]] = [newOrder[newIndex], newOrder[index]]
+    setTempModuleOrder({
+      ...tempModuleOrder,
+      [materia]: newOrder
+    })
+  }
+
+  // Toggle expandir matéria para editar módulos
+  const toggleMateriaModules = (materia) => {
+    setExpandedMateriaForModules(expandedMateriaForModules === materia ? null : materia)
+  }
+
+  // Handlers para drag and drop
+  const handleDragStart = (event) => {
+    setActiveId(event.active.id)
+  }
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event
+    
+    if (!over || active.id === over.id) {
+      setActiveId(null)
+      return
+    }
+
+    // Verificar se é matéria ou módulo
+    if (active.id.toString().startsWith('subject-')) {
+      // Arrastar matéria
+      const activeIndex = tempSubjectOrder.findIndex(m => `subject-${m}` === active.id)
+      const overIndex = tempSubjectOrder.findIndex(m => `subject-${m}` === over.id)
+      
+      if (activeIndex !== -1 && overIndex !== -1) {
+        const newOrder = arrayMove(tempSubjectOrder, activeIndex, overIndex)
+        setTempSubjectOrder(newOrder)
+      }
+    } else if (active.id.toString().startsWith('module-')) {
+      // Arrastar módulo
+      const [materia, modulo] = active.id.toString().replace('module-', '').split('::')
+      const currentModules = tempModuleOrder[materia] || modules[materia] || []
+      const activeIndex = currentModules.findIndex(m => `module-${materia}::${m}` === active.id)
+      const overIndex = currentModules.findIndex(m => `module-${materia}::${m}` === over.id)
+      
+      if (activeIndex !== -1 && overIndex !== -1) {
+        const newOrder = arrayMove(currentModules, activeIndex, overIndex)
+        setTempModuleOrder({
+          ...tempModuleOrder,
+          [materia]: newOrder
+        })
+      }
+    }
+    
+    setActiveId(null)
+  }
+
+  // Componente SortableItem para matérias
+  const SortableSubjectItem = ({ materia, index, modulos }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: `subject-${materia}` })
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    }
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className="flex items-center gap-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 p-3"
+      >
+        <div
+          {...attributes}
+          {...listeners}
+          className="flex items-center gap-2 flex-shrink-0 cursor-grab active:cursor-grabbing"
+        >
+          <span className="text-slate-400">⋮⋮</span>
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{materia}</span>
+            {modulos.length > 0 && (
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                ({modulos.length} módulo{modulos.length !== 1 ? 's' : ''})
+              </span>
+            )}
+          </div>
+          {modulos.length > 0 && (
+            <button
+              type="button"
+              onClick={() => toggleMateriaModules(materia)}
+              className="mt-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+            >
+              {expandedMateriaForModules === materia ? 'Ocultar módulos' : 'Organizar módulos'}
+            </button>
+          )}
+        </div>
+        <span className="text-xs text-slate-500 dark:text-slate-400">#{index + 1}</span>
+      </div>
+    )
+  }
+
+  // Componente SortableItem para módulos
+  const SortableModuleItem = ({ materia, modulo, index }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: `module-${materia}::${modulo}` })
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    }
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className="flex items-center gap-3 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 p-2"
+      >
+        <div
+          {...attributes}
+          {...listeners}
+          className="flex items-center gap-2 flex-shrink-0 cursor-grab active:cursor-grabbing"
+        >
+          <span className="text-indigo-400 text-xs">⋮⋮</span>
+        </div>
+        <div className="flex-1">
+          <span className="text-xs font-medium text-slate-900 dark:text-slate-100">{modulo}</span>
+        </div>
+        <span className="text-xs text-indigo-500 dark:text-indigo-400">#{index + 1}</span>
+      </div>
+    )
   }
 
   // Limpar flashcards órfãos (de matérias/módulos que não existem mais)
@@ -6054,6 +6574,195 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                           <p className="text-sm text-slate-500">Nenhuma matéria adicionada ainda. Adicione matérias acima.</p>
                         )}
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Organizar Matérias e Módulos */}
+                {selectedCourseForFlashcards && (
+                  <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-indigo-500/5 to-cyan-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                    <div className="relative">
+                      <p className="flex items-center gap-2 text-lg font-bold text-indigo-700 dark:text-indigo-300">
+                        <SparklesIcon className="h-6 w-6" />
+                        Organizar Matérias e Módulos
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Organize a ordem das matérias e módulos que aparecerão para os alunos. Esta ordem será aplicada em todos os lugares: flashcards, mapas mentais, questões e dashboard.
+                      </p>
+
+                      <div className="mt-6 flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={organizeSubjectsWithAI}
+                          disabled={organizingSubjects}
+                          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 px-6 py-3 text-sm font-semibold text-white disabled:opacity-50 hover:from-indigo-500 hover:to-cyan-500 transition-all"
+                        >
+                          {organizingSubjects ? (
+                            <>
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                              Organizando...
+                            </>
+                          ) : (
+                            <>
+                              <SparklesIcon className="h-5 w-5" />
+                              Organizar com IA
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={manualEditMode ? () => { 
+                            setManualEditMode(false)
+                            setTempSubjectOrder([])
+                            setTempModuleOrder({})
+                            setExpandedMateriaForModules(null)
+                          } : startManualEdit}
+                          className="flex items-center gap-2 rounded-xl border-2 border-indigo-600 px-6 py-3 text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all"
+                        >
+                          {manualEditMode ? (
+                            <>
+                              <DocumentTextIcon className="h-5 w-5" />
+                              Cancelar Edição
+                            </>
+                          ) : (
+                            <>
+                              <DocumentTextIcon className="h-5 w-5" />
+                              Editar Manualmente
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {organizingProgress && (
+                        <div className="mt-4 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 p-3">
+                          <p className="text-sm text-indigo-700 dark:text-indigo-300">{organizingProgress}</p>
+                        </div>
+                      )}
+
+                      {/* Lista de matérias para edição manual com drag and drop */}
+                      {manualEditMode && (
+                        <DndContext
+                          sensors={sensors}
+                          collisionDetection={closestCenter}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                        >
+                          <div className="mt-6 space-y-3">
+                            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                              Arraste os itens para reorganizar (ou use as setas):
+                            </p>
+                            <SortableContext
+                              items={(tempSubjectOrder.length > 0 ? tempSubjectOrder : (courseSubjects[selectedCourseForFlashcards] || Object.keys(modules).filter(m => modules[m] && modules[m].length > 0))).map(m => `subject-${m}`)}
+                              strategy={verticalListSortingStrategy}
+                            >
+                              <div className="space-y-2">
+                                {(tempSubjectOrder.length > 0 ? tempSubjectOrder : (courseSubjects[selectedCourseForFlashcards] || Object.keys(modules).filter(m => modules[m] && modules[m].length > 0))).map((materia, index) => {
+                                  const modulos = modules[materia] || []
+                                  return (
+                                    <SortableSubjectItem
+                                      key={materia}
+                                      materia={materia}
+                                      index={index}
+                                      modulos={modulos}
+                                    />
+                                  )
+                                })}
+                              </div>
+                            </SortableContext>
+                            
+                            {/* Lista de módulos para edição (quando matéria está expandida) */}
+                            {expandedMateriaForModules && (
+                              <div className="mt-4 ml-4 pl-4 border-l-2 border-indigo-300 dark:border-indigo-600 space-y-2">
+                                <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-2">
+                                  Módulos de {expandedMateriaForModules}:
+                                </p>
+                                <SortableContext
+                                  items={(tempModuleOrder[expandedMateriaForModules] || modules[expandedMateriaForModules] || []).map(m => `module-${expandedMateriaForModules}::${m}`)}
+                                  strategy={verticalListSortingStrategy}
+                                >
+                                  <div className="space-y-2">
+                                    {(tempModuleOrder[expandedMateriaForModules] || modules[expandedMateriaForModules] || []).map((modulo, modIndex) => (
+                                      <SortableModuleItem
+                                        key={modulo}
+                                        materia={expandedMateriaForModules}
+                                        modulo={modulo}
+                                        index={modIndex}
+                                      />
+                                    ))}
+                                  </div>
+                                </SortableContext>
+                              </div>
+                            )}
+                            
+                            <DragOverlay>
+                              {activeId ? (
+                                <div className="rounded-lg bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 p-3 opacity-90">
+                                  {activeId.toString().startsWith('subject-') ? (
+                                    <span className="text-sm font-semibold">{activeId.toString().replace('subject-', '')}</span>
+                                  ) : (
+                                    <span className="text-xs font-medium">{activeId.toString().replace('module-', '').split('::')[1]}</span>
+                                  )}
+                                </div>
+                              ) : null}
+                            </DragOverlay>
+                            
+                            <div className="flex gap-3 pt-2">
+                              <button
+                                type="button"
+                                onClick={saveManualOrder}
+                                className="rounded-xl bg-indigo-600 px-6 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-all"
+                              >
+                                💾 Salvar Ordem
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { 
+                                  setManualEditMode(false)
+                                  setTempSubjectOrder([])
+                                  setTempModuleOrder({})
+                                  setExpandedMateriaForModules(null)
+                                }}
+                                className="rounded-xl border-2 border-slate-300 dark:border-slate-600 px-6 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        </DndContext>
+                      )}
+
+                      {/* Mostrar ordem atual (quando não está editando) */}
+                      {!manualEditMode && !organizingSubjects && (
+                        <div className="mt-6">
+                          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                            Ordem Atual:
+                          </p>
+                          <div className="space-y-2">
+                            {(courseSubjects[selectedCourseForFlashcards] || Object.keys(modules).filter(m => modules[m] && modules[m].length > 0)).map((materia, index) => {
+                              const modulos = modules[materia] || []
+                              return (
+                                <div
+                                  key={materia}
+                                  className="flex items-center gap-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 p-3"
+                                >
+                                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-bold">
+                                    {index + 1}
+                                  </span>
+                                  <div className="flex-1">
+                                    <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{materia}</span>
+                                    {modulos.length > 0 && (
+                                      <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
+                                        ({modulos.length} módulo{modulos.length !== 1 ? 's' : ''})
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
