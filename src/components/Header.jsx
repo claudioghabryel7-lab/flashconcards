@@ -301,20 +301,35 @@ const Header = () => {
                     </div>
                     <div className="space-y-1">
                       {category.items.map((item) => (
-                        <NavLink
-                          key={item.to}
-                          to={item.to}
-                          onClick={() => setIsMenuOpen(false)}
-                          className={({ isActive }) =>
-                            `flex items-center px-4 py-3 rounded-lg text-base font-medium transition-colors ${
-                              isActive
-                                ? 'bg-alego-100 dark:bg-alego-900/30 text-alego-700 dark:text-alego-300'
-                                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                            }`
-                          }
-                        >
-                          {item.label}
-                        </NavLink>
+                        <div key={item.to}>
+                          <NavLink
+                            to={item.to}
+                            onClick={() => setIsMenuOpen(false)}
+                            className={({ isActive }) =>
+                              `flex items-center px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                                isActive
+                                  ? 'bg-alego-100 dark:bg-alego-900/30 text-alego-700 dark:text-alego-300'
+                                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`
+                            }
+                          >
+                            {item.label}
+                          </NavLink>
+                          {/* Botão Sair embaixo de FlashSocial */}
+                          {item.label === 'FlashSocial' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                logout()
+                                setIsMenuOpen(false)
+                              }}
+                              className="w-full mt-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-base font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            >
+                              <ArrowLeftOnRectangleIcon className="h-5 w-5" />
+                              Sair
+                            </button>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -334,17 +349,6 @@ const Header = () => {
               >
                 <ArrowPathIcon className="h-4 w-4" />
                 Trocar Curso
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  logout()
-                  setIsMenuOpen(false)
-                }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-              >
-                <ArrowLeftOnRectangleIcon className="h-4 w-4" />
-                Sair
               </button>
             </div>
           </div>
