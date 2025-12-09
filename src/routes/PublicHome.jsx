@@ -34,7 +34,7 @@ const features = [
   {
     icon: QuestionMarkCircleIcon,
     title: 'FlashQuestões',
-    description: 'Questões fictícias no estilo das principais bancas geradas por IA. 10 questões por módulo com explicações detalhadas (BIZUs) e índice de acerto.',
+    description: 'Questões fictícias no estilo das principais bancas geradas por IA. Questões personalizadas por módulo com explicações detalhadas (BIZUs) e índice de acerto.',
     color: 'from-purple-500 to-purple-600'
   },
   {

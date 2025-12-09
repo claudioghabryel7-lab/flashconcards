@@ -5,6 +5,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import { useSubjectOrder } from '../hooks/useSubjectOrder'
+import { applySubjectOrder, applyModuleOrder } from '../utils/subjectOrder'
 import { FolderIcon, ChevronRightIcon, ChevronDownIcon, LightBulbIcon, CheckCircleIcon, XCircleIcon, HandThumbUpIcon, HandThumbDownIcon } from '@heroicons/react/24/outline'
 import { 
   getOrCreateQuestionsCache, 
@@ -275,6 +277,19 @@ const FlashQuestoes = () => {
     return modulesByMateria
   }, [cards])
 
+  // Carregar ordem de matérias e módulos
+  const { subjectOrderConfig, moduleOrderConfigs, loadModuleOrder } = useSubjectOrder(selectedCourseId, user?.uid)
+  
+  // Carregar ordens de módulos quando necessário
+  useEffect(() => {
+    if (!subjectOrderConfig || !organizedModules) return
+    Object.keys(organizedModules).forEach(materia => {
+      if (!moduleOrderConfigs[materia]) {
+        loadModuleOrder(materia).catch(err => console.error('Erro ao carregar ordem de módulos:', err))
+      }
+    })
+  }, [organizedModules, subjectOrderConfig])
+
   // Função para chamar Groq API
   const callGroqAPI = async (prompt) => {
     const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
@@ -428,7 +443,8 @@ Use ESTE conteúdo como base principal para criar as questões. As questões dev
 
 ${flashcardsContent}
 
-TAREFA: Criar 10 questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${selectedMateria}" no módulo "${selectedModulo}".
+TAREFA: Criar questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${selectedMateria}" no módulo "${selectedModulo}". 
+Gere questões suficientes para cobrir adequadamente todo o conteúdo dos flashcards (recomendado: 1 questão para cada 2-3 flashcards, mínimo de 10 questões, máximo de 50 questões para garantir cobertura completa do conteúdo).
 
 CRÍTICO:
 - As questões devem ser baseadas NO CONTEÚDO DOS FLASHCARDS acima
@@ -961,23 +977,30 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
             Selecione um Módulo
           </h2>
           <div className="space-y-3">
-            {Object.entries(organizedModules).map(([materia, modulos], idx) => (
-              <div key={materia} className="stark-card border-2">
-                <button
-                  type="button"
-                  onClick={() => toggleMateria(materia)}
-                  className="w-full flex items-center justify-between p-4 stark-text-primary hover:stark-bg-hover transition-stark rounded-lg"
-                >
-                  <span className="font-bold text-base sm:text-lg">{materia}</span>
-                  {expandedMaterias[materia] ? (
-                    <ChevronDownIcon className="h-5 w-5 text-cyan-400" />
-                  ) : (
-                    <ChevronRightIcon className="h-5 w-5 text-cyan-400" />
-                  )}
-                </button>
-                {expandedMaterias[materia] && (
-                  <div className="p-3 pt-0 space-y-2 border-t border-cyan-500/20 mt-2">
-                    {modulos.map((modulo) => (
+            {(() => {
+              const orderedSubjects = applySubjectOrder(organizedModules, subjectOrderConfig)
+              return orderedSubjects.map((materia) => {
+                const modulos = organizedModules[materia] || []
+                return (
+                  <div key={materia} className="stark-card border-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleMateria(materia)}
+                      className="w-full flex items-center justify-between p-4 stark-text-primary hover:stark-bg-hover transition-stark rounded-lg"
+                    >
+                      <span className="font-bold text-base sm:text-lg">{materia}</span>
+                      {expandedMaterias[materia] ? (
+                        <ChevronDownIcon className="h-5 w-5 text-cyan-400" />
+                      ) : (
+                        <ChevronRightIcon className="h-5 w-5 text-cyan-400" />
+                      )}
+                    </button>
+                    {expandedMaterias[materia] && (
+                      <div className="p-3 pt-0 space-y-2 border-t border-cyan-500/20 mt-2">
+                        {(() => {
+                          const moduleOrderConfig = moduleOrderConfigs[materia] || { order: null, source: 'default', isCustom: false }
+                          const orderedModules = applyModuleOrder(modulos, moduleOrderConfig)
+                          return orderedModules.map((modulo) => (
                       <button
                         key={modulo}
                         type="button"
@@ -1013,11 +1036,13 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
                           <span className="ml-2 text-xs text-cyan-400 animate-pulse">⚙️ Gerando...</span>
                         )}
                       </button>
-                    ))}
+                      ))})()}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
+                )
+              })
+            })()}
           </div>
 
           {selectedMateria && selectedModulo && questions.length === 0 && (
@@ -1027,7 +1052,7 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
                   <div className="inline-block animate-spin text-4xl mb-4">⚙️</div>
                   <p className="stark-text-primary text-lg font-bold mb-2">Gerando questões...</p>
                   <p className="stark-text-secondary text-sm">
-                    Por favor, aguarde enquanto a IA cria 10 questões personalizadas para você
+                    Por favor, aguarde enquanto a IA cria questões personalizadas para você
                   </p>
                 </div>
               ) : (
