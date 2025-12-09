@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
@@ -7,7 +7,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder, applyModuleOrder } from '../utils/subjectOrder'
-import { FolderIcon, ChevronRightIcon, ChevronDownIcon, LightBulbIcon, CheckCircleIcon, XCircleIcon, HandThumbUpIcon, HandThumbDownIcon } from '@heroicons/react/24/outline'
+import { FolderIcon, ChevronRightIcon, ChevronDownIcon, LightBulbIcon, CheckCircleIcon, XCircleIcon, HandThumbUpIcon, HandThumbDownIcon, ChartBarIcon, BookOpenIcon } from '@heroicons/react/24/outline'
 import { 
   getOrCreateQuestionsCache, 
   saveQuestionsCache, 
@@ -882,26 +882,36 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
     }
   }
 
-  // Calcular déficit por matéria
-  const deficitByMateria = useMemo(() => {
-    const deficits = []
+  // Calcular estatísticas detalhadas por matéria
+  const materiasStats = useMemo(() => {
+    const materias = []
     Object.entries(stats.byMateria || {}).forEach(([materia, data]) => {
       const total = (data.correct || 0) + (data.wrong || 0)
       if (total > 0) {
         const accuracy = (data.correct || 0) / total
-        if (accuracy < 0.7) { // Menos de 70% de acerto
-          deficits.push({
-            materia,
-            accuracy: (accuracy * 100).toFixed(1),
-            correct: data.correct || 0,
-            wrong: data.wrong || 0,
-            total,
-          })
-        }
+        materias.push({
+          materia,
+          accuracy: (accuracy * 100).toFixed(1),
+          correct: data.correct || 0,
+          wrong: data.wrong || 0,
+          total,
+          needsCalibration: accuracy < 0.7, // Menos de 70% precisa calibrar
+        })
       }
     })
-    return deficits.sort((a, b) => parseFloat(a.accuracy) - parseFloat(b.accuracy))
+    return materias.sort((a, b) => parseFloat(a.accuracy) - parseFloat(b.accuracy))
   }, [stats])
+
+  // Matérias que precisam calibrar (prioridade: mais erros primeiro)
+  const needsCalibration = useMemo(() => {
+    return materiasStats
+      .filter(m => m.needsCalibration)
+      .sort((a, b) => {
+        // Ordenar por: 1) mais erros, 2) menor taxa de acerto
+        if (b.wrong !== a.wrong) return b.wrong - a.wrong
+        return parseFloat(a.accuracy) - parseFloat(b.accuracy)
+      })
+  }, [materiasStats])
 
   const toggleMateria = (materia) => {
     setExpandedMaterias((prev) => ({ ...prev, [materia]: !prev[materia] }))
@@ -949,24 +959,126 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
         </div>
       </div>
 
-      {/* Bot de Déficit STARK */}
-      {deficitByMateria.length > 0 && (
-        <div className="stark-card stark-animate-slide-in p-4 sm:p-6 border-orange-500/30">
-          <p className="stark-text-primary text-sm sm:text-base font-bold mb-3 flex items-center gap-2">
-            <span className="text-xl">⚠️</span> Matérias com Déficit
+      {/* Estatísticas por Matéria */}
+      {materiasStats.length > 0 && (
+        <div className="stark-card stark-animate-fade-in p-4 sm:p-6">
+          <p className="stark-text-primary text-lg sm:text-xl font-black mb-4 flex items-center gap-2">
+            <ChartBarIcon className="h-6 w-6 text-cyan-400" />
+            Desempenho por Matéria
           </p>
-          <ul className="space-y-2">
-            {deficitByMateria.map((item, idx) => (
-              <li key={item.materia} className="stark-text-secondary text-xs sm:text-sm flex items-start gap-2">
-                <span className="text-orange-500 mt-1">▸</span>
-                <span>
-                  <strong className="stark-text-primary">{item.materia}</strong>: 
-                  <span className="text-orange-500 font-semibold"> {item.accuracy}%</span> de acerto 
-                  ({item.correct}/{item.total})
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="space-y-3">
+            {materiasStats.map((item) => {
+              const accuracyNum = parseFloat(item.accuracy)
+              const isGood = accuracyNum >= 70
+              const isWarning = accuracyNum >= 50 && accuracyNum < 70
+              const isCritical = accuracyNum < 50
+              
+              return (
+                <div
+                  key={item.materia}
+                  className={`p-4 rounded-xl border-2 transition-all ${
+                    isCritical
+                      ? 'bg-red-500/10 border-red-500/30 dark:bg-red-900/20'
+                      : isWarning
+                      ? 'bg-orange-500/10 border-orange-500/30 dark:bg-orange-900/20'
+                      : 'bg-green-500/10 border-green-500/30 dark:bg-green-900/20'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="stark-text-primary font-bold text-sm sm:text-base">{item.materia}</p>
+                    <p className={`font-black text-lg sm:text-xl ${
+                      isCritical
+                        ? 'text-red-500'
+                        : isWarning
+                        ? 'text-orange-500'
+                        : 'text-green-500'
+                    }`}>
+                      {item.accuracy}%
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs sm:text-sm">
+                    <span className="text-green-500 font-semibold">✓ {item.correct} acertos</span>
+                    <span className="text-red-500 font-semibold">✗ {item.wrong} erros</span>
+                    <span className="stark-text-secondary">Total: {item.total}</span>
+                  </div>
+                  {/* Barra de progresso visual */}
+                  <div className="mt-3 h-2 bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 ${
+                        isCritical
+                          ? 'bg-gradient-to-r from-red-500 to-red-600'
+                          : isWarning
+                          ? 'bg-gradient-to-r from-orange-500 to-orange-600'
+                          : 'bg-gradient-to-r from-green-500 to-green-600'
+                      }`}
+                      style={{ width: `${item.accuracy}%` }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* O que precisa calibrar */}
+      {needsCalibration.length > 0 && (
+        <div className="stark-card stark-animate-slide-in p-4 sm:p-6 border-orange-500/50 bg-gradient-to-br from-orange-500/10 via-red-500/5 to-orange-500/10">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-3xl">🎯</span>
+            <div>
+              <p className="stark-text-primary text-lg sm:text-xl font-black">
+                O que precisa calibrar os estudos
+              </p>
+              <p className="stark-text-secondary text-xs sm:text-sm mt-1">
+                Foque nestas matérias para melhorar seu desempenho
+              </p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {needsCalibration.map((item, idx) => {
+              const priority = idx + 1
+              return (
+                <div
+                  key={item.materia}
+                  className="p-4 rounded-xl bg-gradient-to-r from-orange-500/20 to-red-500/20 border-2 border-orange-500/50 dark:border-orange-400/50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-black text-sm">
+                        {priority}
+                      </div>
+                      <div className="flex-1">
+                        <p className="stark-text-primary font-bold text-base sm:text-lg mb-1">
+                          {item.materia}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
+                          <span className="text-red-500 font-semibold">
+                            ⚠️ {item.wrong} erros
+                          </span>
+                          <span className="stark-text-secondary">
+                            Taxa de acerto: <span className="text-orange-500 font-bold">{item.accuracy}%</span>
+                          </span>
+                          <span className="stark-text-secondary">
+                            {item.correct}/{item.total} questões
+                          </span>
+                        </div>
+                        <div className="mt-2">
+                          <Link
+                            to={`/flashquestoes?materia=${encodeURIComponent(item.materia)}`}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-semibold text-sm transition-all hover:scale-105"
+                          >
+                            <BookOpenIcon className="h-4 w-4" />
+                            Estudar {item.materia}
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

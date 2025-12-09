@@ -325,6 +325,36 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.`
     }
   }
   
+  // Calcular estatísticas por matéria
+  const materiasStats = useMemo(() => {
+    const materias = []
+    Object.entries(stats.byMateria || {}).forEach(([materia, data]) => {
+      const total = (data.correct || 0) + (data.wrong || 0)
+      if (total > 0) {
+        const accuracy = (data.correct || 0) / total
+        materias.push({
+          materia,
+          accuracy: (accuracy * 100).toFixed(1),
+          correct: data.correct || 0,
+          wrong: data.wrong || 0,
+          total,
+          needsCalibration: accuracy < 0.7,
+        })
+      }
+    })
+    return materias.sort((a, b) => parseFloat(a.accuracy) - parseFloat(b.accuracy))
+  }, [stats])
+
+  // Matérias que precisam calibrar
+  const needsCalibration = useMemo(() => {
+    return materiasStats
+      .filter(m => m.needsCalibration)
+      .sort((a, b) => {
+        if (b.wrong !== a.wrong) return b.wrong - a.wrong
+        return parseFloat(a.accuracy) - parseFloat(b.accuracy)
+      })
+  }, [materiasStats])
+
   const currentQuestion = questions[currentQuestionIndex]
   const progress = ((currentQuestionIndex + 1) / questions.length) * 100
   const totalAnswered = (stats.correct || 0) + (stats.wrong || 0)
@@ -363,18 +393,35 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.`
               </div>
             </div>
             
-            {cacheInfo && (
-              <div className="hidden sm:flex items-center gap-3 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 border border-blue-500/30 dark:border-blue-400/30">
-                {cacheInfo.cached && (
-                  <span className="px-2 py-1 rounded-full bg-green-500/20 text-green-600 dark:text-green-400 text-xs font-bold">
-                    ✅ Cache
+            <div className="flex items-center gap-3">
+              {/* Estatísticas em tempo real */}
+              {totalAnswered > 0 && (
+                <div className="hidden md:flex items-center gap-4 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 border border-blue-500/30 dark:border-blue-400/30">
+                  <div className="text-center">
+                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">Taxa de Acerto</p>
+                    <p className="text-lg font-black text-blue-600 dark:text-blue-400">{accuracy}%</p>
+                  </div>
+                  <div className="h-8 w-px bg-slate-300 dark:bg-slate-600"></div>
+                  <div className="text-center">
+                    <p className="text-xs font-semibold text-green-600 dark:text-green-400">✓ {stats.correct || 0}</p>
+                    <p className="text-xs font-semibold text-red-600 dark:text-red-400">✗ {stats.wrong || 0}</p>
+                  </div>
+                </div>
+              )}
+              
+              {cacheInfo && (
+                <div className="hidden sm:flex items-center gap-3 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 border border-blue-500/30 dark:border-blue-400/30">
+                  {cacheInfo.cached && (
+                    <span className="px-2 py-1 rounded-full bg-green-500/20 text-green-600 dark:text-green-400 text-xs font-bold">
+                      ✅ Cache
+                    </span>
+                  )}
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    👍 {cacheInfo.likes} | 👎 {cacheInfo.dislikes}
                   </span>
-                )}
-                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                  👍 {cacheInfo.likes} | 👎 {cacheInfo.dislikes}
-                </span>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
           
           {/* Barra de progresso */}
@@ -664,6 +711,61 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.`
                       <span className="relative z-10">✓ Finalizar</span>
                     </button>
                   )}
+                </div>
+                
+                {/* Resumo de Calibração - Mostrar ao final */}
+                {currentQuestionIndex === questions.length - 1 && needsCalibration.length > 0 && (
+                  <div className="mt-6 relative overflow-hidden bg-gradient-to-br from-orange-500/10 via-red-500/5 to-orange-500/10 rounded-xl border-2 border-orange-500/50 dark:border-orange-400/50 p-5 sm:p-6">
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-orange-500/5 to-red-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                    
+                    <div className="relative">
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className="text-3xl">🎯</span>
+                        <div>
+                          <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                            O que precisa calibrar os estudos
+                          </p>
+                          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
+                            Foque nestas matérias para melhorar seu desempenho
+                          </p>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        {needsCalibration.slice(0, 3).map((item, idx) => {
+                          const priority = idx + 1
+                          return (
+                            <div
+                              key={item.materia}
+                              className="p-4 rounded-xl bg-gradient-to-r from-orange-500/20 to-red-500/20 border border-orange-500/50 dark:border-orange-400/50"
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-black text-sm">
+                                  {priority}
+                                </div>
+                                <div className="flex-1">
+                                  <p className="font-bold text-base sm:text-lg text-slate-900 dark:text-white mb-1">
+                                    {item.materia}
+                                  </p>
+                                  <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
+                                    <span className="text-red-600 dark:text-red-400 font-semibold">
+                                      ⚠️ {item.wrong} erros
+                                    </span>
+                                    <span className="text-slate-600 dark:text-slate-400">
+                                      Taxa: <span className="text-orange-600 dark:text-orange-400 font-bold">{item.accuracy}%</span>
+                                    </span>
+                                    <span className="text-slate-600 dark:text-slate-400">
+                                      {item.correct}/{item.total} questões
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 </div>
               </div>
             )}
