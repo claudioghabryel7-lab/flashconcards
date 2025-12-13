@@ -15,19 +15,14 @@ export default defineConfig({
     reportCompressedSize: false, // Desabilita para build mais rápido
     rollupOptions: {
       output: {
-        // Code splitting otimizado para melhor cache e TTFB
+        // Code splitting simplificado - React deve estar sempre junto
         manualChunks: (id) => {
-          // Separar vendors em chunks menores para melhor cache
           if (id.includes('node_modules')) {
-            // React e React-DOM devem estar juntos no mesmo chunk para evitar problemas
-            if (id.includes('react/') || id.includes('react-dom/') || id.includes('react/jsx-runtime')) {
+            // React, React-DOM e React Router DEVEM estar juntos
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
               return 'react-vendor'
             }
-            // React Router pode estar separado
-            if (id.includes('react-router')) {
-              return 'router-vendor'
-            }
-            // Firebase (pode ser carregado depois)
+            // Firebase
             if (id.includes('firebase')) {
               return 'firebase-vendor'
             }
