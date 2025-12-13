@@ -19,9 +19,13 @@ export default defineConfig({
         manualChunks: (id) => {
           // Separar vendors em chunks menores para melhor cache
           if (id.includes('node_modules')) {
-            // React core (crítico - carregar primeiro)
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+            // React e React-DOM devem estar juntos no mesmo chunk para evitar problemas
+            if (id.includes('react/') || id.includes('react-dom/') || id.includes('react/jsx-runtime')) {
               return 'react-vendor'
+            }
+            // React Router pode estar separado
+            if (id.includes('react-router')) {
+              return 'router-vendor'
             }
             // Firebase (pode ser carregado depois)
             if (id.includes('firebase')) {
@@ -61,6 +65,7 @@ export default defineConfig({
     include: [
       'react',
       'react-dom',
+      'react/jsx-runtime',
       'react-router-dom',
       'firebase/app',
       'firebase/auth',
@@ -68,6 +73,10 @@ export default defineConfig({
     ],
     // Excluir dependências pesadas do pre-bundling
     exclude: ['@google/generative-ai', 'pdfjs-dist', 'html2canvas'],
+    // Forçar esbuild para resolver problemas de compatibilidade
+    esbuildOptions: {
+      jsx: 'automatic',
+    },
   },
   // Otimizações de preview (produção local)
   preview: {
