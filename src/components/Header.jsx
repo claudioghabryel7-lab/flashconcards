@@ -68,7 +68,7 @@ const Header = () => {
         label: 'Estudo',
         icon: BookOpenIcon,
         items: [
-          { to: '/dashboard', label: 'Painel', auth: true },
+          { to: '/dashboard', label: 'Dashboard', auth: true },
           { to: '/guia-estudos', label: 'Guia de Estudos', auth: false },
           { to: '/flashcards', label: 'Flashcards', auth: true },
           { to: '/flashquestoes', label: 'FlashQuestões', auth: true },

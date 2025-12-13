@@ -1,11 +1,13 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, startTransition } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import Header from './components/Header'
-import SupportButton from './components/SupportButton'
-import PopupBanner from './components/PopupBanner'
 import { useAuth } from './hooks/useAuth'
 import { useDarkMode } from './hooks/useDarkMode.jsx'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
+
+// Lazy load de componentes não críticos para melhor TTFB
+const Header = lazy(() => import('./components/Header'))
+const SupportButton = lazy(() => import('./components/SupportButton'))
+const PopupBanner = lazy(() => import('./components/PopupBanner'))
 
 // Lazy load de rotas pesadas
 const AdminPanel = lazy(() => import('./routes/AdminPanel'))
@@ -97,7 +99,7 @@ function App() {
       </div>
     </div>
   )
-
+  
   return (
     <div 
       className="min-h-screen transition-colors"
@@ -107,10 +109,12 @@ function App() {
         minHeight: '100vh'
       }}
     >
-      <Header />
+      <Suspense fallback={<div className="h-16 bg-slate-100 dark:bg-slate-800 animate-pulse" />}>
+        <Header />
+      </Suspense>
       <main className="mx-auto w-full max-w-6xl px-2 sm:px-4 py-4 sm:py-6 md:py-8 overflow-x-hidden">
         <Suspense fallback={<LoadingFallback />}>
-          <Routes>
+        <Routes>
           <Route path="/" element={<PublicHome />} />
           <Route path="/guia-estudos" element={<GuiaEstudos />} />
           <Route path="/setup" element={<SetupUser />} />
@@ -240,8 +244,12 @@ function App() {
           É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.
         </p>
       </footer>
-      <SupportButton />
-      <PopupBanner />
+      <Suspense fallback={null}>
+        <SupportButton />
+      </Suspense>
+      <Suspense fallback={null}>
+        <PopupBanner />
+      </Suspense>
     </div>
   )
 }

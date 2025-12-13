@@ -2,7 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import { collection, onSnapshot, query, limit, getDocs } from 'firebase/firestore'
 
 const CACHE_PREFIX = 'firebase_cache_'
-const CACHE_EXPIRY = 5 * 60 * 1000 // 5 minutos
+// Tempos de cache otimizados por tipo de dados (melhor TTFB)
+const CACHE_EXPIRY = {
+  courses: 10 * 60 * 1000, // 10 minutos (dados que mudam pouco)
+  flashcards: 5 * 60 * 1000, // 5 minutos
+  users: 2 * 60 * 1000, // 2 minutos (dados mais dinâmicos)
+  default: 5 * 60 * 1000, // 5 minutos padrão
+}
 
 // Função para salvar no cache
 const saveToCache = (key, data) => {
@@ -17,8 +23,8 @@ const saveToCache = (key, data) => {
   }
 }
 
-// Função para ler do cache
-const getFromCache = (key) => {
+// Função para ler do cache com TTL inteligente
+const getFromCache = (key, collectionName = null) => {
   try {
     const cached = localStorage.getItem(`${CACHE_PREFIX}${key}`)
     if (!cached) return null
@@ -26,8 +32,13 @@ const getFromCache = (key) => {
     const { data, timestamp } = JSON.parse(cached)
     const now = Date.now()
     
+    // Determinar TTL baseado no tipo de coleção
+    const ttl = collectionName && CACHE_EXPIRY[collectionName] 
+      ? CACHE_EXPIRY[collectionName] 
+      : CACHE_EXPIRY.default
+    
     // Verificar se o cache expirou
-    if (now - timestamp > CACHE_EXPIRY) {
+    if (now - timestamp > ttl) {
       localStorage.removeItem(`${CACHE_PREFIX}${key}`)
       return null
     }
@@ -55,11 +66,11 @@ export const useFirebaseCache = (collectionName, queryOptions = {}, dependencies
 
     const cacheKey = `${collectionName}_${JSON.stringify(queryOptions)}`
     
-    // Tentar carregar do cache primeiro
-    const cachedData = getFromCache(cacheKey)
+    // Tentar carregar do cache primeiro (melhor TTFB)
+    const cachedData = getFromCache(cacheKey, collectionName)
     if (cachedData) {
       setData(cachedData)
-      setLoading(false)
+      setLoading(false) // Não bloquear renderização se tiver cache
     }
 
     // Carregar do Firebase
@@ -152,11 +163,11 @@ export const useFirebaseDocCache = (collectionName, docId, dependencies = []) =>
 
     const cacheKey = `${collectionName}_${docId}`
     
-    // Tentar carregar do cache primeiro
-    const cachedData = getFromCache(cacheKey)
+    // Tentar carregar do cache primeiro (melhor TTFB)
+    const cachedData = getFromCache(cacheKey, collectionName)
     if (cachedData) {
       setData(cachedData)
-      setLoading(false)
+      setLoading(false) // Não bloquear renderização se tiver cache
     }
 
     // Carregar do Firebase

@@ -10,21 +10,30 @@
     <meta name="description" content="Plataforma de estudos para concursos públicos com flashcards, questões e simulados" />
     <title>plegimentoria</title>
     
-    <!-- Preconnect para recursos externos -->
-    <link rel="preconnect" href="https://www.googletagmanager.com" />
+    <!-- Preconnect para recursos externos (melhor TTFB) -->
+    <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin />
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
     
-    <!-- Preload de fontes críticas (se houver) -->
+    <!-- Preload de recursos críticos -->
     <link rel="preload" as="style" href="/src/index.css" />
+    <link rel="preload" as="image" href="/logo.svg" />
     
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17766035851"></script>
+    <!-- Google tag (gtag.js) - Carregar de forma não bloqueante -->
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-
-      gtag('config', 'AW-17766035851');
+      // Carregar gtag de forma assíncrona para não bloquear TTFB
+      (function() {
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=AW-17766035851';
+        document.head.appendChild(script);
+        
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'AW-17766035851');
+      })();
     </script>
     
     <script>

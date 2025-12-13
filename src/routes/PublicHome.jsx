@@ -57,7 +57,7 @@ const features = [
   },
   {
     icon: ChartBarIcon,
-    title: 'Dashboard Completo',
+    title: 'Progresso Completo',
     description: 'Acompanhe seu progresso com calendário visual, streak de estudos, estatísticas por matéria e visualização clara do que já foi estudado.',
     color: 'from-indigo-500 to-indigo-600'
   },
@@ -81,7 +81,7 @@ const benefits = [
   'Flash Mentor - IA que responde dúvidas sobre o edital',
   'Bot "Como Estudar?" - guia personalizado de estudos',
   'Ranking em tempo real com outros alunos',
-  'Dashboard completo com progresso e estatísticas',
+  'Progresso completo com estatísticas e métricas',
   'Calendário visual e streak de estudos',
   'Explicações detalhadas geradas por IA',
 ]

@@ -183,8 +183,8 @@ const Login = () => {
           }
         }
 
-        // Redirecionar para seleção de curso ou dashboard
-        navigate('/select-course')
+        // Redirecionar para seleção de curso ou flashcards
+      navigate('/select-course')
       }
     } catch (err) {
       console.error('Erro no login/cadastro:', err)
@@ -291,8 +291,8 @@ const Login = () => {
             </>
           ) : (
             <>
-              <ArrowRightCircleIcon className="h-5 w-5" />
-              Entrar
+          <ArrowRightCircleIcon className="h-5 w-5" />
+          Entrar
             </>
           )}
         </button>

@@ -169,8 +169,8 @@ const GuiaEstudos = () => {
       icon: ChartBarIcon,
       title: 'Taxa de Acerto por Matéria',
       target: '90%+',
-      description: 'Acompanhe no Dashboard e FlashQuestões. Foque nas matérias abaixo de 90%.',
-      userValue: stats ? 'Acompanhe no Dashboard' : null,
+      description: 'Acompanhe no FlashQuestões. Foque nas matérias abaixo de 90%.',
+      userValue: stats ? 'Acompanhe no FlashQuestões' : null,
     },
     {
       icon: BookOpenIcon,
@@ -190,7 +190,7 @@ const GuiaEstudos = () => {
       icon: TrophyIcon,
       title: 'Horas de Estudo',
       target: 'Quanto mais, melhor',
-      description: 'Acompanhe suas horas no Dashboard e mantenha a consistência.',
+      description: 'Acompanhe suas horas de estudo e mantenha a consistência.',
       userValue: stats ? `${stats.totalHours}h` : null,
     },
   ]
@@ -436,7 +436,7 @@ const GuiaEstudos = () => {
             Como Saber se Está Tendo Resultados
           </h2>
           <p className="text-slate-600 dark:text-slate-400 mb-6 text-lg">
-            Acompanhe essas métricas no seu Dashboard e use o diagnóstico de calibração para focar nos pontos fracos:
+            Acompanhe essas métricas e use o diagnóstico de calibração para focar nos pontos fracos:
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {metrics.map((metric, index) => {
@@ -511,7 +511,7 @@ const GuiaEstudos = () => {
           }`}
         >
           <Link
-            to="/dashboard"
+            to="/flashcards"
             className="inline-flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-br from-alego-600 to-alego-700 text-white font-bold text-lg hover:shadow-xl transition-all hover:scale-105 transform"
           >
             <TrophyIcon className="h-6 w-6" />

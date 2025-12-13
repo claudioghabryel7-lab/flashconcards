@@ -190,12 +190,14 @@ const Simulado = () => {
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
 
-      const themePrompt = `Você é um especialista em criar temas de redação para concursos públicos.
+      // Usar prompt unificado
+      const { buildRedacaoPrompt } = await import('../utils/unifiedPrompt')
+      const themePrompt = await buildRedacaoPrompt(
+        courseId,
+        editalText ? editalText.substring(0, 30000) : ''
+      ) + `
 
-CONCURSO ESPECÍFICO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
 CARGO: ${courseCompetition || courseName || 'Cargo público'}
-
-${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 30000)}\n\n` : ''}
 
 Crie um tema de redação ESPECÍFICO e relevante para o concurso ${courseName || 'mencionado'}${courseCompetition ? ` (${courseCompetition})` : ''}.
 
@@ -301,12 +303,13 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
 
-      const analysisPrompt = `Você é um corretor especializado em redações de concursos públicos.
-
-CONCURSO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
-TEMA DA REDAÇÃO: ${redacaoTema}
-
-${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 30000)}\n\n` : ''}
+      // Usar prompt unificado
+      const { buildRedacaoAnalysisPrompt } = await import('../utils/unifiedPrompt')
+      const analysisPrompt = await buildRedacaoAnalysisPrompt(
+        courseId,
+        redacaoTema,
+        editalText ? editalText.substring(0, 30000) : ''
+      ) + `
 
 IMPORTANTE: Esta redação usa 4 espaços no início da linha para indicar parágrafos. Linhas que começam com 4 espaços são parágrafos.
 
@@ -794,36 +797,15 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
               ? `\n\n📚 FLASHCARDS DO CURSO (USE COMO BASE):\n${window.formatFlashcardsForContext ? window.formatFlashcardsForContext(window.courseFlashcards.slice(0, 30), 30) : ''}\n\n`
               : '')
 
-        const materiaPrompt = `Você é um especialista em criar questões de concursos públicos.
+        // Usar prompt unificado
+        const { buildSimuladoPrompt } = await import('../utils/unifiedPrompt')
+        const basePrompt = await buildSimuladoPrompt(
+          courseId,
+          editalText ? editalText.substring(0, 30000) : '',
+          `${flashcardsContext}${flashcardsText}${linkContext}`
+        )
 
-═══════════════════════════════════════════════════════════════════════════════
-🚨 REGRA CRÍTICA ABSOLUTA - LEIA COM MUITA ATENÇÃO 🚨
-═══════════════════════════════════════════════════════════════════════════════
-
-CONCURSO ESPECÍFICO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
-CURSO ID: ${courseId}
-
-⚠️⚠️⚠️ PROIBIÇÃO ABSOLUTA ⚠️⚠️⚠️
-- NÃO use conteúdo de OUTROS concursos
-- NÃO use conhecimento genérico de concursos públicos
-- NÃO invente conteúdo que não esteja nos flashcards ou edital deste curso específico
-- NÃO misture informações de diferentes concursos
-- NÃO use exemplos ou contextos de outros cursos
-- NÃO use questões ou temas de outros concursos públicos
-
-✅✅✅ O QUE VOCÊ DEVE FAZER ✅✅✅
-- Use APENAS o conteúdo dos flashcards deste curso específico (${courseName || courseId})
-- Use APENAS o edital deste curso específico
-- Use APENAS o link de referência deste curso específico
-- Crie questões ESPECÍFICAS para ${courseName || courseId}
-- Baseie-se EXCLUSIVAMENTE no contexto fornecido abaixo
-- Cada questão DEVE estar relacionada APENAS a este curso
-
-═══════════════════════════════════════════════════════════════════════════════
-
-${flashcardsContext}
-
-${flashcardsText}
+        const materiaPrompt = `${basePrompt}
 
 REGRAS CRÍTICAS PARA CRIAÇÃO DAS QUESTÕES:
 1. BASEIE-SE EXCLUSIVAMENTE nos flashcards acima - APENAS flashcards do curso ${courseName || courseId}
@@ -834,30 +816,22 @@ REGRAS CRÍTICAS PARA CRIAÇÃO DAS QUESTÕES:
 6. NÃO use conhecimento de outros cursos ou concursos genéricos
 7. NÃO invente conteúdo que não esteja nos flashcards ou edital acima
 
-${linkContext}
-
-${editalText ? `CONTEXTO DO EDITAL DO CONCURSO ${courseName || courseId} (USE APENAS ESTE EDITAL):\n${editalText.substring(0, 30000)}\n\n` : ''}
-
 INSTRUÇÕES FINAIS:
 - Questões devem ser ESPECÍFICAS para ${courseName || courseId}
 - NÃO use conteúdo de outros concursos
 - NÃO invente informações que não estejam nos flashcards ou edital acima
 - Cada questão deve testar conhecimento presente nos flashcards deste curso
 
-Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}" do concurso ${courseName || courseId}${courseCompetition ? ` (${courseCompetition})` : ''}.
+Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha para a matéria "${materia.nome}".
 
-Lembre-se: Use APENAS o contexto fornecido acima. NÃO use conhecimento de outros cursos.
-
-REGRAS CRÍTICAS:
-- Questões devem ser ESPECÍFICAS para o concurso ${courseName || 'mencionado'}
+REGRAS ESPECÍFICAS:
+- Questões devem ser ESPECÍFICAS para o concurso mencionado
 - Baseie-se EXCLUSIVAMENTE no edital fornecido acima
 - NÃO use conteúdo de outros concursos ou matérias genéricas
-- Estilo FGV: questões objetivas, claras, com alternativas bem elaboradas
 - Cada questão deve ter 5 alternativas (A, B, C, D, E)
 - Apenas UMA alternativa está correta
 - As alternativas incorretas devem ser plausíveis (distratores inteligentes)
 - Questões devem ser FICTÍCIAS (não são questões reais de provas anteriores)
-- Dificuldade: nível FGV (intermediário a avançado)
 - Enunciados claros e objetivos
 - Foque no conteúdo específico do edital deste concurso
 - Se o edital mencionar tópicos específicos para "${materia.nome}", use APENAS esses tópicos
@@ -1012,28 +986,16 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
 
-      const regeneratePrompt = `Você é um especialista em criar questões de concursos públicos.
+      // Usar prompt unificado
+      const { buildQuestionPrompt } = await import('../utils/unifiedPrompt')
+      const baseRegeneratePrompt = await buildQuestionPrompt(
+        courseId,
+        materia,
+        editalText,
+        flashcardsText
+      )
 
-═══════════════════════════════════════════════════════════════════════════════
-🚨 REGRA CRÍTICA ABSOLUTA - LEIA COM MUITA ATENÇÃO 🚨
-═══════════════════════════════════════════════════════════════════════════════
-
-CONCURSO ESPECÍFICO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
-CURSO ID: ${courseId}
-
-⚠️⚠️⚠️ PROIBIÇÃO ABSOLUTA ⚠️⚠️⚠️
-- NÃO use conteúdo de OUTROS concursos
-- NÃO use conhecimento genérico de concursos públicos
-- NÃO invente conteúdo que não esteja nos flashcards ou edital deste curso específico
-- NÃO misture informações de diferentes concursos
-- NÃO use exemplos ou contextos de outros cursos
-
-✅✅✅ O QUE VOCÊ DEVE FAZER ✅✅✅
-- Use APENAS o conteúdo dos flashcards deste curso específico (${courseName || courseId})
-- Use APENAS o edital deste curso específico
-- Use APENAS o link de referência deste curso específico
-- Crie questões ESPECÍFICAS para ${courseName || courseId}
-- Baseie-se EXCLUSIVAMENTE no contexto fornecido abaixo
+      const regeneratePrompt = `${baseRegeneratePrompt}
 
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1233,6 +1195,39 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
   }
   
   const materiaInfo = getMateriaInfo()
+
+  // Calcular estatísticas detalhadas por matéria (ANTES de qualquer return condicional)
+  const materiasStats = useMemo(() => {
+    if (!results || !results.byMateria) return []
+    
+    const materias = []
+    Object.entries(results.byMateria).forEach(([materia, data]) => {
+      const total = (data.correct || 0) + (data.wrong || 0)
+      if (total > 0) {
+        const accuracy = (data.correct || 0) / total
+        materias.push({
+          materia,
+          accuracy: (accuracy * 100).toFixed(1),
+          correct: data.correct || 0,
+          wrong: data.wrong || 0,
+          total,
+          needsCalibration: accuracy < 0.7, // Menos de 70% precisa calibrar
+        })
+      }
+    })
+    return materias.sort((a, b) => parseFloat(a.accuracy) - parseFloat(b.accuracy))
+  }, [results])
+
+  // Matérias que precisam calibrar (prioridade: mais erros primeiro)
+  const needsCalibration = useMemo(() => {
+    return materiasStats
+      .filter(m => m.needsCalibration)
+      .sort((a, b) => {
+        // Ordenar por: 1) mais erros, 2) menor taxa de acerto
+        if (b.wrong !== a.wrong) return b.wrong - a.wrong
+        return parseFloat(a.accuracy) - parseFloat(b.accuracy)
+      })
+  }, [materiasStats])
 
   // Tela de revisão de questões (admin) - DEVE estar antes de outros returns
   if (showQuestionReview && profile?.role === 'admin') {
@@ -1650,39 +1645,6 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
     )
   }
 
-  // Calcular estatísticas detalhadas por matéria
-  const materiasStats = useMemo(() => {
-    if (!results || !results.byMateria) return []
-    
-    const materias = []
-    Object.entries(results.byMateria).forEach(([materia, data]) => {
-      const total = (data.correct || 0) + (data.wrong || 0)
-      if (total > 0) {
-        const accuracy = (data.correct || 0) / total
-        materias.push({
-          materia,
-          accuracy: (accuracy * 100).toFixed(1),
-          correct: data.correct || 0,
-          wrong: data.wrong || 0,
-          total,
-          needsCalibration: accuracy < 0.7, // Menos de 70% precisa calibrar
-        })
-      }
-    })
-    return materias.sort((a, b) => parseFloat(a.accuracy) - parseFloat(b.accuracy))
-  }, [results])
-
-  // Matérias que precisam calibrar (prioridade: mais erros primeiro)
-  const needsCalibration = useMemo(() => {
-    return materiasStats
-      .filter(m => m.needsCalibration)
-      .sort((a, b) => {
-        // Ordenar por: 1) mais erros, 2) menor taxa de acerto
-        if (b.wrong !== a.wrong) return b.wrong - a.wrong
-        return parseFloat(a.accuracy) - parseFloat(b.accuracy)
-      })
-  }, [materiasStats])
-
   // Tela de resultados
   if (isFinished && results) {
     return (
@@ -1767,7 +1729,7 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
 
             {/* Desempenho por Matéria */}
             {materiasStats.length > 0 && (
-              <div className="mb-6">
+            <div className="mb-6">
                 <h3 className="text-xl font-bold mb-4 text-slate-700 dark:text-slate-300">
                   📊 Desempenho por Matéria
                 </h3>
@@ -1778,7 +1740,7 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
                     const isWarning = accuracyNum >= 50 && accuracyNum < 70
                     const isCritical = accuracyNum < 50
                     
-                    return (
+                  return (
                       <div
                         key={item.materia}
                         className={`p-4 rounded-xl border-2 transition-all ${
@@ -1800,7 +1762,7 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
                           }`}>
                             {item.accuracy}%
                           </p>
-                        </div>
+                      </div>
                         <div className="flex items-center gap-4 text-sm mb-3">
                           <span className="text-green-600 dark:text-green-400 font-semibold">✓ {item.correct} acertos</span>
                           <span className="text-red-600 dark:text-red-400 font-semibold">✗ {item.wrong} erros</span>
@@ -1818,12 +1780,12 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
                             }`}
                             style={{ width: `${item.accuracy}%` }}
                           />
-                        </div>
                       </div>
-                    )
-                  })}
-                </div>
+                    </div>
+                  )
+                })}
               </div>
+            </div>
             )}
 
             {/* O que precisa calibrar */}

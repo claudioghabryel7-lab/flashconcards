@@ -18,6 +18,36 @@ import { auth, db, firebaseInitialized } from '../firebase/config'
 
 const AuthContext = createContext(null)
 
+// Cache para perfil do usuário (TTL: 2 minutos)
+const PROFILE_CACHE_KEY = 'auth_profile_cache'
+const PROFILE_CACHE_TTL = 2 * 60 * 1000 // 2 minutos
+
+const getCachedProfile = (uid) => {
+  try {
+    const cached = localStorage.getItem(`${PROFILE_CACHE_KEY}_${uid}`)
+    if (!cached) return null
+    const { data, timestamp } = JSON.parse(cached)
+    if (Date.now() - timestamp < PROFILE_CACHE_TTL) {
+      return data
+    }
+    localStorage.removeItem(`${PROFILE_CACHE_KEY}_${uid}`)
+    return null
+  } catch {
+    return null
+  }
+}
+
+const setCachedProfile = (uid, profile) => {
+  try {
+    localStorage.setItem(`${PROFILE_CACHE_KEY}_${uid}`, JSON.stringify({
+      data: profile,
+      timestamp: Date.now()
+    }))
+  } catch {
+    // Ignorar erros de localStorage
+  }
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -42,7 +72,14 @@ export const AuthProvider = ({ children }) => {
           }
           setUser(userObj)
 
-          // Carregar perfil do Firestore
+          // Tentar carregar do cache primeiro para melhor TTFB
+          const cachedProfile = getCachedProfile(firebaseUser.uid)
+          if (cachedProfile) {
+            setProfile(cachedProfile)
+            setLoading(false) // Não bloquear renderização se tiver cache
+          }
+
+          // Carregar perfil do Firestore (não bloquear renderização)
           const userRef = doc(db, 'users', firebaseUser.uid)
           
           // Verificar se é email do admin
@@ -81,6 +118,7 @@ export const AuthProvider = ({ children }) => {
               }
               
               setProfile(data)
+              setCachedProfile(firebaseUser.uid, data) // Salvar no cache
             } else {
               // Verificar se o usuário foi deletado antes de recriar
               const deletedUserRef = doc(db, 'deletedUsers', firebaseUser.uid)
@@ -114,10 +152,12 @@ export const AuthProvider = ({ children }) => {
               try {
                 await setDoc(userRef, newProfile)
                 setProfile(newProfile)
+                setCachedProfile(firebaseUser.uid, newProfile) // Salvar no cache
               } catch (err) {
                 console.error('Erro ao criar perfil:', err)
                 // Mesmo com erro, definir perfil localmente
                 setProfile(newProfile)
+                setCachedProfile(firebaseUser.uid, newProfile) // Salvar no cache mesmo com erro
               }
             }
           } catch (err) {
@@ -132,6 +172,7 @@ export const AuthProvider = ({ children }) => {
               favorites: [],
             }
             setProfile(fallbackProfile)
+            setCachedProfile(firebaseUser.uid, fallbackProfile) // Salvar no cache
           }
         } else {
           setUser(null)
@@ -201,6 +242,7 @@ export const AuthProvider = ({ children }) => {
           }
           
           setProfile(data)
+          setCachedProfile(user.uid, data) // Atualizar cache
         } else {
           // Perfil não existe - verificar se foi deletado antes de fazer logout
           const deletedUserRef = doc(db, 'deletedUsers', user.uid)
