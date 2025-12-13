@@ -82,31 +82,32 @@ const GuestOnlyRoute = ({ children }) => {
 }
 
 function App() {
-  const { darkMode } = useDarkMode()
-  const { user } = useAuth()
-  
-  // Rastrear status online/offline
-  useOnlineStatus()
-  
-  // Loading component otimizado
-  const LoadingFallback = () => (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <div className="text-center">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-alego-600 border-t-transparent"></div>
-        <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Carregando...</p>
+  try {
+    const { darkMode } = useDarkMode()
+    const { user } = useAuth()
+    
+    // Rastrear status online/offline
+    useOnlineStatus()
+    
+    // Loading component otimizado
+    const LoadingFallback = () => (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-alego-600 border-t-transparent"></div>
+          <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Carregando...</p>
+        </div>
       </div>
-    </div>
-  )
-  
-  return (
-    <div 
-      className="min-h-screen transition-colors"
-      style={{
-        backgroundColor: darkMode ? '#0f172a' : '#f8fafc',
-        color: darkMode ? '#f1f5f9' : '#1e293b',
-        minHeight: '100vh'
-      }}
-    >
+    )
+    
+    return (
+      <div 
+        className="min-h-screen transition-colors"
+        style={{
+          backgroundColor: darkMode ? '#0f172a' : '#f8fafc',
+          color: darkMode ? '#f1f5f9' : '#1e293b',
+          minHeight: '100vh'
+        }}
+      >
       <Header />
       <main className="mx-auto w-full max-w-6xl px-2 sm:px-4 py-4 sm:py-6 md:py-8 overflow-x-hidden">
         <Suspense fallback={<LoadingFallback />}>
