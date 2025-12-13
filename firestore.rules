@@ -140,6 +140,38 @@
                         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
         }
+        
+        // Edital Verticalizado (subcoleção)
+        match /editalVerticalizado/{docId} {
+          // Permitir leitura para usuários autenticados
+          allow read: if isAuthenticated();
+          // Apenas admin pode criar, atualizar e deletar
+          allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          allow update: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          allow delete: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        }
+        
+        // Matérias Revisadas (subcoleção)
+        match /materiasRevisadas/{docId} {
+          // Permitir leitura para usuários autenticados
+          allow read: if isAuthenticated();
+          // Apenas admin pode criar, atualizar e deletar
+          allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          allow update: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          allow delete: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        }
       }
       
       match /reviews/{reviewId} {

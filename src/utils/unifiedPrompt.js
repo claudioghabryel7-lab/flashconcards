@@ -73,7 +73,9 @@ ${editalText ? `CONTEXTO DO EDITAL:\n${editalText}\n\n` : ''}
 
 ${flashcardsContent ? `⚠️ CONTEÚDO PRINCIPAL - FLASHCARDS:\nUse ESTE conteúdo como base principal para criar as questões:\n\n${flashcardsContent}\n\n` : ''}
 
-TAREFA: Criar questões FICTÍCIAS de múltipla escolha para a matéria "${materia}".`
+TAREFA: Criar questões FICTÍCIAS de múltipla escolha para a matéria "${materia}".
+
+IMPORTANTE: Gere MUITAS questões (mínimo 20, ideal 30+). NÃO pare em 10 questões. Quanto mais questões, melhor.`
   }
   
   // Construir prompt usando dados unificados
@@ -98,7 +100,13 @@ REGRAS ESPECÍFICAS:
 - Baseie-se PRIMARIAMENTE no conteúdo dos flashcards fornecidos
 - Cada questão deve ter 5 alternativas (A, B, C, D, E)
 - Apenas UMA alternativa está correta
-- As alternativas incorretas devem ser plausíveis (distratores inteligentes)`
+- As alternativas incorretas devem ser plausíveis (distratores inteligentes)
+
+QUANTIDADE DE QUESTÕES:
+- Gere MUITAS questões (mínimo 20, ideal 30+ questões)
+- NÃO pare em 10 questões - isso é insuficiente
+- Quanto mais questões você gerar, melhor será a cobertura do conteúdo
+- NÃO há limite máximo - gere o máximo possível dentro do limite de tokens`
 }
 
 /**

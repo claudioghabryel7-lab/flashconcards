@@ -93,8 +93,34 @@ const AdminPanel = () => {
   const [questoesPrompt, setQuestoesPrompt] = useState('')
   const [bizuPrompt, setBizuPrompt] = useState('')
   const [savingQuestoesConfig, setSavingQuestoesConfig] = useState(false)
+  
+  // Estados para Edital Verticalizado
+  const [editalVerticalizadoFile, setEditalVerticalizadoFile] = useState(null)
+  const [editalVerticalizadoText, setEditalVerticalizadoText] = useState('')
+  const [extractingEditalVerticalizado, setExtractingEditalVerticalizado] = useState(false)
+  const [savingEditalVerticalizado, setSavingEditalVerticalizado] = useState(false)
+  const [editalVerticalizadoData, setEditalVerticalizadoData] = useState(null)
+  
+  // Estados para prompt unificado
+  const [unifiedPrompt, setUnifiedPrompt] = useState({
+    banca: '',
+    concursoName: '',
+    prompt: '',
+  })
+  const [savingUnifiedPrompt, setSavingUnifiedPrompt] = useState(false)
   const [expandedCardMaterias, setExpandedCardMaterias] = useState({})
   const [expandedCardModulos, setExpandedCardModulos] = useState({})
+  
+  // Estados para Matérias Revisadas
+  const [materiaRevisadaForm, setMateriaRevisadaForm] = useState({
+    materia: '',
+    courseId: 'alego-default',
+  })
+  const [generatingMateriaRevisada, setGeneratingMateriaRevisada] = useState(false)
+  const [materiaRevisadaProgress, setMateriaRevisadaProgress] = useState('')
+  const [existingMateriasRevisadas, setExistingMateriasRevisadas] = useState([])
+  const [generatingAllMaterias, setGeneratingAllMaterias] = useState(false)
+  const [allMateriasProgress, setAllMateriasProgress] = useState('')
   
   // Estado para geração automática com IA
   const [aiGenerationPrompt, setAiGenerationPrompt] = useState('')
@@ -221,8 +247,16 @@ const AdminPanel = () => {
 
   // Configurar PDF.js worker
   useEffect(() => {
-    // Usar CDN do unpkg que é mais confiável
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+    try {
+      // Tentar usar worker local primeiro
+      if (typeof window !== 'undefined') {
+        // Usar CDN do unpkg que é mais confiável
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+        console.log('✅ PDF.js configurado:', pdfjsLib.version)
+      }
+    } catch (err) {
+      console.error('❌ Erro ao configurar PDF.js:', err)
+    }
   }, [])
 
   // Carregar edital e PDF salvo (por curso)
@@ -297,6 +331,60 @@ const AdminPanel = () => {
     loadQuestoesConfig()
   }, [isAdmin, selectedCourseForPrompts])
 
+  // Carregar prompt unificado (por curso)
+  useEffect(() => {
+    if (!isAdmin) return
+    
+    // Limpar campos primeiro quando mudar de curso
+    setUnifiedPrompt({
+      banca: '',
+      concursoName: '',
+      prompt: '',
+    })
+    
+    const loadUnifiedPrompt = async () => {
+      try {
+        const courseId = selectedCourseForPrompts || 'alego-default'
+        const unifiedRef = doc(db, 'courses', courseId, 'prompts', 'unified')
+        const unifiedDoc = await getDoc(unifiedRef)
+        if (unifiedDoc.exists()) {
+          const data = unifiedDoc.data()
+          setUnifiedPrompt({
+            banca: data.banca || '',
+            concursoName: data.concursoName || '',
+            prompt: data.prompt || '',
+          })
+        } else {
+          // Se não encontrar, tentar carregar do curso (campos antigos)
+          const courseRef = doc(db, 'courses', courseId)
+          const courseDoc = await getDoc(courseRef)
+          if (courseDoc.exists()) {
+            const courseData = courseDoc.data()
+            setUnifiedPrompt({
+              banca: courseData.banca || '',
+              concursoName: courseData.competition || courseData.name || '',
+              prompt: '',
+            })
+          } else {
+            setUnifiedPrompt({
+              banca: '',
+              concursoName: '',
+              prompt: '',
+            })
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao carregar prompt unificado:', err)
+        setUnifiedPrompt({
+          banca: '',
+          concursoName: '',
+          prompt: '',
+        })
+      }
+    }
+    loadUnifiedPrompt()
+  }, [isAdmin, selectedCourseForPrompts])
+
   // Extrair texto do PDF
   const extractTextFromPDF = async (file) => {
     setExtractingPdf(true)
@@ -333,19 +421,50 @@ const AdminPanel = () => {
       const numPages = pdf.numPages
       setMessage(`📄 Extraindo texto de ${numPages} página(s)...`)
       
+      console.log(`📄 PDF carregado: ${numPages} página(s)`)
+      
       // Processar página por página com progresso
       for (let pageNum = 1; pageNum <= numPages; pageNum++) {
         try {
           setMessage(`📄 Processando página ${pageNum}/${numPages}...`)
           const page = await pdf.getPage(pageNum)
           const textContent = await page.getTextContent()
-          const pageText = textContent.items
-            .map(item => item.str)
-            .filter(str => str && str.trim().length > 0)
-            .join(' ')
+          
+          console.log(`📄 Página ${pageNum}: ${textContent.items.length} itens de texto encontrados`)
+          
+          // Tentar múltiplos métodos de extração
+          let pageText = ''
+          
+          // Método 1: Extração padrão
+          if (textContent.items && textContent.items.length > 0) {
+            pageText = textContent.items
+              .map(item => {
+                // Tentar diferentes propriedades
+                return item.str || item.text || item.textContent || ''
+              })
+              .filter(str => str && str.trim().length > 0)
+              .join(' ')
+          }
+          
+          // Método 2: Se não encontrou texto, tentar extrair de forma diferente
+          if (!pageText || pageText.trim().length === 0) {
+            console.warn(`⚠️ Página ${pageNum}: Nenhum texto encontrado com método padrão, tentando método alternativo...`)
+            
+            // Tentar extrair diretamente do stream
+            try {
+              const operatorList = await page.getOperatorList()
+              // Se isso também não funcionar, o PDF pode ter texto em formato especial
+              console.log(`📄 Página ${pageNum}: Operator list obtida, mas texto não extraído`)
+            } catch (opErr) {
+              console.warn(`⚠️ Página ${pageNum}: Erro ao obter operator list:`, opErr)
+            }
+          }
           
           if (pageText.trim()) {
             fullText += `\n\n--- Página ${pageNum} ---\n\n${pageText}`
+            console.log(`✅ Página ${pageNum}: ${pageText.length} caracteres extraídos`)
+          } else {
+            console.warn(`⚠️ Página ${pageNum}: Nenhum texto extraído`)
           }
           
           // Salvar até 100000 caracteres no Firestore (podemos usar estratégia inteligente depois)
@@ -359,23 +478,38 @@ const AdminPanel = () => {
             break
           }
         } catch (pageErr) {
-          console.warn(`Erro ao processar página ${pageNum}:`, pageErr)
+          console.error(`❌ Erro ao processar página ${pageNum}:`, pageErr)
           // Continuar com próxima página
           continue
         }
       }
       
       const finalText = fullText.trim()
+      console.log(`📊 Total extraído: ${finalText.length} caracteres de ${numPages} página(s)`)
+      
+      // Validar se algum texto foi extraído
+      if (!finalText || finalText.length === 0) {
+        console.error('❌ Nenhum texto extraído do PDF')
+        console.log('📋 Informações do PDF:', {
+          numPages,
+          pdfInfo: pdf._pdfInfo || 'N/A'
+        })
+        throw new Error('Nenhum texto foi encontrado no PDF. O arquivo pode ter texto em formato não suportado, estar protegido, ou usar fontes especiais. Tente converter o PDF para um formato mais simples ou use um PDF com texto selecionável.')
+      }
+      
       setPdfText(finalText)
       setMessage(`✅ Texto extraído do PDF com sucesso! (${numPages} página(s), ${finalText.length} caracteres)`)
       return finalText
     } catch (err) {
       console.error('Erro ao extrair texto do PDF:', err)
+      console.error('Stack trace:', err.stack)
       
       // Tentar mensagem de erro mais amigável
       let errorMsg = err.message || 'Erro desconhecido'
       if (errorMsg.includes('worker') || errorMsg.includes('Failed to fetch')) {
         errorMsg = 'Erro ao carregar biblioteca de PDF. Tente novamente ou use um PDF menor.'
+      } else if (errorMsg.includes('Nenhum texto foi encontrado')) {
+        errorMsg = 'Nenhum texto foi encontrado no PDF. O arquivo pode ter texto em formato não suportado, estar protegido, ou usar fontes especiais. Tente converter o PDF para um formato mais simples ou use um PDF com texto selecionável.'
       }
       
       setMessage(`❌ Erro ao extrair texto do PDF: ${errorMsg}`)
@@ -1538,12 +1672,17 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
 
       setFlashcardGenProgress('Analisando conteúdo e gerando flashcards...')
 
-      // Prompt estilo Noji
-      const prompt = `Você é um especialista em criar flashcards educacionais no estilo Noji (perguntas objetivas e respostas claras e diretas).
+      // Usar prompt unificado
+      const { buildFlashcardPrompt } = await import('../utils/unifiedPrompt')
+      const basePrompt = await buildFlashcardPrompt(
+        courseIdForGeneration,
+        materia,
+        editalInfo
+      )
+
+      const prompt = `${basePrompt}
 
 TAREFA: Analisar o conteúdo fornecido abaixo e criar flashcards para o módulo "${modulo}" da matéria "${materia}".
-
-${editalInfo ? `CONTEXTO DO EDITAL:\n${editalInfo}\n\n` : ''}
 
 CONTEÚDO PARA ANÁLISE:
 ${aiContentInput}
@@ -3969,6 +4108,564 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     }
   }
 
+  // Gerar Matéria Revisada baseada no edital
+  const handleGenerateMateriaRevisada = async () => {
+    if (!materiaRevisadaForm.materia || !materiaRevisadaForm.materia.trim()) {
+      setMessage('❌ Por favor, digite o nome da matéria.')
+      return
+    }
+
+    const courseId = materiaRevisadaForm.courseId || 'alego-default'
+    const materia = materiaRevisadaForm.materia.trim()
+
+    setGeneratingMateriaRevisada(true)
+    setMateriaRevisadaProgress('')
+    setMessage('')
+
+    try {
+      setMateriaRevisadaProgress('📖 Buscando edital do curso...')
+
+      // 1. Buscar edital do curso
+      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+      const editalDoc = await getDoc(editalRef)
+      
+      let editalText = ''
+      if (editalDoc.exists()) {
+        const editalData = editalDoc.data()
+        editalText = (editalData.prompt || '') + '\n\n' + (editalData.pdfText || '')
+      }
+
+      if (!editalText || editalText.trim().length === 0) {
+        throw new Error('❌ Edital não encontrado para este curso. Por favor, processe o edital primeiro na seção "Processar e Configurar Tudo" acima.')
+      }
+
+      setMateriaRevisadaProgress(`📖 Edital encontrado (${editalText.length} caracteres).\n🔄 Gerando conteúdo técnico completo para "${materia}" baseado no edital...`)
+
+      // 2. Buscar prompt unificado para contexto
+      const unifiedRef = doc(db, 'courses', courseId, 'prompts', 'unified')
+      const unifiedDoc = await getDoc(unifiedRef)
+      const unifiedData = unifiedDoc.exists() ? unifiedDoc.data() : {}
+      const banca = unifiedData.banca || ''
+      const concursoName = unifiedData.concursoName || ''
+
+      // 3. Chamar IA para gerar conteúdo técnico completo
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        throw new Error('VITE_GEMINI_API_KEY não configurada')
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const modelNames = ['gemini-2.0-flash-exp', 'gemini-1.5-pro-latest', 'gemini-1.5-flash-latest']
+      let lastError = null
+      let aiResponse = ''
+
+      for (const modelName of modelNames) {
+        try {
+          setMateriaRevisadaProgress(`🔄 Usando modelo: ${modelName}...`)
+          const model = genAI.getGenerativeModel({ 
+            model: modelName,
+            generationConfig: {
+              maxOutputTokens: 16000,
+              temperature: 0.7,
+            }
+          })
+
+          const prompt = `Você é um especialista em criar conteúdo técnico completo e detalhado para concursos públicos.
+
+${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n` : ''}MATÉRIA: ${materia}
+
+EDITAL DO CONCURSO (BASE COMPLETA):
+${editalText.substring(0, 100000)}${editalText.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}
+
+TAREFA CRÍTICA:
+Crie um conteúdo técnico COMPLETO e DETALHADO sobre "${materia}" baseado EXCLUSIVAMENTE no edital acima.
+
+REGRAS OBRIGATÓRIAS:
+1. Baseie-se SEMPRE e EXCLUSIVAMENTE no conteúdo do edital
+2. O conteúdo deve ser técnico, completo e detalhado
+3. Inclua leis, artigos, súmulas, entendimentos jurisprudenciais relevantes mencionados no edital
+4. Organize o conteúdo de forma didática e clara
+5. Use linguagem técnica e formal, adequada para concursos públicos
+6. Se o edital mencionar leis específicas, inclua os artigos relevantes
+7. Se o edital mencionar súmulas ou entendimentos, inclua-os
+8. O conteúdo deve ser abrangente e cobrir TODOS os aspectos da matéria mencionados no edital
+
+ESTRUTURA DO CONTEÚDO:
+- Introdução à matéria
+- Conceitos fundamentais
+- Leis e artigos relevantes (se aplicável)
+- Súmulas e entendimentos (se aplicável)
+- Aspectos práticos e aplicação
+- Conclusão
+
+FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
+Retorne APENAS um objeto JSON válido no seguinte formato:
+
+{
+  "titulo": "Título completo da matéria",
+  "subtitulo": "Subtítulo opcional",
+  "content": "Conteúdo HTML formatado completo e técnico da matéria",
+  "secoes": [
+    {
+      "titulo": "Nome da Seção (ex: Lei X, Artigo Y, Súmula Z)",
+      "tipo": "lei|sumula|entendimento|conceito",
+      "conteudo": "Conteúdo HTML formatado da seção"
+    }
+  ],
+  "tags": ["tag1", "tag2"]
+}
+
+CRÍTICO:
+- Retorne APENAS o JSON válido
+- NÃO inclua markdown (sem \`\`\`json)
+- NÃO inclua explicações antes ou depois
+- O campo "content" deve conter o conteúdo principal em HTML
+- As seções devem organizar o conteúdo em partes (leis, súmulas, entendimentos, etc.)
+- Use tags HTML apropriadas: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>, etc.`
+
+          const result = await model.generateContent(prompt)
+          aiResponse = result.response.text()
+          setMateriaRevisadaProgress(`✅ Conteúdo gerado com sucesso usando ${modelName}!`)
+          break
+        } catch (modelErr) {
+          console.warn(`⚠️ Modelo ${modelName} falhou:`, modelErr.message)
+          lastError = modelErr
+          if (modelName !== modelNames[modelNames.length - 1]) {
+            continue
+          }
+        }
+      }
+
+      if (!aiResponse) {
+        throw lastError || new Error('Erro ao gerar conteúdo com a IA')
+      }
+
+      setMateriaRevisadaProgress('📝 Processando resposta da IA...')
+
+      // 4. Extrair e limpar JSON
+      let jsonText = aiResponse.trim()
+      
+      // Remover markdown se houver
+      if (jsonText.includes('```json')) {
+        jsonText = jsonText.split('```json')[1].split('```')[0].trim()
+      } else if (jsonText.includes('```')) {
+        jsonText = jsonText.split('```')[1].split('```')[0].trim()
+      }
+
+      // Extrair JSON mesmo se houver texto antes/depois
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        jsonText = jsonMatch[0]
+      }
+
+      // Limpar caracteres de controle inválidos
+      let cleaned = jsonText
+      let result = ''
+      let inString = false
+      for (let i = 0; i < cleaned.length; i++) {
+        const char = cleaned[i]
+        if (char === '"' && (i === 0 || cleaned[i - 1] !== '\\')) {
+          inString = !inString
+          result += char
+        } else if (inString) {
+          if (char === '\n') result += '\\n'
+          else if (char === '\r') result += '\\r'
+          else if (char === '\t') result += '\\t'
+          else if (char >= '\x00' && char <= '\x1F' && char !== '\n' && char !== '\r' && char !== '\t') {
+            // Remover outros caracteres de controle
+          } else {
+            result += char
+          }
+        } else {
+          result += char
+        }
+      }
+      cleaned = result
+
+      let materiaData
+      try {
+        materiaData = JSON.parse(cleaned)
+      } catch (parseErr) {
+        // Tentar limpeza mais agressiva
+        cleaned = cleaned.replace(/(?<!\\)[\x00-\x1F\x7F]/g, '')
+        materiaData = JSON.parse(cleaned)
+      }
+
+      setMateriaRevisadaProgress('💾 Salvando matéria revisada no banco de dados...')
+
+      // 5. Salvar no Firestore
+      const materiasRef = collection(db, 'courses', courseId, 'materiasRevisadas')
+      
+      // Verificar se já existe
+      const existingDocs = await getDocs(query(materiasRef, where('materia', '==', materia)))
+      if (!existingDocs.empty) {
+        // Atualizar existente
+        const existingDoc = existingDocs.docs[0]
+        await updateDoc(existingDoc.ref, {
+          ...materiaData,
+          materia,
+          updatedAt: serverTimestamp(),
+        })
+        setMateriaRevisadaProgress(`✅ Matéria revisada atualizada com sucesso!`)
+      } else {
+        // Criar novo
+        await addDoc(materiasRef, {
+          ...materiaData,
+          materia,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        })
+        setMateriaRevisadaProgress(`✅ Matéria revisada criada com sucesso!`)
+      }
+
+      // 6. Atualizar lista de matérias existentes
+      const allMaterias = await getDocs(materiasRef)
+      setExistingMateriasRevisadas(allMaterias.docs.map(doc => doc.data().materia))
+
+      setMessage(`✅ Matéria revisada "${materia}" gerada e salva com sucesso! Baseada exclusivamente no edital do curso.`)
+      
+      // Limpar formulário
+      setMateriaRevisadaForm({ ...materiaRevisadaForm, materia: '' })
+    } catch (err) {
+      console.error('Erro ao gerar matéria revisada:', err)
+      setMessage(`❌ Erro ao gerar matéria revisada: ${err.message}`)
+      setMateriaRevisadaProgress(`❌ Erro: ${err.message}`)
+    } finally {
+      setGeneratingMateriaRevisada(false)
+    }
+  }
+
+  // Gerar Todas as Matérias Revisadas de Uma Vez
+  const handleGenerateAllMateriasRevisadas = async () => {
+    const courseId = materiaRevisadaForm.courseId || 'alego-default'
+
+    setGeneratingAllMaterias(true)
+    setAllMateriasProgress('')
+    setMessage('')
+
+    try {
+      setAllMateriasProgress('📖 Buscando edital do curso...')
+
+      // 1. Buscar edital do curso
+      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+      const editalDoc = await getDoc(editalRef)
+      
+      let editalText = ''
+      if (editalDoc.exists()) {
+        const editalData = editalDoc.data()
+        editalText = (editalData.prompt || '') + '\n\n' + (editalData.pdfText || '')
+      }
+
+      if (!editalText || editalText.trim().length === 0) {
+        throw new Error('❌ Edital não encontrado para este curso. Por favor, processe o edital primeiro na seção "Processar e Configurar Tudo" acima.')
+      }
+
+      setAllMateriasProgress(`📖 Edital encontrado (${editalText.length} caracteres).\n🔍 Analisando edital para identificar todas as matérias...`)
+
+      // 2. Buscar prompt unificado para contexto
+      const unifiedRef = doc(db, 'courses', courseId, 'prompts', 'unified')
+      const unifiedDoc = await getDoc(unifiedRef)
+      const unifiedData = unifiedDoc.exists() ? unifiedDoc.data() : {}
+      const banca = unifiedData.banca || ''
+      const concursoName = unifiedData.concursoName || ''
+
+      // 3. Chamar IA para identificar todas as matérias do edital
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        throw new Error('VITE_GEMINI_API_KEY não configurada')
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const modelNames = ['gemini-2.0-flash-exp', 'gemini-1.5-pro-latest', 'gemini-1.5-flash-latest']
+      let lastError = null
+      let materiasList = []
+
+      for (const modelName of modelNames) {
+        try {
+          setAllMateriasProgress(`🔄 Usando modelo ${modelName} para identificar matérias...`)
+          const model = genAI.getGenerativeModel({ 
+            model: modelName,
+            generationConfig: {
+              maxOutputTokens: 8000,
+              temperature: 0.3,
+            }
+          })
+
+          const analysisPrompt = `Você é um especialista em analisar editais de concursos públicos.
+
+${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n` : ''}
+
+EDITAL DO CONCURSO:
+${editalText.substring(0, 100000)}${editalText.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}
+
+TAREFA:
+Analise o edital acima e identifique TODAS as matérias que serão cobradas no concurso. Liste APENAS as matérias principais (ex: Direito Constitucional, Português, Raciocínio Lógico, etc.).
+
+REGRAS:
+- Liste apenas matérias principais e distintas
+- Não liste subtópicos ou módulos
+- Seja específico e preciso
+- Baseie-se EXCLUSIVAMENTE no conteúdo do edital
+
+FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
+Retorne APENAS um objeto JSON válido no seguinte formato:
+
+{
+  "materias": [
+    "Nome da Matéria 1",
+    "Nome da Matéria 2",
+    "Nome da Matéria 3"
+  ]
+}
+
+CRÍTICO:
+- Retorne APENAS o JSON válido
+- NÃO inclua markdown (sem \`\`\`json)
+- NÃO inclua explicações antes ou depois
+- Comece diretamente com { e termine com }`
+
+          const result = await model.generateContent(analysisPrompt)
+          let analysisText = result.response.text().trim()
+          
+          // Limpar markdown
+          if (analysisText.includes('```json')) {
+            analysisText = analysisText.split('```json')[1].split('```')[0].trim()
+          } else if (analysisText.includes('```')) {
+            analysisText = analysisText.split('```')[1].split('```')[0].trim()
+          }
+
+          // Extrair JSON
+          const jsonMatch = analysisText.match(/\{[\s\S]*\}/)
+          if (jsonMatch) {
+            analysisText = jsonMatch[0]
+          }
+
+          // Limpar caracteres de controle
+          let cleaned = analysisText
+          let resultText = ''
+          let inString = false
+          for (let i = 0; i < cleaned.length; i++) {
+            const char = cleaned[i]
+            if (char === '"' && (i === 0 || cleaned[i - 1] !== '\\')) {
+              inString = !inString
+              resultText += char
+            } else if (inString) {
+              if (char === '\n') resultText += '\\n'
+              else if (char === '\r') resultText += '\\r'
+              else if (char === '\t') resultText += '\\t'
+              else if (char >= '\x00' && char <= '\x1F' && char !== '\n' && char !== '\r' && char !== '\t') {
+                // Remover outros caracteres de controle
+              } else {
+                resultText += char
+              }
+            } else {
+              resultText += char
+            }
+          }
+          cleaned = resultText
+
+          let analysisData
+          try {
+            analysisData = JSON.parse(cleaned)
+          } catch (parseErr) {
+            cleaned = cleaned.replace(/(?<!\\)[\x00-\x1F\x7F]/g, '')
+            analysisData = JSON.parse(cleaned)
+          }
+
+          materiasList = analysisData.materias || []
+          if (materiasList.length > 0) {
+            setAllMateriasProgress(`✅ ${materiasList.length} matéria(s) identificada(s) no edital!\n\nMatérias encontradas:\n${materiasList.map((m, i) => `${i + 1}. ${m}`).join('\n')}\n\n🔄 Iniciando geração...`)
+            break
+          }
+        } catch (modelErr) {
+          console.warn(`⚠️ Modelo ${modelName} falhou:`, modelErr.message)
+          lastError = modelErr
+          if (modelName !== modelNames[modelNames.length - 1]) {
+            continue
+          }
+        }
+      }
+
+      if (materiasList.length === 0) {
+        throw lastError || new Error('Não foi possível identificar matérias no edital. Tente gerar manualmente.')
+      }
+
+      // 4. Gerar conteúdo para cada matéria (reutilizar lógica da função individual)
+      const materiasRef = collection(db, 'courses', courseId, 'materiasRevisadas')
+      let sucesso = 0
+      let erros = 0
+
+      for (let i = 0; i < materiasList.length; i++) {
+        const materia = materiasList[i]
+        try {
+          setAllMateriasProgress(`📝 Gerando matéria ${i + 1}/${materiasList.length}: "${materia}"...`)
+
+          // Verificar se já existe
+          const existingDocs = await getDocs(query(materiasRef, where('materia', '==', materia)))
+          if (!existingDocs.empty) {
+            setAllMateriasProgress(`⏭️ Matéria "${materia}" já existe. Pulando...`)
+            sucesso++
+            continue
+          }
+
+          // Gerar conteúdo usando a mesma lógica da função individual
+          let aiResponse = ''
+          for (const modelName of modelNames) {
+            try {
+              const model = genAI.getGenerativeModel({ 
+                model: modelName,
+                generationConfig: {
+                  maxOutputTokens: 16000,
+                  temperature: 0.7,
+                }
+              })
+
+              const prompt = `Você é um especialista em criar conteúdo técnico completo e detalhado para concursos públicos.
+
+${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n` : ''}MATÉRIA: ${materia}
+
+EDITAL DO CONCURSO (BASE COMPLETA):
+${editalText.substring(0, 100000)}${editalText.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}
+
+TAREFA CRÍTICA:
+Crie um conteúdo técnico COMPLETO e DETALHADO sobre "${materia}" baseado EXCLUSIVAMENTE no edital acima.
+
+REGRAS OBRIGATÓRIAS:
+1. Baseie-se SEMPRE e EXCLUSIVAMENTE no conteúdo do edital
+2. O conteúdo deve ser técnico, completo e detalhado
+3. Inclua leis, artigos, súmulas, entendimentos jurisprudenciais relevantes mencionados no edital
+4. Organize o conteúdo de forma didática e clara
+5. Use linguagem técnica e formal, adequada para concursos públicos
+6. Se o edital mencionar leis específicas, inclua os artigos relevantes
+7. Se o edital mencionar súmulas ou entendimentos, inclua-os
+8. O conteúdo deve ser abrangente e cobrir TODOS os aspectos da matéria mencionados no edital
+
+FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
+Retorne APENAS um objeto JSON válido no seguinte formato:
+
+{
+  "titulo": "Título completo da matéria",
+  "subtitulo": "Subtítulo opcional",
+  "content": "Conteúdo HTML formatado completo e técnico da matéria",
+  "secoes": [
+    {
+      "titulo": "Nome da Seção",
+      "tipo": "lei|sumula|entendimento|conceito",
+      "conteudo": "Conteúdo HTML formatado da seção"
+    }
+  ],
+  "tags": ["tag1", "tag2"]
+}
+
+CRÍTICO:
+- Retorne APENAS o JSON válido
+- NÃO inclua markdown (sem \`\`\`json)
+- NÃO inclua explicações antes ou depois
+- O campo "content" deve conter o conteúdo principal em HTML
+- Use tags HTML apropriadas: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>, etc.`
+
+              const result = await model.generateContent(prompt)
+              aiResponse = result.response.text()
+              break
+            } catch (modelErr) {
+              if (modelName === modelNames[modelNames.length - 1]) {
+                throw modelErr
+              }
+              continue
+            }
+          }
+
+          // Processar resposta
+          let jsonText = aiResponse.trim()
+          if (jsonText.includes('```json')) {
+            jsonText = jsonText.split('```json')[1].split('```')[0].trim()
+          } else if (jsonText.includes('```')) {
+            jsonText = jsonText.split('```')[1].split('```')[0].trim()
+          }
+
+          const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
+          if (jsonMatch) {
+            jsonText = jsonMatch[0]
+          }
+
+          // Limpar caracteres de controle
+          let cleaned = jsonText
+          let resultText = ''
+          let inString = false
+          for (let j = 0; j < cleaned.length; j++) {
+            const char = cleaned[j]
+            if (char === '"' && (j === 0 || cleaned[j - 1] !== '\\')) {
+              inString = !inString
+              resultText += char
+            } else if (inString) {
+              if (char === '\n') resultText += '\\n'
+              else if (char === '\r') resultText += '\\r'
+              else if (char === '\t') resultText += '\\t'
+              else if (char >= '\x00' && char <= '\x1F' && char !== '\n' && char !== '\r' && char !== '\t') {
+                // Remover
+              } else {
+                resultText += char
+              }
+            } else {
+              resultText += char
+            }
+          }
+          cleaned = resultText
+
+          let materiaData
+          try {
+            materiaData = JSON.parse(cleaned)
+          } catch (parseErr) {
+            cleaned = cleaned.replace(/(?<!\\)[\x00-\x1F\x7F]/g, '')
+            materiaData = JSON.parse(cleaned)
+          }
+
+          // Salvar
+          await addDoc(materiasRef, {
+            ...materiaData,
+            materia,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          })
+
+          sucesso++
+          setAllMateriasProgress(`✅ Matéria "${materia}" gerada com sucesso! (${sucesso}/${materiasList.length} concluídas)`)
+        } catch (err) {
+          erros++
+          console.error(`Erro ao gerar matéria "${materia}":`, err)
+          setAllMateriasProgress(`⚠️ Erro ao gerar "${materia}": ${err.message}\nContinuando com as próximas...`)
+        }
+      }
+
+      // Atualizar lista
+      const allMaterias = await getDocs(materiasRef)
+      setExistingMateriasRevisadas(allMaterias.docs.map(doc => doc.data().materia))
+
+      setAllMateriasProgress(`\n✅ Processo concluído!\n\n✅ Sucesso: ${sucesso} matéria(s)\n${erros > 0 ? `⚠️ Erros: ${erros} matéria(s)` : ''}`)
+      setMessage(`✅ Geração em lote concluída! ${sucesso} matéria(s) gerada(s) com sucesso.${erros > 0 ? ` ${erros} matéria(s) com erro.` : ''}`)
+    } catch (err) {
+      console.error('Erro ao gerar todas as matérias:', err)
+      setMessage(`❌ Erro ao gerar todas as matérias: ${err.message}`)
+      setAllMateriasProgress(`❌ Erro: ${err.message}`)
+    } finally {
+      setGeneratingAllMaterias(false)
+    }
+  }
+
+  // Carregar matérias revisadas existentes
+  useEffect(() => {
+    if (!materiaRevisadaForm.courseId) return
+
+    const courseId = materiaRevisadaForm.courseId || 'alego-default'
+    const materiasRef = collection(db, 'courses', courseId, 'materiasRevisadas')
+    
+    getDocs(materiasRef).then((snapshot) => {
+      setExistingMateriasRevisadas(snapshot.docs.map(doc => doc.data().materia))
+    }).catch((err) => {
+      console.error('Erro ao carregar matérias revisadas:', err)
+    })
+  }, [materiaRevisadaForm.courseId])
+
   // Salvar configuração de questões e BIZUs (por curso)
   const handleSaveQuestoesConfig = async () => {
     if (!selectedCourseForPrompts) {
@@ -4220,23 +4917,17 @@ A IA deve:
         ? `${defaultPrompt}\n\n--- INSTRUÇÕES ADICIONAIS DO ADMIN ---\n${aiGenerationPrompt}\n\n`
         : defaultPrompt
 
-      const systemPrompt = `Você é um assistente especializado em criar flashcards educacionais para concursos públicos.
+      // Usar prompt unificado
+      const { buildFlashcardPrompt } = await import('../utils/unifiedPrompt')
+      const basePrompt = await buildFlashcardPrompt(
+        courseIdForGeneration,
+        materia,
+        editalInfo + (limitedPdfText ? `\n\nCONTEÚDO COMPLETO DO PDF DO EDITAL/CRONOGRAMA (EXTRAÍDO AUTOMATICAMENTE):\n${limitedPdfText}` : '')
+      )
+
+      const systemPrompt = `${basePrompt}
 
 TAREFA: Criar ${quantidadeModulos} módulo(s) e ${totalFlashcards} flashcards (${flashcardsPorModulo} por módulo) para a matéria "${materia}".
-
-${editalInfo ? `INFORMAÇÕES DO CONCURSO (TEXTO DIGITADO):\n${editalInfo}\n\n` : ''}
-${limitedPdfText ? `CONTEÚDO COMPLETO DO PDF DO EDITAL/CRONOGRAMA (EXTRAÍDO AUTOMATICAMENTE):
-⚠️ IMPORTANTE: Leia e analise TODO o conteúdo abaixo. Ele contém informações essenciais como:
-- Datas importantes (prova, inscrição, etc.)
-- Requisitos e critérios
-- Conteúdo programático completo
-- Cronograma detalhado
-- Todas as informações do edital
-
-INÍCIO DO PDF:
-${limitedPdfText}
-
-⚠️ ATENÇÃO: Use TODAS as informações acima para criar os flashcards. Não ignore nenhuma parte do edital.` : ''}
 
 ${combinedInstructions}
 
@@ -4583,14 +5274,898 @@ CRÍTICO:
 
           {/* Conteúdo das Tabs */}
           <div className="p-4 sm:p-6">
-            {/* Tab: Configurações */}
+            {/* Tab: Configurações Unificadas */}
             {activeTab === 'config' && (
               <div className="space-y-6">
-                {/* Configuração do Prompt da IA */}
-      <div className="rounded-2xl bg-white p-6 shadow-sm">
-        <p className="flex items-center gap-2 text-sm font-semibold text-alego-600">
+                {/* Header */}
+                <div className="rounded-2xl bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 p-6 shadow-lg border-2 border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl">
+                      <span className="text-2xl">⚙️</span>
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-blue-700 dark:text-blue-300">
+                        Configurações do Curso
+                      </h2>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">
+                        Configure tudo de forma simples: faça upload do edital em PDF e a IA processa automaticamente
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Seletor de Curso */}
+                <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-lg border border-slate-200 dark:border-slate-700">
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
+                    📚 Curso para Configurar
+                  </label>
+                  <select
+                    value={selectedCourseForPrompts}
+                    onChange={(e) => setSelectedCourseForPrompts(e.target.value)}
+                    className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-sm font-semibold focus:border-blue-500 focus:outline-none"
+                  >
+                    {courses.map((course) => (
+                      <option key={course.id} value={course.id}>
+                        {course.name} {course.id === 'alego-default' ? '(Padrão)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Upload de Edital PDF ou Texto Manual */}
+                <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-lg border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3 mb-4">
+                    <DocumentArrowUpIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                      Upload do Edital em PDF ou Cole o Texto
+                    </h3>
+                  </div>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+                    Faça upload do edital em PDF ou cole o texto do edital manualmente. A IA irá processar automaticamente e configurar:
+                  </p>
+                  <ul className="list-disc list-inside text-sm text-slate-600 dark:text-slate-400 mb-6 space-y-2">
+                    <li>Edital verticalizado organizado</li>
+                    <li>Prompts unificados para IA</li>
+                    <li>Configurações de questões e BIZUs</li>
+                    <li>Informações do concurso</li>
+                  </ul>
+
+                  {/* Opção: Colar Texto Manualmente */}
+                  <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-2 border-blue-200 dark:border-blue-800">
+                    <div className="flex items-start gap-3 mb-3">
+                      <span className="text-2xl">💡</span>
+                      <div className="flex-1">
+                        <label className="block text-sm font-bold text-blue-700 dark:text-blue-300 mb-1">
+                          📝 Cole o texto do edital aqui (recomendado se o PDF não funcionar):
+                        </label>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mb-3">
+                          Se o PDF não extrair texto automaticamente, abra o PDF no seu leitor, selecione todo o texto (Ctrl+A), copie (Ctrl+C) e cole aqui (Ctrl+V).
+                        </p>
+                      </div>
+                    </div>
+                    <textarea
+                      value={editalVerticalizadoText || ''}
+                      onChange={(e) => {
+                        const text = e.target.value
+                        setEditalVerticalizadoText(text)
+                        if (text.trim().length > 0) {
+                          setMessage(`✅ ${text.length.toLocaleString()} caracteres prontos para processamento`)
+                        } else {
+                          setMessage('')
+                        }
+                      }}
+                      placeholder="Cole aqui o texto completo do edital. Você pode copiar do PDF (Ctrl+A, Ctrl+C) ou de qualquer fonte de texto."
+                      rows={10}
+                      className="w-full rounded-xl border-2 border-blue-300 dark:border-blue-700 bg-white dark:bg-slate-800 p-4 text-sm focus:border-blue-500 focus:outline-none"
+                    />
+                    {editalVerticalizadoText && editalVerticalizadoText.length > 0 && (
+                      <div className="mt-3 flex items-center justify-between">
+                        <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                          ✅ {editalVerticalizadoText.length.toLocaleString()} caracteres prontos para processamento
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditalVerticalizadoText('')
+                            setMessage('')
+                          }}
+                          className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-semibold"
+                        >
+                          Limpar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <label className="flex-1 cursor-pointer block">
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          if (file.type !== 'application/pdf') {
+                            setMessage('❌ Por favor, selecione um arquivo PDF.')
+                            return
+                          }
+                          if (file.size > 50 * 1024 * 1024) {
+                            setMessage('❌ O arquivo PDF é muito grande. Máximo: 50MB')
+                            return
+                          }
+                          setEditalVerticalizadoFile(file)
+                          setMessage('📄 Processando PDF...')
+                          try {
+                            setExtractingEditalVerticalizado(true)
+                            
+                            // Verificar se pdfjs está disponível
+                            if (!pdfjsLib || !pdfjsLib.getDocument) {
+                              throw new Error('Biblioteca PDF.js não está carregada. Recarregue a página.')
+                            }
+                            
+                            const extractedText = await extractTextFromPDF(file)
+                            
+                            // Validar se o texto foi extraído
+                            if (!extractedText || extractedText.trim().length === 0) {
+                              setMessage('⚠️ PDF processado, mas nenhum texto foi encontrado. Este PDF parece ter texto em formato de imagem (escaneado). Use a opção abaixo para colar o texto manualmente ou converta o PDF para um formato com texto selecionável.')
+                              setEditalVerticalizadoFile(null)
+                              // Não limpar o campo de texto manual - deixar o usuário colar
+                              setExtractingEditalVerticalizado(false)
+                              return
+                            }
+                            
+                            if (extractedText.length < 100) {
+                              setMessage(`⚠️ Apenas ${extractedText.length} caracteres foram extraídos. O PDF pode estar incompleto. Use a opção abaixo para colar o texto completo manualmente.`)
+                            } else {
+                              setMessage(`✅ PDF processado! ${extractedText.length.toLocaleString()} caracteres extraídos.`)
+                            }
+                            
+                            setEditalVerticalizadoText(extractedText)
+                            setExtractingEditalVerticalizado(false)
+                          } catch (err) {
+                            console.error('Erro ao processar PDF:', err)
+                            let errorMsg = err.message || 'Erro desconhecido'
+                            
+                            if (errorMsg.includes('Nenhum texto foi encontrado')) {
+                              setMessage('⚠️ Este PDF não tem texto extraível. O texto está em formato de imagem. Use a opção abaixo para colar o texto manualmente copiando do PDF.')
+                            } else if (errorMsg.includes('Biblioteca PDF.js')) {
+                              setMessage('❌ Erro: Biblioteca PDF.js não está carregada. Recarregue a página (F5) e tente novamente.')
+                            } else {
+                              setMessage(`❌ Erro ao processar PDF: ${errorMsg}. Use a opção abaixo para colar o texto manualmente.`)
+                            }
+                            
+                            setEditalVerticalizadoFile(null)
+                            setExtractingEditalVerticalizado(false)
+                          }
+                        }}
+                        className="hidden"
+                        disabled={extractingEditalVerticalizado || savingEditalVerticalizado}
+                      />
+                      <div className="flex items-center justify-center gap-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 px-6 py-8 hover:border-blue-500 dark:hover:border-blue-400 transition cursor-pointer bg-slate-50 dark:bg-slate-700/50">
+                        <DocumentArrowUpIcon className="h-8 w-8 text-slate-400 dark:text-slate-500" />
+                        <div>
+                          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                            {editalVerticalizadoFile ? editalVerticalizadoFile.name : 'Clique para fazer upload do PDF do edital'}
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            Máximo: 50MB
+                          </p>
+                        </div>
+                      </div>
+                    </label>
+
+                    {extractingEditalVerticalizado && (
+                      <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4">
+                        <p className="text-sm font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                          <span className="animate-spin">⏳</span>
+                          Extraindo texto do PDF... Aguarde.
+                        </p>
+                      </div>
+                    )}
+
+                    {editalVerticalizadoText && !extractingEditalVerticalizado && (
+                      <div className={`rounded-lg border p-4 ${
+                        editalVerticalizadoText.length < 100 
+                          ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' 
+                          : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
+                      }`}>
+                        <p className={`text-sm font-semibold mb-2 ${
+                          editalVerticalizadoText.length < 100 
+                            ? 'text-amber-700 dark:text-amber-300' 
+                            : 'text-emerald-700 dark:text-emerald-300'
+                        }`}>
+                          {editalVerticalizadoText.length < 100 ? '⚠️ Pouco texto extraído' : '✅ Texto extraído com sucesso!'}
+                        </p>
+                        <p className={`text-xs ${
+                          editalVerticalizadoText.length < 100 
+                            ? 'text-amber-600 dark:text-amber-400' 
+                            : 'text-emerald-600 dark:text-emerald-400'
+                        }`}>
+                          {editalVerticalizadoText.length.toLocaleString()} caracteres prontos para processamento
+                          {editalVerticalizadoText.length < 100 && (
+                            <span className="block mt-1">⚠️ O PDF pode ser uma imagem escaneada. Use um PDF com texto selecionável.</span>
+                          )}
+                        </p>
+                      </div>
+                    )}
+
+                    {editalVerticalizadoFile && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditalVerticalizadoFile(null)
+                          setEditalVerticalizadoText('')
+                        }}
+                        className="rounded-lg bg-rose-100 dark:bg-rose-900/30 px-4 py-2 text-sm font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-200 dark:hover:bg-rose-900/50 transition"
+                      >
+                        🗑️ Remover PDF
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Botão de Processar */}
+                {editalVerticalizadoText && editalVerticalizadoText.trim().length > 0 && (
+                  <div className="rounded-2xl bg-gradient-to-br from-blue-500 to-purple-500 p-6 shadow-lg">
+                    <h3 className="text-lg font-bold text-white mb-3">
+                      🚀 Processar com IA
+                    </h3>
+                    <p className="text-sm text-white/90 mb-4">
+                      A IA irá processar o edital e configurar automaticamente todas as funcionalidades do curso.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!editalVerticalizadoText.trim()) {
+                          setMessage('❌ Por favor, faça upload e processe um PDF primeiro.')
+                          return
+                        }
+                        
+                        setSavingEditalVerticalizado(true)
+                        setMessage('🤖 Processando edital com IA... Isso pode levar alguns minutos.')
+                        
+                        try {
+                          const courseId = selectedCourseForPrompts || 'alego-default'
+                          const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
+                          
+                          // Tentar modelos válidos em ordem de prioridade
+                          const modelNames = [
+                            'gemini-2.0-flash',           // Mais recente e rápido
+                            'gemini-1.5-pro-latest',      // Melhor para análises complexas
+                            'gemini-1.5-flash-latest'     // Fallback Flash
+                          ]
+                          
+                          let model = null
+                          for (const modelName of modelNames) {
+                            try {
+                              model = genAI.getGenerativeModel({ model: modelName })
+                              // Testar se o modelo funciona
+                              await model.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
+                              console.log(`✅ Usando modelo: ${modelName}`)
+                              break
+                            } catch (err) {
+                              console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
+                              continue
+                            }
+                          }
+                          
+                          if (!model) {
+                            throw new Error('Nenhum modelo Gemini disponível. Verifique sua API key.')
+                          }
+                          
+                          // Processar edital verticalizado
+                          setMessage('📋 Organizando edital verticalizado...')
+                          const verticalizadoPrompt = `Você é um especialista em organizar editais de concursos públicos de forma verticalizada para estudos.
+
+Analise o seguinte texto do edital e organize-o em seções e subseções de forma clara e estruturada. O formato deve ser técnico e completo, mostrando toda a informação de forma organizada.
+
+Texto do edital:
+${editalVerticalizadoText.substring(0, 100000)} ${editalVerticalizadoText.length > 100000 ? '... (texto truncado)' : ''}
+
+Organize o edital em um formato JSON com a seguinte estrutura:
+{
+  "titulo": "Título do Edital",
+  "descricao": "Breve descrição",
+  "secoes": [
+    {
+      "titulo": "Nome da Seção",
+      "subtitulo": "Subtítulo opcional",
+      "conteudo": "Conteúdo HTML formatado da seção",
+      "subsecoes": [
+        {
+          "titulo": "Nome da Subseção",
+          "conteudo": "Conteúdo HTML formatado"
+        }
+      ]
+    }
+  ]
+}
+
+REGRAS CRÍTICAS:
+- Retorne APENAS o JSON válido
+- NÃO inclua markdown (sem código markdown)
+- NÃO inclua explicações antes ou depois
+- NÃO inclua texto como "Por favor" ou "Aqui está"
+- Comece diretamente com { e termine com }
+- O JSON deve ser válido e parseável`
+
+                          const verticalizadoResult = await model.generateContent(verticalizadoPrompt)
+                          const verticalizadoResponse = await verticalizadoResult.response
+                          let verticalizadoText = verticalizadoResponse.text().trim()
+                          
+                          // Limpar markdown e texto extra
+                          if (verticalizadoText.startsWith('```json')) {
+                            verticalizadoText = verticalizadoText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+                          } else if (verticalizadoText.startsWith('```')) {
+                            verticalizadoText = verticalizadoText.replace(/```\n?/g, '').trim()
+                          }
+                          
+                          // Função para limpar e validar JSON
+                          const cleanAndParseJSON = (text) => {
+                            // Remover texto antes e depois do JSON
+                            let cleaned = text.trim()
+                            
+                            // Tentar encontrar JSON no texto (procura por { ... })
+                            const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+                            if (jsonMatch) {
+                              cleaned = jsonMatch[0]
+                            }
+                            
+                            // Tentar parse primeiro (pode já estar válido)
+                            try {
+                              return JSON.parse(cleaned)
+                            } catch (firstErr) {
+                              // Se falhar, tentar corrigir caracteres de controle problemáticos
+                              // A estratégia: processar caractere por caractere dentro de strings
+                              let result = ''
+                              let inString = false
+                              let escapeNext = false
+                              
+                              for (let i = 0; i < cleaned.length; i++) {
+                                const char = cleaned[i]
+                                const code = char.charCodeAt(0)
+                                
+                                if (escapeNext) {
+                                  result += char
+                                  escapeNext = false
+                                  continue
+                                }
+                                
+                                if (char === '\\') {
+                                  result += char
+                                  escapeNext = true
+                                  continue
+                                }
+                                
+                                if (char === '"' && (i === 0 || cleaned[i-1] !== '\\')) {
+                                  inString = !inString
+                                  result += char
+                                  continue
+                                }
+                                
+                                // Se estamos dentro de uma string e encontramos caracteres de controle
+                                if (inString && code >= 0x00 && code <= 0x1F && code !== 0x09 && code !== 0x0A && code !== 0x0D) {
+                                  // Escapar caracteres de controle inválidos
+                                  if (code === 0x09) result += '\\t'
+                                  else if (code === 0x0A) result += '\\n'
+                                  else if (code === 0x0D) result += '\\r'
+                                  else result += ' ' // Substituir outros por espaço
+                                } else {
+                                  result += char
+                                }
+                              }
+                              
+                              try {
+                                return JSON.parse(result)
+                              } catch (secondErr) {
+                                // Última tentativa: remover todos caracteres de controle
+                                result = result.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+                                return JSON.parse(result)
+                              }
+                            }
+                          }
+                          
+                          // Tentar extrair JSON mesmo se houver texto antes/depois
+                          let editalOrganizado = null
+                          try {
+                            // Tentar parse direto primeiro
+                            editalOrganizado = JSON.parse(verticalizadoText)
+                          } catch (parseErr) {
+                            console.warn('⚠️ Erro ao fazer parse direto, tentando limpar e extrair JSON...', parseErr)
+                            
+                            try {
+                              editalOrganizado = cleanAndParseJSON(verticalizadoText)
+                              console.log('✅ JSON extraído e limpo com sucesso')
+                            } catch (matchErr) {
+                              console.error('❌ Erro ao fazer parse do JSON limpo:', matchErr)
+                              console.error('📋 Texto original (primeiros 500 caracteres):', verticalizadoText.substring(0, 500))
+                              throw new Error('A IA retornou uma resposta que não contém JSON válido. Tente novamente ou verifique o texto do edital.')
+                            }
+                          }
+                          
+                          // Salvar edital verticalizado
+                          const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+                          await setDoc(editalRef, {
+                            ...editalOrganizado,
+                            updatedAt: serverTimestamp(),
+                            courseId,
+                          }, { merge: true })
+                          
+                          // Processar prompts unificados
+                          setMessage('🎯 Gerando prompts unificados...')
+                          const unifiedPrompt = `Analise o edital fornecido e extraia as seguintes informações:
+
+1. BANCA ORGANIZADORA (ex: FGV, CESPE, VUNESP, IADES)
+2. NOME DO CONCURSO (ex: ALEGO Policial Legislativo)
+3. PROMPT UNIFICADO para a IA gerar conteúdo (simulados, questões, redação, flashcards, mapas mentais)
+
+Baseado no edital, crie um prompt unificado que a IA deve seguir para gerar todo o conteúdo relacionado a este concurso.
+
+Retorne um JSON com esta estrutura:
+{
+  "banca": "Nome da banca",
+  "concursoName": "Nome do concurso",
+  "prompt": "Prompt unificado detalhado para a IA"
+}
+
+IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem texto antes ou depois. Comece diretamente com { e termine com }.`
+
+                          const unifiedResult = await model.generateContent(unifiedPrompt)
+                          const unifiedResponse = await unifiedResult.response
+                          let unifiedText = unifiedResponse.text().trim()
+                          
+                          if (unifiedText.startsWith('```json')) {
+                            unifiedText = unifiedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+                          } else if (unifiedText.startsWith('```')) {
+                            unifiedText = unifiedText.replace(/```\n?/g, '').trim()
+                          }
+                          
+                          // Função para limpar e validar JSON (reutilizar a mesma lógica)
+                          const cleanAndParseJSONUnified = (text) => {
+                            let cleaned = text.trim()
+                            const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+                            if (jsonMatch) {
+                              cleaned = jsonMatch[0]
+                            }
+                            
+                            // Usar a mesma lógica de processamento caractere por caractere
+                            try {
+                              return JSON.parse(cleaned)
+                            } catch (firstErr) {
+                              let result = ''
+                              let inString = false
+                              let escapeNext = false
+                              
+                              for (let i = 0; i < cleaned.length; i++) {
+                                const char = cleaned[i]
+                                const code = char.charCodeAt(0)
+                                
+                                if (escapeNext) {
+                                  result += char
+                                  escapeNext = false
+                                  continue
+                                }
+                                
+                                if (char === '\\') {
+                                  result += char
+                                  escapeNext = true
+                                  continue
+                                }
+                                
+                                if (char === '"' && (i === 0 || cleaned[i-1] !== '\\')) {
+                                  inString = !inString
+                                  result += char
+                                  continue
+                                }
+                                
+                                if (inString && code >= 0x00 && code <= 0x1F && code !== 0x09 && code !== 0x0A && code !== 0x0D) {
+                                  if (code === 0x09) result += '\\t'
+                                  else if (code === 0x0A) result += '\\n'
+                                  else if (code === 0x0D) result += '\\r'
+                                  else result += ' '
+                                } else {
+                                  result += char
+                                }
+                              }
+                              
+                              try {
+                                return JSON.parse(result)
+                              } catch (secondErr) {
+                                result = result.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+                                return JSON.parse(result)
+                              }
+                            }
+                          }
+                          
+                          // Tentar extrair JSON mesmo se houver texto antes/depois
+                          let unifiedData = null
+                          try {
+                            // Tentar parse direto primeiro
+                            unifiedData = JSON.parse(unifiedText)
+                          } catch (parseErr) {
+                            console.warn('⚠️ Erro ao fazer parse direto do prompt unificado, tentando limpar...', parseErr)
+                            
+                            try {
+                              unifiedData = cleanAndParseJSONUnified(unifiedText)
+                              console.log('✅ JSON do prompt unificado extraído e limpo com sucesso')
+                            } catch (matchErr) {
+                              console.error('❌ Erro ao fazer parse do JSON limpo:', matchErr)
+                              console.error('📋 Texto original (primeiros 500 caracteres):', unifiedText.substring(0, 500))
+                              throw new Error('A IA retornou uma resposta que não contém JSON válido para o prompt unificado. Tente novamente.')
+                            }
+                          }
+                          
+                          // Salvar prompt unificado
+                          const unifiedRef = doc(db, 'courses', courseId, 'prompts', 'unified')
+                          await setDoc(unifiedRef, {
+                            ...unifiedData,
+                            updatedAt: serverTimestamp(),
+                          }, { merge: true })
+                          
+                          // Atualizar documento do curso
+                          const courseRef = doc(db, 'courses', courseId)
+                          await setDoc(courseRef, {
+                            banca: unifiedData.banca,
+                            competition: unifiedData.concursoName,
+                          }, { merge: true })
+                          
+                          // Salvar texto do PDF no edital
+                          const editalPromptRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+                          await setDoc(editalPromptRef, {
+                            pdfText: editalVerticalizadoText,
+                            prompt: `Edital processado automaticamente em ${new Date().toLocaleString('pt-BR')}`,
+                            updatedAt: serverTimestamp(),
+                          }, { merge: true })
+                          
+                          setEditalVerticalizadoData(editalOrganizado)
+                          setMessage('✅ Configuração completa! Edital processado e todas as configurações foram aplicadas com sucesso!')
+                          setEditalVerticalizadoFile(null)
+                          setEditalVerticalizadoText('')
+                        } catch (err) {
+                          console.error('Erro ao processar configurações:', err)
+                          setMessage(`❌ Erro ao processar: ${err.message}`)
+                        } finally {
+                          setSavingEditalVerticalizado(false)
+                        }
+                      }}
+                      disabled={!editalVerticalizadoText.trim() || savingEditalVerticalizado || extractingEditalVerticalizado}
+                      className="w-full rounded-xl bg-white text-blue-600 px-6 py-4 text-lg font-black hover:bg-white/90 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingEditalVerticalizado ? '⏳ Processando...' : '🚀 Processar e Configurar Tudo'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Status das Configurações */}
+                {editalVerticalizadoData && (
+                  <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-6">
+                    <h3 className="text-lg font-bold text-emerald-700 dark:text-emerald-300 mb-3">
+                      ✅ Configurações Aplicadas
+                    </h3>
+                    <div className="space-y-2 text-sm text-emerald-600 dark:text-emerald-400">
+                      <p>✓ Edital verticalizado configurado</p>
+                      <p>✓ Prompts unificados gerados</p>
+                      <p>✓ Informações do concurso atualizadas</p>
+                      {editalVerticalizadoData.updatedAt && (
+                        <p className="text-xs mt-3">
+                          Última atualização: {editalVerticalizadoData.updatedAt.toDate?.().toLocaleString('pt-BR') || 'Data não disponível'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Seção: Gerar Matérias Revisadas */}
+                <div className="rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-6 shadow-lg border-2 border-indigo-200 dark:border-indigo-800">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl">
+                      <span className="text-2xl">📖</span>
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-indigo-700 dark:text-indigo-300">
+                        Matérias Revisadas
+                      </h2>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">
+                        Gere conteúdo técnico completo de matérias baseado SEMPRE no edital
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+                    <p className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2">
+                      ⚠️ IMPORTANTE: Matérias Revisadas sempre se baseiam no Edital
+                    </p>
+                    <p className="text-xs text-blue-700 dark:text-blue-400">
+                      O conteúdo gerado será baseado EXCLUSIVAMENTE no edital do curso. Certifique-se de que o edital já foi processado acima antes de gerar matérias revisadas.
+                    </p>
+                  </div>
+
+                  {/* Botão: Gerar Todas as Matérias de Uma Vez */}
+                  <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-lg border-2 border-purple-200 dark:border-purple-800">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <h3 className="text-lg font-bold text-purple-700 dark:text-purple-300">
+                          🚀 Gerar Todas as Matérias de Uma Vez
+                        </h3>
+                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                          A IA analisará o edital e gerará automaticamente todas as matérias revisadas encontradas
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleGenerateAllMateriasRevisadas}
+                      disabled={generatingAllMaterias || generatingMateriaRevisada}
+                      className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {generatingAllMaterias ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                          <span>Gerando Todas as Matérias...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>🚀</span>
+                          <span>Gerar Todas as Matérias do Edital</span>
+                        </>
+                      )}
+                    </button>
+                    {allMateriasProgress && (
+                      <div className="mt-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-purple-200 dark:border-purple-700">
+                        <p className="text-sm text-purple-700 dark:text-purple-300 whitespace-pre-line">
+                          {allMateriasProgress}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mb-6 border-t border-indigo-200 dark:border-indigo-700 pt-6">
+                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4 text-center">
+                      OU
+                    </p>
+                  </div>
+
+                  {/* Seletor de Curso */}
+                  <div className="mb-4">
+                    <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-400 mb-2">
+                      Curso
+                    </label>
+                    <select
+                      value={materiaRevisadaForm.courseId}
+                      onChange={(e) => setMateriaRevisadaForm({ ...materiaRevisadaForm, courseId: e.target.value })}
+                      className="w-full rounded-xl border-2 border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 p-3 text-sm font-semibold focus:border-indigo-500 focus:outline-none"
+                      disabled={generatingMateriaRevisada}
+                    >
+                      {courses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.name} {course.id === 'alego-default' ? '(Padrão)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Seletor de Matéria */}
+                  <div className="mb-6">
+                    <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-400 mb-2">
+                      Matéria para Revisar
+                    </label>
+                    <input
+                      type="text"
+                      value={materiaRevisadaForm.materia}
+                      onChange={(e) => setMateriaRevisadaForm({ ...materiaRevisadaForm, materia: e.target.value })}
+                      placeholder="Ex: Direito Constitucional, Português, Raciocínio Lógico..."
+                      className="w-full rounded-xl border-2 border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 p-3 text-sm font-semibold focus:border-indigo-500 focus:outline-none"
+                      disabled={generatingMateriaRevisada}
+                    />
+                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                      Digite o nome exato da matéria que deseja revisar
+                    </p>
+                  </div>
+
+                  {/* Botão Gerar */}
+                  <button
+                    onClick={handleGenerateMateriaRevisada}
+                    disabled={!materiaRevisadaForm.materia || generatingMateriaRevisada}
+                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {generatingMateriaRevisada ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                        <span>Gerando Matéria Revisada...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>📖</span>
+                        <span>Gerar Matéria Revisada Baseada no Edital</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Progresso */}
+                  {materiaRevisadaProgress && (
+                    <div className="mt-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                      <p className="text-sm text-indigo-700 dark:text-indigo-300 whitespace-pre-line">
+                        {materiaRevisadaProgress}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Lista de Matérias Revisadas Existentes */}
+                  {existingMateriasRevisadas.length > 0 && (
+                    <div className="mt-6 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
+                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">
+                        Matérias Revisadas Existentes:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {existingMateriasRevisadas.map((materia, idx) => (
+                          <span
+                            key={idx}
+                            className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-semibold"
+                          >
+                            {materia}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Conteúdo antigo de configurações removido */}
+            {false && (
+              <div>
+                {/* Prompt Unificado - Banca e Concurso */}
+                <div className="rounded-2xl bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 p-6 shadow-lg border-2 border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-2xl">🎯</span>
+                    <p className="text-lg font-black text-blue-700 dark:text-blue-300">
+                      Prompt Unificado da IA
+                    </p>
+                  </div>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+                    Configure a banca, nome do concurso e o prompt unificado. A IA usará essas informações para gerar <strong>simulados, questões, redação, flashcards e mapas mentais</strong> específicos para este curso.
+                  </p>
+                  
+                  {/* Seletor de Curso */}
+                  <div className="mb-6">
+                    <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-400 mb-2">
+                      Curso para Configurar
+                    </label>
+                    <select
+                      value={selectedCourseForPrompts}
+                      onChange={(e) => setSelectedCourseForPrompts(e.target.value)}
+                      className="w-full rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-800 p-3 text-sm font-semibold focus:border-blue-500 focus:outline-none"
+                    >
+                      {courses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.name} {course.id === 'alego-default' ? '(Padrão)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    {/* Campo Banca */}
+                    <div>
+                      <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-400 mb-2">
+                        🏛️ Banca Organizadora *
+                      </label>
+                      <input
+                        type="text"
+                        value={unifiedPrompt.banca}
+                        onChange={(e) => setUnifiedPrompt({ ...unifiedPrompt, banca: e.target.value })}
+                        placeholder="Ex: FGV, CESPE, VUNESP, IADES, etc."
+                        className="w-full rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-800 p-3 text-sm font-semibold focus:border-blue-500 focus:outline-none"
+                        disabled={savingUnifiedPrompt}
+                      />
+                    </div>
+
+                    {/* Campo Nome do Concurso */}
+                    <div>
+                      <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-400 mb-2">
+                        📋 Nome do Concurso *
+                      </label>
+                      <input
+                        type="text"
+                        value={unifiedPrompt.concursoName}
+                        onChange={(e) => setUnifiedPrompt({ ...unifiedPrompt, concursoName: e.target.value })}
+                        placeholder="Ex: ALEGO Policial Legislativo, TRT-18, etc."
+                        className="w-full rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-800 p-3 text-sm font-semibold focus:border-blue-500 focus:outline-none"
+                        disabled={savingUnifiedPrompt}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Campo Prompt Unificado */}
+                  <div className="mb-6">
+                    <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-400 mb-2">
+                      📝 Prompt Unificado para IA *
+                    </label>
+                    <textarea
+                      value={unifiedPrompt.prompt}
+                      onChange={(e) => setUnifiedPrompt({ ...unifiedPrompt, prompt: e.target.value })}
+                      rows={12}
+                      placeholder="Exemplo de prompt unificado:
+
+Você é um especialista em criar conteúdo para concursos públicos.
+
+BANCA: [A banca será preenchida automaticamente]
+CONCURSO: [O nome do concurso será preenchido automaticamente]
+
+INSTRUÇÕES GERAIS:
+- Use APENAS o estilo da banca especificada
+- Questões devem seguir o padrão da banca (estilo, formato, dificuldade)
+- Simulados devem refletir a estrutura real da prova
+- Redações devem seguir os critérios de avaliação da banca
+- Flashcards devem focar nos temas mais cobrados pela banca
+- Mapas mentais devem organizar o conteúdo conforme a abordagem da banca
+
+ESTILO DA BANCA:
+- FGV: questões objetivas, claras, com alternativas bem elaboradas
+- CESPE: questões tipo certo/errado, estilo mais técnico
+- VUNESP: questões objetivas, estilo mais direto
+- IADES: questões objetivas, foco em situações práticas
+
+REGRAS ESPECÍFICAS:
+- Baseie-se sempre no conteúdo dos flashcards fornecidos
+- Use informações do edital quando disponível
+- Mantenha consistência com o estilo da banca
+- Questões devem ser FICTÍCIAS mas realistas"
+                      className="w-full rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-800 p-4 text-sm font-mono focus:border-blue-500 focus:outline-none"
+                      disabled={savingUnifiedPrompt}
+                    />
+                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                      💡 Este prompt será usado para gerar <strong>simulados, questões, redação, flashcards e mapas mentais</strong>. A banca e nome do concurso serão automaticamente incluídos no prompt.
+                    </p>
+                  </div>
+
+                  {/* Botão Salvar */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!unifiedPrompt.banca || !unifiedPrompt.concursoName || !unifiedPrompt.prompt) {
+                        setMessage('❌ Preencha todos os campos obrigatórios (Banca, Nome do Concurso e Prompt)')
+                        return
+                      }
+
+                      setSavingUnifiedPrompt(true)
+                      try {
+                        const courseId = selectedCourseForPrompts || 'alego-default'
+                        const unifiedRef = doc(db, 'courses', courseId, 'prompts', 'unified')
+                        await setDoc(unifiedRef, {
+                          banca: unifiedPrompt.banca.trim(),
+                          concursoName: unifiedPrompt.concursoName.trim(),
+                          prompt: unifiedPrompt.prompt.trim(),
+                          updatedAt: serverTimestamp(),
+                        }, { merge: true })
+
+                        // Também atualizar no documento do curso para compatibilidade
+                        const courseRef = doc(db, 'courses', courseId)
+                        await setDoc(courseRef, {
+                          banca: unifiedPrompt.banca.trim(),
+                          competition: unifiedPrompt.concursoName.trim(),
+                        }, { merge: true })
+
+                        setMessage(`✅ Prompt unificado salvo com sucesso para ${courses.find(c => c.id === courseId)?.name || 'curso'}!`)
+                      } catch (err) {
+                        console.error('Erro ao salvar prompt unificado:', err)
+                        setMessage('❌ Erro ao salvar. Tente novamente.')
+                      } finally {
+                        setSavingUnifiedPrompt(false)
+                      }
+                    }}
+                    disabled={savingUnifiedPrompt || !unifiedPrompt.banca || !unifiedPrompt.concursoName || !unifiedPrompt.prompt}
+                    className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 text-white font-black text-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {savingUnifiedPrompt ? '💾 Salvando...' : '💾 Salvar Prompt Unificado'}
+                  </button>
+                </div>
+
+                {/* Configuração do Prompt da IA (Edital - mantido para compatibilidade) */}
+      <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+        <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 dark:text-alego-400">
           <DocumentTextIcon className="h-5 w-5" />
-          Configuração da IA - Informações do Concurso
+          Configuração do Edital (Opcional - para referência adicional)
         </p>
         <p className="mt-2 text-xs text-slate-500">
           Configure aqui as informações sobre o concurso. A IA usará essas informações para responder perguntas dos alunos de forma precisa e objetiva.
@@ -4900,6 +6475,330 @@ ESTRUTURA SUGERIDA:
           >
             🗑️ Limpar
           </button>
+        </div>
+      </div>
+
+      {/* Configuração de Edital Verticalizado */}
+      <div className="rounded-2xl bg-white p-6 shadow-sm mt-6">
+        <p className="flex items-center gap-2 text-sm font-semibold text-alego-600">
+          <DocumentTextIcon className="h-5 w-5" />
+          Edital Verticalizado
+        </p>
+        <p className="mt-2 text-xs text-slate-500">
+          Faça upload do edital em PDF e organize-o de forma verticalizada para estudos. O edital será processado pela IA e organizado em seções.
+        </p>
+        
+        {/* Seletor de Curso */}
+        <div className="mt-4">
+          <label className="block text-xs font-semibold uppercase text-slate-500 mb-2">
+            Curso para Configurar
+          </label>
+          <select
+            value={selectedCourseForPrompts}
+            onChange={(e) => setSelectedCourseForPrompts(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-alego-400 focus:outline-none"
+          >
+            {courses.map((course) => (
+              <option key={course.id} value={course.id}>
+                {course.name} {course.id === 'alego-default' ? '(Padrão)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Upload de PDF */}
+        <div className="mt-6 border-t border-slate-200 pt-6">
+          <label className="block text-xs font-semibold uppercase text-slate-500 mb-2">
+            <DocumentArrowUpIcon className="h-4 w-4 inline mr-2" />
+            Upload de PDF do Edital
+          </label>
+          <div className="space-y-3">
+            <div className="flex items-center gap-4">
+              <label className="flex-1 cursor-pointer">
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    if (file.type !== 'application/pdf') {
+                      setMessage('❌ Por favor, selecione um arquivo PDF.')
+                      return
+                    }
+                    if (file.size > 50 * 1024 * 1024) {
+                      setMessage('❌ O arquivo PDF é muito grande. Máximo: 50MB')
+                      return
+                    }
+                    setEditalVerticalizadoFile(file)
+                    setMessage('Processando PDF...')
+                    try {
+                      const extractedText = await extractTextFromPDF(file)
+                      setEditalVerticalizadoText(extractedText)
+                      setMessage(`✅ PDF processado! ${extractedText.length} caracteres extraídos.`)
+                    } catch (err) {
+                      console.error('Erro ao processar PDF:', err)
+                      setMessage(`❌ Erro ao processar PDF: ${err.message}`)
+                      setEditalVerticalizadoFile(null)
+                    }
+                  }}
+                  className="hidden"
+                  disabled={extractingEditalVerticalizado || savingEditalVerticalizado}
+                />
+                <div className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 px-6 py-4 hover:border-alego-400 transition cursor-pointer disabled:opacity-50">
+                  <DocumentArrowUpIcon className="h-5 w-5 text-slate-400" />
+                  <span className="text-sm font-semibold text-slate-600">
+                    {editalVerticalizadoFile ? editalVerticalizadoFile.name : 'Clique para fazer upload do PDF'}
+                  </span>
+                </div>
+              </label>
+              {editalVerticalizadoFile && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditalVerticalizadoFile(null)
+                    setEditalVerticalizadoText('')
+                  }}
+                  className="rounded-xl bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-200"
+                >
+                  Remover
+                </button>
+              )}
+            </div>
+            
+            {extractingEditalVerticalizado && (
+              <div className="rounded-lg bg-blue-50 p-3">
+                <p className="text-xs font-semibold text-blue-700">📄 Extraindo texto do PDF... Aguarde.</p>
+              </div>
+            )}
+
+            {editalVerticalizadoText && (
+              <div className="rounded-lg bg-emerald-50 p-3">
+                <p className="text-xs font-semibold text-emerald-700 mb-2">
+                  ✅ Texto extraído do PDF ({editalVerticalizadoText.length} caracteres)
+                </p>
+              </div>
+            )}
+
+            {editalVerticalizadoData && (
+              <div className="rounded-lg bg-blue-50 p-3">
+                <p className="text-xs font-semibold text-blue-700 mb-2">
+                  📋 Edital verticalizado já configurado
+                </p>
+                <p className="text-xs text-blue-600">
+                  Título: {editalVerticalizadoData.titulo || 'Sem título'}
+                  {editalVerticalizadoData.updatedAt && (
+                    <span className="ml-2">
+                      (Atualizado em {editalVerticalizadoData.updatedAt.toDate?.().toLocaleDateString('pt-BR')})
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Botões de Ação */}
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            onClick={async () => {
+              if (!editalVerticalizadoText.trim()) {
+                setMessage('❌ Por favor, faça upload e processe um PDF primeiro.')
+                return
+              }
+              
+              setSavingEditalVerticalizado(true)
+              setMessage('Processando edital verticalizado com IA...')
+              
+              try {
+                          const courseId = selectedCourseForPrompts || 'alego-default'
+                          const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
+                          
+                          // Tentar modelos válidos em ordem de prioridade
+                          const modelNames = [
+                            'gemini-2.0-flash',           // Mais recente e rápido
+                            'gemini-1.5-pro-latest',      // Melhor para análises complexas
+                            'gemini-1.5-flash-latest'     // Fallback Flash
+                          ]
+                          
+                          let model = null
+                          for (const modelName of modelNames) {
+                            try {
+                              model = genAI.getGenerativeModel({ model: modelName })
+                              // Testar se o modelo funciona
+                              await model.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
+                              console.log(`✅ Usando modelo: ${modelName}`)
+                              break
+                            } catch (err) {
+                              console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
+                              continue
+                            }
+                          }
+                          
+                          if (!model) {
+                            throw new Error('Nenhum modelo Gemini disponível. Verifique sua API key.')
+                          }
+                
+                const prompt = `Você é um especialista em organizar editais de concursos públicos de forma verticalizada para estudos.
+
+Analise o seguinte texto do edital e organize-o em seções e subseções de forma clara e estruturada. O formato deve ser técnico e completo, mostrando toda a informação de forma organizada.
+
+Texto do edital:
+${editalVerticalizadoText.substring(0, 100000)} ${editalVerticalizadoText.length > 100000 ? '... (texto truncado)' : ''}
+
+Organize o edital em um formato JSON com a seguinte estrutura:
+{
+  "titulo": "Título do Edital",
+  "descricao": "Breve descrição",
+  "secoes": [
+    {
+      "titulo": "Nome da Seção",
+      "subtitulo": "Subtítulo opcional",
+      "conteudo": "Conteúdo HTML formatado da seção",
+      "subsecoes": [
+        {
+          "titulo": "Nome da Subseção",
+          "conteudo": "Conteúdo HTML formatado"
+        }
+      ]
+    }
+  ]
+}
+
+Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
+
+                const result = await model.generateContent(prompt)
+                const response = await result.response
+                const text = response.text()
+                
+                // Extrair JSON da resposta
+                let jsonText = text.trim()
+                if (jsonText.startsWith('```json')) {
+                  jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+                } else if (jsonText.startsWith('```')) {
+                  jsonText = jsonText.replace(/```\n?/g, '').trim()
+                }
+                
+                // Tentar extrair JSON mesmo se houver texto antes/depois
+                // Função para limpar e validar JSON (mesma lógica)
+                const cleanAndParseJSONFinal = (text) => {
+                  let cleaned = text.trim()
+                  const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+                  if (jsonMatch) {
+                    cleaned = jsonMatch[0]
+                  }
+                  
+                  try {
+                    return JSON.parse(cleaned)
+                  } catch (firstErr) {
+                    let result = ''
+                    let inString = false
+                    let escapeNext = false
+                    
+                    for (let i = 0; i < cleaned.length; i++) {
+                      const char = cleaned[i]
+                      const code = char.charCodeAt(0)
+                      
+                      if (escapeNext) {
+                        result += char
+                        escapeNext = false
+                        continue
+                      }
+                      
+                      if (char === '\\') {
+                        result += char
+                        escapeNext = true
+                        continue
+                      }
+                      
+                      if (char === '"' && (i === 0 || cleaned[i-1] !== '\\')) {
+                        inString = !inString
+                        result += char
+                        continue
+                      }
+                      
+                      if (inString && code >= 0x00 && code <= 0x1F && code !== 0x09 && code !== 0x0A && code !== 0x0D) {
+                        if (code === 0x09) result += '\\t'
+                        else if (code === 0x0A) result += '\\n'
+                        else if (code === 0x0D) result += '\\r'
+                        else result += ' '
+                      } else {
+                        result += char
+                      }
+                    }
+                    
+                    try {
+                      return JSON.parse(result)
+                    } catch (secondErr) {
+                      result = result.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+                      return JSON.parse(result)
+                    }
+                  }
+                }
+                
+                let editalOrganizado = null
+                try {
+                  // Tentar parse direto primeiro
+                  editalOrganizado = JSON.parse(jsonText)
+                } catch (parseErr) {
+                  console.warn('⚠️ Erro ao fazer parse direto, tentando limpar JSON...', parseErr)
+                  
+                  try {
+                    editalOrganizado = cleanAndParseJSONFinal(jsonText)
+                    console.log('✅ JSON extraído e limpo com sucesso')
+                  } catch (matchErr) {
+                    console.error('❌ Erro ao fazer parse do JSON limpo:', matchErr)
+                    console.error('📋 Texto original (primeiros 500 caracteres):', jsonText.substring(0, 500))
+                    throw new Error('A IA retornou uma resposta que não contém JSON válido. Tente novamente ou verifique o texto do edital.')
+                  }
+                }
+                
+                // Salvar no Firestore
+                const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+                await setDoc(editalRef, {
+                  ...editalOrganizado,
+                  updatedAt: serverTimestamp(),
+                  courseId,
+                }, { merge: true })
+                
+                setEditalVerticalizadoData(editalOrganizado)
+                setMessage('✅ Edital verticalizado processado e salvo com sucesso!')
+                setEditalVerticalizadoFile(null)
+                setEditalVerticalizadoText('')
+              } catch (err) {
+                console.error('Erro ao processar edital verticalizado:', err)
+                setMessage(`❌ Erro ao processar edital: ${err.message}`)
+              } finally {
+                setSavingEditalVerticalizado(false)
+              }
+            }}
+            disabled={!editalVerticalizadoText.trim() || savingEditalVerticalizado || extractingEditalVerticalizado}
+            className="flex-1 rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white disabled:opacity-50 hover:bg-alego-700 transition"
+          >
+            {savingEditalVerticalizado ? 'Processando...' : 'Processar e Salvar Edital Verticalizado'}
+          </button>
+          {editalVerticalizadoData && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!confirm('Tem certeza que deseja remover o edital verticalizado?')) return
+                
+                try {
+                  const courseId = selectedCourseForPrompts || 'alego-default'
+                  const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+                  await deleteDoc(editalRef)
+                  setEditalVerticalizadoData(null)
+                  setMessage('✅ Edital verticalizado removido com sucesso!')
+                } catch (err) {
+                  console.error('Erro ao remover edital:', err)
+                  setMessage(`❌ Erro ao remover: ${err.message}`)
+                }
+              }}
+              className="rounded-full bg-rose-500 px-6 py-2 text-sm font-semibold text-white hover:bg-rose-600 transition"
+            >
+              🗑️ Remover
+            </button>
+          )}
         </div>
       </div>
               </div>
@@ -6618,7 +8517,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                         Organizar Matérias e Módulos
                       </p>
                       <p className="mt-1 text-sm text-slate-500">
-                        Organize a ordem das matérias e módulos que aparecerão para os alunos. Esta ordem será aplicada em todos os lugares: flashcards, mapas mentais, questões e dashboard.
+                        Organize a ordem das matérias e módulos que aparecerão para os alunos. Esta ordem será aplicada em todos os lugares: flashcards, mapas mentais e questões.
                       </p>
 
                       <div className="mt-6 flex flex-wrap gap-3">

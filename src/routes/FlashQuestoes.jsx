@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { canGenerateQuestions, incrementQuestionCount, canAccessMateria, isTrialMode } from '../utils/trialLimits'
+import { canAccessMateria, isTrialMode } from '../utils/trialLimits'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
@@ -325,7 +325,7 @@ const FlashQuestoes = () => {
             },
           ],
           temperature: 0.7,
-          max_tokens: 4000,
+          max_tokens: 16000, // Aumentado para permitir mais questões
         }),
       })
 
@@ -357,16 +357,13 @@ const FlashQuestoes = () => {
       return
     }
 
-    // Verificar limitações de teste
+    // Verificar limitações de teste (apenas acesso a matérias, questões são ilimitadas)
     if (isTrialMode()) {
       if (!canAccessMateria(selectedMateria)) {
         alert('⚠️ No teste gratuito você pode acessar apenas 1 matéria. Desbloqueie o plano completo!')
         return
       }
-      if (!canGenerateQuestions(selectedMateria)) {
-        alert('⚠️ No teste gratuito você pode gerar apenas 10 questões por matéria. Desbloqueie o plano completo para questões ilimitadas!')
-        return
-      }
+      // Questões são ilimitadas - sem verificação de limite
     }
 
     setGenerating(true)
@@ -385,30 +382,46 @@ const FlashQuestoes = () => {
       const cachedData = await getOrCreateQuestionsCache(selectedMateria, selectedModulo, selectedCourseId)
       
       if (cachedData && cachedData.questoes && cachedData.questoes.length > 0) {
-        console.log(`✅ Cache encontrado! Usando ${cachedData.questoes.length} questões do cache.`)
-        const cacheInfoData = {
-          likes: cachedData.likes,
-          dislikes: cachedData.dislikes,
-          score: cachedData.score,
-          cached: true
-        }
-        
-        // Verificar se precisa remover por score baixo (com courseId)
-        const courseKey = selectedCourseId || 'alego-default'
-        await autoRemoveBadCache('questoesCache', `${courseKey}_${selectedMateria}_${selectedModulo}`.replace(/[^a-zA-Z0-9_]/g, '_'))
-        
-        setGenerating(false)
-        
-        // Navegar para a página de responder questões
-        navigate('/flashquestoes/responder', {
-          state: {
-            questions: cachedData.questoes,
-            selectedMateria,
-            selectedModulo,
-            cacheInfo: cacheInfoData
+        // Se o cache tiver menos de 20 questões, forçar nova geração (cache antigo com limite)
+        if (cachedData.questoes.length < 20) {
+          console.log(`⚠️ Cache encontrado mas com apenas ${cachedData.questoes.length} questões. Forçando nova geração para ter mais questões...`)
+          // Deletar cache antigo para forçar nova geração
+          const courseKey = selectedCourseId || 'alego-default'
+          const cacheId = `${courseKey}_${selectedMateria}_${selectedModulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+          try {
+            const { deleteDoc, doc } = await import('firebase/firestore')
+            await deleteDoc(doc(db, 'questoesCache', cacheId))
+            console.log('🗑️ Cache antigo deletado - será gerado novo cache com mais questões')
+          } catch (delErr) {
+            console.warn('Erro ao deletar cache antigo:', delErr)
           }
-        })
-        return // Sair da função - questões já foram carregadas do cache
+          // Continuar para gerar novas questões
+        } else {
+          console.log(`✅ Cache encontrado! Usando ${cachedData.questoes.length} questões do cache.`)
+          const cacheInfoData = {
+            likes: cachedData.likes,
+            dislikes: cachedData.dislikes,
+            score: cachedData.score,
+            cached: true
+          }
+          
+          // Verificar se precisa remover por score baixo (com courseId)
+          const courseKey = selectedCourseId || 'alego-default'
+          await autoRemoveBadCache('questoesCache', `${courseKey}_${selectedMateria}_${selectedModulo}`.replace(/[^a-zA-Z0-9_]/g, '_'))
+          
+          setGenerating(false)
+          
+          // Navegar para a página de responder questões
+          navigate('/flashquestoes/responder', {
+            state: {
+              questions: cachedData.questoes,
+              selectedMateria,
+              selectedModulo,
+              cacheInfo: cacheInfoData
+            }
+          })
+          return // Sair da função - questões já foram carregadas do cache
+        }
       }
 
       console.log('📝 Cache não encontrado. Gerando novas questões com IA...')
@@ -439,38 +452,42 @@ ${card.explicacao ? `Explicação: ${card.explicacao}` : ''}`
         })
         .join('\n\n')
 
-      // Usar prompt configurado pelo admin ou prompt padrão
-      const basePrompt = questoesConfigPrompt.trim() || `Você é um especialista em criar questões de concursos públicos no estilo FGV para o cargo de Policial Legislativo da ALEGO.
-
-REGRAS PARA AS QUESTÕES:
-- Estilo FGV: questões objetivas, claras, com alternativas bem elaboradas
-- Cada questão deve ter 5 alternativas (A, B, C, D, E)
-- Apenas UMA alternativa está correta
-- As alternativas incorretas devem ser plausíveis (distratores inteligentes)
-- Baseie-se PRIMARIAMENTE no conteúdo dos flashcards fornecidos abaixo
-- Questões devem ser FICTÍCIAS (não são questões reais de provas anteriores)
-- Foque em temas relevantes para o cargo de Policial Legislativo
-- Dificuldade: nível FGV (intermediário a avançado)
-- Enunciados claros e objetivos
-- Alternativas com linguagem formal e técnica quando apropriado`
-
-      const prompt = `${basePrompt}
-
-${editalPrompt ? `CONTEXTO DO EDITAL (para referência):\n${editalPrompt}\n\n` : ''}
-
-⚠️ CONTEÚDO PRINCIPAL - FLASHCARDS DO MÓDULO "${selectedModulo}" (${moduleFlashcards.length} flashcards):
+      // Usar prompt unificado
+      const { buildQuestionPrompt } = await import('../utils/unifiedPrompt')
+      const basePrompt = await buildQuestionPrompt(
+        selectedCourseId || 'alego-default',
+        selectedMateria,
+        editalPrompt,
+        `⚠️ CONTEÚDO PRINCIPAL - FLASHCARDS DO MÓDULO "${selectedModulo}" (${moduleFlashcards.length} flashcards):
 Use ESTE conteúdo como base principal para criar as questões. As questões devem estar diretamente relacionadas ao conteúdo abaixo:
 
-${flashcardsContent}
+${flashcardsContent}`
+      )
 
-TAREFA: Criar questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${selectedMateria}" no módulo "${selectedModulo}". 
-Gere questões suficientes para cobrir adequadamente todo o conteúdo dos flashcards (recomendado: 1 questão para cada 2-3 flashcards, mínimo de 10 questões, máximo de 50 questões para garantir cobertura completa do conteúdo).
+      // Calcular quantidade ideal de questões baseado no número de flashcards
+      const idealQuestionCount = Math.max(30, Math.floor(moduleFlashcards.length / 1.2))
+      const minQuestionCount = Math.max(20, Math.floor(moduleFlashcards.length / 2))
+      
+      const prompt = `${basePrompt}
+
+TAREFA: Criar questões FICTÍCIAS de múltipla escolha para a matéria "${selectedMateria}" no módulo "${selectedModulo}". 
+
+🚨 INSTRUÇÃO CRÍTICA SOBRE QUANTIDADE:
+Este módulo tem ${moduleFlashcards.length} flashcards. Você DEVE gerar PELO MENOS ${idealQuestionCount} questões (ideal: ${idealQuestionCount}+ questões).
+- Mínimo obrigatório: ${minQuestionCount} questões
+- Quantidade ideal: ${idealQuestionCount} questões ou mais
+- NÃO pare em 10 questões - isso é insuficiente
+- Gere o MÁXIMO de questões possível dentro do limite de tokens da API
+- Cada flashcard deve ter pelo menos 1 questão correspondente
+- Quanto mais questões você gerar, melhor será a cobertura do conteúdo
+- NÃO há limite máximo - gere quantas conseguir
 
 CRÍTICO:
 - As questões devem ser baseadas NO CONTEÚDO DOS FLASHCARDS acima
 - NÃO crie questões genéricas sobre o edital
 - Foque no conteúdo específico dos flashcards fornecidos
 - Cada questão deve testar o conhecimento sobre os conceitos apresentados nos flashcards
+- Varie os tipos de questões para cobrir diferentes aspectos de cada flashcard
 
 FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
 Retorne APENAS um objeto JSON válido no seguinte formato:
@@ -509,7 +526,13 @@ CRÍTICO:
         for (const modelName of modelNames) {
           try {
             console.log(`🔄 Tentando modelo: ${modelName}...`)
-            const model = genAI.getGenerativeModel({ model: modelName })
+            const model = genAI.getGenerativeModel({ 
+              model: modelName,
+              generationConfig: {
+                maxOutputTokens: 16000, // Aumentado para permitir mais questões
+                temperature: 0.7,
+              }
+            })
             const result = await model.generateContent(prompt)
             aiResponse = result.response.text()
             console.log(`✅ Sucesso com modelo: ${modelName}`)
@@ -595,10 +618,7 @@ CRÍTICO:
       await saveQuestionsCache(selectedMateria, selectedModulo, parsedData.questoes, selectedCourseId)
       const newCacheInfo = { likes: 0, dislikes: 0, score: 100, cached: false }
 
-      // Incrementar contador de questões se estiver em modo trial
-      if (isTrialMode()) {
-        incrementQuestionCount(selectedMateria)
-      }
+      // Questões são ilimitadas - não precisa incrementar contador
 
       // Navegar para a página de responder questões
       navigate('/flashquestoes/responder', {
@@ -947,13 +967,13 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
       if (total > 0) {
         const accuracy = (data.correct || 0) / total
         materias.push({
-          materia,
-          accuracy: (accuracy * 100).toFixed(1),
-          correct: data.correct || 0,
-          wrong: data.wrong || 0,
-          total,
+            materia,
+            accuracy: (accuracy * 100).toFixed(1),
+            correct: data.correct || 0,
+            wrong: data.wrong || 0,
+            total,
           needsCalibration: accuracy < 0.7, // Menos de 70% precisa calibrar
-        })
+          })
       }
     })
     return materias.sort((a, b) => parseFloat(a.accuracy) - parseFloat(b.accuracy))
@@ -1112,7 +1132,7 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
                         <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
                           <span className="text-red-500 font-semibold">
                             ⚠️ {item.wrong} erros
-                          </span>
+                </span>
                           <span className="stark-text-secondary">
                             Taxa de acerto: <span className="text-orange-500 font-bold">{item.accuracy}%</span>
                           </span>
