@@ -244,7 +244,24 @@ function App() {
       <SupportButton />
       <PopupBanner />
     </div>
-  )
+    )
+  } catch (error) {
+    console.error('Erro no componente App:', error)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-2">Erro ao carregar aplicação</h1>
+          <p className="text-slate-600 dark:text-slate-400 mb-4">{error.message}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-alego-600 text-white rounded-lg hover:bg-alego-700"
+          >
+            Recarregar
+          </button>
+        </div>
+      </div>
+    )
+  }
 }
 
 export default App
