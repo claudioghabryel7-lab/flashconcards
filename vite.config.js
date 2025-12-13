@@ -15,27 +15,21 @@ export default defineConfig({
     reportCompressedSize: false, // Desabilita para build mais rápido
     rollupOptions: {
       output: {
-        // Code splitting simplificado - React deve estar sempre junto
+        // Code splitting - React deve estar no entry chunk (não separar)
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
-            // React, React-DOM e React Router DEVEM estar juntos
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-              return 'react-vendor'
-            }
-            // Firebase
+            // NÃO separar React - deixar no entry chunk para evitar problemas
+            // Apenas separar outras bibliotecas pesadas
             if (id.includes('firebase')) {
               return 'firebase-vendor'
             }
-            // UI libraries
-            if (id.includes('@heroicons') || id.includes('framer-motion')) {
-              return 'ui-vendor'
-            }
-            // AI/ML libraries (pesados - lazy load)
             if (id.includes('@google/generative-ai') || id.includes('pdfjs') || id.includes('html2canvas')) {
               return 'ai-vendor'
             }
-            // Outros vendors
-            return 'vendor'
+            // Outros vendors (mas não React)
+            if (!id.includes('react') && !id.includes('react-dom') && !id.includes('react-router')) {
+              return 'vendor'
+            }
           }
         },
         // Otimizar nomes de chunks para melhor cache
