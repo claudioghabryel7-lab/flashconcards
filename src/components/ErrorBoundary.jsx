@@ -11,7 +11,12 @@ class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('Erro capturado pelo ErrorBoundary:', error, errorInfo)
+    // Garantir que o erro seja convertido para string antes de logar
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorInfoString = errorInfo ? JSON.stringify(errorInfo, null, 2) : 'N/A'
+    if (import.meta.env.DEV) {
+      console.error('Erro capturado pelo ErrorBoundary:', errorMessage, errorInfoString)
+    }
   }
 
   render() {
@@ -54,7 +59,9 @@ class ErrorBoundary extends Component {
                       Detalhes do erro
                     </summary>
                     <pre className="text-xs bg-slate-100 dark:bg-slate-900 p-3 rounded overflow-auto max-h-40">
-                      {this.state.error.toString()}
+                      {this.state.error instanceof Error 
+                        ? this.state.error.message 
+                        : String(this.state.error)}
                     </pre>
                   </details>
                 )}
@@ -70,6 +77,14 @@ class ErrorBoundary extends Component {
 }
 
 export default ErrorBoundary
+
+
+
+
+
+
+
+
 
 
 

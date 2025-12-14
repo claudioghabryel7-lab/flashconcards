@@ -31,12 +31,16 @@ const RootApp = () => {
       </BrowserRouter>
     )
   } catch (error) {
-    console.error('Erro ao renderizar RootApp:', error)
+    // Garantir que o erro seja convertido para string antes de logar
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (import.meta.env.DEV) {
+      console.error('Erro ao renderizar RootApp:', errorMessage)
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600 mb-2">Erro ao carregar aplicação</h1>
-          <p className="text-slate-600 dark:text-slate-400 mb-4">{error.message}</p>
+          <p className="text-slate-600 dark:text-slate-400 mb-4">{errorMessage || 'Erro desconhecido'}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-alego-600 text-white rounded-lg hover:bg-alego-700"

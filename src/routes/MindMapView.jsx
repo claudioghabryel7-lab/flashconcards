@@ -195,10 +195,31 @@ const MindMapView = () => {
               return `Card ${idx + 1}:\nPergunta: ${question}\nResposta: ${answer}`
             }).join('\n\n')
           
+          // Usar prompt unificado
+          const { buildMindMapPrompt } = await import('../utils/unifiedPrompt')
+          const courseId = selectedCourseId || 'alego-default'
+          
+          // Buscar edital se disponível
+          let editalText = ''
+          try {
+            const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+            const editalDoc = await getDoc(editalRef)
+            if (editalDoc.exists()) {
+              const data = editalDoc.data()
+              editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
+            }
+          } catch (err) {
+            console.warn('Erro ao carregar edital:', err)
+          }
+          
+          const basePrompt = await buildMindMapPrompt(courseId, materia, editalText)
+          
           const genAI = new GoogleGenerativeAI(apiKey)
           const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
           
-          const prompt = `Analise os flashcards abaixo e organize-os em até 6 temas principais. Para cada tema, crie um título descritivo (máximo 60 caracteres) e liste os flashcards que pertencem a esse tema.
+          const prompt = `${basePrompt}
+
+TAREFA: Analise os flashcards abaixo e organize-os em até 6 temas principais. Para cada tema, crie um título descritivo (máximo 60 caracteres) e liste os flashcards que pertencem a esse tema.
 
 FLASHCARDS:
 ${cardsContent}

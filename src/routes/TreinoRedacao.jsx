@@ -114,12 +114,16 @@ const TreinoRedacao = () => {
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
 
-      const themePrompt = `Você é um especialista em criar temas de redação para concursos públicos.
+      // Usar prompt unificado
+      const { buildRedacaoPrompt } = await import('../utils/unifiedPrompt')
+      const baseThemePrompt = await buildRedacaoPrompt(
+        courseId,
+        editalText ? editalText.substring(0, 30000) : ''
+      )
+      
+      const themePrompt = `${baseThemePrompt}
 
-CONCURSO ESPECÍFICO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
 CARGO: ${courseCompetition || courseName || 'Cargo público'}
-
-${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 30000)}\n\n` : ''}
 
 Crie um tema de redação ESPECÍFICO e relevante para o concurso ${courseName || 'mencionado'}${courseCompetition ? ` (${courseCompetition})` : ''}.
 
@@ -197,12 +201,15 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       const lines = redacaoTexto.split('\n').length
       const wordCount = redacaoTexto.trim() ? redacaoTexto.trim().split(/\s+/).length : 0
 
-      const analysisPrompt = `Você é um corretor especializado em redações de concursos públicos.
-
-CONCURSO: ${courseName || 'Concurso'}${courseCompetition ? ` (${courseCompetition})` : ''}
-TEMA DA REDAÇÃO: ${redacaoTema}
-
-${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 30000)}\n\n` : ''}
+      // Usar prompt unificado
+      const { buildRedacaoAnalysisPrompt } = await import('../utils/unifiedPrompt')
+      const baseAnalysisPrompt = await buildRedacaoAnalysisPrompt(
+        courseId,
+        redacaoTema,
+        editalText ? editalText.substring(0, 30000) : ''
+      )
+      
+      const analysisPrompt = `${baseAnalysisPrompt}
 
 IMPORTANTE: Esta redação usa 4 espaços no início da linha para indicar parágrafos. Linhas que começam com 4 espaços são parágrafos.
 

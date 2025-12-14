@@ -172,6 +172,14 @@
                         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
         }
+        
+        // Conteúdos Completos (subcoleção)
+        match /conteudosCompletos/{docId} {
+          // Permitir leitura para usuários autenticados
+          allow read: if isAuthenticated();
+          // Apenas admin pode criar, atualizar e deletar
+          allow create, update, delete: if isAdmin();
+        }
       }
       
       match /reviews/{reviewId} {
@@ -249,8 +257,16 @@
       match /questoesCache/{cacheId} {
         // Todos autenticados podem ler (para usar questões do cache)
         allow read: if isAuthenticated();
-        // Apenas sistema pode criar/atualizar (via código)
-        allow create, update: if isAuthenticated();
+        // Usuários autenticados podem criar/atualizar (sistema cria cache automaticamente)
+        // Validação: deve ter estrutura correta (questoes, materia, modulo)
+        allow create: if isAuthenticated() && 
+                       request.resource.data.keys().hasAll(['questoes', 'materia', 'modulo']) &&
+                       request.resource.data.questoes is list &&
+                       request.resource.data.likes is int &&
+                       request.resource.data.dislikes is int;
+        allow update: if isAuthenticated() && 
+                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'dislikes', 'updatedAt']) ||
+                        isAdmin());
         // Admin pode deletar
         allow delete: if isAdmin();
       }
@@ -259,8 +275,17 @@
       match /explanationsCache/{explanationId} {
         // Todos autenticados podem ler (para usar explicações do cache)
         allow read: if isAuthenticated();
-        // Apenas sistema pode criar/atualizar (via código)
-        allow create, update: if isAuthenticated();
+        // Usuários autenticados podem criar (sistema cria cache automaticamente)
+        // Validação: deve ter estrutura correta (text)
+        allow create: if isAuthenticated() && 
+                       request.resource.data.keys().hasAll(['text']) &&
+                       request.resource.data.text is string &&
+                       request.resource.data.likes is int &&
+                       request.resource.data.dislikes is int;
+        // Apenas atualização de likes/dislikes ou admin pode atualizar tudo
+        allow update: if isAuthenticated() && 
+                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'dislikes', 'updatedAt']) ||
+                        isAdmin());
         // Admin pode deletar
         allow delete: if isAdmin();
       }
@@ -269,8 +294,16 @@
       match /mindMapsCache/{cacheId} {
         // Todos autenticados podem ler (para usar mapas do cache)
         allow read: if isAuthenticated();
-        // Apenas sistema pode criar/atualizar (via código)
-        allow create, update: if isAuthenticated();
+        // Usuários autenticados podem criar (sistema cria cache automaticamente)
+        // Validação: deve ter estrutura correta (structure, materia, modulo)
+        allow create: if isAuthenticated() && 
+                       request.resource.data.keys().hasAll(['materia', 'modulo']) &&
+                       request.resource.data.likes is int &&
+                       request.resource.data.dislikes is int;
+        // Apenas atualização de likes/dislikes ou admin pode atualizar tudo
+        allow update: if isAuthenticated() && 
+                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'dislikes', 'updatedAt']) ||
+                        isAdmin());
         // Admin pode deletar
         allow delete: if isAdmin();
       }
@@ -282,16 +315,33 @@
         allow create: if true;
         
         // Permitir leitura de transações:
-        // - Permitir leitura pública (para verificar status após criação sem login)
-        // Nota: Em produção, você pode restringir mais se necessário
-        allow read: if true;
+        // - Dono da transação (por userId ou email) pode ler
+        // - Admin pode ler todas
+        // - Leitura pública apenas se for a própria transação (para verificar status após criação sem login)
+        //   usando transactionId como validação
+        allow read: if isAuthenticated() && (
+          (resource != null && resource.data != null && (
+            resource.data.userId == request.auth.uid ||
+            resource.data.userEmail == request.auth.token.email
+          )) ||
+          isAdmin()
+        ) || (
+          !isAuthenticated() && 
+          resource != null && 
+          resource.data != null &&
+          resource.data.transactionId == transactionId
+        );
         
         // Permitir atualização:
-        // - Qualquer pessoa pode atualizar (para adicionar dados do PIX após criação)
-        // - Mas apenas campos relacionados ao pagamento
-        // Nota: Funções Firebase usam Admin SDK e bypassam essas regras automaticamente
-        // Em produção, você pode adicionar verificação por token ou email
-        allow update: if true;
+        // - Apenas dono da transação (por userId ou email) ou admin
+        // - Funções Firebase usam Admin SDK e bypassam essas regras automaticamente
+        allow update: if isAuthenticated() && (
+          (resource != null && resource.data != null && (
+            resource.data.userId == request.auth.uid ||
+            resource.data.userEmail == request.auth.token.email
+          )) ||
+          isAdmin()
+        );
         
         // Apenas admin pode deletar
         allow delete: if isAdmin();
@@ -302,7 +352,8 @@
         // Permitir leitura pública de notícias, ou posts para autenticados
         // Esta regra permite que qualquer pessoa leia posts marcados como notícia
         // e usuários autenticados podem ler todos os posts
-        allow read: if resource.data.isNews == true || isAuthenticated();
+        // Verificar se resource.data existe antes de acessar propriedades
+        allow read: if (resource != null && resource.data != null && resource.data.isNews == true) || isAuthenticated();
         
         // Usuários autenticados podem criar posts
         allow create: if isAuthenticated() && 
@@ -346,14 +397,21 @@
         allow create: if isAuthenticated() && 
                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-        // Admin pode atualizar OU qualquer pessoa pode atualizar apenas 'attempts' e 'questions'
+        // Admin pode atualizar tudo
+        // Usuários autenticados podem atualizar apenas 'attempts' e 'questions' 
+        // (para registrar tentativas de simulado compartilhado)
+        // Nota: Esta regra permite que qualquer autenticado atualize, o que pode ser um risco
+        // Se necessário, adicionar validação de token de acesso ou limitação por IP
         allow update: if (isAuthenticated() && 
                           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
                      || 
-                     (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attempts']) ||
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['questions']) ||
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attempts', 'questions']));
+                     (isAuthenticated() &&
+                      resource != null &&
+                      resource.data != null &&
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attempts']) ||
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['questions']) ||
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attempts', 'questions'])));
         // Apenas admin pode deletar
         allow delete: if isAuthenticated() && 
                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&

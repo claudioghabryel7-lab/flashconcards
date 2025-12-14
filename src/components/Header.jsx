@@ -75,13 +75,15 @@ const Header = () => {
           { to: '/simulado', label: 'Simulado', auth: true },
           { to: '/treino-redacao', label: 'Treino Redação', auth: true },
           { to: '/mapas-mentais', label: 'Mapas Mentais', auth: true },
+          { to: '/materia-revisada', label: 'Matéria Revisada', auth: true },
+          { to: '/conteudo-completo', label: 'Conteúdo Completo', auth: true },
         ],
       },
       social: {
         label: 'Social',
         icon: UsersIcon,
         items: [
-          { to: '/ranking', label: 'Ranking', auth: true },
+          { to: '/ranking-simulado', label: 'Ranking de Simulados', auth: true },
           { to: '/feed', label: 'FlashSocial', auth: true },
         ],
       },

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
-import { db } from '../firebase/config'
+import { db, firebaseInitialized } from '../firebase/config'
 import { useAuth } from './useAuth'
 
 // Hook para rastrear status online/offline do usuário
@@ -8,24 +8,37 @@ export const useOnlineStatus = () => {
   const { user } = useAuth()
 
   useEffect(() => {
-    if (!user || !user.uid) return
+    // Verificar se Firebase está inicializado e user tem uid válido
+    if (!firebaseInitialized || !db || !user || !user.uid) return
 
-    const userPresenceRef = doc(db, 'presence', user.uid)
+    // Garantir que uid é uma string
+    const userId = String(user.uid)
+    if (!userId) return
+
+    const userPresenceRef = doc(db, 'presence', userId)
 
     // Marcar como online imediatamente
     const setOnline = async () => {
       try {
         await setDoc(userPresenceRef, {
-          uid: user.uid,
-          email: user.email || '',
-          displayName: user.displayName || user.email || 'Usuário',
+          uid: userId,
+          email: String(user.email || ''),
+          displayName: String(user.displayName || user.email || 'Usuário'),
           status: 'online',
           lastSeen: serverTimestamp(),
           updatedAt: serverTimestamp(),
         }, { merge: true })
-        console.log('Status online atualizado para:', user.uid)
+        
+        // Log apenas em desenvolvimento e garantindo string primitiva
+        if (import.meta.env.DEV) {
+          console.log('Status online atualizado para:', userId)
+        }
       } catch (err) {
-        console.error('Erro ao atualizar status online:', err)
+        // Garantir que o erro seja convertido para string antes de logar
+        const errorMessage = err instanceof Error ? err.message : String(err)
+        if (import.meta.env.DEV) {
+          console.error('Erro ao atualizar status online:', errorMessage)
+        }
       }
     }
 
@@ -39,7 +52,11 @@ export const useOnlineStatus = () => {
         lastSeen: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true }).catch(err => {
-        console.error('Erro no heartbeat:', err)
+        // Garantir que o erro seja convertido para string antes de logar
+        const errorMessage = err instanceof Error ? err.message : String(err)
+        if (import.meta.env.DEV) {
+          console.error('Erro no heartbeat:', errorMessage)
+        }
       })
     }, 15000) // 15 segundos
 
@@ -51,7 +68,9 @@ export const useOnlineStatus = () => {
         status: 'offline',
         lastSeen: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      }, { merge: true }).catch(() => {})
+      }, { merge: true }).catch(() => {
+        // Silenciosamente ignorar erros no cleanup
+      })
     }
   }, [user])
 }

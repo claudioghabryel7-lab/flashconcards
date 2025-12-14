@@ -13,7 +13,6 @@ const Dashboard = lazy(() => import('./routes/Dashboard'))
 const FlashcardView = lazy(() => import('./routes/FlashcardView'))
 const Login = lazy(() => import('./routes/Login'))
 const PublicHome = lazy(() => import('./routes/PublicHome'))
-const Ranking = lazy(() => import('./routes/Ranking'))
 const SetupUser = lazy(() => import('./routes/SetupUser'))
 const FlashQuestoes = lazy(() => import('./routes/FlashQuestoes'))
 const QuestionView = lazy(() => import('./routes/QuestionView'))
@@ -30,6 +29,12 @@ const SimuladoShare = lazy(() => import('./routes/SimuladoShare'))
 const TreinoRedacao = lazy(() => import('./routes/TreinoRedacao'))
 const GuiaEstudos = lazy(() => import('./routes/GuiaEstudos'))
 const TestTrial = lazy(() => import('./routes/TestTrial'))
+const MateriaRevisada = lazy(() => import('./routes/MateriaRevisada'))
+const MateriaRevisadaView = lazy(() => import('./routes/MateriaRevisadaView'))
+const ConteudoCompleto = lazy(() => import('./routes/ConteudoCompleto'))
+const ConteudoCompletoView = lazy(() => import('./routes/ConteudoCompletoView'))
+const RankingSimulado = lazy(() => import('./routes/RankingSimulado'))
+const EditalVerticalizado = lazy(() => import('./routes/EditalVerticalizado'))
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()
@@ -148,14 +153,6 @@ function App() {
             }
           />
           <Route
-            path="/ranking"
-            element={
-              <ProtectedRoute requireCourseSelection>
-                <Ranking />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/flashquestoes"
             element={
               <ProtectedRoute requireCourseSelection>
@@ -192,6 +189,54 @@ function App() {
             element={
               <ProtectedRoute requireCourseSelection>
                 <MindMapView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/materia-revisada"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <MateriaRevisada />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/materia-revisada/:materiaId"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <MateriaRevisadaView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/conteudo-completo"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <ConteudoCompleto />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/conteudo-completo/:conteudoId"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <ConteudoCompletoView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/edital-verticalizado"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <EditalVerticalizado />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ranking-simulado"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <RankingSimulado />
               </ProtectedRoute>
             }
           />
@@ -246,12 +291,16 @@ function App() {
     </div>
     )
   } catch (error) {
-    console.error('Erro no componente App:', error)
+    // Garantir que o erro seja convertido para string antes de logar
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (import.meta.env.DEV) {
+      console.error('Erro no componente App:', errorMessage)
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600 mb-2">Erro ao carregar aplicação</h1>
-          <p className="text-slate-600 dark:text-slate-400 mb-4">{error.message}</p>
+          <p className="text-slate-600 dark:text-slate-400 mb-4">{errorMessage || 'Erro desconhecido'}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-alego-600 text-white rounded-lg hover:bg-alego-700"

@@ -393,7 +393,7 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.`
         return parseFloat(a.accuracy) - parseFloat(b.accuracy)
       })
   }, [materiasStats])
-
+  
   const currentQuestion = questions[currentQuestionIndex]
   const progress = ((currentQuestionIndex + 1) / questions.length) * 100
   const totalAnswered = (stats.correct || 0) + (stats.wrong || 0)
@@ -447,19 +447,19 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.`
                   </div>
                 </div>
               )}
-              
-              {cacheInfo && (
-                <div className="hidden sm:flex items-center gap-3 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 border border-blue-500/30 dark:border-blue-400/30">
-                  {cacheInfo.cached && (
-                    <span className="px-2 py-1 rounded-full bg-green-500/20 text-green-600 dark:text-green-400 text-xs font-bold">
-                      ✅ Cache
-                    </span>
-                  )}
-                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                    👍 {cacheInfo.likes} | 👎 {cacheInfo.dislikes}
+            
+            {cacheInfo && (
+              <div className="hidden sm:flex items-center gap-3 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 border border-blue-500/30 dark:border-blue-400/30">
+                {cacheInfo.cached && (
+                  <span className="px-2 py-1 rounded-full bg-green-500/20 text-green-600 dark:text-green-400 text-xs font-bold">
+                    ✅ Cache
                   </span>
-                </div>
-              )}
+                )}
+                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                  👍 {cacheInfo.likes} | 👎 {cacheInfo.dislikes}
+                </span>
+              </div>
+            )}
             </div>
           </div>
           

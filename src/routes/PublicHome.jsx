@@ -50,12 +50,6 @@ const features = [
     color: 'from-orange-500 to-orange-600'
   },
   {
-    icon: TrophyIcon,
-    title: 'Ranking de Alunos',
-    description: 'Competição saudável com ranking em tempo real. Veja sua posição, horas estudadas e dias de dedicação comparados com outros alunos.',
-    color: 'from-yellow-500 to-yellow-600'
-  },
-  {
     icon: ChartBarIcon,
     title: 'Progresso Completo',
     description: 'Acompanhe seu progresso com calendário visual, streak de estudos, estatísticas por matéria e visualização clara do que já foi estudado.',
@@ -80,7 +74,6 @@ const benefits = [
   'FlashQuestões geradas por IA no estilo das principais bancas',
   'Flash Mentor - IA que responde dúvidas sobre o edital',
   'Bot "Como Estudar?" - guia personalizado de estudos',
-  'Ranking em tempo real com outros alunos',
   'Progresso completo com estatísticas e métricas',
   'Calendário visual e streak de estudos',
   'Explicações detalhadas geradas por IA',
@@ -411,7 +404,7 @@ const PublicHome = () => {
             transition={{ duration: 0.6, delay: 0.2 }}
           >
             Plataforma completa com IA, flashcards inteligentes, questões personalizadas,
-            ranking em tempo real e suporte 24/7 para acelerar sua aprovação.
+            suporte 24/7 para acelerar sua aprovação.
           </motion.p>
           <motion.div 
             className="mt-6 sm:mt-8 flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-center items-center"
