@@ -6146,40 +6146,126 @@ CRÍTICO:
                           }
                           
                           // Processar edital verticalizado
-                          setMessage('📋 Organizando edital verticalizado...')
-                          const verticalizadoPrompt = `Você é um especialista em organizar editais de concursos públicos de forma verticalizada para estudos.
+                          setMessage('📋 Organizando edital verticalizado em formato de tabela...')
+                          const verticalizadoPrompt = `Você é um especialista em organizar editais de concursos públicos em formato TABULAR VERTICALIZADO para estudos.
 
-Analise o seguinte texto do edital e organize-o em seções e subseções de forma clara e estruturada. O formato deve ser técnico e completo, mostrando toda a informação de forma organizada.
+Analise o seguinte texto do edital e organize-o em DISCIPLINAS com seus tópicos hierárquicos. O formato deve ser uma TABELA com colunas: DISCIPLINAS, FlashCards, Questões, Dia, Revisões.
 
 Texto do edital:
 ${editalVerticalizadoText.substring(0, 100000)} ${editalVerticalizadoText.length > 100000 ? '... (texto truncado)' : ''}
 
-Organize o edital em um formato JSON com a seguinte estrutura:
+TAREFA CRÍTICA:
+Extraia do edital TODAS as disciplinas e seus tópicos organizados hierarquicamente. O formato final será uma TABELA onde:
+- Cada disciplina aparece em uma linha destacada em laranja
+- Abaixo de cada disciplina, aparecem TODOS os tópicos e sub-tópicos
+- Os tópicos devem manter a numeração original do edital (ex: 1.1, 1.1.2, 1.2.5.1)
+- A indentação será baseada no nível hierárquico
+
+Organize o edital em um formato JSON com a seguinte estrutura EXATA:
+
 {
-  "titulo": "Título do Edital",
-  "descricao": "Breve descrição",
-  "secoes": [
+  "titulo": "EDITAL VERTICALIZADO [NOME DO CONCURSO]",
+  "descricao": "Breve descrição opcional",
+  "disciplinas": [
     {
-      "titulo": "Nome da Seção",
-      "subtitulo": "Subtítulo opcional",
-      "conteudo": "Conteúdo HTML formatado da seção",
-      "subsecoes": [
+      "nome": "DIREITO ADMINISTRATIVO",
+      "totalQuestoes": 10,
+      "topicos": [
         {
-          "titulo": "Nome da Subseção",
-          "conteudo": "Conteúdo HTML formatado"
+          "numero": "1.1",
+          "nome": "Natureza jurídica e conceito",
+          "nivel": 0,
+          "flashcards": false,
+          "questoes": false,
+          "dia": false,
+          "revisoes": false
+        },
+        {
+          "numero": "1.1.2",
+          "nome": "Objeto e abrangência",
+          "nivel": 1,
+          "flashcards": false,
+          "questoes": false,
+          "dia": false,
+          "revisoes": false
+        },
+        {
+          "numero": "1.1.3",
+          "nome": "Princípios constitucionais do Direito Administrativo Brasileiro",
+          "nivel": 1,
+          "flashcards": false,
+          "questoes": false,
+          "dia": false,
+          "revisoes": false
+        },
+        {
+          "numero": "1.2",
+          "nome": "Administração Pública",
+          "nivel": 0,
+          "flashcards": false,
+          "questoes": false,
+          "dia": false,
+          "revisoes": false
+        },
+        {
+          "numero": "1.2.1",
+          "nome": "Conceito",
+          "nivel": 1,
+          "flashcards": false,
+          "questoes": false,
+          "dia": false,
+          "revisoes": false
+        },
+        {
+          "numero": "1.2.5",
+          "nome": "Organização Administrativa",
+          "nivel": 0,
+          "flashcards": false,
+          "questoes": false,
+          "dia": false,
+          "revisoes": false
+        },
+        {
+          "numero": "1.2.5.1",
+          "nome": "Centralização, descentralização, desconcentração",
+          "nivel": 1,
+          "flashcards": false,
+          "questoes": false,
+          "dia": false,
+          "revisoes": false
+        },
+        {
+          "numero": "1.2.5.2",
+          "nome": "Administração direta, Administração indireta e Entidades Paraestatais",
+          "nivel": 1,
+          "flashcards": false,
+          "questoes": false,
+          "dia": false,
+          "revisoes": false
         }
       ]
     }
   ]
 }
 
-REGRAS CRÍTICAS:
-- Retorne APENAS o JSON válido
-- NÃO inclua markdown (sem código markdown)
-- NÃO inclua explicações antes ou depois
-- NÃO inclua texto como "Por favor" ou "Aqui está"
-- Comece diretamente com { e termine com }
-- O JSON deve ser válido e parseável`
+REGRAS CRÍTICAS E OBRIGATÓRIAS:
+1. Extraia TODAS as disciplinas mencionadas no edital
+2. Para cada disciplina, extraia TODOS os tópicos e sub-tópicos na ordem que aparecem no edital
+3. Mantenha a numeração EXATA do edital (ex: 1.1, 1.1.2, 1.2.5.1) - NÃO invente numeração
+4. O campo "nivel" deve refletir a hierarquia baseada na numeração:
+   - nivel 0: tópicos principais (ex: 1.1, 1.2, 1.3)
+   - nivel 1: primeiro sub-nível (ex: 1.1.2, 1.2.5)
+   - nivel 2: segundo sub-nível (ex: 1.2.5.1, 1.2.5.2)
+   - nivel 3: terceiro sub-nível (ex: 1.2.5.1.1)
+5. O campo "nome" deve conter APENAS o texto do tópico, SEM a numeração no início
+6. O campo "numero" deve conter a numeração completa (ex: "1.1", "1.1.2", "1.2.5.1")
+7. Os campos flashcards, questoes, dia, revisoes devem ser SEMPRE false inicialmente
+8. O campo "totalQuestoes" deve ser o número total de questões da disciplina mencionado no edital (se houver)
+9. Se o edital não mencionar número de questões, use null ou omita o campo
+10. Retorne APENAS o JSON válido, sem markdown (sem \`\`\`json), sem explicações, sem texto antes ou depois
+11. Comece diretamente com { e termine com }
+12. O JSON deve ser válido e parseável
+13. IMPORTANTE: Se o edital tiver tópicos sem numeração, crie uma numeração lógica baseada na ordem e hierarquia`
 
                           const verticalizadoResult = await model.generateContent(verticalizadoPrompt)
                           const verticalizadoResponse = await verticalizadoResult.response

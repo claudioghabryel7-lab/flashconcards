@@ -145,13 +145,13 @@
         match /editalVerticalizado/{docId} {
           // Permitir leitura para usuários autenticados
           allow read: if isAuthenticated();
-          // Apenas admin pode criar, atualizar e deletar
+          // Apenas admin pode criar e deletar
           allow create: if isAuthenticated() && 
                         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-          allow update: if isAuthenticated() && 
-                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          // Permitir que usuários autenticados atualizem (para marcar checkboxes dia, horas, revisoes)
+          // Admin pode atualizar tudo
+          allow update: if isAuthenticated();
           allow delete: if isAuthenticated() && 
                         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';

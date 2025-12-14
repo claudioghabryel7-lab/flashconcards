@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { doc, onSnapshot, getDoc } from 'firebase/firestore'
+import { doc, onSnapshot, getDoc, updateDoc } from 'firebase/firestore'
 import {
   DocumentTextIcon,
   ChevronLeftIcon,
@@ -76,6 +76,33 @@ const EditalVerticalizado = () => {
     return () => unsub()
   }, [courseId])
 
+  // Função para atualizar checkbox do tópico
+  const handleToggleCheckbox = async (disciplinaIdx, topicoIdx, campo) => {
+    if (!courseId || !editalVerticalizado?.disciplinas) return
+
+    try {
+      const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+      const disciplinas = [...editalVerticalizado.disciplinas]
+      const topico = disciplinas[disciplinaIdx].topicos[topicoIdx]
+      
+      // Alternar o valor do checkbox
+      const novoValor = !topico[campo]
+      
+      // Atualizar o tópico
+      disciplinas[disciplinaIdx].topicos[topicoIdx] = {
+        ...topico,
+        [campo]: novoValor
+      }
+
+      // Atualizar no Firestore
+      await updateDoc(editalRef, {
+        disciplinas: disciplinas
+      })
+    } catch (error) {
+      console.error('Erro ao atualizar checkbox:', error)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -120,28 +147,29 @@ const EditalVerticalizado = () => {
   }
 
   return (
-    <div className="min-h-screen py-6">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen py-4 sm:py-6">
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-4 sm:mb-6 md:mb-8">
           <Link
             to="/dashboard"
-            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 mb-4"
+            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 mb-3 sm:mb-4 text-sm sm:text-base"
           >
-            <ChevronLeftIcon className="h-5 w-5" />
-            Voltar ao Dashboard
+            <ChevronLeftIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+            <span className="hidden sm:inline">Voltar ao Dashboard</span>
+            <span className="sm:hidden">Voltar</span>
           </Link>
           
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl">
-              <DocumentTextIcon className="h-8 w-8 text-white" />
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg sm:rounded-xl flex-shrink-0">
+              <DocumentTextIcon className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
             </div>
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white break-words">
                 {editalVerticalizado.titulo || 'Edital Verticalizado'}
               </h1>
               {courseName && (
-                <p className="text-slate-600 dark:text-slate-400 mt-1">
+                <p className="text-xs sm:text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1 break-words">
                   {courseName}
                 </p>
               )}
@@ -150,20 +178,136 @@ const EditalVerticalizado = () => {
         </div>
 
         {/* Conteúdo Principal */}
-        <div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6 sm:p-8`}>
+        <div className={`bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-3 sm:p-4 md:p-6 lg:p-8`}>
           {editalVerticalizado.descricao && (
-            <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-700">
-              <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+            <div className="mb-4 sm:mb-6 pb-4 sm:pb-6 border-b border-slate-200 dark:border-slate-700">
+              <p className="text-xs sm:text-sm md:text-base text-slate-600 dark:text-slate-400 leading-relaxed break-words">
                 {editalVerticalizado.descricao}
               </p>
             </div>
           )}
 
-          {/* Seções Organizadas */}
-          {editalVerticalizado.secoes && editalVerticalizado.secoes.length > 0 ? (
+          {/* Tabela de Edital Verticalizado */}
+          {editalVerticalizado?.disciplinas && Array.isArray(editalVerticalizado.disciplinas) && editalVerticalizado.disciplinas.length > 0 ? (
+            <div className="overflow-x-auto -mx-3 sm:-mx-4 md:mx-0 scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-slate-200 dark:scrollbar-track-slate-700">
+              <div className="min-w-full inline-block">
+                <table className="w-full min-w-[600px] sm:min-w-[640px] border-collapse border border-black dark:border-slate-600 bg-white dark:bg-slate-800 text-xs sm:text-sm">
+                  <thead>
+                    <tr className="bg-blue-700 dark:bg-blue-800 text-white">
+                      <th className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-left font-bold text-xs sm:text-sm">
+                        DISCIPLINAS
+                      </th>
+                      <th className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-center font-bold text-xs sm:text-sm whitespace-nowrap">
+                        FlashCards
+                      </th>
+                      <th className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-center font-bold text-xs sm:text-sm whitespace-nowrap">
+                        Questões
+                      </th>
+                      <th className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-center font-bold text-xs sm:text-sm whitespace-nowrap">
+                        Dia
+                      </th>
+                      <th className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-center font-bold text-xs sm:text-sm whitespace-nowrap">
+                        Revisões
+                      </th>
+                    </tr>
+                  </thead>
+                <tbody>
+                  {editalVerticalizado.disciplinas.map((disciplina, idx) => (
+                    <React.Fragment key={idx}>
+                      {/* Linha principal da disciplina (destaque laranja) */}
+                      <tr className="bg-orange-500 dark:bg-orange-600 text-white font-bold">
+                        <td className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-xs sm:text-sm md:text-base">
+                          <span className="break-words">{disciplina.nome || 'Disciplina sem nome'}</span>
+                          {disciplina.totalQuestoes && (
+                            <span className="block sm:inline sm:ml-1 text-xs sm:text-sm">
+                              ({disciplina.totalQuestoes} Questões)
+                            </span>
+                          )}
+                        </td>
+                        <td className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-center"></td>
+                        <td className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-center"></td>
+                        <td className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-center"></td>
+                        <td className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-center"></td>
+                      </tr>
+                      
+                      {/* Tópicos da disciplina */}
+                      {disciplina.topicos && Array.isArray(disciplina.topicos) && disciplina.topicos.length > 0 && disciplina.topicos
+                        .filter(topico => topico && (topico.nome || topico.numero)) // Filtrar tópicos inválidos
+                        .map((topico, topicoIdx) => {
+                          if (!topico) return null // Proteção extra
+                          
+                          // Calcular indentação baseada na numeração (ex: 1.1 = nivel 0, 1.1.2 = nivel 1, 1.2.5.1 = nivel 2)
+                          let nivelCalculado = topico.nivel || 0
+                          if (topico.numero && typeof topico.numero === 'string') {
+                            // Contar quantos níveis há na numeração (1.1 = 2 partes = nivel 0, 1.1.2 = 3 partes = nivel 1)
+                            const partes = topico.numero.split('.').filter(p => p.trim())
+                            nivelCalculado = Math.max(0, partes.length - 2)
+                          }
+                          // Ajustar indentação responsiva
+                          const basePadding = 8
+                          const nivelPadding = nivelCalculado * 12
+                          const paddingLeft = basePadding + nivelPadding
+                          
+                          return (
+                            <tr key={`${idx}-${topicoIdx}`} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 bg-white dark:bg-slate-800">
+                              <td 
+                                className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 text-slate-900 dark:text-white text-xs sm:text-sm break-words"
+                                style={{ 
+                                  paddingLeft: `${paddingLeft}px`
+                                }}
+                              >
+                                {topico.numero && <span className="font-medium whitespace-nowrap">{topico.numero} </span>}
+                                <span className="break-words">{topico.nome || ''}</span>
+                              </td>
+                              <td className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={!!topico.flashcards}
+                                  onChange={() => handleToggleCheckbox(idx, topicoIdx, 'flashcards')}
+                                  className="w-4 h-4 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white dark:bg-slate-700 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-slate-800 focus:ring-2 dark:border-slate-600 cursor-pointer touch-manipulation"
+                                  style={{ touchAction: 'manipulation' }}
+                                />
+                              </td>
+                              <td className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={!!topico.questoes}
+                                  onChange={() => handleToggleCheckbox(idx, topicoIdx, 'questoes')}
+                                  className="w-4 h-4 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white dark:bg-slate-700 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-slate-800 focus:ring-2 dark:border-slate-600 cursor-pointer touch-manipulation"
+                                  style={{ touchAction: 'manipulation' }}
+                                />
+                              </td>
+                              <td className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={!!topico.dia}
+                                  onChange={() => handleToggleCheckbox(idx, topicoIdx, 'dia')}
+                                  className="w-4 h-4 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white dark:bg-slate-700 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-slate-800 focus:ring-2 dark:border-slate-600 cursor-pointer touch-manipulation"
+                                  style={{ touchAction: 'manipulation' }}
+                                />
+                              </td>
+                              <td className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={!!topico.revisoes}
+                                  onChange={() => handleToggleCheckbox(idx, topicoIdx, 'revisoes')}
+                                  className="w-4 h-4 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white dark:bg-slate-700 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-slate-800 focus:ring-2 dark:border-slate-600 cursor-pointer touch-manipulation"
+                                  style={{ touchAction: 'manipulation' }}
+                                />
+                              </td>
+                            </tr>
+                          )
+                        })}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+              </div>
+            </div>
+          ) : editalVerticalizado?.secoes && Array.isArray(editalVerticalizado.secoes) && editalVerticalizado.secoes.length > 0 ? (
             <div className="space-y-6">
               {editalVerticalizado.secoes.map((secao, idx) => (
-                <div
+<div
                   key={idx}
                   className="border-l-4 border-indigo-500 pl-6 py-4 bg-slate-50 dark:bg-slate-700/50 rounded-r-lg"
                 >
@@ -214,7 +358,7 @@ const EditalVerticalizado = () => {
                 </div>
               ))}
             </div>
-          ) : editalVerticalizado.conteudo ? (
+          ) : editalVerticalizado?.conteudo ? (
             <div className="prose prose-slate dark:prose-invert max-w-none">
               <div
                 className="text-slate-700 dark:text-slate-300 leading-relaxed"
@@ -232,7 +376,7 @@ const EditalVerticalizado = () => {
 
           {/* Footer */}
           {editalVerticalizado.updatedAt && (
-            <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
+            <div className="mt-4 sm:mt-6 md:mt-8 pt-4 sm:pt-6 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
               Última atualização: {editalVerticalizado.updatedAt.toDate?.().toLocaleDateString('pt-BR') || 'Data não disponível'}
             </div>
           )}
