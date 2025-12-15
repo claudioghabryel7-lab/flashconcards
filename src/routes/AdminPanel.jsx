@@ -39,6 +39,7 @@ import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import * as pdfjsLib from 'pdfjs-dist'
+import { jsonrepair } from 'jsonrepair'
 
 const MATERIAS = [
   'Português',
@@ -2593,6 +2594,76 @@ REGRAS CRÍTICAS:
     }
   }
 
+  // Função auxiliar para encontrar curso por nome ou competição
+  const findCourseByName = async (searchTerm) => {
+    try {
+      const coursesRef = collection(db, 'courses')
+      const coursesSnapshot = await getDocs(coursesRef)
+      const allCourses = coursesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      
+      const searchLower = searchTerm.toLowerCase()
+      const found = allCourses.find(course => {
+        const name = (course.name || '').toLowerCase()
+        const competition = (course.competition || '').toLowerCase()
+        return name.includes(searchLower) || competition.includes(searchLower)
+      })
+      
+      return found || null
+    } catch (err) {
+      console.error('Erro ao buscar curso:', err)
+      return null
+    }
+  }
+
+  // Função específica para deletar curso de VILA VELHA/ES ACE
+  const deleteVilaVelhaCourse = async () => {
+    const searchTerms = ['vila velha', 'endemias', 'ACE', 'AGENTE DE COMBATE']
+    
+    try {
+      setMessage('🔍 Procurando curso de VILA VELHA/ES ACE...')
+      
+      const coursesRef = collection(db, 'courses')
+      const coursesSnapshot = await getDocs(coursesRef)
+      const allCourses = coursesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      
+      // Procurar curso que contenha algum dos termos
+      const foundCourse = allCourses.find(course => {
+        const name = (course.name || '').toLowerCase()
+        const competition = (course.competition || '').toLowerCase()
+        
+        return searchTerms.some(term => 
+          name.includes(term.toLowerCase()) || 
+          competition.includes(term.toLowerCase())
+        )
+      })
+      
+      if (!foundCourse) {
+        setMessage('❌ Curso de VILA VELHA/ES ACE não encontrado.')
+        return
+      }
+      
+      const confirmMessage = `⚠️ ATENÇÃO: Encontrado curso:\n\nNome: ${foundCourse.name || 'Sem nome'}\nConcurso: ${foundCourse.competition || 'Sem concurso'}\nID: ${foundCourse.id}\n\nDeseja DELETAR este curso COMPLETAMENTE?\n\nIsso vai remover TODOS os dados sem deixar resquícios.\n\nEsta ação NÃO pode ser desfeita!`
+      
+      if (!window.confirm(confirmMessage)) {
+        setMessage('❌ Operação cancelada.')
+        return
+      }
+      
+      // Chamar função de deleção completa
+      await deleteCourse(foundCourse.id)
+      setMessage(`✅ Curso "${foundCourse.name || foundCourse.competition}" (${foundCourse.id}) deletado completamente!`)
+    } catch (err) {
+      console.error('Erro ao deletar curso de VILA VELHA:', err)
+      setMessage(`❌ Erro ao deletar curso: ${err.message}`)
+    }
+  }
+
   const deleteCourse = async (courseId) => {
     console.log('🗑️ deleteCourse chamado com courseId:', courseId, 'tipo:', typeof courseId)
     
@@ -2602,18 +2673,35 @@ REGRAS CRÍTICAS:
       return
     }
     
-    const confirmMessage = `⚠️ ATENÇÃO: Deseja excluir este curso DEFINITIVAMENTE?\n\nIsso vai DELETAR:\n- Todos os flashcards do curso\n- Todos os prompts (edital e questões)\n- Todas as matérias do curso\n- Todo o progresso dos usuários neste curso\n\nEsta ação NÃO pode ser desfeita!`
+    const confirmMessage = `⚠️ ATENÇÃO: Deseja excluir este curso DEFINITIVAMENTE?\n\nIsso vai DELETAR:\n- Todos os flashcards do curso\n- Todos os prompts (edital, questões, unified)\n- Todas as matérias do curso\n- Edital verticalizado\n- Matérias revisadas\n- Conteúdos completos\n- Configurações do curso\n- Todo o progresso dos usuários neste curso\n- Todas as referências nos perfis de usuários\n\nEsta ação NÃO pode ser desfeita!`
     
     if (!window.confirm(confirmMessage)) {
       console.log('❌ Usuário cancelou a exclusão')
       return
     }
 
+    // Função auxiliar para deletar em batches (evita travamento)
+    const deleteInBatches = async (docs, batchSize = 50, itemName = 'itens') => {
+      let deleted = 0
+      for (let i = 0; i < docs.length; i += batchSize) {
+        const batch = docs.slice(i, i + batchSize)
+        const deletePromises = batch.map(doc => deleteDoc(doc.ref))
+        await Promise.all(deletePromises)
+        deleted += batch.length
+        // Atualizar mensagem e permitir que UI responda
+        setMessage(`🗑️ Deletando ${itemName}... ${deleted}/${docs.length}`)
+        // Pequeno delay para não bloquear UI
+        await new Promise(resolve => setTimeout(resolve, 50))
+      }
+      return deleted
+    }
+
     try {
-      setMessage('🗑️ Deletando dados do curso...')
+      setMessage('🗑️ Preparando deleção do curso...')
       console.log('🗑️ Iniciando exclusão do curso:', courseId)
       
       // 1. Deletar todos os flashcards do curso
+      setMessage('🗑️ Deletando flashcards do curso...')
       console.log('🗑️ Deletando flashcards do curso...')
       const cardsRef = collection(db, 'flashcards')
       const cardsQuery = query(cardsRef, where('courseId', '==', courseId))
@@ -2621,22 +2709,88 @@ REGRAS CRÍTICAS:
       const cardsToDelete = cardsSnapshot.docs
       
       if (cardsToDelete.length > 0) {
-        const deleteCardsPromises = cardsToDelete.map(cardDoc => deleteDoc(cardDoc.ref))
-        await Promise.all(deleteCardsPromises)
+        await deleteInBatches(cardsToDelete, 50, 'flashcards')
         console.log(`✅ ${cardsToDelete.length} flashcard(s) deletado(s)`)
       }
       
-      // 2. Deletar prompts do curso (edital e questões)
+      // 2. Deletar TODOS os prompts do curso (subcoleção completa)
+      setMessage('🗑️ Deletando prompts do curso...')
       console.log('🗑️ Deletando prompts do curso...')
       try {
-        const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
-        await deleteDoc(editalRef).catch(() => console.log('⚠️ Prompt edital não existe'))
+        const promptsRef = collection(db, 'courses', courseId, 'prompts')
+        const promptsSnapshot = await getDocs(promptsRef)
+        const promptsToDelete = promptsSnapshot.docs
         
-        const questoesRef = doc(db, 'courses', courseId, 'prompts', 'questoes')
-        await deleteDoc(questoesRef).catch(() => console.log('⚠️ Prompt questões não existe'))
-        console.log('✅ Prompts deletados')
+        if (promptsToDelete.length > 0) {
+          await deleteInBatches(promptsToDelete, 50, 'prompts')
+          console.log(`✅ ${promptsToDelete.length} prompt(s) deletado(s)`)
+        }
       } catch (promptErr) {
         console.warn('⚠️ Erro ao deletar prompts:', promptErr)
+      }
+      
+      // 2.1. Deletar edital verticalizado (subcoleção)
+      setMessage('🗑️ Deletando edital verticalizado...')
+      console.log('🗑️ Deletando edital verticalizado...')
+      try {
+        const editalVerticalizadoRef = collection(db, 'courses', courseId, 'editalVerticalizado')
+        const editalVerticalizadoSnapshot = await getDocs(editalVerticalizadoRef)
+        const editalVerticalizadoToDelete = editalVerticalizadoSnapshot.docs
+        
+        if (editalVerticalizadoToDelete.length > 0) {
+          await deleteInBatches(editalVerticalizadoToDelete, 50, 'edital verticalizado')
+          console.log(`✅ ${editalVerticalizadoToDelete.length} edital(is) verticalizado(s) deletado(s)`)
+        }
+      } catch (editalErr) {
+        console.warn('⚠️ Erro ao deletar edital verticalizado:', editalErr)
+      }
+      
+      // 2.2. Deletar matérias revisadas (subcoleção)
+      setMessage('🗑️ Deletando matérias revisadas...')
+      console.log('🗑️ Deletando matérias revisadas...')
+      try {
+        const materiasRevisadasRef = collection(db, 'courses', courseId, 'materiasRevisadas')
+        const materiasRevisadasSnapshot = await getDocs(materiasRevisadasRef)
+        const materiasRevisadasToDelete = materiasRevisadasSnapshot.docs
+        
+        if (materiasRevisadasToDelete.length > 0) {
+          await deleteInBatches(materiasRevisadasToDelete, 50, 'matérias revisadas')
+          console.log(`✅ ${materiasRevisadasToDelete.length} matéria(s) revisada(s) deletada(s)`)
+        }
+      } catch (materiasErr) {
+        console.warn('⚠️ Erro ao deletar matérias revisadas:', materiasErr)
+      }
+      
+      // 2.3. Deletar conteúdos completos (subcoleção)
+      setMessage('🗑️ Deletando conteúdos completos...')
+      console.log('🗑️ Deletando conteúdos completos...')
+      try {
+        const conteudosCompletosRef = collection(db, 'courses', courseId, 'conteudosCompletos')
+        const conteudosCompletosSnapshot = await getDocs(conteudosCompletosRef)
+        const conteudosCompletosToDelete = conteudosCompletosSnapshot.docs
+        
+        if (conteudosCompletosToDelete.length > 0) {
+          await deleteInBatches(conteudosCompletosToDelete, 50, 'conteúdos completos')
+          console.log(`✅ ${conteudosCompletosToDelete.length} conteúdo(s) completo(s) deletado(s)`)
+        }
+      } catch (conteudosErr) {
+        console.warn('⚠️ Erro ao deletar conteúdos completos:', conteudosErr)
+      }
+      
+      // 2.4. Deletar configurações (subcoleção)
+      setMessage('🗑️ Deletando configurações do curso...')
+      console.log('🗑️ Deletando configurações do curso...')
+      try {
+        const configRef = collection(db, 'courses', courseId, 'config')
+        const configSnapshot = await getDocs(configRef)
+        const configToDelete = configSnapshot.docs
+        
+        if (configToDelete.length > 0) {
+          await deleteInBatches(configToDelete, 50, 'configurações')
+          console.log(`✅ ${configToDelete.length} configuração(ões) deletada(s)`)
+        }
+      } catch (configErr) {
+        console.warn('⚠️ Erro ao deletar configurações:', configErr)
       }
       
       // 3. Deletar matérias do curso (subcoleção)
@@ -2656,6 +2810,7 @@ REGRAS CRÍTICAS:
       }
       
       // 4. Deletar progresso dos usuários relacionado ao curso
+      setMessage('🗑️ Deletando progresso dos usuários...')
       console.log('🗑️ Deletando progresso dos usuários...')
       try {
         const progressRef = collection(db, 'progress')
@@ -2666,8 +2821,7 @@ REGRAS CRÍTICAS:
         })
         
         if (progressToDelete.length > 0) {
-          const deleteProgressPromises = progressToDelete.map(progressDoc => deleteDoc(progressDoc.ref))
-          await Promise.all(deleteProgressPromises)
+          await deleteInBatches(progressToDelete, 50, 'progresso')
           console.log(`✅ ${progressToDelete.length} registro(s) de progresso deletado(s)`)
         }
       } catch (progressErr) {
@@ -2675,6 +2829,7 @@ REGRAS CRÍTICAS:
       }
       
       // 5. Deletar estatísticas de questões relacionadas ao curso
+      setMessage('🗑️ Deletando estatísticas de questões...')
       console.log('🗑️ Deletando estatísticas de questões...')
       try {
         const questoesStatsRef = collection(db, 'questoesStats')
@@ -2685,8 +2840,7 @@ REGRAS CRÍTICAS:
         })
         
         if (statsToDelete.length > 0) {
-          const deleteStatsPromises = statsToDelete.map(statDoc => deleteDoc(statDoc.ref))
-          await Promise.all(deleteStatsPromises)
+          await deleteInBatches(statsToDelete, 50, 'estatísticas')
           console.log(`✅ ${statsToDelete.length} estatística(s) deletada(s)`)
         }
       } catch (statsErr) {
@@ -2694,6 +2848,7 @@ REGRAS CRÍTICAS:
       }
       
       // 6. Remover referências do curso nos perfis de usuários (purchasedCourses e selectedCourseId)
+      setMessage('🗑️ Atualizando perfis de usuários...')
       console.log('🗑️ Removendo referências do curso nos perfis de usuários...')
       try {
         const usersRef = collection(db, 'users')
@@ -2706,25 +2861,33 @@ REGRAS CRÍTICAS:
         })
         
         if (usersToUpdate.length > 0) {
-          const updatePromises = usersToUpdate.map(userDoc => {
-            const data = userDoc.data()
-            const purchasedCourses = (data.purchasedCourses || []).filter(id => id !== courseId)
-            const selectedCourseId = data.selectedCourseId === courseId || String(data.selectedCourseId) === String(courseId) 
-              ? null // Resetar para ALEGO padrão se estava selecionado
-              : data.selectedCourseId
-            
-            const updateData = {
-              purchasedCourses: purchasedCourses
-            }
-            
-            // Só atualizar selectedCourseId se estava selecionado
-            if (selectedCourseId === null && data.selectedCourseId === courseId) {
-              updateData.selectedCourseId = null
-            }
-            
-            return updateDoc(userDoc.ref, updateData)
-          })
-          await Promise.all(updatePromises)
+          // Atualizar em batches para não travar
+          let updated = 0
+          for (let i = 0; i < usersToUpdate.length; i += 20) {
+            const batch = usersToUpdate.slice(i, i + 20)
+            const updatePromises = batch.map(userDoc => {
+              const data = userDoc.data()
+              const purchasedCourses = (data.purchasedCourses || []).filter(id => id !== courseId)
+              const selectedCourseId = data.selectedCourseId === courseId || String(data.selectedCourseId) === String(courseId) 
+                ? null // Resetar para ALEGO padrão se estava selecionado
+                : data.selectedCourseId
+              
+              const updateData = {
+                purchasedCourses: purchasedCourses
+              }
+              
+              // Só atualizar selectedCourseId se estava selecionado
+              if (selectedCourseId === null && data.selectedCourseId === courseId) {
+                updateData.selectedCourseId = null
+              }
+              
+              return updateDoc(userDoc.ref, updateData)
+            })
+            await Promise.all(updatePromises)
+            updated += batch.length
+            setMessage(`🗑️ Atualizando perfis de usuários... ${updated}/${usersToUpdate.length}`)
+            await new Promise(resolve => setTimeout(resolve, 50))
+          }
           console.log(`✅ ${usersToUpdate.length} perfil(is) de usuário atualizado(s)`)
         }
       } catch (userErr) {
@@ -4146,11 +4309,17 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       setMateriaRevisadaProgress(`📖 Edital encontrado (${editalText.length} caracteres).\n🔄 Gerando conteúdo técnico completo para "${materia}" baseado no edital...`)
 
       // 2. Buscar prompt unificado para contexto
-      const unifiedRef = doc(db, 'courses', courseId, 'prompts', 'unified')
-      const unifiedDoc = await getDoc(unifiedRef)
-      const unifiedData = unifiedDoc.exists() ? unifiedDoc.data() : {}
-      const banca = unifiedData.banca || ''
-      const concursoName = unifiedData.concursoName || ''
+    const unifiedRef = doc(db, 'courses', courseId, 'prompts', 'unified')
+    const unifiedDoc = await getDoc(unifiedRef)
+    const unifiedData = unifiedDoc.exists() ? unifiedDoc.data() : {}
+    const banca = unifiedData.banca || ''
+    const concursoName = unifiedData.concursoName || ''
+
+    // Nome do curso para exibir no conteúdo (evitar citar concurso/banca no texto final)
+    const courseRef = doc(db, 'courses', courseId)
+    const courseSnapshot = await getDoc(courseRef)
+    const courseData = courseSnapshot.exists() ? courseSnapshot.data() : {}
+    const courseName = courseData.name || courseData.competition || courseId
 
       // 3. Chamar IA para gerar conteúdo técnico completo
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
@@ -4174,25 +4343,29 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
             }
           })
 
-          const prompt = `Você é um especialista em criar conteúdo técnico completo e detalhado para concursos públicos.
+          const prompt = `Você é um especialista em criar conteúdo técnico completo e detalhado para o nosso curso "${courseName}".
 
+CONTEXTO SOMENTE PARA NIVELAMENTO (NÃO CITE ESTES NOMES NO CONTEÚDO FINAL):
 ${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n` : ''}MATÉRIA: ${materia}
 
-EDITAL DO CONCURSO (BASE COMPLETA):
+NUNCA mencione concurso, prefeitura, banca ou órgão no texto. O material deve parecer feito apenas para o curso "${courseName}".
+
+EDITAL DE REFERÊNCIA (BASE COMPLETA):
 ${editalText.substring(0, 100000)}${editalText.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}
 
 TAREFA CRÍTICA:
-Crie um conteúdo técnico COMPLETO e DETALHADO sobre "${materia}" baseado EXCLUSIVAMENTE no edital acima.
+Crie um conteúdo técnico COMPLETO e DETALHADO sobre "${materia}" baseado EXCLUSIVAMENTE no edital acima, mas apresentando como material oficial do curso "${courseName}".
 
 REGRAS OBRIGATÓRIAS:
 1. Baseie-se SEMPRE e EXCLUSIVAMENTE no conteúdo do edital
 2. O conteúdo deve ser técnico, completo e detalhado
 3. Inclua leis, artigos, súmulas, entendimentos jurisprudenciais relevantes mencionados no edital
 4. Organize o conteúdo de forma didática e clara
-5. Use linguagem técnica e formal, adequada para concursos públicos
+5. Use linguagem técnica e formal
 6. Se o edital mencionar leis específicas, inclua os artigos relevantes
 7. Se o edital mencionar súmulas ou entendimentos, inclua-os
 8. O conteúdo deve ser abrangente e cobrir TODOS os aspectos da matéria mencionados no edital
+9. Não escreva frases do tipo "para o concurso", "para a banca", "para a prefeitura" — fale apenas como material do curso "${courseName}"
 
 ESTRUTURA DO CONTEÚDO:
 - Introdução à matéria
@@ -4387,6 +4560,16 @@ CRÍTICO:
       const banca = unifiedData.banca || ''
       const concursoName = unifiedData.concursoName || ''
 
+      const courseRef = doc(db, 'courses', courseId)
+      const courseSnapshot = await getDoc(courseRef)
+      const courseData = courseSnapshot.exists() ? courseSnapshot.data() : {}
+      const courseName = courseData.name || courseData.competition || courseId
+
+      const courseRef = doc(db, 'courses', courseId)
+      const courseSnapshot = await getDoc(courseRef)
+      const courseData = courseSnapshot.exists() ? courseSnapshot.data() : {}
+      const courseName = courseData.name || courseData.competition || courseId
+
       // 3. Chamar IA para identificar todas as matérias do edital
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
       if (!apiKey) {
@@ -4538,25 +4721,29 @@ CRÍTICO:
                 }
               })
 
-              const prompt = `Você é um especialista em criar conteúdo técnico completo e detalhado para concursos públicos.
+              const prompt = `Você é um especialista em criar conteúdo técnico completo e detalhado para o nosso curso "${courseName}".
 
+CONTEXTO SOMENTE PARA NIVELAMENTO (NÃO CITE ESTES NOMES NO CONTEÚDO FINAL):
 ${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n` : ''}MATÉRIA: ${materia}
 
-EDITAL DO CONCURSO (BASE COMPLETA):
+NUNCA mencione concurso, prefeitura, banca ou órgão no texto. O material deve parecer feito apenas para o curso "${courseName}".
+
+EDITAL DE REFERÊNCIA (BASE COMPLETA):
 ${editalText.substring(0, 100000)}${editalText.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}
 
 TAREFA CRÍTICA:
-Crie um conteúdo técnico COMPLETO e DETALHADO sobre "${materia}" baseado EXCLUSIVAMENTE no edital acima.
+Crie um conteúdo técnico COMPLETO e DETALHADO sobre "${materia}" baseado EXCLUSIVAMENTE no edital acima, mas apresentando como material oficial do curso "${courseName}".
 
 REGRAS OBRIGATÓRIAS:
 1. Baseie-se SEMPRE e EXCLUSIVAMENTE no conteúdo do edital
 2. O conteúdo deve ser técnico, completo e detalhado
 3. Inclua leis, artigos, súmulas, entendimentos jurisprudenciais relevantes mencionados no edital
 4. Organize o conteúdo de forma didática e clara
-5. Use linguagem técnica e formal, adequada para concursos públicos
+5. Use linguagem técnica e formal
 6. Se o edital mencionar leis específicas, inclua os artigos relevantes
 7. Se o edital mencionar súmulas ou entendimentos, inclua-os
 8. O conteúdo deve ser abrangente e cobrir TODOS os aspectos da matéria mencionados no edital
+9. Não escreva frases do tipo "para o concurso", "para a banca", "para a prefeitura" — fale apenas como material do curso "${courseName}"
 
 FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
 Retorne APENAS um objeto JSON válido no seguinte formato:
@@ -6293,6 +6480,14 @@ REGRAS CRÍTICAS E OBRIGATÓRIAS:
                             try {
                               return JSON.parse(cleaned)
                             } catch (firstErr) {
+                              // Tentar reparar usando jsonrepair (corrige vírgulas sobrando, aspas faltando, etc.)
+                              try {
+                                const repaired = jsonrepair(cleaned)
+                                return JSON.parse(repaired)
+                              } catch (repairErr) {
+                                console.warn('jsonrepair não conseguiu reparar o JSON do edital verticalizado', repairErr)
+                              }
+                              
                               // Se falhar, tentar corrigir caracteres de controle problemáticos
                               // A estratégia: processar caractere por caractere dentro de strings
                               let result = ''
@@ -6419,6 +6614,14 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem 
                             try {
                               return JSON.parse(cleaned)
                             } catch (firstErr) {
+                              // Tentar reparar estruturas comuns (vírgulas finais, aspas, etc.)
+                              try {
+                                const repaired = jsonrepair(cleaned)
+                                return JSON.parse(repaired)
+                              } catch (repairErr) {
+                                console.warn('jsonrepair não conseguiu reparar o prompt unificado', repairErr)
+                              }
+                              
                               // Limpar caracteres de controle inválidos caractere por caractere
                               let result = ''
                               let inString = false
@@ -7514,6 +7717,14 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                   try {
                     return JSON.parse(cleaned)
                   } catch (firstErr) {
+                    // Tentar reparar usando jsonrepair para vírgulas sobrando/aspas faltando
+                    try {
+                      const repaired = jsonrepair(cleaned)
+                      return JSON.parse(repaired)
+                    } catch (repairErr) {
+                      console.warn('jsonrepair não conseguiu reparar o JSON final', repairErr)
+                    }
+                    
                     let result = ''
                     let inString = false
                     let escapeNext = false
@@ -7926,10 +8137,20 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                 <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
                   <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
                   <div className="relative">
-                    <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
-                      <DocumentTextIcon className="h-5 w-5" />
-                      Gerenciar Cursos Preparatórios
-                    </p>
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="flex items-center gap-2 text-sm font-semibold text-alego-600">
+                        <DocumentTextIcon className="h-5 w-5" />
+                        Gerenciar Cursos Preparatórios
+                      </p>
+                      <button
+                        type="button"
+                        onClick={deleteVilaVelhaCourse}
+                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 transition-colors"
+                        title="Deletar curso de VILA VELHA/ES ACE completamente (sem deixar resquícios)"
+                      >
+                        🗑️ Deletar VILA VELHA
+                      </button>
+                    </div>
                     <p className="text-xs text-slate-500 mb-6">
                       Adicione cursos preparatórios para concursos específicos. Cada curso aparecerá na página inicial como um card clicável.
                     </p>
