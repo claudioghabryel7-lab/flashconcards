@@ -4565,11 +4565,6 @@ CRÍTICO:
       const courseData = courseSnapshot.exists() ? courseSnapshot.data() : {}
       const courseName = courseData.name || courseData.competition || courseId
 
-      const courseRef = doc(db, 'courses', courseId)
-      const courseSnapshot = await getDoc(courseRef)
-      const courseData = courseSnapshot.exists() ? courseSnapshot.data() : {}
-      const courseName = courseData.name || courseData.competition || courseId
-
       // 3. Chamar IA para identificar todas as matérias do edital
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
       if (!apiKey) {
