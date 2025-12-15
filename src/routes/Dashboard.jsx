@@ -55,6 +55,7 @@ const Dashboard = () => {
   const [courseName, setCourseName] = useState('')
   const [editalVerticalizado, setEditalVerticalizado] = useState(null)
   const [loadingEdital, setLoadingEdital] = useState(false)
+  const [questoesStats, setQuestoesStats] = useState({ correct: 0, wrong: 0, byMateria: {} })
   const { subjectOrder } = useSubjectOrder()
 
   // Carregar curso selecionado
@@ -84,7 +85,7 @@ const Dashboard = () => {
     loadCourseData()
   }, [profile])
 
-  // Carregar progresso do usuário
+  // Carregar progresso do usuário - CORRIGIDO para sincronização correta
   useEffect(() => {
     if (!user) {
       setLoading(false)
@@ -103,19 +104,39 @@ const Dashboard = () => {
       q,
       (snapshot) => {
         const data = snapshot.docs
-          .map((doc) => doc.data())
+          .map((docSnap) => {
+            const data = docSnap.data()
+            // Verificar se o documento segue o padrão userId_courseKey_date
+            const docIdParts = docSnap.id.split('_')
+            if (docIdParts.length >= 3) {
+              const docCourseKey = docIdParts[1]
+              const docDate = docIdParts.slice(2).join('_')
+              return {
+                ...data,
+                courseId: data.courseId || (docCourseKey === 'alego' ? null : docCourseKey),
+                date: data.date || docDate
+              }
+            }
+            return data
+          })
           .filter((item) => {
-            // Filtrar por curso
+            // Filtrar por curso - garantir sincronização correta
             const itemCourseId = item.courseId
             if (selectedCourseId) {
               return itemCourseId === selectedCourseId || String(itemCourseId) === String(selectedCourseId)
             } else {
-              return !itemCourseId || itemCourseId === '' || itemCourseId === null
+              // Para curso padrão, aceitar null, undefined, string vazia ou 'alego-default'
+              return !itemCourseId || itemCourseId === '' || itemCourseId === null || itemCourseId === 'alego-default'
             }
           })
 
         startTransition(() => {
           setProgressData(data)
+          console.log('📊 Progresso sincronizado:', { 
+            total: data.length, 
+            courseId: selectedCourseId || 'alego',
+            dates: data.map(d => d.date).slice(0, 5)
+          })
         })
       },
       (error) => {
@@ -149,6 +170,43 @@ const Dashboard = () => {
 
     return () => unsub()
   }, [user])
+
+  // Carregar estatísticas de questões (para taxa de acerto)
+  useEffect(() => {
+    if (!user || selectedCourseId === undefined) return
+    
+    const courseKey = selectedCourseId || 'alego'
+    const statsRef = doc(db, 'questoesStats', `${user.uid}_${courseKey}`)
+    const unsub = onSnapshot(
+      statsRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data()
+          const dataCourseId = data.courseId || null
+          const currentCourseId = selectedCourseId || null
+          
+          if (dataCourseId === currentCourseId || (dataCourseId === null && currentCourseId === null)) {
+            startTransition(() => {
+              setQuestoesStats({
+                correct: data.correct || 0,
+                wrong: data.wrong || 0,
+                byMateria: data.byMateria || {}
+              })
+            })
+          } else {
+            setQuestoesStats({ correct: 0, wrong: 0, byMateria: {} })
+          }
+        } else {
+          setQuestoesStats({ correct: 0, wrong: 0, byMateria: {} })
+        }
+      },
+      (error) => {
+        console.error('Erro ao carregar estatísticas de questões:', error)
+      }
+    )
+    
+    return () => unsub()
+  }, [user, selectedCourseId])
 
   // Carregar flashcards filtrados por curso selecionado com cache
   useEffect(() => {
@@ -323,17 +381,11 @@ const Dashboard = () => {
       return nextReview.isBefore(now) || nextReview.isSame(now, 'day')
     })
 
-    // Taxa de acerto (baseado em reviews)
-    let totalReviews = 0
-    let correctReviews = 0
-    Object.values(cardProgress).forEach((progress) => {
-      if (progress.reviewCount) {
-        totalReviews += progress.reviewCount
-        // Assumir que reviews com stage > 0 são acertos
-        correctReviews += progress.stage || 0
-      }
-    })
-    const accuracy = totalReviews > 0 ? Math.round((correctReviews / totalReviews) * 100) : 0
+    // Taxa de acerto (baseado em questoesStats - questões respondidas)
+    const totalQuestoes = questoesStats.correct + questoesStats.wrong
+    const accuracy = totalQuestoes > 0 
+      ? Math.round((questoesStats.correct / totalQuestoes) * 100) 
+      : 0
 
     return {
       totalDays,

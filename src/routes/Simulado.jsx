@@ -1476,26 +1476,33 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
                 </button>
               )}
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (questions.length === 0) {
-                    setShowAdScreen(true)
+                    // Se não tem questões, gerar primeiro
+                    if (!simuladoInfo) {
+                      // Se não tem simuladoInfo, precisa analisar o edital primeiro
+                      await analyzeEdital()
+                    } else {
+                      // Se já tem simuladoInfo, gerar questões
+                      await generateSimulado()
+                    }
                   } else {
                     // Se já tem questões, iniciar direto
                     setIsRunning(true)
                   }
                 }}
-                disabled={loading}
+                disabled={loading || analyzing}
                 className="flex-1 bg-alego-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {loading ? (
+                {loading || analyzing ? (
                   <>
                     <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                    Gerando simulado...
+                    {analyzing ? 'Analisando edital...' : 'Gerando simulado...'}
                   </>
                 ) : (
                   <>
                     <PlayIcon className="h-5 w-5" />
-                    Iniciar Simulado
+                    {questions.length === 0 ? (simuladoInfo ? 'Gerar e Iniciar Simulado' : 'Iniciar Simulado') : 'Iniciar Simulado'}
                   </>
                 )}
               </button>

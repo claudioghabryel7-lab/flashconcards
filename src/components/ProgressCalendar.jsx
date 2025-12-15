@@ -234,14 +234,10 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {} }) => {
 
       {/* Estatísticas */}
       <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="text-center">
             <p className="text-2xl sm:text-3xl font-black text-green-600 dark:text-green-400">{studiedCount}</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Dias estudados</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">{daysRemaining}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Dias restantes</p>
           </div>
           <div className="text-center">
             <p className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400">
