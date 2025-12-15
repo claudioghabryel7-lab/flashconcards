@@ -116,7 +116,10 @@ export const rateQuestionsCache = async (materia, modulo, isLike, courseId = nul
  */
 export const getOrCreateExplanationCache = async (cardId) => {
   try {
-    const explanationRef = doc(db, 'explanationsCache', cardId)
+    // Garantir que o ID seja sempre seguro para uso no Firestore
+    // Remove qualquer caractere problemático (incluindo /) e mantém apenas [a-zA-Z0-9_]
+    const safeId = String(cardId).replace(/[^a-zA-Z0-9_]/g, '_')
+    const explanationRef = doc(db, 'explanationsCache', safeId)
     const explanationSnap = await getDoc(explanationRef)
     
     if (explanationSnap.exists()) {
@@ -154,7 +157,9 @@ export const getOrCreateExplanationCache = async (cardId) => {
  */
 export const saveExplanationCache = async (cardId, explanationText) => {
   try {
-    const explanationRef = doc(db, 'explanationsCache', cardId)
+    // Usar sempre o mesmo padrão de ID seguro
+    const safeId = String(cardId).replace(/[^a-zA-Z0-9_]/g, '_')
+    const explanationRef = doc(db, 'explanationsCache', safeId)
     
     await setDoc(explanationRef, {
       text: explanationText,
@@ -164,7 +169,7 @@ export const saveExplanationCache = async (cardId, explanationText) => {
       updatedAt: serverTimestamp(),
     }, { merge: false })
     
-    console.log(`✅ Explicação salva no cache: ${cardId}`)
+    console.log(`✅ Explicação salva no cache: ${safeId}`)
     return true
   } catch (error) {
     console.error('Erro ao salvar explicação no cache:', error)
@@ -177,7 +182,9 @@ export const saveExplanationCache = async (cardId, explanationText) => {
  */
 export const rateExplanationCache = async (cardId, isLike) => {
   try {
-    const explanationRef = doc(db, 'explanationsCache', cardId)
+    // Garantir ID seguro também na avaliação
+    const safeId = String(cardId).replace(/[^a-zA-Z0-9_]/g, '_')
+    const explanationRef = doc(db, 'explanationsCache', safeId)
     
     const update = {
       updatedAt: serverTimestamp(),
