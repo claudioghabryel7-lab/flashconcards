@@ -33,6 +33,7 @@ const MateriaRevisada = lazy(() => import('./routes/MateriaRevisada'))
 const MateriaRevisadaView = lazy(() => import('./routes/MateriaRevisadaView'))
 const ConteudoCompleto = lazy(() => import('./routes/ConteudoCompleto'))
 const ConteudoCompletoView = lazy(() => import('./routes/ConteudoCompletoView'))
+const ConteudoCompletoTopicoView = lazy(() => import('./routes/ConteudoCompletoTopicoView'))
 const RankingSimulado = lazy(() => import('./routes/RankingSimulado'))
 const EditalVerticalizado = lazy(() => import('./routes/EditalVerticalizado'))
 
@@ -221,6 +222,14 @@ function App() {
             element={
               <ProtectedRoute requireCourseSelection>
                 <ConteudoCompletoView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/conteudo-completo/topic/:courseId/:topicKey"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <ConteudoCompletoTopicoView />
               </ProtectedRoute>
             }
           />
