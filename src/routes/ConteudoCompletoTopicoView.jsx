@@ -20,6 +20,7 @@ const ConteudoCompletoTopicoView = () => {
   const [error, setError] = useState('')
   const [courseName, setCourseName] = useState('')
   const [generating, setGenerating] = useState(false)
+  const [progress, setProgress] = useState(0)
 
   const resolvedCourseId = useMemo(() => courseId || 'alego-default', [courseId])
   const resolvedTopicKey = useMemo(() => normalizeKey(topicKey), [topicKey])
@@ -127,6 +128,7 @@ const ConteudoCompletoTopicoView = () => {
 
     try {
       setGenerating(true)
+      setProgress(5)
       setError('')
 
       // Carregar edital e prompt unificado para contexto
@@ -144,6 +146,7 @@ const ConteudoCompletoTopicoView = () => {
       const unifiedData = unifiedDoc.exists() ? unifiedDoc.data() : {}
       const banca = unifiedData.banca || ''
       const concursoName = unifiedData.concursoName || ''
+      setProgress(25)
 
       const genAI = new GoogleGenerativeAI(apiKey)
       const modelNames = ['gemini-2.0-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-flash-latest']
@@ -187,6 +190,7 @@ REGRAS:
 
       for (const modelName of modelNames) {
         try {
+          setProgress((prev) => Math.min(prev + 15, 70))
           const model = genAI.getGenerativeModel({ model: modelName })
           const result = await model.generateContent(prompt)
           aiText = result.response.text().trim()
@@ -200,6 +204,7 @@ REGRAS:
       if (!aiText) {
         throw lastError || new Error('Falha ao gerar conteúdo com a IA.')
       }
+      setProgress(75)
 
       let jsonText = aiText
       if (jsonText.startsWith('```json')) {
@@ -222,6 +227,7 @@ REGRAS:
       await setDoc(doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', resolvedTopicKey), payload, { merge: true })
       setConteudo({ id: resolvedTopicKey, ...payload })
       setError('')
+      setProgress(100)
     } catch (err) {
       console.error('Erro ao gerar conteúdo:', err)
       const message = err instanceof Error ? err.message : String(err)
@@ -229,15 +235,31 @@ REGRAS:
     } finally {
       setGenerating(false)
       setLoading(false)
+      setTimeout(() => setProgress(0), 800)
     }
   }
 
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="text-center">
+        <div className="text-center space-y-4 w-full max-w-md px-6">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-alego-600 border-t-transparent"></div>
-          <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Carregando conteúdo completo...</p>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Carregando conteúdo completo...
+          </p>
+          {generating && (
+            <>
+              <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div
+                  className="h-2 bg-alego-600 dark:bg-alego-400 transition-all duration-300"
+                  style={{ width: `${Math.max(progress, 10)}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                A IA está gerando o conteúdo deste tópico. Não feche nem atualize a página até concluir.
+              </p>
+            </>
+          )}
         </div>
       </div>
     )
@@ -253,6 +275,19 @@ REGRAS:
           <p className="text-sm text-slate-600 dark:text-slate-400">
             Tópico: <span className="font-semibold">{resolvedTopicKey}</span>
           </p>
+          {generating && (
+            <div className="space-y-3">
+              <div className="w-full max-w-md mx-auto h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div
+                  className="h-2 bg-alego-600 dark:bg-alego-400 transition-all duration-300"
+                  style={{ width: `${Math.max(progress, 15)}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Gerando conteúdo específico deste tópico. Isso pode levar alguns instantes, não feche a página.
+              </p>
+            </div>
+          )}
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               type="button"
