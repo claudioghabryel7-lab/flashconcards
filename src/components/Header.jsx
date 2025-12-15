@@ -31,9 +31,9 @@ const Header = () => {
     setIsMenuOpen(false)
   }, [location.pathname])
 
-  // Bloquear scroll quando drawer está aberto no mobile
+  // Bloquear scroll quando drawer está aberto (agora também no desktop)
   useEffect(() => {
-    if (isMenuOpen && window.innerWidth < 640) {
+    if (isMenuOpen) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = ''
@@ -134,8 +134,8 @@ const Header = () => {
               </div>
             </Link>
 
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-1">
+            {/* Navigation principal (agora apenas via menu lateral/hambúrguer) */}
+            <nav className="hidden items-center gap-1">
               {user ? (
                 Object.entries(menuCategories).map(([key, category]) => {
                   return category.items.map((item) => (
@@ -221,13 +221,13 @@ const Header = () => {
                     <span className="hidden lg:inline">Sair</span>
                   </button>
 
-                  {/* Menu Button - Mobile */}
+              {/* Menu Button - Mobile/Desktop */}
                   <button
                     ref={menuRef}
                     type="button"
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className="md:hidden p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    aria-label="Abrir menu"
+                className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                aria-label="Abrir menu lateral"
                   >
                     {isMenuOpen ? (
                       <XMarkIcon className="h-6 w-6" />
@@ -249,19 +249,19 @@ const Header = () => {
         </div>
       </header>
 
-      {/* Mobile Drawer */}
+      {/* Drawer (Mobile e Desktop) */}
       {isMenuOpen && user && (
         <>
           {/* Overlay */}
           <div
-            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            className="fixed inset-0 bg-black/50 z-40"
             onClick={() => setIsMenuOpen(false)}
           />
 
           {/* Drawer */}
           <div
             ref={drawerRef}
-            className="fixed inset-y-0 left-0 w-80 max-w-[85vw] bg-white dark:bg-slate-900 shadow-xl z-50 md:hidden flex flex-col animate-slide-in-left"
+            className="fixed inset-y-0 left-0 w-80 md:w-96 max-w-[90vw] bg-white dark:bg-slate-900 shadow-xl z-50 flex flex-col animate-slide-in-left"
           >
             {/* Drawer Header */}
             <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
