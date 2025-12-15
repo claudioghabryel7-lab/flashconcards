@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp } from 'firebase/firestore'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
@@ -7,12 +7,36 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const normalizeKey = (text = '') => {
-  return decodeURIComponent(text || '')
-    .trim()
+  return decodeURIComponent(text || '').trim()
+}
+
+// Extrai partes estruturadas da chave do tópico.
+// Suporta tanto o formato antigo ("1", "Lei de Drogas ...")
+// quanto o formato novo ("1 :: Lei de Drogas ...").
+const parseTopicKey = (rawKey = '') => {
+  const key = normalizeKey(rawKey)
+  if (!key) return { numero: '', nome: '', raw: '' }
+
+  const [numeroPart, ...rest] = key.split('::')
+  if (rest.length === 0) {
+    // Formato antigo: pode ser só número ou só nome
+    const trimmed = numeroPart.trim()
+    const isNumericLike = /^\d+(\.\d+)*$/.test(trimmed)
+    return {
+      numero: isNumericLike ? trimmed : '',
+      nome: isNumericLike ? '' : trimmed,
+      raw: trimmed,
+    }
+  }
+
+  const numero = numeroPart.trim()
+  const nome = rest.join('::').trim()
+  return { numero, nome, raw: key }
 }
 
 const ConteudoCompletoTopicoView = () => {
   const { courseId, topicKey } = useParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { darkMode } = useDarkMode()
   const [conteudo, setConteudo] = useState(null)
@@ -21,9 +45,21 @@ const ConteudoCompletoTopicoView = () => {
   const [courseName, setCourseName] = useState('')
   const [generating, setGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [validating, setValidating] = useState(false)
+  const [validationMessage, setValidationMessage] = useState('')
 
   const resolvedCourseId = useMemo(() => courseId || 'alego-default', [courseId])
   const resolvedTopicKey = useMemo(() => normalizeKey(topicKey), [topicKey])
+  const { numero: topicNumeroFromKey, nome: topicNomeFromKey } = useMemo(
+    () => parseTopicKey(topicKey),
+    [topicKey]
+  )
+  const topicNomeFromQuery = useMemo(
+    () => normalizeKey(searchParams.get('nome') || ''),
+    [searchParams]
+  )
+
+  const effectiveTopicNome = topicNomeFromQuery || topicNomeFromKey
 
   // Carregar nome do curso
   useEffect(() => {
@@ -77,7 +113,7 @@ const ConteudoCompletoTopicoView = () => {
         setLoading(true)
         setError('')
 
-        // 1) Tentar doc com ID = topicKey
+        // 1) Tentar doc com ID = topicKey (forma mais segura e específica)
         const directRef = doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', resolvedTopicKey)
         const directDoc = await getDoc(directRef)
         if (directDoc.exists()) {
@@ -86,27 +122,68 @@ const ConteudoCompletoTopicoView = () => {
           return
         }
 
-        // 2) Tentar buscar por numero ou materia igual ao topicKey
+        // 2) Buscar por número do tópico (considerando possíveis duplicidades)
         const conteudosRef = collection(db, 'courses', resolvedCourseId, 'conteudosCompletos')
-        const qNumero = query(conteudosRef, where('numero', '==', resolvedTopicKey), limit(1))
-        const numeroSnap = await getDocs(qNumero)
-        if (!numeroSnap.empty) {
-          const docSnap = numeroSnap.docs[0]
-          setConteudo({ id: docSnap.id, ...docSnap.data() })
-          setLoading(false)
-          return
+
+        const tryMatchFromSnapshot = (snap) => {
+          if (snap.empty) return null
+
+          // Se não tivermos nome alvo, volta o primeiro mesmo
+          if (!effectiveTopicNome) {
+            const docSnap = snap.docs[0]
+            return { id: docSnap.id, ...docSnap.data() }
+          }
+
+          // Caso tenhamos o nome do tópico, tentamos achar o doc mais parecido
+          const target = effectiveTopicNome.toLowerCase()
+
+          // 1) Match exato em materia ou titulo
+          const exact = snap.docs.find((d) => {
+            const data = d.data() || {}
+            const materia = (data.materia || '').toString().toLowerCase()
+            const titulo = (data.titulo || '').toString().toLowerCase()
+            return materia === target || titulo === target
+          })
+          if (exact) return { id: exact.id, ...exact.data() }
+
+          // 2) Contém o texto do tópico
+          const contains = snap.docs.find((d) => {
+            const data = d.data() || {}
+            const materia = (data.materia || '').toString().toLowerCase()
+            const titulo = (data.titulo || '').toString().toLowerCase()
+            return materia.includes(target) || titulo.includes(target)
+          })
+          if (contains) return { id: contains.id, ...contains.data() }
+
+          // 3) Fallback: primeiro doc mesmo
+          const first = snap.docs[0]
+          return { id: first.id, ...first.data() }
         }
 
-        const qMateria = query(conteudosRef, where('materia', '==', resolvedTopicKey), limit(1))
-        const materiaSnap = await getDocs(qMateria)
-        if (!materiaSnap.empty) {
-          const docSnap = materiaSnap.docs[0]
-          setConteudo({ id: docSnap.id, ...docSnap.data() })
-          setLoading(false)
-          return
+        if (topicNumeroFromKey) {
+          const qNumero = query(conteudosRef, where('numero', '==', topicNumeroFromKey), limit(10))
+          const numeroSnap = await getDocs(qNumero)
+          const matchedFromNumero = tryMatchFromSnapshot(numeroSnap)
+          if (matchedFromNumero) {
+            setConteudo(matchedFromNumero)
+            setLoading(false)
+            return
+          }
         }
 
-        setError('Conteúdo completo não encontrado para este tópico.')
+        // 3) Buscar por nome/matéria se tivermos essa informação
+        if (effectiveTopicNome) {
+          const qMateria = query(conteudosRef, where('materia', '==', effectiveTopicNome), limit(10))
+          const materiaSnap = await getDocs(qMateria)
+          const matchedFromMateria = tryMatchFromSnapshot(materiaSnap)
+          if (matchedFromMateria) {
+            setConteudo(matchedFromMateria)
+            setLoading(false)
+            return
+          }
+        }
+
+        setError('Conteúdo completo não encontrado ou não corresponde a este tópico.')
         setLoading(false)
       } catch (err) {
         console.error('Erro ao carregar conteúdo completo:', err)
@@ -118,8 +195,104 @@ const ConteudoCompletoTopicoView = () => {
     loadConteudo()
   }, [resolvedTopicKey, resolvedCourseId])
 
+  const handleValidateTopic = async () => {
+    if (!resolvedCourseId || !resolvedTopicKey || !conteudo) return
+
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+    if (!apiKey) {
+      setError('API Key não configurada.')
+      return
+    }
+
+    try {
+      setValidating(true)
+      setValidationMessage('')
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+      const resumoConteudo = [
+        conteudo.materia || '',
+        conteudo.titulo || '',
+        conteudo.subtitulo || '',
+        (conteudo.content || '').toString().replace(/<[^>]+>/g, ' ').slice(0, 1500),
+      ]
+        .join('\n')
+        .trim()
+
+      const validatorPrompt = `Você é um avaliador de aderência de conteúdo a tópicos de edital.
+
+TÓPICO-ALVO DO EDITAL:
+- chave bruta: "${resolvedTopicKey}"
+- número (se houver): "${topicNumeroFromKey || ''}"
+- nome (se houver): "${effectiveTopicNome || ''}"
+
+CONTEÚDO GERADO (resumo):
+${resumoConteudo || '[vazio]'}
+
+TAREFA:
+Verifique se o conteúdo acima realmente corresponde ao tópico do edital informado.
+
+REGRAS:
+- Considere que o conteúdo está "correto" se a MAIOR PARTE dele tratar diretamente do tópico.
+- Marque como "incorreto" se o conteúdo falar de outra lei, outro assunto principal ou da matéria inteira de forma genérica.
+
+RESPOSTA APENAS EM JSON VÁLIDO, no formato exato:
+{
+  "match": true|false,
+  "reason": "explicação curta em português",
+  "action": "keep" ou "regenerate"
+}
+
+ONDE:
+- "match" deve ser false quando o conteúdo não estiver alinhado ao tópico.
+- "action" deve ser "keep" quando estiver adequado e "regenerate" quando estiver inadequado.`
+
+      const result = await model.generateContent(validatorPrompt)
+      let text = result.response.text().trim()
+      if (text.startsWith('```json')) {
+        text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      } else if (text.startsWith('```')) {
+        text = text.replace(/```\n?/g, '').trim()
+      }
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (jsonMatch) text = jsonMatch[0]
+
+      const parsed = JSON.parse(text)
+      const match = !!parsed.match
+      const action = parsed.action === 'regenerate' ? 'regenerate' : 'keep'
+      const reason = parsed.reason || ''
+
+      if (match && action === 'keep') {
+        setValidationMessage(
+          reason
+            ? `A IA analisou e entendeu que o conteúdo está coerente com este tópico: ${reason}`
+            : 'A IA analisou e entendeu que o conteúdo está coerente com este tópico.'
+        )
+        return
+      }
+
+      // Conteúdo considerado inadequado para o tópico → regenerar
+      const success = await handleGenerateContent()
+      if (success) {
+        setValidationMessage(
+          reason
+            ? `A IA detectou que o conteúdo não condizia bem com o tópico e gerou um novo material: ${reason}`
+            : 'A IA detectou que o conteúdo não condizia bem com o tópico e gerou um novo material.'
+        )
+      } else {
+        setValidationMessage('A IA indicou que o conteúdo não está adequado, mas houve erro ao tentar regenerar.')
+      }
+    } catch (err) {
+      console.error('Erro ao validar tópico/conteúdo:', err)
+      setValidationMessage('Não foi possível validar automaticamente este conteúdo agora. Tente novamente mais tarde.')
+    } finally {
+      setValidating(false)
+    }
+  }
+
   const handleGenerateContent = async () => {
-    if (!resolvedCourseId || !resolvedTopicKey) return
+    if (!resolvedCourseId || !resolvedTopicKey) return false
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY
     if (!apiKey) {
       setError('API Key não configurada.')
@@ -156,8 +329,10 @@ const ConteudoCompletoTopicoView = () => {
       const prompt = `Você é um especialista em criar conteúdo técnico completo para cursos preparatórios.
 
 CONTEXTO (não cite estes nomes no texto final):
-${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n` : ''}CURSO: ${courseName || 'Curso Preparatório'}
-TÓPICO DO EDITAL: ${resolvedTopicKey}
+${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n` : ''}CURSO: ${
+        courseName || 'Curso Preparatório'
+      }
+TÓPICO DO EDITAL (use APENAS este tópico, sem misturar com outros): ${resolvedTopicKey}
 
 EDITAL BASE (trecho):
 ${editalText.substring(0, 6000)}${editalText.length > 6000 ? '\n\n[texto truncado]' : ''}
@@ -183,6 +358,8 @@ FORMATO DE RESPOSTA (APENAS JSON VÁLIDO):
 }
 
 REGRAS:
+- O conteúdo DEVE ser específico para o tópico acima. Não faça um texto genérico da matéria inteira.
+- Não inclua assuntos que pertençam a outros tópicos do edital.
 - Não mencione concurso, prefeitura ou banca no texto final.
 - Se usar numeração, mantenha a mesma numeração do tópico.
 - Use HTML sem markdown.
@@ -224,14 +401,18 @@ REGRAS:
         generatedAt: serverTimestamp(),
       }
 
-      await setDoc(doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', resolvedTopicKey), payload, { merge: true })
+      await setDoc(doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', resolvedTopicKey), payload, {
+        merge: true,
+      })
       setConteudo({ id: resolvedTopicKey, ...payload })
       setError('')
       setProgress(100)
+      return true
     } catch (err) {
       console.error('Erro ao gerar conteúdo:', err)
       const message = err instanceof Error ? err.message : String(err)
       setError(message || 'Erro ao gerar conteúdo.')
+      return false
     } finally {
       setGenerating(false)
       setLoading(false)
@@ -333,19 +514,41 @@ REGRAS:
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 sm:p-8 lg:p-10">
         <div className="mb-8 pb-6 border-b border-slate-200 dark:border-slate-700">
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Tópico</p>
-          <h1 className="text-3xl sm:text-4xl font-bold text-alego-600 dark:text-alego-400 mb-2 break-words">
-            {conteudo.materia || conteudo.titulo || resolvedTopicKey}
-          </h1>
-          {conteudo.titulo && conteudo.titulo !== conteudo.materia && (
-            <h2 className="text-2xl sm:text-3xl font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              {conteudo.titulo}
-            </h2>
-          )}
-          {conteudo.subtitulo && (
-            <p className="text-lg text-slate-600 dark:text-slate-400 italic">
-              {replaceConcursoWithCourse(conteudo.subtitulo)}
-            </p>
-          )}
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl sm:text-4xl font-bold text-alego-600 dark:text-alego-400 mb-2 break-words">
+                {conteudo.materia || conteudo.titulo || resolvedTopicKey}
+              </h1>
+              {conteudo.titulo && conteudo.titulo !== conteudo.materia && (
+                <h2 className="text-2xl sm:text-3xl font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  {conteudo.titulo}
+                </h2>
+              )}
+              {conteudo.subtitulo && (
+                <p className="text-lg text-slate-600 dark:text-slate-400 italic">
+                  {replaceConcursoWithCourse(conteudo.subtitulo)}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col items-start gap-2 lg:items-end">
+              <button
+                type="button"
+                onClick={handleValidateTopic}
+                disabled={validating || generating}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition"
+              >
+                {validating
+                  ? 'Analisando matéria…'
+                  : 'Matéria errada? Validar e regenerar'}
+              </button>
+              {validationMessage && (
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-md text-left lg:text-right">
+                  {validationMessage}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="prose prose-lg dark:prose-invert max-w-none">

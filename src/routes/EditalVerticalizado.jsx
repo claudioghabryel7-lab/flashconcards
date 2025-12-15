@@ -9,10 +9,25 @@ import {
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+
+// Gera uma chave estável e mais específica para cada tópico do edital,
+// combinando numeração + nome. Isso evita colisões entre tópicos diferentes
+// que tenham a mesma numeração (ex: "1" em várias disciplinas).
 const makeTopicKey = (topico) => {
   if (!topico) return ''
-  const base = topico.numero || topico.nome || ''
-  return encodeURIComponent(base.trim())
+  const numero = (topico.numero || '').toString().trim()
+  const nome = (topico.nome || '').toString().trim()
+
+  // Mantém compatibilidade com dados antigos: se só tiver um dos dois, usa ele.
+  if (!numero && !nome) return ''
+  if (!numero || !nome) {
+    const base = numero || nome
+    return encodeURIComponent(base)
+  }
+
+  // Nova forma: "numero :: nome" (separador pouco provável de aparecer no texto)
+  const combined = `${numero} :: ${nome}`
+  return encodeURIComponent(combined)
 }
 
 const EditalVerticalizado = () => {
@@ -266,7 +281,9 @@ const EditalVerticalizado = () => {
                                     <span className="break-words">{topico.nome || ''}</span>
                                   </div>
                                   <Link
-                                    to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${makeTopicKey(topico)}`}
+                                    to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${makeTopicKey(
+                                      topico
+                                    )}?nome=${encodeURIComponent(topico.nome || '')}`}
                                     className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-alego-600 text-white hover:bg-alego-700 transition whitespace-nowrap"
                                     title="Estudar conteúdo deste tópico"
                                   >
