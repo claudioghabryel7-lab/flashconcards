@@ -10,6 +10,79 @@ const normalizeKey = (text = '') => {
   return decodeURIComponent(text || '').trim()
 }
 
+// Sanitiza o topicKey para ser usado como ID de documento no Firestore
+// Remove/substitui caracteres que podem ser interpretados como separadores de caminho
+const sanitizeTopicKeyForFirestore = (topicKey = '') => {
+  if (!topicKey) return ''
+  
+  // Decodificar primeiro se estiver codificado
+  let decoded = topicKey
+  try {
+    decoded = decodeURIComponent(topicKey)
+  } catch (e) {
+    decoded = topicKey
+  }
+  
+  // Substituir apenas caracteres problemáticos que o Firestore interpreta como separadores
+  // :: -> _DOUBLECOLON_ (mais curto e ainda único)
+  // / -> _SLASH_
+  // \ -> _BACKSLASH_
+  // Manter outros caracteres especiais que são seguros (parênteses, números, etc)
+  let sanitized = decoded
+    .replace(/::/g, '_DOUBLECOLON_')
+    .replace(/\//g, '_SLASH_')
+    .replace(/\\/g, '_BACKSLASH_')
+    .trim()
+  
+  // Limitar tamanho (Firestore tem limite de 1500 bytes para IDs, mas IDs muito longos são problemáticos)
+  // Manter até 400 caracteres para deixar margem de segurança
+  if (sanitized.length > 400) {
+    sanitized = sanitized.substring(0, 400)
+  }
+  
+  // Se após sanitização ficar vazio ou contiver apenas caracteres inválidos, criar um hash simples
+  if (!sanitized || sanitized.trim() === '') {
+    // Criar um hash simples baseado no topicKey original
+    const hash = topicKey.split('').reduce((acc, char) => {
+      return ((acc << 5) - acc) + char.charCodeAt(0)
+    }, 0)
+    return 'topic_' + Math.abs(hash).toString(36)
+  }
+  
+  return sanitized
+}
+
+// Função reversa para buscar documentos: tenta encontrar por topicKey sanitizado ou original
+const findDocumentByTopicKey = async (courseId, topicKey) => {
+  // Tentar com a chave sanitizada primeiro
+  const sanitizedKey = sanitizeTopicKeyForFirestore(topicKey)
+  try {
+    const sanitizedRef = doc(db, 'courses', courseId, 'conteudosCompletos', sanitizedKey)
+    const sanitizedDoc = await getDoc(sanitizedRef)
+    if (sanitizedDoc.exists()) {
+      return { id: sanitizedDoc.id, ...sanitizedDoc.data() }
+    }
+  } catch (e) {
+    // Ignorar erro se a chave sanitizada for inválida
+  }
+  
+  // Tentar com a chave original (para compatibilidade com documentos antigos)
+  // Mas apenas se não contiver caracteres problemáticos
+  if (!topicKey.includes('::') && !topicKey.includes('/') && !topicKey.includes('\\')) {
+    try {
+      const originalRef = doc(db, 'courses', courseId, 'conteudosCompletos', topicKey)
+      const originalDoc = await getDoc(originalRef)
+      if (originalDoc.exists()) {
+        return { id: originalDoc.id, ...originalDoc.data() }
+      }
+    } catch (e) {
+      // Ignorar erro se a chave original for inválida
+    }
+  }
+  
+  return null
+}
+
 // Extrai partes estruturadas da chave do tópico.
 // Suporta tanto o formato antigo ("1", "Lei de Drogas ...")
 // quanto o formato novo ("1 :: Lei de Drogas ...").
@@ -127,10 +200,10 @@ const ConteudoCompletoTopicoView = () => {
           throw new Error('Referência de documento inválida: faltam parâmetros necessários')
         }
         
-        const directRef = doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', trimmedKey)
-        const directDoc = await getDoc(directRef)
-        if (directDoc.exists()) {
-          setConteudo({ id: directDoc.id, ...directDoc.data() })
+        // Tentar encontrar documento usando função que sanitiza a chave
+        const foundDoc = await findDocumentByTopicKey(resolvedCourseId, trimmedKey)
+        if (foundDoc) {
+          setConteudo(foundDoc)
           setLoading(false)
           return
         }
@@ -423,10 +496,13 @@ REGRAS:
         generatedAt: serverTimestamp(),
       }
 
-      await setDoc(doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', resolvedTopicKey), payload, {
+      // Sanitizar o topicKey para usar como ID de documento no Firestore
+      const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
+      
+      await setDoc(doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', sanitizedKey), payload, {
         merge: true,
       })
-      setConteudo({ id: resolvedTopicKey, ...payload })
+      setConteudo({ id: sanitizedKey, ...payload })
       setError('')
       setProgress(100)
       return true
