@@ -109,12 +109,25 @@ const ConteudoCompletoTopicoView = () => {
         return
       }
 
+      // Validar que o topicKey não está vazio após decode
+      const trimmedKey = resolvedTopicKey.trim()
+      if (!trimmedKey || trimmedKey === '') {
+        setError('Tópico inválido: identificação do tópico está vazia')
+        setLoading(false)
+        return
+      }
+
       try {
         setLoading(true)
         setError('')
 
         // 1) Tentar doc com ID = topicKey (forma mais segura e específica)
-        const directRef = doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', resolvedTopicKey)
+        // Validar que todos os segmentos estão presentes antes de criar a referência
+        if (!resolvedCourseId || !trimmedKey) {
+          throw new Error('Referência de documento inválida: faltam parâmetros necessários')
+        }
+        
+        const directRef = doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', trimmedKey)
         const directDoc = await getDoc(directRef)
         if (directDoc.exists()) {
           setConteudo({ id: directDoc.id, ...directDoc.data() })
@@ -187,7 +200,16 @@ const ConteudoCompletoTopicoView = () => {
         setLoading(false)
       } catch (err) {
         console.error('Erro ao carregar conteúdo completo:', err)
-        setError('Erro ao carregar conteúdo. Tente novamente.')
+        const errorMessage = err.message || String(err)
+        
+        // Tratar erros específicos do Firestore
+        if (errorMessage.includes('Invalid document reference') || errorMessage.includes('even number of segments')) {
+          setError('Erro: Tópico inválido. Por favor, verifique se o tópico possui identificação válida.')
+        } else if (errorMessage.includes('Missing or insufficient permissions')) {
+          setError('Erro de permissão. Por favor, verifique se você está autenticado e tente novamente.')
+        } else {
+          setError('Erro ao carregar conteúdo. Tente novamente.')
+        }
         setLoading(false)
       }
     }

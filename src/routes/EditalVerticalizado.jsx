@@ -280,16 +280,28 @@ const EditalVerticalizado = () => {
                                     {topico.numero && <span className="font-medium whitespace-nowrap">{topico.numero} </span>}
                                     <span className="break-words">{topico.nome || ''}</span>
                                   </div>
-                                  <Link
-                                    to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${makeTopicKey(
-                                      topico
-                                    )}?nome=${encodeURIComponent(topico.nome || '')}`}
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-alego-600 text-white hover:bg-alego-700 transition whitespace-nowrap"
-                                    title="Estudar conteúdo deste tópico"
-                                  >
-                                    <BookOpenIcon className="h-4 w-4" />
-                                    Estudar
-                                  </Link>
+                                  {(() => {
+                                    const topicKey = makeTopicKey(topico)
+                                    // Validar que o topicKey não está vazio antes de criar o link
+                                    if (!topicKey || topicKey.trim() === '') {
+                                      return (
+                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-slate-400 text-white cursor-not-allowed whitespace-nowrap" title="Tópico sem identificação válida">
+                                          <BookOpenIcon className="h-4 w-4" />
+                                          Estudar
+                                        </span>
+                                      )
+                                    }
+                                    return (
+                                      <Link
+                                        to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
+                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-alego-600 text-white hover:bg-alego-700 transition whitespace-nowrap"
+                                        title="Estudar conteúdo deste tópico"
+                                      >
+                                        <BookOpenIcon className="h-4 w-4" />
+                                        Estudar
+                                      </Link>
+                                    )
+                                  })()}
                                 </div>
                               </td>
                               <td className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 text-center">

@@ -534,13 +534,117 @@ const Dashboard = () => {
           </motion.div>
         </div>
 
+        {/* Edital Verticalizado - Movido para aparecer primeiro */}
+        {selectedCourseId && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.5 }}
+            className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6 mb-8"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                  <DocumentTextIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                    Edital Verticalizado
+                  </h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Edital organizado para estudos
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {loadingEdital ? (
+              <div className="text-center py-4">
+                <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-alego-600 border-t-transparent"></div>
+              </div>
+            ) : !editalVerticalizado ? (
+              <div className="text-center py-8">
+                <DocumentTextIcon className="h-12 w-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-600 dark:text-slate-400">
+                  Edital verticalizado ainda não disponível.
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
+                  O administrador precisa fazer upload do edital.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-xl p-6 border border-indigo-200 dark:border-indigo-800">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                        {editalVerticalizado.titulo || 'Edital Verticalizado'}
+                      </h4>
+                      {editalVerticalizado.descricao && (
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                          {editalVerticalizado.descricao}
+                        </p>
+                      )}
+                      {editalVerticalizado.updatedAt && (
+                        <p className="text-xs text-slate-500 dark:text-slate-500">
+                          Atualizado em {editalVerticalizado.updatedAt.toDate?.().toLocaleDateString('pt-BR') || 'Data não disponível'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {editalVerticalizado.secoes && editalVerticalizado.secoes.length > 0 ? (
+                    <div className="space-y-3">
+                      {editalVerticalizado.secoes.slice(0, 5).map((secao, idx) => (
+                        <div
+                          key={idx}
+                          className="bg-white dark:bg-slate-700 rounded-lg p-4 border border-slate-200 dark:border-slate-600"
+                        >
+                          <h5 className="font-semibold text-slate-900 dark:text-white mb-2">
+                            {secao.titulo}
+                          </h5>
+                          {secao.conteudo && (
+                            <p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2">
+                              {secao.conteudo.substring(0, 150)}...
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                      {editalVerticalizado.secoes.length > 5 && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                          +{editalVerticalizado.secoes.length - 5} seções adicionais
+                        </p>
+                      )}
+                    </div>
+                  ) : editalVerticalizado.conteudo ? (
+                    <div className="bg-white dark:bg-slate-700 rounded-lg p-4 max-h-96 overflow-y-auto">
+                      <div
+                        className="text-sm text-slate-700 dark:text-slate-300 prose prose-sm dark:prose-invert max-w-none"
+                        dangerouslySetInnerHTML={{ __html: editalVerticalizado.conteudo.substring(0, 500) + '...' }}
+                      />
+                    </div>
+                  ) : null}
+
+                  <Link
+                    to={`/edital-verticalizado?course=${selectedCourseId}`}
+                    className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-all text-sm"
+                  >
+                    Ver Edital Completo
+                    <ChevronRightIcon className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
         {/* Grid Principal */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* Calendário de Progresso */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.5 }}
+            transition={{ duration: 0.5, delay: 0.6 }}
             className="lg:col-span-2"
           >
             <ProgressCalendar
@@ -554,7 +658,7 @@ const Dashboard = () => {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.6 }}
+            transition={{ duration: 0.5, delay: 0.65 }}
             className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6"
           >
             <div className="flex items-center justify-between mb-6">
@@ -660,110 +764,6 @@ const Dashboard = () => {
                   )
                 })}
             </div>
-          </motion.div>
-        )}
-
-        {/* Edital Verticalizado */}
-        {selectedCourseId && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.75 }}
-            className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6 mb-8"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-                  <DocumentTextIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                    Edital Verticalizado
-                  </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    Edital organizado para estudos
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {loadingEdital ? (
-              <div className="text-center py-4">
-                <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-alego-600 border-t-transparent"></div>
-              </div>
-            ) : !editalVerticalizado ? (
-              <div className="text-center py-8">
-                <DocumentTextIcon className="h-12 w-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-600 dark:text-slate-400">
-                  Edital verticalizado ainda não disponível.
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
-                  O administrador precisa fazer upload do edital.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-xl p-6 border border-indigo-200 dark:border-indigo-800">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-                        {editalVerticalizado.titulo || 'Edital Verticalizado'}
-                      </h4>
-                      {editalVerticalizado.descricao && (
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
-                          {editalVerticalizado.descricao}
-                        </p>
-                      )}
-                      {editalVerticalizado.updatedAt && (
-                        <p className="text-xs text-slate-500 dark:text-slate-500">
-                          Atualizado em {editalVerticalizado.updatedAt.toDate?.().toLocaleDateString('pt-BR') || 'Data não disponível'}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {editalVerticalizado.secoes && editalVerticalizado.secoes.length > 0 ? (
-                    <div className="space-y-3">
-                      {editalVerticalizado.secoes.slice(0, 5).map((secao, idx) => (
-                        <div
-                          key={idx}
-                          className="bg-white dark:bg-slate-700 rounded-lg p-4 border border-slate-200 dark:border-slate-600"
-                        >
-                          <h5 className="font-semibold text-slate-900 dark:text-white mb-2">
-                            {secao.titulo}
-                          </h5>
-                          {secao.conteudo && (
-                            <p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2">
-                              {secao.conteudo.substring(0, 150)}...
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                      {editalVerticalizado.secoes.length > 5 && (
-                        <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
-                          +{editalVerticalizado.secoes.length - 5} seções adicionais
-                        </p>
-                      )}
-                    </div>
-                  ) : editalVerticalizado.conteudo ? (
-                    <div className="bg-white dark:bg-slate-700 rounded-lg p-4 max-h-96 overflow-y-auto">
-                      <div
-                        className="text-sm text-slate-700 dark:text-slate-300 prose prose-sm dark:prose-invert max-w-none"
-                        dangerouslySetInnerHTML={{ __html: editalVerticalizado.conteudo.substring(0, 500) + '...' }}
-                      />
-                    </div>
-                  ) : null}
-
-                  <Link
-                    to={`/edital-verticalizado?course=${selectedCourseId}`}
-                    className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-all text-sm"
-                  >
-                    Ver Edital Completo
-                    <ChevronRightIcon className="h-4 w-4" />
-                  </Link>
-                </div>
-              </div>
-            )}
           </motion.div>
         )}
 
