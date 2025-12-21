@@ -23,6 +23,7 @@ import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
 import Reviews from '../components/Reviews'
 import NewsSection from '../components/NewsSection'
+import MarketingHero from '../components/MarketingHero'
 
 const features = [
   {
@@ -197,6 +198,9 @@ const PublicHome = () => {
     <section className="space-y-8 sm:space-y-12 md:space-y-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       {/* Carrossel de Banners */}
       <HomeBanner />
+      
+      {/* Marketing Hero - Logo após os banners */}
+      <MarketingHero />
       
       {/* Cursos Disponíveis - Movido para o início */}
       {courses.length > 0 && (

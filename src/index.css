@@ -538,3 +538,298 @@ img[loading="lazy"] {
   animation: shine 3s infinite;
   pointer-events: none;
 }
+
+/* Animações de Fagulhas de Fogo - Marketing Hero - OTIMIZADO */
+@keyframes spark-float {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(20px, -100px, 0) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes spark-glow {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.spark-particle, .sparks-particle {
+  animation: spark-float 3s ease-out infinite;
+  will-change: transform, opacity;
+  contain: layout style paint;
+  transform: translateZ(0); /* Force GPU acceleration */
+}
+
+.spark-dot, .sparks-dot {
+  width: 4px;
+  height: 4px;
+  background: radial-gradient(circle, #ff6b00 0%, #ff9500 50%, transparent 100%);
+  border-radius: 50%;
+  animation: spark-glow 1.5s ease-in-out infinite;
+  position: relative;
+  will-change: opacity;
+  transform: translateZ(0);
+}
+
+.spark-dot::before, .sparks-dot::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: radial-gradient(circle, rgba(255, 200, 0, 0.6) 0%, transparent 70%);
+  border-radius: 50%;
+  opacity: 0.6;
+  transform: translateZ(0);
+}
+
+/* Animação de Fogo - OTIMIZADO */
+@keyframes fire-float {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate3d(10px, -50px, 0) scale(1.2) rotate(180deg);
+    opacity: 0.8;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(-10px, -120px, 0) scale(0.8) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes fire-glow {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.fire-particle {
+  animation: fire-float 4s ease-out infinite;
+  will-change: transform, opacity;
+  contain: layout style paint;
+  transform: translateZ(0);
+}
+
+.fire-dot {
+  width: 6px;
+  height: 6px;
+  background: radial-gradient(circle, #ff3300 0%, #ff6600 40%, #ff9900 70%, transparent 100%);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  animation: fire-glow 1s ease-in-out infinite;
+  position: relative;
+  will-change: opacity;
+  transform: translateZ(0);
+}
+
+.fire-dot::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  background: radial-gradient(circle, rgba(255, 100, 0, 0.8) 0%, transparent 70%);
+  border-radius: 50%;
+  opacity: 0.8;
+  transform: translateZ(0);
+}
+
+/* Animação de Estrelas/Faíscas - OTIMIZADO */
+@keyframes star-float {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(30px, -80px, 0) scale(1) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+@keyframes star-glow {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.stars-particle {
+  animation: star-float 5s ease-out infinite;
+  will-change: transform, opacity;
+  contain: layout style paint;
+  transform: translateZ(0);
+}
+
+.stars-dot {
+  width: 3px;
+  height: 3px;
+  background: radial-gradient(circle, #ffffff 0%, #e0e0ff 50%, transparent 100%);
+  border-radius: 50%;
+  animation: star-glow 2s ease-in-out infinite;
+  position: relative;
+  will-change: opacity;
+  transform: translateZ(0);
+}
+
+.stars-dot::before {
+  content: '';
+  position: absolute;
+  top: -1.5px;
+  left: -1.5px;
+  right: -1.5px;
+  bottom: -1.5px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, transparent 70%);
+  border-radius: 50%;
+  opacity: 0.7;
+  transform: translateZ(0);
+}
+
+/* Textos motivacionais rotativos - CORRIGIDO para não sobrepor */
+@keyframes fade-in-out {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -30%);
+    visibility: hidden;
+    z-index: 0;
+  }
+  3% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+    visibility: visible;
+    z-index: 1;
+  }
+  30% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+    visibility: visible;
+    z-index: 1;
+  }
+  33% {
+    opacity: 0;
+    transform: translate(-50%, -70%);
+    visibility: hidden;
+    z-index: 0;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -70%);
+    visibility: hidden;
+    z-index: 0;
+  }
+}
+
+.motivational-text-container {
+  position: relative;
+  width: 100%;
+  min-height: 80px; /* Altura mínima aumentada */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden; /* Esconder textos fora da área */
+}
+
+.motivational-text-container p {
+  position: absolute;
+  width: 100%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: fade-in-out 15s infinite;
+  opacity: 0;
+  visibility: hidden;
+  text-align: center;
+  padding: 0 1rem;
+  pointer-events: none;
+  white-space: normal;
+  word-wrap: break-word;
+  max-width: 90%;
+}
+
+/* Ajustar delays para cada texto - cada um aparece por ~4.5s, com 0.5s de transição */
+.motivational-text-container p:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.motivational-text-container p:nth-child(2) {
+  animation-delay: 5s;
+}
+
+.motivational-text-container p:nth-child(3) {
+  animation-delay: 10s;
+}
+
+.motivational-text-container p:nth-child(4) {
+  animation-delay: 15s;
+}
+
+.motivational-text-container p:nth-child(5) {
+  animation-delay: 20s;
+}
+
+/* Se houver mais textos, calcular delay baseado no número total */
+.motivational-text-container p:nth-child(n+6) {
+  animation-delay: calc((var(--index, 5) * 5s));
+}
+
+/* Efeito de pulso para elementos de urgência */
+@keyframes urgent-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+}
+
+.urgent-badge {
+  animation: urgent-pulse 2s ease-in-out infinite;
+}
+
+/* Efeito de brilho para CTA */
+@keyframes cta-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.5), 0 0 40px rgba(249, 115, 22, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(251, 191, 36, 0.8), 0 0 60px rgba(249, 115, 22, 0.5), 0 0 80px rgba(239, 68, 68, 0.3);
+  }
+}
+
+.cta-button-glow {
+  animation: cta-glow 2s ease-in-out infinite;
+}

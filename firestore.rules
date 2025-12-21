@@ -86,6 +86,22 @@
                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       }
       
+      // 🔥 Marketing Hero (Seção Persuasiva Final)
+      match /marketingHero/{heroId} {
+        // Permitir leitura pública (sem autenticação) para aparecer na página inicial
+        allow read: if true;
+        // Admin pode criar, atualizar e deletar - VERIFICAÇÃO EXPANDIDA
+        allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow update: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow delete: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
       // 🎓 Cursos Preparatórios
       match /courses/{courseId} {
         // Permitir leitura pública de cursos ativos (para página inicial)
