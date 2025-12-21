@@ -12,52 +12,88 @@ const MarketingHero = () => {
 
   useEffect(() => {
     const configRef = collection(db, 'marketingHero')
-    const q = query(configRef, where('active', '==', true), orderBy('order', 'asc'), limit(1))
     
-    const unsub = onSnapshot(
-      q,
-      (snapshot) => {
-        if (!snapshot.empty) {
-          const data = snapshot.docs[0].data()
-          const configData = {
-            id: snapshot.docs[0].id,
-            backgroundImage: data.backgroundImage || null,
-            title: data.title || 'Não perca sua chance!',
-            subtitle: data.subtitle || 'Turma fechando em breve',
-            urgencyText: data.urgencyText || 'Últimas vagas disponíveis',
-            motivationalTexts: data.motivationalTexts || [
-              'Seu futuro começa aqui',
-              'Transforme sua carreira hoje',
-              'Aprovação está mais perto do que você imagina'
-            ],
-            ctaText: data.ctaText || 'Garantir minha vaga agora',
-            ctaLink: data.ctaLink || '/pagamento',
-            showTimer: data.showTimer || false,
-            timerEndDate: data.timerEndDate || null,
-            showSpotsLeft: data.showSpotsLeft !== undefined ? data.showSpotsLeft : true,
-            spotsLeft: data.spotsLeft || 12,
-            active: data.active !== undefined ? data.active : true,
-            backgroundAnimationType: data.backgroundAnimationType || 'sparks',
-            backgroundAnimationActive: data.backgroundAnimationActive !== undefined ? data.backgroundAnimationActive : true
+    // Função para tentar carregar com orderBy primeiro, depois sem orderBy se falhar
+    const tryLoadConfig = (useOrderBy = true) => {
+      try {
+        const q = useOrderBy
+          ? query(configRef, where('active', '==', true), orderBy('order', 'asc'), limit(1))
+          : query(configRef, where('active', '==', true), limit(1))
+        
+        const unsub = onSnapshot(
+          q,
+          (snapshot) => {
+            if (!snapshot.empty) {
+              // Se não usar orderBy, ordenar manualmente
+              let docs = snapshot.docs
+              if (!useOrderBy) {
+                docs = docs.sort((a, b) => {
+                  const orderA = a.data().order || 0
+                  const orderB = b.data().order || 0
+                  return orderA - orderB
+                })
+              }
+              
+              const data = docs[0].data()
+              const configData = {
+                id: docs[0].id,
+                backgroundImage: data.backgroundImage || null,
+                title: data.title || 'Não perca sua chance!',
+                subtitle: data.subtitle || 'Turma fechando em breve',
+                urgencyText: data.urgencyText || 'Últimas vagas disponíveis',
+                motivationalTexts: data.motivationalTexts || [
+                  'Seu futuro começa aqui',
+                  'Transforme sua carreira hoje',
+                  'Aprovação está mais perto do que você imagina'
+                ],
+                ctaText: data.ctaText || 'Garantir minha vaga agora',
+                ctaLink: data.ctaLink || '/pagamento',
+                showTimer: data.showTimer || false,
+                timerEndDate: data.timerEndDate || null,
+                showSpotsLeft: data.showSpotsLeft !== undefined ? data.showSpotsLeft : true,
+                spotsLeft: data.spotsLeft || 12,
+                active: data.active !== undefined ? data.active : true,
+                backgroundAnimationType: data.backgroundAnimationType || 'sparks',
+                backgroundAnimationActive: data.backgroundAnimationActive !== undefined ? data.backgroundAnimationActive : true
+              }
+              setConfig(configData)
+              setAnimationType(configData.backgroundAnimationType)
+            } else {
+              // Se não houver configuração salva no banco, não mostrar nada
+              setConfig(null)
+              setAnimationType('sparks')
+            }
+            setLoading(false)
+          },
+          (error) => {
+            console.error('Erro ao carregar configuração de marketing:', error)
+            
+            // Se falhar por falta de índice e ainda não tentou sem orderBy, tentar novamente
+            if ((error.code === 'failed-precondition' || error.code === 'permission-denied') && useOrderBy) {
+              console.warn('Índice não encontrado, tentando sem orderBy...')
+              tryLoadConfig(false)
+              return
+            }
+            
+            // Em caso de outro erro, não mostrar nada
+            setConfig(null)
+            setLoading(false)
           }
-          setConfig(configData)
-          setAnimationType(configData.backgroundAnimationType)
-        } else {
-          // Se não houver configuração salva no banco, não mostrar nada
-          setConfig(null)
-          setAnimationType('sparks')
-        }
-        setLoading(false)
-      },
-      (error) => {
-        console.error('Erro ao carregar configuração de marketing:', error)
-        // Em caso de erro, não mostrar nada
+        )
+
+        return unsub
+      } catch (err) {
+        console.error('Erro ao criar query:', err)
         setConfig(null)
         setLoading(false)
+        return () => {}
       }
-    )
+    }
 
-    return () => unsub()
+    const unsub = tryLoadConfig(true)
+    return () => {
+      if (unsub) unsub()
+    }
   }, [])
 
   // Calcular tempo restante se houver timer

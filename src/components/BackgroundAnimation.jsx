@@ -8,26 +8,61 @@ const BackgroundAnimation = () => {
 
   useEffect(() => {
     const configRef = collection(db, 'marketingHero')
-    const q = query(configRef, where('active', '==', true), orderBy('order', 'asc'), limit(1))
     
-    const unsub = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        const data = snapshot.docs[0].data()
-        setAnimationType(data.backgroundAnimationType || 'sparks')
-        // Só ativar se explicitamente configurado como true
-        setActive(data.backgroundAnimationActive === true && data.active === true)
-      } else {
-        // Se não houver configuração, desativar
-        setActive(false)
-        setAnimationType('sparks')
-      }
-    }, (error) => {
-      console.error('Erro ao carregar configuração de animação:', error)
-      // Em caso de erro, desativar
-      setActive(false)
-    })
+    // Função para tentar carregar com orderBy primeiro, depois sem orderBy se falhar
+    const tryLoadConfig = (useOrderBy = true) => {
+      try {
+        const q = useOrderBy
+          ? query(configRef, where('active', '==', true), orderBy('order', 'asc'), limit(1))
+          : query(configRef, where('active', '==', true), limit(1))
+        
+        const unsub = onSnapshot(q, (snapshot) => {
+          if (!snapshot.empty) {
+            // Se não usar orderBy, ordenar manualmente
+            let docs = snapshot.docs
+            if (!useOrderBy) {
+              docs = docs.sort((a, b) => {
+                const orderA = a.data().order || 0
+                const orderB = b.data().order || 0
+                return orderA - orderB
+              })
+            }
+            
+            const data = docs[0].data()
+            setAnimationType(data.backgroundAnimationType || 'sparks')
+            // Só ativar se explicitamente configurado como true
+            setActive(data.backgroundAnimationActive === true && data.active === true)
+          } else {
+            // Se não houver configuração, desativar
+            setActive(false)
+            setAnimationType('sparks')
+          }
+        }, (error) => {
+          console.error('Erro ao carregar configuração de animação:', error)
+          
+          // Se falhar por falta de índice e ainda não tentou sem orderBy, tentar novamente
+          if ((error.code === 'failed-precondition' || error.code === 'permission-denied') && useOrderBy) {
+            console.warn('Índice não encontrado, tentando sem orderBy...')
+            tryLoadConfig(false)
+            return
+          }
+          
+          // Em caso de outro erro, desativar
+          setActive(false)
+        })
 
-    return () => unsub()
+        return unsub
+      } catch (err) {
+        console.error('Erro ao criar query:', err)
+        setActive(false)
+        return () => {}
+      }
+    }
+
+    const unsub = tryLoadConfig(true)
+    return () => {
+      if (unsub) unsub()
+    }
   }, [])
 
   if (!active || animationType === 'none') {
