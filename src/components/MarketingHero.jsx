@@ -19,45 +19,40 @@ const MarketingHero = () => {
       (snapshot) => {
         if (!snapshot.empty) {
           const data = snapshot.docs[0].data()
-          setConfig({
+          const configData = {
             id: snapshot.docs[0].id,
-            ...data,
-          })
-        } else {
-          // Configuração padrão se não houver no banco
-          setConfig({
-            backgroundImage: null,
-            title: 'Não perca sua chance!',
-            subtitle: 'Turma fechando em breve',
-            urgencyText: 'Últimas vagas disponíveis',
-            motivationalTexts: [
+            backgroundImage: data.backgroundImage || null,
+            title: data.title || 'Não perca sua chance!',
+            subtitle: data.subtitle || 'Turma fechando em breve',
+            urgencyText: data.urgencyText || 'Últimas vagas disponíveis',
+            motivationalTexts: data.motivationalTexts || [
               'Seu futuro começa aqui',
               'Transforme sua carreira hoje',
               'Aprovação está mais perto do que você imagina'
             ],
-            ctaText: 'Garantir minha vaga agora',
-            ctaLink: '/pagamento',
-            showTimer: true,
-            timerEndDate: null, // Admin pode configurar
-            showSpotsLeft: true,
-            spotsLeft: 12,
-            active: true,
-            backgroundAnimationType: 'sparks',
-            backgroundAnimationActive: true
-          })
-        }
-        
-        // Atualizar tipo de animação
-        if (!snapshot.empty) {
-          const data = snapshot.docs[0].data()
-          setAnimationType(data.backgroundAnimationType || 'sparks')
+            ctaText: data.ctaText || 'Garantir minha vaga agora',
+            ctaLink: data.ctaLink || '/pagamento',
+            showTimer: data.showTimer || false,
+            timerEndDate: data.timerEndDate || null,
+            showSpotsLeft: data.showSpotsLeft !== undefined ? data.showSpotsLeft : true,
+            spotsLeft: data.spotsLeft || 12,
+            active: data.active !== undefined ? data.active : true,
+            backgroundAnimationType: data.backgroundAnimationType || 'sparks',
+            backgroundAnimationActive: data.backgroundAnimationActive !== undefined ? data.backgroundAnimationActive : true
+          }
+          setConfig(configData)
+          setAnimationType(configData.backgroundAnimationType)
         } else {
+          // Se não houver configuração salva no banco, não mostrar nada
+          setConfig(null)
           setAnimationType('sparks')
         }
         setLoading(false)
       },
       (error) => {
         console.error('Erro ao carregar configuração de marketing:', error)
+        // Em caso de erro, não mostrar nada
+        setConfig(null)
         setLoading(false)
       }
     )
@@ -95,7 +90,13 @@ const MarketingHero = () => {
     return () => clearInterval(interval)
   }, [config?.showTimer, config?.timerEndDate])
 
-  if (loading || !config) {
+  // Não mostrar se estiver carregando ou se não houver configuração ativa
+  if (loading) {
+    return null
+  }
+
+  // Se não houver config ou se não estiver ativo, não mostrar
+  if (!config || !config.active) {
     return null
   }
 

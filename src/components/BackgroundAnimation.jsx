@@ -14,10 +14,17 @@ const BackgroundAnimation = () => {
       if (!snapshot.empty) {
         const data = snapshot.docs[0].data()
         setAnimationType(data.backgroundAnimationType || 'sparks')
-        setActive(data.backgroundAnimationActive !== false)
+        // Só ativar se explicitamente configurado como true
+        setActive(data.backgroundAnimationActive === true && data.active === true)
+      } else {
+        // Se não houver configuração, desativar
+        setActive(false)
+        setAnimationType('sparks')
       }
     }, (error) => {
       console.error('Erro ao carregar configuração de animação:', error)
+      // Em caso de erro, desativar
+      setActive(false)
     })
 
     return () => unsub()
