@@ -20,10 +20,10 @@ const FlashcardItem = ({
 
   const handleRate = (difficulty) => {
     if (onRateDifficulty) {
-      // Mostrar animação de level up se foi fácil
-      if (difficulty === 'easy' && cardProgress) {
-        const currentStage = cardProgress.stage || 0
-        if (currentStage < 5) {
+      // Mostrar animação de level up se foi Good ou Easy
+      if ((difficulty === 'good' || difficulty === 'easy') && cardProgress) {
+        const consecutiveCorrect = cardProgress.consecutiveCorrect || 0
+        if (consecutiveCorrect > 0) {
           setShowLevelUp(true)
           setTimeout(() => setShowLevelUp(false), 2000)
         }
@@ -190,10 +190,28 @@ const FlashcardItem = ({
                 style={{ pointerEvents: flipped ? 'auto' : 'none' }}
               >
                 <p className="text-[10px] sm:text-xs md:text-sm font-black uppercase tracking-widest text-white/90 text-center px-1">
-                  Como foi essa revisão?
+                  Como foi essa revisão? (Estilo Noji)
                 </p>
                 <div className="flex flex-col gap-2 sm:gap-2">
+                  {/* Linha 1: Again e Hard */}
                   <div className="flex gap-1.5 sm:gap-2">
+                    <motion.button
+                      type="button"
+                      whileHover={{ scale: 1.05, y: -2 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRate('again')
+                      }}
+                      className="group/btn relative flex-1 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-[10px] sm:text-xs md:text-sm font-black text-white shadow-xl hover:shadow-2xl hover:shadow-red-500/50 border-2 border-white/20 min-h-[44px] sm:min-h-[48px] md:min-h-[52px] overflow-hidden touch-manipulation"
+                      aria-label="Again - Errei, mostrar novamente em 10 minutos"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000"></div>
+                      <span className="relative z-10 flex items-center justify-center gap-1 sm:gap-1.5 md:gap-2">
+                        <span className="text-xs sm:text-sm md:text-base">❌</span>
+                        <span className="whitespace-nowrap">Again</span>
+                      </span>
+                    </motion.button>
                     <motion.button
                       type="button"
                       whileHover={{ scale: 1.05, y: -2 }}
@@ -202,12 +220,33 @@ const FlashcardItem = ({
                         e.stopPropagation()
                         handleRate('hard')
                       }}
-                      className="group/btn relative flex-1 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-[10px] sm:text-xs md:text-sm font-black text-white shadow-xl hover:shadow-2xl hover:shadow-rose-500/50 border-2 border-white/20 min-h-[44px] sm:min-h-[48px] md:min-h-[52px] overflow-hidden touch-manipulation"
+                      className="group/btn relative flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-[10px] sm:text-xs md:text-sm font-black text-white shadow-xl hover:shadow-2xl hover:shadow-orange-500/50 border-2 border-white/20 min-h-[44px] sm:min-h-[48px] md:min-h-[52px] overflow-hidden touch-manipulation"
+                      aria-label="Hard - Lembrei com esforço, revisar em 1 dia"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000"></div>
                       <span className="relative z-10 flex items-center justify-center gap-1 sm:gap-1.5 md:gap-2">
-                        <span className="text-xs sm:text-sm md:text-base">🔴</span>
-                        <span className="whitespace-nowrap">Difícil</span>
+                        <span className="text-xs sm:text-sm md:text-base">🟠</span>
+                        <span className="whitespace-nowrap">Hard</span>
+                      </span>
+                    </motion.button>
+                  </div>
+                  {/* Linha 2: Good e Easy */}
+                  <div className="flex gap-1.5 sm:gap-2">
+                    <motion.button
+                      type="button"
+                      whileHover={{ scale: 1.05, y: -2 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRate('good')
+                      }}
+                      className="group/btn relative flex-1 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-[10px] sm:text-xs md:text-sm font-black text-white shadow-xl hover:shadow-2xl hover:shadow-blue-500/50 border-2 border-white/20 min-h-[44px] sm:min-h-[48px] md:min-h-[52px] overflow-hidden touch-manipulation"
+                      aria-label="Good - Lembrei bem, revisar em alguns dias"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000"></div>
+                      <span className="relative z-10 flex items-center justify-center gap-1 sm:gap-1.5 md:gap-2">
+                        <span className="text-xs sm:text-sm md:text-base">🔵</span>
+                        <span className="whitespace-nowrap">Good</span>
                       </span>
                     </motion.button>
                     <motion.button
@@ -219,11 +258,12 @@ const FlashcardItem = ({
                         handleRate('easy')
                       }}
                       className="group/btn relative flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-[10px] sm:text-xs md:text-sm font-black text-white shadow-xl hover:shadow-2xl hover:shadow-emerald-500/50 border-2 border-white/20 min-h-[44px] sm:min-h-[48px] md:min-h-[52px] overflow-hidden touch-manipulation"
+                      aria-label="Easy - Foi muito fácil, revisar em muitos dias"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000"></div>
                       <span className="relative z-10 flex items-center justify-center gap-1 sm:gap-1.5 md:gap-2">
                         <span className="text-xs sm:text-sm md:text-base">🟢</span>
-                        <span className="whitespace-nowrap">Fácil</span>
+                        <span className="whitespace-nowrap">Easy</span>
                       </span>
                     </motion.button>
                   </div>

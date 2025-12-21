@@ -339,17 +339,18 @@ const Reviews = () => {
                   {Array.from({ length: Math.ceil(reviews.length / 3) }).map((_, index) => {
                     const isActive = Math.floor(currentReviewIndex / 3) === index
                     return (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => setCurrentReviewIndex(index * 3)}
-                        className={`h-2 rounded-full transition-all duration-300 shadow-md ${
-                          isActive
-                            ? 'w-8 bg-alego-600 dark:bg-alego-400 scale-110'
-                            : 'w-2 bg-white/60 dark:bg-slate-400/60 hover:bg-white/80 dark:hover:bg-slate-400/80'
-                        }`}
-                        aria-label={`Ir para página ${index + 1}`}
-                      />
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => setCurrentReviewIndex(index * 3)}
+                      className={`h-3 w-3 rounded-full transition-all duration-300 shadow-md min-w-[12px] min-h-[12px] ${
+                        isActive
+                          ? 'w-8 bg-alego-600 dark:bg-alego-400 scale-110'
+                          : 'bg-white/60 dark:bg-slate-400/60 hover:bg-white/80 dark:hover:bg-slate-400/80'
+                      }`}
+                      aria-label={`Ir para página ${index + 1}`}
+                      style={{ willChange: 'transform, width' }}
+                    />
                     )
                   })}
                 </div>
@@ -449,9 +450,11 @@ const Reviews = () => {
                           key={index}
                           type="button"
                           onClick={() => setCurrentReviewIndex(index * 2)}
-                          className={`h-2 rounded-full transition-all ${
-                            isActive ? 'w-6 bg-alego-600 dark:bg-alego-400' : 'w-2 bg-white/60 dark:bg-slate-400/60'
+                          className={`h-3 w-3 rounded-full transition-all min-w-[12px] min-h-[12px] ${
+                            isActive ? 'w-6 bg-alego-600 dark:bg-alego-400' : 'bg-white/60 dark:bg-slate-400/60'
                           }`}
+                          aria-label={`Ir para página ${index + 1}`}
+                          style={{ willChange: 'transform, width' }}
                         />
                       )
                     })}

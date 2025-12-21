@@ -16,9 +16,17 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
     <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
     
-    <!-- Preload de recursos críticos -->
-    <link rel="preload" as="style" href="/src/index.css" />
-    <link rel="preload" as="image" href="/favicon.svg" />
+    <!-- CSS crítico inline para evitar bloqueio de renderização -->
+    <style>
+      /* CSS crítico mínimo para evitar CLS */
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 0; }
+      #root { min-height: 100vh; }
+      footer { min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <!-- CSS não crítico - defer -->
+    <link rel="preload" as="style" href="/src/index.css" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript><link rel="stylesheet" href="/src/index.css" /></noscript>
     
     <!-- Google tag (gtag.js) - Carregar de forma não bloqueante -->
     <script>

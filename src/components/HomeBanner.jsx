@@ -156,12 +156,13 @@ const HomeBanner = () => {
               key={index}
               type="button"
               onClick={() => setCurrentIndex(index)}
-              className={`h-2.5 rounded-full transition-all duration-300 shadow-lg ${
+              className={`h-3 w-3 rounded-full transition-all duration-300 shadow-lg min-w-[12px] min-h-[12px] ${
                 index === currentIndex
                   ? 'w-10 bg-white scale-110'
-                  : 'w-2.5 bg-white/60 hover:bg-white/80 hover:scale-110'
+                  : 'bg-white/60 hover:bg-white/80 hover:scale-110'
               }`}
               aria-label={`Ir para banner ${index + 1}`}
+              style={{ willChange: 'transform, width' }}
             />
           ))}
         </div>

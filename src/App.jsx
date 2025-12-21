@@ -289,7 +289,7 @@ function App() {
         </Routes>
         </Suspense>
       </main>
-      <footer className="mx-auto w-full max-w-6xl px-4 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+      <footer className="mx-auto w-full max-w-6xl px-4 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[60px] flex items-center justify-center">
         <p>
           © {new Date().getFullYear()} FlashConCards. Todos os direitos reservados.
           É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.

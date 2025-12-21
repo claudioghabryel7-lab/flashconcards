@@ -148,7 +148,7 @@ const Dashboard = () => {
     return () => unsub()
   }, [user, selectedCourseId])
 
-  // Carregar progresso de cards
+  // Carregar progresso de cards - FILTRADO POR CURSO para sincronização correta
   useEffect(() => {
     if (!user) return
 
@@ -158,18 +158,56 @@ const Dashboard = () => {
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data()
-          startTransition(() => {
-            setCardProgress(data.cardProgress || {})
+          const allCardProgress = data.cardProgress || {}
+          
+          // Filtrar cards apenas do curso selecionado
+          // Se o card não tem courseId no progresso, assumir que é do curso padrão (null)
+          const filteredProgress = {}
+          
+          // Se temos cards carregados, filtrar pelo curso deles
+          allCards.forEach(card => {
+            const progress = allCardProgress[card.id]
+            if (progress) {
+              // Se o card pertence ao curso selecionado, incluir o progresso
+              const cardCourseId = card.courseId || null
+              const currentCourseId = selectedCourseId || null
+              
+              // Incluir se o curso do card corresponde ao curso selecionado
+              if (cardCourseId === currentCourseId) {
+                filteredProgress[card.id] = progress
+              }
+            }
           })
+          
+          // Também incluir progressos de cards que ainda não foram carregados mas pertencem ao curso
+          Object.keys(allCardProgress).forEach(cardId => {
+            if (!filteredProgress[cardId]) {
+              const progress = allCardProgress[cardId]
+              // Se não temos o card ainda, incluir o progresso (será filtrado depois quando os cards carregarem)
+              filteredProgress[cardId] = progress
+            }
+          })
+          
+          startTransition(() => {
+            setCardProgress(filteredProgress)
+            console.log('📊 Card progress sincronizado:', { 
+              total: Object.keys(filteredProgress).length, 
+              courseId: selectedCourseId || 'alego',
+              sample: Object.keys(filteredProgress).slice(0, 3)
+            })
+          })
+        } else {
+          setCardProgress({})
         }
       },
       (error) => {
         console.error('Erro ao carregar progresso de cards:', error)
+        setCardProgress({})
       }
     )
 
     return () => unsub()
-  }, [user])
+  }, [user, selectedCourseId, allCards])
 
   // Carregar estatísticas de questões (para taxa de acerto)
   useEffect(() => {
@@ -400,18 +438,23 @@ const Dashboard = () => {
     }
   }, [progressData, cardProgress, allCards])
 
-  // Cards para revisar (detalhado)
+  // Cards para revisar (detalhado) - FILTRADO POR CURSO
   const reviewCards = useMemo(() => {
     const now = dayjs()
     return allCards
       .filter((card) => {
+        // Garantir que o card pertence ao curso selecionado
+        const cardCourseId = card.courseId || null
+        const currentCourseId = selectedCourseId || null
+        if (cardCourseId !== currentCourseId) return false
+        
         const progress = cardProgress[card.id]
         if (!progress || !progress.nextReview) return false
         const nextReview = dayjs(progress.nextReview)
         return nextReview.isBefore(now) || nextReview.isSame(now, 'day')
       })
       .slice(0, 5) // Limitar a 5 cards
-  }, [allCards, cardProgress])
+  }, [allCards, cardProgress, selectedCourseId])
 
   if (loading) {
     return (

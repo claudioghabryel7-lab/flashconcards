@@ -29,15 +29,24 @@ const MATERIAS = [
   'Redação',
 ]
 
-// Estágios do SRS (Spaced Repetition System)
-const STAGES = [
-  { level: 1, intervalDays: 1 },
-  { level: 2, intervalDays: 3 },
-  { level: 3, intervalDays: 7 },
-  { level: 4, intervalDays: 14 },
-  { level: 5, intervalDays: 30 },
-  { level: 6, intervalDays: 60 },
-]
+// Sistema SRS estilo Noji - Baseado em dificuldade (Again/Hard/Good/Easy)
+// Intervalos dinâmicos que aumentam conforme o desempenho
+const SRS_INTERVALS = {
+  // Again: Volta quase imediatamente (10 minutos)
+  again: { minutes: 10 },
+  // Hard: Intervalo curto (1-2 dias)
+  hard: { days: 1 },
+  // Good: Intervalo médio que aumenta progressivamente
+  good: { 
+    initialDays: 4,
+    multiplier: 1.7 // Multiplicador para aumentar intervalo a cada acerto
+  },
+  // Easy: Intervalo longo que aumenta muito
+  easy: {
+    initialDays: 7,
+    multiplier: 2.5 // Multiplicador maior para Easy
+  }
+}
 
 const FlashcardView = () => {
   const { user, favorites, updateFavorites, profile } = useAuth()
@@ -242,7 +251,7 @@ const FlashcardView = () => {
     fetchPrompt()
   }, [selectedCourseId])
 
-  // Carregar progresso dos cards do usuário
+  // Carregar progresso dos cards do usuário - FILTRADO POR CURSO
   useEffect(() => {
     if (!user) return () => {}
     
@@ -250,13 +259,44 @@ const FlashcardView = () => {
     const unsub = onSnapshot(userProgressRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data()
-        setCardProgress(data.cardProgress || {})
+        const allCardProgress = data.cardProgress || {}
+        
+        // Filtrar progresso apenas dos cards do curso selecionado
+        const filteredProgress = {}
+        const currentCourseId = selectedCourseId || null
+        
+        // Se temos cards carregados, filtrar pelo curso deles
+        cards.forEach(card => {
+          const progress = allCardProgress[card.id]
+          if (progress) {
+            const cardCourseId = card.courseId || null
+            // Incluir se o curso do card corresponde ao curso selecionado
+            if (cardCourseId === currentCourseId) {
+              filteredProgress[card.id] = progress
+            }
+          }
+        })
+        
+        // Também incluir progressos de cards que ainda não foram carregados mas pertencem ao curso
+        Object.keys(allCardProgress).forEach(cardId => {
+          if (!filteredProgress[cardId]) {
+            // Incluir temporariamente, será filtrado quando os cards carregarem
+            filteredProgress[cardId] = allCardProgress[cardId]
+          }
+        })
+        
+        setCardProgress(filteredProgress)
+        console.log('📊 FlashcardView - Card progress sincronizado:', { 
+          total: Object.keys(filteredProgress).length, 
+          courseId: currentCourseId || 'alego',
+          cardsLoaded: cards.length
+        })
       } else {
         setCardProgress({})
       }
     })
     return () => unsub()
-  }, [user])
+  }, [user, selectedCourseId, cards])
 
   // Organizar cards por matéria e módulo
   const organizedCards = useMemo(() => {
@@ -322,33 +362,87 @@ const FlashcardView = () => {
     return activeCards.every((card) => ratingsSnapshot[card.id] === 'easy')
   }
 
-  // Calcular próxima revisão com sistema retroativo
-  const calculateNextReview = (currentProgress, difficulty, isRetroactive = false) => {
+  // Calcular próxima revisão estilo Noji - Baseado em dificuldade
+  const calculateNextReview = (currentProgress, difficulty) => {
     const now = dayjs()
-    let currentStage = currentProgress?.stage || 0
-    let nextReview = currentProgress?.nextReview ? dayjs(currentProgress.nextReview) : now
-
-    if (isRetroactive && nextReview.isBefore(now)) {
-      const daysLate = now.diff(nextReview, 'day')
-      if (daysLate > 0 && currentStage > 0) {
-        const reduction = Math.min(Math.floor(daysLate / 3), currentStage)
-        currentStage = Math.max(0, currentStage - reduction)
+    
+    // Se é a primeira vez vendo o card
+    if (!currentProgress || !currentProgress.nextReview) {
+      // Primeira revisão sempre é "Good" (4 dias)
+      return {
+        easeFactor: 2.5, // Fator de facilidade inicial
+        intervalDays: SRS_INTERVALS.good.initialDays,
+        nextReview: now.add(SRS_INTERVALS.good.initialDays, 'day').toISOString(),
+        reviewCount: 1,
+        consecutiveCorrect: 1
       }
     }
 
-    if (difficulty === 'easy') {
-      currentStage = Math.min(STAGES.length - 1, currentStage + (currentStage === 0 ? 2 : 1))
-    } else if (difficulty === 'hard') {
-      currentStage = Math.max(0, currentStage - 1)
+    const currentInterval = currentProgress.intervalDays || SRS_INTERVALS.good.initialDays
+    const easeFactor = currentProgress.easeFactor || 2.5
+    const consecutiveCorrect = currentProgress.consecutiveCorrect || 0
+    let newInterval = currentInterval
+    let newEaseFactor = easeFactor
+    let newConsecutiveCorrect = consecutiveCorrect
+
+    // Calcular novo intervalo baseado na dificuldade (estilo Noji)
+    switch (difficulty) {
+      case 'again':
+        // Again: Volta em 10 minutos
+        newInterval = 0 // Minutos
+        newEaseFactor = Math.max(1.3, easeFactor - 0.2) // Reduz facilidade
+        newConsecutiveCorrect = 0 // Reset contador
+        break
+        
+      case 'hard':
+        // Hard: Intervalo curto (1 dia), mas não reduz muito o easeFactor
+        newInterval = SRS_INTERVALS.hard.days
+        newEaseFactor = Math.max(1.3, easeFactor - 0.15)
+        newConsecutiveCorrect = Math.max(0, consecutiveCorrect - 1)
+        break
+        
+      case 'good':
+        // Good: Intervalo aumenta progressivamente
+        if (consecutiveCorrect === 0) {
+          // Primeira vez acertando "Good"
+          newInterval = SRS_INTERVALS.good.initialDays
+        } else {
+          // Aumenta intervalo usando multiplicador
+          newInterval = Math.round(currentInterval * SRS_INTERVALS.good.multiplier)
+        }
+        newEaseFactor = easeFactor // Mantém facilidade
+        newConsecutiveCorrect = consecutiveCorrect + 1
+        break
+        
+      case 'easy':
+        // Easy: Intervalo aumenta muito
+        if (consecutiveCorrect === 0) {
+          newInterval = SRS_INTERVALS.easy.initialDays
+        } else {
+          newInterval = Math.round(currentInterval * SRS_INTERVALS.easy.multiplier)
+        }
+        newEaseFactor = Math.min(2.5, easeFactor + 0.15) // Aumenta facilidade
+        newConsecutiveCorrect = consecutiveCorrect + 1
+        break
     }
 
-    const stage = STAGES[currentStage] || STAGES[0]
-    const nextReviewDate = now.add(stage.intervalDays, 'day')
+    // Calcular próxima data de revisão
+    let nextReviewDate
+    if (difficulty === 'again') {
+      // Again: 10 minutos
+      nextReviewDate = now.add(SRS_INTERVALS.again.minutes, 'minute')
+    } else {
+      // Outros: dias
+      nextReviewDate = now.add(newInterval, 'day')
+    }
 
     return {
-      stage: currentStage,
+      easeFactor: newEaseFactor,
+      intervalDays: newInterval,
       nextReview: nextReviewDate.toISOString(),
-      intervalDays: stage.intervalDays,
+      reviewCount: (currentProgress.reviewCount || 0) + 1,
+      consecutiveCorrect: newConsecutiveCorrect,
+      lastDifficulty: difficulty
     }
   }
 
@@ -411,38 +505,42 @@ const FlashcardView = () => {
     await updateFavorites(nextFavorites)
   }
 
-  // Avaliar dificuldade
+  // Avaliar dificuldade - Estilo Noji (Again/Hard/Good/Easy)
   const rateDifficulty = async (cardId, difficulty) => {
     if (!user) return
     
     const now = dayjs()
     const currentProgress = cardProgress[cardId] || {}
-    const nextReviewDate = currentProgress.nextReview ? dayjs(currentProgress.nextReview) : null
-    const isRetroactive = nextReviewDate && now.isAfter(nextReviewDate)
     
-    const newProgressData = calculateNextReview(currentProgress, difficulty, isRetroactive)
+    // Calcular nova revisão usando algoritmo estilo Noji
+    const newProgressData = calculateNextReview(currentProgress, difficulty)
     
     const newProgress = {
       ...currentProgress,
       ...newProgressData,
-      difficulty,
-      reviewCount: (currentProgress.reviewCount || 0) + 1,
+      lastDifficulty: difficulty,
       lastReviewed: now.toISOString(),
-      isRetroactive: isRetroactive || false,
+      // Manter compatibilidade com sistema antigo
+      stage: Math.floor(newProgressData.consecutiveCorrect / 2), // Stage baseado em acertos consecutivos
     }
     
+    // Salvar progresso do usuário (filtrado por curso se necessário)
     const userProgressRef = doc(db, 'userProgress', user.uid)
+    const currentCardProgress = { ...cardProgress, [cardId]: newProgress }
+    
     await setDoc(
       userProgressRef,
       {
-        cardProgress: {
-          ...cardProgress,
-          [cardId]: newProgress,
-        },
+        cardProgress: currentCardProgress,
         updatedAt: new Date().toISOString(),
+        // Adicionar metadata do curso para filtragem
+        courseId: selectedCourseId || null,
       },
       { merge: true },
     )
+
+    // Atualizar estado local
+    setCardProgress(currentCardProgress)
 
     setSessionRatings((prevRatings) => {
       const updated = { ...prevRatings, [cardId]: difficulty }
