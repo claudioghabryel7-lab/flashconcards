@@ -12,21 +12,25 @@ export const useIntersectionObserver = (options = {}) => {
     const element = elementRef.current
     if (!element) return
 
+    const once = options.once !== false // Default true
+    const threshold = options.threshold || 0.1
+    const rootMargin = options.rootMargin || '-100px'
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
           setIsVisible(true)
           // Opcional: desobservar após aparecer para melhor performance
-          if (options.once !== false) {
+          if (once) {
             observer.unobserve(element)
           }
-        } else if (!options.once) {
+        } else if (!once) {
           setIsVisible(false)
         }
       },
       {
-        threshold: options.threshold || 0.1,
-        rootMargin: options.rootMargin || '-100px',
+        threshold,
+        rootMargin,
       }
     )
 
@@ -37,7 +41,7 @@ export const useIntersectionObserver = (options = {}) => {
         observer.unobserve(element)
       }
     }
-  }, [options.threshold, options.rootMargin, options.once])
+  }, [options])
 
   return [elementRef, isVisible]
 }
