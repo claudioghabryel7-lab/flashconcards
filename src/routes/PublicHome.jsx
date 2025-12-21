@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { collection, doc, onSnapshot, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import LazyImage from '../components/LazyImage'
+import { useIntersectionObserver } from '../hooks/useIntersectionObserver'
 import { 
   ShieldCheckIcon, 
   SparklesIcon, 
@@ -88,6 +88,13 @@ const PublicHome = () => {
   // Carregar cursos
   const [courses, setCourses] = useState([])
   const [loadingCourses, setLoadingCourses] = useState(true)
+  
+  // Intersection observers para animações
+  const [heroRef, heroVisible] = useIntersectionObserver({ once: true })
+  const [coursesRef, coursesVisible] = useIntersectionObserver({ once: true })
+  const [featuresRef, featuresVisible] = useIntersectionObserver({ once: true })
+  const [ctaRef, ctaVisible] = useIntersectionObserver({ once: true })
+  const [newsRef, newsVisible] = useIntersectionObserver({ once: true })
 
   useEffect(() => {
     // Tentar carregar do cache primeiro
@@ -193,66 +200,25 @@ const PublicHome = () => {
       
       {/* Cursos Disponíveis - Movido para o início */}
       {courses.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 50 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.8, type: "spring", stiffness: 100 }}
-          className="space-y-6"
+        <div
+          ref={coursesRef}
+          className={`space-y-6 animate-on-scroll fade-up ${coursesVisible ? 'visible' : ''}`}
         >
-          <motion.div 
-            className="text-center"
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.6, type: "spring" }}
-          >
-            <motion.h2 
-              className="text-2xl sm:text-3xl md:text-4xl font-black text-alego-700 dark:text-alego-300 mb-3"
-              initial={{ opacity: 0, y: -20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-            >
+          <div className="text-center">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-alego-700 dark:text-alego-300 mb-3">
               Cursos Preparatórios Disponíveis
-            </motion.h2>
-            <motion.p 
-              className="text-slate-600 dark:text-slate-400 text-sm sm:text-base"
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-            >
+            </h2>
+            <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
               Escolha o curso ideal para sua aprovação
-            </motion.p>
-          </motion.div>
+            </p>
+          </div>
           <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
             {courses.map((course, index) => {
-              const direction = index % 3 === 0 ? -50 : index % 3 === 1 ? 50 : 0
               return (
-                <motion.div
+                <div
                   key={course.id}
-                  initial={{ 
-                    opacity: 0, 
-                    y: 60,
-                    x: direction,
-                    scale: 0.9
-                  }}
-                  whileInView={{ 
-                    opacity: 1, 
-                    y: 0,
-                    x: 0,
-                    scale: 1
-                  }}
-                  viewport={{ once: true, margin: "-50px" }}
-                  transition={{ 
-                    duration: 0.7, 
-                    delay: index * 0.15,
-                    type: "spring",
-                    stiffness: 100
-                  }}
-                  className="group relative overflow-hidden rounded-2xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl shadow-lg hover:shadow-2xl border border-slate-200/50 dark:border-slate-700/50"
-                  whileHover={{ scale: 1.05, y: -10, rotate: 1 }}
+                  className={`group relative overflow-hidden rounded-2xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl shadow-lg hover:shadow-2xl border border-slate-200/50 dark:border-slate-700/50 hover-scale hover-lift animate-on-scroll fade-up ${coursesVisible ? 'visible' : ''}`}
+                  style={{ animationDelay: `${index * 0.1}s` }}
                 >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 opacity-10 rounded-full blur-2xl group-hover:opacity-30 transition-all duration-500"></div>
                 <div className="relative z-10">
@@ -306,25 +272,15 @@ const PublicHome = () => {
                       )}
                     </div>
                     
-                    <motion.div 
-                      className="flex gap-2"
-                      initial={{ opacity: 0, y: 10 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.5, delay: index * 0.15 + 0.3 }}
-                    >
-                      <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                        <Link
-                          to={`/pagamento?course=${course.id}`}
-                          onClick={trackButtonClick}
-                          className="flex-1 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 text-center text-sm font-bold text-white shadow-lg hover:shadow-xl hover:from-blue-500 hover:to-purple-500 transition-all block"
-                        >
-                          Comprar Agora
-                        </Link>
-                      </motion.div>
-                      <motion.button
-                        whileHover={{ scale: 1.1, rotate: 15 }}
-                        whileTap={{ scale: 0.9 }}
+                    <div className="flex gap-2">
+                      <Link
+                        to={`/pagamento?course=${course.id}`}
+                        onClick={trackButtonClick}
+                        className="flex-1 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 text-center text-sm font-bold text-white shadow-lg hover:shadow-xl hover:from-blue-500 hover:to-purple-500 transition-all block hover-scale"
+                      >
+                        Comprar Agora
+                      </Link>
+                      <button
                         type="button"
                         onClick={async (e) => {
                           e.preventDefault()
@@ -350,346 +306,156 @@ const PublicHome = () => {
                             alert('Link copiado para a área de transferência!')
                           }
                         }}
-                        className="rounded-full bg-slate-100 hover:bg-slate-200 px-4 py-3 text-slate-700 transition-all flex items-center justify-center"
+                        className="rounded-full bg-slate-100 hover:bg-slate-200 px-4 py-3 text-slate-700 transition-all flex items-center justify-center hover-scale"
                         title="Compartilhar curso"
                       >
                         <ShareIcon className="h-5 w-5" />
-                      </motion.button>
-                    </motion.div>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )})}
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Hero Section */}
-      <motion.div 
-        className="grid gap-6 sm:gap-8 rounded-3xl bg-gradient-to-br from-alego-700 via-alego-600 to-alego-500 p-6 sm:p-8 md:p-10 text-white md:grid-cols-2 shadow-xl border border-alego-600/20"
-        initial={{ opacity: 0, scale: 0.95 }}
-        whileInView={{ opacity: 1, scale: 1 }}
-        viewport={{ once: true, margin: "-100px" }}
-        transition={{ duration: 0.8, type: "spring", stiffness: 100 }}
+      <div 
+        ref={heroRef}
+        className={`grid gap-6 sm:gap-8 rounded-3xl bg-gradient-to-br from-alego-700 via-alego-600 to-alego-500 p-6 sm:p-8 md:p-10 text-white md:grid-cols-2 shadow-xl border border-alego-600/20 animate-on-scroll scale ${heroVisible ? 'visible' : ''}`}
       >
-        <motion.div
-          initial={{ opacity: 0, x: -80 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8, type: "spring", stiffness: 80 }}
-        >
-          <motion.p 
-            className="text-xs sm:text-sm font-semibold uppercase tracking-[0.3em] text-alego-100"
-            initial={{ opacity: 0, y: -20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-          >
+        <div>
+          <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.3em] text-alego-100">
             Plataforma Completa
-          </motion.p>
-          <motion.h1 
-            className="mt-3 sm:mt-4 text-2xl sm:text-3xl md:text-4xl font-black leading-tight"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-          >
+          </p>
+          <h1 className="mt-3 sm:mt-4 text-2xl sm:text-3xl md:text-4xl font-black leading-tight">
             Plataforma de Estudos Completa
-          </motion.h1>
-          <motion.p 
-            className="mt-4 sm:mt-6 text-base sm:text-lg text-alego-50"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
+          </h1>
+          <p className="mt-4 sm:mt-6 text-base sm:text-lg text-alego-50">
             Plataforma completa com IA, flashcards inteligentes, questões personalizadas,
             suporte 24/7 para acelerar sua aprovação.
-          </motion.p>
-          <motion.div 
-            className="mt-6 sm:mt-8 flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-center items-center"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-          >
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Link
-                to="/login"
-                className="rounded-full bg-white px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-alego-600 shadow text-center hover:bg-alego-50 transition whitespace-nowrap"
-              >
-                Começar agora
-              </Link>
-            </motion.div>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Link
-                to="/login"
-                className="rounded-full border border-white/60 px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-white text-center hover:bg-white/10 transition whitespace-nowrap"
-              >
-                Já tenho conta
-              </Link>
-            </motion.div>
-          </motion.div>
-        </motion.div>
-        <motion.div 
-          className="space-y-3 sm:space-y-4 rounded-2xl bg-white/10 p-4 sm:p-6"
-          initial={{ opacity: 0, x: 80 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8, type: "spring", stiffness: 80 }}
-        >
-          {benefits.map((benefit, index) => (
-            <motion.div
-              key={benefit}
-              initial={{ opacity: 0, x: 50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              whileHover={{ scale: 1.02, x: 5 }}
-              className="flex items-start sm:items-center gap-2 sm:gap-3 rounded-2xl bg-white/20 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold cursor-default"
+          </p>
+          <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-center items-center">
+            <Link
+              to="/login"
+              className="rounded-full bg-white px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-alego-600 shadow text-center hover:bg-alego-50 transition whitespace-nowrap hover-scale"
             >
-              <motion.div
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 2, repeat: Infinity, delay: index * 0.2 }}
-              >
-                <ShieldCheckIcon className="h-5 w-5 sm:h-6 sm:w-6 text-alego-100 flex-shrink-0 mt-0.5 sm:mt-0" />
-              </motion.div>
+              Começar agora
+            </Link>
+            <Link
+              to="/login"
+              className="rounded-full border border-white/60 px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-white text-center hover:bg-white/10 transition whitespace-nowrap hover-scale"
+            >
+              Já tenho conta
+            </Link>
+          </div>
+        </div>
+        <div className="space-y-3 sm:space-y-4 rounded-2xl bg-white/10 p-4 sm:p-6">
+          {benefits.map((benefit, index) => (
+            <div
+              key={benefit}
+              className="flex items-start sm:items-center gap-2 sm:gap-3 rounded-2xl bg-white/20 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold cursor-default hover-scale"
+              style={{ animationDelay: `${index * 0.1}s` }}
+            >
+              <ShieldCheckIcon className="h-5 w-5 sm:h-6 sm:w-6 text-alego-100 flex-shrink-0 mt-0.5 sm:mt-0" />
               <span>{benefit}</span>
-            </motion.div>
+            </div>
           ))}
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
 
       {/* Features Grid */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true, margin: "-100px" }}
-        transition={{ duration: 0.6 }}
-      >
-        <motion.div 
-          className="text-center mb-8"
-          initial={{ opacity: 0, y: -30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, type: "spring" }}
-        >
-          <motion.h2 
-            className="text-2xl sm:text-3xl md:text-4xl font-black text-alego-700 dark:text-alego-300 mb-3"
-            initial={{ opacity: 0, scale: 0.8 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, type: "spring", delay: 0.1 }}
-          >
+      <div ref={featuresRef}>
+        <div className="text-center mb-8">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-alego-700 dark:text-alego-300 mb-3">
             Tudo que você precisa para sua aprovação
-          </motion.h2>
-          <motion.p 
-            className="text-slate-600 dark:text-slate-400 text-sm sm:text-base"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
             Plataforma completa com inteligência artificial e recursos avançados
-          </motion.p>
-        </motion.div>
+          </p>
+        </div>
         <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
           {features.map((feature, index) => {
             const Icon = feature.icon
-            const isEven = index % 2 === 0
-            const direction = isEven ? -60 : 60
             return (
-              <motion.div
+              <div
                 key={index}
-                className="group relative overflow-hidden rounded-2xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl p-6 shadow-lg hover:shadow-2xl border border-slate-200/50 dark:border-slate-700/50"
-                initial={{ 
-                  opacity: 0, 
-                  y: 50,
-                  x: direction,
-                  rotate: isEven ? -5 : 5
-                }}
-                whileInView={{ 
-                  opacity: 1, 
-                  y: 0,
-                  x: 0,
-                  rotate: 0
-                }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ 
-                  duration: 0.7, 
-                  delay: index * 0.12,
-                  type: "spring",
-                  stiffness: 100
-                }}
-                whileHover={{ scale: 1.05, y: -12, rotate: isEven ? 2 : -2 }}
+                className={`group relative overflow-hidden rounded-2xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl p-6 shadow-lg hover:shadow-2xl border border-slate-200/50 dark:border-slate-700/50 hover-scale hover-lift animate-on-scroll fade-up ${featuresVisible ? 'visible' : ''}`}
+                style={{ animationDelay: `${index * 0.1}s` }}
               >
-                <motion.div 
+                <div 
                   className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${feature.color} opacity-10 rounded-full blur-2xl group-hover:opacity-30 transition-all duration-500`}
-                  animate={{
-                    scale: [1, 1.2, 1],
-                    opacity: [0.1, 0.2, 0.1],
-                  }}
-                  transition={{
-                    duration: 3,
-                    repeat: Infinity,
-                    delay: index * 0.3,
-                  }}
-                ></motion.div>
+                ></div>
                 <div className="relative z-10">
-                  <motion.div 
-                    className={`inline-flex p-3 rounded-xl bg-gradient-to-br ${feature.color} mb-4 shadow-lg`}
-                    initial={{ scale: 0, rotate: -180 }}
-                    whileInView={{ scale: 1, rotate: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.6, delay: index * 0.15, type: "spring" }}
-                    whileHover={{ scale: 1.15, rotate: [0, -10, 10, -10, 0] }}
+                  <div 
+                    className={`inline-flex p-3 rounded-xl bg-gradient-to-br ${feature.color} mb-4 shadow-lg hover-scale`}
                   >
                     <Icon className="h-6 w-6 text-white" />
-                  </motion.div>
-                  <motion.h3 
-                    className="text-lg font-bold text-alego-700 dark:text-alego-300 mb-2"
-                    initial={{ opacity: 0 }}
-                    whileInView={{ opacity: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.5, delay: index * 0.2 }}
-                  >
+                  </div>
+                  <h3 className="text-lg font-bold text-alego-700 dark:text-alego-300 mb-2">
                     {feature.title}
-                  </motion.h3>
-                  <motion.p 
-                    className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed"
-                    initial={{ opacity: 0, y: 10 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.5, delay: index * 0.25 }}
-                  >
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                     {feature.description}
-                  </motion.p>
+                  </p>
                 </div>
-              </motion.div>
+              </div>
             )
           })}
         </div>
-      </motion.div>
+      </div>
 
       {/* Avaliações dos Alunos */}
-      <motion.div 
-        className="rounded-2xl bg-white dark:bg-slate-800 p-6 sm:p-8 shadow-sm"
-        initial={{ opacity: 0, y: 60 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-100px" }}
-        transition={{ duration: 0.8, type: "spring", stiffness: 100 }}
-      >
+      <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 sm:p-8 shadow-sm">
         <Reviews />
-      </motion.div>
+      </div>
 
       {/* CTA Final */}
-      <motion.div 
-        className="rounded-2xl bg-gradient-to-r from-alego-600 to-alego-700 p-8 sm:p-10 text-center text-white relative overflow-hidden"
-        initial={{ opacity: 0, scale: 0.9 }}
-        whileInView={{ opacity: 1, scale: 1 }}
-        viewport={{ once: true, margin: "-100px" }}
-        transition={{ duration: 0.8, type: "spring", stiffness: 100 }}
+      <div 
+        ref={ctaRef}
+        className={`rounded-2xl bg-gradient-to-r from-alego-600 to-alego-700 p-8 sm:p-10 text-center text-white relative overflow-hidden animate-on-scroll scale ${ctaVisible ? 'visible' : ''}`}
       >
-        {/* Background animado */}
-        <motion.div
-          className="absolute inset-0 opacity-20"
-          animate={{
-            background: [
-              "radial-gradient(circle at 20% 50%, rgba(255,255,255,0.3) 0%, transparent 50%)",
-              "radial-gradient(circle at 80% 80%, rgba(255,255,255,0.3) 0%, transparent 50%)",
-              "radial-gradient(circle at 40% 20%, rgba(255,255,255,0.3) 0%, transparent 50%)",
-              "radial-gradient(circle at 20% 50%, rgba(255,255,255,0.3) 0%, transparent 50%)",
-            ]
-          }}
-          transition={{
-            duration: 8,
-            repeat: Infinity,
-            ease: "linear"
-          }}
-        />
         <div className="relative z-10">
-          <motion.div
-            initial={{ scale: 0, rotate: -180 }}
-            whileInView={{ scale: 1, rotate: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, type: "spring", delay: 0.2 }}
-          >
+          <div>
             <AcademicCapIcon className="h-12 w-12 sm:h-16 sm:w-16 mx-auto mb-4 text-alego-100" />
-          </motion.div>
-          <motion.h2 
-            className="text-2xl sm:text-3xl md:text-4xl font-black mb-4"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-          >
+          </div>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-4">
             Pronto para começar sua jornada?
-          </motion.h2>
-          <motion.p 
-            className="text-alego-100 mb-6 text-sm sm:text-base max-w-2xl mx-auto"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-          >
+          </h2>
+          <p className="text-alego-100 mb-6 text-sm sm:text-base max-w-2xl mx-auto">
             Junte-se a centenas de alunos que já estão se preparando para seus concursos com nossa plataforma completa.
-          </motion.p>
-          <motion.div 
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.5 }}
-          >
-            <motion.div
-              whileHover={{ scale: 1.1, y: -5 }}
-              whileTap={{ scale: 0.95 }}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
+            <Link
+              to="/login"
+              className="inline-block rounded-full bg-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-alego-600 shadow-2xl hover:bg-alego-50 transition-all whitespace-nowrap hover-scale hover-lift"
             >
-              <Link
-                to="/login"
-                className="inline-block rounded-full bg-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-alego-600 shadow-2xl hover:bg-alego-50 transition-all whitespace-nowrap"
-              >
-                Começar Agora
-              </Link>
-            </motion.div>
-            <motion.div
-              whileHover={{ scale: 1.1, y: -5 }}
-              whileTap={{ scale: 0.95 }}
+              Começar Agora
+            </Link>
+            <Link
+              to="/pagamento"
+              onClick={trackButtonClick}
+              className="inline-block rounded-full bg-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-alego-600 shadow-2xl hover:bg-alego-50 transition-all whitespace-nowrap hover-scale hover-lift"
             >
-              <Link
-                to="/pagamento"
-                onClick={trackButtonClick}
-                className="inline-block rounded-full bg-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-alego-600 shadow-2xl hover:bg-alego-50 transition-all whitespace-nowrap"
-              >
-                Garantir Promoção
-              </Link>
-            </motion.div>
-            <motion.div
-              whileHover={{ scale: 1.1, y: -5 }}
-              whileTap={{ scale: 0.95 }}
+              Garantir Promoção
+            </Link>
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block rounded-full border-2 border-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-white hover:bg-white/10 transition-all whitespace-nowrap hover-scale hover-lift"
             >
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block rounded-full border-2 border-white px-8 py-3 sm:px-10 sm:py-4 text-base sm:text-lg font-black text-white hover:bg-white/10 transition-all whitespace-nowrap"
-              >
-                Falar no WhatsApp
-              </a>
-            </motion.div>
-          </motion.div>
+              Falar no WhatsApp
+            </a>
+          </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* Seção de Notícias - No final da página */}
-      <motion.div
-        initial={{ opacity: 0, y: 80 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-100px" }}
-        transition={{ duration: 0.8, type: "spring", stiffness: 100 }}
-      >
+      <div ref={newsRef} className={`animate-on-scroll fade-up ${newsVisible ? 'visible' : ''}`}>
         <NewsSection />
-      </motion.div>
+      </div>
     </section>
   )
 }

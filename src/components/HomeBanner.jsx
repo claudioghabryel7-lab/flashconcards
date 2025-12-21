@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '../firebase/config'
-import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import LazyImage from './LazyImage'
 
@@ -123,37 +122,31 @@ const HomeBanner = () => {
 
   return (
     <div className="relative w-full overflow-hidden rounded-3xl shadow-xl mb-6 sm:mb-8 border border-slate-200/50 dark:border-slate-700/50 h-[200px] sm:h-[300px] md:h-[400px] lg:h-[500px]">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={currentBanner.id}
-          initial={{ opacity: 0, scale: 1.05 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
-          className="relative w-full h-full"
-        >
-          {currentBanner.link ? (
-            <Link to={currentBanner.link} className="block w-full h-full group">
-              <LazyImage
-                src={currentBanner.imageUrl || currentBanner.imageBase64}
-                alt={currentBanner.title || 'Banner'}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                style={{ objectFit: 'cover', objectPosition: 'center' }}
-                priority={true}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            </Link>
-          ) : (
+      <div
+        key={currentBanner.id}
+        className="relative w-full h-full animate-banner-fade"
+      >
+        {currentBanner.link ? (
+          <Link to={currentBanner.link} className="block w-full h-full group">
             <LazyImage
               src={currentBanner.imageUrl || currentBanner.imageBase64}
               alt={currentBanner.title || 'Banner'}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
               style={{ objectFit: 'cover', objectPosition: 'center' }}
               priority={true}
             />
-          )}
-        </motion.div>
-      </AnimatePresence>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          </Link>
+        ) : (
+          <LazyImage
+            src={currentBanner.imageUrl || currentBanner.imageBase64}
+            alt={currentBanner.title || 'Banner'}
+            className="w-full h-full object-cover"
+            style={{ objectFit: 'cover', objectPosition: 'center' }}
+            priority={true}
+          />
+        )}
+      </div>
 
       {/* Indicadores */}
       {banners.length > 1 && (

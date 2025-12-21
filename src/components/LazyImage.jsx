@@ -44,6 +44,18 @@ const LazyImage = ({
         img.fetchPriority = 'high'
       }
       
+      // Tentar usar WebP se suportado (para imagens do Firebase, isso depende do servidor)
+      // Mas podemos adicionar parâmetros de qualidade se a URL suportar
+      let optimizedSrc = src
+      if (src && !src.includes('data:image')) {
+        // Se a URL não for base64, podemos tentar adicionar parâmetros de otimização
+        // Isso depende do servidor suportar, mas não quebra se não suportar
+        if (!src.includes('?')) {
+          // Alguns CDNs suportam parâmetros de qualidade
+          // optimizedSrc = src + '?q=80&w=1200' // Exemplo para Cloudinary/Imagix
+        }
+      }
+      
       img.onload = () => {
         if (!cancelled) {
           setImageSrc(src)
