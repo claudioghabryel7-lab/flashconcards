@@ -205,6 +205,8 @@ const PublicHome = () => {
       {/* Cursos Disponíveis - Movido para o início */}
       {courses.length > 0 && (
         <div
+          id="cursos"
+          data-courses-section
           ref={coursesRef}
           className={`space-y-8 animate-on-scroll fade-up ${coursesVisible ? 'visible' : ''}`}
         >

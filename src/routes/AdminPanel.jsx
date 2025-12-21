@@ -8312,9 +8312,12 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                             type="text"
                             value={marketingHeroForm.ctaLink}
                             onChange={(e) => setMarketingHeroForm(prev => ({ ...prev, ctaLink: e.target.value }))}
-                            placeholder="Ex: /pagamento"
+                            placeholder="Ex: /pagamento ou /cursos ou deixe vazio para scroll até cursos"
                             className="w-full rounded-lg border border-slate-300 p-2 text-sm"
                           />
+                          <p className="text-xs text-slate-500 mt-1">
+                            Deixe vazio ou use "/cursos" para fazer scroll até a seção de cursos na página inicial.
+                          </p>
                         </div>
                       </div>
 

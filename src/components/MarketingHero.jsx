@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import LazyImage from './LazyImage'
 import { SparklesIcon, FireIcon, ClockIcon, UserGroupIcon } from '@heroicons/react/24/solid'
+import { useIntersectionObserver } from '../hooks/useIntersectionObserver'
 
 const MarketingHero = () => {
   const [config, setConfig] = useState(null)
   const [loading, setLoading] = useState(true)
   const [animationType, setAnimationType] = useState('sparks')
+  const navigate = useNavigate()
+  
+  // Observer para animação de entrada
+  const [heroRef, heroVisible] = useIntersectionObserver({ once: true })
 
   useEffect(() => {
     const configRef = collection(db, 'marketingHero')
@@ -126,6 +131,21 @@ const MarketingHero = () => {
     return () => clearInterval(interval)
   }, [config?.showTimer, config?.timerEndDate])
 
+  // Função para scrollar até a seção de cursos
+  const scrollToCourses = (e) => {
+    e.preventDefault()
+    const coursesSection = document.querySelector('[data-courses-section]')
+    if (coursesSection) {
+      coursesSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    } else {
+      // Se não encontrar, tentar scrollar até o elemento com id cursos
+      const element = document.getElementById('cursos')
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }
+  }
+
   // Não mostrar se estiver carregando ou se não houver configuração ativa
   if (loading) {
     return null
@@ -136,8 +156,20 @@ const MarketingHero = () => {
     return null
   }
 
+  // Determinar o link do CTA
+  const ctaLink = config.ctaLink || '/pagamento'
+  const isInternalLink = ctaLink.startsWith('/') && !ctaLink.startsWith('http')
+  const shouldScrollToCourses = ctaLink === '/cursos' || ctaLink === '#cursos' || ctaLink === ''
+
   return (
-    <section className="relative w-full min-h-[600px] sm:min-h-[700px] md:min-h-[800px] overflow-hidden rounded-3xl mb-8">
+    <section 
+      ref={heroRef}
+      className={`relative w-full min-h-[600px] sm:min-h-[700px] md:min-h-[800px] overflow-hidden rounded-3xl mb-8 transition-all duration-1000 ${
+        heroVisible 
+          ? 'opacity-100 translate-y-0 scale-100' 
+          : 'opacity-0 translate-y-20 scale-95'
+      }`}
+    >
       {/* Imagem de fundo */}
       {config.backgroundImage && (
         <div className="absolute inset-0 z-0">
@@ -264,19 +296,35 @@ const MarketingHero = () => {
         )}
 
         {/* CTA Principal */}
-        <Link
-          to={config.ctaLink || '/pagamento'}
-          className="cta-button-glow group relative inline-block px-8 sm:px-12 py-4 sm:py-5 rounded-2xl bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-black text-lg sm:text-xl md:text-2xl shadow-2xl hover:shadow-yellow-500/50 transition-all duration-300 hover:scale-110 overflow-hidden"
-        >
-          {/* Efeito shine */}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-          
-          <span className="relative z-10 flex items-center gap-3">
-            <SparklesIcon className="h-6 w-6 sm:h-8 sm:w-8 animate-pulse" />
-            {config.ctaText || 'Garantir minha vaga agora'}
-            <SparklesIcon className="h-6 w-6 sm:h-8 sm:w-8 animate-pulse" />
-          </span>
-        </Link>
+        {shouldScrollToCourses ? (
+          <button
+            onClick={scrollToCourses}
+            className="cta-button-glow group relative inline-block px-8 sm:px-12 py-4 sm:py-5 rounded-2xl bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-black text-lg sm:text-xl md:text-2xl shadow-2xl hover:shadow-yellow-500/50 transition-all duration-300 hover:scale-110 overflow-hidden cursor-pointer"
+          >
+            {/* Efeito shine */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+            
+            <span className="relative z-10 flex items-center gap-3">
+              <SparklesIcon className="h-6 w-6 sm:h-8 sm:w-8 animate-pulse" />
+              {config.ctaText || 'Ver Cursos Disponíveis'}
+              <SparklesIcon className="h-6 w-6 sm:h-8 sm:w-8 animate-pulse" />
+            </span>
+          </button>
+        ) : (
+          <Link
+            to={ctaLink}
+            className="cta-button-glow group relative inline-block px-8 sm:px-12 py-4 sm:py-5 rounded-2xl bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-black text-lg sm:text-xl md:text-2xl shadow-2xl hover:shadow-yellow-500/50 transition-all duration-300 hover:scale-110 overflow-hidden"
+          >
+            {/* Efeito shine */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+            
+            <span className="relative z-10 flex items-center gap-3">
+              <SparklesIcon className="h-6 w-6 sm:h-8 sm:w-8 animate-pulse" />
+              {config.ctaText || 'Garantir minha vaga agora'}
+              <SparklesIcon className="h-6 w-6 sm:h-8 sm:w-8 animate-pulse" />
+            </span>
+          </Link>
+        )}
 
         {/* Garantia/Selos */}
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-sm sm:text-base">
