@@ -1152,15 +1152,30 @@ exports.updateUserPassword = functions.https.onRequest((req, res) => {
 
 // Função para enviar email em massa para todos os usuários
 exports.sendMassEmail = functions.https.onRequest((req, res) => {
+  // DEFINIR CORS HEADERS MANUALMENTE PRIMEIRO
+  const origin = req.headers.origin
+  const allowedOrigins = ['https://www.flashconcards.com.br', 'https://flashconcards.com.br', 'http://localhost:5173']
+  
+  if (origin && allowedOrigins.includes(origin)) {
+    res.set('Access-Control-Allow-Origin', origin)
+  } else {
+    res.set('Access-Control-Allow-Origin', 'https://www.flashconcards.com.br')
+  }
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.set('Access-Control-Max-Age', '3600')
+  
+  // Tratar preflight request ANTES de qualquer coisa
+  if (req.method === 'OPTIONS') {
+    return res.status(204).send('')
+  }
+  
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Método não permitido' })
+  }
+  
+  // Usar CORS middleware também para garantir
   cors(req, res, async () => {
-    // Tratar preflight request
-    if (req.method === 'OPTIONS') {
-      return res.status(204).send('')
-    }
-    
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Método não permitido' })
-    }
 
     try {
       const { subject, message, adminEmail } = req.body
