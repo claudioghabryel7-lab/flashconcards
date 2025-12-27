@@ -211,29 +211,15 @@ const NewsView = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
-      {/* Background com imagem e gradiente fosco */}
-      <div 
-        className="fixed inset-0 z-0 opacity-30"
-        style={{
-          backgroundImage: 'url("https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920")',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
-        }}
-      />
-      <div className="fixed inset-0 z-0 bg-gradient-to-br from-blue-600/40 via-indigo-600/40 to-blue-700/40 dark:from-slate-900/80 dark:via-slate-800/80 dark:to-slate-900/80" />
-      
+    <div className="min-h-screen bg-white dark:bg-slate-900">
       {/* Header completo */}
-      <div className="relative z-10">
-        <Header />
-      </div>
+      <Header />
 
       {/* Conteúdo principal */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Artigo principal */}
-          <article className="lg:col-span-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-6 md:p-8 shadow-xl">
+          <article className="lg:col-span-2">
             {/* Cabeçalho da notícia */}
             <header className="mb-8">
               {/* Badge de categoria */}

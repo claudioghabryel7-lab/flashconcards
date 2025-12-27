@@ -10887,10 +10887,29 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                     </ul>
                   </div>
                   
+                  {/* Campo para especificar concurso */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                      📝 Especificar Concurso (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      id="concursoInput"
+                      placeholder="Ex: Concurso PMGO 2024, Concurso PC Goiás, etc. (Deixe vazio para IA escolher)"
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      Se especificar, a IA vai gerar notícia focada neste concurso. Se deixar vazio, a IA escolhe automaticamente.
+                    </p>
+                  </div>
+                  
                   <button
                     type="button"
                     onClick={async () => {
-                      if (!confirm('Deseja gerar uma nova notícia de concurso? Isso pode levar alguns segundos.')) {
+                      const concursoInput = document.getElementById('concursoInput')
+                      const concursoEspecifico = concursoInput?.value?.trim() || ''
+                      
+                      if (!confirm(`Deseja gerar uma nova notícia de concurso${concursoEspecifico ? ` sobre "${concursoEspecifico}"` : ''}? Isso pode levar alguns segundos.`)) {
                         return
                       }
                       
@@ -10902,7 +10921,9 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                           headers: {
                             'Content-Type': 'application/json',
                           },
-                          body: JSON.stringify({}),
+                          body: JSON.stringify({
+                            concursoEspecifico: concursoEspecifico
+                          }),
                         })
                         
                         if (!response.ok) {
@@ -10912,6 +10933,9 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                         
                         const result = await response.json()
                         setMessage(`✅ Notícia gerada com sucesso! ID: ${result.newsId}`)
+                        
+                        // Limpar campo
+                        if (concursoInput) concursoInput.value = ''
                         
                         // Aguardar um pouco e recarregar
                         setTimeout(() => {

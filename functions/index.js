@@ -1240,6 +1240,56 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
         return res.status(500).json({ error: 'GEMINI_API_KEY não configurada' })
       }
 
+      const { concursoEspecifico } = req.body || {}
+      
+      // Verificar se já existe notícia similar (evitar duplicatas)
+      const postsRef = admin.firestore().collection('posts')
+      
+      if (concursoEspecifico) {
+        // Verificar se já existe notícia sobre este concurso específico
+        const existingQuery = await postsRef
+          .where('isConcursoNews', '==', true)
+          .where('concursoData.concursoName', '==', concursoEspecifico)
+          .orderBy('createdAt', 'desc')
+          .limit(1)
+          .get()
+        
+        if (!existingQuery.empty) {
+          const lastNews = existingQuery.docs[0].data()
+          const lastNewsDate = lastNews.createdAt?.toDate?.() || new Date(0)
+          const daysSinceLastNews = (Date.now() - lastNewsDate.getTime()) / (1000 * 60 * 60 * 24)
+          
+          // Se foi gerada há menos de 7 dias, não gerar novamente
+          if (daysSinceLastNews < 7) {
+            return res.status(400).json({ 
+              error: 'Notícia sobre este concurso já foi gerada recentemente',
+              message: `Uma notícia sobre "${concursoEspecifico}" foi gerada há ${Math.floor(daysSinceLastNews)} dias. Aguarde pelo menos 7 dias antes de gerar novamente.`
+            })
+          }
+        }
+      } else {
+        // Verificar últimas 3 notícias geradas para evitar repetição
+        const recentNews = await postsRef
+          .where('isConcursoNews', '==', true)
+          .orderBy('createdAt', 'desc')
+          .limit(3)
+          .get()
+        
+        if (!recentNews.empty) {
+          const lastNews = recentNews.docs[0].data()
+          const lastNewsDate = lastNews.createdAt?.toDate?.() || new Date(0)
+          const hoursSinceLastNews = (Date.now() - lastNewsDate.getTime()) / (1000 * 60 * 60)
+          
+          // Se foi gerada há menos de 24 horas, não gerar novamente
+          if (hoursSinceLastNews < 24) {
+            return res.status(400).json({ 
+              error: 'Notícia gerada recentemente',
+              message: `Uma notícia foi gerada há ${Math.floor(hoursSinceLastNews)} horas. Aguarde pelo menos 24 horas antes de gerar novamente.`
+            })
+          }
+        }
+      }
+
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ 
         model: 'gemini-2.0-flash-exp',
@@ -1252,8 +1302,10 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
       // Prompt para IA buscar e gerar notícia sobre concursos
       const prompt = `Você é um especialista em concursos públicos brasileiros. 
       Sua tarefa é criar uma notícia completa e atualizada sobre concursos públicos abertos ou iminentes.
-
-      GERE UMA NOTÍCIA SOBRE:
+      
+      ${concursoEspecifico ? `CONCURSO ESPECÍFICO SOLICITADO: "${concursoEspecifico}"
+      
+      IMPORTANTE: Você DEVE gerar uma notícia sobre este concurso específico. Foque todas as informações neste concurso. Seja detalhado e específico sobre este concurso.` : `GERE UMA NOTÍCIA SOBRE:
       - Concurso público aberto (com inscrições abertas)
       - Concurso público previsto/iminente (com edital previsto)
       - Atualização sobre concursos já abertos (novas vagas, prorrogação de prazo, etc.)
@@ -1262,7 +1314,7 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
       - Polícia Militar (PMGO, PMSP, PMRJ, etc.)
       - Polícia Civil (PC)
       - Guarda Municipal (GCM)
-      - Outros concursos públicos relevantes
+      - Outros concursos públicos relevantes`}
 
       INFORMAÇÕES OBRIGATÓRIAS A INCLUIR:
       1. Nome do concurso e órgão
