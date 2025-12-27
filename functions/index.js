@@ -1223,8 +1223,13 @@ exports.expireTrialUsers = functions.pubsub.schedule('0 0 * * *').timeZone('Amer
  * Gera notícias de concursos automaticamente usando IA
  * Busca informações sobre concursos abertos, vagas, remuneração, etc.
  */
-exports.generateConcursoNews = functions.https.onRequest(async (req, res) => {
-  cors(req, res, async () => {
+exports.generateConcursoNews = functions.https.onRequest((req, res) => {
+  return cors(req, res, async () => {
+    // Responder a OPTIONS (preflight) imediatamente
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end()
+    }
+    
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' })
     }
