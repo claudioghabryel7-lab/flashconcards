@@ -159,6 +159,7 @@ const AdminPanel = () => {
   const [resetEmail, setResetEmail] = useState('')
   const [generatedLink, setGeneratedLink] = useState('')
   const [generatingLink, setGeneratingLink] = useState(false)
+  const [resetPasswordError, setResetPasswordError] = useState(null) // { email: string, existsInFirestore: boolean }
   
   // Estado para gerenciar leads
   const [leads, setLeads] = useState([])
@@ -4099,12 +4100,14 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
   const generateResetLink = async () => {
     if (!resetEmail.trim()) {
       setMessage('❌ Digite o email do usuário.')
+      setResetPasswordError(null)
       return
     }
 
     setGeneratingLink(true)
     setGeneratedLink('')
     setMessage('')
+    setResetPasswordError(null)
 
     try {
       // Tentar enviar email de redefinição de senha diretamente
@@ -4113,6 +4116,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       
       setGeneratedLink('') // Não precisamos mais do link, o email foi enviado
       setMessage('✅ Email de redefinição de senha enviado com sucesso! Verifique a caixa de entrada (e spam) do usuário.')
+      setResetPasswordError(null)
     } catch (err) {
       console.error('Erro ao enviar email de redefinição:', err)
       
@@ -4123,14 +4127,28 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
         const userSnapshot = await getDocs(q)
         
         if (!userSnapshot.empty) {
-          setMessage('⚠️ Este email está cadastrado no sistema, mas não possui conta no Firebase Authentication.\n\nPara resolver:\n1. O usuário precisa fazer login pelo menos uma vez para criar a conta no Firebase Auth\n2. Ou você pode criar a conta manualmente no Firebase Console > Authentication\n3. Depois tente redefinir a senha novamente')
+          // Usuário existe no Firestore mas não no Firebase Auth
+          setResetPasswordError({
+            email: resetEmail.toLowerCase().trim(),
+            existsInFirestore: true,
+            type: 'no-firebase-auth'
+          })
+          setMessage('')
         } else {
-          setMessage('❌ Usuário com este email não encontrado no sistema.')
+          // Usuário não existe em nenhum lugar
+          setResetPasswordError({
+            email: resetEmail.toLowerCase().trim(),
+            existsInFirestore: false,
+            type: 'not-found'
+          })
+          setMessage('')
         }
       } else if (err.code === 'auth/invalid-email') {
         setMessage('❌ Email inválido.')
+        setResetPasswordError(null)
       } else {
         setMessage(`❌ Erro ao enviar email: ${err.message}`)
+        setResetPasswordError(null)
       }
     } finally {
       setGeneratingLink(false)
@@ -4141,8 +4159,12 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
   const generateResetLinkForUser = async (userEmail) => {
     if (!userEmail) {
       setMessage('❌ Email do usuário não fornecido.')
+      setResetPasswordError(null)
       return
     }
+
+    // Limpar erro anterior
+    setResetPasswordError(null)
 
     try {
       // Tentar enviar email de redefinição de senha diretamente
@@ -4150,6 +4172,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       await sendPasswordResetEmail(auth, userEmail.toLowerCase().trim())
       
       setMessage(`✅ Email de redefinição de senha enviado com sucesso para ${userEmail}! Verifique a caixa de entrada (e spam) do usuário.`)
+      setResetPasswordError(null)
     } catch (err) {
       console.error('Erro ao enviar email de redefinição:', err)
       
@@ -4160,14 +4183,28 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
         const userSnapshot = await getDocs(q)
         
         if (!userSnapshot.empty) {
-          setMessage(`⚠️ Este email está cadastrado no sistema, mas não possui conta no Firebase Authentication.\n\nPara resolver:\n1. O usuário precisa fazer login pelo menos uma vez para criar a conta no Firebase Auth\n2. Ou você pode criar a conta manualmente no Firebase Console > Authentication\n3. Depois tente redefinir a senha novamente`)
+          // Usuário existe no Firestore mas não no Firebase Auth
+          setResetPasswordError({
+            email: userEmail.toLowerCase().trim(),
+            existsInFirestore: true,
+            type: 'no-firebase-auth'
+          })
+          setMessage('') // Limpar mensagem normal para mostrar a mensagem estruturada
         } else {
-          setMessage(`❌ Usuário com este email não encontrado no sistema.`)
+          // Usuário não existe em nenhum lugar
+          setResetPasswordError({
+            email: userEmail.toLowerCase().trim(),
+            existsInFirestore: false,
+            type: 'not-found'
+          })
+          setMessage('')
         }
       } else if (err.code === 'auth/invalid-email') {
         setMessage(`❌ Email inválido.`)
+        setResetPasswordError(null)
       } else {
         setMessage(`❌ Erro ao enviar email: ${err.message}`)
+        setResetPasswordError(null)
       }
     }
   }
@@ -6050,6 +6087,82 @@ CRÍTICO:
             <p className="relative text-sm font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
               <span>✓</span> {message}
             </p>
+          </div>
+        )}
+
+        {/* Mensagem estruturada de erro de redefinição de senha */}
+        {resetPasswordError && (
+          <div className="mb-6 relative overflow-hidden rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-amber-300 dark:border-amber-700 px-6 py-5 shadow-lg">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-200/20 dark:bg-amber-800/20 rounded-full blur-2xl -mr-16 -mt-16"></div>
+            
+            <div className="relative">
+              <div className="flex items-start gap-4 mb-4">
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                  <LockClosedIcon className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                </div>
+                
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-amber-900 dark:text-amber-100 mb-2">
+                    Não foi possível enviar o email de redefinição de senha
+                  </h3>
+                  
+                  {resetPasswordError.existsInFirestore ? (
+                    <>
+                      <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
+                        O email <strong>{resetPasswordError.email}</strong> está cadastrado no sistema, mas não possui uma conta ativa no Firebase Authentication.
+                      </p>
+                      
+                      <div className="bg-white/60 dark:bg-slate-800/60 rounded-lg p-4 mb-4">
+                        <p className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2">
+                          Para resolver este problema:
+                        </p>
+                        <ol className="text-sm text-amber-800 dark:text-amber-200 space-y-2 list-decimal list-inside">
+                          <li>Peça ao usuário para fazer login pelo menos uma vez - isso criará a conta automaticamente no Firebase Auth</li>
+                          <li>Ou crie a conta manualmente no Firebase Console (Authentication → Users)</li>
+                          <li>Depois, tente redefinir a senha novamente</li>
+                        </ol>
+                      </div>
+                      
+                      <button
+                        onClick={() => {
+                          setResetPasswordError(null)
+                          generateResetLinkForUser(resetPasswordError.email)
+                        }}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg transition-colors shadow-md"
+                      >
+                        <LockClosedIcon className="w-4 h-4" />
+                        Tentar Novamente
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
+                        O email <strong>{resetPasswordError.email}</strong> não foi encontrado no sistema.
+                      </p>
+                      
+                      <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
+                        Verifique se o email está correto ou se o usuário foi cadastrado corretamente.
+                      </p>
+                      
+                      <button
+                        onClick={() => setResetPasswordError(null)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg transition-colors shadow-md"
+                      >
+                        Fechar
+                      </button>
+                    </>
+                  )}
+                </div>
+                
+                <button
+                  onClick={() => setResetPasswordError(null)}
+                  className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/50 hover:bg-amber-200 dark:hover:bg-amber-900/70 flex items-center justify-center transition-colors text-amber-600 dark:text-amber-400"
+                  title="Fechar"
+                >
+                  <span className="text-lg">×</span>
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
