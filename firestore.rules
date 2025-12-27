@@ -334,14 +334,28 @@
         );
         
         // Permitir atualização:
-        // - Apenas dono da transação (por userId ou email) ou admin
+        // - Dono da transação (por userId ou email) ou admin (se autenticado)
+        // - Se não autenticado, permitir update apenas se:
+        //   1. A transação não tem userId (foi criada sem autenticação)
+        //   2. O transactionId corresponde ao documento
         // - Funções Firebase usam Admin SDK e bypassam essas regras automaticamente
-        allow update: if isAuthenticated() && (
-          (resource != null && resource.data != null && (
-            resource.data.userId == request.auth.uid ||
-            resource.data.userEmail == request.auth.token.email
-          )) ||
-          isAdmin()
+        allow update: if (
+          // Usuário autenticado: pode atualizar se for dono ou admin
+          isAuthenticated() && (
+            (resource != null && resource.data != null && (
+              resource.data.userId == request.auth.uid ||
+              resource.data.userEmail == request.auth.token.email
+            )) ||
+            isAdmin()
+          )
+        ) || (
+          // Usuário não autenticado: pode atualizar apenas transações sem userId
+          // que foram criadas por ele (mesmo transactionId)
+          !isAuthenticated() &&
+          resource != null &&
+          resource.data != null &&
+          resource.data.userId == null &&
+          resource.data.transactionId == transactionId
         );
         
         // Apenas admin pode deletar
