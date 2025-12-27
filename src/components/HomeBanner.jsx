@@ -11,77 +11,78 @@ const HomeBanner = () => {
 
   // Carregar banners do Firestore com cache
   useEffect(() => {
-    // Deferir carregamento para não bloquear renderização inicial
-    startTransition(() => {
-      // Tentar carregar do cache primeiro
-      const cacheKey = 'homeBanners'
-      try {
-        const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
-        if (cached) {
-          const { data: cachedData, timestamp } = JSON.parse(cached)
-          const now = Date.now()
-          if (now - timestamp < 5 * 60 * 1000 && cachedData) {
-            setBanners(cachedData)
-            setLoading(false)
-          }
-        }
-      } catch (err) {
-        console.warn('Erro ao ler cache de banners:', err)
-      }
-      
-      // Deferir query do Firestore
-      setTimeout(() => {
-        const bannersRef = collection(db, 'homeBanners')
-        const q = query(bannersRef, orderBy('order', 'asc'))
-        let retryCount = 0
-        const maxRetries = 3
-        
-        const loadData = () => {
-          const unsub = onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs
-          .map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-          .filter((banner) => banner.active !== false) // Filtrar apenas ativos
-        
-        setBanners(data)
-        setLoading(false)
-        retryCount = 0
-        
-        // Salvar no cache
-        try {
-          localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
-            data,
-            timestamp: Date.now(),
-          }))
-        } catch (err) {
-          console.warn('Erro ao salvar cache de banners:', err)
-        }
-      }, (error) => {
-        console.error('Erro ao carregar banners:', error)
-        
-        // Retry logic
-        if (retryCount < maxRetries) {
-          retryCount++
-          setTimeout(() => {
-            loadData()
-          }, 1000 * retryCount)
-        } else {
-          setBanners([])
+    // Tentar carregar do cache primeiro
+    const cacheKey = 'homeBanners'
+    try {
+      const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+      if (cached) {
+        const { data: cachedData, timestamp } = JSON.parse(cached)
+        const now = Date.now()
+        if (now - timestamp < 5 * 60 * 1000 && cachedData) {
+          setBanners(cachedData)
           setLoading(false)
         }
-      })
-      return unsub
+      }
+    } catch (err) {
+      console.warn('Erro ao ler cache de banners:', err)
     }
     
-        const unsub = loadData()
-        return () => unsub()
+    // Deferir query do Firestore para não bloquear renderização inicial
+    let unsub = null
+    const timeoutId = setTimeout(() => {
+      const bannersRef = collection(db, 'homeBanners')
+      const q = query(bannersRef, orderBy('order', 'asc'))
+      let retryCount = 0
+      const maxRetries = 3
+      
+      const loadData = () => {
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const data = snapshot.docs
+            .map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }))
+            .filter((banner) => banner.active !== false) // Filtrar apenas ativos
+          
+          setBanners(data)
+          setLoading(false)
+          retryCount = 0
+          
+          // Salvar no cache
+          try {
+            localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
+              data,
+              timestamp: Date.now(),
+            }))
+          } catch (err) {
+            console.warn('Erro ao salvar cache de banners:', err)
+          }
+        }, (error) => {
+          console.error('Erro ao carregar banners:', error)
+          
+          // Retry logic
+          if (retryCount < maxRetries) {
+            retryCount++
+            setTimeout(() => {
+              loadData()
+            }, 1000 * retryCount)
+          } else {
+            setBanners([])
+            setLoading(false)
+          }
+        })
+        return unsubscribe
       }
       
-      loadData()
-      }, 100) // Delay para permitir renderização inicial
-    })
+      unsub = loadData()
+    }, 100) // Delay para permitir renderização inicial
+
+    return () => {
+      clearTimeout(timeoutId)
+      if (unsub) {
+        unsub()
+      }
+    }
   }, [])
 
   // Preload das próximas imagens do banner
