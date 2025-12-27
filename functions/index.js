@@ -499,12 +499,23 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
         })
         
         console.log(`Transação ${transactionDoc.id} atualizada para status: ${newStatus}`)
+        console.log(`Dados da transação:`, {
+          userId: transactionData.userId,
+          userEmail: transactionData.userEmail,
+          courseId: transactionData.courseId,
+          productName: transactionData.productName
+        })
         
         // Se pagamento foi aprovado, criar usuário e enviar email
         if (newStatus === 'paid') {
           const userId = transactionData.userId
           const userEmail = transactionData.userEmail
           const userName = transactionData.userName || userEmail?.split('@')[0] || 'Cliente'
+          
+          // Verificar se courseId existe
+          if (!transactionData.courseId) {
+            console.warn(`⚠️ ATENÇÃO: Transação ${transactionDoc.id} não tem courseId! Verifique se o curso foi selecionado corretamente.`)
+          }
           
           // Função auxiliar para gerar senha
           const generatePassword = () => {
@@ -517,6 +528,10 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
             return password
           }
           
+          // Obter courseId da transação
+          const courseId = transactionData.courseId || null
+          console.log(`CourseId da transação: ${courseId}, UserId: ${userId}, UserEmail: ${userEmail}`)
+          
           if (userId) {
             // Usuário já existe - apenas ativar acesso e adicionar curso comprado
             const userRef = admin.firestore().collection('users').doc(userId)
@@ -524,26 +539,39 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
             
             if (userDoc.exists()) {
               const userData = userDoc.data()
-              const courseId = transactionData.courseId || null
               const currentPurchasedCourses = userData.purchasedCourses || []
               
               // Adicionar curso se não estiver na lista
               let updatedPurchasedCourses = [...currentPurchasedCourses]
               if (courseId && !updatedPurchasedCourses.includes(courseId)) {
                 updatedPurchasedCourses.push(courseId)
+                console.log(`Adicionando curso ${courseId} ao usuário ${userId}. Cursos anteriores: ${currentPurchasedCourses.join(', ')}, Cursos atualizados: ${updatedPurchasedCourses.join(', ')}`)
+              } else if (courseId) {
+                console.log(`Curso ${courseId} já está na lista do usuário ${userId}`)
+              } else {
+                console.warn(`CourseId é null ou undefined para transação ${transactionDoc.id}`)
               }
               
-              await userRef.update({
+              const updateData = {
                 hasActiveSubscription: true,
-                subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
                 lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
                 purchasedCourses: updatedPurchasedCourses,
-                // Se não tem curso selecionado, selecionar o curso comprado
-                ...(courseId && !userData.selectedCourseId && {
-                  selectedCourseId: courseId
-                })
-              })
-              console.log(`Acesso ativado para usuário: ${userId}, curso adicionado: ${courseId}`)
+              }
+              
+              // Adicionar subscriptionStartDate apenas se não existir
+              if (!userData.subscriptionStartDate) {
+                updateData.subscriptionStartDate = admin.firestore.FieldValue.serverTimestamp()
+              }
+              
+              // Se não tem curso selecionado, selecionar o curso comprado
+              if (courseId && !userData.selectedCourseId) {
+                updateData.selectedCourseId = courseId
+              }
+              
+              await userRef.update(updateData)
+              console.log(`✅ Acesso ativado para usuário: ${userId}, curso adicionado: ${courseId}, purchasedCourses: ${updatedPurchasedCourses.join(', ')}`)
+            } else {
+              console.error(`Usuário ${userId} não encontrado no Firestore`)
             }
           } else if (userEmail) {
             // Usuário não existe - criar usuário e enviar email
@@ -558,11 +586,10 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
                 emailVerified: false
               })
               
-              // Obter courseId da transação
-              const courseId = transactionData.courseId || null
-              
               // Criar perfil no Firestore com curso comprado
               const purchasedCourses = courseId ? [courseId] : []
+              
+              console.log(`Criando novo usuário ${userRecord.uid} com curso ${courseId}, purchasedCourses: ${purchasedCourses.join(', ')}`)
               
               await admin.firestore().collection('users').doc(userRecord.uid).set({
                 uid: userRecord.uid,
@@ -576,6 +603,8 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
                 purchasedCourses: purchasedCourses,
                 selectedCourseId: courseId || null,
               })
+              
+              console.log(`✅ Novo usuário criado: ${userRecord.uid} com curso ${courseId}`)
               
               // Atualizar transação com userId
               await transactionDoc.ref.update({
