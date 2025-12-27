@@ -1,7 +1,10 @@
 const functions = require('firebase-functions')
 const admin = require('firebase-admin')
 const nodemailer = require('nodemailer')
-const cors = require('cors')({ origin: true })
+const cors = require('cors')({ 
+  origin: ['https://www.flashconcards.com.br', 'https://flashconcards.com.br', 'http://localhost:5173'],
+  credentials: true 
+})
 const { MercadoPagoConfig, Payment } = require('mercadopago')
 
 admin.initializeApp()
@@ -1149,9 +1152,15 @@ exports.updateUserPassword = functions.https.onRequest((req, res) => {
 
 // Função para enviar email em massa para todos os usuários
 exports.sendMassEmail = functions.https.onRequest((req, res) => {
+  // Aplicar CORS primeiro
   cors(req, res, async () => {
     // Tratar preflight request
     if (req.method === 'OPTIONS') {
+      // O middleware CORS já aplica os headers, mas garantimos que estão presentes
+      res.set('Access-Control-Allow-Origin', req.headers.origin || 'https://www.flashconcards.com.br')
+      res.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
+      res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+      res.set('Access-Control-Max-Age', '3600')
       return res.status(204).send('')
     }
     
