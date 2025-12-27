@@ -35,7 +35,7 @@ import {
 } from 'firebase/firestore'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon } from '@heroicons/react/24/outline'
 import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
-import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signOut } from 'firebase/auth'
+import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth'
 import { auth, db, storage } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -4107,40 +4107,29 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     setMessage('')
 
     try {
-      // Verificar se o email existe
-      const usersRef = collection(db, 'users')
-      const q = query(usersRef, where('email', '==', resetEmail.toLowerCase().trim()))
-      const userSnapshot = await getDocs(q)
-
-      if (userSnapshot.empty) {
-        setMessage('❌ Usuário com este email não encontrado.')
+      // Verificar se o email existe no Firebase Auth
+      const methods = await fetchSignInMethodsForEmail(auth, resetEmail.toLowerCase().trim())
+      
+      if (methods.length === 0) {
+        setMessage('❌ Este email não está cadastrado no Firebase Authentication. O usuário precisa ter uma conta no Firebase Auth para receber o email de redefinição.')
         setGeneratingLink(false)
         return
       }
 
-      // Gerar token aleatório seguro
-      const token = crypto.randomUUID() + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15)
+      // Enviar email de redefinição de senha usando Firebase Auth
+      await sendPasswordResetEmail(auth, resetEmail.toLowerCase().trim())
       
-      // Criar token no Firestore (expira em 24 horas)
-      const expiresAt = new Date()
-      expiresAt.setHours(expiresAt.getHours() + 24)
-
-      await setDoc(doc(db, 'passwordResetTokens', token), {
-        email: resetEmail.toLowerCase().trim(),
-        createdAt: serverTimestamp(),
-        expiresAt: expiresAt,
-        used: false,
-      })
-
-      // Gerar link completo
-      const baseUrl = window.location.origin
-      const resetLink = `${baseUrl}/reset/${token}`
-      
-      setGeneratedLink(resetLink)
-      setMessage('✅ Link gerado com sucesso! Copie e envie para o usuário.')
+      setGeneratedLink('') // Não precisamos mais do link, o email foi enviado
+      setMessage('✅ Email de redefinição de senha enviado com sucesso! Verifique a caixa de entrada (e spam) do usuário.')
     } catch (err) {
-      console.error('Erro ao gerar link:', err)
-      setMessage(`❌ Erro ao gerar link: ${err.message}`)
+      console.error('Erro ao enviar email de redefinição:', err)
+      if (err.code === 'auth/user-not-found') {
+        setMessage('❌ Usuário com este email não encontrado no Firebase Authentication.')
+      } else if (err.code === 'auth/invalid-email') {
+        setMessage('❌ Email inválido.')
+      } else {
+        setMessage(`❌ Erro ao enviar email: ${err.message}`)
+      }
     } finally {
       setGeneratingLink(false)
     }
@@ -4154,30 +4143,27 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     }
 
     try {
-      // Gerar token aleatório seguro
-      const token = crypto.randomUUID() + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15)
+      // Verificar se o email existe no Firebase Auth
+      const methods = await fetchSignInMethodsForEmail(auth, userEmail.toLowerCase().trim())
       
-      // Criar token no Firestore (expira em 24 horas)
-      const expiresAt = new Date()
-      expiresAt.setHours(expiresAt.getHours() + 24)
+      if (methods.length === 0) {
+        setMessage(`❌ Este email não está cadastrado no Firebase Authentication. O usuário precisa ter uma conta no Firebase Auth para receber o email de redefinição.`)
+        return
+      }
 
-      await setDoc(doc(db, 'passwordResetTokens', token), {
-        email: userEmail.toLowerCase().trim(),
-        createdAt: serverTimestamp(),
-        expiresAt: expiresAt,
-        used: false,
-      })
-
-      // Gerar link completo
-      const baseUrl = window.location.origin
-      const resetLink = `${baseUrl}/reset/${token}`
+      // Enviar email de redefinição de senha usando Firebase Auth
+      await sendPasswordResetEmail(auth, userEmail.toLowerCase().trim())
       
-      // Copiar para área de transferência
-      await navigator.clipboard.writeText(resetLink)
-      setMessage(`✅ Link de redefinição gerado e copiado para ${userEmail}! O link expira em 24 horas.`)
+      setMessage(`✅ Email de redefinição de senha enviado com sucesso para ${userEmail}! Verifique a caixa de entrada (e spam) do usuário.`)
     } catch (err) {
-      console.error('Erro ao gerar link:', err)
-      setMessage(`❌ Erro ao gerar link: ${err.message}`)
+      console.error('Erro ao enviar email de redefinição:', err)
+      if (err.code === 'auth/user-not-found') {
+        setMessage(`❌ Usuário com este email não encontrado no Firebase Authentication.`)
+      } else if (err.code === 'auth/invalid-email') {
+        setMessage(`❌ Email inválido.`)
+      } else {
+        setMessage(`❌ Erro ao enviar email: ${err.message}`)
+      }
     }
   }
 
