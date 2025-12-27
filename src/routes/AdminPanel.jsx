@@ -162,6 +162,15 @@ const AdminPanel = () => {
   const [generatingLink, setGeneratingLink] = useState(false)
   const [resetPasswordError, setResetPasswordError] = useState(null) // { email: string, existsInFirestore: boolean }
   
+  // Estado para envio de email em massa
+  const [massEmailForm, setMassEmailForm] = useState({
+    subject: '',
+    message: '',
+    adminEmail: ''
+  })
+  const [sendingMassEmail, setSendingMassEmail] = useState(false)
+  const [massEmailResult, setMassEmailResult] = useState(null)
+  
   // Estado para gerenciar leads
   const [leads, setLeads] = useState([])
   const [leadFilter, setLeadFilter] = useState('all') // 'all', 'contacted', 'not_contacted'
@@ -4229,6 +4238,71 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
         setMessage(`❌ Erro ao enviar email: ${err.message}`)
         setResetPasswordError(null)
       }
+    }
+  }
+
+  // Enviar email em massa para todos os usuários
+  const sendMassEmail = async () => {
+    if (!massEmailForm.subject.trim()) {
+      setMessage('❌ Digite o assunto do email.')
+      return
+    }
+
+    if (!massEmailForm.message.trim()) {
+      setMessage('❌ Digite a mensagem do email.')
+      return
+    }
+
+    if (!window.confirm(`⚠️ ATENÇÃO: Você está prestes a enviar um email para TODOS os usuários cadastrados (${users.length} usuário(s)).\n\nTem certeza que deseja continuar?`)) {
+      return
+    }
+
+    setSendingMassEmail(true)
+    setMassEmailResult(null)
+    setMessage('')
+
+    try {
+      const response = await fetch(FIREBASE_FUNCTIONS.sendMassEmail || 'https://us-central1-plegi-d84c2.cloudfunctions.net/sendMassEmail', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subject: massEmailForm.subject.trim(),
+          message: massEmailForm.message.trim(),
+          adminEmail: massEmailForm.adminEmail.trim() || undefined,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao enviar emails')
+      }
+
+      setMassEmailResult({
+        success: true,
+        stats: data.stats,
+        errors: data.errors
+      })
+      
+      setMessage(`✅ Email em massa enviado com sucesso! ${data.stats.success} email(s) enviado(s), ${data.stats.errors} erro(s).`)
+      
+      // Limpar formulário
+      setMassEmailForm({
+        subject: '',
+        message: '',
+        adminEmail: ''
+      })
+    } catch (err) {
+      console.error('Erro ao enviar email em massa:', err)
+      setMassEmailResult({
+        success: false,
+        error: err.message
+      })
+      setMessage(`❌ Erro ao enviar emails: ${err.message}`)
+    } finally {
+      setSendingMassEmail(false)
     }
   }
 
@@ -9295,6 +9369,135 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
               </p>
             </div>
                     )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Envio de Email em Massa */}
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-purple-500/5 to-pink-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  <div className="relative">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg">
+                        <span className="text-xl">📧</span>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-slate-900 dark:text-white">
+                          Envio de Email em Massa
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Envie um email para todos os {users.length} usuário(s) cadastrado(s)
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 mt-6">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                          Assunto do Email <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={massEmailForm.subject}
+                          onChange={(e) => setMassEmailForm(prev => ({ ...prev, subject: e.target.value }))}
+                          placeholder="Ex: Novidades da Plataforma"
+                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 p-3 text-sm focus:border-purple-500 focus:outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                          disabled={sendingMassEmail}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                          Mensagem <span className="text-rose-500">*</span>
+                        </label>
+                        <textarea
+                          value={massEmailForm.message}
+                          onChange={(e) => setMassEmailForm(prev => ({ ...prev, message: e.target.value }))}
+                          placeholder="Digite sua mensagem aqui... (Suporta quebras de linha)"
+                          rows={8}
+                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 p-3 text-sm focus:border-purple-500 focus:outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 resize-y"
+                          disabled={sendingMassEmail}
+                        />
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          Use quebras de linha para organizar sua mensagem. O texto será formatado automaticamente no email.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                          Email para Contato (Opcional)
+                        </label>
+                        <input
+                          type="email"
+                          value={massEmailForm.adminEmail}
+                          onChange={(e) => setMassEmailForm(prev => ({ ...prev, adminEmail: e.target.value }))}
+                          placeholder="contato@exemplo.com (será exibido no rodapé do email)"
+                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 p-3 text-sm focus:border-purple-500 focus:outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                          disabled={sendingMassEmail}
+                        />
+                      </div>
+
+                      {massEmailResult && (
+                        <div className={`rounded-lg p-4 ${
+                          massEmailResult.success 
+                            ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800' 
+                            : 'bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800'
+                        }`}>
+                          {massEmailResult.success ? (
+                            <>
+                              <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-2">
+                                ✅ Email em massa enviado com sucesso!
+                              </p>
+                              <div className="text-xs text-emerald-600 dark:text-emerald-400 space-y-1">
+                                <p>📊 Total de usuários: {massEmailResult.stats.total}</p>
+                                <p>✅ Enviados com sucesso: {massEmailResult.stats.success}</p>
+                                {massEmailResult.stats.errors > 0 && (
+                                  <p>❌ Erros: {massEmailResult.stats.errors}</p>
+                                )}
+                              </div>
+                              {massEmailResult.errors && massEmailResult.errors.length > 0 && (
+                                <details className="mt-3">
+                                  <summary className="text-xs text-emerald-600 dark:text-emerald-400 cursor-pointer hover:underline">
+                                    Ver detalhes dos erros
+                                  </summary>
+                                  <ul className="mt-2 text-xs text-emerald-700 dark:text-emerald-300 list-disc list-inside space-y-1">
+                                    {massEmailResult.errors.slice(0, 10).map((error, idx) => (
+                                      <li key={idx}>{error}</li>
+                                    ))}
+                                    {massEmailResult.errors.length > 10 && (
+                                      <li>... e mais {massEmailResult.errors.length - 10} erro(s)</li>
+                                    )}
+                                  </ul>
+                                </details>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">
+                              ❌ Erro: {massEmailResult.error}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={sendMassEmail}
+                        disabled={sendingMassEmail || !massEmailForm.subject.trim() || !massEmailForm.message.trim()}
+                        className="w-full rounded-full bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 text-sm font-semibold text-white hover:from-purple-700 hover:to-pink-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                      >
+                        {sendingMassEmail ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="animate-spin">⏳</span>
+                            Enviando emails...
+                          </span>
+                        ) : (
+                          `📧 Enviar para ${users.length} Usuário(s)`
+                        )}
+                      </button>
+
+                      <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                        ⚠️ Todos os emails serão enviados imediatamente. Verifique o conteúdo antes de enviar.
+                      </p>
                     </div>
                   </div>
                 </div>
