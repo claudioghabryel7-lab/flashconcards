@@ -6050,6 +6050,7 @@ CRÍTICO:
     { id: 'popup', label: '🔔 Popup Banner', icon: '🔔' },
     { id: 'courses', label: '🎓 Cursos', icon: '🎓' },
     { id: 'reviews', label: '⭐ Avaliações', icon: '⭐' },
+    { id: 'news', label: '📰 Notícias de Concursos', icon: '📰' },
     { id: 'leads', label: '📋 Leads', icon: '📋' },
     { id: 'simulados', label: '📝 Simulados', icon: '📝' },
     { id: 'trials', label: '🎁 Testes Gratuitos', icon: '🎁' },
@@ -10860,6 +10861,87 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                       })}
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Notícias de Concursos */}
+            {activeTab === 'news' && (
+              <div className="space-y-6">
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl p-6 border border-blue-200 dark:border-blue-800">
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                    🤖 Gerador Automático de Notícias de Concursos
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                    Use a IA para gerar notícias completas sobre concursos públicos abertos ou previstos.
+                    As notícias são geradas automaticamente com informações sobre vagas, remuneração, conteúdo programático e muito mais.
+                  </p>
+                  
+                  <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700 mb-4">
+                    <h4 className="font-semibold text-slate-900 dark:text-white mb-2">ℹ️ Como funciona:</h4>
+                    <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
+                      <li>A IA busca informações sobre concursos públicos abertos ou previstos</li>
+                      <li>Gera notícia completa com vagas, remuneração, datas, conteúdo programático</li>
+                      <li>Otimizada para SEO com palavras-chave relevantes</li>
+                      <li>Publicada automaticamente na seção de notícias</li>
+                    </ul>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!confirm('Deseja gerar uma nova notícia de concurso? Isso pode levar alguns segundos.')) {
+                        return
+                      }
+                      
+                      setMessage('🤖 Gerando notícia com IA... Isso pode levar alguns segundos.')
+                      
+                      try {
+                        const response = await fetch(FIREBASE_FUNCTIONS.generateConcursoNews, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({}),
+                        })
+                        
+                        if (!response.ok) {
+                          const errorData = await response.json()
+                          throw new Error(errorData.error || 'Erro ao gerar notícia')
+                        }
+                        
+                        const result = await response.json()
+                        setMessage(`✅ Notícia gerada com sucesso! ID: ${result.newsId}`)
+                        
+                        // Aguardar um pouco e recarregar
+                        setTimeout(() => {
+                          window.location.reload()
+                        }, 2000)
+                      } catch (err) {
+                        console.error('Erro ao gerar notícia:', err)
+                        setMessage(`❌ Erro ao gerar notícia: ${err.message}`)
+                      }
+                    }}
+                    className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition shadow-lg"
+                  >
+                    🚀 Gerar Nova Notícia de Concurso
+                  </button>
+                </div>
+                
+                <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-700">
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
+                    📅 Agendamento Automático
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                    As notícias são geradas automaticamente todos os dias às 8h da manhã (horário de Brasília).
+                    Você também pode gerar notícias manualmente usando o botão acima.
+                  </p>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-1">Próxima geração automática</p>
+                    <p className="text-base font-bold text-slate-900 dark:text-white">
+                      Todos os dias às 08:00 (Brasília)
+                    </p>
+                  </div>
                 </div>
               </div>
             )}

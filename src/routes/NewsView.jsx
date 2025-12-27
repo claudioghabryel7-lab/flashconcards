@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
-import { ArrowLeftIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, CalendarIcon, CurrencyDollarIcon, UserGroupIcon, DocumentTextIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 
@@ -40,11 +40,92 @@ const NewsView = () => {
           return
         }
 
-        setNews({
+        const newsData = {
           id: snap.id,
           ...data,
-        })
+        }
+        setNews(newsData)
         setLoading(false)
+        
+        // SEO: Adicionar meta tags dinamicamente
+        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+          const seoTitle = newsData.seoTitle || newsData.text || 'Notícia de Concurso - FlashConCards'
+          const seoDescription = newsData.seoDescription || newsData.fullText?.substring(0, 160) || newsData.text || ''
+          
+          // Atualizar título
+          document.title = `${seoTitle} | FlashConCards`
+          
+          // Remover meta tags antigas
+          const oldTags = document.querySelectorAll('meta[name="description"], meta[property^="og:"], meta[name^="twitter:"], script[type="application/ld+json"]')
+          oldTags.forEach(tag => tag.remove())
+          
+          // Adicionar meta description
+          const metaDesc = document.createElement('meta')
+          metaDesc.name = 'description'
+          metaDesc.content = seoDescription
+          document.head.appendChild(metaDesc)
+          
+          // Open Graph
+          const ogTags = [
+            { property: 'og:type', content: 'article' },
+            { property: 'og:title', content: seoTitle },
+            { property: 'og:description', content: seoDescription },
+            { property: 'og:url', content: window.location.href },
+          ]
+          if (newsData.imageBase64) {
+            ogTags.push({ property: 'og:image', content: newsData.imageBase64 })
+          }
+          ogTags.forEach(tag => {
+            const meta = document.createElement('meta')
+            meta.setAttribute('property', tag.property)
+            meta.content = tag.content
+            document.head.appendChild(meta)
+          })
+          
+          // Twitter Cards
+          const twitterTags = [
+            { name: 'twitter:card', content: 'summary_large_image' },
+            { name: 'twitter:title', content: seoTitle },
+            { name: 'twitter:description', content: seoDescription },
+          ]
+          if (newsData.imageBase64) {
+            twitterTags.push({ name: 'twitter:image', content: newsData.imageBase64 })
+          }
+          twitterTags.forEach(tag => {
+            const meta = document.createElement('meta')
+            meta.setAttribute('name', tag.name)
+            meta.content = tag.content
+            document.head.appendChild(meta)
+          })
+          
+          // Schema.org NewsArticle
+          if (newsData.isConcursoNews && newsData.concursoData) {
+            const schema = {
+              '@context': 'https://schema.org',
+              '@type': 'NewsArticle',
+              headline: seoTitle,
+              description: seoDescription,
+              datePublished: newsData.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+              author: {
+                '@type': 'Organization',
+                name: 'FlashConCards'
+              },
+              publisher: {
+                '@type': 'Organization',
+                name: 'FlashConCards',
+                logo: {
+                  '@type': 'ImageObject',
+                  url: `${window.location.origin}/logo.svg`
+                }
+              }
+            }
+            
+            const schemaScript = document.createElement('script')
+            schemaScript.type = 'application/ld+json'
+            schemaScript.textContent = JSON.stringify(schema)
+            document.head.appendChild(schemaScript)
+          }
+        }
       } catch (err) {
         console.error('Erro ao carregar notícia:', err)
         setError('Erro ao carregar notícia. Tente novamente.')
@@ -133,10 +214,10 @@ const NewsView = () => {
         {/* Cabeçalho da notícia */}
         <header className="mb-8">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white mb-4 leading-tight">
-            {news.text || 'Notícia'}
+            {news.seoTitle || news.text || 'Notícia'}
           </h1>
           
-          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
+          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 dark:text-slate-400 mb-6">
             <div className="flex items-center gap-2">
               {news.authorAvatar ? (
                 <img
@@ -158,6 +239,84 @@ const NewsView = () => {
             <span>•</span>
             <time>{formatDate(news.createdAt)}</time>
           </div>
+          
+          {/* Dados específicos de concurso */}
+          {news.isConcursoNews && news.concursoData && (
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-6 mb-8 border border-blue-200 dark:border-slate-700">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <DocumentTextIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                Informações do Concurso
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {news.concursoData.orgao && (
+                  <div className="flex items-start gap-3">
+                    <BuildingOfficeIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Órgão</p>
+                      <p className="text-base font-bold text-slate-900 dark:text-white">{news.concursoData.orgao}</p>
+                    </div>
+                  </div>
+                )}
+                {news.concursoData.vagas && news.concursoData.vagas !== 'A definir' && (
+                  <div className="flex items-start gap-3">
+                    <UserGroupIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Vagas</p>
+                      <p className="text-base font-bold text-slate-900 dark:text-white">{news.concursoData.vagas}</p>
+                    </div>
+                  </div>
+                )}
+                {news.concursoData.remuneracao && news.concursoData.remuneracao !== 'A definir' && (
+                  <div className="flex items-start gap-3">
+                    <CurrencyDollarIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Remuneração</p>
+                      <p className="text-base font-bold text-slate-900 dark:text-white">{news.concursoData.remuneracao}</p>
+                    </div>
+                  </div>
+                )}
+                {news.concursoData.dataInscricaoFim && (
+                  <div className="flex items-start gap-3">
+                    <CalendarIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Inscrições até</p>
+                      <p className="text-base font-bold text-slate-900 dark:text-white">
+                        {new Date(news.concursoData.dataInscricaoFim).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {news.concursoData.banca && news.concursoData.banca !== 'A definir' && (
+                  <div className="flex items-start gap-3">
+                    <DocumentTextIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Banca</p>
+                      <p className="text-base font-bold text-slate-900 dark:text-white">{news.concursoData.banca}</p>
+                    </div>
+                  </div>
+                )}
+                {news.concursoData.linkEdital && (
+                  <div className="md:col-span-2">
+                    <a
+                      href={news.concursoData.linkEdital}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
+                    >
+                      <DocumentTextIcon className="h-5 w-5" />
+                      Ver Edital Completo
+                    </a>
+                  </div>
+                )}
+              </div>
+              {news.concursoData.conteudoProgramatico && (
+                <div className="mt-4 pt-4 border-t border-blue-200 dark:border-slate-700">
+                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-2">Conteúdo Programático</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">{news.concursoData.conteudoProgramatico}</p>
+                </div>
+              )}
+            </div>
+          )}
         </header>
 
         {/* Imagem principal */}
@@ -173,10 +332,28 @@ const NewsView = () => {
 
         {/* Conteúdo completo */}
         <div className="prose prose-lg dark:prose-invert max-w-none">
-          <div className="text-lg leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-            {news.fullText || news.text || ''}
-          </div>
+          <div 
+            className="text-lg leading-relaxed text-slate-700 dark:text-slate-300"
+            dangerouslySetInnerHTML={{ __html: news.fullText || news.text || '' }}
+          />
         </div>
+        
+        {/* Tags e palavras-chave */}
+        {news.tags && news.tags.length > 0 && (
+          <div className="mt-8 pt-6 border-t border-slate-300 dark:border-slate-800">
+            <p className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3">Tags:</p>
+            <div className="flex flex-wrap gap-2">
+              {news.tags.map((tag, index) => (
+                <span
+                  key={index}
+                  className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Botão Voltar */}
         <div className="mt-12 pt-8 border-t border-slate-300 dark:border-slate-800">

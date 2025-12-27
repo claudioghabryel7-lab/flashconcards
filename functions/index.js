@@ -6,6 +6,7 @@ const cors = require('cors')({
   credentials: true 
 })
 const { MercadoPagoConfig, Payment } = require('mercadopago')
+const { GoogleGenerativeAI } = require('@google/generative-ai')
 
 admin.initializeApp()
 
@@ -1213,3 +1214,334 @@ exports.expireTrialUsers = functions.pubsub.schedule('0 0 * * *').timeZone('Amer
     throw error
   }
 })
+
+// ============================================
+// IA DE NOTÍCIAS DE CONCURSOS
+// ============================================
+
+/**
+ * Gera notícias de concursos automaticamente usando IA
+ * Busca informações sobre concursos abertos, vagas, remuneração, etc.
+ */
+exports.generateConcursoNews = functions.https.onRequest(async (req, res) => {
+  cors(req, res, async () => {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Método não permitido' })
+    }
+
+    try {
+      const apiKey = functions.config().gemini?.api_key || process.env.GEMINI_API_KEY
+      if (!apiKey) {
+        return res.status(500).json({ error: 'GEMINI_API_KEY não configurada' })
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ 
+        model: 'gemini-2.0-flash-exp',
+        generationConfig: {
+          maxOutputTokens: 8000,
+          temperature: 0.7,
+        }
+      })
+
+      // Prompt para IA buscar e gerar notícia sobre concursos
+      const prompt = `Você é um especialista em concursos públicos brasileiros. 
+      Sua tarefa é criar uma notícia completa e atualizada sobre concursos públicos abertos ou iminentes.
+
+      GERE UMA NOTÍCIA SOBRE:
+      - Concurso público aberto (com inscrições abertas)
+      - Concurso público previsto/iminente (com edital previsto)
+      - Atualização sobre concursos já abertos (novas vagas, prorrogação de prazo, etc.)
+
+      FOCO PRINCIPAL:
+      - Polícia Militar (PMGO, PMSP, PMRJ, etc.)
+      - Polícia Civil (PC)
+      - Guarda Municipal (GCM)
+      - Outros concursos públicos relevantes
+
+      INFORMAÇÕES OBRIGATÓRIAS A INCLUIR:
+      1. Nome do concurso e órgão
+      2. Número de vagas (se disponível)
+      3. Remuneração/salário (se disponível)
+      4. Data de abertura das inscrições (se aplicável)
+      5. Data de encerramento das inscrições (se aplicável)
+      6. Data prevista da prova (se disponível)
+      7. Conteúdo programático (principais matérias)
+      8. Requisitos básicos (escolaridade, idade, etc.)
+      9. Link do edital (se disponível)
+      10. Banca organizadora (se conhecida)
+
+      FORMATO DE RESPOSTA (JSON VÁLIDO):
+      {
+        "title": "Título da notícia (SEO otimizado)",
+        "summary": "Resumo curto em 1-2 frases",
+        "content": "Conteúdo completo da notícia em HTML (use <p>, <h2>, <h3>, <ul>, <li>, <strong>)",
+        "concursoName": "Nome do concurso",
+        "orgao": "Órgão/Instituição",
+        "vagas": "Número de vagas ou 'A definir'",
+        "remuneracao": "Remuneração/salário ou 'A definir'",
+        "dataInscricaoInicio": "Data de início das inscrições ou null",
+        "dataInscricaoFim": "Data de fim das inscrições ou null",
+        "dataProva": "Data prevista da prova ou null",
+        "banca": "Banca organizadora ou 'A definir'",
+        "requisitos": "Requisitos básicos",
+        "conteudoProgramatico": "Principais matérias do conteúdo programático",
+        "linkEdital": "Link do edital ou null",
+        "status": "aberto|previsto|atualizacao",
+        "tags": ["concurso público", "PMGO", "polícia militar", "vagas", etc],
+        "keywords": "palavras-chave para SEO separadas por vírgula"
+      }
+
+      IMPORTANTE:
+      - Seja específico e atualizado
+      - Use informações reais quando possível
+      - Se não souber alguma informação, use "A definir" ou null
+      - O título deve ser otimizado para SEO
+      - O conteúdo deve ser rico em palavras-chave relacionadas
+      - Retorne APENAS o JSON, sem markdown, sem explicações adicionais
+      - Comece diretamente com { e termine com }`
+
+      console.log('🤖 Gerando notícia de concurso com IA...')
+      const result = await model.generateContent(prompt)
+      const aiResponse = result.response.text()
+
+      // Limpar resposta da IA (remover markdown se houver)
+      let jsonText = aiResponse.trim()
+      if (jsonText.startsWith('```json')) {
+        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
+      } else if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/```\n?/g, '')
+      }
+
+      // Parsear JSON
+      let newsData
+      try {
+        newsData = JSON.parse(jsonText)
+      } catch (parseError) {
+        console.error('Erro ao parsear JSON da IA:', parseError)
+        console.error('Resposta da IA:', aiResponse.substring(0, 500))
+        return res.status(500).json({ error: 'Erro ao processar resposta da IA', raw: aiResponse.substring(0, 500) })
+      }
+
+      // Validar dados obrigatórios
+      if (!newsData.title || !newsData.content) {
+        return res.status(500).json({ error: 'IA não retornou dados completos', data: newsData })
+      }
+
+      // Criar slug do título
+      const slug = newsData.title
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '')
+
+      // Salvar no Firestore
+      const db = admin.firestore()
+      const newsRef = db.collection('posts')
+      
+      const newsDoc = {
+        text: newsData.summary || newsData.title,
+        fullText: newsData.content,
+        authorName: 'FlashConCards IA',
+        authorId: 'system-ai-news', // ID especial para notícias geradas por IA
+        isNews: true,
+        isConcursoNews: true, // Flag especial para notícias de concursos
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        // Dados específicos de concurso
+        concursoData: {
+          concursoName: newsData.concursoName || '',
+          orgao: newsData.orgao || '',
+          vagas: newsData.vagas || 'A definir',
+          remuneracao: newsData.remuneracao || 'A definir',
+          dataInscricaoInicio: newsData.dataInscricaoInicio || null,
+          dataInscricaoFim: newsData.dataInscricaoFim || null,
+          dataProva: newsData.dataProva || null,
+          banca: newsData.banca || 'A definir',
+          requisitos: newsData.requisitos || '',
+          conteudoProgramatico: newsData.conteudoProgramatico || '',
+          linkEdital: newsData.linkEdital || null,
+          status: newsData.status || 'aberto',
+        },
+        tags: newsData.tags || [],
+        keywords: newsData.keywords || '',
+        slug: slug,
+        seoTitle: newsData.title,
+        seoDescription: newsData.summary || newsData.title.substring(0, 160),
+      }
+
+      const docRef = await newsRef.add(newsDoc)
+
+      console.log('✅ Notícia gerada e salva com sucesso:', docRef.id)
+
+      return res.status(200).json({
+        success: true,
+        newsId: docRef.id,
+        data: newsDoc
+      })
+
+    } catch (error) {
+      console.error('Erro ao gerar notícia de concurso:', error)
+      return res.status(500).json({ 
+        error: 'Erro ao gerar notícia', 
+        message: error.message 
+      })
+    }
+  })
+})
+
+/**
+ * Scheduler para gerar notícias automaticamente
+ * Roda diariamente às 8h da manhã
+ */
+exports.scheduledGenerateConcursoNews = functions.pubsub
+  .schedule('0 8 * * *') // Todo dia às 8h
+  .timeZone('America/Sao_Paulo')
+  .onRun(async (context) => {
+    try {
+      console.log('🔄 Iniciando geração automática de notícias de concursos...')
+      
+      const apiKey = functions.config().gemini?.api_key || process.env.GEMINI_API_KEY
+      if (!apiKey) {
+        console.error('GEMINI_API_KEY não configurada')
+        return null
+      }
+
+      // Chamar a função de geração diretamente (sem HTTP)
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ 
+        model: 'gemini-2.0-flash-exp',
+        generationConfig: {
+          maxOutputTokens: 8000,
+          temperature: 0.7,
+        }
+      })
+
+      const prompt = `Você é um especialista em concursos públicos brasileiros. 
+      Sua tarefa é criar uma notícia completa e atualizada sobre concursos públicos abertos ou iminentes.
+
+      GERE UMA NOTÍCIA SOBRE:
+      - Concurso público aberto (com inscrições abertas)
+      - Concurso público previsto/iminente (com edital previsto)
+      - Atualização sobre concursos já abertos (novas vagas, prorrogação de prazo, etc.)
+
+      FOCO PRINCIPAL:
+      - Polícia Militar (PMGO, PMSP, PMRJ, etc.)
+      - Polícia Civil (PC)
+      - Guarda Municipal (GCM)
+      - Outros concursos públicos relevantes
+
+      INFORMAÇÕES OBRIGATÓRIAS A INCLUIR:
+      1. Nome do concurso e órgão
+      2. Número de vagas (se disponível)
+      3. Remuneração/salário (se disponível)
+      4. Data de abertura das inscrições (se aplicável)
+      5. Data de encerramento das inscrições (se aplicável)
+      6. Data prevista da prova (se disponível)
+      7. Conteúdo programático (principais matérias)
+      8. Requisitos básicos (escolaridade, idade, etc.)
+      9. Link do edital (se disponível)
+      10. Banca organizadora (se conhecida)
+
+      FORMATO DE RESPOSTA (JSON VÁLIDO):
+      {
+        "title": "Título da notícia (SEO otimizado)",
+        "summary": "Resumo curto em 1-2 frases",
+        "content": "Conteúdo completo da notícia em HTML (use <p>, <h2>, <h3>, <ul>, <li>, <strong>)",
+        "concursoName": "Nome do concurso",
+        "orgao": "Órgão/Instituição",
+        "vagas": "Número de vagas ou 'A definir'",
+        "remuneracao": "Remuneração/salário ou 'A definir'",
+        "dataInscricaoInicio": "Data de início das inscrições ou null",
+        "dataInscricaoFim": "Data de fim das inscrições ou null",
+        "dataProva": "Data prevista da prova ou null",
+        "banca": "Banca organizadora ou 'A definir'",
+        "requisitos": "Requisitos básicos",
+        "conteudoProgramatico": "Principais matérias do conteúdo programático",
+        "linkEdital": "Link do edital ou null",
+        "status": "aberto|previsto|atualizacao",
+        "tags": ["concurso público", "PMGO", "polícia militar", "vagas", etc],
+        "keywords": "palavras-chave para SEO separadas por vírgula"
+      }
+
+      IMPORTANTE:
+      - Seja específico e atualizado
+      - Use informações reais quando possível
+      - Se não souber alguma informação, use "A definir" ou null
+      - O título deve ser otimizado para SEO
+      - O conteúdo deve ser rico em palavras-chave relacionadas
+      - Retorne APENAS o JSON, sem markdown, sem explicações adicionais
+      - Comece diretamente com { e termine com }`
+
+      const result = await model.generateContent(prompt)
+      const aiResponse = result.response.text()
+
+      // Limpar resposta da IA
+      let jsonText = aiResponse.trim()
+      if (jsonText.startsWith('```json')) {
+        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
+      } else if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/```\n?/g, '')
+      }
+
+      // Parsear JSON
+      const newsData = JSON.parse(jsonText)
+
+      // Validar dados obrigatórios
+      if (!newsData.title || !newsData.content) {
+        console.error('IA não retornou dados completos')
+        return null
+      }
+
+      // Criar slug do título
+      const slug = newsData.title
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '')
+
+      // Salvar no Firestore
+      const db = admin.firestore()
+      const newsRef = db.collection('posts')
+      
+      const newsDoc = {
+        text: newsData.summary || newsData.title,
+        fullText: newsData.content,
+        authorName: 'FlashConCards IA',
+        authorId: 'system-ai-news',
+        isNews: true,
+        isConcursoNews: true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        concursoData: {
+          concursoName: newsData.concursoName || '',
+          orgao: newsData.orgao || '',
+          vagas: newsData.vagas || 'A definir',
+          remuneracao: newsData.remuneracao || 'A definir',
+          dataInscricaoInicio: newsData.dataInscricaoInicio || null,
+          dataInscricaoFim: newsData.dataInscricaoFim || null,
+          dataProva: newsData.dataProva || null,
+          banca: newsData.banca || 'A definir',
+          requisitos: newsData.requisitos || '',
+          conteudoProgramatico: newsData.conteudoProgramatico || '',
+          linkEdital: newsData.linkEdital || null,
+          status: newsData.status || 'aberto',
+        },
+        tags: newsData.tags || [],
+        keywords: newsData.keywords || '',
+        slug: slug,
+        seoTitle: newsData.title,
+        seoDescription: newsData.summary || newsData.title.substring(0, 160),
+      }
+
+      await newsRef.add(newsDoc)
+
+      console.log('✅ Notícia gerada automaticamente com sucesso')
+      return null
+    } catch (error) {
+      console.error('Erro no scheduler de notícias:', error)
+      return null
+    }
+  })
