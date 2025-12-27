@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
-import { ArrowLeftIcon, CalendarIcon, CurrencyDollarIcon, UserGroupIcon, DocumentTextIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, CalendarIcon, CurrencyDollarIcon, UserGroupIcon, DocumentTextIcon, BuildingOfficeIcon, ShareIcon, ClockIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import Header from '../components/Header'
 
 const NewsView = () => {
   const { postId } = useParams()
@@ -211,161 +212,261 @@ const NewsView = () => {
 
       {/* Conteúdo da notícia - Estilo portal de notícias */}
       <article className="max-w-4xl mx-auto px-4 py-8 md:py-12">
-        {/* Cabeçalho da notícia */}
-        <header className="mb-8">
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white mb-4 leading-tight">
-            {news.seoTitle || news.text || 'Notícia'}
-          </h1>
-          
-          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 dark:text-slate-400 mb-6">
-            <div className="flex items-center gap-2">
-              {news.authorAvatar ? (
-                <img
-                  src={news.authorAvatar}
-                  alt={news.authorName}
-                  className="h-8 w-8 rounded-full object-cover"
-                />
-              ) : (
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                  <span className="text-white font-bold text-xs">
-                    {(news.authorName || 'U')[0].toUpperCase()}
+            {/* Cabeçalho da notícia */}
+            <header className="mb-8">
+              {/* Badge de categoria */}
+              {news.isConcursoNews && (
+                <div className="mb-4">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                    📰 Notícia de Concurso
                   </span>
                 </div>
               )}
-              <span className="font-semibold text-slate-900 dark:text-white">
-                {news.authorName || 'Autor'}
-              </span>
-            </div>
-            <span>•</span>
-            <time>{formatDate(news.createdAt)}</time>
-          </div>
+              
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 dark:text-white mb-6 leading-tight">
+                {news.seoTitle || news.text || 'Notícia'}
+              </h1>
+              
+              {/* Meta informações */}
+              <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 dark:text-slate-400 mb-6 pb-6 border-b border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-2">
+                  {news.authorAvatar ? (
+                    <img
+                      src={news.authorAvatar}
+                      alt={news.authorName}
+                      className="h-10 w-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">
+                        {(news.authorName || 'U')[0].toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-semibold text-slate-900 dark:text-white">
+                      {news.authorName || 'FlashConCards'}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {news.isConcursoNews ? 'Equipe FlashConCards' : 'Autor'}
+                    </p>
+                  </div>
+                </div>
+                <span className="hidden sm:inline text-slate-300 dark:text-slate-600">•</span>
+                <div className="flex items-center gap-1">
+                  <ClockIcon className="h-4 w-4" />
+                  <time>{formatDate(news.createdAt)}</time>
+                </div>
+                <span className="hidden sm:inline text-slate-300 dark:text-slate-600">•</span>
+                <button
+                  onClick={async () => {
+                    if (navigator.share) {
+                      try {
+                        await navigator.share({
+                          title: news.seoTitle || news.text,
+                          text: news.seoDescription || news.text,
+                          url: window.location.href,
+                        })
+                      } catch (err) {
+                        // Usuário cancelou
+                      }
+                    } else {
+                      await navigator.clipboard.writeText(window.location.href)
+                      alert('Link copiado para a área de transferência!')
+                    }
+                  }}
+                  className="flex items-center gap-1 hover:text-alego-600 dark:hover:text-alego-400 transition"
+                >
+                  <ShareIcon className="h-4 w-4" />
+                  <span>Compartilhar</span>
+                </button>
+              </div>
           
-          {/* Dados específicos de concurso */}
-          {news.isConcursoNews && news.concursoData && (
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-6 mb-8 border border-blue-200 dark:border-slate-700">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                <DocumentTextIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                Informações do Concurso
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {news.concursoData.orgao && (
-                  <div className="flex items-start gap-3">
-                    <BuildingOfficeIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Órgão</p>
-                      <p className="text-base font-bold text-slate-900 dark:text-white">{news.concursoData.orgao}</p>
-                    </div>
+            {/* Dados específicos de concurso - Card destacado */}
+            {news.isConcursoNews && news.concursoData && (
+              <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 rounded-2xl p-6 md:p-8 mb-8 border-2 border-blue-200 dark:border-blue-800 shadow-lg">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 bg-blue-600 rounded-xl">
+                    <DocumentTextIcon className="h-6 w-6 text-white" />
                   </div>
-                )}
-                {news.concursoData.vagas && news.concursoData.vagas !== 'A definir' && (
-                  <div className="flex items-start gap-3">
-                    <UserGroupIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Vagas</p>
-                      <p className="text-base font-bold text-slate-900 dark:text-white">{news.concursoData.vagas}</p>
+                  <h2 className="text-2xl font-black text-slate-900 dark:text-white">
+                    Informações do Concurso
+                  </h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {news.concursoData.orgao && (
+                    <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-3 mb-2">
+                        <BuildingOfficeIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Órgão</p>
+                      </div>
+                      <p className="text-lg font-black text-slate-900 dark:text-white">{news.concursoData.orgao}</p>
                     </div>
-                  </div>
-                )}
-                {news.concursoData.remuneracao && news.concursoData.remuneracao !== 'A definir' && (
-                  <div className="flex items-start gap-3">
-                    <CurrencyDollarIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Remuneração</p>
-                      <p className="text-base font-bold text-slate-900 dark:text-white">{news.concursoData.remuneracao}</p>
+                  )}
+                  {news.concursoData.vagas && news.concursoData.vagas !== 'A definir' && (
+                    <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-3 mb-2">
+                        <UserGroupIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Vagas</p>
+                      </div>
+                      <p className="text-lg font-black text-slate-900 dark:text-white">{news.concursoData.vagas}</p>
                     </div>
-                  </div>
-                )}
-                {news.concursoData.dataInscricaoFim && (
-                  <div className="flex items-start gap-3">
-                    <CalendarIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Inscrições até</p>
-                      <p className="text-base font-bold text-slate-900 dark:text-white">
-                        {new Date(news.concursoData.dataInscricaoFim).toLocaleDateString('pt-BR')}
+                  )}
+                  {news.concursoData.remuneracao && news.concursoData.remuneracao !== 'A definir' && (
+                    <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-3 mb-2">
+                        <CurrencyDollarIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Remuneração</p>
+                      </div>
+                      <p className="text-lg font-black text-slate-900 dark:text-white">{news.concursoData.remuneracao}</p>
+                    </div>
+                  )}
+                  {news.concursoData.dataInscricaoFim && (
+                    <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-3 mb-2">
+                        <CalendarIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Inscrições até</p>
+                      </div>
+                      <p className="text-lg font-black text-slate-900 dark:text-white">
+                        {new Date(news.concursoData.dataInscricaoFim).toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: 'long',
+                          year: 'numeric'
+                        })}
                       </p>
                     </div>
-                  </div>
-                )}
-                {news.concursoData.banca && news.concursoData.banca !== 'A definir' && (
-                  <div className="flex items-start gap-3">
-                    <DocumentTextIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Banca</p>
-                      <p className="text-base font-bold text-slate-900 dark:text-white">{news.concursoData.banca}</p>
+                  )}
+                  {news.concursoData.banca && news.concursoData.banca !== 'A definir' && (
+                    <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-3 mb-2">
+                        <DocumentTextIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Banca</p>
+                      </div>
+                      <p className="text-lg font-black text-slate-900 dark:text-white">{news.concursoData.banca}</p>
                     </div>
-                  </div>
-                )}
-                {news.concursoData.linkEdital && (
-                  <div className="md:col-span-2">
-                    <a
-                      href={news.concursoData.linkEdital}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
-                    >
-                      <DocumentTextIcon className="h-5 w-5" />
-                      Ver Edital Completo
-                    </a>
-                  </div>
-                )}
+                  )}
+                  {news.concursoData.linkEdital && (
+                    <div className="md:col-span-2">
+                      <a
+                        href={news.concursoData.linkEdital}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition shadow-lg"
+                      >
+                        <DocumentTextIcon className="h-5 w-5" />
+                        Ver Edital Completo
+                      </a>
+                    </div>
+                  )}
               </div>
-              {news.concursoData.conteudoProgramatico && (
-                <div className="mt-4 pt-4 border-t border-blue-200 dark:border-slate-700">
-                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-2">Conteúdo Programático</p>
-                  <p className="text-sm text-slate-700 dark:text-slate-300">{news.concursoData.conteudoProgramatico}</p>
+                  {news.concursoData.conteudoProgramatico && (
+                    <div className="md:col-span-2 bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                      <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Conteúdo Programático</p>
+                      <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{news.concursoData.conteudoProgramatico}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Imagem principal */}
+            {news.imageBase64 && (
+              <div className="mb-8 rounded-2xl overflow-hidden shadow-xl">
+                <img
+                  src={news.imageBase64}
+                  alt={news.seoTitle || news.text || 'Notícia'}
+                  className="w-full h-auto object-cover"
+                />
+              </div>
+            )}
+
+            {/* Conteúdo completo */}
+            <div className="prose prose-lg prose-slate dark:prose-invert max-w-none mb-8">
+              <div 
+                className="text-lg leading-relaxed text-slate-700 dark:text-slate-300"
+                dangerouslySetInnerHTML={{ __html: news.fullText || news.text || '' }}
+              />
+            </div>
+            
+            {/* Tags e palavras-chave */}
+            {news.tags && news.tags.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-3 uppercase tracking-wide">Tags relacionadas:</p>
+                <div className="flex flex-wrap gap-2">
+                  {news.tags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-semibold hover:bg-blue-200 dark:hover:bg-blue-900/50 transition"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Botão CTA */}
+            <div className="mt-12 pt-8 border-t border-slate-200 dark:border-slate-700">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-8 text-center text-white">
+                <h3 className="text-2xl font-black mb-3">Prepare-se para este concurso!</h3>
+                <p className="text-blue-100 mb-6">Acesse nossos cursos preparatórios e garanta sua aprovação</p>
+                <Link
+                  to="/"
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-white text-blue-600 font-bold rounded-xl hover:bg-blue-50 transition shadow-lg"
+                >
+                  Ver Cursos Disponíveis
+                </Link>
+              </div>
+            </div>
+          </article>
+
+          {/* Sidebar */}
+          <aside className="lg:col-span-1">
+            <div className="sticky top-8 space-y-6">
+              {/* Card de CTA */}
+              <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl p-6 text-white">
+                <h3 className="text-xl font-black mb-3">🚀 Prepare-se Agora!</h3>
+                <p className="text-blue-100 mb-4 text-sm">
+                  Acesse nossos cursos preparatórios com flashcards, questões e simulados.
+                </p>
+                <Link
+                  to="/"
+                  className="block w-full text-center px-4 py-3 bg-white text-blue-600 font-bold rounded-lg hover:bg-blue-50 transition"
+                >
+                  Ver Cursos
+                </Link>
+              </div>
+
+              {/* Informações adicionais */}
+              {news.isConcursoNews && news.concursoData && (
+                <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700">
+                  <h4 className="font-bold text-slate-900 dark:text-white mb-4">📋 Resumo</h4>
+                  <div className="space-y-3 text-sm">
+                    {news.concursoData.concursoName && (
+                      <div>
+                        <p className="text-slate-500 dark:text-slate-400 font-semibold">Concurso</p>
+                        <p className="text-slate-900 dark:text-white font-bold">{news.concursoData.concursoName}</p>
+                      </div>
+                    )}
+                    {news.concursoData.status && (
+                      <div>
+                        <p className="text-slate-500 dark:text-slate-400 font-semibold">Status</p>
+                        <p className="text-slate-900 dark:text-white font-bold capitalize">{news.concursoData.status}</p>
+                      </div>
+                    )}
+                    {news.concursoData.requisitos && (
+                      <div>
+                        <p className="text-slate-500 dark:text-slate-400 font-semibold">Requisitos</p>
+                        <p className="text-slate-900 dark:text-white">{news.concursoData.requisitos}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
-          )}
-        </header>
-
-        {/* Imagem principal */}
-        {news.imageBase64 && (
-          <div className="mb-8 rounded-lg overflow-hidden">
-            <img
-              src={news.imageBase64}
-              alt={news.text || 'Notícia'}
-              className="w-full h-auto max-h-[600px] object-contain"
-            />
-          </div>
-        )}
-
-        {/* Conteúdo completo */}
-        <div className="prose prose-lg dark:prose-invert max-w-none">
-          <div 
-            className="text-lg leading-relaxed text-slate-700 dark:text-slate-300"
-            dangerouslySetInnerHTML={{ __html: news.fullText || news.text || '' }}
-          />
+          </aside>
         </div>
-        
-        {/* Tags e palavras-chave */}
-        {news.tags && news.tags.length > 0 && (
-          <div className="mt-8 pt-6 border-t border-slate-300 dark:border-slate-800">
-            <p className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3">Tags:</p>
-            <div className="flex flex-wrap gap-2">
-              {news.tags.map((tag, index) => (
-                <span
-                  key={index}
-                  className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Botão Voltar */}
-        <div className="mt-12 pt-8 border-t border-slate-300 dark:border-slate-800">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 px-8 py-4 bg-alego-600 text-white font-semibold rounded-lg hover:bg-alego-700 transition text-lg"
-          >
-            <ArrowLeftIcon className="h-6 w-6" />
-            Voltar para a Plataforma
-          </Link>
-        </div>
-      </article>
+      </div>
     </div>
   )
 }
