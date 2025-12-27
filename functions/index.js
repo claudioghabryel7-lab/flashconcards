@@ -833,6 +833,310 @@ exports.sendSimuladoResultEmail = functions.https.onRequest((req, res) => {
   })
 })
 
+// Função para enviar email personalizado de redefinição de senha
+exports.sendPasswordResetEmail = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Método não permitido' })
+    }
+
+    try {
+      const { email } = req.body
+
+      if (!email) {
+        return res.status(400).json({ error: 'Email é obrigatório' })
+      }
+
+      const emailLower = email.toLowerCase().trim()
+
+      // Verificar se o email existe no Firebase Auth
+      let userRecord
+      try {
+        userRecord = await admin.auth().getUserByEmail(emailLower)
+      } catch (authError) {
+        if (authError.code === 'auth/user-not-found') {
+          return res.status(404).json({ error: 'Usuário não encontrado no Firebase Authentication' })
+        }
+        throw authError
+      }
+
+      // Gerar token aleatório seguro
+      const token = require('crypto').randomUUID() + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15)
+      
+      // Criar token no Firestore (expira em 24 horas)
+      const expiresAt = new Date()
+      expiresAt.setHours(expiresAt.getHours() + 24)
+
+      await admin.firestore().collection('passwordResetTokens').doc(token).set({
+        email: emailLower,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: expiresAt,
+        used: false,
+      })
+
+      // URL base do site (ajuste conforme necessário)
+      const baseUrl = req.body.baseUrl || 'https://flashconcards.vercel.app'
+      const resetLink = `${baseUrl}/reset/${token}`
+
+      // Enviar email personalizado
+      const transporter = createEmailTransporter()
+      
+      if (transporter) {
+        const mailOptions = {
+          from: `"Plegimentoria ALEGO" <${functions.config().email?.user || process.env.EMAIL_USER || 'flashconcards@gmail.com'}>`,
+          to: emailLower,
+          subject: '🔒 Redefinir Senha - Plegimentoria ALEGO',
+          html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                body { 
+                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; 
+                  line-height: 1.6; 
+                  color: #333; 
+                  margin: 0; 
+                  padding: 0;
+                  background-color: #f5f5f5;
+                }
+                .email-container {
+                  max-width: 600px; 
+                  margin: 0 auto; 
+                  background-color: #ffffff;
+                }
+                .header { 
+                  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                  color: white; 
+                  padding: 40px 30px; 
+                  text-align: center; 
+                }
+                .header h1 {
+                  margin: 0;
+                  font-size: 28px;
+                  font-weight: bold;
+                }
+                .header p {
+                  margin: 10px 0 0 0;
+                  font-size: 16px;
+                  opacity: 0.9;
+                }
+                .content { 
+                  background: #ffffff; 
+                  padding: 40px 30px; 
+                }
+                .message {
+                  font-size: 16px;
+                  color: #333;
+                  margin-bottom: 30px;
+                  line-height: 1.8;
+                }
+                .button-container {
+                  text-align: center;
+                  margin: 35px 0;
+                }
+                .button { 
+                  display: inline-block; 
+                  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                  color: white !important; 
+                  padding: 16px 40px; 
+                  text-decoration: none; 
+                  border-radius: 8px; 
+                  font-size: 16px;
+                  font-weight: bold;
+                  box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3);
+                  transition: transform 0.2s;
+                }
+                .button:hover {
+                  transform: translateY(-2px);
+                  box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+                }
+                .info-box {
+                  background: #f8f9fa;
+                  border-left: 4px solid #667eea;
+                  padding: 20px;
+                  margin: 30px 0;
+                  border-radius: 4px;
+                }
+                .info-box p {
+                  margin: 0;
+                  font-size: 14px;
+                  color: #666;
+                  line-height: 1.6;
+                }
+                .warning {
+                  background: #fff3cd;
+                  border-left: 4px solid #ffc107;
+                  padding: 15px;
+                  margin: 25px 0;
+                  border-radius: 4px;
+                }
+                .warning p {
+                  margin: 0;
+                  font-size: 14px;
+                  color: #856404;
+        }
+                .footer {
+                  background: #f8f9fa;
+                  padding: 30px;
+                  text-align: center;
+                  font-size: 14px;
+                  color: #666;
+                  border-top: 1px solid #e9ecef;
+                }
+                .link-fallback {
+                  margin-top: 20px;
+                  padding: 15px;
+                  background: #f8f9fa;
+                  border-radius: 4px;
+                  word-break: break-all;
+                }
+                .link-fallback p {
+                  margin: 0 0 10px 0;
+                  font-size: 12px;
+                  color: #666;
+                  font-weight: bold;
+        }
+                .link-fallback a {
+                  color: #667eea;
+                  font-size: 12px;
+                  word-break: break-all;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="email-container">
+                <div class="header">
+                  <h1>🔒 Redefinir Senha</h1>
+                  <p>Você solicitou a redefinição da sua senha</p>
+                </div>
+                <div class="content">
+                  <div class="message">
+                    <p>Olá!</p>
+                    <p>Recebemos uma solicitação para redefinir a senha da sua conta <strong>${emailLower}</strong>.</p>
+                    <p>Clique no botão abaixo para criar uma nova senha:</p>
+                  </div>
+
+                  <div class="button-container">
+                    <a href="${resetLink}" class="button">Redefinir Minha Senha</a>
+                  </div>
+
+                  <div class="link-fallback">
+                    <p>Se o botão não funcionar, copie e cole este link no seu navegador:</p>
+                    <a href="${resetLink}">${resetLink}</a>
+                  </div>
+
+                  <div class="info-box">
+                    <p><strong>⏰ Importante:</strong> Este link expira em 24 horas. Após esse período, será necessário solicitar uma nova redefinição de senha.</p>
+                  </div>
+
+                  <div class="warning">
+                    <p><strong>⚠️ Não solicitou esta redefinição?</strong> Se você não solicitou a redefinição de senha, ignore este email. Sua senha permanecerá inalterada.</p>
+                  </div>
+
+                  <p style="margin-top: 30px; font-size: 14px; color: #666;">
+                    Se tiver dúvidas ou precisar de ajuda, entre em contato conosco.
+                  </p>
+                </div>
+                <div class="footer">
+                  <p><strong>Equipe Plegimentoria ALEGO</strong></p>
+                  <p>Este é um email automático, por favor não responda.</p>
+                </div>
+              </div>
+            </body>
+            </html>
+          `
+        }
+
+        await transporter.sendMail(mailOptions)
+        console.log(`Email de redefinição de senha enviado para ${emailLower}`)
+        
+        return res.status(200).json({ 
+          success: true, 
+          message: 'Email de redefinição de senha enviado com sucesso' 
+        })
+      } else {
+        console.warn('Transporter não configurado - email não enviado')
+        return res.status(500).json({ error: 'Serviço de email não configurado' })
+      }
+    } catch (error) {
+      console.error('Erro ao enviar email de redefinição:', error)
+      return res.status(500).json({ error: 'Erro ao enviar email', details: error.message })
+    }
+  })
+})
+
+// Função para atualizar senha do usuário (usado na página de reset)
+exports.updateUserPassword = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Método não permitido' })
+    }
+
+    try {
+      const { token, newPassword } = req.body
+
+      if (!token || !newPassword) {
+        return res.status(400).json({ error: 'Token e nova senha são obrigatórios' })
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' })
+      }
+
+      // Verificar token no Firestore
+      const tokenRef = admin.firestore().collection('passwordResetTokens').doc(token)
+      const tokenDoc = await tokenRef.get()
+
+      if (!tokenDoc.exists) {
+        return res.status(404).json({ error: 'Token inválido ou expirado' })
+      }
+
+      const tokenData = tokenDoc.data()
+      
+      // Verificar se o token expirou (24 horas)
+      const now = new Date()
+      const expiresAt = tokenData.expiresAt?.toDate?.() || new Date(0)
+      
+      if (now > expiresAt) {
+        await tokenRef.delete()
+        return res.status(400).json({ error: 'Token expirado' })
+      }
+
+      // Verificar se já foi usado
+      if (tokenData.used === true) {
+        return res.status(400).json({ error: 'Token já foi usado' })
+      }
+
+      // Buscar usuário pelo email e atualizar senha usando Admin SDK
+      try {
+        const userRecord = await admin.auth().getUserByEmail(tokenData.email)
+        await admin.auth().updateUser(userRecord.uid, { password: newPassword })
+        
+        // Marcar token como usado
+        await tokenRef.update({
+          used: true,
+          usedAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+
+        console.log(`Senha atualizada para usuário ${tokenData.email}`)
+        
+        return res.status(200).json({ 
+          success: true, 
+          message: 'Senha atualizada com sucesso' 
+        })
+      } catch (authError) {
+        console.error('Erro ao atualizar senha:', authError)
+        return res.status(500).json({ error: 'Erro ao atualizar senha', details: authError.message })
+      }
+    } catch (error) {
+      console.error('Erro na função updateUserPassword:', error)
+      return res.status(500).json({ error: 'Erro ao processar', details: error.message })
+    }
+  })
+})
+
 // Função agendada para expirar usuários trial automaticamente
 // Roda diariamente às 00:00 UTC (21:00 horário de Brasília)
 exports.expireTrialUsers = functions.pubsub.schedule('0 0 * * *').timeZone('America/Sao_Paulo').onRun(async (context) => {

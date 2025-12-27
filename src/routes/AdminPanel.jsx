@@ -35,8 +35,9 @@ import {
 } from 'firebase/firestore'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon } from '@heroicons/react/24/outline'
 import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
-import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth'
+import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { auth, db, storage } from '../firebase/config'
+import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
@@ -4110,17 +4111,31 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     setResetPasswordError(null)
 
     try {
-      // Tentar enviar email de redefinição de senha diretamente
-      // O Firebase Auth vai verificar se o email existe
-      await sendPasswordResetEmail(auth, resetEmail.toLowerCase().trim())
-      
+      // Chamar a função Cloud Function que envia email personalizado
+      const response = await fetch(FIREBASE_FUNCTIONS.sendPasswordResetEmail, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: resetEmail.toLowerCase().trim(),
+          baseUrl: window.location.origin,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao enviar email')
+      }
+
       setGeneratedLink('') // Não precisamos mais do link, o email foi enviado
       setMessage('✅ Email de redefinição de senha enviado com sucesso! Verifique a caixa de entrada (e spam) do usuário.')
       setResetPasswordError(null)
     } catch (err) {
       console.error('Erro ao enviar email de redefinição:', err)
       
-      if (err.code === 'auth/user-not-found') {
+      if (err.message.includes('não encontrado')) {
         // Verificar se o usuário existe no Firestore
         const usersRef = collection(db, 'users')
         const q = query(usersRef, where('email', '==', resetEmail.toLowerCase().trim()))
@@ -4143,9 +4158,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
           })
           setMessage('')
         }
-      } else if (err.code === 'auth/invalid-email') {
-        setMessage('❌ Email inválido.')
-        setResetPasswordError(null)
       } else {
         setMessage(`❌ Erro ao enviar email: ${err.message}`)
         setResetPasswordError(null)
@@ -4167,16 +4179,30 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     setResetPasswordError(null)
 
     try {
-      // Tentar enviar email de redefinição de senha diretamente
-      // O Firebase Auth vai verificar se o email existe
-      await sendPasswordResetEmail(auth, userEmail.toLowerCase().trim())
-      
+      // Chamar a função Cloud Function que envia email personalizado
+      const response = await fetch(FIREBASE_FUNCTIONS.sendPasswordResetEmail, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: userEmail.toLowerCase().trim(),
+          baseUrl: window.location.origin,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao enviar email')
+      }
+
       setMessage(`✅ Email de redefinição de senha enviado com sucesso para ${userEmail}! Verifique a caixa de entrada (e spam) do usuário.`)
       setResetPasswordError(null)
     } catch (err) {
       console.error('Erro ao enviar email de redefinição:', err)
       
-      if (err.code === 'auth/user-not-found') {
+      if (err.message.includes('não encontrado')) {
         // Verificar se o usuário existe no Firestore
         const usersRef = collection(db, 'users')
         const q = query(usersRef, where('email', '==', userEmail.toLowerCase().trim()))
@@ -4199,9 +4225,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
           })
           setMessage('')
         }
-      } else if (err.code === 'auth/invalid-email') {
-        setMessage(`❌ Email inválido.`)
-        setResetPasswordError(null)
       } else {
         setMessage(`❌ Erro ao enviar email: ${err.message}`)
         setResetPasswordError(null)

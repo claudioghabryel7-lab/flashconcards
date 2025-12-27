@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore'
-import { sendPasswordResetEmail } from 'firebase/auth'
-import { db, auth } from '../firebase/config'
+import { db } from '../firebase/config'
 import { LockClosedIcon } from '@heroicons/react/24/solid'
+import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 
 const ResetPassword = () => {
   const { token } = useParams()
@@ -87,32 +87,30 @@ const ResetPassword = () => {
     setSubmitting(true)
 
     try {
-      const tokenRef = doc(db, 'passwordResetTokens', token)
-      const tokenDoc = await getDoc(tokenRef)
-
-      if (!tokenDoc.exists()) {
-        setMessage('❌ Token inválido ou expirado.')
-        setSubmitting(false)
-        return
-      }
-
-      const tokenData = tokenDoc.data()
-
-      // Enviar email de redefinição de senha do Firebase Auth
-      await sendPasswordResetEmail(auth, tokenData.email)
-      
-      // Marcar token como usado
-      await updateDoc(tokenRef, {
-        used: true,
-        usedAt: serverTimestamp(),
+      // Chamar a função Cloud Function para atualizar a senha
+      const response = await fetch(FIREBASE_FUNCTIONS.updateUserPassword || 'https://us-central1-plegi-d84c2.cloudfunctions.net/updateUserPassword', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: token,
+          newPassword: formData.newPassword,
+        }),
       })
 
-      setMessage('✅ Email de redefinição de senha enviado para ' + tokenData.email + '! Verifique sua caixa de entrada (e spam) e siga as instruções no email do Firebase.')
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao atualizar senha')
+      }
+
+      setMessage('✅ Senha redefinida com sucesso! Você pode fazer login agora com sua nova senha.')
       
-      // Redirecionar após 5 segundos
+      // Redirecionar após 3 segundos
       setTimeout(() => {
         navigate('/login')
-      }, 5000)
+      }, 3000)
 
     } catch (err) {
       console.error('Erro ao redefinir senha:', err)
