@@ -40,6 +40,7 @@ import { auth, db, storage } from '../firebase/config'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { createSlug } from '../utils/slug'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import * as pdfjsLib from 'pdfjs-dist'
 import { jsonrepair } from 'jsonrepair'
@@ -2503,8 +2504,12 @@ REGRAS CRÍTICAS:
 
     setUploadingCourse(true)
     try {
+      // Gerar slug do nome do curso
+      const slug = createSlug(courseForm.name)
+      
       await addDoc(collection(db, 'courses'), {
         name: courseForm.name,
+        slug: slug, // Slug para URLs amigáveis
         description: courseForm.description || '',
         price: parseFloat(courseForm.price) || 99.90,
         originalPrice: parseFloat(courseForm.originalPrice) || 149.99,
@@ -2583,8 +2588,12 @@ REGRAS CRÍTICAS:
     }
 
     try {
+      // Gerar slug do nome do curso
+      const slug = createSlug(editingCourseData.name.trim())
+      
       await updateCourse(courseId, {
         name: editingCourseData.name.trim(),
+        slug: slug, // Atualizar slug quando nome mudar
         description: editingCourseData.description?.trim() || '',
         price: parseFloat(editingCourseData.price) || 99.90,
         originalPrice: parseFloat(editingCourseData.originalPrice) || 149.99,

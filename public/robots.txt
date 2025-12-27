@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /flashcards
+Disallow: /simulado
+Disallow: /feed
+Disallow: /profile/
+
+# Sitemap
+Sitemap: https://www.flashconcards.com.br/sitemap.xml
+

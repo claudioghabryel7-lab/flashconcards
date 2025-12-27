@@ -91,6 +91,82 @@ const PublicHome = () => {
   const [courses, setCourses] = useState([])
   const [loadingCourses, setLoadingCourses] = useState(true)
   
+  // SEO: Adicionar meta tags e Schema.org dinamicamente
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return
+    
+    // Atualizar título se necessário
+    const currentTitle = document.title
+    if (!currentTitle.includes('FlashConCards')) {
+      document.title = 'FlashConCards - Flashcards para Concursos Públicos | Polícia Militar, PMGO, PC'
+    }
+    
+    // Adicionar Schema.org para Organization e WebSite
+    const organizationSchema = {
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: 'FlashConCards',
+      url: 'https://www.flashconcards.com.br',
+      logo: 'https://www.flashconcards.com.br/logo.svg',
+      description: 'Plataforma de flashcards para concursos públicos. Estude para Polícia Militar, PMGO, PC, GCM e muito mais.',
+      sameAs: [
+        // Adicione redes sociais aqui se tiver
+      ],
+      contactPoint: {
+        '@type': 'ContactPoint',
+        contactType: 'Customer Service',
+        availableLanguage: 'Portuguese'
+      }
+    }
+    
+    const websiteSchema = {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: 'FlashConCards',
+      url: 'https://www.flashconcards.com.br',
+      description: 'A melhor plataforma de flashcards para concursos públicos. Estude para Polícia Militar, PMGO, PC, GCM e muito mais.',
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: 'https://www.flashconcards.com.br/?q={search_term_string}',
+        'query-input': 'required name=search_term_string'
+      }
+    }
+    
+    // Remover schemas antigos
+    const oldSchemas = document.querySelectorAll('script[type="application/ld+json"]')
+    oldSchemas.forEach(s => s.remove())
+    
+    // Adicionar novos schemas
+    try {
+      const orgScript = document.createElement('script')
+      orgScript.type = 'application/ld+json'
+      orgScript.textContent = JSON.stringify(organizationSchema)
+      document.head.appendChild(orgScript)
+      
+      const webScript = document.createElement('script')
+      webScript.type = 'application/ld+json'
+      webScript.textContent = JSON.stringify(websiteSchema)
+      document.head.appendChild(webScript)
+    } catch (err) {
+      console.warn('Erro ao adicionar Schema.org:', err)
+    }
+    
+    return () => {
+      // Limpar ao desmontar
+      const schemas = document.querySelectorAll('script[type="application/ld+json"]')
+      schemas.forEach(s => {
+        try {
+          const content = JSON.parse(s.textContent)
+          if (content['@type'] === 'Organization' || content['@type'] === 'WebSite') {
+            s.remove()
+          }
+        } catch (e) {
+          // Ignorar
+        }
+      })
+    }
+  }, [])
+  
   // Intersection observers para animações
   const [heroRef, heroVisible] = useIntersectionObserver({ once: true })
   const [coursesRef, coursesVisible] = useIntersectionObserver({ once: true })
@@ -379,14 +455,15 @@ const PublicHome = () => {
             </span>
           </div>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-black leading-tight">
-            Plataforma de Estudos
+            FlashConCards - Flashcards para
             <span className="block mt-2 bg-gradient-to-r from-white via-blue-100 to-cyan-100 bg-clip-text text-transparent">
-              Completa com IA
+              Concursos Públicos
             </span>
           </h1>
           <p className="text-lg sm:text-xl text-white/90 leading-relaxed max-w-xl">
-            Plataforma completa com IA, flashcards inteligentes, questões personalizadas,
-            suporte 24/7 para acelerar sua aprovação.
+            Estude para <strong>concurso público</strong>, <strong>concurso polícia militar</strong>, <strong>concurso policial</strong>, PMGO, PC, GCM e muito mais. 
+            <strong>Flashcards interativos</strong> com sistema de repetição espaçada (SRS), questões comentadas e simulados. 
+            A melhor plataforma de <strong>flashcards para concursos</strong> do Brasil.
           </p>
           <div className="flex flex-col sm:flex-row flex-wrap gap-4 pt-4">
             <Link
@@ -420,6 +497,52 @@ const PublicHome = () => {
         </div>
       </div>
 
+      {/* Seção SEO - Conteúdo Rico em Palavras-chave */}
+      <div className="tech-section relative rounded-3xl bg-gradient-to-br from-slate-50 to-blue-50/30 dark:from-slate-800 dark:to-slate-900 p-8 sm:p-12 md:p-16">
+        <div className="max-w-4xl mx-auto space-y-6">
+          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">
+            Estude para Concursos Públicos com FlashConCards
+          </h2>
+          <div className="prose prose-lg dark:prose-invert max-w-none space-y-4 text-slate-700 dark:text-slate-300">
+            <p className="text-lg leading-relaxed">
+              O <strong>FlashConCards</strong> é a melhor plataforma de <strong>flashcards para concursos públicos</strong> do Brasil. 
+              Se você está se preparando para <strong>concurso polícia militar</strong>, <strong>concurso policial</strong>, 
+              <strong>concurso PMGO</strong>, <strong>concurso PC</strong>, <strong>concurso GCM</strong> ou qualquer outro 
+              <strong>concurso público</strong>, você está no lugar certo.
+            </p>
+            <p className="text-lg leading-relaxed">
+              Nossa plataforma oferece <strong>flashcards interativos</strong> com sistema de repetição espaçada (SRS), 
+              que adapta o ritmo de estudos ao seu desempenho. Estude com <strong>flashcards online</strong> de forma 
+              inteligente e eficiente, otimizando seu tempo de preparação para <strong>concursos públicos</strong>.
+            </p>
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mt-8 mb-4">
+              Por que escolher FlashConCards para estudar para concursos?
+            </h3>
+            <ul className="list-disc list-inside space-y-2 text-lg">
+              <li><strong>Flashcards para concursos</strong> com conteúdo completo e atualizado</li>
+              <li><strong>Estude para concursos</strong> de Polícia Militar, PC, GCM e muito mais</li>
+              <li><strong>Concurso polícia militar</strong> - Prepare-se com flashcards específicos</li>
+              <li><strong>Concurso policial</strong> - Questões e flashcards personalizados</li>
+              <li><strong>Flashcards PMGO</strong> - Conteúdo completo para Polícia Militar de Goiás</li>
+              <li><strong>Flashcards PC</strong> - Prepare-se para Polícia Civil</li>
+              <li><strong>Sistema de repetição espaçada</strong> (SRS) para memorização eficiente</li>
+              <li><strong>Questões comentadas</strong> geradas por IA no estilo das principais bancas</li>
+              <li><strong>Simulados completos</strong> para testar seus conhecimentos</li>
+              <li><strong>Assistente de IA</strong> disponível 24/7 para tirar dúvidas</li>
+            </ul>
+            <p className="text-lg leading-relaxed mt-6">
+              Se você está procurando por <strong>flashcards</strong>, <strong>flashconcards</strong>, 
+              <strong>estude para concursos</strong>, <strong>concurso público</strong>, 
+              <strong>concurso polícia militar</strong>, <strong>concurso policial</strong>, 
+              <strong>flashcards para concursos</strong>, <strong>flashcards online</strong>, 
+              <strong>preparatório concursos</strong>, <strong>curso concurso público</strong>, 
+              <strong>estudo para concursos</strong> ou <strong>flashcards interativos</strong>, 
+              você encontrou a plataforma ideal. Comece agora e acelere sua aprovação!
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Features Grid - Tech Senior */}
       <div ref={featuresRef} className="tech-section relative">
         <div className="text-center mb-12 space-y-4">
@@ -432,7 +555,8 @@ const PublicHome = () => {
             Tudo que você precisa para sua aprovação
           </h2>
           <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-            Plataforma completa com inteligência artificial e recursos avançados de última geração
+            Plataforma completa com inteligência artificial e recursos avançados de última geração para 
+            <strong>estudar para concursos públicos</strong> de forma eficiente
           </p>
         </div>
         <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-4">

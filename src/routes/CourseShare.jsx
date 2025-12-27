@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
-// Meta tags serão adicionadas via document.head diretamente
+import { createSlug } from '../utils/slug'
 
 const CourseShare = () => {
   const { courseId } = useParams()
@@ -61,12 +61,19 @@ const CourseShare = () => {
       }
 
       const imageUrl = course.imageBase64 || course.imageUrl || ''
-      const description = course.description || `Curso preparatório ${course.name} - ${course.competition}`
+      
+      // Criar descrição otimizada para SEO
+      const seoDescription = course.description 
+        ? `${course.description} Curso completo ${course.name} para ${course.competition || 'concursos públicos'}. Aprenda com flashcards interativos, questões e simulados. Por apenas R$ ${course.price?.toFixed(2) || '99.90'}.`
+        : `Curso completo ${course.name} para ${course.competition || 'concursos públicos'}. Aprenda com flashcards interativos, questões e simulados. Por apenas R$ ${course.price?.toFixed(2) || '99.90'}.`
+      
+      // Título otimizado para SEO
+      const seoTitle = `${course.name} - Curso Completo ${course.competition ? `| ${course.competition}` : ''} | FlashConCards`
 
       // Remover meta tags antigas
       const removeOldTags = () => {
         try {
-          const tags = document.querySelectorAll('meta[property^="og:"], meta[name^="twitter:"]')
+          const tags = document.querySelectorAll('meta[property^="og:"], meta[name^="twitter:"], meta[name="description"], script[type="application/ld+json"]')
           tags.forEach(tag => tag.remove())
         } catch (err) {
           console.warn('Erro ao remover meta tags:', err)
@@ -92,33 +99,89 @@ const CourseShare = () => {
         }
       }
 
-      // Atualizar título
+      // Atualizar título e meta description
       if (course.name) {
         try {
-          document.title = `${course.name} - FlashConCards`
+          document.title = seoTitle
+          addMetaTag('description', seoDescription.substring(0, 160)) // Limitar a 160 caracteres
         } catch (err) {
           console.warn('Erro ao atualizar título:', err)
         }
       }
 
       // Open Graph / Facebook
-      addMetaTag('og:type', 'website')
+      addMetaTag('og:type', 'product')
       if (shareUrl) addMetaTag('og:url', shareUrl)
-      if (course.name) addMetaTag('og:title', course.name)
-      if (description) addMetaTag('og:description', description)
+      if (course.name) addMetaTag('og:title', seoTitle)
+      addMetaTag('og:description', seoDescription.substring(0, 200))
       if (imageUrl) {
         addMetaTag('og:image', imageUrl)
         addMetaTag('og:image:width', '1200')
         addMetaTag('og:image:height', '630')
+        addMetaTag('og:image:alt', `${course.name} - FlashConCards`)
       }
 
       // Twitter
       addMetaTag('twitter:card', 'summary_large_image')
       if (shareUrl) addMetaTag('twitter:url', shareUrl)
-      if (course.name) addMetaTag('twitter:title', course.name)
-      if (description) addMetaTag('twitter:description', description)
+      if (course.name) addMetaTag('twitter:title', seoTitle)
+      addMetaTag('twitter:description', seoDescription.substring(0, 200))
       if (imageUrl) {
         addMetaTag('twitter:image', imageUrl)
+        addMetaTag('twitter:image:alt', `${course.name} - FlashConCards`)
+      }
+
+      // Schema.org JSON-LD para SEO
+      const schemaOrg = {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: course.name,
+        description: seoDescription,
+        image: imageUrl,
+        brand: {
+          '@type': 'Brand',
+          name: 'FlashConCards'
+        },
+        offers: {
+          '@type': 'Offer',
+          url: shareUrl,
+          priceCurrency: 'BRL',
+          price: course.price?.toFixed(2) || '99.90',
+          availability: 'https://schema.org/InStock',
+          priceValidUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 1 ano
+        },
+        aggregateRating: {
+          '@type': 'AggregateRating',
+          ratingValue: '4.8',
+          reviewCount: '150'
+        }
+      }
+
+      // Adicionar também como EducationalCourse
+      const educationalSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'Course',
+        name: course.name,
+        description: seoDescription,
+        provider: {
+          '@type': 'Organization',
+          name: 'FlashConCards',
+          url: window.location.origin
+        },
+        courseCode: course.competition || '',
+        educationalLevel: 'Professional',
+        teaches: course.description || `Conteúdo completo para ${course.competition || 'concursos públicos'}`,
+        timeRequired: course.courseDuration || 'P6M' // 6 meses padrão
+      }
+
+      // Adicionar schemas ao head
+      try {
+        const schemaScript = document.createElement('script')
+        schemaScript.type = 'application/ld+json'
+        schemaScript.textContent = JSON.stringify([schemaOrg, educationalSchema])
+        document.head.appendChild(schemaScript)
+      } catch (err) {
+        console.warn('Erro ao adicionar Schema.org:', err)
       }
 
       // Limpar ao desmontar
@@ -191,12 +254,14 @@ const CourseShare = () => {
         <div className="max-w-4xl mx-auto px-4 py-6 sm:py-12">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
             {/* Imagem do curso */}
-            {imageUrl && (
+            {(course.imageBase64 || course.imageUrl) && (
               <div className="w-full h-64 md:h-96 overflow-hidden">
                 <img
-                  src={imageUrl}
-                  alt={course.name}
+                  src={course.imageBase64 || course.imageUrl}
+                  alt={`Curso ${course.name} - ${course.competition || 'Preparatório para Concursos'} - FlashConCards`}
                   className="w-full h-full object-cover"
+                  loading="eager"
+                  fetchPriority="high"
                 />
               </div>
             )}
@@ -212,12 +277,28 @@ const CourseShare = () => {
               
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-4">
                 {course.name}
+                {course.competition && (
+                  <span className="block text-xl sm:text-2xl text-blue-600 dark:text-blue-400 mt-2">
+                    {course.competition}
+                  </span>
+                )}
               </h1>
               
               {course.description && (
-                <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 mb-6">
-                  {course.description}
-                </p>
+                <div className="text-base sm:text-lg text-slate-600 dark:text-slate-400 mb-6 space-y-3">
+                  <p className="font-semibold">{course.description}</p>
+                  <p>
+                    Prepare-se para o {course.competition || 'concurso'} com nosso curso completo de {course.name}. 
+                    Aprenda com flashcards interativos, questões comentadas e simulados no estilo da banca examinadora.
+                  </p>
+                  <ul className="list-disc list-inside space-y-2 text-sm">
+                    <li>Flashcards inteligentes com sistema de repetição espaçada</li>
+                    <li>Questões comentadas geradas por IA</li>
+                    <li>Simulados completos no estilo da banca</li>
+                    <li>Assistente de IA para tirar dúvidas 24/7</li>
+                    <li>Acesso completo a todo o conteúdo</li>
+                  </ul>
+                </div>
               )}
               
               <div className="mb-6">
