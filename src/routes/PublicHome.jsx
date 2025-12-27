@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense, startTransition } from 'react'
 import { collection, doc, onSnapshot, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import LazyImage from '../components/LazyImage'
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver'
+// Lazy load de ícones - carregar apenas quando necessário
 import { 
   ShieldCheckIcon, 
   SparklesIcon, 
@@ -21,8 +22,9 @@ import {
 } from '@heroicons/react/24/solid'
 import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
-import Reviews from '../components/Reviews'
-import NewsSection from '../components/NewsSection'
+// Lazy load de componentes pesados que não são críticos para LCP
+const Reviews = lazy(() => import('../components/Reviews'))
+const NewsSection = lazy(() => import('../components/NewsSection'))
 
 const features = [
   {
@@ -97,35 +99,41 @@ const PublicHome = () => {
   const [newsRef, newsVisible] = useIntersectionObserver({ once: true })
 
   useEffect(() => {
-    // Tentar carregar do cache primeiro
-    const cacheKey = 'courses_active'
-    try {
-      const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
-      if (cached) {
-        const { data: cachedData, timestamp } = JSON.parse(cached)
-        const now = Date.now()
-        if (now - timestamp < 5 * 60 * 1000 && cachedData) {
-          // Ordenar: cursos em destaque primeiro, depois os outros
-          const sortedCached = cachedData.sort((a, b) => {
-            if (a.featured === true && b.featured !== true) return -1
-            if (a.featured !== true && b.featured === true) return 1
-            return 0
-          })
-          setCourses(sortedCached)
-          setLoadingCourses(false)
+    // Deferir carregamento de Firestore para não bloquear renderização inicial
+    // Usar startTransition para marcar como não urgente
+    startTransition(() => {
+      // Tentar carregar do cache primeiro
+      const cacheKey = 'courses_active'
+      try {
+        const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+        if (cached) {
+          const { data: cachedData, timestamp } = JSON.parse(cached)
+          const now = Date.now()
+          if (now - timestamp < 5 * 60 * 1000 && cachedData) {
+            // Ordenar: cursos em destaque primeiro, depois os outros
+            const sortedCached = cachedData.sort((a, b) => {
+              if (a.featured === true && b.featured !== true) return -1
+              if (a.featured !== true && b.featured === true) return 1
+              return 0
+            })
+            setCourses(sortedCached)
+            setLoadingCourses(false)
+          }
         }
+      } catch (err) {
+        console.warn('Erro ao ler cache de cursos:', err)
       }
-    } catch (err) {
-      console.warn('Erro ao ler cache de cursos:', err)
-    }
-    
-    const coursesRef = collection(db, 'courses')
-    const q = query(coursesRef, where('active', '==', true))
-    let retryCount = 0
-    const maxRetries = 3
-    
-    const loadData = () => {
-    const unsub = onSnapshot(q, async (snapshot) => {
+      
+      // Deferir query do Firestore para não bloquear thread principal
+      // Usar setTimeout para dar tempo ao navegador renderizar conteúdo crítico primeiro
+      setTimeout(() => {
+        const coursesRef = collection(db, 'courses')
+        const q = query(coursesRef, where('active', '==', true))
+        let retryCount = 0
+        const maxRetries = 3
+        
+        const loadData = () => {
+        const unsub = onSnapshot(q, async (snapshot) => {
       const data = snapshot.docs.map((docSnapshot) => ({
         id: docSnapshot.id,
         ...docSnapshot.data(),
@@ -182,8 +190,13 @@ const PublicHome = () => {
       return unsub
     }
 
-    const unsub = loadData()
-    return () => unsub()
+        const unsub = loadData()
+        return () => unsub()
+      }
+      
+      loadData()
+      }, 100) // Delay de 100ms para permitir renderização inicial
+    })
   }, [])
 
   const formatCurrency = (value) => {
@@ -239,9 +252,9 @@ const PublicHome = () => {
                   <div className="tech-glow absolute inset-0 rounded-3xl pointer-events-none"></div>
                   
                   <div className="relative z-10">
-                    {/* Imagem do curso */}
+                    {/* Imagem do curso - com dimensões fixas para evitar CLS */}
                     {(course.imageBase64 || course.imageUrl) && (
-                      <div className="w-full h-52 overflow-hidden relative">
+                      <div className="w-full h-52 overflow-hidden relative" style={{ aspectRatio: '16/9', minHeight: '208px' }}>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent z-10"></div>
                         <LazyImage
                           src={course.imageBase64 || course.imageUrl}
@@ -456,9 +469,16 @@ const PublicHome = () => {
         </div>
       </div>
 
-      {/* Avaliações dos Alunos */}
+      {/* Avaliações dos Alunos - Lazy loaded */}
       <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 sm:p-8 shadow-sm">
-        <Reviews />
+        <Suspense fallback={
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent"></div>
+            <p className="mt-4 text-slate-600 dark:text-slate-400">Carregando avaliações...</p>
+          </div>
+        }>
+          <Reviews />
+        </Suspense>
       </div>
 
       {/* CTA Final - Tech Senior */}
@@ -508,9 +528,16 @@ const PublicHome = () => {
         </div>
       </div>
 
-      {/* Seção de Notícias - No final da página */}
+      {/* Seção de Notícias - No final da página - Lazy loaded */}
       <div ref={newsRef} className={`animate-on-scroll fade-up ${newsVisible ? 'visible' : ''}`}>
-        <NewsSection />
+        <Suspense fallback={
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent"></div>
+            <p className="mt-4 text-slate-600 dark:text-slate-400">Carregando notícias...</p>
+          </div>
+        }>
+          <NewsSection />
+        </Suspense>
       </div>
     </section>
   )

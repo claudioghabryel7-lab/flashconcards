@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, startTransition } from 'react'
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { Link } from 'react-router-dom'
@@ -11,29 +11,33 @@ const HomeBanner = () => {
 
   // Carregar banners do Firestore com cache
   useEffect(() => {
-    // Tentar carregar do cache primeiro
-    const cacheKey = 'homeBanners'
-    try {
-      const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
-      if (cached) {
-        const { data: cachedData, timestamp } = JSON.parse(cached)
-        const now = Date.now()
-        if (now - timestamp < 5 * 60 * 1000 && cachedData) {
-          setBanners(cachedData)
-          setLoading(false)
+    // Deferir carregamento para não bloquear renderização inicial
+    startTransition(() => {
+      // Tentar carregar do cache primeiro
+      const cacheKey = 'homeBanners'
+      try {
+        const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+        if (cached) {
+          const { data: cachedData, timestamp } = JSON.parse(cached)
+          const now = Date.now()
+          if (now - timestamp < 5 * 60 * 1000 && cachedData) {
+            setBanners(cachedData)
+            setLoading(false)
+          }
         }
+      } catch (err) {
+        console.warn('Erro ao ler cache de banners:', err)
       }
-    } catch (err) {
-      console.warn('Erro ao ler cache de banners:', err)
-    }
-    
-    const bannersRef = collection(db, 'homeBanners')
-    const q = query(bannersRef, orderBy('order', 'asc'))
-    let retryCount = 0
-    const maxRetries = 3
-    
-    const loadData = () => {
-      const unsub = onSnapshot(q, (snapshot) => {
+      
+      // Deferir query do Firestore
+      setTimeout(() => {
+        const bannersRef = collection(db, 'homeBanners')
+        const q = query(bannersRef, orderBy('order', 'asc'))
+        let retryCount = 0
+        const maxRetries = 3
+        
+        const loadData = () => {
+          const unsub = onSnapshot(q, (snapshot) => {
         const data = snapshot.docs
           .map((doc) => ({
             id: doc.id,
@@ -71,8 +75,13 @@ const HomeBanner = () => {
       return unsub
     }
     
-    const unsub = loadData()
-    return () => unsub()
+        const unsub = loadData()
+        return () => unsub()
+      }
+      
+      loadData()
+      }, 100) // Delay para permitir renderização inicial
+    })
   }, [])
 
   // Preload das próximas imagens do banner
