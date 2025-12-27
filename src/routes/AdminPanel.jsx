@@ -11078,7 +11078,21 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                     setMessage('🗑️ Deletando notícia...')
                                     await deleteDoc(doc(db, 'posts', news.id))
                                     setMessage('✅ Notícia deletada com sucesso!')
-                                    loadConcursoNews()
+                                    
+                                    // Recarregar lista de notícias
+                                    const newsRef = collection(db, 'posts')
+                                    const newsQuery = query(
+                                      newsRef,
+                                      where('isConcursoNews', '==', true),
+                                      orderBy('createdAt', 'desc'),
+                                      limit(50)
+                                    )
+                                    const newsSnapshot = await getDocs(newsQuery)
+                                    const newsList = newsSnapshot.docs.map(doc => ({
+                                      id: doc.id,
+                                      ...doc.data()
+                                    }))
+                                    setConcursoNews(newsList)
                                   } catch (err) {
                                     console.error('Erro ao deletar notícia:', err)
                                     setMessage(`❌ Erro ao deletar notícia: ${err.message}`)
