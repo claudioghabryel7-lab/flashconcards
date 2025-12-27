@@ -10986,7 +10986,19 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                         if (concursoInput) concursoInput.value = ''
                         
                         // Recarregar lista de notícias
-                        loadConcursoNews()
+                        const newsRef = collection(db, 'posts')
+                        const newsQuery = query(
+                          newsRef,
+                          where('isConcursoNews', '==', true),
+                          orderBy('createdAt', 'desc'),
+                          limit(50)
+                        )
+                        const newsSnapshot = await getDocs(newsQuery)
+                        const newsList = newsSnapshot.docs.map(doc => ({
+                          id: doc.id,
+                          ...doc.data()
+                        }))
+                        setConcursoNews(newsList)
                       } catch (err) {
                         console.error('Erro ao gerar notícia:', err)
                         setMessage(`❌ Erro ao gerar notícia: ${err.message}`)
