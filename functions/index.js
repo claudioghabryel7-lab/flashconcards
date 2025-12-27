@@ -1246,13 +1246,23 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
       const postsRef = admin.firestore().collection('posts')
       
       // Buscar todas as notícias recentes para evitar duplicatas
+      // Usar query simples sem orderBy para evitar necessidade de índice composto
       const recentNews = await postsRef
         .where('isConcursoNews', '==', true)
-        .orderBy('createdAt', 'desc')
-        .limit(10)
+        .limit(50) // Buscar mais para depois ordenar em memória
         .get()
       
-      const recentNewsList = recentNews.docs.map(doc => doc.data())
+      // Ordenar em memória por data de criação (mais recente primeiro)
+      const recentNewsList = recentNews.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(news => news.createdAt) // Filtrar apenas as que têm data
+        .sort((a, b) => {
+          const dateA = a.createdAt?.toDate?.() || new Date(0)
+          const dateB = b.createdAt?.toDate?.() || new Date(0)
+          return dateB.getTime() - dateA.getTime() // Mais recente primeiro
+        })
+        .slice(0, 10) // Pegar apenas as 10 mais recentes
+        .map(news => news) // Remover o id, manter apenas os dados
       
       if (concursoEspecifico) {
         // Verificar se já existe notícia sobre este concurso específico (busca flexível)

@@ -11079,19 +11079,22 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                     await deleteDoc(doc(db, 'posts', news.id))
                                     setMessage('✅ Notícia deletada com sucesso!')
                                     
-                                    // Recarregar lista de notícias
+                                    // Recarregar lista de notícias (sem orderBy para evitar índice)
                                     const newsRef = collection(db, 'posts')
                                     const newsQuery = query(
                                       newsRef,
                                       where('isConcursoNews', '==', true),
-                                      orderBy('createdAt', 'desc'),
                                       limit(50)
                                     )
                                     const newsSnapshot = await getDocs(newsQuery)
-                                    const newsList = newsSnapshot.docs.map(doc => ({
-                                      id: doc.id,
-                                      ...doc.data()
-                                    }))
+                                    const newsList = newsSnapshot.docs
+                                      .map(doc => ({ id: doc.id, ...doc.data() }))
+                                      .filter(news => news.createdAt)
+                                      .sort((a, b) => {
+                                        const dateA = a.createdAt?.toDate?.() || new Date(0)
+                                        const dateB = b.createdAt?.toDate?.() || new Date(0)
+                                        return dateB.getTime() - dateA.getTime()
+                                      })
                                     setConcursoNews(newsList)
                                   } catch (err) {
                                     console.error('Erro ao deletar notícia:', err)

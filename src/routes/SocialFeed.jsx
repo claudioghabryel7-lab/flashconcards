@@ -632,11 +632,12 @@ const SocialFeed = () => {
                       📰 Notícia
                     </button>
                   )}
-                  {isAuthor && (
+                  {(isAuthor || isAdmin) && (
                     <button
                       type="button"
                       onClick={() => deletePost(post.id)}
                       className="text-rose-500 hover:text-rose-600 transition"
+                      title={isAdmin && !isAuthor ? "Deletar como admin" : "Deletar post"}
                     >
                       <TrashIcon className="h-5 w-5" />
                     </button>
