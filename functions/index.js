@@ -1245,38 +1245,46 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
       // Verificar se já existe notícia similar (evitar duplicatas)
       const postsRef = admin.firestore().collection('posts')
       
+      // Buscar todas as notícias recentes para evitar duplicatas
+      const recentNews = await postsRef
+        .where('isConcursoNews', '==', true)
+        .orderBy('createdAt', 'desc')
+        .limit(10)
+        .get()
+      
+      const recentNewsList = recentNews.docs.map(doc => doc.data())
+      
       if (concursoEspecifico) {
-        // Verificar se já existe notícia sobre este concurso específico
-        const existingQuery = await postsRef
-          .where('isConcursoNews', '==', true)
-          .where('concursoData.concursoName', '==', concursoEspecifico)
-          .orderBy('createdAt', 'desc')
-          .limit(1)
-          .get()
+        // Verificar se já existe notícia sobre este concurso específico (busca flexível)
+        const concursoLower = concursoEspecifico.toLowerCase().trim()
+        const existingNews = recentNewsList.find(news => {
+          const newsConcursoName = (news.concursoData?.concursoName || '').toLowerCase().trim()
+          const newsTitle = (news.seoTitle || news.text || '').toLowerCase().trim()
+          const newsOrgao = (news.concursoData?.orgao || '').toLowerCase().trim()
+          
+          // Verificar se o nome do concurso, título ou órgão contém palavras-chave similares
+          return newsConcursoName.includes(concursoLower) || 
+                 concursoLower.includes(newsConcursoName) ||
+                 newsTitle.includes(concursoLower) ||
+                 newsOrgao.includes(concursoLower)
+        })
         
-        if (!existingQuery.empty) {
-          const lastNews = existingQuery.docs[0].data()
-          const lastNewsDate = lastNews.createdAt?.toDate?.() || new Date(0)
+        if (existingNews) {
+          const lastNewsDate = existingNews.createdAt?.toDate?.() || new Date(0)
           const daysSinceLastNews = (Date.now() - lastNewsDate.getTime()) / (1000 * 60 * 60 * 24)
           
           // Se foi gerada há menos de 7 dias, não gerar novamente
           if (daysSinceLastNews < 7) {
             return res.status(400).json({ 
               error: 'Notícia sobre este concurso já foi gerada recentemente',
-              message: `Uma notícia sobre "${concursoEspecifico}" foi gerada há ${Math.floor(daysSinceLastNews)} dias. Aguarde pelo menos 7 dias antes de gerar novamente.`
+              message: `Uma notícia sobre "${existingNews.concursoData?.concursoName || existingNews.seoTitle || 'este concurso'}" foi gerada há ${Math.floor(daysSinceLastNews)} dias. Aguarde pelo menos 7 dias antes de gerar novamente.`
             })
           }
         }
       } else {
-        // Verificar últimas 3 notícias geradas para evitar repetição
-        const recentNews = await postsRef
-          .where('isConcursoNews', '==', true)
-          .orderBy('createdAt', 'desc')
-          .limit(3)
-          .get()
-        
+        // Verificar última notícia gerada para evitar repetição
         if (!recentNews.empty) {
-          const lastNews = recentNews.docs[0].data()
+          const lastNews = recentNewsList[0]
           const lastNewsDate = lastNews.createdAt?.toDate?.() || new Date(0)
           const hoursSinceLastNews = (Date.now() - lastNewsDate.getTime()) / (1000 * 60 * 60)
           
@@ -1289,6 +1297,13 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
           }
         }
       }
+      
+      // Preparar lista de notícias recentes para a IA evitar repetição
+      const recentTitles = recentNewsList.slice(0, 5).map(news => ({
+        title: news.seoTitle || news.text || '',
+        concurso: news.concursoData?.concursoName || '',
+        date: news.createdAt?.toDate?.()?.toLocaleDateString('pt-BR') || ''
+      }))
 
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ 

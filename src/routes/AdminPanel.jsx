@@ -101,6 +101,7 @@ const AdminPanel = () => {
   
   // Estados para Edital Verticalizado
   const [editalVerticalizadoFile, setEditalVerticalizadoFile] = useState(null)
+  const [concursoNews, setConcursoNews] = useState([]) // Notícias de concursos geradas
   const [editalVerticalizadoText, setEditalVerticalizadoText] = useState('')
   const [extractingEditalVerticalizado, setExtractingEditalVerticalizado] = useState(false)
   const [savingEditalVerticalizado, setSavingEditalVerticalizado] = useState(false)
@@ -718,6 +719,27 @@ const AdminPanel = () => {
     }, (error) => {
       console.error('Erro ao carregar popup banner:', error)
     })
+
+    // Carregar notícias de concursos quando a aba for ativada
+    const loadConcursoNews = async () => {
+      try {
+        const newsRef = collection(db, 'posts')
+        const newsQuery = query(
+          newsRef,
+          where('isConcursoNews', '==', true),
+          orderBy('createdAt', 'desc'),
+          limit(50)
+        )
+        const newsSnapshot = await getDocs(newsQuery)
+        const newsList = newsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        setConcursoNews(newsList)
+      } catch (err) {
+        console.error('Erro ao carregar notícias:', err)
+      }
+    }
 
     // Carregar cursos
     const coursesRef = collection(db, 'courses')
@@ -10928,7 +10950,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                         
                         if (!response.ok) {
                           const errorData = await response.json()
-                          throw new Error(errorData.error || 'Erro ao gerar notícia')
+                          throw new Error(errorData.message || errorData.error || 'Erro ao gerar notícia')
                         }
                         
                         const result = await response.json()
@@ -10937,10 +10959,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                         // Limpar campo
                         if (concursoInput) concursoInput.value = ''
                         
-                        // Aguardar um pouco e recarregar
-                        setTimeout(() => {
-                          window.location.reload()
-                        }, 2000)
+                        // Recarregar lista de notícias
+                        loadConcursoNews()
                       } catch (err) {
                         console.error('Erro ao gerar notícia:', err)
                         setMessage(`❌ Erro ao gerar notícia: ${err.message}`)
@@ -10950,6 +10970,93 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                   >
                     🚀 Gerar Nova Notícia de Concurso
                   </button>
+                </div>
+
+                {/* Lista de Notícias Geradas */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700">
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
+                    📰 Notícias Geradas ({concursoNews.length})
+                  </h3>
+                  
+                  {concursoNews.length === 0 ? (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-8">
+                      Nenhuma notícia gerada ainda.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {concursoNews.map((news) => {
+                        const newsDate = news.createdAt?.toDate?.() || news.createdAt?.seconds ? new Date(news.createdAt.seconds * 1000) : new Date()
+                        const formatDate = (date) => {
+                          return date.toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })
+                        }
+                        
+                        return (
+                          <div
+                            key={news.id}
+                            className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 transition"
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-slate-900 dark:text-white mb-1 truncate">
+                                  {news.seoTitle || news.text || 'Sem título'}
+                                </h4>
+                                {news.concursoData?.concursoName && (
+                                  <p className="text-sm text-blue-600 dark:text-blue-400 font-semibold mb-1">
+                                    {news.concursoData.concursoName}
+                                  </p>
+                                )}
+                                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-2">
+                                  <span>📅 {formatDate(newsDate)}</span>
+                                  {news.concursoData?.orgao && (
+                                    <span>• {news.concursoData.orgao}</span>
+                                  )}
+                                  {news.concursoData?.vagas && news.concursoData.vagas !== 'A definir' && (
+                                    <span>• {news.concursoData.vagas} vagas</span>
+                                  )}
+                                </div>
+                                {news.slug && (
+                                  <a
+                                    href={`/noticia/${news.id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-2 inline-block"
+                                  >
+                                    Ver notícia →
+                                  </a>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (!confirm('Deseja realmente excluir esta notícia?')) return
+                                  
+                                  try {
+                                    setMessage('🗑️ Deletando notícia...')
+                                    await deleteDoc(doc(db, 'posts', news.id))
+                                    setMessage('✅ Notícia deletada com sucesso!')
+                                    loadConcursoNews()
+                                  } catch (err) {
+                                    console.error('Erro ao deletar notícia:', err)
+                                    setMessage(`❌ Erro ao deletar notícia: ${err.message}`)
+                                  }
+                                }}
+                                className="flex-shrink-0 p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+                                title="Deletar notícia"
+                              >
+                                <TrashIcon className="h-5 w-5" />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
                 
                 <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-700">
