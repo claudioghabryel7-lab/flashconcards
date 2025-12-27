@@ -1150,23 +1150,38 @@ exports.updateUserPassword = functions.https.onRequest((req, res) => {
   })
 })
 
+// Função helper para aplicar CORS
+const applyCORS = (req, res) => {
+  const allowedOrigins = ['https://www.flashconcards.com.br', 'https://flashconcards.com.br', 'http://localhost:5173']
+  const origin = req.headers.origin
+  
+  if (origin && allowedOrigins.includes(origin)) {
+    res.set('Access-Control-Allow-Origin', origin)
+  } else {
+    res.set('Access-Control-Allow-Origin', 'https://www.flashconcards.com.br')
+  }
+  
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.set('Access-Control-Max-Age', '3600')
+}
+
 // Função para enviar email em massa para todos os usuários
 exports.sendMassEmail = functions.https.onRequest((req, res) => {
-  // Aplicar CORS primeiro
-  cors(req, res, async () => {
-    // Tratar preflight request
-    if (req.method === 'OPTIONS') {
-      // O middleware CORS já aplica os headers, mas garantimos que estão presentes
-      res.set('Access-Control-Allow-Origin', req.headers.origin || 'https://www.flashconcards.com.br')
-      res.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
-      res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-      res.set('Access-Control-Max-Age', '3600')
-      return res.status(204).send('')
-    }
-    
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Método não permitido' })
-    }
+  // Aplicar CORS em todas as respostas
+  applyCORS(req, res)
+  
+  // Tratar preflight request
+  if (req.method === 'OPTIONS') {
+    return res.status(204).send('')
+  }
+  
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Método não permitido' })
+  }
+  
+  // Processar requisição POST
+  (async () => {
 
     try {
       const { subject, message, adminEmail } = req.body
@@ -1329,7 +1344,7 @@ ${message}
       console.error('Erro na função sendMassEmail:', error)
       return res.status(500).json({ error: 'Erro ao enviar emails', details: error.message })
     }
-  })
+  })()
 })
 
 // Função agendada para expirar usuários trial automaticamente
