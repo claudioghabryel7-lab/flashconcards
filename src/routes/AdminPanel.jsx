@@ -4146,6 +4146,41 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     }
   }
 
+  // Gerar link de redefinição de senha para um usuário específico
+  const generateResetLinkForUser = async (userEmail) => {
+    if (!userEmail) {
+      setMessage('❌ Email do usuário não fornecido.')
+      return
+    }
+
+    try {
+      // Gerar token aleatório seguro
+      const token = crypto.randomUUID() + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 15)
+      
+      // Criar token no Firestore (expira em 24 horas)
+      const expiresAt = new Date()
+      expiresAt.setHours(expiresAt.getHours() + 24)
+
+      await setDoc(doc(db, 'passwordResetTokens', token), {
+        email: userEmail.toLowerCase().trim(),
+        createdAt: serverTimestamp(),
+        expiresAt: expiresAt,
+        used: false,
+      })
+
+      // Gerar link completo
+      const baseUrl = window.location.origin
+      const resetLink = `${baseUrl}/reset/${token}`
+      
+      // Copiar para área de transferência
+      await navigator.clipboard.writeText(resetLink)
+      setMessage(`✅ Link de redefinição gerado e copiado para ${userEmail}! O link expira em 24 horas.`)
+    } catch (err) {
+      console.error('Erro ao gerar link:', err)
+      setMessage(`❌ Erro ao gerar link: ${err.message}`)
+    }
+  }
+
   const removeCard = async (cardId) => {
     if (!window.confirm('Deseja realmente excluir este card?')) return
     await deleteDoc(doc(db, 'flashcards', cardId))
@@ -9254,6 +9289,15 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                               >
                                 <AcademicCapIcon className="h-4 w-4" />
                                 Cursos
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => generateResetLinkForUser(user.email)}
+                                className="flex items-center gap-1 rounded-full border border-orange-500 px-4 py-2 text-sm font-semibold text-orange-500 hover:bg-orange-50"
+                                title="Gerar link de redefinição de senha"
+                              >
+                                <LockClosedIcon className="h-4 w-4" />
+                                Redefinir Senha
                               </button>
                               <button
                                 type="button"
