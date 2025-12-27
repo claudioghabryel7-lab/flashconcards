@@ -1314,13 +1314,20 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
         }
       })
 
+      // Preparar lista de notícias recentes para a IA evitar repetição
+      const recentTitlesText = recentNewsList.length > 0 
+        ? `\n\nNOTÍCIAS RECENTES JÁ GERADAS (EVITE REPETIR):\n${recentNewsList.slice(0, 5).map((n, i) => `${i + 1}. "${n.seoTitle || n.text || ''}" - ${n.concursoData?.concursoName || 'N/A'} (${n.createdAt?.toDate?.()?.toLocaleDateString('pt-BR') || ''})`).join('\n')}\n\nIMPORTANTE: NÃO gere uma notícia sobre os mesmos concursos listados acima. Escolha um concurso DIFERENTE ou uma atualização significativa com informações novas.`
+        : ''
+      
       // Prompt para IA buscar e gerar notícia sobre concursos
       const prompt = `Você é um especialista em concursos públicos brasileiros. 
       Sua tarefa é criar uma notícia completa e atualizada sobre concursos públicos abertos ou iminentes.
       
       ${concursoEspecifico ? `CONCURSO ESPECÍFICO SOLICITADO: "${concursoEspecifico}"
       
-      IMPORTANTE: Você DEVE gerar uma notícia sobre este concurso específico. Foque todas as informações neste concurso. Seja detalhado e específico sobre este concurso.` : `GERE UMA NOTÍCIA SOBRE:
+      IMPORTANTE: Você DEVE gerar uma notícia sobre este concurso específico. Foque todas as informações neste concurso. Seja detalhado e específico sobre este concurso.
+      
+      ATENÇÃO: Se já existe uma notícia recente sobre este mesmo concurso (ver lista abaixo), você DEVE gerar uma ATUALIZAÇÃO com informações novas, diferentes ou mais recentes. Não repita o mesmo conteúdo.${recentTitlesText}` : `GERE UMA NOTÍCIA SOBRE:
       - Concurso público aberto (com inscrições abertas)
       - Concurso público previsto/iminente (com edital previsto)
       - Atualização sobre concursos já abertos (novas vagas, prorrogação de prazo, etc.)
@@ -1329,7 +1336,7 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
       - Polícia Militar (PMGO, PMSP, PMRJ, etc.)
       - Polícia Civil (PC)
       - Guarda Municipal (GCM)
-      - Outros concursos públicos relevantes`}
+      - Outros concursos públicos relevantes${recentTitlesText}`}
 
       INFORMAÇÕES OBRIGATÓRIAS A INCLUIR:
       1. Nome do concurso e órgão
