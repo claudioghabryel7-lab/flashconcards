@@ -836,6 +836,11 @@ exports.sendSimuladoResultEmail = functions.https.onRequest((req, res) => {
 // Função para enviar email personalizado de redefinição de senha
 exports.sendPasswordResetEmail = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
+    // Tratar preflight request
+    if (req.method === 'OPTIONS') {
+      return res.status(204).send('')
+    }
+    
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' })
     }
@@ -1070,6 +1075,11 @@ exports.sendPasswordResetEmail = functions.https.onRequest((req, res) => {
 // Função para atualizar senha do usuário (usado na página de reset)
 exports.updateUserPassword = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
+    // Tratar preflight request
+    if (req.method === 'OPTIONS') {
+      return res.status(204).send('')
+    }
+    
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' })
     }
