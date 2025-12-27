@@ -1394,8 +1394,7 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
         .replace(/(^-|-$)/g, '')
 
       // Salvar no Firestore
-      const db = admin.firestore()
-      const newsRef = db.collection('posts')
+      const newsRef = admin.firestore().collection('posts')
       
       const newsDoc = {
         text: newsData.summary || newsData.title,
