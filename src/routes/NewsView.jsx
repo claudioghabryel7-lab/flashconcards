@@ -358,7 +358,6 @@ const NewsView = () => {
                       </a>
                     </div>
                   )}
-              </div>
                   {news.concursoData.conteudoProgramatico && (
                     <div className="md:col-span-2 bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
                       <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Conteúdo Programático</p>
