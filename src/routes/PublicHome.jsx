@@ -23,7 +23,6 @@ import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
 import Reviews from '../components/Reviews'
 import NewsSection from '../components/NewsSection'
-import MarketingHero from '../components/MarketingHero'
 
 const features = [
   {
@@ -199,30 +198,32 @@ const PublicHome = () => {
       {/* Carrossel de Banners */}
       <HomeBanner />
       
-      {/* Marketing Hero - Logo após os banners */}
-      <MarketingHero />
-      
       {/* Cursos Disponíveis - Movido para o início */}
-      {courses.length > 0 && (
-        <div
-          id="cursos"
-          data-courses-section
-          ref={coursesRef}
-          className={`space-y-8 animate-on-scroll fade-up ${coursesVisible ? 'visible' : ''}`}
-        >
-          <div className="text-center space-y-3">
-            <div className="inline-block">
-              <span className="tech-badge px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                Cursos Premium
-              </span>
-            </div>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black gradient-text-tech mb-2">
-              Cursos Preparatórios Disponíveis
-            </h2>
-            <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-              Escolha o curso ideal para sua aprovação. Plataforma completa com IA e recursos avançados.
-            </p>
+      <div
+        id="cursos"
+        data-courses-section
+        ref={coursesRef}
+        className={`space-y-8 animate-on-scroll fade-up ${coursesVisible ? 'visible' : ''}`}
+      >
+        <div className="text-center space-y-3">
+          <div className="inline-block">
+            <span className="tech-badge px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              Cursos Premium
+            </span>
           </div>
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black gradient-text-tech mb-2">
+            Cursos Preparatórios Disponíveis
+          </h2>
+          <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+            Escolha o curso ideal para sua aprovação. Plataforma completa com IA e recursos avançados.
+          </p>
+        </div>
+        {loadingCourses ? (
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+            <p className="mt-4 text-slate-600 dark:text-slate-400">Carregando cursos...</p>
+          </div>
+        ) : courses.length > 0 ? (
           <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
             {courses.map((course, index) => {
               return (
@@ -340,8 +341,12 @@ const PublicHome = () => {
                 </div>
               )})}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="text-center py-12 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+            <p className="text-slate-600 dark:text-slate-400">Nenhum curso disponível no momento.</p>
+          </div>
+        )}
+      </div>
 
       {/* Hero Section - Tech Senior */}
       <div 
@@ -423,7 +428,7 @@ const PublicHome = () => {
             return (
               <div
                 key={index}
-                className={`group relative tech-card tech-shine rounded-3xl p-6 sm:p-7 hover-scale hover-lift animate-on-scroll fade-up ${featuresVisible ? 'visible' : ''}`}
+                className={`group relative tech-card tech-shine rounded-3xl p-6 sm:p-7 hover-scale hover-lift animate-on-scroll fade-up visible`}
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
                 {/* Tech Glow Border */}

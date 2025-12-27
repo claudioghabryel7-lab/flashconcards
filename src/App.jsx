@@ -6,7 +6,6 @@ import { useOnlineStatus } from './hooks/useOnlineStatus'
 import Header from './components/Header'
 import SupportButton from './components/SupportButton'
 import PopupBanner from './components/PopupBanner'
-import BackgroundAnimation from './components/BackgroundAnimation'
 
 // Lazy load de rotas pesadas
 const AdminPanel = lazy(() => import('./routes/AdminPanel'))
@@ -115,7 +114,6 @@ function App() {
           minHeight: '100vh'
         }}
       >
-      <BackgroundAnimation />
       <Header />
       <main className="mx-auto w-full max-w-6xl px-2 sm:px-4 py-4 sm:py-6 md:py-8 overflow-x-hidden relative z-10">
         <Suspense fallback={<LoadingFallback />}>
