@@ -284,6 +284,7 @@ const NewsView = () => {
                   <span>Compartilhar</span>
                 </button>
               </div>
+            </header>
           
             {/* Dados específicos de concurso - Card destacado */}
             {news.isConcursoNews && news.concursoData && (
