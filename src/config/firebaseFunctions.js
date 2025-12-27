@@ -27,9 +27,6 @@ export const FIREBASE_FUNCTIONS = {
   
   // Função para atualizar senha do usuário usando token de reset
   updateUserPassword: `${FIREBASE_FUNCTIONS_BASE_URL}/updateUserPassword`,
-  
-  // Função para enviar email em massa para todos os usuários
-  sendMassEmail: `${FIREBASE_FUNCTIONS_BASE_URL}/sendMassEmail`,
 }
 
 /**
