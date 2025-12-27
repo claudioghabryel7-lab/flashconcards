@@ -4107,24 +4107,26 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     setMessage('')
 
     try {
-      // Verificar se o email existe no Firebase Auth
-      const methods = await fetchSignInMethodsForEmail(auth, resetEmail.toLowerCase().trim())
-      
-      if (methods.length === 0) {
-        setMessage('❌ Este email não está cadastrado no Firebase Authentication. O usuário precisa ter uma conta no Firebase Auth para receber o email de redefinição.')
-        setGeneratingLink(false)
-        return
-      }
-
-      // Enviar email de redefinição de senha usando Firebase Auth
+      // Tentar enviar email de redefinição de senha diretamente
+      // O Firebase Auth vai verificar se o email existe
       await sendPasswordResetEmail(auth, resetEmail.toLowerCase().trim())
       
       setGeneratedLink('') // Não precisamos mais do link, o email foi enviado
       setMessage('✅ Email de redefinição de senha enviado com sucesso! Verifique a caixa de entrada (e spam) do usuário.')
     } catch (err) {
       console.error('Erro ao enviar email de redefinição:', err)
+      
       if (err.code === 'auth/user-not-found') {
-        setMessage('❌ Usuário com este email não encontrado no Firebase Authentication.')
+        // Verificar se o usuário existe no Firestore
+        const usersRef = collection(db, 'users')
+        const q = query(usersRef, where('email', '==', resetEmail.toLowerCase().trim()))
+        const userSnapshot = await getDocs(q)
+        
+        if (!userSnapshot.empty) {
+          setMessage('⚠️ Este email está cadastrado no sistema, mas não possui conta no Firebase Authentication.\n\nPara resolver:\n1. O usuário precisa fazer login pelo menos uma vez para criar a conta no Firebase Auth\n2. Ou você pode criar a conta manualmente no Firebase Console > Authentication\n3. Depois tente redefinir a senha novamente')
+        } else {
+          setMessage('❌ Usuário com este email não encontrado no sistema.')
+        }
       } else if (err.code === 'auth/invalid-email') {
         setMessage('❌ Email inválido.')
       } else {
@@ -4143,22 +4145,25 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     }
 
     try {
-      // Verificar se o email existe no Firebase Auth
-      const methods = await fetchSignInMethodsForEmail(auth, userEmail.toLowerCase().trim())
-      
-      if (methods.length === 0) {
-        setMessage(`❌ Este email não está cadastrado no Firebase Authentication. O usuário precisa ter uma conta no Firebase Auth para receber o email de redefinição.`)
-        return
-      }
-
-      // Enviar email de redefinição de senha usando Firebase Auth
+      // Tentar enviar email de redefinição de senha diretamente
+      // O Firebase Auth vai verificar se o email existe
       await sendPasswordResetEmail(auth, userEmail.toLowerCase().trim())
       
       setMessage(`✅ Email de redefinição de senha enviado com sucesso para ${userEmail}! Verifique a caixa de entrada (e spam) do usuário.`)
     } catch (err) {
       console.error('Erro ao enviar email de redefinição:', err)
+      
       if (err.code === 'auth/user-not-found') {
-        setMessage(`❌ Usuário com este email não encontrado no Firebase Authentication.`)
+        // Verificar se o usuário existe no Firestore
+        const usersRef = collection(db, 'users')
+        const q = query(usersRef, where('email', '==', userEmail.toLowerCase().trim()))
+        const userSnapshot = await getDocs(q)
+        
+        if (!userSnapshot.empty) {
+          setMessage(`⚠️ Este email está cadastrado no sistema, mas não possui conta no Firebase Authentication.\n\nPara resolver:\n1. O usuário precisa fazer login pelo menos uma vez para criar a conta no Firebase Auth\n2. Ou você pode criar a conta manualmente no Firebase Console > Authentication\n3. Depois tente redefinir a senha novamente`)
+        } else {
+          setMessage(`❌ Usuário com este email não encontrado no sistema.`)
+        }
       } else if (err.code === 'auth/invalid-email') {
         setMessage(`❌ Email inválido.`)
       } else {
