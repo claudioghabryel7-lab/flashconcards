@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { doc, getDoc } from 'firebase/firestore'
-import { ArrowLeftIcon, CalendarIcon, CurrencyDollarIcon, UserGroupIcon, DocumentTextIcon, BuildingOfficeIcon, ShareIcon, ClockIcon } from '@heroicons/react/24/outline'
+import { doc, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore'
+import { ArrowLeftIcon, CalendarIcon, CurrencyDollarIcon, UserGroupIcon, DocumentTextIcon, BuildingOfficeIcon, ShareIcon, ClockIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import Header from '../components/Header'
@@ -13,6 +13,9 @@ const NewsView = () => {
   const [news, setNews] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [courses, setCourses] = useState([])
+  
+  const whatsappNumber = '5562981841878'
 
   useEffect(() => {
     if (!postId) {
@@ -46,6 +49,21 @@ const NewsView = () => {
           ...data,
         }
         setNews(newsData)
+        
+        // Carregar cursos para anúncio
+        try {
+          const coursesRef = collection(db, 'courses')
+          const q = query(coursesRef, where('active', '==', true), limit(3))
+          const coursesSnapshot = await getDocs(q)
+          const coursesData = coursesSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }))
+          setCourses(coursesData)
+        } catch (err) {
+          console.error('Erro ao carregar cursos:', err)
+        }
+        
         setLoading(false)
         
         // SEO: Adicionar meta tags dinamicamente
@@ -193,28 +211,29 @@ const NewsView = () => {
   }
 
   return (
-    <div 
-      className="min-h-screen"
-      style={{ backgroundColor: darkMode ? '#000000' : '#ffffff' }}
-    >
-      {/* Header simples */}
-      <div className="border-b border-slate-300 dark:border-slate-800 sticky top-0 z-10 bg-white dark:bg-black">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 text-alego-600 hover:text-alego-700 dark:text-alego-400 font-semibold"
-          >
-            <ArrowLeftIcon className="h-5 w-5" />
-            Voltar para o site
-          </Link>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+      {/* Background com imagem e gradiente fosco */}
+      <div 
+        className="fixed inset-0 z-0 opacity-30"
+        style={{
+          backgroundImage: 'url("https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920")',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        }}
+      />
+      <div className="fixed inset-0 z-0 bg-gradient-to-br from-blue-600/40 via-indigo-600/40 to-blue-700/40 dark:from-slate-900/80 dark:via-slate-800/80 dark:to-slate-900/80" />
+      
+      {/* Header completo */}
+      <div className="relative z-10">
+        <Header />
       </div>
 
       {/* Conteúdo principal */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Artigo principal */}
-          <article className="lg:col-span-2">
+          <article className="lg:col-span-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-6 md:p-8 shadow-xl">
             {/* Cabeçalho da notícia */}
             <header className="mb-8">
               {/* Badge de categoria */}
@@ -383,12 +402,117 @@ const NewsView = () => {
               </div>
             )}
 
-            {/* Conteúdo completo */}
+            {/* Conteúdo completo com processamento inteligente */}
             <div className="prose prose-lg prose-slate dark:prose-invert max-w-none mb-8">
-              <div 
-                className="text-lg leading-relaxed text-slate-700 dark:text-slate-300"
-                dangerouslySetInnerHTML={{ __html: news.fullText || news.text || '' }}
-              />
+              {(() => {
+                const content = news.fullText || news.text || ''
+                
+                // Processar conteúdo: dividir em seções e adicionar anúncios/botões
+                const sections = content.split(/(?=Vagas e Remuneração|Etapas do Concurso|Conteúdo Programático)/i)
+                
+                return (
+                  <div className="space-y-6">
+                    {sections.map((section, index) => {
+                      // Primeira seção (antes de "Vagas e Remuneração")
+                      if (index === 0) {
+                        return (
+                          <div key={index}>
+                            <div 
+                              className="text-lg leading-relaxed text-slate-700 dark:text-slate-300"
+                              style={{
+                                whiteSpace: 'pre-wrap',
+                                wordWrap: 'break-word'
+                              }}
+                              dangerouslySetInnerHTML={{ 
+                                __html: section
+                                  .split('\n\n')
+                                  .map(para => para.trim())
+                                  .filter(para => para)
+                                  .map(para => `<p class="mb-6 leading-8">${para.replace(/\n/g, '<br />')}</p>`)
+                                  .join('')
+                              }}
+                            />
+                            
+                            {/* Anúncio de Cursos - Horizontal (antes de "Vagas e Remuneração") */}
+                            {section.toLowerCase().includes('vagas') === false && courses.length > 0 && (
+                              <div className="my-12 p-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl shadow-2xl border-2 border-blue-400">
+                                <h3 className="text-3xl font-black text-white mb-3">🎓 Prepare-se com Nossos Cursos Preparatórios</h3>
+                                <p className="text-blue-50 mb-6 text-lg">Acesse nossos cursos completos com flashcards interativos, questões comentadas e simulados</p>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                  {courses.slice(0, 3).map((course) => (
+                                    <Link
+                                      key={course.id}
+                                      to={`/curso/${course.id}`}
+                                      className="bg-white/15 hover:bg-white/25 backdrop-blur-md rounded-xl p-5 border-2 border-white/30 transition transform hover:scale-105"
+                                    >
+                                      <div className="font-black text-white mb-2 text-lg">{course.name}</div>
+                                      <div className="text-sm text-blue-100 mb-3">{course.competition}</div>
+                                      <div className="text-2xl font-black text-white">
+                                        R$ {course.price?.toFixed(2) || '99,90'}
+                                      </div>
+                                    </Link>
+                                  ))}
+                                </div>
+                                <Link
+                                  to="/"
+                                  className="inline-block px-8 py-4 bg-white text-blue-600 font-black rounded-xl hover:bg-blue-50 transition shadow-lg text-lg"
+                                >
+                                  Ver Todos os Cursos →
+                                </Link>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                      
+                      // Seção "Vagas e Remuneração" ou outras
+                      const isEtapas = section.toLowerCase().includes('etapas do concurso')
+                      const isConteudoProgramatico = section.toLowerCase().includes('conteúdo programático')
+                      
+                      return (
+                        <div key={index}>
+                          <div 
+                            className="text-lg leading-relaxed text-slate-700 dark:text-slate-300"
+                            style={{
+                              whiteSpace: 'pre-wrap',
+                              wordWrap: 'break-word'
+                            }}
+                            dangerouslySetInnerHTML={{ 
+                              __html: section
+                                .split('\n\n')
+                                .map(para => para.trim())
+                                .filter(para => para)
+                                .map(para => {
+                                  // Detectar títulos (linhas em maiúsculas ou com formatação especial)
+                                  if (para.match(/^[A-ZÁÊÇ][A-ZÁÊÇ\s:]+$/) || para.match(/^[A-ZÁÊÇ][^.!?]*:$/)) {
+                                    return `<h2 class="text-3xl font-black text-blue-600 dark:text-blue-400 mb-4 mt-8">${para}</h2>`
+                                  }
+                                  return `<p class="mb-6 leading-8">${para.replace(/\n/g, '<br />')}</p>`
+                                })
+                                .join('')
+                            }}
+                          />
+                          
+                          {/* Botão WhatsApp após "Etapas do Concurso" */}
+                          {isEtapas && (
+                            <div className="my-10 text-center">
+                              <a
+                                href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent('Olá! Gostaria de saber mais sobre os cursos preparatórios disponíveis para este concurso.')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-3 px-8 py-4 bg-green-500 hover:bg-green-600 text-white font-black rounded-xl transition shadow-lg text-lg"
+                              >
+                                <ChatBubbleLeftRightIcon className="h-6 w-6" />
+                                Falar no WhatsApp sobre os Cursos
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </div>
             
             {/* Tags e palavras-chave */}
@@ -409,8 +533,8 @@ const NewsView = () => {
             )}
 
             {/* Botão CTA */}
-            <div className="mt-12 pt-8 border-t border-slate-200 dark:border-slate-700">
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-8 text-center text-white">
+            <div className="mt-12 pt-8 border-t-2 border-blue-200 dark:border-blue-700">
+              <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-8 text-center text-white shadow-2xl border-2 border-blue-400">
                 <h3 className="text-2xl font-black mb-3">Prepare-se para este concurso!</h3>
                 <p className="text-blue-100 mb-6">Acesse nossos cursos preparatórios e garanta sua aprovação</p>
                 <Link
@@ -427,7 +551,7 @@ const NewsView = () => {
           <aside className="lg:col-span-1">
             <div className="sticky top-8 space-y-6">
               {/* Card de CTA */}
-              <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl p-6 text-white">
+              <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-xl border-2 border-blue-400">
                 <h3 className="text-xl font-black mb-3">🚀 Prepare-se Agora!</h3>
                 <p className="text-blue-100 mb-4 text-sm">
                   Acesse nossos cursos preparatórios com flashcards, questões e simulados.
@@ -442,7 +566,7 @@ const NewsView = () => {
 
               {/* Informações adicionais */}
               {news.isConcursoNews && news.concursoData && (
-                <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700">
+                <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-6 border-2 border-blue-200 dark:border-blue-700 shadow-xl">
                   <h4 className="font-bold text-slate-900 dark:text-white mb-4">📋 Resumo</h4>
                   <div className="space-y-3 text-sm">
                     {news.concursoData.concursoName && (
