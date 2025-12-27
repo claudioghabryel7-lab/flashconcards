@@ -278,17 +278,22 @@ const AdminPanel = () => {
       const loadConcursoNews = async () => {
         try {
           const newsRef = collection(db, 'posts')
+          // Usar query simples sem orderBy para evitar necessidade de índice composto
           const newsQuery = query(
             newsRef,
             where('isConcursoNews', '==', true),
-            orderBy('createdAt', 'desc'),
             limit(50)
           )
           const newsSnapshot = await getDocs(newsQuery)
-          const newsList = newsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
+          // Ordenar em memória por data de criação (mais recente primeiro)
+          const newsList = newsSnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(news => news.createdAt)
+            .sort((a, b) => {
+              const dateA = a.createdAt?.toDate?.() || new Date(0)
+              const dateB = b.createdAt?.toDate?.() || new Date(0)
+              return dateB.getTime() - dateA.getTime()
+            })
           setConcursoNews(newsList)
         } catch (err) {
           console.error('Erro ao carregar notícias:', err)
