@@ -6,6 +6,7 @@ import { useOnlineStatus } from './hooks/useOnlineStatus'
 import Header from './components/Header'
 import SupportButton from './components/SupportButton'
 import PopupBanner from './components/PopupBanner'
+import OfflineIndicator from './components/OfflineIndicator'
 
 // Lazy load de rotas pesadas
 const AdminPanel = lazy(() => import('./routes/AdminPanel'))
@@ -321,6 +322,7 @@ function App() {
       </footer>
       <SupportButton />
       <PopupBanner />
+      <OfflineIndicator />
     </div>
     )
   } catch (error) {

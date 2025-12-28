@@ -6,7 +6,15 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1" />
     <!-- Fallback para navegadores que não suportam SVG -->
     <link rel="alternate icon" href="/favicon.svg?v=1" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#667eea" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="FlashConCards" />
+    <link rel="apple-touch-icon" href="/logo.svg" />
     
     <!-- SEO Meta Tags Otimizadas -->
     <title>FlashConCards - Flashcards para Concursos Públicos | Estude para Polícia Militar, PMGO, PC e Mais</title>
@@ -172,5 +180,32 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+      // Registrar Service Worker para PWA
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((registration) => {
+              console.log('✅ Service Worker registrado com sucesso:', registration.scope)
+              
+              // Verificar atualizações periodicamente
+              registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    // Novo service worker disponível
+                    console.log('🔄 Nova versão disponível. Recarregue a página para atualizar.')
+                  }
+                })
+              })
+            })
+            .catch((error) => {
+              console.error('❌ Erro ao registrar Service Worker:', error)
+            })
+        })
+      }
+    </script>
   </body>
 </html>
