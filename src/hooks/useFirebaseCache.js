@@ -4,10 +4,10 @@ import { collection, onSnapshot, query, limit, getDocs } from 'firebase/firestor
 const CACHE_PREFIX = 'firebase_cache_'
 // Tempos de cache otimizados por tipo de dados (melhor TTFB)
 const CACHE_EXPIRY = {
-  courses: 10 * 60 * 1000, // 10 minutos (dados que mudam pouco)
-  flashcards: 5 * 60 * 1000, // 5 minutos
+  courses: 24 * 60 * 60 * 1000, // 24 horas (para funcionar offline)
+  flashcards: 24 * 60 * 60 * 1000, // 24 horas (para funcionar offline)
   users: 2 * 60 * 1000, // 2 minutos (dados mais dinâmicos)
-  default: 5 * 60 * 1000, // 5 minutos padrão
+  default: 24 * 60 * 60 * 1000, // 24 horas padrão (para funcionar offline)
 }
 
 // Função para salvar no cache

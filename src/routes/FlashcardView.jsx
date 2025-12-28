@@ -132,6 +132,32 @@ const FlashcardView = () => {
     setCards([])
     setCardsLoading(true)
     
+    // Tentar carregar do cache primeiro (funciona offline)
+    const cacheKey = `flashcards_${selectedCourseId || 'alego'}_${user.uid}`
+    let cachedDataLoaded = false
+    
+    try {
+      const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+      if (cached) {
+        const { data: cachedData, timestamp } = JSON.parse(cached)
+        const now = Date.now()
+        // Usar cache se tiver menos de 24 horas (para funcionar offline por mais tempo)
+        if (now - timestamp < 24 * 60 * 60 * 1000 && cachedData && cachedData.length > 0) {
+          console.log('📦 Carregando flashcards do cache')
+          setCards(cachedData)
+          setCardsLoading(false)
+          cachedDataLoaded = true
+        }
+      }
+    } catch (err) {
+      console.warn('Erro ao ler cache de flashcards:', err)
+    }
+    
+    // Se estiver offline e já carregou do cache, não tenta buscar do Firebase
+    if (!navigator.onLine && cachedDataLoaded) {
+      return () => {} // Cleanup vazio se estiver offline e usando cache
+    }
+    
     const cardsRef = collection(db, 'flashcards')
     const unsub = onSnapshot(cardsRef, (snapshot) => {
       const purchasedCourses = profile.purchasedCourses || []
@@ -202,6 +228,38 @@ const FlashcardView = () => {
       // Só atualizar após filtrar completamente e marcar como não loading
       setCards(data)
       setCardsLoading(false)
+      
+      // Salvar no cache para uso offline (válido por 24 horas)
+      try {
+        localStorage.setItem(
+          `firebase_cache_${cacheKey}`,
+          JSON.stringify({
+            data: data,
+            timestamp: Date.now(),
+          })
+        )
+      } catch (err) {
+        console.warn('Erro ao salvar cache de flashcards:', err)
+      }
+    }, (error) => {
+      console.error('Erro ao carregar flashcards:', error)
+      // Se der erro e tiver cache, usar o cache
+      if (cachedDataLoaded) {
+        try {
+          const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+          if (cached) {
+            const { data: cachedData } = JSON.parse(cached)
+            if (cachedData && cachedData.length > 0) {
+              setCards(cachedData)
+              setCardsLoading(false)
+            }
+          }
+        } catch (err) {
+          console.warn('Erro ao ler cache após erro:', err)
+        }
+      } else {
+        setCardsLoading(false)
+      }
     })
     return () => unsub()
   }, [user, profile, selectedCourseId])

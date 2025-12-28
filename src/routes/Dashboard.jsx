@@ -281,19 +281,26 @@ const Dashboard = () => {
   useEffect(() => {
     if (!user || !profile) return
     
-    // Tentar carregar do cache primeiro
+    // Tentar carregar do cache primeiro (funciona offline)
     const cacheKey = `flashcards_${selectedCourseId || 'alego'}_${user.uid}`
+    let cachedDataLoaded = false
+    
     try {
       const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
       if (cached) {
         const { data: cachedData, timestamp } = JSON.parse(cached)
         const now = Date.now()
-        // Usar cache se tiver menos de 5 minutos
-        if (now - timestamp < 5 * 60 * 1000 && cachedData) {
+        // Usar cache se tiver menos de 24 horas (para funcionar offline)
+        if (now - timestamp < 24 * 60 * 60 * 1000 && cachedData && cachedData.length > 0) {
           startTransition(() => {
             setAllCards(cachedData)
             setLoading(false)
           })
+          cachedDataLoaded = true
+          // Se estiver offline, não tenta buscar do Firebase
+          if (!navigator.onLine) {
+            return () => {} // Cleanup vazio se estiver offline e usando cache
+          }
         }
       }
     } catch (err) {
@@ -347,6 +354,24 @@ const Dashboard = () => {
         },
         (error) => {
           console.error('Erro ao carregar flashcards:', error)
+          // Se der erro e tiver cache, usar o cache
+          if (cachedDataLoaded) {
+            try {
+              const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+              if (cached) {
+                const { data: cachedData } = JSON.parse(cached)
+                if (cachedData && cachedData.length > 0) {
+                  startTransition(() => {
+                    setAllCards(cachedData)
+                    setLoading(false)
+                  })
+                  return
+                }
+              }
+            } catch (err) {
+              console.warn('Erro ao ler cache após erro:', err)
+            }
+          }
           retryCount++
           if (retryCount < maxRetries) {
             setTimeout(loadData, 1000 * retryCount)
