@@ -318,6 +318,43 @@
     
     <!-- Service Worker Registration -->
     <script>
+      // Função para limpar cache do Service Worker
+      window.clearServiceWorkerCache = async function() {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          try {
+            // Enviar mensagem para o Service Worker limpar cache
+            const channel = new MessageChannel()
+            channel.port1.onmessage = (event) => {
+              if (event.data.success) {
+                console.log('✅ Cache do Service Worker limpo com sucesso')
+                // Recarregar página após limpar cache
+                window.location.reload()
+              }
+            }
+            
+            navigator.serviceWorker.controller.postMessage(
+              { type: 'CLEAR_CACHE' },
+              [channel.port2]
+            )
+          } catch (error) {
+            console.error('❌ Erro ao limpar cache:', error)
+            // Fallback: limpar todos os caches diretamente
+            if ('caches' in window) {
+              const cacheNames = await caches.keys()
+              await Promise.all(cacheNames.map(name => caches.delete(name)))
+              console.log('✅ Cache limpo via fallback')
+              window.location.reload()
+            }
+          }
+        } else if ('caches' in window) {
+          // Se não tem Service Worker, limpar caches diretamente
+          const cacheNames = await caches.keys()
+          await Promise.all(cacheNames.map(name => caches.delete(name)))
+          console.log('✅ Cache limpo (sem Service Worker)')
+          window.location.reload()
+        }
+      }
+      
       // Registrar Service Worker para PWA
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -335,6 +372,21 @@
                   }
                 })
               })
+              
+              // Limpar cache inválido na inicialização (apenas uma vez por sessão)
+              if (!sessionStorage.getItem('sw_cache_cleaned')) {
+                // Verificar se há cache inválido e limpar
+                setTimeout(() => {
+                  if (navigator.serviceWorker.controller) {
+                    const channel = new MessageChannel()
+                    navigator.serviceWorker.controller.postMessage(
+                      { type: 'CLEAR_CACHE' },
+                      [channel.port2]
+                    )
+                    sessionStorage.setItem('sw_cache_cleaned', 'true')
+                  }
+                }, 2000) // Aguardar 2s para não bloquear carregamento inicial
+              }
             })
             .catch((error) => {
               console.error('❌ Erro ao registrar Service Worker:', error)
