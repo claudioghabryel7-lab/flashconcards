@@ -37,7 +37,6 @@ const ConteudoCompletoTopicoView = lazy(() => import('./routes/ConteudoCompletoT
 const RankingSimulado = lazy(() => import('./routes/RankingSimulado'))
 const EditalVerticalizado = lazy(() => import('./routes/EditalVerticalizado'))
 const Sitemap = lazy(() => import('./routes/Sitemap'))
-const NovaPagina = lazy(() => import('./routes/NovaPagina'))
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()
@@ -289,15 +288,6 @@ function App() {
           <Route path="/teste/:token" element={<TestTrial />} />
           {/* Sitemap XML - Acessível sem login */}
           <Route path="/sitemap.xml" element={<Sitemap />} />
-          {/* Nova Página - Exemplo */}
-          <Route
-            path="/nova-pagina"
-            element={
-              <ProtectedRoute requireCourseSelection={false}>
-                <NovaPagina />
-              </ProtectedRoute>
-            }
-          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
