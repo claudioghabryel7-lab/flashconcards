@@ -298,7 +298,15 @@ OBRIGATÓRIO INCLUIR NO CONTEÚDO:
 3. **Distribuição de Vagas**: Se houver distribuição por cargo ou área, inclua
 4. **Matérias por Área**: Organize as matérias por área de conhecimento (se aplicável)
 5. **Peso das Matérias**: Se houver informações sobre peso ou pontuação de cada matéria, inclua
-6. **Requisitos Detalhados**: Escolaridade, idade, experiência, etc.
+6. **REQUISITOS DO CARGO (OBRIGATÓRIO E DETALHADO)**: 
+   - Escolaridade mínima exigida (ensino médio, superior, etc.)
+   - Idade mínima e máxima (se houver)
+   - Experiência profissional exigida
+   - Certificações ou cursos específicos necessários
+   - Altura mínima (para cargos policiais/militares)
+   - CNH (Carteira Nacional de Habilitação) - categoria exigida
+   - Outros requisitos específicos do cargo
+   - IMPORTANTE: Crie uma seção específica <h2>Requisitos do Cargo</h2> com TODOS os requisitos detalhados
 7. **Remuneração Completa**: Salário base, benefícios, progressão de carreira
 8. **Etapas do Concurso**: Todas as fases (prova objetiva, discursiva, física, psicológica, etc.)
 9. **Banca Organizadora**: Nome completo da banca
@@ -308,7 +316,7 @@ FORMATO DE RESPOSTA (JSON VÁLIDO):
 {
   "title": "Título otimizado para SEO (H1)",
   "excerpt": "Resumo curto em 2-3 frases para chamada",
-  "content": "Conteúdo completo em HTML formatado. Use <h2> para seções principais (ex: 'Conteúdo Programático', 'Vagas e Remuneração', 'Etapas do Concurso'), <h3> para subseções, <p> para parágrafos, <ul><li> para listas de matérias, <strong> para negrito, <table> para tabelas se necessário. Seja EXTREMAMENTE detalhado sobre o conteúdo programático, listando TODAS as matérias encontradas no link de referência.",
+  "content": "Conteúdo completo em HTML formatado. Use <h2> para seções principais (OBRIGATÓRIO: 'Requisitos do Cargo' como primeira seção, depois 'Conteúdo Programático', 'Vagas e Remuneração', 'Etapas do Concurso'), <h3> para subseções, <p> para parágrafos, <ul><li> para listas de matérias e requisitos, <strong> para negrito, <table> para tabelas se necessário. Seja EXTREMAMENTE detalhado sobre os requisitos do cargo (escolaridade, idade, experiência, CNH, altura, etc.) e sobre o conteúdo programático, listando TODAS as matérias encontradas no link de referência.",
   "metaTitle": "Meta title otimizado (máx 60 caracteres)",
   "metaDescription": "Meta description otimizada (máx 160 caracteres)",
   "tags": ["tag1", "tag2", "tag3"],
@@ -316,11 +324,13 @@ FORMATO DE RESPOSTA (JSON VÁLIDO):
 }
 
 ESTRUTURA DO CONTEÚDO (HTML):
+- Use <h2>Requisitos do Cargo</h2> como PRIMEIRA seção obrigatória, com lista detalhada de TODOS os requisitos (escolaridade, idade, experiência, CNH, altura, etc.)
 - Use <h2>Conteúdo Programático</h2> seguido de uma lista completa de todas as matérias
 - Use <h2>Vagas e Remuneração</h2> com informações detalhadas
 - Use <h2>Etapas do Concurso</h2> com todas as fases
 - Organize as matérias em listas <ul><li> ou tabelas quando apropriado
 - Se houver distribuição de vagas, crie uma seção específica para isso
+- IMPORTANTE: A seção "Requisitos do Cargo" DEVE aparecer no conteúdo e ser detalhada
 
 IMPORTANTE:
 - O conteúdo deve ser factual e baseado EXCLUSIVAMENTE nas informações do link fornecido
@@ -328,6 +338,7 @@ IMPORTANTE:
 - Inclua menções ao FlashConCards como plataforma de estudo para o concurso
 - Use HTML para formatação (não markdown)
 - O título deve ser atrativo e otimizado para SEO
+- **OBRIGATÓRIO**: Inclua uma seção <h2>Requisitos do Cargo</h2> com TODOS os requisitos detalhados (escolaridade, idade, experiência, CNH, altura, etc.) - esta seção é ESSENCIAL e deve aparecer no conteúdo
 - Seja EXTREMAMENTE detalhado sobre o conteúdo programático - liste TODAS as matérias encontradas
 - Inclua informações sobre quantidade de barras/vagas se disponível no link
 - Ao mencionar matérias ou áreas de estudo, inclua links contextuais para o FlashConCards
