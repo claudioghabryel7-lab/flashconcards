@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore'
+import { useEffect, useState, startTransition } from 'react'
+import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { StarIcon } from '@heroicons/react/24/solid'
@@ -19,34 +19,47 @@ const Reviews = () => {
   const [submitting, setSubmitting] = useState(false)
   const [hoveredStar, setHoveredStar] = useState(0)
 
-  // Carregar avaliações
+  // Carregar avaliações (usar getDocs para dados estáticos - melhor performance)
   useEffect(() => {
-    const reviewsRef = collection(db, 'reviews')
-    
-    const unsub = onSnapshot(reviewsRef, (snapshot) => {
-      const data = snapshot.docs
-        .map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        .filter((review) => review.approved !== false) // Filtrar apenas aprovadas
-      
-      // Ordenar manualmente por data (mais recente primeiro)
-      data.sort((a, b) => {
-        const dateA = a.createdAt?.toDate?.() || new Date(0)
-        const dateB = b.createdAt?.toDate?.() || new Date(0)
-        return dateB - dateA
-      })
-      
-      setReviews(data)
+    if (!db) {
       setLoading(false)
-    }, (error) => {
-      console.error('Erro ao carregar avaliações:', error)
-      setReviews([])
-      setLoading(false)
-    })
+      return
+    }
 
-    return () => unsub()
+    const loadReviews = async () => {
+      try {
+        const reviewsRef = collection(db, 'reviews')
+        const snapshot = await getDocs(reviewsRef)
+        const data = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((review) => review.approved !== false) // Filtrar apenas aprovadas
+        
+        // Ordenar manualmente por data (mais recente primeiro)
+        data.sort((a, b) => {
+          const dateA = a.createdAt?.toDate?.() || new Date(0)
+          const dateB = b.createdAt?.toDate?.() || new Date(0)
+          return dateB - dateA
+        })
+        
+        startTransition(() => {
+          setReviews(data)
+          setLoading(false)
+        })
+      } catch (error) {
+        console.error('Erro ao carregar avaliações:', error)
+        setReviews([])
+        setLoading(false)
+      }
+    }
+
+    loadReviews()
+    
+    // Recarregar a cada 30 segundos para manter atualizado (sem listener contínuo)
+    const interval = setInterval(loadReviews, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   // Verificar se usuário já avaliou
@@ -137,8 +150,8 @@ const Reviews = () => {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="h-48 bg-slate-100 animate-pulse rounded-2xl" />
+      <div className="reviews-container space-y-4">
+        <div className="h-48 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-2xl" />
       </div>
     )
   }
@@ -150,7 +163,7 @@ const Reviews = () => {
   const currentReview = reviews[currentReviewIndex]
 
   return (
-    <div className="space-y-6">
+    <div className="reviews-container space-y-6">
       {/* Cabeçalho */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>

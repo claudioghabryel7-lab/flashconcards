@@ -605,7 +605,7 @@ const PublicHome = () => {
       </div>
 
       {/* Avaliações dos Alunos - Lazy loaded */}
-      <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 sm:p-8 shadow-sm">
+      <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 sm:p-8 shadow-sm reviews-container">
         <Suspense fallback={
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent"></div>

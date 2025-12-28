@@ -43,17 +43,68 @@
     <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
     <link rel="dns-prefetch" href="https://firebase.googleapis.com" />
     
-    <!-- CSS crítico inline para evitar bloqueio de renderização -->
+    <!-- CSS crítico inline para evitar bloqueio de renderização e CLS -->
     <style>
-      /* CSS crítico mínimo para evitar CLS */
+      /* CSS crítico mínimo para evitar CLS e melhorar LCP */
       * { box-sizing: border-box; }
-      body { margin: 0; padding: 0; }
+      body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
       #root { min-height: 100vh; }
-      footer { min-height: 60px; display: flex; align-items: center; justify-content: center; }
+      /* Footer fixo para evitar CLS */
+      footer { 
+        min-height: 60px; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        padding: 1rem;
+        /* Reservar espaço para evitar layout shift */
+        contain: layout style paint;
+      }
+      /* Reviews section - altura fixa para evitar CLS */
+      .reviews-container {
+        min-height: 400px;
+        contain: layout style paint;
+      }
+      /* Otimizar animações com will-change */
+      [class*="animate-"], [class*="motion-"] {
+        will-change: transform, opacity;
+      }
+      /* Prevenir reflow forçado */
+      img, video {
+        max-width: 100%;
+        height: auto;
+      }
+      /* Skeleton loader para evitar CLS durante carregamento */
+      .skeleton {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s ease-in-out infinite;
+      }
+      @keyframes loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+      /* Otimizar fontes para evitar FOIT */
+      @font-face {
+        font-family: 'system';
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+      }
     </style>
-    <!-- CSS não crítico - defer -->
+    <!-- CSS não crítico - defer para não bloquear renderização -->
     <link rel="preload" as="style" href="/src/index.css" onload="this.onload=null;this.rel='stylesheet'" />
     <noscript><link rel="stylesheet" href="/src/index.css" /></noscript>
+    <!-- Fallback para navegadores sem suporte a preload -->
+    <script>
+      (function() {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = '/src/index.css';
+        link.media = 'print';
+        link.onload = function() { this.media = 'all'; };
+        document.head.appendChild(link);
+      })();
+    </script>
     
     <!-- Google tag (gtag.js) - Carregar de forma não bloqueante -->
     <script>

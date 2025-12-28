@@ -26,7 +26,11 @@ export default defineConfig({
             if (id.includes('@google/generative-ai') || id.includes('pdfjs') || id.includes('html2canvas')) {
               return 'ai-vendor'
             }
-            // Outros vendors (mas não React) - framer-motion volta ao vendor normal para evitar erros
+            // Separar framer-motion (pesado, usado apenas em alguns componentes)
+            if (id.includes('framer-motion')) {
+              return 'framer-motion'
+            }
+            // Outros vendors (mas não React)
             if (!id.includes('react') && !id.includes('react-dom') && !id.includes('react-router')) {
               return 'vendor'
             }
