@@ -40,6 +40,7 @@ import ProgressCalendar from '../components/ProgressCalendar'
 import { isTrialMode, getTrialData } from '../utils/trialLimits'
 import { motion } from 'framer-motion'
 import { DocumentTextIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import InstallPWAButton from '../components/InstallPWAButton'
 
 dayjs.locale('pt-br')
 
@@ -527,6 +528,9 @@ const Dashboard = () => {
             </div>
           </div>
         </motion.div>
+
+        {/* Botão de Instalação PWA */}
+        <InstallPWAButton />
 
         {/* Cards de Estatísticas */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
