@@ -466,10 +466,43 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
         throw new Error('Nenhuma questão foi gerada. Tente novamente.')
       }
 
-      // Manter questões organizadas por matéria (sem embaralhar)
+      // Embaralhar alternativas de cada questão (mantendo correspondência com resposta correta)
+      const shuffleAlternatives = (question) => {
+        if (!question.alternativas || !question.correta) return question
+        
+        // Converter alternativas em array de pares [letra, texto]
+        const alternativesArray = Object.entries(question.alternativas)
+        
+        // Embaralhar o array
+        const shuffled = [...alternativesArray].sort(() => Math.random() - 0.5)
+        
+        // Criar novo objeto de alternativas com letras A, B, C, D, E na ordem embaralhada
+        const newAlternatives = {}
+        const letterMap = {} // Mapear letra antiga -> letra nova
+        
+        shuffled.forEach(([oldLetter, text], index) => {
+          const newLetter = ['A', 'B', 'C', 'D', 'E'][index]
+          newAlternatives[newLetter] = text
+          letterMap[oldLetter] = newLetter
+        })
+        
+        // Atualizar resposta correta para a nova letra
+        const newCorrectAnswer = letterMap[question.correta] || question.correta
+        
+        return {
+          ...question,
+          alternativas: newAlternatives,
+          correta: newCorrectAnswer
+        }
+      }
+      
+      // Embaralhar alternativas de todas as questões
+      const questionsWithShuffledAlternatives = allQuestions.map(shuffleAlternatives)
+
+      // Manter questões organizadas por matéria (com alternativas embaralhadas)
       setLoadingStatus('Organizando questões...')
       setLoadingProgress(90)
-      setQuestions(allQuestions)
+      setQuestions(questionsWithShuffledAlternatives)
       
       // Atualizar simulado no Firestore com as questões geradas
       setLoadingStatus('Salvando questões...')

@@ -182,8 +182,12 @@
         match /conteudosCompletos/{docId} {
           // Permitir leitura para usuários autenticados
           allow read: if isAuthenticated();
-          // Apenas admin pode criar, atualizar e deletar
-          allow create, update, delete: if isAdmin();
+          // Usuários autenticados podem criar conteúdo (gerar do edital verticalizado)
+          allow create: if isAuthenticated();
+          // Usuários autenticados podem atualizar (para regenerar ou corrigir)
+          allow update: if isAuthenticated();
+          // Apenas admin pode deletar
+          allow delete: if isAdmin();
         }
       }
       
