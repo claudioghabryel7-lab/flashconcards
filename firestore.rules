@@ -200,10 +200,13 @@
       
       // ✅ CORRIGIDO: Regra expandida diretamente para deletedUsers
       match /deletedUsers/{userId} {
-        // Admin pode ler
-        allow read: if isAuthenticated() && 
-                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        // Permitir que qualquer usuário autenticado possa ler seu próprio registro (para verificar se foi deletado)
+        // Admin pode ler qualquer registro
+        allow read: if isAuthenticated() && (
+          request.auth.uid == userId ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
         
         // Admin pode criar - VERIFICAÇÃO EXPANDIDA
         allow create: if isAuthenticated() && 

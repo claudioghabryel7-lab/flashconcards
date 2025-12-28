@@ -245,25 +245,35 @@ export const AuthProvider = ({ children }) => {
           setCachedProfile(user.uid, data) // Atualizar cache
         } else {
           // Perfil não existe - verificar se foi deletado antes de fazer logout
-          const deletedUserRef = doc(db, 'deletedUsers', user.uid)
-          const deletedSnap = await getDoc(deletedUserRef)
-          
-          if (deletedSnap.exists()) {
-            // Usuário foi deletado pelo admin - fazer logout
-            console.log('Usuário foi removido do sistema. Fazendo logout...')
           try {
-            await signOut(auth)
-            setUser(null)
-            setProfile(null)
-          } catch (err) {
-            console.error('Erro ao fazer logout:', err)
-            setUser(null)
+            const deletedUserRef = doc(db, 'deletedUsers', user.uid)
+            const deletedSnap = await getDoc(deletedUserRef)
+            
+            if (deletedSnap.exists()) {
+              // Usuário foi deletado pelo admin - fazer logout
+              console.log('Usuário foi removido do sistema. Fazendo logout...')
+              try {
+                await signOut(auth)
+                setUser(null)
+                setProfile(null)
+              } catch (err) {
+                console.error('Erro ao fazer logout:', err)
+                setUser(null)
+                setProfile(null)
+              }
+            } else {
+              // Perfil não existe mas não foi deletado - pode ser um usuário novo
+              // Não fazer logout, apenas limpar profile (o onAuthStateChanged vai recriar se necessário)
+              console.log('Perfil não encontrado, mas usuário não foi deletado. Aguardando recriação...')
               setProfile(null)
             }
-          } else {
-            // Perfil não existe mas não foi deletado - pode ser um usuário novo
-            // Não fazer logout, apenas limpar profile (o onAuthStateChanged vai recriar se necessário)
-            console.log('Perfil não encontrado, mas usuário não foi deletado. Aguardando recriação...')
+          } catch (deletedCheckError) {
+            // Se der erro de permissão ao verificar deletedUsers, apenas logar perfil como null
+            // Não bloquear o usuário por problemas de permissão
+            if (deletedCheckError.code !== 'permission-denied') {
+              console.error('Erro ao verificar deletedUsers:', deletedCheckError)
+            }
+            // Perfil não encontrado - pode ser usuário novo ou erro de permissão
             setProfile(null)
           }
         }
@@ -292,14 +302,22 @@ export const AuthProvider = ({ children }) => {
       const userCredential = await signInWithEmailAndPassword(auth, emailLower, password)
       
       // Verificar se o usuário foi deletado ANTES de permitir login
-      const deletedUserRef = doc(db, 'deletedUsers', userCredential.user.uid)
-      const deletedSnap = await getDoc(deletedUserRef)
-      
-      if (deletedSnap.exists()) {
-        // Usuário foi deletado - fazer logout imediato
-        console.log('Usuário foi removido do sistema. Acesso negado.')
-        await signOut(auth)
-        throw new Error('Este usuário foi removido do sistema. Entre em contato com o administrador.')
+      try {
+        const deletedUserRef = doc(db, 'deletedUsers', userCredential.user.uid)
+        const deletedSnap = await getDoc(deletedUserRef)
+        
+        if (deletedSnap.exists()) {
+          // Usuário foi deletado - fazer logout imediato
+          console.log('Usuário foi removido do sistema. Acesso negado.')
+          await signOut(auth)
+          throw new Error('Este usuário foi removido do sistema. Entre em contato com o administrador.')
+        }
+      } catch (deletedCheckError) {
+        // Se der erro de permissão, continuar normalmente (pode ser problema de regras)
+        // O onSnapshot vai verificar depois
+        if (deletedCheckError.code !== 'permission-denied') {
+          console.warn('Erro ao verificar deletedUsers:', deletedCheckError)
+        }
       }
       
       // O estado será atualizado automaticamente pelo onAuthStateChanged
