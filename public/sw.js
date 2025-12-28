@@ -79,6 +79,12 @@ self.addEventListener('fetch', (event) => {
     return // Deixa passar direto, sem cache
   }
 
+  // Ignorar arquivos JS/CSS com hash (modules) - sempre usar network para evitar problemas de MIME type
+  // Isso previne que arquivos JS/CSS sejam interceptados e retornem HTML (404) causando erro de MIME type
+  if (url.pathname.startsWith('/assets/') && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css'))) {
+    return // Deixa passar direto, sem cache - evita problemas de MIME type
+  }
+
   // Para páginas HTML - Cache First com atualização em background
   if (request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
@@ -134,11 +140,9 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Para assets estáticos (JS, CSS, imagens) - Cache First (otimizado para offline)
+  // Para outros assets estáticos (apenas imagens e fontes) - Cache First (otimizado para offline)
+  // JS/CSS já são ignorados acima
   if (
-    url.pathname.startsWith('/assets/') ||
-    url.pathname.includes('.js') ||
-    url.pathname.includes('.css') ||
     url.pathname.includes('.svg') ||
     url.pathname.includes('.png') ||
     url.pathname.includes('.jpg') ||
