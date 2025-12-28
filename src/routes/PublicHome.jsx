@@ -237,17 +237,27 @@ const PublicHome = () => {
           setLoadingCourses(false)
         })
         
-        // Preload das primeiras 3 imagens de cursos (acima da dobra)
+        // Preload agressivo das primeiras 6 imagens de cursos (mais que apenas 3 para melhor UX)
         // Priorizar imageUrl (URL externa) sobre imageBase64 (mais leve)
-        sortedData.slice(0, 3).forEach((course) => {
+        sortedData.slice(0, 6).forEach((course, index) => {
           const imageUrl = course.imageUrl || course.imageBase64
           if (imageUrl && typeof imageUrl === 'string') {
             try {
+              // Preload usando link tag
               const link = document.createElement('link')
               link.rel = 'preload'
               link.as = 'image'
               link.href = imageUrl
+              if (index < 3) {
+                link.setAttribute('fetchpriority', 'high')
+              }
               document.head.appendChild(link)
+              
+              // Preload também usando Image() para garantir cache do navegador
+              const img = new Image()
+              img.src = imageUrl
+              img.loading = index < 3 ? 'eager' : 'lazy'
+              img.fetchPriority = index < 3 ? 'high' : 'auto'
             } catch (err) {
               console.warn('Erro ao fazer preload da imagem:', err)
             }
@@ -363,15 +373,24 @@ const PublicHome = () => {
                   
                   <div className="relative z-10">
                     {/* Imagem do curso - com dimensões fixas para evitar CLS */}
-                    {(course.imageUrl || course.imageBase64) && (
+                    {(course.imageUrl || course.imageBase64) ? (
                       <div className="w-full h-52 overflow-hidden relative bg-slate-200 dark:bg-slate-700" style={{ aspectRatio: '16/9', minHeight: '208px' }}>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent z-10"></div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent z-10 pointer-events-none"></div>
                         <LazyImage
                           src={course.imageUrl || course.imageBase64}
                           alt={course.name}
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                          priority={index < 3}
+                          priority={index < 6}
                         />
+                      </div>
+                    ) : (
+                      <div className="w-full h-52 overflow-hidden relative bg-slate-200 dark:bg-slate-700 flex items-center justify-center" style={{ aspectRatio: '16/9', minHeight: '208px' }}>
+                        <div className="text-center p-4">
+                          <svg className="w-12 h-12 mx-auto mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <span className="text-slate-400 text-xs block">Sem imagem</span>
+                        </div>
                       </div>
                     )}
                     

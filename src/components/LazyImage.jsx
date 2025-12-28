@@ -23,147 +23,21 @@ const LazyImage = ({
     if (!src) {
       setIsLoading(false)
       setHasError(true)
+      setImageSrc(null)
       return
     }
 
-    let cancelled = false
-    let timeoutId = null
-    let retryTimeoutId = null
-
-    const loadImage = (attempt = 0) => {
-      if (cancelled) return
-      
-      setIsLoading(true)
-      setHasError(false)
-      
-      const img = new Image()
-      
-      // Adicionar atributos para melhor performance
-      img.decoding = 'async'
-      if (priority) {
-        img.fetchPriority = 'high'
-      }
-      
-      // Tentar usar WebP se suportado (para imagens do Firebase, isso depende do servidor)
-      // Mas podemos adicionar parâmetros de qualidade se a URL suportar
-      let optimizedSrc = src
-      if (src && !src.includes('data:image')) {
-        // Se a URL não for base64, podemos tentar adicionar parâmetros de otimização
-        // Isso depende do servidor suportar, mas não quebra se não suportar
-        if (!src.includes('?')) {
-          // Alguns CDNs suportam parâmetros de qualidade
-          // optimizedSrc = src + '?q=80&w=1200' // Exemplo para Cloudinary/Imagix
-        }
-      }
-      
-      img.onload = () => {
-        if (!cancelled) {
-          setImageSrc(src)
-          setIsLoading(false)
-          setHasError(false)
-          setRetries(0)
-          if (timeoutId) {
-            clearTimeout(timeoutId)
-          }
-        }
-      }
-
-      img.onerror = () => {
-        if (!cancelled) {
-          if (timeoutId) {
-            clearTimeout(timeoutId)
-          }
-          
-          // Tentar novamente se ainda há tentativas disponíveis
-          if (attempt < maxRetries) {
-            setRetries(attempt + 1)
-            retryTimeoutId = setTimeout(() => {
-              loadImage(attempt + 1)
-            }, 1000 * (attempt + 1)) // Delay incremental: 1s, 2s
-          } else {
-            setHasError(true)
-            setIsLoading(false)
-            if (onError) {
-              onError()
-            }
-          }
-        }
-      }
-
-      // Timeout reduzido (3s no mobile, 5s no desktop) para melhor responsividade
-      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
-      const timeoutDuration = isMobile ? 3000 : 5000
-      timeoutId = setTimeout(() => {
-        if (!cancelled) {
-          // Tentar novamente se ainda há tentativas e não foi cancelado
-          if (attempt < maxRetries) {
-            setRetries(attempt + 1)
-            retryTimeoutId = setTimeout(() => {
-              loadImage(attempt + 1)
-            }, 1000 * (attempt + 1))
-          } else {
-            setHasError(true)
-            setIsLoading(false)
-            if (onError) {
-              onError()
-            }
-          }
-        }
-      }, timeoutDuration)
-
-      // Tentar carregar a imagem
-      img.src = src
-    }
-
-    // Se priority=true ou já está visível, carregar imediatamente
-    if (priority) {
-      loadImage()
-    } else if ('IntersectionObserver' in window && containerRef.current) {
-      // Usar Intersection Observer para lazy loading - evita reflow forçado
-      // Não usar getBoundingClientRect() diretamente para evitar reflow
-      // Reduzir rootMargin no mobile para melhor performance
-      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
-      const rootMargin = isMobile ? '150px' : '300px' // Menor margem no mobile
-      
-      observerRef.current = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting && !cancelled) {
-              loadImage()
-              if (observerRef.current && containerRef.current) {
-                observerRef.current.unobserve(containerRef.current)
-              }
-            }
-          })
-        },
-        {
-          rootMargin, // Margem adaptativa para mobile/desktop
-        }
-      )
-
-      observerRef.current.observe(containerRef.current)
-    } else {
-      // Fallback: carregar imediatamente se não houver IntersectionObserver
-      loadImage()
-    }
+    // Definir imageSrc imediatamente para renderizar a tag <img> 
+    // O navegador vai cuidar do lazy loading se loading="lazy" estiver definido
+    setImageSrc(src)
+    setIsLoading(true)
+    setHasError(false)
+    setRetries(0)
 
     return () => {
-      cancelled = true
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
-      if (retryTimeoutId) {
-        clearTimeout(retryTimeoutId)
-      }
-      if (observerRef.current && containerRef.current) {
-        try {
-          observerRef.current.unobserve(containerRef.current)
-        } catch (e) {
-          // Ignorar erros ao desobservar
-        }
-      }
+      // Cleanup: não precisa fazer nada, o navegador cuida do cancelamento do carregamento
     }
-  }, [src, onError, priority])
+  }, [src])
 
   if (!src || hasError) {
     return (
@@ -190,7 +64,8 @@ const LazyImage = ({
       className={`relative overflow-hidden ${className}`} 
       {...props}
     >
-      {isLoading && !imageSrc && (
+      {/* Skeleton sempre visível enquanto carregando */}
+      {isLoading && (
         <div className="absolute inset-0 bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 z-0">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-[shimmer_2s_infinite]"></div>
         </div>
@@ -200,22 +75,26 @@ const LazyImage = ({
           ref={imgRef}
           src={imageSrc}
           alt={alt}
-          className={`w-full h-full object-cover transition-opacity duration-500 ${
+          className={`w-full h-full object-cover transition-opacity duration-300 relative z-[1] ${
             isLoading ? 'opacity-0' : 'opacity-100'
           }`}
           loading={priority ? "eager" : "lazy"}
-          decoding="async"
+          decoding={priority ? "sync" : "async"}
           fetchPriority={priority ? "high" : "auto"}
           onLoad={() => {
             setIsLoading(false)
+            setHasError(false)
+            setRetries(0)
           }}
           onError={() => {
-            // Se ainda há tentativas, não marcar como erro ainda
+            // Se ainda há tentativas, tentar novamente
             if (retries < maxRetries) {
-              setRetries(retries + 1)
+              setRetries(prev => prev + 1)
               setTimeout(() => {
                 if (imgRef.current && src) {
-                  imgRef.current.src = src + (src.includes('?') ? '&' : '?') + '_retry=' + (retries + 1)
+                  // Tentar recarregar com cache busting
+                  const separator = src.includes('?') ? '&' : '?'
+                  imgRef.current.src = src + separator + '_retry=' + Date.now()
                 }
               }, 1000 * (retries + 1))
             } else {
