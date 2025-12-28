@@ -249,14 +249,31 @@ const PublicHome = () => {
           }
         })
         
-        // Salvar no cache
+        // Salvar no cache (apenas dados essenciais para evitar quota)
         try {
+          // Comprimir cursos - remover campos grandes como imagens base64
+          const compressedCourses = sortedData.map(course => ({
+            id: course.id,
+            name: course.name,
+            competition: course.competition,
+            price: course.price,
+            originalPrice: course.originalPrice,
+            featured: course.featured,
+            active: course.active,
+            // Não salvar imageBase64 e outros campos grandes
+          }))
+          
           localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
-            data: sortedData,
+            data: compressedCourses,
             timestamp: Date.now(),
           }))
         } catch (err) {
-          console.warn('Erro ao salvar cache de cursos:', err)
+          if (err.name === 'QuotaExceededError') {
+            console.warn('Quota excedida ao salvar cursos. Cache não será salvo.')
+            // Não salvar cursos se exceder quota
+          } else {
+            console.warn('Erro ao salvar cache de cursos:', err)
+          }
         }
       } catch (error) {
         console.error('Erro ao carregar cursos:', error)

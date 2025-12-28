@@ -13,13 +13,66 @@ const CACHE_EXPIRY = {
 // Função para salvar no cache
 const saveToCache = (key, data) => {
   try {
+    // Não salvar cursos completos (são muito grandes e causam quota excedida)
+    // Cursos podem ter imagens base64 e outros dados grandes
+    if (key.includes('courses') || key.includes('course') || key === 'courses') {
+      console.warn('Cursos não são salvos no cache local devido ao tamanho. Use apenas para dados essenciais.')
+      return // Não salvar cursos no localStorage
+    }
+    
     const cacheData = {
       data,
       timestamp: Date.now(),
     }
-    localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(cacheData))
+    
+    // Tentar salvar normalmente
+    try {
+      localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(cacheData))
+    } catch (quotaError) {
+      if (quotaError.name === 'QuotaExceededError') {
+        console.warn(`Quota excedida ao salvar ${key}. Tentando limpar cache antigo...`)
+        
+        // Tentar limpar caches antigos
+        try {
+          const keysToRemove = []
+          for (let i = 0; i < localStorage.length; i++) {
+            const storedKey = localStorage.key(i)
+            if (storedKey && storedKey.startsWith(CACHE_PREFIX)) {
+              try {
+                const stored = localStorage.getItem(storedKey)
+                if (stored) {
+                  const { timestamp } = JSON.parse(stored)
+                  // Remover caches com mais de 7 dias
+                  if (Date.now() - timestamp > 7 * 24 * 60 * 60 * 1000) {
+                    keysToRemove.push(storedKey)
+                  }
+                }
+              } catch (e) {
+                // Se não conseguir parsear, remove
+                keysToRemove.push(storedKey)
+              }
+            }
+          }
+          
+          // Remover caches antigos
+          keysToRemove.forEach(k => localStorage.removeItem(k))
+          
+          // Tentar salvar novamente
+          if (keysToRemove.length > 0) {
+            localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(cacheData))
+            console.log(`Cache limpo. ${keysToRemove.length} entradas antigas removidas.`)
+          } else {
+            console.warn(`Não foi possível salvar ${key}. Cache cheio e nenhum item antigo para remover.`)
+          }
+        } catch (cleanError) {
+          console.error('Erro ao limpar cache:', cleanError)
+        }
+      } else {
+        throw quotaError
+      }
+    }
   } catch (err) {
-    console.warn('Erro ao salvar no cache:', err)
+    console.warn(`Erro ao salvar no cache (${key}):`, err)
   }
 }
 
@@ -66,11 +119,14 @@ export const useFirebaseCache = (collectionName, queryOptions = {}, dependencies
 
     const cacheKey = `${collectionName}_${JSON.stringify(queryOptions)}`
     
-    // Tentar carregar do cache primeiro (melhor TTFB)
-    const cachedData = getFromCache(cacheKey, collectionName)
-    if (cachedData) {
-      setData(cachedData)
-      setLoading(false) // Não bloquear renderização se tiver cache
+    // Tentar carregar do cache primeiro (melhor TTFB) - mas não para cursos
+    let cachedData = null
+    if (collectionName !== 'courses') {
+      cachedData = getFromCache(cacheKey, collectionName)
+      if (cachedData) {
+        setData(cachedData)
+        setLoading(false) // Não bloquear renderização se tiver cache
+      }
     }
 
     // Carregar do Firebase
@@ -103,8 +159,10 @@ export const useFirebaseCache = (collectionName, queryOptions = {}, dependencies
             setError(null)
             retryCount.current = 0
             
-            // Salvar no cache
-            saveToCache(cacheKey, newData)
+            // Salvar no cache (não salvar cursos)
+            if (collectionName !== 'courses') {
+              saveToCache(cacheKey, newData)
+            }
           },
           (err) => {
             console.error(`Erro ao carregar ${collectionName}:`, err)
