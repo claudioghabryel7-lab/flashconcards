@@ -68,8 +68,13 @@ const BlogNewsView = () => {
             { property: 'og:description', content: seoDescription },
             { property: 'og:url', content: window.location.href },
           ]
+          // Usar featuredImage do upload como imagem do compartilhamento
           if (data.featuredImage) {
             ogTags.push({ property: 'og:image', content: data.featuredImage })
+            ogTags.push({ property: 'og:image:type', content: data.featuredImage.startsWith('data:') ? 'image/jpeg' : 'image/png' })
+            ogTags.push({ property: 'og:image:width', content: '1200' })
+            ogTags.push({ property: 'og:image:height', content: '630' })
+            ogTags.push({ property: 'og:image:alt', content: seoTitle })
           }
           ogTags.forEach(tag => {
             const meta = document.createElement('meta')
@@ -84,8 +89,10 @@ const BlogNewsView = () => {
             { name: 'twitter:title', content: seoTitle },
             { name: 'twitter:description', content: seoDescription },
           ]
+          // Usar featuredImage do upload como imagem do compartilhamento
           if (data.featuredImage) {
             twitterTags.push({ name: 'twitter:image', content: data.featuredImage })
+            twitterTags.push({ name: 'twitter:image:alt', content: seoTitle })
           }
           twitterTags.forEach(tag => {
             const meta = document.createElement('meta')
