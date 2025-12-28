@@ -53,15 +53,47 @@ const RootApp = () => {
   }
 }
 
-const rootElement = document.getElementById('root')
-if (!rootElement) {
-  throw new Error('Elemento root não encontrado')
+// Aguardar DOM estar pronto antes de renderizar
+const initApp = () => {
+  try {
+    const rootElement = document.getElementById('root')
+    if (!rootElement) {
+      // Tentar novamente após um pequeno delay se o elemento não existir
+      setTimeout(() => {
+        const retryElement = document.getElementById('root')
+        if (!retryElement) {
+          document.body.innerHTML = '<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f8fafc; color: #1e293b; font-family: system-ui;"><div style="text-align: center; padding: 2rem;"><h1 style="font-size: 1.5rem; font-weight: bold; color: #dc2626; margin-bottom: 1rem;">Erro ao carregar aplicação</h1><p style="color: #64748b; margin-bottom: 1.5rem;">Elemento root não encontrado.</p><button onclick="window.location.reload()" style="padding: 0.5rem 1rem; background: #667eea; color: white; border: none; border-radius: 0.5rem; font-weight: 600; cursor: pointer;">Recarregar</button></div></div>'
+          return
+        }
+        createRoot(retryElement).render(
+          <StrictMode>
+            <ErrorBoundary>
+              <RootApp />
+            </ErrorBoundary>
+          </StrictMode>
+        )
+      }, 100)
+      return
+    }
+
+    createRoot(rootElement).render(
+      <StrictMode>
+        <ErrorBoundary>
+          <RootApp />
+        </ErrorBoundary>
+      </StrictMode>
+    )
+  } catch (error) {
+    // Fallback em caso de erro crítico
+    console.error('Erro crítico ao inicializar aplicação:', error)
+    document.body.innerHTML = '<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f8fafc; color: #1e293b; font-family: system-ui;"><div style="text-align: center; padding: 2rem; max-width: 500px;"><h1 style="font-size: 1.5rem; font-weight: bold; color: #dc2626; margin-bottom: 1rem;">Erro ao carregar aplicação</h1><p style="color: #64748b; margin-bottom: 1.5rem;">Ocorreu um erro ao inicializar a aplicação. Por favor, recarregue a página.</p><button onclick="window.location.reload()" style="padding: 0.5rem 1rem; background: #667eea; color: white; border: none; border-radius: 0.5rem; font-weight: 600; cursor: pointer;">Recarregar Página</button></div></div>'
+  }
 }
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <RootApp />
-    </ErrorBoundary>
-  </StrictMode>,
-)
+// Aguardar DOM estar pronto
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp)
+} else {
+  // DOM já está pronto
+  initApp()
+}
