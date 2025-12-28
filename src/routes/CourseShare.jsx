@@ -64,8 +64,8 @@ const CourseShare = () => {
       
       // Criar descrição otimizada para SEO
       const seoDescription = course.description 
-        ? `${course.description} Curso completo ${course.name} para ${course.competition || 'concursos públicos'}. Aprenda com flashcards interativos, questões e simulados. Por apenas R$ ${course.price?.toFixed(2) || '99.90'}.`
-        : `Curso completo ${course.name} para ${course.competition || 'concursos públicos'}. Aprenda com flashcards interativos, questões e simulados. Por apenas R$ ${course.price?.toFixed(2) || '99.90'}.`
+        ? `${course.description} Curso completo ${course.name} para ${course.competition || 'concursos públicos'}. Aprenda com flashcards interativos, questões e simulados.`
+        : `Curso completo ${course.name} para ${course.competition || 'concursos públicos'}. Aprenda com flashcards interativos, questões e simulados.`
       
       // Título otimizado para SEO
       const seoTitle = `${course.name} - Curso Completo ${course.competition ? `| ${course.competition}` : ''} | FlashConCards`
@@ -308,7 +308,7 @@ const CourseShare = () => {
                   </p>
                 )}
                 <p className="text-3xl sm:text-4xl font-black text-blue-600 dark:text-blue-400">
-                  Por R$ {course.price?.toFixed(2) || '99.90'}
+                  R$ {course.price?.toFixed(2) || '99.90'}
                 </p>
                 {course.courseDuration && (
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
