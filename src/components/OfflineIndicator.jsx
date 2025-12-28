@@ -19,6 +19,19 @@ const OfflineIndicator = () => {
     }
   }, [])
 
+  // Adicionar padding-bottom ao body quando offline (para não cobrir conteúdo)
+  useEffect(() => {
+    if (!isOnline) {
+      document.body.style.paddingBottom = '64px'
+    } else {
+      document.body.style.paddingBottom = ''
+    }
+
+    return () => {
+      document.body.style.paddingBottom = ''
+    }
+  }, [isOnline])
+
   // Não mostrar nada se estiver online
   if (isOnline) {
     return null
@@ -27,18 +40,18 @@ const OfflineIndicator = () => {
   return (
     <div
       className={`
-        fixed top-0 left-0 right-0 z-50 
+        fixed bottom-0 left-0 right-0 z-40 
         flex items-center justify-center gap-2 
-        px-4 py-2 text-sm font-medium
-        shadow-md
+        px-4 py-3 text-sm font-medium
+        shadow-lg
         ${darkMode
-          ? 'bg-amber-900/90 text-amber-100 border-b border-amber-700'
-          : 'bg-amber-50 text-amber-900 border-b border-amber-200'
+          ? 'bg-amber-900/95 text-amber-100 border-t border-amber-700'
+          : 'bg-amber-50 text-amber-900 border-t border-amber-200'
         }
       `}
     >
-      <WifiIcon className="h-5 w-5" />
-      <span>Você está offline. Algumas funcionalidades podem estar limitadas.</span>
+      <WifiIcon className="h-5 w-5 flex-shrink-0" />
+      <span className="text-center">Você está offline. Algumas funcionalidades podem estar limitadas.</span>
     </div>
   )
 }
