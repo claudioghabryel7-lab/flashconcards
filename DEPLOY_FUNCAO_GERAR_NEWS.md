@@ -47,3 +47,4 @@ Se ainda der erro, verifique os logs:
 firebase functions:log --only generateNewsFromLink
 ```
 
+

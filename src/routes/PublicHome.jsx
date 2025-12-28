@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useState, lazy, Suspense, startTransition } from 'react'
-import { collection, doc, onSnapshot, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
+import { collection, doc, getDocs, query, setDoc, serverTimestamp, where, limit } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import LazyImage from '../components/LazyImage'
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver'
@@ -175,103 +175,114 @@ const PublicHome = () => {
   const [newsRef, newsVisible] = useIntersectionObserver({ once: true })
 
   useEffect(() => {
-    // Tentar carregar do cache primeiro
+    if (!db) {
+      setLoadingCourses(false)
+      return
+    }
+
     const cacheKey = 'courses_active'
+    const CACHE_DURATION = 10 * 60 * 1000 // 10 minutos
+    
+    // Função para ordenar cursos
+    const sortCourses = (data) => {
+      return data.sort((a, b) => {
+        if (a.featured === true && b.featured !== true) return -1
+        if (a.featured !== true && b.featured === true) return 1
+        return 0
+      })
+    }
+    
+    // Carregar do cache imediatamente (síncrono para renderização instantânea)
     try {
       const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
       if (cached) {
         const { data: cachedData, timestamp } = JSON.parse(cached)
         const now = Date.now()
-        if (now - timestamp < 5 * 60 * 1000 && cachedData) {
-          // Ordenar: cursos em destaque primeiro, depois os outros
-          const sortedCached = cachedData.sort((a, b) => {
-            if (a.featured === true && b.featured !== true) return -1
-            if (a.featured !== true && b.featured === true) return 1
-            return 0
+        if (now - timestamp < CACHE_DURATION && cachedData && cachedData.length > 0) {
+          startTransition(() => {
+            setCourses(sortCourses([...cachedData]))
+            setLoadingCourses(false)
           })
-          setCourses(sortedCached)
-          setLoadingCourses(false)
+          // Continuar carregando em background para atualizar cache
+        } else {
+          setLoadingCourses(true)
         }
       }
     } catch (err) {
       console.warn('Erro ao ler cache de cursos:', err)
     }
     
-    // Deferir query do Firestore para não bloquear thread principal
-    // Usar setTimeout para dar tempo ao navegador renderizar conteúdo crítico primeiro
-    let unsub = null
-    const timeoutId = setTimeout(() => {
-      const coursesRef = collection(db, 'courses')
-      const q = query(coursesRef, where('active', '==', true))
-      let retryCount = 0
-      const maxRetries = 3
-      
-      const loadData = () => {
-        const unsubscribe = onSnapshot(q, async (snapshot) => {
-          const data = snapshot.docs.map((docSnapshot) => ({
-            id: docSnapshot.id,
-            ...docSnapshot.data(),
-          }))
-          
-          // Ordenar: cursos em destaque primeiro, depois os outros
-          const sortedData = data.sort((a, b) => {
-            // Cursos destacados primeiro
-            if (a.featured === true && b.featured !== true) return -1
-            if (a.featured !== true && b.featured === true) return 1
-            // Se ambos destacados ou ambos não destacados, manter ordem original
-            return 0
-          })
-          
+    // Carregar do Firestore (usar getDocs ao invés de onSnapshot para dados estáticos)
+    const loadCourses = async () => {
+      try {
+        const coursesRef = collection(db, 'courses')
+        const q = query(
+          coursesRef, 
+          where('active', '==', true),
+          limit(50) // Limitar quantidade para melhor performance
+        )
+        
+        const snapshot = await getDocs(q)
+        const data = snapshot.docs.map((docSnapshot) => ({
+          id: docSnapshot.id,
+          ...docSnapshot.data(),
+        }))
+        
+        // Ordenar: cursos em destaque primeiro
+        const sortedData = sortCourses(data)
+        
+        // Atualizar estado de forma não bloqueante
+        startTransition(() => {
           setCourses(sortedData)
           setLoadingCourses(false)
-          retryCount = 0
-          
-          // Preload das primeiras 3 imagens de cursos (acima da dobra)
-          sortedData.slice(0, 3).forEach((course) => {
-            const imageUrl = course.imageBase64 || course.imageUrl
-            if (imageUrl) {
-              const link = document.createElement('link')
-              link.rel = 'preload'
-              link.as = 'image'
-              link.href = imageUrl
-              document.head.appendChild(link)
-            }
-          })
-          
-          // Salvar no cache (com ordenação)
-          try {
-            localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
-              data: sortedData,
-              timestamp: Date.now(),
-            }))
-          } catch (err) {
-            console.warn('Erro ao salvar cache de cursos:', err)
-          }
-        }, (error) => {
-          console.error('Erro ao carregar cursos:', error)
-          
-          // Retry logic
-          if (retryCount < maxRetries) {
-            retryCount++
-            setTimeout(() => {
-              loadData()
-            }, 1000 * retryCount)
-          } else {
-            setCourses([])
-            setLoadingCourses(false)
+        })
+        
+        // Preload das primeiras 3 imagens de cursos (acima da dobra)
+        sortedData.slice(0, 3).forEach((course) => {
+          const imageUrl = course.imageBase64 || course.imageUrl
+          if (imageUrl) {
+            const link = document.createElement('link')
+            link.rel = 'preload'
+            link.as = 'image'
+            link.href = imageUrl
+            document.head.appendChild(link)
           }
         })
-        return unsubscribe
+        
+        // Salvar no cache
+        try {
+          localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
+            data: sortedData,
+            timestamp: Date.now(),
+          }))
+        } catch (err) {
+          console.warn('Erro ao salvar cache de cursos:', err)
+        }
+      } catch (error) {
+        console.error('Erro ao carregar cursos:', error)
+        setLoadingCourses(false)
       }
-
-      unsub = loadData()
-    }, 100) // Delay de 100ms para permitir renderização inicial
-
-    return () => {
-      clearTimeout(timeoutId)
-      if (unsub) {
-        unsub()
-      }
+    }
+    
+    // Carregar imediatamente se não houver cache válido, senão carregar em background
+    const hasValidCache = (() => {
+      try {
+        const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+        if (cached) {
+          const { data: cachedData, timestamp } = JSON.parse(cached)
+          const now = Date.now()
+          return now - timestamp < CACHE_DURATION && cachedData && cachedData.length > 0
+        }
+      } catch {}
+      return false
+    })()
+    
+    if (hasValidCache) {
+      // Carregar em background para atualizar cache
+      setTimeout(loadCourses, 0)
+    } else {
+      // Carregar imediatamente
+      loadCourses()
     }
   }, [])
 

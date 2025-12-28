@@ -1727,6 +1727,12 @@ exports.generateNewsFromLink = functions.https.onRequest((req, res) => {
 CONTEÚDO DA PÁGINA DE REFERÊNCIA (extraído do link fornecido):
 ${pageContent}
 
+REFERÊNCIA OBRIGATÓRIA:
+- A referência desta notícia é SEMPRE o FlashConCards (https://www.flashconcards.com.br)
+- FlashConCards é uma plataforma especializada em flashcards para concursos públicos
+- Ao final do artigo, mencione que o FlashConCards oferece materiais de estudo para este concurso
+- Inclua links contextuais para o FlashConCards quando mencionar matérias ou áreas de estudo
+
 TAREFA:
 Crie uma notícia completa, profissional e atualizada sobre o concurso público mencionado no conteúdo acima.
 
@@ -1772,11 +1778,14 @@ FORMATO DE RESPOSTA (JSON VÁLIDO):
 
 IMPORTANTE:
 - Baseie-se EXCLUSIVAMENTE no conteúdo fornecido acima
+- A REFERÊNCIA é sempre o FlashConCards (https://www.flashconcards.com.br)
+- Inclua menções ao FlashConCards como plataforma de estudo para o concurso
 - Se alguma informação não estiver no conteúdo, use "A definir" ou null
 - O título deve ser atrativo e otimizado para SEO
 - O conteúdo deve ser completo e informativo
 - **SEJA EXTREMAMENTE DETALHADO sobre o conteúdo programático - liste TODAS as matérias encontradas**
 - **INCLUA informações sobre quantidade de barras/vagas se disponível no conteúdo**
+- Ao mencionar matérias ou áreas de estudo, inclua links contextuais para o FlashConCards
 - Use HTML para formatação (não markdown)
 - Retorne APENAS o JSON válido, sem markdown, sem explicações
 - Comece diretamente com { e termine com }`

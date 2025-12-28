@@ -220,9 +220,34 @@ const BlankPage = () => {
       .replace(/(^-|-$)/g, '')
   }
   
+  // Regenerar notícia (usando dados do artigo atual)
+  const handleRegenerateArticle = async () => {
+    if (!editingArticle) {
+      alert('Nenhum artigo selecionado para regenerar')
+      return
+    }
+    
+    if (!confirm('Deseja regenerar o conteúdo deste artigo? O conteúdo atual será substituído.')) {
+      return
+    }
+    
+    // Preencher formulário de IA com dados do artigo atual
+    setAiForm({
+      topic: editingArticle.title || articleForm.title || '',
+      referenceUrl: editingArticle.referenceUrl || aiForm.referenceUrl || '',
+      tone: 'formal',
+      keywords: editingArticle.keywords || articleForm.keywords || ''
+    })
+    
+    // Chamar função de geração
+    await handleGenerateWithAI(true)
+  }
+  
   // Gerar conteúdo com IA
-  const handleGenerateWithAI = async () => {
-    if (!aiForm.topic) {
+  const handleGenerateWithAI = async (isRegenerating = false) => {
+    const topicToUse = isRegenerating ? (editingArticle?.title || articleForm.title || aiForm.topic) : aiForm.topic
+    
+    if (!topicToUse) {
       alert('Por favor, insira o tópico da notícia')
       return
     }
@@ -247,10 +272,20 @@ const BlankPage = () => {
       // URL de referência será passada para a IA processar
       // Não fazemos scraping no frontend para evitar CORS
       
+      const topicToUse = isRegenerating ? (editingArticle?.title || articleForm.title || aiForm.topic) : aiForm.topic
+      const referenceUrlToUse = isRegenerating ? (editingArticle?.referenceUrl || aiForm.referenceUrl) : aiForm.referenceUrl
+      const keywordsToUse = isRegenerating ? (editingArticle?.keywords || articleForm.keywords || aiForm.keywords) : aiForm.keywords
+      
       const prompt = `Você é um especialista em concursos públicos brasileiros e jornalista de notícias.
 
-${aiForm.referenceUrl ? `URL DE REFERÊNCIA: ${aiForm.referenceUrl}\nUse esta URL como fonte de informações sobre o tópico. Acesse e analise o conteúdo completo do link fornecido.\n\n` : ''}TÓPICO DA NOTÍCIA: ${aiForm.topic}
-${aiForm.keywords ? `PALAVRAS-CHAVE PRIMÁRIAS: ${aiForm.keywords}\n` : ''}ESTILO DE TOM: ${aiForm.tone}
+${referenceUrlToUse ? `URL DE REFERÊNCIA PARA EXTRAIR INFORMAÇÕES: ${referenceUrlToUse}\nUse esta URL APENAS para extrair informações sobre o tópico. Acesse e analise o conteúdo completo do link fornecido para obter dados sobre o concurso.\n\n` : ''}TÓPICO DA NOTÍCIA: ${topicToUse}
+${keywordsToUse ? `PALAVRAS-CHAVE PRIMÁRIAS: ${keywordsToUse}\n` : ''}ESTILO DE TOM: ${aiForm.tone}
+
+REFERÊNCIA OBRIGATÓRIA:
+- A referência desta notícia é SEMPRE o FlashConCards (https://www.flashconcards.com.br)
+- FlashConCards é uma plataforma especializada em flashcards para concursos públicos
+- Ao final do artigo, mencione que o FlashConCards oferece materiais de estudo para este concurso
+- Inclua links contextuais para o FlashConCards quando mencionar matérias ou áreas de estudo
 
 TAREFA:
 Crie um artigo completo e profissional sobre o tópico acima, seguindo o estilo ${aiForm.tone}.
@@ -287,25 +322,53 @@ ESTRUTURA DO CONTEÚDO (HTML):
 
 IMPORTANTE:
 - O conteúdo deve ser factual e baseado EXCLUSIVAMENTE nas informações do link fornecido
+- A REFERÊNCIA é sempre o FlashConCards (https://www.flashconcards.com.br)
+- Inclua menções ao FlashConCards como plataforma de estudo para o concurso
 - Use HTML para formatação (não markdown)
 - O título deve ser atrativo e otimizado para SEO
 - Seja EXTREMAMENTE detalhado sobre o conteúdo programático - liste TODAS as matérias encontradas
 - Inclua informações sobre quantidade de barras/vagas se disponível no link
+- Ao mencionar matérias ou áreas de estudo, inclua links contextuais para o FlashConCards
 - Retorne APENAS o JSON válido, sem markdown, sem explicações
 - Comece diretamente com { e termine com }`
       
       const result = await model.generateContent(prompt)
       const response = result.response.text()
       
-      // Limpar resposta
+      // Limpar resposta de forma robusta
       let jsonText = response.trim()
-      if (jsonText.startsWith('```json')) {
-        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
-      } else if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/```\n?/g, '')
+      
+      // Remover markdown code blocks
+      jsonText = jsonText.replace(/```json\n?/gi, '').replace(/```\n?/g, '')
+      
+      // Encontrar o primeiro { e último } para extrair apenas o JSON válido
+      const firstBrace = jsonText.indexOf('{')
+      const lastBrace = jsonText.lastIndexOf('}')
+      
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        jsonText = jsonText.substring(firstBrace, lastBrace + 1)
       }
       
-      const aiData = JSON.parse(jsonText)
+      // Tentar parsear o JSON
+      let aiData
+      try {
+        aiData = JSON.parse(jsonText)
+      } catch (parseError) {
+        // Se falhar, tentar corrigir problemas comuns de formatação
+        console.warn('Erro ao parsear JSON, tentando corrigir...', parseError.message)
+        
+        // Remover vírgulas extras antes de } ou ]
+        jsonText = jsonText.replace(/,\s*([}\]])/g, '$1')
+        
+        // Tentar parsear novamente
+        try {
+          aiData = JSON.parse(jsonText)
+        } catch (secondError) {
+          // Log do JSON problemático para debug
+          console.error('JSON problemático (primeiros 1000 caracteres):', jsonText.substring(0, 1000))
+          throw new Error(`Erro ao processar resposta da IA: ${parseError.message}. A resposta pode estar mal formatada. Tente gerar novamente.`)
+        }
+      }
       
       // Preencher formulário com dados da IA
       setArticleForm({
@@ -353,7 +416,8 @@ IMPORTANTE:
         authorId: user.uid,
         authorName: 'FlashConCards',
         updatedAt: serverTimestamp(),
-        keywords: articleForm.keywords || ''
+        keywords: articleForm.keywords || '',
+        referenceUrl: aiForm.referenceUrl || editingArticle?.referenceUrl || '' // Salvar URL de referência
       }
       
       // Se for agendado, adicionar timestamp
@@ -1626,7 +1690,15 @@ IMPORTANTE:
                           featuredImage: article.featuredImage || '',
                           scheduledDate: article.scheduledAt ? article.scheduledAt.toDate().toISOString().split('T')[0] : '',
                           scheduledTime: article.scheduledAt ? article.scheduledAt.toDate().toTimeString().slice(0, 5) : '',
-                          status: article.status || 'draft'
+                          status: article.status || 'draft',
+                          keywords: article.keywords || ''
+                        })
+                        // Carregar referenceUrl no formulário de IA também
+                        setAiForm({
+                          ...aiForm,
+                          referenceUrl: article.referenceUrl || '',
+                          topic: article.title || '',
+                          keywords: article.keywords || ''
                         })
                       }}
                       style={{
@@ -2107,7 +2179,7 @@ IMPORTANTE:
                 )}
               </div>
               
-              <div style={{ display: 'flex', gap: '15px', marginTop: '20px' }}>
+              <div style={{ display: 'flex', gap: '15px', marginTop: '20px', flexWrap: 'wrap' }}>
                 <button
                   onClick={handleSaveArticle}
                   style={{
@@ -2124,37 +2196,55 @@ IMPORTANTE:
                   {editingArticle ? '💾 Atualizar' : '💾 Salvar'}
                 </button>
                 {editingArticle && (
-                  <button
-                    onClick={() => {
-                      setEditingArticle(null)
-                      setArticleForm({
-                        title: '',
-                        content: '',
-                        excerpt: '',
-                        category: '',
-                        tags: [],
-                        metaTitle: '',
-                        metaDescription: '',
-                        slug: '',
-                        featuredImage: '',
-                        scheduledDate: '',
-                        scheduledTime: '',
-                        status: 'draft'
-                      })
-                    }}
-                    style={{
-                      padding: '14px 28px',
-                      backgroundColor: '#6b7280',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontWeight: 'bold',
+                  <>
+                    <button
+                      onClick={handleRegenerateArticle}
+                      disabled={aiGenerating}
+                      style={{
+                        padding: '14px 28px',
+                        backgroundColor: aiGenerating ? '#9ca3af' : '#10b981',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: aiGenerating ? 'not-allowed' : 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '16px'
+                      }}
+                    >
+                      {aiGenerating ? '⏳ Regenerando...' : '🔄 Regenerar Notícia'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingArticle(null)
+                        setArticleForm({
+                          title: '',
+                          content: '',
+                          excerpt: '',
+                          category: '',
+                          tags: [],
+                          metaTitle: '',
+                          metaDescription: '',
+                          slug: '',
+                          featuredImage: '',
+                          scheduledDate: '',
+                          scheduledTime: '',
+                          status: 'draft'
+                        })
+                      }}
+                      style={{
+                        padding: '14px 28px',
+                        backgroundColor: '#6b7280',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
                       fontSize: '16px'
                     }}
                   >
                     ✕ Cancelar
                   </button>
+                  </>
                 )}
               </div>
             </div>
