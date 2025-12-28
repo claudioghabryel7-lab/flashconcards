@@ -24,10 +24,11 @@ export default defineConfig({
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
             // NÃO separar React - deixar no entry chunk para evitar problemas
-            // Separar framer-motion em chunk próprio (carregado apenas quando necessário)
-            if (id.includes('framer-motion')) {
-              return 'framer-motion-vendor'
-            }
+            // TEMPORARIAMENTE: framer-motion no vendor comum para evitar problemas de inicialização
+            // TODO: Separar em chunk próprio após resolver problemas de compatibilidade
+            // if (id.includes('framer-motion')) {
+            //   return 'framer-motion-vendor'
+            // }
             // Firebase em chunk separado
             if (id.includes('firebase')) {
               return 'firebase-vendor'

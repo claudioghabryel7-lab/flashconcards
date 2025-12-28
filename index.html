@@ -355,7 +355,9 @@
         }
       }
       
-      // Registrar Service Worker para PWA
+      // Registrar Service Worker para PWA - TEMPORARIAMENTE DESABILITADO
+      // Descomentar após corrigir erros
+      /*
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
@@ -391,6 +393,20 @@
             .catch((error) => {
               console.error('❌ Erro ao registrar Service Worker:', error)
             })
+        })
+      }
+      */
+      
+      // Desregistrar Service Workers antigos que podem estar causando problemas
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          registrations.forEach((registration) => {
+            registration.unregister().then(() => {
+              console.log('✅ Service Worker antigo desregistrado')
+            }).catch((err) => {
+              console.warn('⚠️ Erro ao desregistrar Service Worker:', err)
+            })
+          })
         })
       }
     </script>

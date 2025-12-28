@@ -10,6 +10,26 @@ import FirebaseConfigError from './components/FirebaseConfigError'
 import { firebaseInitialized } from './firebase/config'
 import './index.css'
 
+// Proteção global contra erros do framer-motion
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (event) => {
+    if (event.message && event.message.includes('Activity') && event.filename && event.filename.includes('framer-motion')) {
+      console.warn('[App] Erro do framer-motion capturado, continuando sem animações...')
+      event.preventDefault()
+      event.stopPropagation()
+      return false
+    }
+  }, true)
+  
+  window.addEventListener('unhandledrejection', (event) => {
+    if (event.reason && event.reason.message && event.reason.message.includes('Activity') && event.reason.stack && event.reason.stack.includes('framer-motion')) {
+      console.warn('[App] Promise rejection do framer-motion capturado, continuando...')
+      event.preventDefault()
+      return false
+    }
+  })
+}
+
 // Componente principal que verifica a configuração do Firebase
 const RootApp = () => {
   try {

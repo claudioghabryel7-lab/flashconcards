@@ -183,10 +183,11 @@ self.addEventListener('activate', (event) => {
       
       // Limpar cache inválido dos caches atuais
       const cleanInvalidCache = async () => {
-        const cache = await safeOpenCache(RUNTIME_CACHE)
-        if (!cache) {
-          return
-        }
+        try {
+          const cache = await safeOpenCache(RUNTIME_CACHE)
+          if (!cache) {
+            return
+          }
           
           let keys
           try {
