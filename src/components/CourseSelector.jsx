@@ -4,7 +4,6 @@ import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { AcademicCapIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
-import { motion } from 'framer-motion'
 
 const CourseSelector = () => {
   const { user, profile } = useAuth()
@@ -127,10 +126,12 @@ const CourseSelector = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 px-4 py-6 sm:py-10">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-2xl w-full mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8"
+      <div
+        className="max-w-2xl w-full mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8 animate-fade-in-up"
+        style={{
+          transform: 'translateZ(0)',
+          backfaceVisibility: 'hidden',
+        }}
       >
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 mb-4">
@@ -149,17 +150,20 @@ const CourseSelector = () => {
           style={{ touchAction: 'pan-y' }} // Permite rolagem vertical mesmo tocando nos cards
         >
           {courses.map((course) => (
-            <motion.button
+            <button
               key={course.id || 'default'}
               type="button"
               onClick={() => setSelectedCourseId(course.id)}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+              className={`w-full text-left p-4 rounded-xl border-2 transition-all hover:scale-102 active:scale-98 ${
                 selectedCourseId === course.id
                   ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-lg'
                   : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 bg-white dark:bg-slate-700'
               }`}
+              style={{
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
+                willChange: 'transform',
+              }}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -191,7 +195,7 @@ const CourseSelector = () => {
                   </span>
                 )}
               </div>
-            </motion.button>
+            </button>
           ))}
         </div>
 
@@ -206,7 +210,7 @@ const CourseSelector = () => {
         <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-4">
           Você pode trocar de curso a qualquer momento nas configurações
         </p>
-      </motion.div>
+      </div>
     </div>
   )
 }

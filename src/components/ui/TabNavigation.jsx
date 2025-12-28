@@ -1,5 +1,3 @@
-import { motion } from 'framer-motion'
-
 const TabNavigation = ({ tabs, activeTab, onTabChange, className = '' }) => {
   return (
     <div className={`flex flex-wrap gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl ${className}`}>
@@ -18,10 +16,13 @@ const TabNavigation = ({ tabs, activeTab, onTabChange, className = '' }) => {
             `}
           >
             {isActive && (
-              <motion.div
-                layoutId="activeTab"
-                className="absolute inset-0 bg-gradient-to-r from-alego-600 to-alego-700 rounded-lg"
-                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+              <div
+                className="absolute inset-0 bg-gradient-to-r from-alego-600 to-alego-700 rounded-lg tab-indicator"
+                style={{
+                  transform: 'translateZ(0)',
+                  backfaceVisibility: 'hidden',
+                  willChange: 'transform',
+                }}
               />
             )}
             <span className="relative z-10 flex items-center gap-2">

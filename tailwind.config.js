@@ -5,6 +5,13 @@ export default {
     './index.html',
     './src/**/*.{js,jsx}',
   ],
+  // Remover CSS não usado (PurgeCSS já está integrado no Tailwind v3+)
+  safelist: [
+    // Classes dinâmicas que podem ser geradas em runtime
+    'scale-102',
+    'scale-98',
+    'tab-indicator',
+  ],
   theme: {
     extend: {
       colors: {

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { 
   ChevronUpIcon, 
   ChevronDownIcon,
@@ -88,42 +87,43 @@ const ModernTable = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-            <AnimatePresence>
-              {sortedData.length === 0 ? (
-                <tr>
-                  <td colSpan={columns.length} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-                    {emptyMessage}
-                  </td>
+            {sortedData.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+                  {emptyMessage}
+                </td>
+              </tr>
+            ) : (
+              sortedData.map((row, index) => (
+                <tr
+                  key={row.id || index}
+                  className={`
+                    hover:bg-gradient-to-r hover:from-alego-50 hover:to-purple-50 dark:hover:from-slate-700 dark:hover:to-slate-800
+                    transition-colors duration-200
+                    ${onRowClick ? 'cursor-pointer' : ''}
+                    animate-fade-in-up
+                  `}
+                  style={{
+                    animationDelay: `${index * 0.02}s`,
+                    animationFillMode: 'both',
+                    transform: 'translateZ(0)',
+                    backfaceVisibility: 'hidden',
+                  }}
+                  onClick={() => onRowClick && onRowClick(row)}
+                >
+                  {columns.map((column) => (
+                    <td
+                      key={column.key}
+                      className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-slate-200"
+                    >
+                      {column.render
+                        ? column.render(row[column.key], row)
+                        : row[column.key]}
+                    </td>
+                  ))}
                 </tr>
-              ) : (
-                sortedData.map((row, index) => (
-                  <motion.tr
-                    key={row.id || index}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2, delay: index * 0.02 }}
-                    className={`
-                      hover:bg-gradient-to-r hover:from-alego-50 hover:to-purple-50 dark:hover:from-slate-700 dark:hover:to-slate-800
-                      transition-colors duration-200
-                      ${onRowClick ? 'cursor-pointer' : ''}
-                    `}
-                    onClick={() => onRowClick && onRowClick(row)}
-                  >
-                    {columns.map((column) => (
-                      <td
-                        key={column.key}
-                        className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-slate-200"
-                      >
-                        {column.render
-                          ? column.render(row[column.key], row)
-                          : row[column.key]}
-                      </td>
-                    ))}
-                  </motion.tr>
-                ))
-              )}
-            </AnimatePresence>
+              ))
+            )}
           </tbody>
         </table>
       </div>

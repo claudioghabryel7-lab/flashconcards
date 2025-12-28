@@ -106,37 +106,37 @@ img[loading="lazy"] {
   animation: slideInLeft 0.3s ease-out forwards;
 }
 
-/* Animações CSS para substituir framer-motion - Performance otimizada */
+/* Animações CSS para substituir framer-motion - Performance otimizada com GPU */
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(50px);
+    transform: translate3d(0, 50px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 @keyframes fadeInDown {
   from {
     opacity: 0;
-    transform: translateY(-20px);
+    transform: translate3d(0, -20px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 @keyframes fadeInScale {
   from {
     opacity: 0;
-    transform: scale(0.9);
+    transform: scale3d(0.9, 0.9, 1);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: scale3d(1, 1, 1);
   }
 }
 
@@ -152,33 +152,33 @@ img[loading="lazy"] {
 @keyframes slideInLeft {
   from {
     opacity: 0;
-    transform: translateX(-80px);
+    transform: translate3d(-80px, 0, 0);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 @keyframes slideInRight {
   from {
     opacity: 0;
-    transform: translateX(80px);
+    transform: translate3d(80px, 0, 0);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 @keyframes scaleIn {
   from {
     opacity: 0;
-    transform: scale(0.8);
+    transform: scale3d(0.8, 0.8, 1);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: scale3d(1, 1, 1);
   }
 }
 
@@ -204,10 +204,13 @@ img[loading="lazy"] {
   }
 }
 
-/* Classes utilitárias para animações */
+/* Classes utilitárias para animações - GPU optimized */
 .animate-fade-in-up {
   animation: fadeInUp 0.8s ease-out forwards;
   opacity: 0;
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
 }
 
 .animate-fade-in-down {
@@ -249,12 +252,14 @@ img[loading="lazy"] {
   animation: bannerFade 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* Intersection Observer - animações quando visíveis - Otimizado para composição */
+/* Intersection Observer - animações quando visíveis - Otimizado para composição GPU */
 .animate-on-scroll {
   opacity: 0;
   transition: opacity 0.6s ease-out, transform 0.6s ease-out;
   will-change: transform, opacity;
   transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
 }
 
 .animate-on-scroll.visible {
@@ -301,29 +306,52 @@ img[loading="lazy"] {
   transform: scale(1);
 }
 
-/* Hover effects otimizados */
+/* Hover effects otimizados - GPU accelerated */
 .hover-scale {
   transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .hover-scale:hover {
-  transform: scale(1.05);
+  transform: scale(1.05) translateZ(0);
 }
 
 .hover-lift {
   transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .hover-lift:hover {
-  transform: translateY(-10px);
+  transform: translateY(-10px) translateZ(0);
 }
 
 .hover-rotate {
   transition: transform 0.3s ease;
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .hover-rotate:hover {
-  transform: rotate(2deg);
+  transform: rotate(2deg) translateZ(0);
+}
+
+/* Scale utilities otimizadas para GPU */
+.scale-102 {
+  transform: scale(1.02) translateZ(0);
+}
+
+.scale-98 {
+  transform: scale(0.98) translateZ(0);
+}
+
+/* Tab indicator animation - GPU optimized */
+.tab-indicator {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 /* Delay utilities */

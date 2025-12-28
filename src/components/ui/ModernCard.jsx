@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion'
 import { useDarkMode } from '../../hooks/useDarkMode'
 
 const ModernCard = ({ 
@@ -19,29 +18,23 @@ const ModernCard = ({
     }
     shadow-lg dark:shadow-xl
     transition-all duration-300
-    ${hover ? 'hover:shadow-2xl hover:-translate-y-1' : ''}
+    ${hover ? 'hover:shadow-2xl hover:-translate-y-1 hover:scale-102 active:scale-98' : ''}
     ${gradient ? 'bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900' : ''}
     ${className}
+    animate-fade-in-up
+    transform-gpu
+    will-change-transform
   `
   
-  if (hover) {
-    return (
-      <motion.div
-        className={baseClasses}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        {...props}
-      >
-        {children}
-      </motion.div>
-    )
-  }
-  
   return (
-    <div className={baseClasses} {...props}>
+    <div 
+      className={baseClasses}
+      style={{
+        transform: 'translateZ(0)',
+        backfaceVisibility: 'hidden',
+      }}
+      {...props}
+    >
       {children}
     </div>
   )

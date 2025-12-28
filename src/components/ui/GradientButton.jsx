@@ -1,5 +1,3 @@
-import { motion } from 'framer-motion'
-
 const GradientButton = ({ 
   children, 
   onClick, 
@@ -24,7 +22,7 @@ const GradientButton = ({
   }
   
   return (
-    <motion.button
+    <button
       onClick={onClick}
       disabled={disabled}
       className={`
@@ -36,13 +34,18 @@ const GradientButton = ({
         disabled:opacity-50 disabled:cursor-not-allowed
         ${sizes[size]}
         ${className}
+        hover:scale-105 active:scale-95
+        transform-gpu
+        will-change-transform
       `}
-      whileHover={{ scale: disabled ? 1 : 1.05 }}
-      whileTap={{ scale: disabled ? 1 : 0.95 }}
+      style={{
+        transform: 'translateZ(0)',
+        backfaceVisibility: 'hidden',
+      }}
       {...props}
     >
       {children}
-    </motion.button>
+    </button>
   )
 }
 

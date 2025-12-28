@@ -19,14 +19,18 @@ export default defineConfig({
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
             // NÃO separar React - deixar no entry chunk para evitar problemas
-            // Apenas separar outras bibliotecas pesadas
+            // Separar framer-motion em chunk próprio (carregado apenas quando necessário)
+            if (id.includes('framer-motion')) {
+              return 'framer-motion-vendor'
+            }
+            // Firebase em chunk separado
             if (id.includes('firebase')) {
               return 'firebase-vendor'
             }
+            // Bibliotecas de IA/PDF em chunk separado (carregadas apenas quando necessário)
             if (id.includes('@google/generative-ai') || id.includes('pdfjs') || id.includes('html2canvas')) {
               return 'ai-vendor'
             }
-            // NÃO separar framer-motion - deixar no vendor para evitar problemas de inicialização
             // Outros vendors (mas não React)
             if (!id.includes('react') && !id.includes('react-dom') && !id.includes('react-router')) {
               return 'vendor'
@@ -62,8 +66,8 @@ export default defineConfig({
       'firebase/firestore',
       'framer-motion', // Incluir framer-motion para evitar problemas de inicialização
     ],
-    // Excluir dependências pesadas do pre-bundling
-    exclude: ['@google/generative-ai', 'pdfjs-dist', 'html2canvas'],
+    // Excluir dependências pesadas do pre-bundling (carregadas apenas quando necessário)
+    exclude: ['@google/generative-ai', 'pdfjs-dist', 'html2canvas', 'framer-motion'],
     // Forçar esbuild para resolver problemas de compatibilidade
     esbuildOptions: {
       jsx: 'automatic',

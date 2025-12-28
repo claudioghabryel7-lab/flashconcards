@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion'
 import { useDarkMode } from '../../hooks/useDarkMode'
 
 const StatsCard = ({ 
@@ -13,12 +12,14 @@ const StatsCard = ({
   const { darkMode } = useDarkMode()
   
   return (
-    <motion.div
-      className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-lg hover:shadow-xl transition-all duration-300 border border-slate-200/80 dark:border-slate-700/80"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay }}
-      whileHover={{ scale: 1.02, y: -4 }}
+    <div
+      className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-lg hover:shadow-xl transition-all duration-300 border border-slate-200/80 dark:border-slate-700/80 animate-fade-in-up hover:scale-102 hover:-translate-y-1"
+      style={{
+        animationDelay: `${delay}s`,
+        transform: 'translateZ(0)',
+        backfaceVisibility: 'hidden',
+        willChange: 'transform, opacity',
+      }}
       {...props}
     >
       {/* Gradient Background Effect */}
