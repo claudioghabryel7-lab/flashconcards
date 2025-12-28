@@ -126,12 +126,14 @@ const Dashboard = () => {
               .filter((item) => {
                 // Filtrar por curso - garantir sincronização correta
                 const itemCourseId = item.courseId
-                if (selectedCourseId) {
-                  return itemCourseId === selectedCourseId || String(itemCourseId) === String(selectedCourseId)
-                } else {
-                  // Para curso padrão, aceitar null, undefined, string vazia ou 'alego-default'
-                  return !itemCourseId || itemCourseId === '' || itemCourseId === null || itemCourseId === 'alego-default'
-                }
+                const matchesCourse = selectedCourseId
+                  ? (itemCourseId === selectedCourseId || String(itemCourseId) === String(selectedCourseId))
+                  : (!itemCourseId || itemCourseId === '' || itemCourseId === null || itemCourseId === 'alego-default')
+                
+                // Filtrar apenas dias com horas > 0 (para aparecer no calendário)
+                const hasHours = item.hours && parseFloat(item.hours) > 0
+                
+                return matchesCourse && hasHours && item.date
               })
             
             // Ordenar manualmente por data (mais recente primeiro)
@@ -482,7 +484,7 @@ const Dashboard = () => {
       accuracy,
       dates: dates,
     }
-  }, [progressData, cardProgress, allCards])
+  }, [progressData, cardProgress, allCards, questoesStats])
 
   // Cards para revisar (detalhado) - FILTRADO POR CURSO
   const reviewCards = useMemo(() => {
@@ -746,6 +748,57 @@ const Dashboard = () => {
               dates={stats.dates}
               streak={stats.streak}
               bySubject={stats.bySubject}
+              onMarkDay={async (dateStr) => {
+                if (!user || saving) return
+                try {
+                  setSaving(true)
+                  const courseKey = selectedCourseId || 'alego'
+                  const progressDoc = doc(db, 'progress', `${user.uid}_${courseKey}_${dateStr}`)
+                  
+                  // Verificar se já existe
+                  const existing = await getDoc(progressDoc)
+                  const existingData = existing.exists() ? existing.data() : null
+                  const hasHours = existingData && existingData.hours > 0
+                  
+                  // Verificar se já está marcado (tem horas > 0)
+                  const isMarked = hasHours && parseFloat(existingData.hours) > 0
+                  
+                  if (isMarked && parseFloat(existingData.hours) <= 0.1) {
+                    // Se só tem 0.1 horas (marcação manual), pode desmarcar
+                    await setDoc(
+                      progressDoc,
+                      {
+                        uid: user.uid,
+                        date: dateStr,
+                        hours: 0, // Desmarcar removendo horas
+                        courseId: selectedCourseId || null,
+                        lastUpdated: dayjs().format('HH:mm:ss'),
+                        updatedAt: serverTimestamp(),
+                      },
+                      { merge: true }
+                    )
+                  } else if (!isMarked) {
+                    // Marcar o dia com 0.1 horas para aparecer no calendário
+                    await setDoc(
+                      progressDoc,
+                      {
+                        uid: user.uid,
+                        date: dateStr,
+                        hours: 0.1, // Mínimo para aparecer no calendário
+                        courseId: selectedCourseId || null,
+                        lastUpdated: dayjs().format('HH:mm:ss'),
+                        updatedAt: serverTimestamp(),
+                      },
+                      { merge: true }
+                    )
+                  }
+                  setSaving(false)
+                } catch (err) {
+                  console.error('Erro ao marcar dia:', err)
+                  setSaving(false)
+                  alert('Erro ao marcar dia. Verifique as regras do Firestore.')
+                }
+              }}
             />
           </motion.div>
 

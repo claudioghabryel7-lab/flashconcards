@@ -7,7 +7,7 @@ import { CalendarIcon, FireIcon } from '@heroicons/react/24/outline'
 // Configurar locale para português
 dayjs.locale('pt-br')
 
-const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {} }) => {
+const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {}, onMarkDay = null }) => {
   const { darkMode } = useDarkMode()
   
   // Normalizar datas para formato YYYY-MM-DD para comparação
@@ -188,13 +188,22 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {} }) => {
               bgColor = 'bg-slate-100 dark:bg-slate-800 opacity-30'
             }
 
+            // Permitir marcar dia se estiver no range (incluindo hoje) e não for futuro
+            const canMark = onMarkDay && (isInRange || isToday) && !isFuture
+            const handleClick = () => {
+              if (canMark) {
+                onMarkDay(key)
+              }
+            }
+
             return (
               <div
                 key={key}
+                onClick={handleClick}
                 className={`group relative aspect-square rounded-md ${bgColor} ${borderColor} transition-all duration-200 ${
-                  done && isInRange && !isToday ? 'hover:scale-105 cursor-pointer' : ''
+                  canMark ? 'cursor-pointer hover:scale-105 hover:shadow-md' : ''
                 } ${!isInRange && !isFuture && !isToday ? 'opacity-30' : ''}`}
-                title={`${day.format('DD/MM/YYYY')}${isInRange || isToday ? (done ? ' - Estudou' : ' - Sem estudo') : ''}`}
+                title={`${day.format('DD/MM/YYYY')}${isInRange || isToday ? (done ? ' - Estudou (clique para desmarcar)' : ' - Sem estudo (clique para marcar)') : ''}`}
               >
                 {/* Número do dia - sempre mostrar */}
                 <div className={`absolute top-1 left-1 text-[9px] sm:text-[10px] font-semibold ${
