@@ -41,6 +41,7 @@ import { isTrialMode, getTrialData } from '../utils/trialLimits'
 import { motion } from 'framer-motion'
 import { DocumentTextIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import InstallPWAButton from '../components/InstallPWAButton'
+import PreloadOfflineButton from '../components/PreloadOfflineButton'
 
 dayjs.locale('pt-br')
 
@@ -554,8 +555,11 @@ const Dashboard = () => {
           </div>
         </motion.div>
 
-        {/* Botão de Instalação PWA */}
-        <InstallPWAButton />
+        {/* Botões de Instalação e Preparação Offline */}
+        <div className="mb-6 space-y-3">
+          <InstallPWAButton />
+          <PreloadOfflineButton />
+        </div>
 
         {/* Cards de Estatísticas */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
