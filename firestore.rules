@@ -24,7 +24,11 @@
         allow update: if isAuthenticated() && (
           (isOwner(userId) && 
           (request.resource.data.role == resource.data.role ||
-            !resource.data.hasAny(['role']))) ||
+            !resource.data.hasAny(['role']) ||
+            // Permitir que o próprio usuário atualize role para 'admin' se o role atual não for 'admin'
+            // Isso permite que o email do admin atualize seu próprio role
+            (request.resource.data.role == 'admin' && 
+             resource.data.role != 'admin'))) ||
           isAdmin()
         );
         allow delete: if isAdmin();
@@ -224,7 +228,9 @@
       }
       
       match /presence/{userId} {
+        // Usuário pode ler, criar e atualizar seu próprio presence
         allow read, create, update: if isAuthenticated() && isOwner(userId);
+        // Admin pode ler qualquer presence (para ver status de todos os usuários)
         allow read: if isAdmin();
         allow delete: if false;
       }
