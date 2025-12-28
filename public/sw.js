@@ -92,21 +92,56 @@ self.addEventListener('activate', (event) => {
       // Limpar cache inválido dos caches atuais
       const cleanInvalidCache = async () => {
         try {
-          const cache = await caches.open(RUNTIME_CACHE)
-          const keys = await cache.keys()
+          // Verificar se CacheStorage está disponível
+          if (!('caches' in self)) {
+            return
+          }
+          
+          let cache
+          try {
+            cache = await caches.open(RUNTIME_CACHE)
+          } catch (openError) {
+            // Se falhar ao abrir, tentar deletar e recriar
+            console.warn('[SW] Erro ao abrir cache na ativação, tentando recriar:', openError)
+            try {
+              await caches.delete(RUNTIME_CACHE)
+              cache = await caches.open(RUNTIME_CACHE)
+            } catch (recreateError) {
+              console.warn('[SW] Não foi possível recriar cache na ativação:', recreateError)
+              return
+            }
+          }
+          
+          let keys
+          try {
+            keys = await cache.keys()
+          } catch (keysError) {
+            console.warn('[SW] Erro ao obter chaves do cache na ativação:', keysError)
+            return
+          }
+          
           let removedCount = 0
           
           for (const key of keys) {
-            if (key.headers.get('accept')?.includes('text/html')) {
-              const response = await cache.match(key)
-              if (response) {
-                const isValid = await validateHTML(response)
-                if (!isValid) {
-                  await cache.delete(key)
-                  removedCount++
-                  console.log('[SW] Removido cache inválido na ativação:', key.url)
+            try {
+              if (key.headers?.get('accept')?.includes('text/html')) {
+                const response = await cache.match(key)
+                if (response) {
+                  const isValid = await validateHTML(response)
+                  if (!isValid) {
+                    try {
+                      await cache.delete(key)
+                      removedCount++
+                      console.log('[SW] Removido cache inválido na ativação:', key.url)
+                    } catch (deleteError) {
+                      console.warn('[SW] Erro ao deletar cache inválido na ativação:', deleteError)
+                    }
+                  }
                 }
               }
+            } catch (itemError) {
+              // Continuar com próximo item
+              console.warn('[SW] Erro ao processar item do cache na ativação:', itemError)
             }
           }
           
@@ -114,7 +149,8 @@ self.addEventListener('activate', (event) => {
             console.log(`[SW] Limpeza concluída: ${removedCount} cache(s) inválido(s) removido(s)`)
           }
         } catch (e) {
-          console.error('[SW] Erro ao limpar cache inválido na ativação:', e)
+          // Erro geral - não crítico, apenas logar
+          console.warn('[SW] Erro ao limpar cache inválido na ativação (não crítico):', e.message || e)
         }
       }
       
@@ -160,22 +196,59 @@ self.addEventListener('fetch', (event) => {
     // Função para limpar cache inválido (em background)
     const clearInvalidCache = async () => {
       try {
-        const cache = await caches.open(RUNTIME_CACHE)
-        const keys = await cache.keys()
+        // Verificar se CacheStorage está disponível
+        if (!('caches' in self)) {
+          return
+        }
+        
+        let cache
+        try {
+          cache = await caches.open(RUNTIME_CACHE)
+        } catch (openError) {
+          // Se falhar ao abrir cache, pode ser problema de quota ou cache corrompido
+          console.warn('[SW] Não foi possível abrir cache para limpeza:', openError)
+          // Tentar deletar o cache corrompido e recriar
+          try {
+            await caches.delete(RUNTIME_CACHE)
+            cache = await caches.open(RUNTIME_CACHE)
+          } catch (recreateError) {
+            console.warn('[SW] Não foi possível recriar cache:', recreateError)
+            return
+          }
+        }
+        
+        let keys
+        try {
+          keys = await cache.keys()
+        } catch (keysError) {
+          console.warn('[SW] Erro ao obter chaves do cache:', keysError)
+          return
+        }
+        
         for (const key of keys) {
-          if (key.headers.get('accept')?.includes('text/html')) {
-            const response = await cache.match(key)
-            if (response) {
-              const isValid = await validateHTML(response)
-              if (!isValid) {
-                await cache.delete(key)
-                console.log('[SW] Removido cache inválido:', key.url)
+          try {
+            if (key.headers?.get('accept')?.includes('text/html')) {
+              const response = await cache.match(key)
+              if (response) {
+                const isValid = await validateHTML(response)
+                if (!isValid) {
+                  try {
+                    await cache.delete(key)
+                    console.log('[SW] Removido cache inválido:', key.url)
+                  } catch (deleteError) {
+                    console.warn('[SW] Erro ao deletar cache inválido:', deleteError)
+                  }
+                }
               }
             }
+          } catch (itemError) {
+            // Continuar com próximo item mesmo se houver erro
+            console.warn('[SW] Erro ao processar item do cache:', itemError)
           }
         }
       } catch (e) {
-        console.error('[SW] Erro ao limpar cache inválido:', e)
+        // Erro geral - não bloquear a aplicação
+        console.warn('[SW] Erro ao limpar cache inválido (não crítico):', e.message || e)
       }
     }
     
@@ -193,7 +266,13 @@ self.addEventListener('fetch', (event) => {
             // Cache apenas se for válido
             const responseToCache = networkResponse.clone()
             caches.open(RUNTIME_CACHE).then((cache) => {
-              cache.put(request, responseToCache)
+              cache.put(request, responseToCache).catch((cacheError) => {
+                // Erro ao cachear não é crítico - apenas logar
+                console.warn('[SW] Erro ao cachear resposta (não crítico):', cacheError)
+              })
+            }).catch((openError) => {
+              // Erro ao abrir cache não é crítico - apenas logar
+              console.warn('[SW] Erro ao abrir cache para salvar (não crítico):', openError)
             })
             return networkResponse
           }
@@ -216,30 +295,51 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(async () => {
           // Rede falhou, tentar cache
-          const cachedResponse = await caches.match(request)
-          if (cachedResponse) {
-            // Validar cache antes de retornar
-            const isValid = await validateHTML(cachedResponse)
-            if (isValid) {
-              return cachedResponse
-            } else {
-              // Cache inválido, remover
-              const cache = await caches.open(RUNTIME_CACHE)
-              await cache.delete(request)
+          try {
+            const cachedResponse = await caches.match(request)
+            if (cachedResponse) {
+              // Validar cache antes de retornar
+              const isValid = await validateHTML(cachedResponse)
+              if (isValid) {
+                return cachedResponse
+              } else {
+                // Cache inválido, remover
+                try {
+                  const cache = await caches.open(RUNTIME_CACHE)
+                  await cache.delete(request)
+                } catch (deleteError) {
+                  console.warn('[SW] Erro ao deletar cache inválido:', deleteError)
+                }
+              }
             }
+          } catch (cacheError) {
+            console.warn('[SW] Erro ao acessar cache:', cacheError)
           }
           
           // Se não tem cache válido, tentar index.html como último recurso
-          const indexResponse = await caches.match('/index.html')
-          if (indexResponse) {
-            const isValid = await validateHTML(indexResponse)
-            if (isValid) {
-              return indexResponse
+          try {
+            const indexResponse = await caches.match('/index.html')
+            if (indexResponse) {
+              const isValid = await validateHTML(indexResponse)
+              if (isValid) {
+                return indexResponse
+              }
             }
+          } catch (indexError) {
+            console.warn('[SW] Erro ao acessar index.html do cache:', indexError)
           }
           
           // Último recurso: tentar raiz
-          return caches.match('/')
+          try {
+            return await caches.match('/')
+          } catch (rootError) {
+            // Se tudo falhar, retornar resposta de erro básica
+            return new Response('Offline - Não foi possível carregar a página', {
+              status: 503,
+              statusText: 'Service Unavailable',
+              headers: { 'Content-Type': 'text/plain' }
+            })
+          }
         })
     )
     return
@@ -284,13 +384,20 @@ self.addEventListener('fetch', (event) => {
           const responseToCache = response.clone()
           const cacheToUse = url.pathname.startsWith('/assets/') ? CACHE_NAME : RUNTIME_CACHE
           caches.open(cacheToUse).then((cache) => {
-            cache.put(request, responseToCache)
+            cache.put(request, responseToCache).catch((cacheError) => {
+              console.warn('[SW] Erro ao cachear asset (não crítico):', cacheError)
+            })
+          }).catch((openError) => {
+            console.warn('[SW] Erro ao abrir cache para asset (não crítico):', openError)
           })
 
           return response
         }).catch(() => {
           // Se falhar completamente, tenta retornar do cache (mesmo que já tenha tentado)
-          return caches.match(request)
+          return caches.match(request).catch(() => {
+            // Se cache também falhar, retornar undefined (navegador tratará)
+            return undefined
+          })
         })
       })
     )
@@ -304,13 +411,20 @@ self.addEventListener('fetch', (event) => {
         const responseToCache = response.clone()
         if (response.status === 200) {
           caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, responseToCache)
+            cache.put(request, responseToCache).catch((cacheError) => {
+              console.warn('[SW] Erro ao cachear recurso (não crítico):', cacheError)
+            })
+          }).catch((openError) => {
+            console.warn('[SW] Erro ao abrir cache para recurso (não crítico):', openError)
           })
         }
         return response
       })
       .catch(() => {
-        return caches.match(request)
+        return caches.match(request).catch(() => {
+          // Se cache falhar, retornar undefined
+          return undefined
+        })
       })
   )
 })
@@ -318,15 +432,40 @@ self.addEventListener('fetch', (event) => {
 // Limpar cache antigo periodicamente
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'CLEAR_CACHE') {
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          return caches.delete(cacheName)
-        })
-      )
-    }).then(() => {
-      event.ports[0].postMessage({ success: true })
-    })
+    // Verificar se CacheStorage está disponível
+    if (!('caches' in self)) {
+      if (event.ports && event.ports[0]) {
+        event.ports[0].postMessage({ success: false, error: 'CacheStorage não disponível' })
+      }
+      return
+    }
+    
+    caches.keys()
+      .then((cacheNames) => {
+        return Promise.allSettled(
+          cacheNames.map((cacheName) => {
+            return caches.delete(cacheName)
+          })
+        )
+      })
+      .then((results) => {
+        const success = results.every(r => r.status === 'fulfilled')
+        if (event.ports && event.ports[0]) {
+          event.ports[0].postMessage({ 
+            success, 
+            message: success ? 'Cache limpo com sucesso' : 'Alguns caches não puderam ser limpos'
+          })
+        }
+      })
+      .catch((error) => {
+        console.error('[SW] Erro ao limpar cache via mensagem:', error)
+        if (event.ports && event.ports[0]) {
+          event.ports[0].postMessage({ 
+            success: false, 
+            error: error.message || 'Erro desconhecido ao limpar cache'
+          })
+        }
+      })
   }
 })
 

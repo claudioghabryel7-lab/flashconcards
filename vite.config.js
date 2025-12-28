@@ -64,10 +64,12 @@ export default defineConfig({
       'firebase/app',
       'firebase/auth',
       'firebase/firestore',
-      'framer-motion', // Incluir framer-motion para evitar problemas de inicialização
+      // framer-motion incluído porque ainda é usado em alguns componentes (Dashboard, Reviews, etc.)
+      // Mas será carregado apenas quando necessário via code splitting
+      'framer-motion',
     ],
     // Excluir dependências pesadas do pre-bundling (carregadas apenas quando necessário)
-    exclude: ['@google/generative-ai', 'pdfjs-dist', 'html2canvas', 'framer-motion'],
+    exclude: ['@google/generative-ai', 'pdfjs-dist', 'html2canvas'],
     // Forçar esbuild para resolver problemas de compatibilidade
     esbuildOptions: {
       jsx: 'automatic',
