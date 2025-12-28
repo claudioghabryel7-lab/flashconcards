@@ -7,6 +7,7 @@ const cors = require('cors')({
 })
 const { MercadoPagoConfig, Payment } = require('mercadopago')
 const { GoogleGenerativeAI } = require('@google/generative-ai')
+const axios = require('axios')
 
 admin.initializeApp()
 
@@ -1633,3 +1634,245 @@ exports.scheduledGenerateConcursoNews = functions.pubsub
       return null
     }
   })
+
+/**
+ * Gerar notícia de concurso a partir de um link de referência
+ * O admin fornece um link e a IA lê o conteúdo e gera a notícia
+ */
+exports.generateNewsFromLink = functions.https.onRequest((req, res) => {
+  return cors(req, res, async () => {
+    // Responder a OPTIONS (preflight) imediatamente
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end()
+    }
+    
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Método não permitido' })
+    }
+
+    try {
+      const { referenceLink, category } = req.body
+
+      if (!referenceLink) {
+        return res.status(400).json({ error: 'Link de referência é obrigatório' })
+      }
+
+      // Validar URL
+      let url
+      try {
+        url = new URL(referenceLink)
+      } catch {
+        return res.status(400).json({ error: 'URL inválida' })
+      }
+
+      const apiKey = functions.config().gemini?.api_key || process.env.GEMINI_API_KEY
+      if (!apiKey) {
+        return res.status(500).json({ error: 'GEMINI_API_KEY não configurada' })
+      }
+
+      console.log('🔗 Fazendo scraping do link:', referenceLink)
+
+      // Fazer scraping do conteúdo da página
+      let pageContent = ''
+      try {
+        const response = await axios.get(referenceLink, {
+          timeout: 30000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          }
+        })
+        
+        // Extrair texto do HTML (método simples)
+        const html = response.data
+        // Remover scripts, styles, etc
+        let text = html
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+          .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+        
+        // Limitar tamanho (primeiros 50000 caracteres)
+        pageContent = text.substring(0, 50000)
+        
+        if (!pageContent || pageContent.length < 100) {
+          return res.status(400).json({ 
+            error: 'Não foi possível extrair conteúdo suficiente da página',
+            message: 'A página pode estar protegida ou não contém texto suficiente'
+          })
+        }
+        
+        console.log('✅ Conteúdo extraído:', pageContent.length, 'caracteres')
+      } catch (scrapeError) {
+        console.error('Erro ao fazer scraping:', scrapeError.message)
+        return res.status(400).json({ 
+          error: 'Erro ao acessar o link',
+          message: scrapeError.message || 'Não foi possível acessar a página. Verifique se o link está correto e acessível.'
+        })
+      }
+
+      // Gerar notícia com IA baseada no conteúdo
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ 
+        model: 'gemini-2.0-flash-exp',
+        generationConfig: {
+          maxOutputTokens: 8000,
+          temperature: 0.7,
+        }
+      })
+
+      const prompt = `Você é um especialista em concursos públicos brasileiros e jornalista de notícias.
+
+CONTEÚDO DA PÁGINA DE REFERÊNCIA (extraído do link fornecido):
+${pageContent}
+
+TAREFA:
+Crie uma notícia completa, profissional e atualizada sobre o concurso público mencionado no conteúdo acima.
+
+INSTRUÇÕES OBRIGATÓRIAS:
+1. Analise o conteúdo da página de referência acima EXTREMAMENTE DETALHADAMENTE
+2. Extraia TODAS as informações relevantes sobre o concurso
+3. **OBRIGATÓRIO**: Extraia o CONTEÚDO PROGRAMÁTICO COMPLETO - liste TODAS as matérias/disciplinas que serão cobradas
+4. **OBRIGATÓRIO**: Extraia a QUANTIDADE DE VAGAS/BARRAS - informe quantas vagas estão disponíveis, se houver distribuição por cargo/área, inclua
+5. **OBRIGATÓRIO**: Organize as matérias por área de conhecimento (se aplicável)
+6. **OBRIGATÓRIO**: Se houver informações sobre peso ou pontuação de cada matéria, inclua
+7. Crie uma notícia jornalística profissional e objetiva
+8. Use linguagem clara e acessível
+9. Organize as informações de forma lógica
+10. Destaque informações importantes como número de vagas, salário, datas de inscrição
+
+ESTRUTURA DO CONTEÚDO (HTML):
+- Use <h2>Conteúdo Programático</h2> seguido de uma lista completa de TODAS as matérias encontradas
+- Use <h2>Vagas e Remuneração</h2> com informações detalhadas sobre quantidade de vagas, distribuição, etc.
+- Use <h2>Etapas do Concurso</h2> com todas as fases (prova objetiva, discursiva, física, psicológica, etc.)
+- Organize as matérias em listas <ul><li> ou tabelas quando apropriado
+- Se houver distribuição de vagas, crie uma seção específica para isso
+
+FORMATO DE RESPOSTA (JSON VÁLIDO):
+{
+  "title": "Título da notícia (SEO otimizado, chamativo)",
+  "summary": "Resumo curto em 1-2 frases para chamada",
+  "content": "Conteúdo completo da notícia em HTML formatado. Use tags HTML: <p> para parágrafos, <h2> para seções principais (ex: 'Conteúdo Programático', 'Vagas e Remuneração', 'Etapas do Concurso'), <h3> para subseções, <ul> e <li> para listas de matérias, <strong> e <b> para negrito, <a href='...'> para links, <table> para tabelas se necessário. Seja EXTREMAMENTE detalhado sobre o conteúdo programático - liste TODAS as matérias encontradas no conteúdo de referência. Inclua informações sobre quantidade de barras/vagas se disponível.",
+  "concursoName": "Nome completo do concurso",
+  "orgao": "Órgão/Instituição responsável",
+  "vagas": "Número de vagas detalhado (ex: '500 vagas' ou '300 vagas + 200 CR' ou 'A definir')",
+  "remuneracao": "Remuneração/salário inicial completo (ex: 'R$ 5.000,00' ou 'A definir')",
+  "dataInscricaoInicio": "Data de início das inscrições (formato: DD/MM/YYYY ou null)",
+  "dataInscricaoFim": "Data de fim das inscrições (formato: DD/MM/YYYY ou null)",
+  "dataProva": "Data prevista da prova (formato: DD/MM/YYYY ou null)",
+  "banca": "Banca organizadora (ex: 'FGV', 'CESPE', 'A definir')",
+  "requisitos": "Requisitos básicos completos (escolaridade, idade mínima, experiência, etc.)",
+  "conteudoProgramatico": "Lista COMPLETA de todas as matérias do conteúdo programático encontradas no conteúdo de referência, organizadas por área quando aplicável",
+  "linkEdital": "Link do edital se mencionado no conteúdo ou null",
+  "status": "aberto|previsto|atualizacao",
+  "tags": ["concurso público", "nome do órgão", "categoria", etc],
+  "keywords": "palavras-chave para SEO separadas por vírgula"
+}
+
+IMPORTANTE:
+- Baseie-se EXCLUSIVAMENTE no conteúdo fornecido acima
+- Se alguma informação não estiver no conteúdo, use "A definir" ou null
+- O título deve ser atrativo e otimizado para SEO
+- O conteúdo deve ser completo e informativo
+- **SEJA EXTREMAMENTE DETALHADO sobre o conteúdo programático - liste TODAS as matérias encontradas**
+- **INCLUA informações sobre quantidade de barras/vagas se disponível no conteúdo**
+- Use HTML para formatação (não markdown)
+- Retorne APENAS o JSON válido, sem markdown, sem explicações
+- Comece diretamente com { e termine com }`
+
+      console.log('🤖 Gerando notícia com IA baseada no link...')
+      const result = await model.generateContent(prompt)
+      const aiResponse = result.response.text()
+
+      // Limpar resposta da IA
+      let jsonText = aiResponse.trim()
+      if (jsonText.startsWith('```json')) {
+        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
+      } else if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/```\n?/g, '')
+      }
+
+      // Parsear JSON
+      let newsData
+      try {
+        newsData = JSON.parse(jsonText)
+      } catch (parseError) {
+        console.error('Erro ao parsear JSON da IA:', parseError)
+        console.error('Resposta da IA:', aiResponse.substring(0, 500))
+        return res.status(500).json({ 
+          error: 'Erro ao processar resposta da IA', 
+          raw: aiResponse.substring(0, 500) 
+        })
+      }
+
+      // Validar dados obrigatórios
+      if (!newsData.title || !newsData.content) {
+        return res.status(500).json({ 
+          error: 'IA não retornou dados completos', 
+          data: newsData 
+        })
+      }
+
+      // Criar slug do título
+      const slug = newsData.title
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '')
+
+      // Salvar no Firestore
+      const newsRef = admin.firestore().collection('posts')
+      
+      const newsDoc = {
+        text: newsData.summary || newsData.title,
+        fullText: newsData.content,
+        authorName: 'FlashConCards IA',
+        authorId: 'system-ai-news',
+        isNews: true,
+        isConcursoNews: true,
+        category: category || 'CONCURSOS',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        referenceLink: referenceLink, // Salvar link de referência
+        concursoData: {
+          concursoName: newsData.concursoName || '',
+          orgao: newsData.orgao || '',
+          vagas: newsData.vagas || 'A definir',
+          remuneracao: newsData.remuneracao || 'A definir',
+          dataInscricaoInicio: newsData.dataInscricaoInicio || null,
+          dataInscricaoFim: newsData.dataInscricaoFim || null,
+          dataProva: newsData.dataProva || null,
+          banca: newsData.banca || 'A definir',
+          requisitos: newsData.requisitos || '',
+          conteudoProgramatico: newsData.conteudoProgramatico || '',
+          linkEdital: newsData.linkEdital || null,
+          status: newsData.status || 'aberto',
+        },
+        tags: newsData.tags || [category ? category.toLowerCase() : 'concursos'],
+        keywords: newsData.keywords || '',
+        slug: slug,
+        seoTitle: newsData.title,
+        seoDescription: newsData.summary || newsData.title.substring(0, 160),
+      }
+
+      const docRef = await newsRef.add(newsDoc)
+
+      console.log('✅ Notícia gerada e salva com sucesso:', docRef.id)
+
+      return res.status(200).json({
+        success: true,
+        newsId: docRef.id,
+        data: newsDoc
+      })
+
+    } catch (error) {
+      console.error('Erro ao gerar notícia do link:', error)
+      return res.status(500).json({ 
+        error: 'Erro ao gerar notícia', 
+        message: error.message 
+      })
+    }
+  })
+})

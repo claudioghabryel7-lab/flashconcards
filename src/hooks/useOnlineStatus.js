@@ -29,10 +29,7 @@ export const useOnlineStatus = () => {
           updatedAt: serverTimestamp(),
         }, { merge: true })
         
-        // Log apenas em desenvolvimento e garantindo string primitiva
-        if (import.meta.env.DEV) {
-          console.log('Status online atualizado para:', userId)
-        }
+        // Log removido para limpar o console
       } catch (err) {
         // Garantir que o erro seja convertido para string antes de logar
         const errorMessage = err instanceof Error ? err.message : String(err)

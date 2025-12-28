@@ -393,6 +393,19 @@ const NewsView = () => {
               {(() => {
                 const content = news.fullText || news.text || ''
                 
+                // Se o conteúdo já é HTML (contém tags), renderizar diretamente
+                const isHTML = /<[a-z][\s\S]*>/i.test(content)
+                
+                if (isHTML) {
+                  // Renderizar HTML diretamente
+                  return (
+                    <div 
+                      className="text-lg leading-relaxed text-slate-700 dark:text-slate-300"
+                      dangerouslySetInnerHTML={{ __html: content }}
+                    />
+                  )
+                }
+                
                 // Processar conteúdo: dividir em seções e adicionar anúncios/botões
                 const sections = content.split(/(?=Vagas e Remuneração|Etapas do Concurso|Conteúdo Programático)/i)
                 

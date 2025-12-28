@@ -30,6 +30,9 @@ export const FIREBASE_FUNCTIONS = {
   
   // Função para gerar notícias de concursos automaticamente com IA
   generateConcursoNews: `${FIREBASE_FUNCTIONS_BASE_URL}/generateConcursoNews`,
+  
+  // Função para gerar notícia de concurso a partir de um link de referência
+  generateNewsFromLink: `${FIREBASE_FUNCTIONS_BASE_URL}/generateNewsFromLink`,
 }
 
 /**

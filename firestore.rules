@@ -337,7 +337,36 @@
         allow delete: if isAdmin();
       }
       
+      // Regras para blog_articles (portal de notícias)
+      match /blog_articles/{articleId} {
+        // Leitura: qualquer pessoa (mesmo sem login) pode ler artigos publicados
+        // Para queries de coleção, precisamos permitir leitura se o documento não existir (!resource.exists)
+        // ou se atender às condições abaixo
+        allow read: if !resource.exists || 
+                     resource.data.status == 'published' || 
+                     (resource.data.status == 'scheduled' && resource.data.scheduledAt != null && resource.data.scheduledAt <= request.time) ||
+                     (isAuthenticated() && isAdmin()) ||
+                     (isAuthenticated() && resource.data.authorId == request.auth.uid);
+        
+        // Criação: apenas usuários autenticados
+        allow create: if isAuthenticated() && 
+                       request.resource.data.authorId == request.auth.uid;
+        
+        // Atualização: apenas o autor ou admin
+        allow update: if isAuthenticated() && (
+          resource.data.authorId == request.auth.uid || 
+          isAdmin()
+        );
+        
+        // Exclusão: apenas o autor ou admin
+        allow delete: if isAuthenticated() && (
+          resource.data.authorId == request.auth.uid || 
+          isAdmin()
+        );
+      }
+      
       // 📱 Feed Social - Posts
+      
       match /posts/{postId} {
         // Permitir leitura pública de notícias, ou posts para autenticados
         // Esta regra permite que qualquer pessoa leia posts marcados como notícia

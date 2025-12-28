@@ -72,6 +72,20 @@
     </script>
     
     <script>
+      // Suprimir mensagem do React DevTools
+      (function() {
+        const originalLog = console.log;
+        console.log = function(...args) {
+          const message = args.join(' ');
+          if (message.includes('Download the React DevTools') || 
+              message.includes('react-devtools') ||
+              message.includes('react.dev/link/react-devtools')) {
+            return; // Não exibir esta mensagem
+          }
+          originalLog.apply(console, args);
+        };
+      })();
+      
       // Aplicar dark mode antes do React renderizar para evitar flash
       (function() {
         try {

@@ -32,19 +32,7 @@ if (!hasValidConfig) {
 }
 
 // Log da configuração apenas em desenvolvimento
-if (import.meta.env.DEV) {
-  console.log('🔥 Firebase Config:', {
-    projectId: firebaseConfig.projectId,
-    authDomain: firebaseConfig.authDomain,
-    hasApiKey: !!firebaseConfig.apiKey,
-    hasValidConfig
-  })
-  console.log('🔍 Debug - Variáveis de ambiente:', {
-    VITE_FIREBASE_API_KEY: import.meta.env.VITE_FIREBASE_API_KEY ? '✅ Definida' : '❌ Não definida',
-    VITE_FIREBASE_PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID ? '✅ Definida' : '❌ Não definida',
-    todasVars: Object.keys(import.meta.env).filter(k => k.startsWith('VITE_FIREBASE'))
-  })
-}
+// Removido para limpar o console
 
 let app = null
 let auth = null
@@ -73,9 +61,7 @@ try {
 export { auth, db, storage }
 
 // Verificar se o Firestore está configurado corretamente (apenas em dev)
-if (import.meta.env.DEV && db) {
-  console.log('🔥 Firestore Database:', db.app.options.projectId)
-}
+// Removido para limpar o console
 
 export default app
 

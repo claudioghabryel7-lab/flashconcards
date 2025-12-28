@@ -37,6 +37,7 @@ const ConteudoCompletoTopicoView = lazy(() => import('./routes/ConteudoCompletoT
 const RankingSimulado = lazy(() => import('./routes/RankingSimulado'))
 const EditalVerticalizado = lazy(() => import('./routes/EditalVerticalizado'))
 const Sitemap = lazy(() => import('./routes/Sitemap'))
+const BlankPage = lazy(() => import('./routes/BlankPage'))
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()
@@ -92,9 +93,13 @@ function App() {
   try {
     const { darkMode } = useDarkMode()
     const { user } = useAuth()
+    const location = useLocation()
     
     // Rastrear status online/offline
     useOnlineStatus()
+    
+    // Verificar se é a página em branco (sem Header/Footer)
+    const isBlankPage = location.pathname === '/blank'
     
     // Loading component otimizado
     const LoadingFallback = () => (
@@ -105,6 +110,17 @@ function App() {
         </div>
       </div>
     )
+    
+    // Se for página em branco, renderizar apenas o conteúdo
+    if (isBlankPage) {
+      return (
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            <Route path="/blank" element={<BlankPage />} />
+          </Routes>
+        </Suspense>
+      )
+    }
     
     return (
       <div 
@@ -288,6 +304,8 @@ function App() {
           <Route path="/teste/:token" element={<TestTrial />} />
           {/* Sitemap XML - Acessível sem login */}
           <Route path="/sitemap.xml" element={<Sitemap />} />
+          {/* Página em branco - Acessível sem login */}
+          <Route path="/blank" element={<BlankPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
