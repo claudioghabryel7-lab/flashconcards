@@ -54,6 +54,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
     <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
     
+    <!-- Preload de recursos críticos para melhor performance -->
+    <link rel="modulepreload" href="/src/main.jsx" />
+    <link rel="modulepreload" href="/src/App.jsx" />
+    <link rel="modulepreload" href="/src/routes/PublicHome.jsx" />
+    
     <!-- CSS crítico inline para evitar bloqueio de renderização e CLS -->
     <style>
       /* CSS crítico mínimo para evitar CLS e melhorar LCP */

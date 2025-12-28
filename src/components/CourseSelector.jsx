@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, startTransition } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore'
+import { collection, getDocs, query, where, doc, setDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { AcademicCapIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
@@ -13,60 +13,98 @@ const CourseSelector = () => {
   const [selectedCourseId, setSelectedCourseId] = useState(null)
   const [saving, setSaving] = useState(false)
 
-  // Carregar cursos disponíveis
+  // Carregar cursos disponíveis - Otimizado com cache e getDocs
   useEffect(() => {
     if (!profile) return
 
     const purchasedCourses = profile.purchasedCourses || []
     const isAdmin = profile.role === 'admin'
+    const cacheKey = `courses_user_${user?.uid || 'guest'}`
+    const CACHE_DURATION = 5 * 60 * 1000 // 5 minutos
 
-    const coursesRef = collection(db, 'courses')
-    const unsub = onSnapshot(coursesRef, (snapshot) => {
-      const allCourses = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
-
-      // Verificar se o curso ALEGO padrão existe
-      const alegoCourse = allCourses.find(c => c.id === 'alego-default')
-      
-      // Filtrar apenas cursos comprados (ou todos se admin)
-      // Incluir curso ALEGO padrão sempre (admin vê todos, usuário vê se comprou)
-      const filtered = isAdmin
-        ? allCourses.filter(c => c.active !== false)
-        : allCourses.filter(c => {
-            // Se for o curso ALEGO padrão, sempre mostrar (é gratuito/padrão)
-            if (c.id === 'alego-default') return true
-            return purchasedCourses.includes(c.id) && c.active !== false
+    // Carregar do cache imediatamente
+    try {
+      const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+      if (cached) {
+        const { data: cachedData, timestamp } = JSON.parse(cached)
+        const now = Date.now()
+        if (now - timestamp < CACHE_DURATION && cachedData && cachedData.length > 0) {
+          startTransition(() => {
+            setCourses(cachedData)
+            setLoading(false)
           })
-
-      // Ordenar: ALEGO padrão primeiro, depois os outros por nome
-      const sorted = filtered.sort((a, b) => {
-        if (a.id === 'alego-default') return -1
-        if (b.id === 'alego-default') return 1
-        return a.name.localeCompare(b.name)
-      })
-
-      setCourses(sorted)
-      setLoading(false)
-
-      // Se já tem curso selecionado no perfil, usar ele
-      // Converter null para 'alego-default' para compatibilidade
-      if (profile.selectedCourseId !== undefined) {
-        const courseId = profile.selectedCourseId === null ? 'alego-default' : profile.selectedCourseId
-        setSelectedCourseId(courseId)
-      } else if (alegoCourse) {
-        // Se não tem curso selecionado mas existe o curso ALEGO, selecionar ele por padrão
-        setSelectedCourseId('alego-default')
+          // Continuar carregando em background para atualizar
+        }
       }
-    }, (error) => {
-      console.error('Erro ao carregar cursos:', error)
-      setCourses([])
-      setLoading(false)
-    })
+    } catch (err) {
+      console.warn('Erro ao ler cache de cursos:', err)
+    }
 
-    return () => unsub()
-  }, [profile])
+    // Carregar do Firestore (getDocs é mais rápido que onSnapshot para dados estáticos)
+    const loadCourses = async () => {
+      try {
+        const coursesRef = collection(db, 'courses')
+        const q = query(
+          coursesRef,
+          where('active', '==', true)
+        )
+        
+        const snapshot = await getDocs(q)
+        const allCourses = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+
+        // Verificar se o curso ALEGO padrão existe
+        const alegoCourse = allCourses.find(c => c.id === 'alego-default')
+        
+        // Filtrar apenas cursos comprados (ou todos se admin)
+        const filtered = isAdmin
+          ? allCourses.filter(c => c.active !== false)
+          : allCourses.filter(c => {
+              if (c.id === 'alego-default') return true
+              return purchasedCourses.includes(c.id) && c.active !== false
+            })
+
+        // Ordenar: ALEGO padrão primeiro, depois os outros por nome
+        const sorted = filtered.sort((a, b) => {
+          if (a.id === 'alego-default') return -1
+          if (b.id === 'alego-default') return 1
+          return a.name.localeCompare(b.name)
+        })
+
+        startTransition(() => {
+          setCourses(sorted)
+          setLoading(false)
+        })
+
+        // Salvar no cache
+        try {
+          localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
+            data: sorted,
+            timestamp: Date.now(),
+          }))
+        } catch (err) {
+          if (err.name !== 'QuotaExceededError') {
+            console.warn('Erro ao salvar cache:', err)
+          }
+        }
+
+        // Se já tem curso selecionado no perfil, usar ele
+        if (profile.selectedCourseId !== undefined) {
+          const courseId = profile.selectedCourseId === null ? 'alego-default' : profile.selectedCourseId
+          setSelectedCourseId(courseId)
+        } else if (alegoCourse) {
+          setSelectedCourseId('alego-default')
+        }
+      } catch (error) {
+        console.error('Erro ao carregar cursos:', error)
+        setLoading(false)
+      }
+    }
+
+    loadCourses()
+  }, [profile, user])
 
   const handleSelectCourse = async () => {
     if (!user || selectedCourseId === undefined) return

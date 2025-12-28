@@ -69,14 +69,23 @@ const HomeBanner = () => {
           setLoading(false)
         })
         
-        // Salvar no cache
+        // Salvar no cache (apenas dados essenciais)
         try {
+          const compressedBanners = data.map(banner => ({
+            id: banner.id,
+            imageUrl: banner.imageUrl, // Apenas URL, não base64
+            link: banner.link,
+            active: banner.active,
+            order: banner.order,
+          }))
           localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
-            data,
+            data: compressedBanners,
             timestamp: Date.now(),
           }))
         } catch (err) {
-          console.warn('Erro ao salvar cache de banners:', err)
+          if (err.name !== 'QuotaExceededError') {
+            console.warn('Erro ao salvar cache de banners:', err)
+          }
         }
       } catch (error) {
         // Ignorar erros de índice (pode ser cache do navegador)
@@ -117,27 +126,31 @@ const HomeBanner = () => {
     })()
     
     if (hasValidCache) {
-      // Carregar em background para atualizar cache
-      setTimeout(loadBanners, 0)
+      // Carregar em background para atualizar cache (não bloqueia UI)
+      setTimeout(() => loadBanners(), 100)
     } else {
-      // Carregar imediatamente
+      // Carregar imediatamente se não houver cache
       loadBanners()
     }
   }, [])
 
-  // Preload das próximas imagens do banner
+  // Preload das próximas imagens do banner (apenas imageUrl, não base64)
   useEffect(() => {
     if (banners.length <= 1) return
 
-    // Preload do próximo banner
+    // Preload do próximo banner (apenas se for URL externa)
     const nextIndex = (currentIndex + 1) % banners.length
     const nextBanner = banners[nextIndex]
-    if (nextBanner && (nextBanner.imageUrl || nextBanner.imageBase64)) {
-      const link = document.createElement('link')
-      link.rel = 'preload'
-      link.as = 'image'
-      link.href = nextBanner.imageUrl || nextBanner.imageBase64
-      document.head.appendChild(link)
+    if (nextBanner && nextBanner.imageUrl && !nextBanner.imageUrl.startsWith('data:')) {
+      try {
+        const link = document.createElement('link')
+        link.rel = 'preload'
+        link.as = 'image'
+        link.href = nextBanner.imageUrl
+        document.head.appendChild(link)
+      } catch (err) {
+        // Ignorar erros de preload
+      }
     }
   }, [banners, currentIndex])
 

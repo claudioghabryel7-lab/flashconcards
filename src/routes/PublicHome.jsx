@@ -219,7 +219,7 @@ const PublicHome = () => {
         const q = query(
           coursesRef, 
           where('active', '==', true),
-          limit(50) // Limitar quantidade para melhor performance
+          limit(20) // Reduzir limite para melhor performance inicial
         )
         
         const snapshot = await getDocs(q)
@@ -237,29 +237,21 @@ const PublicHome = () => {
           setLoadingCourses(false)
         })
         
-        // Preload agressivo das primeiras 6 imagens de cursos (mais que apenas 3 para melhor UX)
-        // Priorizar imageUrl (URL externa) sobre imageBase64 (mais leve)
-        sortedData.slice(0, 6).forEach((course, index) => {
-          const imageUrl = course.imageUrl || course.imageBase64
-          if (imageUrl && typeof imageUrl === 'string') {
+        // Preload apenas das primeiras 3 imagens (prioridade alta)
+        // Apenas imageUrl (URL externa), não imageBase64 (muito pesado)
+        sortedData.slice(0, 3).forEach((course) => {
+          const imageUrl = course.imageUrl // Apenas imageUrl, não imageBase64
+          if (imageUrl && typeof imageUrl === 'string' && !imageUrl.startsWith('data:')) {
             try {
-              // Preload usando link tag
+              // Preload usando link tag (mais eficiente)
               const link = document.createElement('link')
               link.rel = 'preload'
               link.as = 'image'
               link.href = imageUrl
-              if (index < 3) {
-                link.setAttribute('fetchpriority', 'high')
-              }
+              link.setAttribute('fetchpriority', 'high')
               document.head.appendChild(link)
-              
-              // Preload também usando Image() para garantir cache do navegador
-              const img = new Image()
-              img.src = imageUrl
-              img.loading = index < 3 ? 'eager' : 'lazy'
-              img.fetchPriority = index < 3 ? 'high' : 'auto'
             } catch (err) {
-              console.warn('Erro ao fazer preload da imagem:', err)
+              // Ignorar erros de preload (não crítico)
             }
           }
         })
@@ -311,10 +303,10 @@ const PublicHome = () => {
     })()
     
     if (hasValidCache) {
-      // Carregar em background para atualizar cache
-      setTimeout(loadCourses, 0)
+      // Carregar em background para atualizar cache (não bloqueia UI)
+      setTimeout(() => loadCourses(), 100)
     } else {
-      // Carregar imediatamente
+      // Carregar imediatamente se não houver cache
       loadCourses()
     }
   }, [])
