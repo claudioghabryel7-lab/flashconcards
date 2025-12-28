@@ -315,7 +315,7 @@ const PublicHome = () => {
             Cursos Preparatórios Disponíveis
           </h2>
           <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-            Escolha o curso ideal para sua aprovação. Plataforma completa com IA e recursos avançados.
+            FlashCards Para Concurso Público - Polícia Militar, Polícia Civil, GCM e muito mais. Escolha o curso ideal para sua aprovação.
           </p>
         </div>
         {loadingCourses ? (
@@ -566,8 +566,8 @@ const PublicHome = () => {
             Tudo que você precisa para sua aprovação
           </h2>
           <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-            Plataforma completa com inteligência artificial e recursos avançados de última geração para 
-            <strong>estudar para concursos públicos</strong> de forma eficiente
+            FlashCards Para Concurso Público - Polícia Militar, Polícia Civil, GCM e muito mais. 
+            <strong> Estude para concursos públicos</strong> de forma eficiente com flashcards interativos e inteligência artificial.
           </p>
         </div>
         <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-4">
