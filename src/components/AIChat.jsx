@@ -762,8 +762,15 @@ O chat estará disponível novamente amanhã ou após configurar um plano pago.`
           type="submit"
           disabled={!input.trim() || sending || !availableModel || quotaCooldown > 0 || quotaDailyLimit}
           className="flex items-center gap-2 rounded-full bg-alego-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          aria-label={
+            quotaDailyLimit ? 'Limite diário atingido' :
+            quotaCooldown > 0 ? `Aguarde ${quotaCooldown} segundos` :
+            sending ? 'Enviando mensagem...' :
+            !input.trim() ? 'Digite uma mensagem para enviar' :
+            'Enviar mensagem'
+          }
         >
-          <PaperAirplaneIcon className="h-4 w-4" />
+          <PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
           {quotaCooldown > 0 ? `Aguarde ${quotaCooldown}s` : (quotaDailyLimit ? '⏳' : 'Enviar')}
         </button>
       </form>

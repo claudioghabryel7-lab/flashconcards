@@ -171,7 +171,7 @@ const HomeBanner = () => {
   const currentBanner = banners[currentIndex]
 
   return (
-    <div className="relative w-full overflow-hidden rounded-3xl shadow-xl mb-6 sm:mb-8 border border-slate-200/50 dark:border-slate-700/50 h-[200px] sm:h-[300px] md:h-[400px] lg:h-[500px]">
+    <div className="relative w-full overflow-hidden rounded-3xl shadow-xl mb-6 sm:mb-8 border border-slate-200/50 dark:border-slate-700/50 h-[200px] sm:h-[300px] md:h-[400px] lg:h-[500px] above-fold">
       <div
         key={currentBanner.id}
         className="relative w-full h-full animate-banner-fade"
@@ -206,14 +206,17 @@ const HomeBanner = () => {
               key={index}
               type="button"
               onClick={() => setCurrentIndex(index)}
-              className={`h-3 w-3 rounded-full transition-all duration-300 shadow-lg min-w-[12px] min-h-[12px] ${
+              className={`h-4 w-4 rounded-full transition-all duration-300 shadow-lg min-w-[16px] min-h-[16px] p-1 ${
                 index === currentIndex
                   ? 'w-10 bg-white scale-110'
                   : 'bg-white/60 hover:bg-white/80 hover:scale-110'
               }`}
-              aria-label={`Ir para banner ${index + 1}`}
+              aria-label={`Ir para banner ${index + 1} de ${banners.length}`}
+              aria-current={index === currentIndex ? 'true' : 'false'}
               style={{ willChange: 'transform, width' }}
-            />
+            >
+              <span className="sr-only">Banner {index + 1}</span>
+            </button>
           ))}
         </div>
       )}

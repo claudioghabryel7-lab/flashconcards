@@ -32,23 +32,35 @@
     <meta name="twitter:description" content="A melhor plataforma de flashcards para concursos públicos. Estude para Polícia Militar, PMGO, PC e muito mais!" />
     <meta name="twitter:image" content="https://www.flashconcards.com.br/logo.svg" />
     
-    <!-- Preconnect para recursos externos (melhor TTFB) -->
-    <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin />
-    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
-    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
-    <!-- Preconnect para Firebase -->
+    <!-- Preconnect para recursos externos (melhor TTFB) - Ordem importante! -->
+    <!-- Firebase primeiro (mais crítico) -->
     <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
     <link rel="preconnect" href="https://firebase.googleapis.com" crossorigin />
     <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
     <link rel="dns-prefetch" href="https://firebase.googleapis.com" />
+    <!-- Google Tag Manager -->
+    <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin />
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+    <!-- Fonts (menos crítico) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
     
     <!-- CSS crítico inline para evitar bloqueio de renderização e CLS -->
     <style>
       /* CSS crítico mínimo para evitar CLS e melhorar LCP */
       * { box-sizing: border-box; }
-      body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-      #root { min-height: 100vh; }
+      body { 
+        margin: 0; 
+        padding: 0; 
+        font-family: system-ui, -apple-system, sans-serif;
+        /* Prevenir reflow forçado */
+        contain: layout style;
+      }
+      #root { 
+        min-height: 100vh;
+        /* Otimizar renderização */
+        contain: layout style;
+      }
       /* Footer fixo para evitar CLS */
       footer { 
         min-height: 60px; 
@@ -64,14 +76,21 @@
         min-height: 400px;
         contain: layout style paint;
       }
-      /* Otimizar animações com will-change */
-      [class*="animate-"], [class*="motion-"] {
+      /* Otimizar animações com will-change - apenas quando necessário */
+      [class*="animate-"]:not([class*="animate-pulse"]),
+      [class*="motion-"] {
         will-change: transform, opacity;
       }
-      /* Prevenir reflow forçado */
+      /* Prevenir reflow forçado em imagens */
       img, video {
         max-width: 100%;
         height: auto;
+        /* Otimizar renderização de imagens */
+        content-visibility: auto;
+      }
+      /* Otimizar renderização de elementos acima da dobra */
+      .above-fold {
+        contain: layout style paint;
       }
       /* Skeleton loader para evitar CLS durante carregamento */
       .skeleton {

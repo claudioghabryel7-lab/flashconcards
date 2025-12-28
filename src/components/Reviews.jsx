@@ -129,17 +129,20 @@ const Reviews = () => {
           return (
             <button
               key={star}
-              type={interactive ? "button" : undefined}
+              type={interactive ? "button" : "button"}
               onClick={interactive && onStarClick ? () => onStarClick(star) : undefined}
               onMouseEnter={interactive ? () => setHoveredStar(star) : undefined}
               onMouseLeave={interactive ? () => setHoveredStar(0) : undefined}
               disabled={!interactive || submitting}
               className={interactive ? "cursor-pointer transition-transform hover:scale-110" : ""}
+              aria-label={interactive ? `Avaliar com ${star} ${star === 1 ? 'estrela' : 'estrelas'}` : `${isFilled ? 'Estrela preenchida' : 'Estrela vazia'} ${star} de 5`}
+              aria-pressed={interactive ? (star <= formData.rating ? 'true' : 'false') : undefined}
             >
               <StarComponent
                 className={`h-5 w-5 ${
                   isFilled ? 'text-yellow-400' : 'text-gray-300'
                 }`}
+                aria-hidden="true"
               />
             </button>
           )

@@ -117,34 +117,25 @@ const LazyImage = ({
     if (priority) {
       loadImage()
     } else if ('IntersectionObserver' in window && containerRef.current) {
-      // Verificar se já está visível na viewport
-      const rect = containerRef.current.getBoundingClientRect()
-      const viewportHeight = window.innerHeight || document.documentElement.clientHeight
-      const isVisible = rect.top < viewportHeight + 300 && rect.bottom > -300
-      
-      if (isVisible) {
-        // Já está visível ou próximo, carregar imediatamente
-        loadImage()
-      } else {
-        // Usar Intersection Observer para lazy loading de imagens fora da viewport
-        observerRef.current = new IntersectionObserver(
-          (entries) => {
-            entries.forEach((entry) => {
-              if (entry.isIntersecting && !cancelled) {
-                loadImage()
-                if (observerRef.current && containerRef.current) {
-                  observerRef.current.unobserve(containerRef.current)
-                }
+      // Usar Intersection Observer para lazy loading - evita reflow forçado
+      // Não usar getBoundingClientRect() diretamente para evitar reflow
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting && !cancelled) {
+              loadImage()
+              if (observerRef.current && containerRef.current) {
+                observerRef.current.unobserve(containerRef.current)
               }
-            })
-          },
-          {
-            rootMargin: '300px', // Começar a carregar 300px antes de aparecer
-          }
-        )
+            }
+          })
+        },
+        {
+          rootMargin: '300px', // Começar a carregar 300px antes de aparecer
+        }
+      )
 
-        observerRef.current.observe(containerRef.current)
-      }
+      observerRef.current.observe(containerRef.current)
     } else {
       // Fallback: carregar imediatamente se não houver IntersectionObserver
       loadImage()
