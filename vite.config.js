@@ -26,10 +26,7 @@ export default defineConfig({
             if (id.includes('@google/generative-ai') || id.includes('pdfjs') || id.includes('html2canvas')) {
               return 'ai-vendor'
             }
-            // Separar framer-motion (pesado, usado apenas em alguns componentes)
-            if (id.includes('framer-motion')) {
-              return 'framer-motion'
-            }
+            // NÃO separar framer-motion - deixar no vendor para evitar problemas de inicialização
             // Outros vendors (mas não React)
             if (!id.includes('react') && !id.includes('react-dom') && !id.includes('react-router')) {
               return 'vendor'
@@ -63,6 +60,7 @@ export default defineConfig({
       'firebase/app',
       'firebase/auth',
       'firebase/firestore',
+      'framer-motion', // Incluir framer-motion para evitar problemas de inicialização
     ],
     // Excluir dependências pesadas do pre-bundling
     exclude: ['@google/generative-ai', 'pdfjs-dist', 'html2canvas'],
