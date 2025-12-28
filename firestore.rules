@@ -371,11 +371,10 @@
       // 📱 Feed Social - Posts
       
       match /posts/{postId} {
-        // Permitir leitura pública de notícias, ou posts para autenticados
-        // Esta regra permite que qualquer pessoa leia posts marcados como notícia
-        // e usuários autenticados podem ler todos os posts
-        // Verificar se resource.data existe antes de acessar propriedades
-        allow read: if (resource != null && resource.data != null && resource.data.isNews == true) || isAuthenticated();
+        // Permitir leitura pública de todos os posts (o código filtra para mostrar apenas notícias)
+        // Isso é necessário para permitir queries na collection inteira
+        // A filtragem por isNews é feita no código (NewsSection.jsx)
+        allow read: if true;
         
         // Usuários autenticados podem criar posts
         allow create: if isAuthenticated() && 

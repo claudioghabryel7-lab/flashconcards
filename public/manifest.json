@@ -7,24 +7,12 @@
   "background_color": "#ffffff",
   "theme_color": "#667eea",
   "orientation": "portrait-primary",
-  "icons": [
-    {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/logo.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    }
-  ],
+  "icons": [],
   "categories": ["education", "productivity"],
   "lang": "pt-BR",
   "dir": "ltr",
   "scope": "/",
   "prefer_related_applications": false
 }
+
 

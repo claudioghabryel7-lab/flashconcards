@@ -158,18 +158,92 @@
     </script>
     
     <script>
-      // Suprimir mensagem do React DevTools
+      // Suprimir mensagens do React DevTools e imagens base64 grandes
       (function() {
         const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        
+        // Função para detectar se uma string contém imagem base64 grande
+        const hasLargeBase64 = (str) => {
+          if (typeof str !== 'string') return false;
+          // Detectar data URIs de imagem base64 (mais de 50KB de dados base64)
+          const base64Pattern = /data:image\/[^;]+;base64,([A-Za-z0-9+/=]{50000,})/;
+          return base64Pattern.test(str);
+        };
+        
+        // Interceptar console.log para filtrar React DevTools e imagens base64 grandes
         console.log = function(...args) {
           const message = args.join(' ');
+          // Filtrar mensagens do React DevTools
           if (message.includes('Download the React DevTools') || 
               message.includes('react-devtools') ||
               message.includes('react.dev/link/react-devtools')) {
             return; // Não exibir esta mensagem
           }
-          originalLog.apply(console, args);
+          // Filtrar imagens base64 grandes
+          const filtered = args.filter(arg => !hasLargeBase64(String(arg)));
+          if (filtered.length > 0) {
+            originalLog.apply(console, filtered);
+          }
         };
+        
+        // Interceptar console.warn para filtrar imagens base64 grandes
+        console.warn = function(...args) {
+          const filtered = args.filter(arg => !hasLargeBase64(String(arg)));
+          if (filtered.length > 0) {
+            originalWarn.apply(console, filtered);
+          }
+        };
+        
+        // Interceptar console.error para filtrar imagens base64 grandes
+        console.error = function(...args) {
+          const filtered = args.filter(arg => !hasLargeBase64(String(arg)));
+          if (filtered.length > 0) {
+            originalError.apply(console, filtered);
+          }
+        };
+        
+        window.addEventListener('error', function(event) {
+          // Suprimir erros do Firebase Auth iframe
+          if (event.message && (
+            event.message.includes('fireauth is not defined') ||
+            event.message.includes('ERR_CONTENT_DECODING_FAILED') ||
+            event.filename && event.filename.includes('iframe.js') ||
+            event.filename && event.filename.includes('__/auth/iframe')
+          )) {
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+          }
+          
+          // Suprimir erros que contêm imagens base64 grandes
+          if (event.message && hasLargeBase64(event.message)) {
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+          }
+        }, true);
+        
+        // Suprimir erros de rede do Firebase Auth iframe
+        window.addEventListener('unhandledrejection', function(event) {
+          if (event.reason && (
+            event.reason.message && event.reason.message.includes('ERR_CONTENT_DECODING_FAILED') ||
+            event.reason.stack && event.reason.stack.includes('iframe.js')
+          )) {
+            event.preventDefault();
+            return false;
+          }
+          
+          // Suprimir rejections que contêm imagens base64 grandes
+          if (event.reason && (
+            (event.reason.message && hasLargeBase64(String(event.reason.message))) ||
+            (event.reason.stack && hasLargeBase64(String(event.reason.stack)))
+          )) {
+            event.preventDefault();
+            return false;
+          }
+        });
       })();
       
       // Aplicar dark mode antes do React renderizar para evitar flash
