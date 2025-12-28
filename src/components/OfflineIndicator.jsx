@@ -40,7 +40,7 @@ const OfflineIndicator = () => {
   return (
     <div
       className={`
-        fixed bottom-0 left-0 right-0 z-40 
+        fixed bottom-0 left-0 right-0 z-[100] 
         flex items-center justify-center gap-2 
         px-4 py-3 text-sm font-medium
         shadow-lg
