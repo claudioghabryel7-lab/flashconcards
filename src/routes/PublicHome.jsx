@@ -238,20 +238,25 @@ const PublicHome = () => {
         })
         
         // Preload das primeiras 3 imagens de cursos (acima da dobra)
+        // Priorizar imageUrl (URL externa) sobre imageBase64 (mais leve)
         sortedData.slice(0, 3).forEach((course) => {
-          const imageUrl = course.imageBase64 || course.imageUrl
-          if (imageUrl) {
-            const link = document.createElement('link')
-            link.rel = 'preload'
-            link.as = 'image'
-            link.href = imageUrl
-            document.head.appendChild(link)
+          const imageUrl = course.imageUrl || course.imageBase64
+          if (imageUrl && typeof imageUrl === 'string') {
+            try {
+              const link = document.createElement('link')
+              link.rel = 'preload'
+              link.as = 'image'
+              link.href = imageUrl
+              document.head.appendChild(link)
+            } catch (err) {
+              console.warn('Erro ao fazer preload da imagem:', err)
+            }
           }
         })
         
         // Salvar no cache (apenas dados essenciais para evitar quota)
         try {
-          // Comprimir cursos - remover campos grandes como imagens base64
+          // Comprimir cursos - manter apenas imageUrl (não imageBase64)
           const compressedCourses = sortedData.map(course => ({
             id: course.id,
             name: course.name,
@@ -260,7 +265,8 @@ const PublicHome = () => {
             originalPrice: course.originalPrice,
             featured: course.featured,
             active: course.active,
-            // Não salvar imageBase64 e outros campos grandes
+            imageUrl: course.imageUrl, // Manter imageUrl (é URL externa, pequena)
+            // Não salvar imageBase64 (é muito grande)
           }))
           
           localStorage.setItem(`firebase_cache_${cacheKey}`, JSON.stringify({
@@ -357,11 +363,11 @@ const PublicHome = () => {
                   
                   <div className="relative z-10">
                     {/* Imagem do curso - com dimensões fixas para evitar CLS */}
-                    {(course.imageBase64 || course.imageUrl) && (
-                      <div className="w-full h-52 overflow-hidden relative" style={{ aspectRatio: '16/9', minHeight: '208px' }}>
+                    {(course.imageUrl || course.imageBase64) && (
+                      <div className="w-full h-52 overflow-hidden relative bg-slate-200 dark:bg-slate-700" style={{ aspectRatio: '16/9', minHeight: '208px' }}>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent z-10"></div>
                         <LazyImage
-                          src={course.imageBase64 || course.imageUrl}
+                          src={course.imageUrl || course.imageBase64}
                           alt={course.name}
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                           priority={index < 3}

@@ -90,7 +90,9 @@ const LazyImage = ({
         }
       }
 
-      // Timeout reduzido para 5 segundos (mais responsivo)
+      // Timeout reduzido (3s no mobile, 5s no desktop) para melhor responsividade
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+      const timeoutDuration = isMobile ? 3000 : 5000
       timeoutId = setTimeout(() => {
         if (!cancelled) {
           // Tentar novamente se ainda há tentativas e não foi cancelado
@@ -107,7 +109,7 @@ const LazyImage = ({
             }
           }
         }
-      }, 5000) // 5 segundos timeout
+      }, timeoutDuration)
 
       // Tentar carregar a imagem
       img.src = src
@@ -119,6 +121,10 @@ const LazyImage = ({
     } else if ('IntersectionObserver' in window && containerRef.current) {
       // Usar Intersection Observer para lazy loading - evita reflow forçado
       // Não usar getBoundingClientRect() diretamente para evitar reflow
+      // Reduzir rootMargin no mobile para melhor performance
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+      const rootMargin = isMobile ? '150px' : '300px' // Menor margem no mobile
+      
       observerRef.current = new IntersectionObserver(
         (entries) => {
           entries.forEach((entry) => {
@@ -131,7 +137,7 @@ const LazyImage = ({
           })
         },
         {
-          rootMargin: '300px', // Começar a carregar 300px antes de aparecer
+          rootMargin, // Margem adaptativa para mobile/desktop
         }
       )
 

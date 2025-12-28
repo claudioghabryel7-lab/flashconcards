@@ -7,13 +7,14 @@ import Header from './components/Header'
 import SupportButton from './components/SupportButton'
 import PopupBanner from './components/PopupBanner'
 import OfflineIndicator from './components/OfflineIndicator'
+// PublicHome importado diretamente (sem lazy loading) para melhor performance na página inicial
+import PublicHome from './routes/PublicHome'
 
 // Lazy load de rotas pesadas
 const AdminPanel = lazy(() => import('./routes/AdminPanel'))
 const Dashboard = lazy(() => import('./routes/Dashboard'))
 const FlashcardView = lazy(() => import('./routes/FlashcardView'))
 const Login = lazy(() => import('./routes/Login'))
-const PublicHome = lazy(() => import('./routes/PublicHome'))
 const SetupUser = lazy(() => import('./routes/SetupUser'))
 const FlashQuestoes = lazy(() => import('./routes/FlashQuestoes'))
 const QuestionView = lazy(() => import('./routes/QuestionView'))
