@@ -1,7 +1,7 @@
 // Service Worker para PWA - FlashConCards
 // Versão do cache - Incremente para forçar atualização
-const CACHE_NAME = 'flashconcards-v1.0.4'
-const RUNTIME_CACHE = 'flashconcards-runtime-v1.0.4'
+const CACHE_NAME = 'flashconcards-v1.0.5'
+const RUNTIME_CACHE = 'flashconcards-runtime-v1.0.5'
 
 // Flag para desabilitar cache se houver problemas persistentes
 let CACHE_DISABLED = false
@@ -38,36 +38,34 @@ const safeOpenCache = async (cacheName) => {
     return await caches.open(cacheName)
   } catch (openError) {
     CACHE_ERROR_COUNT++
-    console.warn(`[SW] Erro ao abrir cache ${cacheName} (tentativa ${CACHE_ERROR_COUNT}/${MAX_CACHE_ERRORS}):`, openError)
     
-    // Se muitos erros, tentar limpar tudo
-    if (CACHE_ERROR_COUNT >= MAX_CACHE_ERRORS) {
-      console.warn('[SW] Muitos erros de cache detectados. Limpando todos os caches...')
-      const cleared = await clearAllCaches()
-      if (!cleared) {
-        CACHE_DISABLED = true
-        console.warn('[SW] Cache desabilitado devido a erros persistentes')
-        return null
-      }
-      
-      // Tentar abrir novamente após limpar
-      try {
-        return await caches.open(cacheName)
-      } catch (retryError) {
-        console.error('[SW] Erro persistente ao abrir cache após limpeza:', retryError)
-        CACHE_DISABLED = true
-        return null
-      }
-    }
-    
-    // Tentar deletar e recriar este cache específico
-    try {
-      await caches.delete(cacheName)
-      return await caches.open(cacheName)
-    } catch (recreateError) {
-      console.warn('[SW] Não foi possível recriar cache:', recreateError)
+    // Se já desabilitado, não tentar mais
+    if (CACHE_DISABLED) {
       return null
     }
+    
+    // Se muitos erros, desabilitar cache imediatamente
+    if (CACHE_ERROR_COUNT >= MAX_CACHE_ERRORS) {
+      console.warn('[SW] Muitos erros de cache detectados. Desabilitando cache...')
+      CACHE_DISABLED = true
+      // Tentar limpar em background (não bloqueia)
+      clearAllCaches().catch(() => {})
+      return null
+    }
+    
+    // Tentar deletar e recriar este cache específico (apenas 1 vez)
+    if (CACHE_ERROR_COUNT <= 2) {
+      try {
+        await caches.delete(cacheName)
+        return await caches.open(cacheName)
+      } catch (recreateError) {
+        // Se falhar ao recriar, incrementar contador
+        CACHE_ERROR_COUNT++
+        return null
+      }
+    }
+    
+    return null
   }
 }
 
@@ -148,7 +146,29 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   console.log('[SW] Activating service worker...')
   event.waitUntil(
-    caches.keys().then(async (cacheNames) => {
+    (async () => {
+      // Verificar se CacheStorage está funcionando
+      try {
+        if (!('caches' in self)) {
+          console.warn('[SW] CacheStorage não disponível - cache desabilitado')
+          CACHE_DISABLED = true
+          return self.clients.claim()
+        }
+        
+        // Testar se consegue abrir cache
+        try {
+          await caches.open(CACHE_NAME)
+        } catch (testError) {
+          console.warn('[SW] Erro ao testar cache na ativação, limpando todos os caches...', testError)
+          await clearAllCaches()
+        }
+      } catch (e) {
+        console.error('[SW] Erro crítico na ativação:', e)
+        CACHE_DISABLED = true
+        return self.clients.claim()
+      }
+      
+      const cacheNames = await caches.keys()
       // Remover caches antigos
       const deletePromises = cacheNames
         .filter((cacheName) => {
@@ -159,7 +179,7 @@ self.addEventListener('activate', (event) => {
           return caches.delete(cacheName)
         })
       
-      await Promise.all(deletePromises)
+      await Promise.allSettled(deletePromises)
       
       // Limpar cache inválido dos caches atuais
       const cleanInvalidCache = async () => {
@@ -214,7 +234,7 @@ self.addEventListener('activate', (event) => {
       
       // Assume controle de todas as páginas imediatamente
       return self.clients.claim()
-    })
+    })()
   )
 })
 

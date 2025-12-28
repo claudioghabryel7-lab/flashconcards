@@ -8,6 +8,11 @@ export default defineConfig({
     // Otimizações de build para melhor TTFB
     minify: 'esbuild', // esbuild é mais rápido que terser
     target: 'esnext', // Usar ES modules modernos
+    commonjsOptions: {
+      // Resolver problemas de compatibilidade com framer-motion
+      include: [/node_modules/],
+      transformMixedEsModules: true,
+    },
     cssCodeSplit: true, // Code splitting de CSS
     // Otimizações de assets
     assetsInlineLimit: 4096, // Inline assets pequenos (< 4kb)
