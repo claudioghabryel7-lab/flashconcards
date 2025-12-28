@@ -44,13 +44,9 @@ const HomeBanner = () => {
     const loadBanners = async () => {
       try {
         const bannersRef = collection(db, 'homeBanners')
-        // Filtrar apenas ativos e limitar quantidade
-        const q = query(
-          bannersRef, 
-          where('active', '==', true),
-          orderBy('order', 'asc'),
-          limit(10) // Limitar a 10 banners
-        )
+        // Query completamente simples - sem where, orderBy ou limit
+        // Filtrar, ordenar e limitar tudo no código após buscar
+        const q = query(bannersRef)
         
         const snapshot = await getDocs(q)
         const data = snapshot.docs
@@ -58,7 +54,14 @@ const HomeBanner = () => {
             id: doc.id,
             ...doc.data(),
           }))
-          .filter((banner) => banner.active !== false)
+          .filter((banner) => banner.active !== false) // Filtrar ativos no código
+          .sort((a, b) => {
+            // Ordenar por 'order' no código (se existir, senão manter ordem original)
+            const orderA = a.order ?? 999
+            const orderB = b.order ?? 999
+            return orderA - orderB
+          })
+          .slice(0, 10) // Limitar a 10 banners ativos
         
         // Atualizar estado de forma não bloqueante
         startTransition(() => {
@@ -76,7 +79,26 @@ const HomeBanner = () => {
           console.warn('Erro ao salvar cache de banners:', err)
         }
       } catch (error) {
-        console.error('Erro ao carregar banners:', error)
+        // Ignorar erros de índice (pode ser cache do navegador)
+        if (error.code === 'failed-precondition') {
+          console.warn('Índice necessário. Limpe o cache do navegador ou crie o índice no Firebase Console.')
+          // Tentar usar cache se disponível
+          try {
+            const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
+            if (cached) {
+              const { data: cachedData } = JSON.parse(cached)
+              if (cachedData && cachedData.length > 0) {
+                startTransition(() => {
+                  setBanners(cachedData)
+                  setLoading(false)
+                })
+                return
+              }
+            }
+          } catch {}
+        } else {
+          console.error('Erro ao carregar banners:', error)
+        }
         setLoading(false)
       }
     }

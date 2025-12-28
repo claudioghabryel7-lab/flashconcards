@@ -29,22 +29,26 @@ const MATERIAS = [
   'Redação',
 ]
 
-// Sistema SRS estilo Noji - Baseado em dificuldade (Again/Hard/Good/Easy)
-// Intervalos dinâmicos que aumentam conforme o desempenho
+// Sistema SRS - Repetição Espaçada Dinâmica
+// Intervalos ajustados dinamicamente baseado na dificuldade percebida
 const SRS_INTERVALS = {
   // Again: Volta quase imediatamente (10 minutos)
   again: { minutes: 10 },
-  // Hard: Intervalo curto (1-2 dias)
-  hard: { days: 1 },
+  // Hard/Difícil: Diminui bastante o intervalo - volta para minutos (final da sessão) ou no dia seguinte
+  hard: { 
+    minutes: 30, // Se intervalo atual > 1 dia, volta para 30 minutos (final da sessão)
+    maxDays: 1 // Máximo 1 dia se intervalo atual já é pequeno
+  },
   // Good: Intervalo médio que aumenta progressivamente
   good: { 
     initialDays: 4,
     multiplier: 1.7 // Multiplicador para aumentar intervalo a cada acerto
   },
-  // Easy: Intervalo longo que aumenta muito
+  // Easy/Fácil: Aumenta significativamente o intervalo (ex: 1 dia -> 4-5 dias)
   easy: {
     initialDays: 7,
-    multiplier: 2.5 // Multiplicador maior para Easy
+    minMultiplier: 4.0, // Mínimo: multiplica por 4x (ex: 1 dia -> 4 dias)
+    multiplier: 5.0 // Multiplicador padrão: 5x (ex: 1 dia -> 5 dias)
   }
 }
 
@@ -385,7 +389,8 @@ const FlashcardView = () => {
     let newEaseFactor = easeFactor
     let newConsecutiveCorrect = consecutiveCorrect
 
-    // Calcular novo intervalo baseado na dificuldade (estilo Noji)
+    // Calcular novo intervalo baseado na dificuldade
+    // Sistema dinâmico que ajusta intervalos conforme o desempenho
     switch (difficulty) {
       case 'again':
         // Again: Volta em 10 minutos
@@ -395,8 +400,16 @@ const FlashcardView = () => {
         break
         
       case 'hard':
-        // Hard: Intervalo curto (1 dia), mas não reduz muito o easeFactor
-        newInterval = SRS_INTERVALS.hard.days
+        // Hard/Difícil: Diminui bastante o intervalo
+        // Se intervalo atual > 1 dia, volta para minutos (final da sessão)
+        // Se intervalo atual <= 1 dia, mantém em 1 dia máximo
+        if (currentInterval > 1) {
+          // Intervalo grande: volta para minutos (30 min = final da sessão)
+          newInterval = 0 // Será tratado como minutos
+        } else {
+          // Intervalo já pequeno: mantém em 1 dia máximo
+          newInterval = SRS_INTERVALS.hard.maxDays
+        }
         newEaseFactor = Math.max(1.3, easeFactor - 0.15)
         newConsecutiveCorrect = Math.max(0, consecutiveCorrect - 1)
         break
@@ -415,11 +428,22 @@ const FlashcardView = () => {
         break
         
       case 'easy':
-        // Easy: Intervalo aumenta muito
+        // Easy/Fácil: Aumenta SIGNIFICATIVAMENTE o intervalo
+        // Exemplo: Se próxima revisão seria em 1 dia, pula para 4-5 dias
         if (consecutiveCorrect === 0) {
+          // Primeira vez marcando como Easy
           newInterval = SRS_INTERVALS.easy.initialDays
         } else {
-          newInterval = Math.round(currentInterval * SRS_INTERVALS.easy.multiplier)
+          // Aumenta intervalo de forma significativa
+          // Garante mínimo de 4x o intervalo atual (ex: 1 dia -> 4 dias)
+          // Usa multiplicador de 5x para aumentar ainda mais (ex: 1 dia -> 5 dias)
+          const multipliedInterval = currentInterval * SRS_INTERVALS.easy.multiplier
+          const minInterval = currentInterval * SRS_INTERVALS.easy.minMultiplier
+          // Usa o maior valor entre o multiplicador padrão e o mínimo garantido
+          newInterval = Math.max(
+            Math.round(multipliedInterval),
+            Math.round(minInterval)
+          )
         }
         newEaseFactor = Math.min(2.5, easeFactor + 0.15) // Aumenta facilidade
         newConsecutiveCorrect = consecutiveCorrect + 1
@@ -431,6 +455,9 @@ const FlashcardView = () => {
     if (difficulty === 'again') {
       // Again: 10 minutos
       nextReviewDate = now.add(SRS_INTERVALS.again.minutes, 'minute')
+    } else if (difficulty === 'hard' && newInterval === 0) {
+      // Hard: Se intervalo foi reduzido para minutos, usar 30 minutos (final da sessão)
+      nextReviewDate = now.add(SRS_INTERVALS.hard.minutes, 'minute')
     } else {
       // Outros: dias
       nextReviewDate = now.add(newInterval, 'day')
@@ -439,6 +466,8 @@ const FlashcardView = () => {
     return {
       easeFactor: newEaseFactor,
       intervalDays: newInterval,
+      // Incluir intervalo em minutos se for "hard" e intervalo for 0
+      intervalMinutes: (difficulty === 'hard' && newInterval === 0) ? SRS_INTERVALS.hard.minutes : null,
       nextReview: nextReviewDate.toISOString(),
       reviewCount: (currentProgress.reviewCount || 0) + 1,
       consecutiveCorrect: newConsecutiveCorrect,

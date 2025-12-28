@@ -100,41 +100,41 @@ const Dashboard = () => {
       try {
         const q = useOrderBy
           ? query(
-              progressRef,
-              where('uid', '==', user.uid),
-              orderBy('date', 'desc')
-            )
+      progressRef,
+      where('uid', '==', user.uid),
+      orderBy('date', 'desc')
+    )
           : query(progressRef, where('uid', '==', user.uid))
 
-        const unsub = onSnapshot(
-          q,
-          (snapshot) => {
-            const data = snapshot.docs
-              .map((docSnap) => {
-                const data = docSnap.data()
-                // Verificar se o documento segue o padrão userId_courseKey_date
-                const docIdParts = docSnap.id.split('_')
-                if (docIdParts.length >= 3) {
-                  const docCourseKey = docIdParts[1]
-                  const docDate = docIdParts.slice(2).join('_')
-                  return {
-                    ...data,
-                    courseId: data.courseId || (docCourseKey === 'alego' ? null : docCourseKey),
-                    date: data.date || docDate
-                  }
-                }
-                return data
-              })
-              .filter((item) => {
-                // Filtrar por curso - garantir sincronização correta
-                const itemCourseId = item.courseId
-                if (selectedCourseId) {
-                  return itemCourseId === selectedCourseId || String(itemCourseId) === String(selectedCourseId)
-                } else {
-                  // Para curso padrão, aceitar null, undefined, string vazia ou 'alego-default'
-                  return !itemCourseId || itemCourseId === '' || itemCourseId === null || itemCourseId === 'alego-default'
-                }
-              })
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        const data = snapshot.docs
+          .map((docSnap) => {
+            const data = docSnap.data()
+            // Verificar se o documento segue o padrão userId_courseKey_date
+            const docIdParts = docSnap.id.split('_')
+            if (docIdParts.length >= 3) {
+              const docCourseKey = docIdParts[1]
+              const docDate = docIdParts.slice(2).join('_')
+              return {
+                ...data,
+                courseId: data.courseId || (docCourseKey === 'alego' ? null : docCourseKey),
+                date: data.date || docDate
+              }
+            }
+            return data
+          })
+          .filter((item) => {
+            // Filtrar por curso - garantir sincronização correta
+            const itemCourseId = item.courseId
+            if (selectedCourseId) {
+              return itemCourseId === selectedCourseId || String(itemCourseId) === String(selectedCourseId)
+            } else {
+              // Para curso padrão, aceitar null, undefined, string vazia ou 'alego-default'
+              return !itemCourseId || itemCourseId === '' || itemCourseId === null || itemCourseId === 'alego-default'
+            }
+          })
             
             // Ordenar manualmente se não usou orderBy
             if (!useOrderBy) {
@@ -145,25 +145,25 @@ const Dashboard = () => {
               })
             }
 
-            startTransition(() => {
-              setProgressData(data)
-              console.log('📊 Progresso sincronizado:', { 
-                total: data.length, 
-                courseId: selectedCourseId || 'alego',
-                dates: data.map(d => d.date).slice(0, 5)
-              })
-            })
-          },
-          (error) => {
-            console.error('Erro ao carregar progresso:', error)
+        startTransition(() => {
+          setProgressData(data)
+          console.log('📊 Progresso sincronizado:', { 
+            total: data.length, 
+            courseId: selectedCourseId || 'alego',
+            dates: data.map(d => d.date).slice(0, 5)
+          })
+        })
+      },
+      (error) => {
+        console.error('Erro ao carregar progresso:', error)
             // Se falhar por falta de índice, tentar sem orderBy
             if ((error.code === 'failed-precondition' || error.code === 'permission-denied') && useOrderBy) {
               tryLoadProgress(false)
               return
             }
-            setProgressData([])
-          }
-        )
+        setProgressData([])
+      }
+    )
         
         return unsub
       } catch (err) {

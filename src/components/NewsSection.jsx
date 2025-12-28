@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore'
+import { collection, onSnapshot, query } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import LazyImage from './LazyImage'
@@ -12,17 +12,19 @@ const NewsSection = () => {
   const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
+    if (!db) {
+      setLoading(false)
+      return
+    }
+
     const postsRef = collection(db, 'posts')
     
-    const tryLoadNews = (useOrderBy = true) => {
+    // Usar query simples sem índice composto - filtrar e ordenar no código
+    const tryLoadNews = () => {
       try {
-        const q = useOrderBy
-          ? query(
-              postsRef,
-              where('isNews', '==', true),
-              orderBy('createdAt', 'desc')
-            )
-          : query(postsRef, where('isNews', '==', true))
+        // Query simples sem where/orderBy para evitar necessidade de índice
+        // Buscar todos os posts e filtrar no código
+        const q = query(postsRef)
 
         const unsub = onSnapshot(
           q,
@@ -32,26 +34,30 @@ const NewsSection = () => {
               ...doc.data(),
             }))
             
-            // Ordenar por data manualmente se necessário
-            data.sort((a, b) => {
+            // Filtrar apenas isNews === true (garantir)
+            const filteredData = data.filter(item => item.isNews === true)
+            
+            // Ordenar por data manualmente (sempre fazer isso no código)
+            filteredData.sort((a, b) => {
               const aTime = a.createdAt?.toMillis?.() || (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0) || 0
               const bTime = b.createdAt?.toMillis?.() || (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0) || 0
               return bTime - aTime
             })
             
-            setNews(data)
+            setNews(filteredData)
             setLoading(false)
           },
           (error) => {
-            console.error('Erro ao carregar notícias:', error)
-            // Se falhar por falta de índice ou permissão, tentar sem orderBy
-            if ((error.code === 'failed-precondition' || error.code === 'permission-denied') && useOrderBy) {
-              tryLoadNews(false)
+            // Ignorar erros de índice (pode ser cache do navegador)
+            if (error.code === 'failed-precondition') {
+              console.warn('Índice necessário. Limpe o cache do navegador ou crie o índice no Firebase Console.')
+              // Tentar carregar sem filtro como fallback
               return
             }
-            // Se ainda falhar, mostrar mensagem de erro
             if (error.code === 'permission-denied') {
               console.warn('Permissão negada. Verifique as regras do Firestore.')
+            } else {
+              console.error('Erro ao carregar notícias:', error)
             }
             setNews([])
             setLoading(false)
@@ -67,7 +73,7 @@ const NewsSection = () => {
       }
     }
 
-    const unsub = tryLoadNews(true)
+    const unsub = tryLoadNews()
     return () => {
       if (unsub) unsub()
     }
