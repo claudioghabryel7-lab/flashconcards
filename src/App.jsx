@@ -24,6 +24,7 @@ const MindMapView = lazy(() => import('./routes/MindMapView'))
 const SocialFeed = lazy(() => import('./routes/SocialFeed'))
 const UserProfile = lazy(() => import('./routes/UserProfile'))
 const NewsView = lazy(() => import('./routes/NewsView'))
+const BlogNewsView = lazy(() => import('./routes/BlogNewsView'))
 const Simulado = lazy(() => import('./routes/Simulado'))
 const SimuladoShare = lazy(() => import('./routes/SimuladoShare'))
 const TreinoRedacao = lazy(() => import('./routes/TreinoRedacao'))
@@ -306,6 +307,8 @@ function App() {
           <Route path="/sitemap.xml" element={<Sitemap />} />
           {/* Página em branco - Acessível sem login */}
           <Route path="/blank" element={<BlankPage />} />
+          {/* Página de Notícia do Blog - Acessível sem login */}
+          <Route path="/blank/noticia/:articleId" element={<BlogNewsView />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>

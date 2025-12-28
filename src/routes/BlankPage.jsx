@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { collection, onSnapshot, query, where, orderBy, doc, getDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, limit, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -6,6 +7,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 
 const BlankPage = () => {
+  const navigate = useNavigate()
   const { user, isAdmin, login, register, logout } = useAuth()
   
   // Estados principais
@@ -597,24 +599,10 @@ IMPORTANTE:
     }
   }
   
-  // Abrir artigo
-  const handleOpenArticle = async (articleId) => {
-    try {
-      const articleRef = doc(db, 'blog_articles', articleId)
-      const articleSnap = await getDoc(articleRef)
-      
-      if (articleSnap.exists()) {
-        setSelectedArticle({
-          id: articleSnap.id,
-          ...articleSnap.data()
-        })
-        setView('article')
-        window.scrollTo(0, 0)
-      }
-    } catch (error) {
-      console.error('Erro ao carregar artigo:', error)
-      alert('Erro ao carregar artigo')
-    }
+  // Abrir artigo - navegar para rota específica
+  const handleOpenArticle = (articleId) => {
+    // Navegar para rota específica da notícia
+    navigate(`/blank/noticia/${articleId}`)
   }
   
   // Formatar data
