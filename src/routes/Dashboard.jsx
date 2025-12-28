@@ -97,55 +97,49 @@ const Dashboard = () => {
     const courseKey = selectedCourseId || 'alego'
     const progressRef = collection(db, 'progress')
     
-    // Função para carregar progresso com fallback
-    const tryLoadProgress = (useOrderBy = true) => {
+    // Função para carregar progresso
+    // Não usar orderBy no Firestore para evitar necessidade de índice composto
+    // Ordenação será feita manualmente após filtrar
+    const tryLoadProgress = () => {
       try {
-        const q = useOrderBy
-          ? query(
-      progressRef,
-      where('uid', '==', user.uid),
-      orderBy('date', 'desc')
-    )
-          : query(progressRef, where('uid', '==', user.uid))
+        const q = query(progressRef, where('uid', '==', user.uid))
 
-    const unsub = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs
-          .map((docSnap) => {
-            const data = docSnap.data()
-            // Verificar se o documento segue o padrão userId_courseKey_date
-            const docIdParts = docSnap.id.split('_')
-            if (docIdParts.length >= 3) {
-              const docCourseKey = docIdParts[1]
-              const docDate = docIdParts.slice(2).join('_')
-              return {
-                ...data,
-                courseId: data.courseId || (docCourseKey === 'alego' ? null : docCourseKey),
-                date: data.date || docDate
-              }
-            }
-            return data
-          })
-          .filter((item) => {
-            // Filtrar por curso - garantir sincronização correta
-            const itemCourseId = item.courseId
-            if (selectedCourseId) {
-              return itemCourseId === selectedCourseId || String(itemCourseId) === String(selectedCourseId)
-            } else {
-              // Para curso padrão, aceitar null, undefined, string vazia ou 'alego-default'
-              return !itemCourseId || itemCourseId === '' || itemCourseId === null || itemCourseId === 'alego-default'
-            }
-          })
-            
-            // Ordenar manualmente se não usou orderBy
-            if (!useOrderBy) {
-              data.sort((a, b) => {
-                const dateA = a.date || ''
-                const dateB = b.date || ''
-                return dateB.localeCompare(dateA) // Mais recente primeiro
+        const unsub = onSnapshot(
+          q,
+          (snapshot) => {
+            const data = snapshot.docs
+              .map((docSnap) => {
+                const data = docSnap.data()
+                // Verificar se o documento segue o padrão userId_courseKey_date
+                const docIdParts = docSnap.id.split('_')
+                if (docIdParts.length >= 3) {
+                  const docCourseKey = docIdParts[1]
+                  const docDate = docIdParts.slice(2).join('_')
+                  return {
+                    ...data,
+                    courseId: data.courseId || (docCourseKey === 'alego' ? null : docCourseKey),
+                    date: data.date || docDate
+                  }
+                }
+                return data
               })
-            }
+              .filter((item) => {
+                // Filtrar por curso - garantir sincronização correta
+                const itemCourseId = item.courseId
+                if (selectedCourseId) {
+                  return itemCourseId === selectedCourseId || String(itemCourseId) === String(selectedCourseId)
+                } else {
+                  // Para curso padrão, aceitar null, undefined, string vazia ou 'alego-default'
+                  return !itemCourseId || itemCourseId === '' || itemCourseId === null || itemCourseId === 'alego-default'
+                }
+              })
+            
+            // Ordenar manualmente por data (mais recente primeiro)
+            data.sort((a, b) => {
+              const dateA = a.date || ''
+              const dateB = b.date || ''
+              return dateB.localeCompare(dateA) // Mais recente primeiro
+            })
 
         startTransition(() => {
           setProgressData(data)
@@ -158,11 +152,6 @@ const Dashboard = () => {
       },
       (error) => {
         console.error('Erro ao carregar progresso:', error)
-            // Se falhar por falta de índice, tentar sem orderBy
-            if ((error.code === 'failed-precondition' || error.code === 'permission-denied') && useOrderBy) {
-              tryLoadProgress(false)
-              return
-            }
         setProgressData([])
       }
     )
@@ -175,7 +164,7 @@ const Dashboard = () => {
       }
     }
 
-    const unsub = tryLoadProgress(true)
+    const unsub = tryLoadProgress()
 
     return () => unsub()
   }, [user, selectedCourseId])
