@@ -725,23 +725,23 @@ const Payment = () => {
   }
 
   return (
-    <div className="min-h-screen py-8 sm:py-12">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6">
+    <div className="min-h-screen py-4 sm:py-8 md:py-12">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 md:px-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
+          className="text-center mb-6 sm:mb-8"
         >
-          <h1 className="text-3xl sm:text-4xl font-black mb-2 bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black mb-2 bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent">
             Finalizar Compra
           </h1>
-          <p className="text-slate-600 dark:text-slate-400">
+          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 px-2">
             Garanta sua promoção e comece a estudar hoje mesmo
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Resumo do Pedido */}
           <div className="lg:col-span-1">
             <motion.div
@@ -769,12 +769,12 @@ const Payment = () => {
                 </div>
               )}
               
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 <div className="mb-4">
-                  <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 px-3 py-1 text-xs font-bold text-white mb-3">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 px-2 sm:px-3 py-1 text-xs font-bold text-white mb-3">
                     <span>🔥 PROMOÇÃO</span>
                   </div>
-                  <h3 className="text-xl font-bold mb-2 text-slate-900 dark:text-white">
+                  <h3 className="text-lg sm:text-xl font-bold mb-2 text-slate-900 dark:text-white">
                     {checkoutCourses.length > 0 
                       ? checkoutCourses.length === 1 
                         ? checkoutCourses[0].name 
@@ -791,11 +791,11 @@ const Payment = () => {
                             <img
                               src={course.imageUrl}
                               alt={course.name}
-                              className="w-12 h-12 object-cover rounded"
+                              className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded flex-shrink-0"
                             />
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                            <p className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white truncate">
                               {course.name}
                             </p>
                             <p className="text-xs text-slate-600 dark:text-slate-400">
@@ -820,13 +820,13 @@ const Payment = () => {
                   )}
                   
                   <div className="space-y-1">
-                    <p className="text-sm text-slate-400 line-through">
+                    <p className="text-xs sm:text-sm text-slate-400 line-through">
                       {formatCurrency(product.originalPrice)}
                     </p>
-                    <p className="text-3xl font-black text-rose-600 dark:text-rose-400">
+                    <p className="text-2xl sm:text-3xl font-black text-rose-600 dark:text-rose-400">
                       {formatCurrency(product.price)}
                     </p>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                       Economize {formatCurrency(product.discount)}
                     </p>
                   </div>
@@ -1061,13 +1061,13 @@ const Payment = () => {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="rounded-2xl bg-white dark:bg-slate-800 p-6 sm:p-8 shadow-xl"
+                  className="rounded-xl sm:rounded-2xl bg-white dark:bg-slate-800 p-4 sm:p-6 md:p-8 shadow-xl"
                 >
                   {/* Dados do Cliente */}
                   {!user && (
-                    <div className="mb-6 space-y-4">
+                    <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                           Email *
                         </label>
                         <input
@@ -1075,7 +1075,7 @@ const Payment = () => {
                           placeholder="seu@email.com"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2.5 sm:p-3 text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
                           required
                         />
                         <p className="text-xs text-slate-500 mt-1">
@@ -1083,7 +1083,7 @@ const Payment = () => {
                         </p>
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                           Nome Completo *
                         </label>
                         <input
@@ -1091,7 +1091,7 @@ const Payment = () => {
                           placeholder="Seu nome completo"
                           value={name}
                           onChange={(e) => setName(e.target.value)}
-                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2.5 sm:p-3 text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
                           required
                         />
                       </div>
@@ -1099,59 +1099,59 @@ const Payment = () => {
                   )}
 
                   {/* Seleção de Método de Pagamento */}
-                  <div className="mb-6">
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                  <div className="mb-4 sm:mb-6">
+                    <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
                       Método de Pagamento
                     </label>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-2 sm:gap-4">
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('pix')}
-                        className={`rounded-xl p-4 border-2 transition-all ${
+                        className={`rounded-lg sm:rounded-xl p-3 sm:p-4 border-2 transition-all ${
                           paymentMethod === 'pix'
                             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                             : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                         }`}
                       >
-                        <BanknotesIcon className={`h-8 w-8 mx-auto mb-2 ${
+                        <BanknotesIcon className={`h-6 w-6 sm:h-8 sm:w-8 mx-auto mb-1 sm:mb-2 ${
                           paymentMethod === 'pix' ? 'text-blue-500' : 'text-slate-400'
                         }`} />
-                        <p className={`font-semibold text-sm ${
+                        <p className={`font-semibold text-xs sm:text-sm ${
                           paymentMethod === 'pix' ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'
                         }`}>
                           PIX
                         </p>
-                        <p className="text-xs text-slate-500 mt-1">Aprovação instantânea</p>
+                        <p className="text-xs text-slate-500 mt-1 hidden sm:block">Aprovação instantânea</p>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('card')}
-                        className={`rounded-xl p-4 border-2 transition-all ${
+                        className={`rounded-lg sm:rounded-xl p-3 sm:p-4 border-2 transition-all ${
                           paymentMethod === 'card'
                             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                             : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                         }`}
                       >
-                        <CreditCardIcon className={`h-8 w-8 mx-auto mb-2 ${
+                        <CreditCardIcon className={`h-6 w-6 sm:h-8 sm:w-8 mx-auto mb-1 sm:mb-2 ${
                           paymentMethod === 'card' ? 'text-blue-500' : 'text-slate-400'
                         }`} />
-                        <p className={`font-semibold text-sm ${
+                        <p className={`font-semibold text-xs sm:text-sm ${
                           paymentMethod === 'card' ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'
                         }`}>
                           Cartão
                         </p>
-                        <p className="text-xs text-slate-500 mt-1">Até 10x sem juros</p>
+                        <p className="text-xs text-slate-500 mt-1 hidden sm:block">Até 10x sem juros</p>
                       </button>
                     </div>
                   </div>
 
                   {/* Formulário do Cartão */}
                   {paymentMethod === 'card' && (
-                    <div className="space-y-4 mb-6">
+                    <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
                       {/* Número do Cartão */}
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                           Número do Cartão
                         </label>
                         <input
@@ -1160,13 +1160,13 @@ const Payment = () => {
                           value={cardData.number}
                           onChange={(e) => handleCardInputChange('number', e.target.value)}
                           maxLength={19}
-                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2.5 sm:p-3 text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
                         />
                       </div>
 
                       {/* Nome do Portador */}
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                           Nome no Cartão
                         </label>
                         <input
@@ -1174,14 +1174,14 @@ const Payment = () => {
                           placeholder="Nome como está no cartão"
                           value={cardData.name}
                           onChange={(e) => handleCardInputChange('name', e.target.value.toUpperCase())}
-                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2.5 sm:p-3 text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
                         />
                       </div>
 
                       {/* Validade e CVV */}
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-2 sm:gap-4">
                         <div>
-                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                          <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                             Validade
                           </label>
                           <input
@@ -1190,11 +1190,11 @@ const Payment = () => {
                             value={cardData.expiry}
                             onChange={(e) => handleCardInputChange('expiry', e.target.value)}
                             maxLength={5}
-                            className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                            className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2.5 sm:p-3 text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                          <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                             CVV
                           </label>
                           <input
@@ -1203,20 +1203,20 @@ const Payment = () => {
                             value={cardData.cvv}
                             onChange={(e) => handleCardInputChange('cvv', e.target.value)}
                             maxLength={4}
-                            className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                            className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2.5 sm:p-3 text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
                           />
                         </div>
                       </div>
 
                       {/* Parcelas */}
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                           Parcelas
                         </label>
                         <select
                           value={installments}
                           onChange={(e) => setInstallments(parseInt(e.target.value))}
-                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2.5 sm:p-3 text-sm sm:text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
                         >
                           {installmentsOptions.map((num) => (
                             <option key={num} value={num}>
@@ -1244,19 +1244,21 @@ const Payment = () => {
                     id="payment-button"
                     onClick={handlePayment}
                     disabled={loading}
-                    className="w-full rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-4 text-white font-bold text-lg shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+                    className="w-full rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-4 sm:px-8 py-3 sm:py-4 text-white font-bold text-sm sm:text-base md:text-lg shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
                   >
                     {loading ? (
                       <>
-                        <ArrowPathIcon className="h-5 w-5 animate-spin" />
-                        Processando...
+                        <ArrowPathIcon className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                        <span className="text-sm sm:text-base">Processando...</span>
                       </>
                     ) : (
                       <>
-                        <LockClosedIcon className="h-5 w-5" />
-                        {paymentMethod === 'pix'
-                          ? `Pagar ${formatCurrency(product.price)} com PIX`
-                          : `Pagar ${installments}x de ${formatCurrency(calculateInstallmentValue(product.price, installments))}`}
+                        <LockClosedIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <span className="text-xs sm:text-sm md:text-base">
+                          {paymentMethod === 'pix'
+                            ? `Pagar ${formatCurrency(product.price)} com PIX`
+                            : `Pagar ${installments}x de ${formatCurrency(calculateInstallmentValue(product.price, installments))}`}
+                        </span>
                       </>
                     )}
                   </button>
