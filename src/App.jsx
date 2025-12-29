@@ -335,56 +335,56 @@ function App() {
         </Routes>
         </Suspense>
       </main>
-      <footer className="mx-auto w-full max-w-6xl px-4 py-8 text-xs sm:text-sm text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-6">
+      <footer className="mx-auto w-full max-w-6xl px-4 sm:px-6 py-6 sm:py-8 text-sm text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 mb-6">
           {/* Sobre */}
-          <div>
-            <h3 className="font-bold text-slate-900 dark:text-white mb-3">Sobre</h3>
-            <ul className="space-y-2">
-              <li><Link to="/" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Início</Link></li>
-              <li><Link to="/guia-estudos" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Guia de Estudos</Link></li>
-              <li><Link to="/blank" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Blog e Notícias</Link></li>
-              <li><Link to="/pagamento" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Planos e Preços</Link></li>
+          <div className="min-w-0">
+            <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white mb-2 sm:mb-3">Sobre</h3>
+            <ul className="space-y-1.5 sm:space-y-2">
+              <li><Link to="/" className="block text-xs sm:text-sm hover:text-blue-600 dark:hover:text-blue-400 transition-colors break-words">Início</Link></li>
+              <li><Link to="/guia-estudos" className="block text-xs sm:text-sm hover:text-blue-600 dark:hover:text-blue-400 transition-colors break-words">Guia de Estudos</Link></li>
+              <li><Link to="/blank" className="block text-xs sm:text-sm hover:text-blue-600 dark:hover:text-blue-400 transition-colors break-words">Blog e Notícias</Link></li>
+              <li><Link to="/pagamento" className="block text-xs sm:text-sm hover:text-blue-600 dark:hover:text-blue-400 transition-colors break-words">Planos e Preços</Link></li>
             </ul>
           </div>
           
           {/* Cursos */}
-          <div>
-            <h3 className="font-bold text-slate-900 dark:text-white mb-3">Cursos</h3>
-            <ul className="space-y-2">
-              <li><span className="text-slate-400 dark:text-slate-600">Polícia Militar (PMGO)</span></li>
-              <li><span className="text-slate-400 dark:text-slate-600">Polícia Civil (PC)</span></li>
-              <li><span className="text-slate-400 dark:text-slate-600">Guarda Municipal (GCM)</span></li>
-              <li><Link to="/pagamento" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Ver Todos os Cursos</Link></li>
+          <div className="min-w-0">
+            <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white mb-2 sm:mb-3">Cursos</h3>
+            <ul className="space-y-1.5 sm:space-y-2">
+              <li><span className="block text-xs sm:text-sm text-slate-400 dark:text-slate-600 break-words">Polícia Militar (PMGO)</span></li>
+              <li><span className="block text-xs sm:text-sm text-slate-400 dark:text-slate-600 break-words">Polícia Civil (PC)</span></li>
+              <li><span className="block text-xs sm:text-sm text-slate-400 dark:text-slate-600 break-words">Guarda Municipal (GCM)</span></li>
+              <li><Link to="/pagamento" className="block text-xs sm:text-sm hover:text-blue-600 dark:hover:text-blue-400 transition-colors break-words">Ver Todos os Cursos</Link></li>
             </ul>
           </div>
           
           {/* Recursos */}
-          <div>
-            <h3 className="font-bold text-slate-900 dark:text-white mb-3">Recursos</h3>
-            <ul className="space-y-2">
-              <li><span className="text-slate-400 dark:text-slate-600">Flashcards Interativos</span></li>
-              <li><span className="text-slate-400 dark:text-slate-600">Questões Comentadas</span></li>
-              <li><span className="text-slate-400 dark:text-slate-600">Simulados Online</span></li>
-              <li><span className="text-slate-400 dark:text-slate-600">Assistente de IA</span></li>
+          <div className="min-w-0">
+            <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white mb-2 sm:mb-3">Recursos</h3>
+            <ul className="space-y-1.5 sm:space-y-2">
+              <li><span className="block text-xs sm:text-sm text-slate-400 dark:text-slate-600 break-words">Flashcards Interativos</span></li>
+              <li><span className="block text-xs sm:text-sm text-slate-400 dark:text-slate-600 break-words">Questões Comentadas</span></li>
+              <li><span className="block text-xs sm:text-sm text-slate-400 dark:text-slate-600 break-words">Simulados Online</span></li>
+              <li><span className="block text-xs sm:text-sm text-slate-400 dark:text-slate-600 break-words">Assistente de IA</span></li>
             </ul>
           </div>
           
           {/* Legal */}
-          <div>
-            <h3 className="font-bold text-slate-900 dark:text-white mb-3">Legal</h3>
-            <ul className="space-y-2">
-              <li><span className="text-slate-400 dark:text-slate-600">Termos de Uso</span></li>
-              <li><span className="text-slate-400 dark:text-slate-600">Política de Privacidade</span></li>
+          <div className="min-w-0">
+            <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white mb-2 sm:mb-3">Legal</h3>
+            <ul className="space-y-1.5 sm:space-y-2">
+              <li><span className="block text-xs sm:text-sm text-slate-400 dark:text-slate-600 break-words">Termos de Uso</span></li>
+              <li><span className="block text-xs sm:text-sm text-slate-400 dark:text-slate-600 break-words">Política de Privacidade</span></li>
             </ul>
           </div>
         </div>
         
-        <div className="text-center pt-6 border-t border-slate-200 dark:border-slate-800">
-          <p>
+        <div className="text-center pt-4 sm:pt-6 border-t border-slate-200 dark:border-slate-800">
+          <p className="text-xs sm:text-sm leading-relaxed">
             © {new Date().getFullYear()} FlashConCards (Plegimentoria). Todos os direitos reservados.
-            <br />
-            <span className="text-xs">É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.</span>
+            <br className="hidden sm:block" />
+            <span className="block sm:inline text-xs mt-1 sm:mt-0">É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.</span>
           </p>
         </div>
       </footer>
