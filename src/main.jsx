@@ -6,6 +6,7 @@ import { AuthProvider } from './hooks/useAuth'
 import { DarkModeProvider } from './hooks/useDarkMode.jsx'
 import { SystemProvider } from './hooks/useSystem.jsx'
 import { QueryProvider } from './providers/QueryProvider'
+import { CartProvider } from './hooks/useCart'
 import ErrorBoundary from './components/ErrorBoundary'
 import FirebaseConfigError from './components/FirebaseConfigError'
 import { firebaseInitialized } from './firebase/config'
@@ -45,9 +46,11 @@ const RootApp = () => {
         <QueryProvider>
           <DarkModeProvider>
             <AuthProvider>
-              <SystemProvider>
-                <App />
-              </SystemProvider>
+              <CartProvider>
+                <SystemProvider>
+                  <App />
+                </SystemProvider>
+              </CartProvider>
             </AuthProvider>
           </DarkModeProvider>
         </QueryProvider>

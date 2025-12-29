@@ -18,10 +18,12 @@ import {
   ChatBubbleLeftRightIcon,
   BookOpenIcon,
   RocketLaunchIcon,
-  ShareIcon
+  ShareIcon,
+  ShoppingCartIcon
 } from '@heroicons/react/24/solid'
 import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
+import { useCart } from '../hooks/useCart'
 // Lazy load de componentes pesados que não são críticos para LCP
 const Reviews = lazy(() => import('../components/Reviews'))
 const NewsSection = lazy(() => import('../components/NewsSection'))
@@ -459,6 +461,35 @@ const PublicHome = () => {
                       >
                         <span className="relative z-10">Comprar Agora</span>
                       </Link>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            addToCart(course)
+                            // Feedback visual
+                            const button = e.currentTarget
+                            const originalText = button.innerHTML
+                            button.innerHTML = '<span class="text-green-600">✓</span>'
+                            button.disabled = true
+                            setTimeout(() => {
+                              button.innerHTML = originalText
+                              button.disabled = false
+                            }, 1500)
+                          }}
+                          disabled={isInCart(course.id)}
+                          className={`rounded-xl glass-tech px-4 py-3.5 transition-all flex items-center justify-center hover-scale border border-slate-200/50 dark:border-slate-700/50 ${
+                            isInCart(course.id)
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 cursor-not-allowed'
+                              : 'text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                          }`}
+                          title={isInCart(course.id) ? 'Já está no carrinho' : 'Adicionar ao carrinho'}
+                        >
+                          {isInCart(course.id) ? (
+                            <span className="text-sm font-semibold">✓</span>
+                          ) : (
+                            <ShoppingCartIcon className="h-5 w-5" />
+                          )}
+                        </button>
                         <button
                           type="button"
                           onClick={async (e) => {
