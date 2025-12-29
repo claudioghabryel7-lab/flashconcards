@@ -210,7 +210,14 @@ Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou
   }
 
   return (
-    <div className="flex justify-end mt-8 mb-4">
+    <div 
+      className="flex justify-end mt-8 mb-4" 
+      style={{ 
+        position: 'static', 
+        zIndex: 10,
+        width: '100%'
+      }}
+    >
       {/* Botão flutuante - canto inferior direito */}
       {!isOpen && (
         <motion.button
@@ -220,6 +227,10 @@ Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou
           whileTap={{ scale: 0.9 }}
           onClick={() => setIsOpen(true)}
           className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-full shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 flex items-center gap-2"
+          style={{ 
+            position: 'static',
+            display: 'inline-flex'
+          }}
           aria-label="Abrir chat"
         >
           <ChatBubbleLeftRightIcon className="h-6 w-6" />
@@ -235,6 +246,10 @@ Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
             className="w-96 max-w-[calc(100vw-2rem)] h-[600px] max-h-[calc(100vh-8rem)] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border-2 border-blue-200 dark:border-blue-700 flex flex-col overflow-hidden"
+            style={{ 
+              position: 'static',
+              display: 'block'
+            }}
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 flex items-center justify-between">
