@@ -91,6 +91,10 @@
   ],
   "rewrites": [
     {
+      "source": "/adsense-verification.html",
+      "destination": "/adsense-verification.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
