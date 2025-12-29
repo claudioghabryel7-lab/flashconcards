@@ -339,6 +339,8 @@ const PublicHome = () => {
     }).format(value)
   }
 
+  const { addToCart, isInCart } = useCart()
+
   return (
     <section className="space-y-8 sm:space-y-12 md:space-y-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Carrossel de Banners */}
