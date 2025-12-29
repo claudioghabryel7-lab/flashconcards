@@ -2,66 +2,120 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChatBubbleLeftRightIcon, XMarkIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline'
 import { motion, AnimatePresence } from 'framer-motion'
+import { GoogleGenerativeAI } from '@google/generative-ai'
+import { collection, query, where, getDocs } from 'firebase/firestore'
+import { db } from '../firebase/config'
 
-const ATTENDANTS = [
-  'Ana Silva',
-  'Carlos Santos',
-  'Mariana Costa',
-  'João Oliveira',
-  'Patricia Lima'
-]
-
-const SalesChatbot = ({ article, courses = [] }) => {
+const SalesChatbot = ({ article }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState([])
   const [inputValue, setInputValue] = useState('')
-  const [currentAttendant, setCurrentAttendant] = useState('')
+  const [sending, setSending] = useState(false)
+  const [courses, setCourses] = useState([])
+  const [userCompetition, setUserCompetition] = useState(null)
   const messagesEndRef = useRef(null)
   const navigate = useNavigate()
 
-  // Selecionar atendente aleatório ao abrir
+  // Carregar cursos ativos
   useEffect(() => {
-    if (isOpen && !currentAttendant) {
-      const randomAttendant = ATTENDANTS[Math.floor(Math.random() * ATTENDANTS.length)]
-      setCurrentAttendant(randomAttendant)
-      
-      // Mensagem inicial após 1 segundo
-      setTimeout(() => {
-        const course = courses[0] || null
-        const competitionName = article?.concursoData?.concursoName || article?.concursoData?.orgao || 'este concurso'
-        
-        const initialMessage = {
-          type: 'bot',
-          text: `Olá! 👋 Eu sou ${randomAttendant}, atendente de plantão do FlashConCards! 🎓\n\nVi que você está lendo sobre ${competitionName}. Que tal conhecer nosso curso preparatório completo?`,
-          timestamp: new Date()
-        }
-        setMessages([initialMessage])
-        
-        // Segunda mensagem com informações do curso
-        setTimeout(() => {
-          if (course) {
-            const monthlyPrice = ((course.price || 99.90) / 10).toFixed(2)
-            const courseInfo = {
-              type: 'bot',
-              text: `📚 **${course.name}**\n\n${course.description || 'Curso completo com flashcards interativos, questões comentadas e simulados.'}\n\n💰 Investimento: R$ ${course.price?.toFixed(2) || '99,90'}\n💳 Parcelamento em até 10x de R$ ${monthlyPrice} sem juros!\n\n✅ Flashcards interativos\n✅ Questões comentadas\n✅ Simulados completos\n✅ Assistente de IA 24/7\n\nQuer saber mais detalhes? 😊`,
-              timestamp: new Date(),
-              course: course
-            }
-            setMessages(prev => [...prev, courseInfo])
-          }
-        }, 2000)
-      }, 1000)
+    const loadCourses = async () => {
+      try {
+        const coursesRef = collection(db, 'courses')
+        const q = query(coursesRef, where('active', '==', true))
+        const snapshot = await getDocs(q)
+        const coursesData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        setCourses(coursesData)
+      } catch (err) {
+        console.error('Erro ao carregar cursos:', err)
+      }
     }
-  }, [isOpen, currentAttendant, courses, article])
+    loadCourses()
+  }, [])
+
+  // Abrir automaticamente após 3 segundos
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsOpen(true)
+    }, 3000)
+
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Mensagem inicial quando abre
+  useEffect(() => {
+    if (isOpen && messages.length === 0 && courses.length > 0) {
+      const initialMessage = {
+        type: 'bot',
+        text: 'Olá! 👋 Qual concurso você está se preparando?',
+        timestamp: new Date()
+      }
+      setMessages([initialMessage])
+    }
+  }, [isOpen, courses.length])
 
   // Scroll para última mensagem
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Detectar objeções e responder
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return
+  // Gerar resposta com IA
+  const getAIResponse = async (userMessage, conversationHistory) => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+    
+    if (!apiKey) {
+      return 'Desculpe, estou com problemas técnicos. Tente novamente mais tarde.'
+    }
+
+    try {
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+
+      // Formatar cursos para o prompt
+      const coursesList = courses.map(c => 
+        `- ${c.name} (${c.competition || 'Concurso'}) - R$ ${c.price?.toFixed(2) || '99,90'} - Parcelado em até 10x`
+      ).join('\n')
+
+      // Construir histórico da conversa
+      const historyText = conversationHistory.map(msg => 
+        `${msg.type === 'user' ? 'Usuário' : 'Assistente'}: ${msg.text}`
+      ).join('\n')
+
+      const prompt = `Você é um assistente de vendas do FlashConCards, uma plataforma de flashcards para concursos públicos.
+
+CURSOS DISPONÍVEIS:
+${coursesList}
+
+REGRAS IMPORTANTES:
+- Seja DIRETO e OBJETIVO. Frases curtas, máximo 2 linhas por mensagem.
+- NUNCA faça textões. Seja conciso.
+- Se o usuário mencionar um concurso, identifique qual curso corresponde.
+- Sempre mencione o parcelamento em 10x sem juros.
+- Se perguntarem sobre preço, enfatize que é um investimento na aprovação.
+- Se o usuário quiser comprar, direcione para a página de pagamento.
+
+HISTÓRICO DA CONVERSA:
+${historyText}
+
+ÚLTIMA MENSAGEM DO USUÁRIO: ${userMessage}
+
+Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou um concurso, identifique o curso correspondente e fale sobre ele.`
+
+      const result = await model.generateContent(prompt)
+      const response = result.response.text()
+      
+      // Limpar resposta (remover markdown, etc)
+      return response.trim().replace(/```[\s\S]*?```/g, '').trim()
+    } catch (error) {
+      console.error('Erro ao chamar IA:', error)
+      return 'Desculpe, tive um problema. Pode repetir?'
+    }
+  }
+
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || sending) return
 
     const userMessage = {
       type: 'user',
@@ -71,85 +125,63 @@ const SalesChatbot = ({ article, courses = [] }) => {
 
     setMessages(prev => [...prev, userMessage])
     setInputValue('')
+    setSending(true)
 
-    // Processar resposta após 1 segundo
-    setTimeout(() => {
-      const response = generateResponse(inputValue.toLowerCase(), courses[0])
-      setMessages(prev => [...prev, response])
-    }, 1000)
-  }
+    // Detectar se mencionou um concurso
+    const inputLower = inputValue.toLowerCase()
+    const mentionedCourse = courses.find(c => {
+      const courseName = (c.name || '').toLowerCase()
+      const competition = (c.competition || '').toLowerCase()
+      return inputLower.includes(courseName) || 
+             inputLower.includes(competition) ||
+             courseName.includes(inputLower) ||
+             competition.includes(inputLower)
+    })
 
-  const generateResponse = (userInput, course) => {
-    const courseName = course?.name || 'nosso curso'
-    const coursePrice = course?.price || 99.90
-    const monthlyPrice = (coursePrice / 10).toFixed(2)
-
-    // Detectar objeções de preço
-    if (userInput.includes('caro') || userInput.includes('preço') || userInput.includes('valor') || userInput.includes('custa') || userInput.includes('dinheiro')) {
-      return {
-        type: 'bot',
-        text: `Entendo sua preocupação! 😊 Mas pense bem: este é um **investimento na sua aprovação**! 🎯\n\n💡 Você pode parcelar em **até 10x de R$ ${monthlyPrice}** sem juros!\n\n📊 Compare: um curso presencial custa muito mais e você não tem a flexibilidade de estudar quando e onde quiser.\n\n✅ Com o FlashConCards você tem:\n• Flashcards interativos\n• Questões comentadas\n• Simulados completos\n• Assistente de IA 24/7\n• Acesso vitalício após aprovação\n\n💰 R$ ${coursePrice.toFixed(2)} dividido em 10x = menos de R$ ${monthlyPrice} por mês! É menos que um café por dia! ☕\n\nQuer garantir sua aprovação? 🚀`,
-        timestamp: new Date(),
-        course: course
-      }
+    if (mentionedCourse && !userCompetition) {
+      setUserCompetition(mentionedCourse)
     }
 
-    // Detectar interesse em comprar
-    if (userInput.includes('comprar') || userInput.includes('quero') || userInput.includes('interessado') || userInput.includes('sim') || userInput.includes('ok') || userInput.includes('vou comprar') || userInput.includes('feito')) {
-      return {
+    // Gerar resposta com IA
+    try {
+      const aiResponse = await getAIResponse(inputValue, messages)
+      
+      const botMessage = {
         type: 'bot',
-        text: `Excelente escolha! 🎉 Você está no caminho certo para sua aprovação! 🏆\n\nClique no botão abaixo para finalizar sua compra de forma segura:\n\n💳 Aceitamos cartão de crédito (até 10x sem juros)\n💵 PIX com desconto\n📱 Pagamento 100% seguro\n✅ Acesso imediato após pagamento\n\nVou te acompanhar até o final! 😊`,
+        text: aiResponse,
         timestamp: new Date(),
-        course: course,
-        showButton: true
+        course: mentionedCourse || userCompetition
       }
-    }
 
-    // Detectar dúvidas sobre o curso
-    if (userInput.includes('curso') || userInput.includes('conteúdo') || userInput.includes('o que') || userInput.includes('tem') || userInput.includes('inclui')) {
-      return {
+      // Se mencionou interesse em comprar ou curso específico, adicionar botão
+      if (inputLower.includes('comprar') || 
+          inputLower.includes('quero') || 
+          inputLower.includes('interessado') ||
+          mentionedCourse) {
+        botMessage.showButton = true
+      }
+
+      setMessages(prev => [...prev, botMessage])
+    } catch (error) {
+      console.error('Erro ao gerar resposta:', error)
+      const errorMessage = {
         type: 'bot',
-        text: `Ótima pergunta! 📚 O **${courseName}** inclui:\n\n✅ **Flashcards Interativos** - Sistema de repetição espaçada (SRS) que adapta ao seu ritmo\n✅ **FlashQuestões** - Questões geradas por IA no estilo das principais bancas\n✅ **Simulados Completos** - Teste seus conhecimentos antes da prova\n✅ **Flash Mentor** - Assistente de IA que responde suas dúvidas 24/7\n✅ **Bot "Como Estudar?"** - Guia personalizado de estudos\n✅ **Progresso Completo** - Acompanhe seu desempenho com estatísticas\n✅ **Calendário de Estudos** - Organize sua rotina\n✅ **Acesso Vitalício** - Estude no seu ritmo, sem pressa!\n\nTudo isso por apenas R$ ${coursePrice.toFixed(2)} parcelado em até 10x! 💰\n\nQuer garantir sua vaga? 🎯`,
-        timestamp: new Date(),
-        course: course
+        text: 'Desculpe, tive um problema. Pode repetir?',
+        timestamp: new Date()
       }
-    }
-
-    // Detectar dúvidas sobre garantia/confiança
-    if (userInput.includes('garantia') || userInput.includes('confiança') || userInput.includes('seguro') || userInput.includes('funciona')) {
-      return {
-        type: 'bot',
-        text: `Fico feliz que você queira se certificar! 😊\n\n✅ **Pagamento 100% Seguro** - Processado pelo Mercado Pago\n✅ **Acesso Imediato** - Após a compra, você já pode começar\n✅ **Suporte Completo** - Estamos aqui para ajudar você\n✅ **Milhares de Aprovados** - Nossa metodologia funciona!\n\n💡 Além disso, você pode parcelar em até 10x sem juros, então o investimento fica super acessível!\n\nNão perca esta oportunidade de garantir sua aprovação! 🚀`,
-        timestamp: new Date(),
-        course: course
-      }
-    }
-
-    // Detectar hesitação/tempo
-    if (userInput.includes('depois') || userInput.includes('pensar') || userInput.includes('talvez') || userInput.includes('ver') || userInput.includes('considerar')) {
-      return {
-        type: 'bot',
-        text: `Entendo que você quer pensar bem! 😊 Mas não deixe passar esta oportunidade! ⏰\n\n🎯 **O concurso não espera** - Quanto antes você começar, melhor!\n💰 **Parcelamento em 10x** - Não precisa pagar tudo de uma vez\n📚 **Acesso Imediato** - Comece a estudar hoje mesmo\n🏆 **Sua aprovação vale muito mais** que este investimento!\n\n💡 Pense assim: R$ ${monthlyPrice} por mês é um investimento pequeno comparado ao salário que você vai receber após a aprovação!\n\nQue tal garantir agora? 😉`,
-        timestamp: new Date(),
-        course: course
-      }
-    }
-
-    // Resposta padrão persuasiva
-    return {
-      type: 'bot',
-      text: `Ótimo! 😊 Deixa eu te mostrar por que o **${courseName}** é a melhor escolha para sua aprovação! 🎓\n\n💡 Com nosso curso você tem:\n• Flashcards interativos com IA\n• Questões comentadas\n• Simulados completos\n• Assistente 24/7\n• Acesso vitalício\n\n💰 E o melhor: apenas R$ ${coursePrice.toFixed(2)} parcelado em **até 10x sem juros**!\n\nÉ um investimento na sua carreira! 🚀 Quer saber mais detalhes ou já está pronto para garantir sua vaga? 😉`,
-      timestamp: new Date(),
-      course: course
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
+      setSending(false)
     }
   }
 
-  const handleBuyClick = () => {
-    // Priorizar courseLink do artigo se disponível
-    if (article?.courseLink) {
+  const handleBuyClick = (course) => {
+    if (course) {
+      navigate(`/pagamento?course=${course.id}`)
+    } else if (userCompetition) {
+      navigate(`/pagamento?course=${userCompetition.id}`)
+    } else if (article?.courseLink) {
       window.open(article.courseLink, '_blank')
-    } else if (courses[0]) {
-      navigate(`/pagamento?course=${courses[0].id}`)
     } else {
       navigate('/pagamento')
     }
@@ -160,13 +192,13 @@ const SalesChatbot = ({ article, courses = [] }) => {
     return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   }
 
-  if (!courses || courses.length === 0) {
-    return null // Não mostrar chatbot se não houver cursos
+  if (courses.length === 0) {
+    return null
   }
 
   return (
     <>
-      {/* Botão flutuante */}
+      {/* Botão flutuante - posicionado de forma acessível */}
       {!isOpen && (
         <motion.button
           initial={{ scale: 0 }}
@@ -174,14 +206,12 @@ const SalesChatbot = ({ article, courses = [] }) => {
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-full shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 flex items-center gap-2 group"
-          aria-label="Abrir chat de vendas"
+          className="fixed bottom-20 right-6 z-50 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-full shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 flex items-center gap-2"
+          style={{ position: 'fixed' }}
+          aria-label="Abrir chat"
         >
           <ChatBubbleLeftRightIcon className="h-6 w-6" />
-          <span className="hidden sm:block font-bold text-sm">Falar com Atendente</span>
-          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center animate-pulse">
-            !
-          </span>
+          <span className="hidden sm:block font-bold text-sm">Falar com IA</span>
         </motion.button>
       )}
 
@@ -201,8 +231,8 @@ const SalesChatbot = ({ article, courses = [] }) => {
                   <ChatBubbleLeftRightIcon className="h-6 w-6" />
                 </div>
                 <div>
-                  <div className="font-bold text-sm">{currentAttendant || 'Atendente'}</div>
-                  <div className="text-xs text-blue-100">Atendente de plantão</div>
+                  <div className="font-bold text-sm">Assistente IA</div>
+                  <div className="text-xs text-blue-100">FlashConCards</div>
                 </div>
               </div>
               <button
@@ -224,7 +254,7 @@ const SalesChatbot = ({ article, courses = [] }) => {
                   className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-2xl p-3 ${
+                    className={`max-w-[85%] rounded-2xl p-3 ${
                       msg.type === 'user'
                         ? 'bg-blue-600 text-white'
                         : 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600'
@@ -234,17 +264,28 @@ const SalesChatbot = ({ article, courses = [] }) => {
                     <div className={`text-xs mt-1 ${msg.type === 'user' ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
                       {formatTime(msg.timestamp)}
                     </div>
-                    {msg.showButton && (
+                    {msg.showButton && (msg.course || userCompetition) && (
                       <button
-                        onClick={handleBuyClick}
-                        className="mt-3 w-full bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-2 px-4 rounded-lg hover:from-green-600 hover:to-green-700 transition shadow-lg"
+                        onClick={() => handleBuyClick(msg.course || userCompetition)}
+                        className="mt-3 w-full bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-2 px-4 rounded-lg hover:from-green-600 hover:to-green-700 transition shadow-lg text-sm"
                       >
-                        💳 Comprar Agora - Parcelado em 10x
+                        💳 Comprar Agora - 10x sem juros
                       </button>
                     )}
                   </div>
                 </motion.div>
               ))}
+              {sending && (
+                <div className="flex justify-start">
+                  <div className="bg-white dark:bg-slate-700 rounded-2xl p-3 border border-slate-200 dark:border-slate-600">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
 
@@ -255,13 +296,15 @@ const SalesChatbot = ({ article, courses = [] }) => {
                   type="text"
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
                   placeholder="Digite sua mensagem..."
-                  className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-white"
+                  disabled={sending}
+                  className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-white disabled:opacity-50"
                 />
                 <button
                   onClick={handleSendMessage}
-                  className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition"
+                  disabled={sending || !inputValue.trim()}
+                  className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   aria-label="Enviar mensagem"
                 >
                   <PaperAirplaneIcon className="h-5 w-5" />
@@ -276,4 +319,3 @@ const SalesChatbot = ({ article, courses = [] }) => {
 }
 
 export default SalesChatbot
-
