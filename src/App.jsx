@@ -41,6 +41,8 @@ const RankingSimulado = lazy(() => import('./routes/RankingSimulado'))
 const EditalVerticalizado = lazy(() => import('./routes/EditalVerticalizado'))
 const Sitemap = lazy(() => import('./routes/Sitemap'))
 const BlankPage = lazy(() => import('./routes/BlankPage'))
+const BlankLayout = lazy(() => import('./components/blog/BlankLayout'))
+const ListaArtigos = lazy(() => import('./routes/ListaArtigos'))
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()
@@ -101,8 +103,8 @@ function App() {
     // Rastrear status online/offline
     useOnlineStatus()
     
-    // Verificar se é a página em branco (sem Header/Footer)
-    const isBlankPage = location.pathname === '/blank'
+    // Verificar se é a página em branco (sem Header/Footer do site principal)
+    const isBlankPage = location.pathname.startsWith('/blank')
     
     // Loading component otimizado
     const LoadingFallback = () => (
@@ -114,12 +116,33 @@ function App() {
       </div>
     )
     
-    // Se for página em branco, renderizar apenas o conteúdo
+    // Se for página em branco, renderizar com BlankLayout (tem seu próprio Header/Footer)
+    // EXCEÇÃO: Se for /blank com ?admin=true, usar BlankPage antigo (tem admin integrado)
     if (isBlankPage) {
+      const searchParams = new URLSearchParams(location.search)
+      const isAdminMode = searchParams.get('admin') === 'true'
+      
+      // Se for modo admin, usar BlankPage antigo (com admin integrado)
+      if (isAdminMode) {
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <Routes>
+              <Route path="/blank" element={<BlankPage />} />
+            </Routes>
+          </Suspense>
+        )
+      }
+      
+      // Caso contrário, usar novo layout
       return (
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
-            <Route path="/blank" element={<BlankPage />} />
+            <Route path="/blank" element={<BlankLayout />}>
+              <Route index element={<ListaArtigos />} />
+              <Route path="noticia/:articleId" element={<BlogNewsView />} />
+            </Route>
+            {/* Rota antiga para compatibilidade (admin) */}
+            <Route path="/blank/admin" element={<BlankPage />} />
           </Routes>
         </Suspense>
       )
@@ -307,10 +330,7 @@ function App() {
           <Route path="/teste/:token" element={<TestTrial />} />
           {/* Sitemap XML - Acessível sem login */}
           <Route path="/sitemap.xml" element={<Sitemap />} />
-          {/* Página em branco - Acessível sem login */}
-          <Route path="/blank" element={<BlankPage />} />
-          {/* Página de Notícia do Blog - Acessível sem login */}
-          <Route path="/blank/noticia/:articleId" element={<BlogNewsView />} />
+          {/* Rotas do blog são tratadas acima no isBlankPage */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>

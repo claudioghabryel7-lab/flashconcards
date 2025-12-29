@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { collection, onSnapshot, query, where, orderBy, doc, getDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, limit, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -8,10 +8,14 @@ import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 
 const BlankPage = () => {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { user, isAdmin, login, register, logout } = useAuth()
   
+  // Verificar se veio com parâmetro admin
+  const isAdminMode = searchParams.get('admin') === 'true' && isAdmin
+  
   // Estados principais
-  const [view, setView] = useState('home') // 'home', 'article', 'admin'
+  const [view, setView] = useState(isAdminMode ? 'admin' : 'home') // 'home', 'article', 'admin'
   const [selectedArticle, setSelectedArticle] = useState(null)
   const [articles, setArticles] = useState([])
   const [loading, setLoading] = useState(true)
@@ -40,7 +44,8 @@ const BlankPage = () => {
     featuredImage: '',
     scheduledDate: '',
     scheduledTime: '',
-    status: 'draft' // 'draft', 'published', 'scheduled'
+    status: 'draft', // 'draft', 'published', 'scheduled'
+    courseLink: '' // Link para o curso preparatório da matéria
   })
   
   // Estados da IA
@@ -507,7 +512,8 @@ IMPORTANTE:
           featuredImage: '',
           scheduledDate: '',
           scheduledTime: '',
-          status: 'draft'
+          status: 'draft',
+          courseLink: ''
         })
       }
     } catch (error) {
@@ -1690,7 +1696,8 @@ IMPORTANTE:
                           scheduledDate: article.scheduledAt ? article.scheduledAt.toDate().toISOString().split('T')[0] : '',
                           scheduledTime: article.scheduledAt ? article.scheduledAt.toDate().toTimeString().slice(0, 5) : '',
                           status: article.status || 'draft',
-                          keywords: article.keywords || ''
+                          keywords: article.keywords || '',
+                          courseLink: article.courseLink || ''
                         })
                         // Carregar referenceUrl no formulário de IA também
                         setAiForm({
@@ -2101,6 +2108,28 @@ IMPORTANTE:
               
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#374151' }}>
+                  🔗 Link do Curso Preparatório
+                </label>
+                <input
+                  type="url"
+                  value={articleForm.courseLink}
+                  onChange={(e) => setArticleForm({ ...articleForm, courseLink: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    fontSize: '14px'
+                  }}
+                  placeholder="https://www.flashconcards.com.br/pagamento?course=..."
+                />
+                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                  Link que será usado no botão "Acessar Agora" do artigo. Se vazio, usará o link padrão do FlashConCards.
+                </div>
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#374151' }}>
                   Imagem em Destaque
                 </label>
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
@@ -2227,7 +2256,8 @@ IMPORTANTE:
                           featuredImage: '',
                           scheduledDate: '',
                           scheduledTime: '',
-                          status: 'draft'
+                          status: 'draft',
+                          courseLink: ''
                         })
                       }}
                       style={{

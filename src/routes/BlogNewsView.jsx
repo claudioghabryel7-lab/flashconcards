@@ -1,123 +1,96 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { doc, getDoc } from 'firebase/firestore'
+import { motion } from 'framer-motion'
 import { ShareIcon, ArrowLeftIcon } from '@heroicons/react/24/outline'
-import { db } from '../firebase/config'
+import { useArticle } from '../hooks/useArticles'
+import Sidebar from '../components/blog/Sidebar'
+import { formatDate, calculateReadingTime, extractCompetitionName } from '../utils/blogUtils'
+import '../styles/blog-modern.css'
 
 const BlogNewsView = () => {
   const { articleId } = useParams()
   const navigate = useNavigate()
-  const [article, setArticle] = useState(null)
-  const [loading, setLoading] = useState(true)
+  
+  // Usar React Query para buscar artigo
+  const { data: article, isLoading: loading, error: queryError } = useArticle(articleId)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!articleId) {
+    if (queryError) {
+      setError('Erro ao carregar artigo')
+    } else if (!loading && !article) {
       setError('Artigo não encontrado')
-      setLoading(false)
-      return
     }
+  }, [queryError, loading, article])
 
-    const loadArticle = async () => {
-      try {
-        const articleRef = doc(db, 'blog_articles', articleId)
-        const snap = await getDoc(articleRef)
+  useEffect(() => {
+    if (!article) return
 
-        if (!snap.exists()) {
-          setError('Artigo não encontrado')
-          setLoading(false)
-          return
-        }
-
-        const data = snap.data()
-
-        // Verificar se está publicado
-        if (data.status !== 'published') {
-          setError('Este artigo não está disponível')
-          setLoading(false)
-          return
-        }
-
-        setArticle({
-          id: snap.id,
-          ...data,
-        })
-
-        // SEO: Adicionar meta tags dinamicamente
-        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-          const seoTitle = data.metaTitle || data.title || 'Notícia de Concurso - FlashConCards'
-          const seoDescription = data.metaDescription || data.excerpt || data.title || ''
-          
-          // Atualizar título
-          document.title = `${seoTitle} | FlashNotícias`
-          
-          // Remover meta tags antigas
-          const oldTags = document.querySelectorAll('meta[name="description"], meta[property^="og:"], meta[name^="twitter:"], link[rel="canonical"]')
-          oldTags.forEach(tag => tag.remove())
-          
-          // Adicionar meta description
-          const metaDesc = document.createElement('meta')
-          metaDesc.name = 'description'
-          metaDesc.content = seoDescription
-          document.head.appendChild(metaDesc)
-          
-          // Open Graph
-          const ogTags = [
-            { property: 'og:type', content: 'article' },
-            { property: 'og:title', content: seoTitle },
-            { property: 'og:description', content: seoDescription },
-            { property: 'og:url', content: window.location.href },
-          ]
-          // Usar featuredImage do upload como imagem do compartilhamento
-          if (data.featuredImage) {
-            ogTags.push({ property: 'og:image', content: data.featuredImage })
-            ogTags.push({ property: 'og:image:type', content: data.featuredImage.startsWith('data:') ? 'image/jpeg' : 'image/png' })
-            ogTags.push({ property: 'og:image:width', content: '1200' })
-            ogTags.push({ property: 'og:image:height', content: '630' })
-            ogTags.push({ property: 'og:image:alt', content: seoTitle })
-          }
-          ogTags.forEach(tag => {
-            const meta = document.createElement('meta')
-            meta.setAttribute('property', tag.property)
-            meta.content = tag.content
-            document.head.appendChild(meta)
-          })
-
-          // Twitter Card
-          const twitterTags = [
-            { name: 'twitter:card', content: 'summary_large_image' },
-            { name: 'twitter:title', content: seoTitle },
-            { name: 'twitter:description', content: seoDescription },
-          ]
-          // Usar featuredImage do upload como imagem do compartilhamento
-          if (data.featuredImage) {
-            twitterTags.push({ name: 'twitter:image', content: data.featuredImage })
-            twitterTags.push({ name: 'twitter:image:alt', content: seoTitle })
-          }
-          twitterTags.forEach(tag => {
-            const meta = document.createElement('meta')
-            meta.setAttribute('name', tag.name)
-            meta.content = tag.content
-            document.head.appendChild(meta)
-          })
-
-          // Canonical URL
-          const canonical = document.createElement('link')
-          canonical.rel = 'canonical'
-          canonical.href = window.location.href
-          document.head.appendChild(canonical)
-        }
-        
-        setLoading(false)
-      } catch (err) {
-        console.error('Erro ao carregar artigo:', err)
-        setError('Erro ao carregar artigo')
-        setLoading(false)
+    // SEO: Adicionar meta tags dinamicamente
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      const seoTitle = article.metaTitle || article.title || 'Notícia de Concurso - FlashConCards'
+      const seoDescription = article.metaDescription || article.excerpt || article.title || ''
+      
+      // Atualizar título
+      document.title = `${seoTitle} | FlashNotícias`
+      
+      // Remover meta tags antigas
+      const oldTags = document.querySelectorAll('meta[name="description"], meta[property^="og:"], meta[name^="twitter:"], link[rel="canonical"]')
+      oldTags.forEach(tag => tag.remove())
+      
+      // Adicionar meta description
+      const metaDesc = document.createElement('meta')
+      metaDesc.name = 'description'
+      metaDesc.content = seoDescription
+      document.head.appendChild(metaDesc)
+      
+      // Open Graph
+      const ogTags = [
+        { property: 'og:type', content: 'article' },
+        { property: 'og:title', content: seoTitle },
+        { property: 'og:description', content: seoDescription },
+        { property: 'og:url', content: window.location.href },
+      ]
+      // Usar featuredImage do upload como imagem do compartilhamento
+      if (article.featuredImage) {
+        ogTags.push({ property: 'og:image', content: article.featuredImage })
+        ogTags.push({ property: 'og:image:type', content: article.featuredImage.startsWith('data:') ? 'image/jpeg' : 'image/png' })
+        ogTags.push({ property: 'og:image:width', content: '1200' })
+        ogTags.push({ property: 'og:image:height', content: '630' })
+        ogTags.push({ property: 'og:image:alt', content: seoTitle })
       }
-    }
+      ogTags.forEach(tag => {
+        const meta = document.createElement('meta')
+        meta.setAttribute('property', tag.property)
+        meta.content = tag.content
+        document.head.appendChild(meta)
+      })
 
-    loadArticle()
-  }, [articleId])
+      // Twitter Card
+      const twitterTags = [
+        { name: 'twitter:card', content: 'summary_large_image' },
+        { name: 'twitter:title', content: seoTitle },
+        { name: 'twitter:description', content: seoDescription },
+      ]
+      // Usar featuredImage do upload como imagem do compartilhamento
+      if (article.featuredImage) {
+        twitterTags.push({ name: 'twitter:image', content: article.featuredImage })
+        twitterTags.push({ name: 'twitter:image:alt', content: seoTitle })
+      }
+      twitterTags.forEach(tag => {
+        const meta = document.createElement('meta')
+        meta.setAttribute('name', tag.name)
+        meta.content = tag.content
+        document.head.appendChild(meta)
+      })
+
+      // Canonical URL
+      const canonical = document.createElement('link')
+      canonical.rel = 'canonical'
+      canonical.href = window.location.href
+      document.head.appendChild(canonical)
+    }
+  }, [article])
 
   // Função para compartilhar
   const handleShare = async () => {
@@ -151,21 +124,8 @@ const BlogNewsView = () => {
     }
   }
 
-  // Formatar data
-  const formatDate = (timestamp) => {
-    if (!timestamp) return 'Data não disponível'
-    
-    try {
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-      return date.toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric'
-      })
-    } catch (err) {
-      return 'Data não disponível'
-    }
-  }
+  // Extrair nome do concurso para CTA contextual
+  const competitionName = article ? extractCompetitionName(article.content || '', article.title || '') : ''
 
   if (loading) {
     return (
@@ -177,7 +137,7 @@ const BlogNewsView = () => {
     )
   }
 
-  if (error || !article) {
+  if (error || (!loading && !article)) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center' }}>
@@ -201,94 +161,58 @@ const BlogNewsView = () => {
     )
   }
 
+  if (!article) {
+    return null
+  }
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-      {/* Header */}
-      <header style={{
-        backgroundColor: '#1e3a8a',
-        padding: '15px 20px',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{
-          maxWidth: '1200px',
+      {/* Layout 2 Colunas: 70% Conteúdo / 30% Sidebar */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4 }}
+        style={{
+          maxWidth: '1400px',
           margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <button
-            onClick={() => navigate('/blank')}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: 'transparent',
-              color: 'white',
-              border: '1px solid white',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '14px'
-            }}
-          >
-            <ArrowLeftIcon style={{ width: '18px', height: '18px' }} />
-            Voltar
-          </button>
-          <h1 style={{
-            color: 'white',
-            fontSize: '20px',
-            fontWeight: 'bold',
-            margin: 0
-          }}>
-            FlashNotícias
-          </h1>
-          <button
-            onClick={handleShare}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: 'white',
-              color: '#1e3a8a',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '14px',
-              fontWeight: '600'
-            }}
-            aria-label="Compartilhar notícia"
-          >
-            <ShareIcon style={{ width: '18px', height: '18px' }} />
-            Compartilhar
-          </button>
-        </div>
-      </header>
-      
-      {/* Artigo */}
-      <article style={{
-        maxWidth: '800px',
-        margin: '40px auto',
-        padding: '0 20px'
-      }}>
-        <div style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          padding: '40px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-        }}>
+          padding: '40px 20px',
+          display: 'grid',
+          gridTemplateColumns: '1fr 350px',
+          gap: '40px',
+          alignItems: 'start'
+        }}
+        className="article-layout"
+      >
+        {/* Coluna Principal - Artigo (70%) */}
+        <motion.article
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            padding: '40px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.2)'
+          }}
+          className="glass-card smooth-transition"
+        >
+          {/* Categoria */}
           <div style={{
             fontSize: '14px',
             color: '#1e3a8a',
             fontWeight: 'bold',
             marginBottom: '15px',
-            textTransform: 'uppercase'
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
           }}>
             {article.category}
           </div>
           
+          {/* Título H1 para SEO */}
           <h1 style={{
-            fontSize: '36px',
+            fontSize: '42px',
             fontWeight: '900',
             marginBottom: '20px',
             color: '#1f2937',
@@ -297,6 +221,7 @@ const BlogNewsView = () => {
             {article.title}
           </h1>
           
+          {/* Meta informações */}
           <div style={{
             fontSize: '14px',
             color: '#6b7280',
@@ -307,27 +232,40 @@ const BlogNewsView = () => {
             justifyContent: 'space-between',
             alignItems: 'center',
             flexWrap: 'wrap',
-            gap: '10px'
+            gap: '12px'
           }}>
-            <span>Por FlashConCards • {formatDate(article.createdAt)}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+              <span>Por FlashConCards</span>
+              <span>•</span>
+              <span>📅 {formatDate(article.createdAt)}</span>
+              <span>•</span>
+              <span>⏱️ {calculateReadingTime(article.content)} min de leitura</span>
+            </div>
             <button
               onClick={handleShare}
               style={{
-                padding: '6px 12px',
+                padding: '8px 16px',
                 backgroundColor: '#f3f4f6',
                 color: '#1e3a8a',
                 border: 'none',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                fontSize: '13px',
-                fontWeight: '500'
+                gap: '8px',
+                fontSize: '14px',
+                fontWeight: '600',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#e5e7eb'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#f3f4f6'
               }}
               aria-label="Compartilhar notícia"
             >
-              <ShareIcon style={{ width: '16px', height: '16px' }} />
+              <ShareIcon style={{ width: '18px', height: '18px' }} />
               Compartilhar
             </button>
           </div>
@@ -362,31 +300,37 @@ const BlogNewsView = () => {
             }}
           />
           
-          {/* CTA FlashConCards */}
+          {/* CTA Contextual FlashConCards */}
           <div style={{
             marginTop: '50px',
             padding: '30px',
-            backgroundColor: '#1e3a8a',
+            background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)',
             borderRadius: '12px',
             textAlign: 'center',
-            color: 'white'
+            color: 'white',
+            boxShadow: '0 8px 24px rgba(30, 58, 138, 0.3)'
           }}>
             <h3 style={{
               fontSize: '24px',
               fontWeight: 'bold',
-              marginBottom: '15px'
+              marginBottom: '15px',
+              color: '#fbbf24'
             }}>
-              🎓 Prepare-se para este concurso!
+              🎓 {competitionName ? `Prepare-se para ${competitionName}!` : 'Prepare-se para este concurso!'}
             </h3>
             <p style={{
               fontSize: '16px',
               marginBottom: '20px',
-              opacity: 0.9
+              opacity: 0.95,
+              lineHeight: '1.6'
             }}>
-              Acesse o FlashConCards e tenha acesso a flashcards, questões e simulados completos
+              {competitionName 
+                ? `Acesse o FlashConCards e tenha acesso a flashcards, questões e simulados completos para ${competitionName}.`
+                : 'Acesse o FlashConCards e tenha acesso a flashcards, questões e simulados completos para concursos públicos.'
+              }
             </p>
             <a
-              href="https://www.flashconcards.com.br"
+              href={article.courseLink || 'https://www.flashconcards.com.br'}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -397,10 +341,19 @@ const BlogNewsView = () => {
                 textDecoration: 'none',
                 borderRadius: '8px',
                 fontWeight: 'bold',
-                fontSize: '16px'
+                fontSize: '16px',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#fcd34d'
+                e.target.style.transform = 'translateY(-2px)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#fbbf24'
+                e.target.style.transform = 'translateY(0)'
               }}
             >
-              Acessar FlashConCards →
+              {article.courseLink ? 'Acessar Curso Agora →' : 'Acessar FlashConCards →'}
             </a>
           </div>
           
@@ -438,8 +391,50 @@ const BlogNewsView = () => {
               </div>
             </div>
           )}
-        </div>
-      </article>
+        </motion.article>
+
+        {/* Sidebar (30%) */}
+        <motion.div
+          initial={{ opacity: 0, x: 30 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+          style={{
+            position: 'sticky',
+            top: '100px',
+            alignSelf: 'start'
+          }}
+        >
+          <Sidebar 
+            currentArticle={article}
+            currentCategory={article?.category}
+          />
+        </motion.div>
+      </motion.div>
+
+      {/* Responsive CSS */}
+      <style>{`
+        @media (max-width: 1024px) {
+          .article-layout {
+            grid-template-columns: 1fr !important;
+            gap: 24px !important;
+          }
+          .article-layout > div:last-child {
+            position: static !important;
+            top: auto !important;
+          }
+        }
+        @media (max-width: 768px) {
+          .article-layout {
+            padding: 20px 16px !important;
+          }
+          .article-layout article {
+            padding: 24px !important;
+          }
+          .article-layout article h1 {
+            font-size: 28px !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }

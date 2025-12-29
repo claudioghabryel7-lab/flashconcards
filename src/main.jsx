@@ -5,6 +5,7 @@ import App from './App.jsx'
 import { AuthProvider } from './hooks/useAuth'
 import { DarkModeProvider } from './hooks/useDarkMode.jsx'
 import { SystemProvider } from './hooks/useSystem.jsx'
+import { QueryProvider } from './providers/QueryProvider'
 import ErrorBoundary from './components/ErrorBoundary'
 import FirebaseConfigError from './components/FirebaseConfigError'
 import { firebaseInitialized } from './firebase/config'
@@ -41,13 +42,15 @@ const RootApp = () => {
     // Se está tudo OK, renderizar a aplicação normalmente
     return (
       <BrowserRouter>
-        <DarkModeProvider>
-          <AuthProvider>
-            <SystemProvider>
-              <App />
-            </SystemProvider>
-          </AuthProvider>
-        </DarkModeProvider>
+        <QueryProvider>
+          <DarkModeProvider>
+            <AuthProvider>
+              <SystemProvider>
+                <App />
+              </SystemProvider>
+            </AuthProvider>
+          </DarkModeProvider>
+        </QueryProvider>
       </BrowserRouter>
     )
   } catch (error) {

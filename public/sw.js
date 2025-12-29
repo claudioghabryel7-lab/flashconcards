@@ -1,7 +1,7 @@
 // Service Worker para PWA - FlashConCards
 // Versão do cache - Incremente para forçar atualização
-const CACHE_NAME = 'flashconcards-v1.0.5'
-const RUNTIME_CACHE = 'flashconcards-runtime-v1.0.5'
+const CACHE_NAME = 'flashconcards-v1.0.6'
+const RUNTIME_CACHE = 'flashconcards-runtime-v1.0.6'
 
 // Flag para desabilitar cache se houver problemas persistentes
 let CACHE_DISABLED = false

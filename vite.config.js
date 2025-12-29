@@ -68,6 +68,7 @@ export default defineConfig({
       'react-dom',
       'react/jsx-runtime',
       'react-router-dom',
+      '@tanstack/react-query',
       'firebase/app',
       'firebase/auth',
       'firebase/firestore',
@@ -82,6 +83,9 @@ export default defineConfig({
     },
     // Forçar re-otimização se houver problemas
     force: false,
+  },
+  resolve: {
+    dedupe: ['react', 'react-dom'],
   },
   // Otimizações de preview (produção local)
   preview: {
