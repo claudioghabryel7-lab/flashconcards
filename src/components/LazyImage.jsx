@@ -27,8 +27,15 @@ const LazyImage = ({
       return
     }
 
-    // Definir imageSrc imediatamente para renderizar a tag <img> 
-    // O navegador vai cuidar do lazy loading se loading="lazy" estiver definido
+    // Se for base64, definir imediatamente (já está em memória)
+    if (src.startsWith('data:image')) {
+      setImageSrc(src)
+      setIsLoading(false)
+      setHasError(false)
+      return
+    }
+
+    // Para URLs externas, usar preload e definir imediatamente
     setImageSrc(src)
     setIsLoading(true)
     setHasError(false)
@@ -75,11 +82,11 @@ const LazyImage = ({
           ref={imgRef}
           src={imageSrc}
           alt={alt}
-          className={`w-full h-full object-cover transition-opacity duration-300 relative z-[1] ${
+          className={`w-full h-full object-cover transition-opacity duration-200 relative z-[1] ${
             isLoading ? 'opacity-0' : 'opacity-100'
           }`}
           loading={priority ? "eager" : "lazy"}
-          decoding={priority ? "sync" : "async"}
+          decoding={imageSrc.startsWith('data:') ? "sync" : (priority ? "sync" : "async")}
           fetchPriority={priority ? "high" : "auto"}
           onLoad={() => {
             setIsLoading(false)

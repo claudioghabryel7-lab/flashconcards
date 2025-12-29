@@ -259,10 +259,10 @@ const PublicHome = () => {
           setLoadingCourses(false)
         })
         
-        // Preload apenas das primeiras 3 imagens (prioridade alta)
-        // Apenas imageUrl (URL externa), não imageBase64 (muito pesado)
-        sortedData.slice(0, 3).forEach((course) => {
-          const imageUrl = course.imageUrl // Apenas imageUrl, não imageBase64
+        // Preload das primeiras 6 imagens (prioridade alta) - apenas imageUrl
+        // Ignorar completamente imageBase64 (muito pesado para página inicial)
+        sortedData.slice(0, 6).forEach((course, index) => {
+          const imageUrl = course.imageUrl // Apenas imageUrl, nunca imageBase64
           if (imageUrl && typeof imageUrl === 'string' && !imageUrl.startsWith('data:')) {
             try {
               // Preload usando link tag (mais eficiente)
@@ -270,8 +270,23 @@ const PublicHome = () => {
               link.rel = 'preload'
               link.as = 'image'
               link.href = imageUrl
-              link.setAttribute('fetchpriority', 'high')
+              link.setAttribute('fetchpriority', index < 3 ? 'high' : 'auto')
+              link.setAttribute('crossorigin', 'anonymous')
               document.head.appendChild(link)
+              
+              // Preconnect para domínio da imagem (se for URL externa)
+              try {
+                const url = new URL(imageUrl)
+                const preconnectLink = document.createElement('link')
+                preconnectLink.rel = 'preconnect'
+                preconnectLink.href = url.origin
+                preconnectLink.setAttribute('crossorigin', 'anonymous')
+                if (!document.querySelector(`link[rel="preconnect"][href="${url.origin}"]`)) {
+                  document.head.appendChild(preconnectLink)
+                }
+              } catch (e) {
+                // URL inválida, ignorar
+              }
             } catch (err) {
               // Ignorar erros de preload (não crítico)
             }
@@ -389,11 +404,12 @@ const PublicHome = () => {
                   
                   <div className="relative z-10">
                     {/* Imagem do curso - com dimensões fixas para evitar CLS */}
-                    {(course.imageUrl || course.imageBase64) ? (
+                    {/* IMPORTANTE: Usar apenas imageUrl, nunca imageBase64 na página inicial */}
+                    {course.imageUrl ? (
                       <div className="w-full h-52 overflow-hidden relative bg-slate-200 dark:bg-slate-700" style={{ aspectRatio: '16/9', minHeight: '208px' }}>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent z-10 pointer-events-none"></div>
                         <LazyImage
-                          src={course.imageUrl || course.imageBase64}
+                          src={course.imageUrl}
                           alt={course.name}
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                           priority={index < 6}
