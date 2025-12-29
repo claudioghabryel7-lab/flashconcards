@@ -92,6 +92,7 @@ const PublicHome = () => {
   // Carregar cursos
   const [courses, setCourses] = useState([])
   const [loadingCourses, setLoadingCourses] = useState(true)
+  const [recentlyAdded, setRecentlyAdded] = useState(new Set()) // IDs dos cursos adicionados recentemente
   
   // SEO: Adicionar meta tags e Schema.org dinamicamente
   useEffect(() => {
@@ -467,26 +468,35 @@ const PublicHome = () => {
                           type="button"
                           onClick={(e) => {
                             e.preventDefault()
+                            if (isInCart(course.id)) return
+                            
                             addToCart(course)
-                            // Feedback visual
-                            const button = e.currentTarget
-                            const originalText = button.innerHTML
-                            button.innerHTML = '<span class="text-green-600">✓</span>'
-                            button.disabled = true
+                            
+                            // Feedback visual usando estado do React
+                            setRecentlyAdded((prev) => {
+                              const newSet = new Set(prev)
+                              newSet.add(course.id)
+                              return newSet
+                            })
+                            
+                            // Remover feedback após 1.5s
                             setTimeout(() => {
-                              button.innerHTML = originalText
-                              button.disabled = false
+                              setRecentlyAdded((prev) => {
+                                const newSet = new Set(prev)
+                                newSet.delete(course.id)
+                                return newSet
+                              })
                             }, 1500)
                           }}
                           disabled={isInCart(course.id)}
                           className={`rounded-xl glass-tech px-4 py-3.5 transition-all flex items-center justify-center hover-scale border border-slate-200/50 dark:border-slate-700/50 ${
-                            isInCart(course.id)
+                            isInCart(course.id) || recentlyAdded.has(course.id)
                               ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 cursor-not-allowed'
                               : 'text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                           }`}
                           title={isInCart(course.id) ? 'Já está no carrinho' : 'Adicionar ao carrinho'}
                         >
-                          {isInCart(course.id) ? (
+                          {isInCart(course.id) || recentlyAdded.has(course.id) ? (
                             <span className="text-sm font-semibold">✓</span>
                           ) : (
                             <ShoppingCartIcon className="h-5 w-5" />
