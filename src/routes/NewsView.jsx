@@ -5,7 +5,6 @@ import { ArrowLeftIcon, CalendarIcon, CurrencyDollarIcon, UserGroupIcon, Documen
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import Header from '../components/Header'
-import SalesChatbot from '../components/SalesChatbot'
 
 const NewsView = () => {
   const { postId } = useParams()
@@ -545,7 +544,6 @@ const NewsView = () => {
                 </Link>
               </div>
             </div>
-
           </article>
 
           {/* Sidebar */}
@@ -591,9 +589,6 @@ const NewsView = () => {
                   </div>
                 </div>
               )}
-
-              {/* Chatbot de Vendas - Na Sidebar */}
-              <SalesChatbot article={news} courses={courses} />
             </div>
           </aside>
         </div>

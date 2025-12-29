@@ -21,7 +21,6 @@ import {
   ShareIcon,
   ShoppingCartIcon
 } from '@heroicons/react/24/solid'
-import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
 import { useCart } from '../hooks/useCart.jsx'
@@ -94,7 +93,6 @@ const PublicHome = () => {
   const [courses, setCourses] = useState([])
   const [loadingCourses, setLoadingCourses] = useState(true)
   const [recentlyAdded, setRecentlyAdded] = useState(new Set()) // IDs dos cursos adicionados recentemente
-  const [searchTerm, setSearchTerm] = useState('') // Termo de pesquisa
   
   // SEO: Adicionar meta tags e Schema.org dinamicamente
   useEffect(() => {
@@ -369,58 +367,14 @@ const PublicHome = () => {
             FlashCards Para Concurso Público - Polícia Militar, Polícia Civil, GCM e muito mais. Escolha o curso ideal para sua aprovação.
           </p>
         </div>
-
-        {/* Campo de Pesquisa */}
-        <div className="max-w-2xl mx-auto px-2 sm:px-0">
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Pesquisar curso por nome ou concurso..."
-              className="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 text-sm sm:text-base rounded-lg sm:rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-            />
-          </div>
-        </div>
-
         {loadingCourses ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
             <p className="mt-4 text-slate-600 dark:text-slate-400">Carregando cursos...</p>
           </div>
         ) : courses.length > 0 ? (
-          <>
-            {/* Filtrar cursos baseado na pesquisa */}
-            {(() => {
-              const filteredCourses = searchTerm.trim() 
-                ? courses.filter(course => {
-                    const search = searchTerm.toLowerCase()
-                    const name = (course.name || '').toLowerCase()
-                    const competition = (course.competition || '').toLowerCase()
-                    return name.includes(search) || competition.includes(search)
-                  })
-                : courses
-
-              if (filteredCourses.length === 0 && searchTerm.trim()) {
-                return (
-                  <div className="text-center py-12">
-                    <p className="text-slate-600 dark:text-slate-400 text-lg">
-                      Nenhum curso encontrado para "{searchTerm}"
-                    </p>
-                    <button
-                      onClick={() => setSearchTerm('')}
-                      className="mt-4 text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      Limpar pesquisa
-                    </button>
-                  </div>
-                )
-              }
-
-              return (
-                <div className="grid gap-4 sm:gap-6 md:gap-8 md:grid-cols-2 lg:grid-cols-3">
-                  {filteredCourses.map((course, index) => {
+          <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {courses.map((course, index) => {
               return (
                 <div
                   key={course.id}
@@ -456,41 +410,40 @@ const PublicHome = () => {
                       </div>
                     )}
                     
-                    <div className="p-4 sm:p-6 md:p-7">
-                      <div className="mb-3 sm:mb-4 flex items-center gap-2 flex-wrap">
+                    <div className="p-6 sm:p-7">
+                      <div className="mb-4 flex items-center gap-2 flex-wrap">
                         {course.featured && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 px-3 sm:px-4 py-1 sm:py-1.5 text-xs font-black text-white shadow-lg relative overflow-hidden">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 px-4 py-1.5 text-xs font-black text-white shadow-lg relative overflow-hidden">
                             <span className="relative z-10 flex items-center gap-1">
                               <SparklesIcon className="h-3 w-3" />
-                              <span className="hidden sm:inline">Mais Vendido</span>
-                              <span className="sm:hidden">Destaque</span>
+                              Mais Vendido
                             </span>
                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-[shimmer_2s_infinite]"></div>
                           </span>
                         )}
-                        <span className="inline-block rounded-full glass-tech px-3 sm:px-4 py-1 sm:py-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-500/30">
+                        <span className="inline-block rounded-full glass-tech px-4 py-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-500/30">
                           {course.competition}
                         </span>
                       </div>
                       
-                      <h3 className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 dark:text-white mb-2 sm:mb-3 leading-tight">
+                      <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mb-3 leading-tight">
                         {course.name}
                       </h3>
                       
                       {course.description && (
-                        <p className="text-xs sm:text-sm md:text-base text-slate-600 dark:text-slate-300 mb-4 sm:mb-5 line-clamp-2 leading-relaxed">
+                        <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 mb-5 line-clamp-2 leading-relaxed">
                           {course.description}
                         </p>
                       )}
                       
-                      <div className="mb-4 sm:mb-5 pb-4 sm:pb-5 border-b border-slate-200/50 dark:border-slate-700/50">
+                      <div className="mb-5 pb-5 border-b border-slate-200/50 dark:border-slate-700/50">
                         {course.originalPrice && course.originalPrice > course.price && (
-                          <p className="text-xs sm:text-sm text-slate-400 dark:text-slate-500 line-through mb-1">
+                          <p className="text-sm text-slate-400 dark:text-slate-500 line-through mb-1">
                             {formatCurrency(course.originalPrice)}
                           </p>
                         )}
                         <div className="flex items-baseline gap-2">
-                          <p className="text-2xl sm:text-3xl font-black gradient-text-tech">
+                          <p className="text-3xl font-black gradient-text-tech">
                             {formatCurrency(course.price || 99.90)}
                           </p>
                         </div>
@@ -502,11 +455,11 @@ const PublicHome = () => {
                         )}
                       </div>
                       
-                      <div className="flex gap-2 sm:gap-3">
+                      <div className="flex gap-3">
                         <Link
                           to={`/pagamento?course=${course.id}`}
                           onClick={trackButtonClick}
-                        className="flex-1 tech-button rounded-lg sm:rounded-xl px-4 sm:px-6 py-2.5 sm:py-3.5 text-center text-xs sm:text-sm font-bold text-white shadow-lg relative overflow-hidden"
+                        className="flex-1 tech-button rounded-xl px-6 py-3.5 text-center text-sm font-bold text-white shadow-lg relative overflow-hidden"
                         aria-label={`Comprar curso ${course.name}`}
                       >
                         <span className="relative z-10">Comprar Agora</span>
@@ -536,7 +489,7 @@ const PublicHome = () => {
                             }, 1500)
                           }}
                           disabled={isInCart(course.id)}
-                          className={`rounded-lg sm:rounded-xl glass-tech px-3 sm:px-4 py-2.5 sm:py-3.5 transition-all flex items-center justify-center hover-scale border border-slate-200/50 dark:border-slate-700/50 ${
+                          className={`rounded-xl glass-tech px-4 py-3.5 transition-all flex items-center justify-center hover-scale border border-slate-200/50 dark:border-slate-700/50 ${
                             isInCart(course.id) || recentlyAdded.has(course.id)
                               ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 cursor-not-allowed'
                               : 'text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'
@@ -544,9 +497,9 @@ const PublicHome = () => {
                           title={isInCart(course.id) ? 'Já está no carrinho' : 'Adicionar ao carrinho'}
                         >
                           {isInCart(course.id) || recentlyAdded.has(course.id) ? (
-                            <span className="text-xs sm:text-sm font-semibold">✓</span>
+                            <span className="text-sm font-semibold">✓</span>
                           ) : (
-                            <ShoppingCartIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                            <ShoppingCartIcon className="h-5 w-5" />
                           )}
                         </button>
                         <button
@@ -582,11 +535,8 @@ const PublicHome = () => {
                     </div>
                   </div>
                 </div>
-                  )})}
-                </div>
-              )
-            })()}
-          </>
+              )})}
+          </div>
         ) : (
           <div className="text-center py-12 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
             <p className="text-slate-600 dark:text-slate-400">Nenhum curso disponível no momento.</p>

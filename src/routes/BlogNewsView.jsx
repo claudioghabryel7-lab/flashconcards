@@ -4,10 +4,7 @@ import { motion } from 'framer-motion'
 import { ShareIcon, ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { useArticle } from '../hooks/useArticles'
 import Sidebar from '../components/blog/Sidebar'
-import SalesChatbot from '../components/SalesChatbot'
 import { formatDate, calculateReadingTime, extractCompetitionName } from '../utils/blogUtils'
-import { collection, query, where, getDocs, limit } from 'firebase/firestore'
-import { db } from '../firebase/config'
 import '../styles/blog-modern.css'
 
 const BlogNewsView = () => {
@@ -17,7 +14,6 @@ const BlogNewsView = () => {
   // Usar React Query para buscar artigo
   const { data: article, isLoading: loading, error: queryError } = useArticle(articleId)
   const [error, setError] = useState('')
-  const [courses, setCourses] = useState([])
 
   useEffect(() => {
     if (queryError) {
@@ -26,25 +22,6 @@ const BlogNewsView = () => {
       setError('Artigo não encontrado')
     }
   }, [queryError, loading, article])
-
-  // Carregar cursos relacionados
-  useEffect(() => {
-    const loadCourses = async () => {
-      try {
-        const coursesRef = collection(db, 'courses')
-        const q = query(coursesRef, where('active', '==', true), limit(3))
-        const coursesSnapshot = await getDocs(q)
-        const coursesData = coursesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-        setCourses(coursesData)
-      } catch (err) {
-        console.error('Erro ao carregar cursos:', err)
-      }
-    }
-    loadCourses()
-  }, [])
 
   useEffect(() => {
     if (!article) return
@@ -414,7 +391,6 @@ const BlogNewsView = () => {
               </div>
             </div>
           )}
-
         </motion.article>
 
         {/* Sidebar (30%) */}
@@ -432,9 +408,6 @@ const BlogNewsView = () => {
             currentArticle={article}
             currentCategory={article?.category}
           />
-          
-          {/* Chatbot de Vendas - Na Sidebar */}
-          <SalesChatbot article={article} courses={courses} />
         </motion.div>
       </motion.div>
 
