@@ -44,6 +44,7 @@ export default defineConfig({
           }
         },
         // Otimizar nomes de chunks para melhor cache
+        // Garantir que todos os arquivos JS tenham extensão .js (não .jsx)
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
         assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
