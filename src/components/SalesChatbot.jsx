@@ -221,38 +221,42 @@ Responda de forma CURTA (máximo 2 linhas) e PERSUASIVA.`
   }
 
   return (
-    <div style={{ width: '100%', marginTop: '48px', marginBottom: '32px', position: 'static', display: 'block' }}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', position: 'static' }}>
-        {/* Botão flutuante - canto inferior direito */}
+    <div style={{ width: '100%', marginTop: '24px', position: 'static', display: 'block' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', position: 'static', width: '100%' }}>
+        {/* Botão flutuante */}
         {!isOpen && (
           <button
             onClick={() => setIsOpen(true)}
             style={{
               position: 'static',
-              display: 'inline-flex',
+              display: 'flex',
               alignItems: 'center',
+              justifyContent: 'center',
               gap: '8px',
-              padding: '16px',
+              padding: '12px 16px',
               background: 'linear-gradient(to right, #2563eb, #4f46e5)',
               color: 'white',
-              borderRadius: '9999px',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              borderRadius: '12px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
               border: 'none',
               cursor: 'pointer',
-              transition: 'all 0.3s'
+              transition: 'all 0.3s',
+              width: '100%',
+              fontWeight: 'bold',
+              fontSize: '14px'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'scale(1.1)'
-              e.currentTarget.style.boxShadow = '0 25px 50px -12px rgba(59, 130, 246, 0.5)'
+              e.currentTarget.style.transform = 'translateY(-2px)'
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(59, 130, 246, 0.4)'
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'scale(1)'
-              e.currentTarget.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)'
             }}
             aria-label="Abrir chat"
           >
-            <ChatBubbleLeftRightIcon className="h-6 w-6" />
-            <span className="hidden sm:block font-bold text-sm">Falar com IA</span>
+            <ChatBubbleLeftRightIcon className="h-5 w-5" />
+            <span>Falar com IA</span>
           </button>
         )}
 
@@ -261,17 +265,15 @@ Responda de forma CURTA (máximo 2 linhas) e PERSUASIVA.`
           <div
             style={{
               position: 'static',
-              display: 'block',
-              width: '384px',
-              maxWidth: 'calc(100vw - 2rem)',
-              height: '600px',
-              maxHeight: 'calc(100vh - 8rem)',
-              backgroundColor: 'white',
-              borderRadius: '16px',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              border: '2px solid #bfdbfe',
               display: 'flex',
               flexDirection: 'column',
+              width: '100%',
+              height: '500px',
+              maxHeight: '500px',
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              border: '2px solid #bfdbfe',
               overflow: 'hidden'
             }}
             className="dark:bg-slate-800 dark:border-blue-700"
