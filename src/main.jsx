@@ -63,15 +63,15 @@ const RootApp = () => {
     return (
       <BrowserRouter>
         <QueryProvider>
-          <DarkModeProvider>
-            <AuthProvider>
+        <DarkModeProvider>
+          <AuthProvider>
               <CartProvider>
-                <SystemProvider>
-                  <App />
-                </SystemProvider>
+            <SystemProvider>
+              <App />
+            </SystemProvider>
               </CartProvider>
-            </AuthProvider>
-          </DarkModeProvider>
+          </AuthProvider>
+        </DarkModeProvider>
         </QueryProvider>
       </BrowserRouter>
     )

@@ -84,7 +84,7 @@ const HomeBanner = () => {
           }))
         } catch (err) {
           if (err.name !== 'QuotaExceededError') {
-            console.warn('Erro ao salvar cache de banners:', err)
+          console.warn('Erro ao salvar cache de banners:', err)
           }
         }
       } catch (error) {
@@ -143,11 +143,11 @@ const HomeBanner = () => {
     const nextBanner = banners[nextIndex]
     if (nextBanner && nextBanner.imageUrl && !nextBanner.imageUrl.startsWith('data:')) {
       try {
-        const link = document.createElement('link')
-        link.rel = 'preload'
-        link.as = 'image'
+      const link = document.createElement('link')
+      link.rel = 'preload'
+      link.as = 'image'
         link.href = nextBanner.imageUrl
-        document.head.appendChild(link)
+      document.head.appendChild(link)
       } catch (err) {
         // Ignorar erros de preload
       }

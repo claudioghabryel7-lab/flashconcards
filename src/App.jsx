@@ -124,10 +124,10 @@ function App() {
       
       // Se for modo admin, usar BlankPage antigo (com admin integrado)
       if (isAdminMode) {
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <Routes>
-              <Route path="/blank" element={<BlankPage />} />
+      return (
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            <Route path="/blank" element={<BlankPage />} />
             </Routes>
           </Suspense>
         )

@@ -202,18 +202,18 @@ self.addEventListener('activate', (event) => {
           for (const key of keys) {
             try {
               if (key.headers?.get('accept')?.includes('text/html')) {
-                const response = await cache.match(key)
-                if (response) {
-                  const isValid = await validateHTML(response)
-                  if (!isValid) {
+              const response = await cache.match(key)
+              if (response) {
+                const isValid = await validateHTML(response)
+                if (!isValid) {
                     try {
-                      await cache.delete(key)
-                      removedCount++
-                      console.log('[SW] Removido cache inválido na ativação:', key.url)
+                  await cache.delete(key)
+                  removedCount++
+                  console.log('[SW] Removido cache inválido na ativação:', key.url)
                     } catch (deleteError) {
                       console.warn('[SW] Erro ao deletar cache inválido na ativação:', deleteError)
-                    }
-                  }
+                }
+              }
                 }
               }
             } catch (itemError) {
@@ -288,17 +288,17 @@ self.addEventListener('fetch', (event) => {
         for (const key of keys) {
           try {
             if (key.headers?.get('accept')?.includes('text/html')) {
-              const response = await cache.match(key)
-              if (response) {
-                const isValid = await validateHTML(response)
-                if (!isValid) {
+            const response = await cache.match(key)
+            if (response) {
+              const isValid = await validateHTML(response)
+              if (!isValid) {
                   try {
-                    await cache.delete(key)
-                    console.log('[SW] Removido cache inválido:', key.url)
+                await cache.delete(key)
+                console.log('[SW] Removido cache inválido:', key.url)
                   } catch (deleteError) {
                     console.warn('[SW] Erro ao deletar cache inválido:', deleteError)
-                  }
-                }
+              }
+            }
               }
             }
           } catch (itemError) {
@@ -355,23 +355,23 @@ self.addEventListener('fetch', (event) => {
         .catch(async () => {
           // Rede falhou, tentar cache
           try {
-            const cachedResponse = await caches.match(request)
-            if (cachedResponse) {
-              // Validar cache antes de retornar
-              const isValid = await validateHTML(cachedResponse)
-              if (isValid) {
-                return cachedResponse
-              } else {
-                // Cache inválido, remover
+          const cachedResponse = await caches.match(request)
+          if (cachedResponse) {
+            // Validar cache antes de retornar
+            const isValid = await validateHTML(cachedResponse)
+            if (isValid) {
+              return cachedResponse
+            } else {
+              // Cache inválido, remover
                 const cache = await safeOpenCache(RUNTIME_CACHE)
                 if (cache) {
                   try {
-                    await cache.delete(request)
+              await cache.delete(request)
                   } catch (deleteError) {
                     console.warn('[SW] Erro ao deletar cache inválido:', deleteError)
                   }
                 }
-              }
+            }
             }
           } catch (cacheError) {
             console.warn('[SW] Erro ao acessar cache:', cacheError)
@@ -379,12 +379,12 @@ self.addEventListener('fetch', (event) => {
           
           // Se não tem cache válido, tentar index.html como último recurso
           try {
-            const indexResponse = await caches.match('/index.html')
-            if (indexResponse) {
-              const isValid = await validateHTML(indexResponse)
-              if (isValid) {
-                return indexResponse
-              }
+          const indexResponse = await caches.match('/index.html')
+          if (indexResponse) {
+            const isValid = await validateHTML(indexResponse)
+            if (isValid) {
+              return indexResponse
+            }
             }
           } catch (indexError) {
             console.warn('[SW] Erro ao acessar index.html do cache:', indexError)
@@ -506,10 +506,10 @@ self.addEventListener('message', (event) => {
     caches.keys()
       .then((cacheNames) => {
         return Promise.allSettled(
-          cacheNames.map((cacheName) => {
-            return caches.delete(cacheName)
-          })
-        )
+        cacheNames.map((cacheName) => {
+          return caches.delete(cacheName)
+        })
+      )
       })
       .then((results) => {
         const success = results.every(r => r.status === 'fulfilled')
@@ -528,7 +528,7 @@ self.addEventListener('message', (event) => {
             error: error.message || 'Erro desconhecido ao limpar cache'
           })
         }
-      })
+    })
   }
 })
 

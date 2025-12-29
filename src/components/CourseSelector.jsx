@@ -43,44 +43,44 @@ const CourseSelector = () => {
     // Carregar do Firestore (getDocs é mais rápido que onSnapshot para dados estáticos)
     const loadCourses = async () => {
       try {
-        const coursesRef = collection(db, 'courses')
+    const coursesRef = collection(db, 'courses')
         const q = query(
           coursesRef,
           where('active', '==', true)
         )
         
         const snapshot = await getDocs(q)
-        const allCourses = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
+      const allCourses = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
 
-        // Verificar se o curso ALEGO padrão existe
-        const alegoCourse = allCourses.find(c => c.id === 'alego-default')
-        
+      // Verificar se o curso ALEGO padrão existe
+      const alegoCourse = allCourses.find(c => c.id === 'alego-default')
+      
         // Filtrar cursos: se não tem cursos comprados, mostrar TODOS os cursos disponíveis para compra
         // Se tem cursos comprados, mostrar apenas os comprados (ou todos se admin)
         const hasPurchasedCourses = purchasedCourses && purchasedCourses.length > 0
         
-        const filtered = isAdmin
-          ? allCourses.filter(c => c.active !== false)
+      const filtered = isAdmin
+        ? allCourses.filter(c => c.active !== false)
           : hasPurchasedCourses
             ? allCourses.filter(c => {
-                if (c.id === 'alego-default') return true
-                return purchasedCourses.includes(c.id) && c.active !== false
-              })
+            if (c.id === 'alego-default') return true
+            return purchasedCourses.includes(c.id) && c.active !== false
+          })
             : allCourses.filter(c => c.active !== false && c.id !== 'alego-default') // Mostrar todos os cursos disponíveis para compra (exceto ALEGO padrão)
 
-        // Ordenar: ALEGO padrão primeiro, depois os outros por nome
-        const sorted = filtered.sort((a, b) => {
-          if (a.id === 'alego-default') return -1
-          if (b.id === 'alego-default') return 1
-          return a.name.localeCompare(b.name)
-        })
+      // Ordenar: ALEGO padrão primeiro, depois os outros por nome
+      const sorted = filtered.sort((a, b) => {
+        if (a.id === 'alego-default') return -1
+        if (b.id === 'alego-default') return 1
+        return a.name.localeCompare(b.name)
+      })
 
         startTransition(() => {
-          setCourses(sorted)
-          setLoading(false)
+      setCourses(sorted)
+      setLoading(false)
         })
 
         // Salvar no cache
@@ -95,16 +95,16 @@ const CourseSelector = () => {
           }
         }
 
-        // Se já tem curso selecionado no perfil, usar ele
-        if (profile.selectedCourseId !== undefined) {
-          const courseId = profile.selectedCourseId === null ? 'alego-default' : profile.selectedCourseId
-          setSelectedCourseId(courseId)
-        } else if (alegoCourse) {
-          setSelectedCourseId('alego-default')
-        }
+      // Se já tem curso selecionado no perfil, usar ele
+      if (profile.selectedCourseId !== undefined) {
+        const courseId = profile.selectedCourseId === null ? 'alego-default' : profile.selectedCourseId
+        setSelectedCourseId(courseId)
+      } else if (alegoCourse) {
+        setSelectedCourseId('alego-default')
+      }
       } catch (error) {
-        console.error('Erro ao carregar cursos:', error)
-        setLoading(false)
+      console.error('Erro ao carregar cursos:', error)
+      setLoading(false)
       }
     }
 
@@ -209,8 +209,8 @@ const CourseSelector = () => {
                 showingAvailableCourses
                   ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700'
                   : selectedCourseId === course.id
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-lg'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 bg-white dark:bg-slate-700'
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-lg'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 bg-white dark:bg-slate-700'
               }`}
             >
               {showingAvailableCourses ? (
@@ -247,37 +247,37 @@ const CourseSelector = () => {
                   type="button"
                   onClick={() => setSelectedCourseId(course.id)}
                   className="w-full text-left"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                        selectedCourseId === course.id
-                          ? 'border-blue-500 bg-blue-500'
-                          : 'border-slate-300 dark:border-slate-600'
-                      }`}>
-                        {selectedCourseId === course.id && (
-                          <CheckCircleIcon className="h-4 w-4 text-white" />
-                        )}
-                      </div>
-                      <div>
-                        <p className={`font-bold text-lg ${
-                          selectedCourseId === course.id
-                            ? 'text-blue-700 dark:text-blue-300'
-                            : 'text-slate-900 dark:text-white'
-                        }`}>
-                          {course.name}
-                        </p>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">
-                          {course.competition || 'Curso Padrão'}
-                        </p>
-                      </div>
-                    </div>
-                    {course.isDefault && (
-                      <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-600 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                        Padrão
-                      </span>
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                    selectedCourseId === course.id
+                      ? 'border-blue-500 bg-blue-500'
+                      : 'border-slate-300 dark:border-slate-600'
+                  }`}>
+                    {selectedCourseId === course.id && (
+                      <CheckCircleIcon className="h-4 w-4 text-white" />
                     )}
                   </div>
+                  <div>
+                    <p className={`font-bold text-lg ${
+                      selectedCourseId === course.id
+                        ? 'text-blue-700 dark:text-blue-300'
+                        : 'text-slate-900 dark:text-white'
+                    }`}>
+                      {course.name}
+                    </p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {course.competition || 'Curso Padrão'}
+                    </p>
+                  </div>
+                </div>
+                {course.isDefault && (
+                  <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-600 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Padrão
+                  </span>
+                )}
+              </div>
                 </button>
               )}
             </div>
@@ -286,17 +286,17 @@ const CourseSelector = () => {
 
         {!showingAvailableCourses && (
           <>
-            <button
-              onClick={handleSelectCourse}
-              disabled={selectedCourseId === undefined || saving}
-              className="w-full rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 text-white font-bold text-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
-            >
-              {saving ? 'Salvando...' : 'Continuar'}
-            </button>
+        <button
+          onClick={handleSelectCourse}
+          disabled={selectedCourseId === undefined || saving}
+          className="w-full rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 text-white font-bold text-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
+        >
+          {saving ? 'Salvando...' : 'Continuar'}
+        </button>
 
-            <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-4">
-              Você pode trocar de curso a qualquer momento nas configurações
-            </p>
+        <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-4">
+          Você pode trocar de curso a qualquer momento nas configurações
+        </p>
           </>
         )}
 

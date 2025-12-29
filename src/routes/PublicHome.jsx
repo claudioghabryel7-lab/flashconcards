@@ -192,7 +192,7 @@ const PublicHome = () => {
   useEffect(() => {
     // Tratamento de erro mais robusto para desktop
     try {
-      if (!db) {
+    if (!db) {
         setLoadingCourses(false)
         return
       }
@@ -259,10 +259,10 @@ const PublicHome = () => {
           setLoadingCourses(false)
         })
         
-        // Preload das primeiras 6 imagens (prioridade alta) - apenas imageUrl
-        // Ignorar completamente imageBase64 (muito pesado para página inicial)
-        sortedData.slice(0, 6).forEach((course, index) => {
-          const imageUrl = course.imageUrl // Apenas imageUrl, nunca imageBase64
+        // Preload apenas das primeiras 3 imagens (prioridade alta)
+        // Apenas imageUrl (URL externa), não imageBase64 (muito pesado)
+        sortedData.slice(0, 3).forEach((course) => {
+          const imageUrl = course.imageUrl // Apenas imageUrl, não imageBase64
           if (imageUrl && typeof imageUrl === 'string' && !imageUrl.startsWith('data:')) {
             try {
               // Preload usando link tag (mais eficiente)
@@ -270,23 +270,8 @@ const PublicHome = () => {
               link.rel = 'preload'
               link.as = 'image'
               link.href = imageUrl
-              link.setAttribute('fetchpriority', index < 3 ? 'high' : 'auto')
-              link.setAttribute('crossorigin', 'anonymous')
+                link.setAttribute('fetchpriority', 'high')
               document.head.appendChild(link)
-              
-              // Preconnect para domínio da imagem (se for URL externa)
-              try {
-                const url = new URL(imageUrl)
-                const preconnectLink = document.createElement('link')
-                preconnectLink.rel = 'preconnect'
-                preconnectLink.href = url.origin
-                preconnectLink.setAttribute('crossorigin', 'anonymous')
-                if (!document.querySelector(`link[rel="preconnect"][href="${url.origin}"]`)) {
-                  document.head.appendChild(preconnectLink)
-                }
-              } catch (e) {
-                // URL inválida, ignorar
-              }
             } catch (err) {
               // Ignorar erros de preload (não crítico)
             }
@@ -359,8 +344,8 @@ const PublicHome = () => {
 
   return (
     <section className="space-y-8 sm:space-y-12 md:space-y-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        {/* Carrossel de Banners */}
-        <HomeBanner />
+      {/* Carrossel de Banners */}
+      <HomeBanner />
       
       {/* Cursos Disponíveis - Movido para o início */}
       <div
@@ -404,12 +389,11 @@ const PublicHome = () => {
                   
                   <div className="relative z-10">
                     {/* Imagem do curso - com dimensões fixas para evitar CLS */}
-                    {/* IMPORTANTE: Usar apenas imageUrl, nunca imageBase64 na página inicial */}
-                    {course.imageUrl ? (
+                    {(course.imageUrl || course.imageBase64) ? (
                       <div className="w-full h-52 overflow-hidden relative bg-slate-200 dark:bg-slate-700" style={{ aspectRatio: '16/9', minHeight: '208px' }}>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent z-10 pointer-events-none"></div>
                         <LazyImage
-                          src={course.imageUrl}
+                          src={course.imageUrl || course.imageBase64}
                           alt={course.name}
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                           priority={index < 6}
