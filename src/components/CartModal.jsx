@@ -32,32 +32,41 @@ const CartModal = ({ isOpen, onClose }) => {
   }
 
   return (
-    <>
-      {/* Overlay */}
-      <div
-        className="fixed inset-0 bg-black/50 z-50"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div className="fixed inset-y-0 right-0 w-full sm:w-96 max-w-[90vw] bg-white dark:bg-slate-900 shadow-xl z-50 flex flex-col animate-slide-in-right">
+    <div 
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      {/* Modal Centralizado */}
+      <div 
+        className="relative w-full max-w-2xl max-h-[90vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col animate-fade-in-scale overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-            Carrinho ({cartItems.length})
+        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+            Carrinho de Compras
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             aria-label="Fechar carrinho"
           >
-            <XMarkIcon className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+            <XMarkIcon className="h-6 w-6 text-slate-600 dark:text-slate-400" />
           </button>
         </div>
+        
+        {/* Badge com quantidade */}
+        {cartItems.length > 0 && (
+          <div className="px-6 pt-4">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+              {cartItems.length} {cartItems.length === 1 ? 'item' : 'itens'}
+            </span>
+          </div>
+        )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-6">
           {cartItems.length === 0 ? (
             <div className="text-center py-12">
               <ShoppingCartIcon className="h-16 w-16 text-slate-400 mx-auto mb-4" />
@@ -106,27 +115,27 @@ const CartModal = ({ isOpen, onClose }) => {
 
         {/* Footer */}
         {cartItems.length > 0 && (
-          <div className="border-t border-slate-200 dark:border-slate-700 p-4 space-y-3">
+          <div className="border-t border-slate-200 dark:border-slate-700 p-6 space-y-4 bg-slate-50 dark:bg-slate-800/50 rounded-b-2xl">
             <div className="flex items-center justify-between">
-              <span className="text-lg font-bold text-slate-900 dark:text-white">
+              <span className="text-xl font-bold text-slate-900 dark:text-white">
                 Total:
               </span>
-              <span className="text-xl font-bold text-blue-600 dark:text-blue-400">
+              <span className="text-2xl font-black text-blue-600 dark:text-blue-400">
                 {formatCurrency(getCartTotal())}
               </span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <button
                 type="button"
                 onClick={clearCart}
-                className="flex-1 px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 border border-red-600 dark:border-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                className="flex-1 px-6 py-3 text-sm font-semibold text-red-600 dark:text-red-400 border-2 border-red-600 dark:border-red-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-all hover:scale-105"
               >
-                Limpar
+                Limpar Carrinho
               </button>
               <button
                 type="button"
                 onClick={handleCheckout}
-                className="flex-1 px-4 py-2 text-sm font-bold text-white bg-blue-600 dark:bg-blue-500 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+                className="flex-1 px-6 py-3 text-base font-bold text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
               >
                 Finalizar Compra
               </button>
@@ -134,7 +143,7 @@ const CartModal = ({ isOpen, onClose }) => {
           </div>
         )}
       </div>
-    </>
+    </div>
   )
 }
 
