@@ -11,15 +11,22 @@ const CartModal = ({ isOpen, onClose }) => {
   const handleCheckout = () => {
     if (cartItems.length === 0) return
     
-    // Se tiver apenas um item, redirecionar para pagamento direto
-    if (cartItems.length === 1) {
-      navigate(`/pagamento?course=${cartItems[0].id}`)
-    } else {
-      // Se tiver múltiplos itens, redirecionar para página de checkout (pode criar depois)
-      // Por enquanto, redirecionar para o primeiro item
-      navigate(`/pagamento?course=${cartItems[0].id}`)
-    }
+    // Salvar cursos do carrinho no localStorage para a página de pagamento
+    localStorage.setItem('checkoutCourses', JSON.stringify(cartItems))
+    
+    // Fechar modal
     onClose()
+    
+    // Navegar para página de pagamento
+    navigate('/pagamento')
+    
+    // Aguardar um pouco para garantir que a navegação aconteceu, depois rolar até o fim
+    setTimeout(() => {
+      window.scrollTo({
+        top: document.documentElement.scrollHeight,
+        behavior: 'smooth'
+      })
+    }, 100)
   }
 
   const formatCurrency = (value) => {
