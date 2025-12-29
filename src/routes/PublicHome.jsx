@@ -23,7 +23,7 @@ import {
 } from '@heroicons/react/24/solid'
 import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
-import { useCart } from '../hooks/useCart'
+import { useCart } from '../hooks/useCart.jsx'
 // Lazy load de componentes pesados que não são críticos para LCP
 const Reviews = lazy(() => import('../components/Reviews'))
 const NewsSection = lazy(() => import('../components/NewsSection'))

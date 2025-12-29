@@ -17,7 +17,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { useCart } from '../hooks/useCart'
+import { useCart } from '../hooks/useCart.jsx'
 import { useState } from 'react'
 import CartModal from './CartModal'
 

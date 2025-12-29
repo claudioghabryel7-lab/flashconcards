@@ -1,4 +1,4 @@
-import { useCart } from '../hooks/useCart'
+import { useCart } from '../hooks/useCart.jsx'
 import { useNavigate } from 'react-router-dom'
 import { XMarkIcon, TrashIcon, ShoppingCartIcon } from '@heroicons/react/24/outline'
 
