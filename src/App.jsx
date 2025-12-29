@@ -1,5 +1,5 @@
 import { lazy, Suspense, startTransition } from 'react'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, Link } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { useDarkMode } from './hooks/useDarkMode.jsx'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
@@ -335,11 +335,58 @@ function App() {
         </Routes>
         </Suspense>
       </main>
-      <footer className="mx-auto w-full max-w-6xl px-4 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[60px] flex items-center justify-center">
-        <p>
-          © {new Date().getFullYear()} FlashConCards. Todos os direitos reservados.
-          É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.
-        </p>
+      <footer className="mx-auto w-full max-w-6xl px-4 py-8 text-xs sm:text-sm text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-6">
+          {/* Sobre */}
+          <div>
+            <h3 className="font-bold text-slate-900 dark:text-white mb-3">Sobre</h3>
+            <ul className="space-y-2">
+              <li><Link to="/" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Início</Link></li>
+              <li><Link to="/guia-estudos" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Guia de Estudos</Link></li>
+              <li><Link to="/blank" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Blog e Notícias</Link></li>
+              <li><Link to="/pagamento" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Planos e Preços</Link></li>
+            </ul>
+          </div>
+          
+          {/* Cursos */}
+          <div>
+            <h3 className="font-bold text-slate-900 dark:text-white mb-3">Cursos</h3>
+            <ul className="space-y-2">
+              <li><span className="text-slate-400 dark:text-slate-600">Polícia Militar (PMGO)</span></li>
+              <li><span className="text-slate-400 dark:text-slate-600">Polícia Civil (PC)</span></li>
+              <li><span className="text-slate-400 dark:text-slate-600">Guarda Municipal (GCM)</span></li>
+              <li><Link to="/pagamento" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Ver Todos os Cursos</Link></li>
+            </ul>
+          </div>
+          
+          {/* Recursos */}
+          <div>
+            <h3 className="font-bold text-slate-900 dark:text-white mb-3">Recursos</h3>
+            <ul className="space-y-2">
+              <li><span className="text-slate-400 dark:text-slate-600">Flashcards Interativos</span></li>
+              <li><span className="text-slate-400 dark:text-slate-600">Questões Comentadas</span></li>
+              <li><span className="text-slate-400 dark:text-slate-600">Simulados Online</span></li>
+              <li><span className="text-slate-400 dark:text-slate-600">Assistente de IA</span></li>
+            </ul>
+          </div>
+          
+          {/* Legal */}
+          <div>
+            <h3 className="font-bold text-slate-900 dark:text-white mb-3">Legal</h3>
+            <ul className="space-y-2">
+              <li><span className="text-slate-400 dark:text-slate-600">Termos de Uso</span></li>
+              <li><span className="text-slate-400 dark:text-slate-600">Política de Privacidade</span></li>
+            </ul>
+          </div>
+        </div>
+        
+        <div className="text-center pt-6 border-t border-slate-200 dark:border-slate-800">
+          <p>
+            © {new Date().getFullYear()} FlashConCards (Plegimentoria). Todos os direitos reservados.
+            <br />
+            <span className="text-xs">É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.</span>
+          </p>
+        </div>
       </footer>
       <SupportButton />
       <PopupBanner />

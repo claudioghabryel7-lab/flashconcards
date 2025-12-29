@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState, lazy, Suspense, startTransition } from 'react'
 import { collection, doc, getDocs, query, setDoc, serverTimestamp, where, limit } from 'firebase/firestore'
 import { db } from '../firebase/config'
@@ -646,6 +646,29 @@ const PublicHome = () => {
               <strong>estudo para concursos</strong> ou <strong>flashcards interativos</strong>, 
               você encontrou a plataforma ideal. Comece agora e acelere sua aprovação!
             </p>
+            
+            {/* Links Úteis para SEO */}
+            <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-700">
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                Recursos e Conteúdo Gratuito
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Link 
+                  to="/guia-estudos" 
+                  className="flex items-center gap-2 p-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <BookOpenIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <span className="font-semibold text-slate-900 dark:text-white">Guia de Estudos Completo</span>
+                </Link>
+                <Link 
+                  to="/blank" 
+                  className="flex items-center gap-2 p-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <SparklesIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  <span className="font-semibold text-slate-900 dark:text-white">Blog e Notícias de Concursos</span>
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </div>
