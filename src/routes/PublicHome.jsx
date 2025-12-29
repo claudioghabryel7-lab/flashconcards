@@ -21,6 +21,7 @@ import {
   ShareIcon,
   ShoppingCartIcon
 } from '@heroicons/react/24/solid'
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
 import { useCart } from '../hooks/useCart.jsx'
@@ -93,6 +94,7 @@ const PublicHome = () => {
   const [courses, setCourses] = useState([])
   const [loadingCourses, setLoadingCourses] = useState(true)
   const [recentlyAdded, setRecentlyAdded] = useState(new Set()) // IDs dos cursos adicionados recentemente
+  const [searchTerm, setSearchTerm] = useState('') // Termo de pesquisa
   
   // SEO: Adicionar meta tags e Schema.org dinamicamente
   useEffect(() => {
@@ -367,14 +369,58 @@ const PublicHome = () => {
             FlashCards Para Concurso Público - Polícia Militar, Polícia Civil, GCM e muito mais. Escolha o curso ideal para sua aprovação.
           </p>
         </div>
+
+        {/* Campo de Pesquisa */}
+        <div className="max-w-2xl mx-auto">
+          <div className="relative">
+            <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Pesquisar curso por nome ou concurso..."
+              className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            />
+          </div>
+        </div>
+
         {loadingCourses ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
             <p className="mt-4 text-slate-600 dark:text-slate-400">Carregando cursos...</p>
           </div>
         ) : courses.length > 0 ? (
-          <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {courses.map((course, index) => {
+          <>
+            {/* Filtrar cursos baseado na pesquisa */}
+            {(() => {
+              const filteredCourses = searchTerm.trim() 
+                ? courses.filter(course => {
+                    const search = searchTerm.toLowerCase()
+                    const name = (course.name || '').toLowerCase()
+                    const competition = (course.competition || '').toLowerCase()
+                    return name.includes(search) || competition.includes(search)
+                  })
+                : courses
+
+              if (filteredCourses.length === 0 && searchTerm.trim()) {
+                return (
+                  <div className="text-center py-12">
+                    <p className="text-slate-600 dark:text-slate-400 text-lg">
+                      Nenhum curso encontrado para "{searchTerm}"
+                    </p>
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="mt-4 text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      Limpar pesquisa
+                    </button>
+                  </div>
+                )
+              }
+
+              return (
+                <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
+                  {filteredCourses.map((course, index) => {
               return (
                 <div
                   key={course.id}
@@ -535,8 +581,11 @@ const PublicHome = () => {
                     </div>
                   </div>
                 </div>
-              )})}
-          </div>
+                  )})}
+                </div>
+              )
+            })()}
+          </>
         ) : (
           <div className="text-center py-12 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
             <p className="text-slate-600 dark:text-slate-400">Nenhum curso disponível no momento.</p>

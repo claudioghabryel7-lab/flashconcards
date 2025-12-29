@@ -94,14 +94,15 @@ REGRAS IMPORTANTES:
 - Se o usuário mencionar um concurso, identifique qual curso corresponde.
 - Sempre mencione o parcelamento em 10x sem juros.
 - Se perguntarem sobre preço, enfatize que é um investimento na aprovação.
-- Se o usuário quiser comprar, direcione para a página de pagamento.
+- Se o usuário demonstrar interesse em comprar (mesmo sem mencionar curso específico), incentive a compra.
+- Se não encontrar curso específico mas o usuário quiser comprar, sugira falar no WhatsApp.
 
 HISTÓRICO DA CONVERSA:
 ${historyText}
 
 ÚLTIMA MENSAGEM DO USUÁRIO: ${userMessage}
 
-Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou um concurso, identifique o curso correspondente e fale sobre ele.`
+Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou um concurso, identifique o curso correspondente e fale sobre ele. Se demonstrar interesse em comprar, sempre incentive.`
 
       const result = await model.generateContent(prompt)
       const response = result.response.text()
@@ -146,19 +147,21 @@ Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou
     try {
       const aiResponse = await getAIResponse(inputValue, messages)
       
+      // Detectar se a resposta da IA menciona interesse em comprar
+      const aiResponseLower = aiResponse.toLowerCase()
+      const showsInterest = inputLower.includes('comprar') || 
+                           inputLower.includes('quero') || 
+                           inputLower.includes('interessado') ||
+                           inputLower.includes('vou comprar') ||
+                           aiResponseLower.includes('comprar') ||
+                           aiResponseLower.includes('quero')
+      
       const botMessage = {
         type: 'bot',
         text: aiResponse,
         timestamp: new Date(),
-        course: mentionedCourse || userCompetition
-      }
-
-      // Se mencionou interesse em comprar ou curso específico, adicionar botão
-      if (inputLower.includes('comprar') || 
-          inputLower.includes('quero') || 
-          inputLower.includes('interessado') ||
-          mentionedCourse) {
-        botMessage.showButton = true
+        course: mentionedCourse || userCompetition,
+        showButton: showsInterest
       }
 
       setMessages(prev => [...prev, botMessage])
@@ -176,15 +179,25 @@ Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou
   }
 
   const handleBuyClick = (course) => {
-    if (course) {
-      navigate(`/pagamento?course=${course.id}`)
-    } else if (userCompetition) {
-      navigate(`/pagamento?course=${userCompetition.id}`)
+    const targetCourse = course || userCompetition
+    
+    if (targetCourse) {
+      // Se tem curso específico, ir para a página do curso ou inicial
+      navigate(`/curso/${targetCourse.id}`)
     } else if (article?.courseLink) {
+      // Se tem link do artigo, usar ele
       window.open(article.courseLink, '_blank')
     } else {
-      navigate('/pagamento')
+      // Se não tem curso, ir para página inicial
+      navigate('/')
     }
+    setIsOpen(false)
+  }
+
+  const handleWhatsAppClick = () => {
+    const whatsappNumber = '5562981841878'
+    const message = encodeURIComponent('Olá! Gostaria de saber mais sobre os cursos disponíveis.')
+    window.open(`https://wa.me/${whatsappNumber}?text=${message}`, '_blank')
     setIsOpen(false)
   }
 
@@ -198,7 +211,7 @@ Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou
 
   return (
     <>
-      {/* Botão flutuante - posicionado de forma acessível */}
+      {/* Botão flutuante - canto superior direito */}
       {!isOpen && (
         <motion.button
           initial={{ scale: 0 }}
@@ -206,8 +219,7 @@ Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-20 right-6 z-50 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-full shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 flex items-center gap-2"
-          style={{ position: 'fixed' }}
+          className="fixed top-20 right-6 z-50 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-full shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 flex items-center gap-2"
           aria-label="Abrir chat"
         >
           <ChatBubbleLeftRightIcon className="h-6 w-6" />
@@ -222,7 +234,7 @@ Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou
             initial={{ opacity: 0, y: 20, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className="fixed bottom-6 right-6 z-50 w-96 max-w-[calc(100vw-2rem)] h-[600px] max-h-[calc(100vh-8rem)] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border-2 border-blue-200 dark:border-blue-700 flex flex-col overflow-hidden"
+            className="fixed top-20 right-6 z-50 w-96 max-w-[calc(100vw-2rem)] h-[600px] max-h-[calc(100vh-8rem)] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border-2 border-blue-200 dark:border-blue-700 flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 flex items-center justify-between">
@@ -264,13 +276,24 @@ Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou
                     <div className={`text-xs mt-1 ${msg.type === 'user' ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
                       {formatTime(msg.timestamp)}
                     </div>
-                    {msg.showButton && (msg.course || userCompetition) && (
-                      <button
-                        onClick={() => handleBuyClick(msg.course || userCompetition)}
-                        className="mt-3 w-full bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-2 px-4 rounded-lg hover:from-green-600 hover:to-green-700 transition shadow-lg text-sm"
-                      >
-                        💳 Comprar Agora - 10x sem juros
-                      </button>
+                    {msg.showButton && (
+                      <>
+                        {(msg.course || userCompetition) ? (
+                          <button
+                            onClick={() => handleBuyClick(msg.course || userCompetition)}
+                            className="mt-3 w-full bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-2 px-4 rounded-lg hover:from-green-600 hover:to-green-700 transition shadow-lg text-sm"
+                          >
+                            💳 Ver Curso - 10x sem juros
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleWhatsAppClick}
+                            className="mt-3 w-full bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-2 px-4 rounded-lg hover:from-green-600 hover:to-green-700 transition shadow-lg text-sm"
+                          >
+                            💬 Falar no WhatsApp
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </motion.div>
