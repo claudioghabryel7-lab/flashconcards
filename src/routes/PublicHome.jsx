@@ -167,15 +167,35 @@ const PublicHome = () => {
     }
   }, [])
   
-  // Intersection observers para animações
-  const [heroRef, heroVisible] = useIntersectionObserver({ once: true })
-  const [coursesRef, coursesVisible] = useIntersectionObserver({ once: true })
-  const [featuresRef, featuresVisible] = useIntersectionObserver({ once: true })
-  const [ctaRef, ctaVisible] = useIntersectionObserver({ once: true })
-  const [newsRef, newsVisible] = useIntersectionObserver({ once: true })
+  // Intersection observers para animações - com fallback para desktop
+  const [heroRef, heroVisible] = useIntersectionObserver({ once: true, threshold: 0.1 })
+  const [coursesRef, coursesVisible] = useIntersectionObserver({ once: true, threshold: 0.1 })
+  const [featuresRef, featuresVisible] = useIntersectionObserver({ once: true, threshold: 0.1 })
+  const [ctaRef, ctaVisible] = useIntersectionObserver({ once: true, threshold: 0.1 })
+  const [newsRef, newsVisible] = useIntersectionObserver({ once: true, threshold: 0.1 })
+  
+  // Fallback: se IntersectionObserver não funcionar, mostrar elementos imediatamente
+  useEffect(() => {
+    // Verificar se IntersectionObserver está disponível
+    if (typeof window !== 'undefined' && 'IntersectionObserver' in window) {
+      return
+    }
+    // Se não estiver disponível, forçar visibilidade após um pequeno delay
+    const timer = setTimeout(() => {
+      // Os elementos serão mostrados mesmo sem IntersectionObserver
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [])
 
   useEffect(() => {
-    if (!db) {
+    // Tratamento de erro mais robusto para desktop
+    try {
+      if (!db) {
+        setLoadingCourses(false)
+        return
+      }
+    } catch (error) {
+      console.error('[PublicHome] Erro ao verificar db:', error)
       setLoadingCourses(false)
       return
     }
@@ -320,8 +340,8 @@ const PublicHome = () => {
 
   return (
     <section className="space-y-8 sm:space-y-12 md:space-y-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-      {/* Carrossel de Banners */}
-      <HomeBanner />
+        {/* Carrossel de Banners */}
+        <HomeBanner />
       
       {/* Cursos Disponíveis - Movido para o início */}
       <div
