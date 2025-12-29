@@ -56,28 +56,26 @@ const Payment = () => {
         // Limpar do localStorage após carregar
         localStorage.removeItem('checkoutCourses')
         
-        // Rolar até o fim da página quando carregar com cursos do carrinho
+        // Rolar até o botão de pagamento quando carregar com cursos do carrinho
         // Usar múltiplos timeouts para garantir que role após o conteúdo estar renderizado
-        setTimeout(() => {
-          window.scrollTo({
-            top: document.documentElement.scrollHeight,
-            behavior: 'smooth'
-          })
-        }, 100)
+        const scrollToPaymentButton = () => {
+          const paymentButton = document.getElementById('payment-button')
+          if (paymentButton) {
+            paymentButton.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          } else {
+            // Fallback: rolar até o final da página
+            window.scrollTo({
+              top: document.documentElement.scrollHeight,
+              behavior: 'smooth'
+            })
+          }
+        }
         
-        setTimeout(() => {
-          window.scrollTo({
-            top: document.documentElement.scrollHeight,
-            behavior: 'smooth'
-          })
-        }, 500)
-        
-        setTimeout(() => {
-          window.scrollTo({
-            top: document.documentElement.scrollHeight,
-            behavior: 'smooth'
-          })
-        }, 1000)
+        // Tentar rolar imediatamente e depois com delays
+        setTimeout(scrollToPaymentButton, 100)
+        setTimeout(scrollToPaymentButton, 500)
+        setTimeout(scrollToPaymentButton, 1000)
+        setTimeout(scrollToPaymentButton, 1500)
       } catch (error) {
         console.error('Erro ao carregar cursos do carrinho:', error)
       }
@@ -1243,6 +1241,7 @@ const Payment = () => {
 
                   {/* Botão de Pagamento */}
                   <button
+                    id="payment-button"
                     onClick={handlePayment}
                     disabled={loading}
                     className="w-full rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-4 text-white font-bold text-lg shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"

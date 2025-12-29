@@ -20,22 +20,8 @@ const CartModal = ({ isOpen, onClose }) => {
     // Navegar para página de pagamento
     navigate('/pagamento')
     
-    // Aguardar mais tempo para garantir que a navegação e renderização aconteceram
-    // Usar múltiplos timeouts para garantir que role após o conteúdo estar carregado
-    setTimeout(() => {
-      window.scrollTo({
-        top: document.documentElement.scrollHeight,
-        behavior: 'smooth'
-      })
-    }, 300)
-    
-    // Backup: tentar novamente após mais tempo
-    setTimeout(() => {
-      window.scrollTo({
-        top: document.documentElement.scrollHeight,
-        behavior: 'smooth'
-      })
-    }, 800)
+    // A rolagem será feita na página de pagamento via useEffect
+    // Não precisa rolar aqui pois a navegação ainda não aconteceu
   }
 
   const formatCurrency = (value) => {
