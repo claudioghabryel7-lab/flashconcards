@@ -7,23 +7,12 @@ const CartModal = ({ isOpen, onClose }) => {
   const { cartItems, removeFromCart, clearCart, getCartTotal } = useCart()
   const navigate = useNavigate()
 
-  // Bloquear scroll do body quando modal estiver aberto
+  // Bloquear scroll do body quando modal estiver aberto (versão simplificada)
   useEffect(() => {
     if (isOpen) {
-      // Salvar posição atual do scroll
-      const scrollY = window.scrollY
-      document.body.style.position = 'fixed'
-      document.body.style.top = `-${scrollY}px`
-      document.body.style.width = '100%'
       document.body.style.overflow = 'hidden'
-      
       return () => {
-        // Restaurar scroll quando fechar
-        document.body.style.position = ''
-        document.body.style.top = ''
-        document.body.style.width = ''
         document.body.style.overflow = ''
-        window.scrollTo(0, scrollY)
       }
     }
   }, [isOpen])
@@ -55,28 +44,13 @@ const CartModal = ({ isOpen, onClose }) => {
 
   return (
     <div 
-      className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4"
-      style={{ 
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'auto'
-      }}
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
       {/* Modal Centralizado */}
       <div 
         className="relative w-full max-w-2xl max-h-[90vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col animate-fade-in-scale overflow-hidden"
         onClick={(e) => e.stopPropagation()}
-        style={{ 
-          margin: 'auto',
-          position: 'relative'
-        }}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
