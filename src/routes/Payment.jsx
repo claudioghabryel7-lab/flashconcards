@@ -57,12 +57,27 @@ const Payment = () => {
         localStorage.removeItem('checkoutCourses')
         
         // Rolar até o fim da página quando carregar com cursos do carrinho
+        // Usar múltiplos timeouts para garantir que role após o conteúdo estar renderizado
         setTimeout(() => {
           window.scrollTo({
             top: document.documentElement.scrollHeight,
             behavior: 'smooth'
           })
-        }, 300)
+        }, 100)
+        
+        setTimeout(() => {
+          window.scrollTo({
+            top: document.documentElement.scrollHeight,
+            behavior: 'smooth'
+          })
+        }, 500)
+        
+        setTimeout(() => {
+          window.scrollTo({
+            top: document.documentElement.scrollHeight,
+            behavior: 'smooth'
+          })
+        }, 1000)
       } catch (error) {
         console.error('Erro ao carregar cursos do carrinho:', error)
       }

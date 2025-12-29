@@ -20,13 +20,22 @@ const CartModal = ({ isOpen, onClose }) => {
     // Navegar para página de pagamento
     navigate('/pagamento')
     
-    // Aguardar um pouco para garantir que a navegação aconteceu, depois rolar até o fim
+    // Aguardar mais tempo para garantir que a navegação e renderização aconteceram
+    // Usar múltiplos timeouts para garantir que role após o conteúdo estar carregado
     setTimeout(() => {
       window.scrollTo({
         top: document.documentElement.scrollHeight,
         behavior: 'smooth'
       })
-    }, 100)
+    }, 300)
+    
+    // Backup: tentar novamente após mais tempo
+    setTimeout(() => {
+      window.scrollTo({
+        top: document.documentElement.scrollHeight,
+        behavior: 'smooth'
+      })
+    }, 800)
   }
 
   const formatCurrency = (value) => {
