@@ -211,7 +211,7 @@ Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou
 
   return (
     <>
-      {/* Botão flutuante - canto superior direito */}
+      {/* Botão flutuante - canto inferior direito */}
       {!isOpen && (
         <motion.button
           initial={{ scale: 0 }}
@@ -219,7 +219,8 @@ Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => setIsOpen(true)}
-          className="fixed top-20 right-6 z-50 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-full shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 flex items-center gap-2"
+          className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-full shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 flex items-center gap-2"
+          style={{ position: 'fixed' }}
           aria-label="Abrir chat"
         >
           <ChatBubbleLeftRightIcon className="h-6 w-6" />
@@ -234,7 +235,8 @@ Responda de forma CURTA e PERSUASIVA (máximo 2 linhas). Se o usuário mencionou
             initial={{ opacity: 0, y: 20, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className="fixed top-20 right-6 z-50 w-96 max-w-[calc(100vw-2rem)] h-[600px] max-h-[calc(100vh-8rem)] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border-2 border-blue-200 dark:border-blue-700 flex flex-col overflow-hidden"
+            className="fixed bottom-6 right-6 z-50 w-96 max-w-[calc(100vw-2rem)] h-[600px] max-h-[calc(100vh-8rem)] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border-2 border-blue-200 dark:border-blue-700 flex flex-col overflow-hidden"
+            style={{ position: 'fixed' }}
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 flex items-center justify-between">
