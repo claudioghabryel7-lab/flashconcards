@@ -221,33 +221,61 @@ Responda de forma CURTA (máximo 2 linhas) e PERSUASIVA.`
   }
 
   return (
-    <div className="w-full mt-12 mb-8">
-      <div className="flex justify-end">
+    <div style={{ width: '100%', marginTop: '48px', marginBottom: '32px', position: 'static', display: 'block' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', position: 'static' }}>
         {/* Botão flutuante - canto inferior direito */}
         {!isOpen && (
-          <motion.button
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
+          <button
             onClick={() => setIsOpen(true)}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-full shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 flex items-center gap-2"
+            style={{
+              position: 'static',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '16px',
+              background: 'linear-gradient(to right, #2563eb, #4f46e5)',
+              color: 'white',
+              borderRadius: '9999px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.3s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.1)'
+              e.currentTarget.style.boxShadow = '0 25px 50px -12px rgba(59, 130, 246, 0.5)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)'
+              e.currentTarget.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+            }}
             aria-label="Abrir chat"
           >
             <ChatBubbleLeftRightIcon className="h-6 w-6" />
             <span className="hidden sm:block font-bold text-sm">Falar com IA</span>
-          </motion.button>
+          </button>
         )}
 
         {/* Chat Window */}
-        <AnimatePresence>
-          {isOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.9 }}
-              className="w-96 max-w-[calc(100vw-2rem)] h-[600px] max-h-[calc(100vh-8rem)] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border-2 border-blue-200 dark:border-blue-700 flex flex-col overflow-hidden"
-            >
+        {isOpen && (
+          <div
+            style={{
+              position: 'static',
+              display: 'block',
+              width: '384px',
+              maxWidth: 'calc(100vw - 2rem)',
+              height: '600px',
+              maxHeight: 'calc(100vh - 8rem)',
+              backgroundColor: 'white',
+              borderRadius: '16px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: '2px solid #bfdbfe',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}
+            className="dark:bg-slate-800 dark:border-blue-700"
+          >
               {/* Header */}
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -346,9 +374,8 @@ Responda de forma CURTA (máximo 2 linhas) e PERSUASIVA.`
                   </button>
                 </div>
               </div>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
       </div>
     </div>
   )
