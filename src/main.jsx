@@ -12,6 +12,25 @@ import FirebaseConfigError from './components/FirebaseConfigError'
 import { firebaseInitialized } from './firebase/config'
 import './index.css'
 
+// Garantir que a tag do Google AdSense esteja sempre presente no head
+if (typeof document !== 'undefined') {
+  const ensureAdSenseTag = () => {
+    const existingTag = document.querySelector('meta[name="google-adsense-account"]')
+    if (!existingTag) {
+      const metaTag = document.createElement('meta')
+      metaTag.name = 'google-adsense-account'
+      metaTag.content = 'ca-pub-5942048225240647'
+      document.head.insertBefore(metaTag, document.head.firstChild)
+    }
+  }
+  
+  // Executar imediatamente e após DOM estar pronto
+  ensureAdSenseTag()
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', ensureAdSenseTag)
+  }
+}
+
 // Proteção global contra erros do framer-motion
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (event) => {
