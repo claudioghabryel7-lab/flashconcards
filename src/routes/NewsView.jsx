@@ -545,6 +545,9 @@ const NewsView = () => {
                 </Link>
               </div>
             </div>
+
+            {/* Chatbot de Vendas - DENTRO do conteúdo */}
+            <SalesChatbot article={news} courses={courses} />
           </article>
 
           {/* Sidebar */}
@@ -594,9 +597,6 @@ const NewsView = () => {
           </aside>
         </div>
       </div>
-
-      {/* Chatbot de Vendas */}
-      <SalesChatbot article={news} courses={courses} />
     </div>
   )
 }

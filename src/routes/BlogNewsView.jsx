@@ -414,6 +414,9 @@ const BlogNewsView = () => {
               </div>
             </div>
           )}
+
+          {/* Chatbot de Vendas - DENTRO do conteúdo */}
+          <SalesChatbot article={article} courses={courses} />
         </motion.article>
 
         {/* Sidebar (30%) */}
@@ -433,9 +436,6 @@ const BlogNewsView = () => {
           />
         </motion.div>
       </motion.div>
-
-      {/* Chatbot de Vendas */}
-      <SalesChatbot article={article} courses={courses} />
 
       {/* Responsive CSS */}
       <style>{`
