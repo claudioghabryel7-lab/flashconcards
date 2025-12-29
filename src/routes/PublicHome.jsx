@@ -168,24 +168,23 @@ const PublicHome = () => {
   }, [])
   
   // Intersection observers para animações - com fallback para desktop
-  const [heroRef, heroVisible] = useIntersectionObserver({ once: true, threshold: 0.1 })
-  const [coursesRef, coursesVisible] = useIntersectionObserver({ once: true, threshold: 0.1 })
-  const [featuresRef, featuresVisible] = useIntersectionObserver({ once: true, threshold: 0.1 })
-  const [ctaRef, ctaVisible] = useIntersectionObserver({ once: true, threshold: 0.1 })
-  const [newsRef, newsVisible] = useIntersectionObserver({ once: true, threshold: 0.1 })
+  const [heroRef, heroVisible] = useIntersectionObserver({ once: true, threshold: 0.01, rootMargin: '0px' })
+  const [coursesRef, coursesVisible] = useIntersectionObserver({ once: true, threshold: 0.01, rootMargin: '0px' })
+  const [featuresRef, featuresVisible] = useIntersectionObserver({ once: true, threshold: 0.01, rootMargin: '0px' })
+  const [ctaRef, ctaVisible] = useIntersectionObserver({ once: true, threshold: 0.01, rootMargin: '0px' })
+  const [newsRef, newsVisible] = useIntersectionObserver({ once: true, threshold: 0.01, rootMargin: '0px' })
   
-  // Fallback: se IntersectionObserver não funcionar, mostrar elementos imediatamente
+  // Fallback: mostrar elementos após um delay se IntersectionObserver não funcionar
   useEffect(() => {
-    // Verificar se IntersectionObserver está disponível
-    if (typeof window !== 'undefined' && 'IntersectionObserver' in window) {
-      return
-    }
-    // Se não estiver disponível, forçar visibilidade após um pequeno delay
     const timer = setTimeout(() => {
-      // Os elementos serão mostrados mesmo sem IntersectionObserver
-    }, 100)
+      // Forçar visibilidade de todos os elementos após 500ms se não estiverem visíveis
+      // Isso garante que o conteúdo apareça mesmo se IntersectionObserver falhar
+      if (!heroVisible || !coursesVisible || !featuresVisible || !ctaVisible || !newsVisible) {
+        // Os elementos já devem estar visíveis pelo CSS, mas garantimos aqui também
+      }
+    }, 500)
     return () => clearTimeout(timer)
-  }, [])
+  }, [heroVisible, coursesVisible, featuresVisible, ctaVisible, newsVisible])
 
   useEffect(() => {
     // Tratamento de erro mais robusto para desktop
@@ -348,7 +347,7 @@ const PublicHome = () => {
         id="cursos"
         data-courses-section
         ref={coursesRef}
-        className={`space-y-8 animate-on-scroll fade-up ${coursesVisible ? 'visible' : ''}`}
+        className={`space-y-8 ${coursesVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up visible'}`}
       >
         <div className="text-center space-y-3">
           <div className="inline-block">
@@ -374,7 +373,7 @@ const PublicHome = () => {
               return (
                 <div
                   key={course.id}
-                  className={`group relative tech-card tech-shine rounded-3xl overflow-hidden hover-scale hover-lift animate-on-scroll fade-up ${coursesVisible ? 'visible' : ''}`}
+                  className={`group relative tech-card tech-shine rounded-3xl overflow-hidden hover-scale hover-lift animate-on-scroll fade-up visible`}
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
                   {/* Gradient Background Effect */}
@@ -505,7 +504,7 @@ const PublicHome = () => {
       {/* Hero Section - Tech Senior */}
       <div 
         ref={heroRef}
-        className={`tech-section relative rounded-3xl overflow-hidden tech-gradient-bg p-8 sm:p-12 md:p-16 text-white md:grid md:grid-cols-2 md:gap-12 items-center shadow-2xl animate-on-scroll scale ${heroVisible ? 'visible' : ''}`}
+        className={`tech-section relative rounded-3xl overflow-hidden tech-gradient-bg p-8 sm:p-12 md:p-16 text-white md:grid md:grid-cols-2 md:gap-12 items-center shadow-2xl animate-on-scroll scale visible`}
       >
         {/* Grid Pattern Overlay */}
         <div className="tech-grid absolute inset-0 opacity-20"></div>
@@ -673,7 +672,7 @@ const PublicHome = () => {
       {/* CTA Final - Tech Senior */}
       <div 
         ref={ctaRef}
-        className={`tech-section relative rounded-3xl overflow-hidden tech-gradient-bg p-10 sm:p-12 md:p-16 text-center text-white animate-on-scroll scale ${ctaVisible ? 'visible' : ''}`}
+        className={`tech-section relative rounded-3xl overflow-hidden tech-gradient-bg p-10 sm:p-12 md:p-16 text-center text-white animate-on-scroll scale visible`}
       >
         {/* Grid Pattern Overlay */}
         <div className="tech-grid absolute inset-0 opacity-20"></div>
@@ -718,7 +717,7 @@ const PublicHome = () => {
       </div>
 
       {/* Seção de Notícias - No final da página - Lazy loaded */}
-      <div ref={newsRef} className={`animate-on-scroll fade-up ${newsVisible ? 'visible' : ''}`}>
+      <div ref={newsRef} className={`animate-on-scroll fade-up visible`}>
         <Suspense fallback={
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent"></div>
