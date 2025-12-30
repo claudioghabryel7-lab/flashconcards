@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { canAccessMateria, isTrialMode } from '../utils/trialLimits'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -34,6 +34,7 @@ const MATERIAS = [
 
 const FlashQuestoes = () => {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { user, profile } = useAuth()
   const { darkMode } = useDarkMode()
   const [cards, setCards] = useState([])
@@ -338,6 +339,19 @@ const FlashQuestoes = () => {
 
     return modulesByMateria
   }, [cards])
+
+  // Selecionar matéria e módulo baseado em query params
+  useEffect(() => {
+    const materiaParam = searchParams.get('materia')
+    const moduloParam = searchParams.get('modulo')
+    
+    if (materiaParam && moduloParam && organizedModules[materiaParam]?.includes(moduloParam)) {
+      setSelectedMateria(materiaParam)
+      setSelectedModulo(moduloParam)
+      // Expandir a matéria para mostrar o módulo selecionado
+      setExpandedMaterias(prev => ({ ...prev, [materiaParam]: true }))
+    }
+  }, [searchParams, organizedModules])
 
   // Carregar ordem de matérias e módulos
   const { subjectOrderConfig, moduleOrderConfigs, loadModuleOrder } = useSubjectOrder(selectedCourseId, user?.uid)
