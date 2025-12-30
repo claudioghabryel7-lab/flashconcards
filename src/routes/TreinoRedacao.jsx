@@ -163,7 +163,8 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
     setRedacaoTexto('')
     setTimeLeft(3600)
     setIsRunning(false)
-    setResultado(null)
+    setResultado(null) // Limpar resultado anterior
+    setAnalizing(false) // Limpar estado de análise
     generateTheme()
   }
 
@@ -209,7 +210,18 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
         editalText ? editalText.substring(0, 30000) : ''
       )
       
+      // Criar hash único do conteúdo para garantir análise única
+      const contentHash = redacaoTexto.substring(0, 100) + redacaoTexto.length + wordCount
+      
       const analysisPrompt = `${baseAnalysisPrompt}
+
+⚠️⚠️⚠️ INSTRUÇÕES CRÍTICAS ⚠️⚠️⚠️
+- Você DEVE analisar o CONTEÚDO REAL desta redação específica
+- NÃO use notas genéricas ou padrões
+- Cada redação é ÚNICA e deve ser avaliada individualmente
+- A nota deve refletir REALMENTE a qualidade do texto fornecido abaixo
+- Se a redação tiver erros, dê nota baixa. Se for boa, dê nota alta.
+- VARIE as notas conforme a qualidade REAL do texto
 
 IMPORTANTE: Esta redação usa 4 espaços no início da linha para indicar parágrafos. Linhas que começam com 4 espaços são parágrafos.
 
@@ -217,18 +229,53 @@ INFORMAÇÕES DA REDAÇÃO:
 - Número de parágrafos (linhas com 4 espaços no início): ${paragraphCount}
 - Total de linhas: ${lines}
 - Total de palavras: ${wordCount}
+- Tamanho do texto: ${redacaoTexto.length} caracteres
+- Hash do conteúdo: ${contentHash.substring(0, 20)}... (para garantir análise única)
+
+${wordCount < 200 ? '⚠️ ATENÇÃO: Esta redação está MUITO CURTA (menos de 200 palavras). Isso deve impactar NEGATIVAMENTE a nota, especialmente em estrutura e argumentação.' : ''}
+${paragraphCount < 3 ? '⚠️ ATENÇÃO: Esta redação tem poucos parágrafos. Isso deve impactar NEGATIVAMENTE a nota em estrutura textual.' : ''}
 
 Analise a seguinte redação e atribua uma nota de 0 a 1000, seguindo os critérios típicos de concursos públicos:
 
-CRITÉRIOS DE AVALIAÇÃO:
+CRITÉRIOS DE AVALIAÇÃO (seja RIGOROSO e JUSTO):
 1. Domínio da modalidade escrita (0-200 pontos): ortografia, acentuação, pontuação, uso adequado da língua
+   - Erros graves de ortografia: reduzir significativamente
+   - Pontuação incorreta: reduzir
+   - Uso inadequado da língua: reduzir
+   
 2. Compreensão do tema (0-200 pontos): adequação ao tema proposto, compreensão da proposta
+   - Se fugir do tema: nota ZERO neste critério
+   - Se abordar parcialmente: nota reduzida
+   - Se abordar completamente: nota alta
+   
 3. Argumentação (0-200 pontos): qualidade dos argumentos, coerência, capacidade de defender pontos de vista
+   - Argumentos fracos ou ausentes: nota baixa
+   - Argumentos sólidos e bem desenvolvidos: nota alta
+   - Falta de coerência: reduzir significativamente
+   
 4. Estrutura textual (0-200 pontos): organização do texto, parágrafos (linhas com 4 espaços), introdução, desenvolvimento, conclusão
+   - Sem parágrafos adequados: reduzir
+   - Sem introdução/desenvolvimento/conclusão claros: reduzir
+   - Estrutura bem organizada: nota alta
+   
 5. Conhecimento sobre o cargo/concurso (0-200 pontos): demonstração de conhecimento sobre a área, atualidade, relevância
+   - Sem conhecimento específico: nota baixa
+   - Conhecimento superficial: nota média
+   - Conhecimento profundo e atualizado: nota alta
 
-REDAÇÃO DO CANDIDATO:
+REDAÇÃO DO CANDIDATO (ANALISE ESTE TEXTO ESPECÍFICO):
+═══════════════════════════════════════════════════════════════════════════════
 ${redacaoTexto}
+═══════════════════════════════════════════════════════════════════════════════
+
+⚠️ LEMBRE-SE:
+- Esta é uma redação ÚNICA com conteúdo específico
+- Analise CADA palavra, CADA parágrafo, CADA argumento
+- A nota deve ser PROPORCIONAL à qualidade REAL do texto acima
+- NÃO use notas genéricas ou padrões
+- Se o texto tiver muitos erros, a nota deve ser BAIXA
+- Se o texto for excelente, a nota deve ser ALTA
+- VARIE as notas conforme a qualidade REAL
 
 Retorne APENAS um objeto JSON válido no seguinte formato:
 
@@ -241,18 +288,44 @@ Retorne APENAS um objeto JSON válido no seguinte formato:
     "estrutura": 150,
     "conhecimento": 90
   },
-  "feedback": "Feedback geral sobre a redação, destacando pontos positivos e áreas de melhoria (máximo 300 palavras). Seja específico sobre o uso de parágrafos (4 espaços) e dê dicas práticas de melhoria.",
+  "feedback": "Feedback DETALHADO e ESPECÍFICO sobre esta redação em particular. Mencione erros específicos encontrados, pontos fortes específicos, e áreas de melhoria específicas. Seja ESPECÍFICO sobre o conteúdo analisado (máximo 300 palavras).",
   "dicas": [
-    "Dica específica 1 de melhoria",
-    "Dica específica 2 de melhoria",
-    "Dica específica 3 de melhoria"
+    "Dica específica 1 baseada no conteúdo real da redação",
+    "Dica específica 2 baseada no conteúdo real da redação",
+    "Dica específica 3 baseada no conteúdo real da redação"
   ]
 }
 
-CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
+CRÍTICO: 
+- Retorne APENAS o JSON, sem markdown, sem explicações
+- A nota DEVE refletir a qualidade REAL do texto fornecido
+- NÃO use notas genéricas ou padrões
+- Analise o CONTEÚDO REAL desta redação específica`
 
-      const result = await model.generateContent(analysisPrompt)
+      // Garantir que estamos analisando o texto atual (não um cache)
+      const contentHash = redacaoTexto.substring(0, 50) + redacaoTexto.length + wordCount + paragraphCount
+      console.log('📝 Analisando redação única:', {
+        tema: redacaoTema,
+        tamanho: redacaoTexto.length,
+        palavras: wordCount,
+        paragrafos: paragraphCount,
+        hash: contentHash.substring(0, 20),
+        preview: redacaoTexto.substring(0, 100) + '...'
+      })
+
+      // Usar configuração com temperatura mais alta para variabilidade
+      const result = await model.generateContent({
+        contents: [{ parts: [{ text: analysisPrompt }] }],
+        generationConfig: {
+          temperature: 0.9, // Alta temperatura para mais variabilidade nas avaliações
+          maxOutputTokens: 2000,
+          topP: 0.95,
+        }
+      })
+      
       let responseText = result.response.text().trim()
+      
+      console.log('🤖 Resposta da IA recebida (primeiros 300 chars):', responseText.substring(0, 300))
 
       // Extrair JSON
       let jsonText = responseText
@@ -268,12 +341,51 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
         jsonText = jsonText.substring(firstBrace, lastBrace + 1)
       }
 
-      const parsed = JSON.parse(jsonText)
+      // Tentar reparar JSON se necessário
+      let parsed
+      try {
+        parsed = JSON.parse(jsonText)
+      } catch (parseError) {
+        console.warn('⚠️ Erro ao parsear JSON, tentando reparar...', parseError)
+        try {
+          // Tentar usar jsonrepair se disponível
+          const { default: jsonrepair } = await import('jsonrepair')
+          const repaired = jsonrepair(jsonText)
+          parsed = JSON.parse(repaired)
+        } catch (repairError) {
+          console.error('❌ Erro ao reparar JSON:', repairError)
+          throw new Error('Erro ao processar resposta da IA. Tente novamente.')
+        }
+      }
+
+      // Validar que a nota faz sentido
+      if (parsed.nota < 0 || parsed.nota > 1000) {
+        console.warn('⚠️ Nota fora do range esperado, ajustando...', parsed.nota)
+        parsed.nota = Math.max(0, Math.min(1000, parsed.nota))
+      }
+
+      // Validar critérios
+      Object.keys(parsed.criterios || {}).forEach(key => {
+        if (parsed.criterios[key] < 0 || parsed.criterios[key] > 200) {
+          console.warn(`⚠️ Critério ${key} fora do range, ajustando...`, parsed.criterios[key])
+          parsed.criterios[key] = Math.max(0, Math.min(200, parsed.criterios[key]))
+        }
+      })
+
+      console.log('✅ Resultado da análise:', {
+        nota: parsed.nota,
+        criterios: parsed.criterios,
+        feedbackPreview: parsed.feedback?.substring(0, 80) + '...',
+        timestamp: new Date().toISOString()
+      })
+
       setResultado({
         ...parsed,
         paragraphCount,
         lines,
         wordCount,
+        analyzedAt: new Date().toISOString(), // Timestamp para garantir unicidade
+        contentHash: contentHash.substring(0, 30) // Hash para debug
       })
     } catch (err) {
       console.error('Erro ao analisar redação:', err)
@@ -393,10 +505,12 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
               </button>
               <button
                 onClick={() => {
-                  setResultado(null)
-                  setRedacaoTexto('')
-                  setTimeLeft(3600)
-                  setIsRunning(false)
+                  setResultado(null) // Limpar resultado anterior
+                  setRedacaoTexto('') // Limpar texto
+                  setTimeLeft(3600) // Resetar timer
+                  setIsRunning(false) // Parar timer
+                  setAnalizing(false) // Limpar estado de análise
+                  generateTheme() // Gerar novo tema
                 }}
                 className="flex-1 bg-slate-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-slate-700 flex items-center justify-center gap-2"
               >

@@ -201,12 +201,14 @@ export async function buildRedacaoAnalysisPrompt(courseId, tema, editalText = ''
     // Fallback
     return `Você é um corretor especializado em redações de concursos públicos.
 
+⚠️ REGRA CRÍTICA: Cada redação é ÚNICA. Você DEVE analisar o CONTEÚDO REAL de cada texto e atribuir notas DIFERENTES baseadas na qualidade REAL.
+
 CONCURSO: Concurso
 TEMA DA REDAÇÃO: ${tema}
 
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText}\n\n` : ''}
 
-Analise a redação e atribua uma nota de 0 a 10.`
+Analise a redação e atribua uma nota de 0 a 1000 baseada na qualidade REAL do texto fornecido.`
   }
   
   return `${unified.prompt}
@@ -220,12 +222,22 @@ TEMA DA REDAÇÃO: ${tema}
 
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText}\n\n` : ''}
 
-TAREFA: Analisar a redação seguindo os critérios da banca ${unified.banca} e atribuir uma nota de 0 a 10.
+⚠️⚠️⚠️ REGRAS CRÍTICAS DE AVALIAÇÃO ⚠️⚠️⚠️
+- Cada redação é ÚNICA e deve ser avaliada INDIVIDUALMENTE
+- NÃO use notas genéricas, padrões ou médias
+- Analise o CONTEÚDO REAL do texto fornecido
+- A nota deve refletir EXATAMENTE a qualidade do texto específico
+- Se o texto tiver erros, dê nota baixa. Se for excelente, dê nota alta.
+- VARIE as notas conforme a qualidade REAL de cada redação
+
+TAREFA: Analisar a redação seguindo os critérios da banca ${unified.banca} e atribuir uma nota de 0 a 1000 baseada na qualidade REAL do texto.
 
 REGRAS ESPECÍFICAS:
 - Use os critérios de avaliação da banca ${unified.banca}
 - Seja rigoroso mas justo na avaliação
-- Considere o tema proposto e a adequação ao concurso ${unified.concursoName}`
+- Considere o tema proposto e a adequação ao concurso ${unified.concursoName}
+- Analise CADA aspecto do texto fornecido
+- NÃO use notas genéricas - cada redação é única`
 }
 
 /**
