@@ -210,9 +210,6 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
         editalText ? editalText.substring(0, 30000) : ''
       )
       
-      // Criar hash único do conteúdo para garantir análise única
-      const contentHash = redacaoTexto.substring(0, 100) + redacaoTexto.length + wordCount
-      
       const analysisPrompt = `${baseAnalysisPrompt}
 
 ⚠️⚠️⚠️ INSTRUÇÕES CRÍTICAS ⚠️⚠️⚠️
@@ -230,7 +227,6 @@ INFORMAÇÕES DA REDAÇÃO:
 - Total de linhas: ${lines}
 - Total de palavras: ${wordCount}
 - Tamanho do texto: ${redacaoTexto.length} caracteres
-- Hash do conteúdo: ${contentHash.substring(0, 20)}... (para garantir análise única)
 
 ${wordCount < 200 ? '⚠️ ATENÇÃO: Esta redação está MUITO CURTA (menos de 200 palavras). Isso deve impactar NEGATIVAMENTE a nota, especialmente em estrutura e argumentação.' : ''}
 ${paragraphCount < 3 ? '⚠️ ATENÇÃO: Esta redação tem poucos parágrafos. Isso deve impactar NEGATIVAMENTE a nota em estrutura textual.' : ''}
