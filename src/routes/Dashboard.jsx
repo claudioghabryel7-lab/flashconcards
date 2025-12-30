@@ -30,7 +30,6 @@ import {
 import {
   ArrowRightIcon as ArrowRightOutline,
   PlayIcon,
-  LightBulbIcon,
 } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -44,7 +43,6 @@ import { DocumentTextIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import InstallPWAButton from '../components/InstallPWAButton'
 import PreloadOfflineButton from '../components/PreloadOfflineButton'
 import StudyPlanner from '../components/StudyPlanner'
-import DashboardTutorial from '../components/DashboardTutorial'
 import { useStudyPlanner } from '../hooks/useStudyPlanner'
 
 dayjs.locale('pt-br')
@@ -62,7 +60,6 @@ const Dashboard = () => {
   const [editalVerticalizado, setEditalVerticalizado] = useState(null)
   const [loadingEdital, setLoadingEdital] = useState(false)
   const [questoesStats, setQuestoesStats] = useState({ correct: 0, wrong: 0, byMateria: {} })
-  const [showTutorial, setShowTutorial] = useState(false)
   const { subjectOrder } = useSubjectOrder()
 
   // Planejador de estudos com IA
@@ -82,22 +79,6 @@ const Dashboard = () => {
     questoesStats,
     editalVerticalizado
   )
-
-  // Verificar se deve mostrar tutorial
-  useEffect(() => {
-    if (!user) return
-    
-    const tutorialKey = `dashboard_tutorial_completed_${user.uid}`
-    const hasSeenTutorial = localStorage.getItem(tutorialKey) === 'true'
-    
-    // Verificar se há parâmetro na URL para forçar tutorial
-    const urlParams = new URLSearchParams(window.location.search)
-    const forceTutorial = urlParams.get('tutorial') === 'true'
-    
-    if (forceTutorial || !hasSeenTutorial) {
-      setShowTutorial(true)
-    }
-  }, [user])
 
   // Carregar curso selecionado
   useEffect(() => {
@@ -556,11 +537,6 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen py-6">
-      {/* Tutorial Modal */}
-      {showTutorial && (
-        <DashboardTutorial onClose={() => setShowTutorial(false)} />
-      )}
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <motion.div
@@ -579,14 +555,6 @@ const Dashboard = () => {
               </p>
             </div>
             <div className="flex gap-3">
-              <button
-                onClick={() => setShowTutorial(true)}
-                className="inline-flex items-center gap-2 px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-200 dark:hover:bg-slate-600 transition-all"
-                title="Ver tutorial novamente"
-              >
-                <LightBulbIcon className="h-5 w-5" />
-                Tutorial
-              </button>
               <Link
                 to="/flashcards"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-alego-600 to-alego-700 text-white rounded-xl font-semibold hover:from-alego-700 hover:to-alego-800 shadow-lg hover:shadow-xl transition-all"
