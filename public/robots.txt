@@ -1,18 +1,11 @@
 User-agent: *
 Allow: /
-Allow: /guia-estudos
-Allow: /pagamento
-Allow: /blank
-Allow: /curso/
-Allow: /noticia/
 Disallow: /admin
 Disallow: /dashboard
 Disallow: /flashcards
 Disallow: /simulado
 Disallow: /feed
 Disallow: /profile/
-Disallow: /select-course
-Disallow: /setup
 
 # Sitemap
 Sitemap: https://www.flashconcards.com.br/sitemap.xml

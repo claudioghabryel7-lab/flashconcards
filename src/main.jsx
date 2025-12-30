@@ -6,30 +6,10 @@ import { AuthProvider } from './hooks/useAuth'
 import { DarkModeProvider } from './hooks/useDarkMode.jsx'
 import { SystemProvider } from './hooks/useSystem.jsx'
 import { QueryProvider } from './providers/QueryProvider'
-import { CartProvider } from './hooks/useCart.jsx'
 import ErrorBoundary from './components/ErrorBoundary'
 import FirebaseConfigError from './components/FirebaseConfigError'
 import { firebaseInitialized } from './firebase/config'
 import './index.css'
-
-// Garantir que a tag do Google AdSense esteja sempre presente no head
-if (typeof document !== 'undefined') {
-  const ensureAdSenseTag = () => {
-    const existingTag = document.querySelector('meta[name="google-adsense-account"]')
-    if (!existingTag) {
-      const metaTag = document.createElement('meta')
-      metaTag.name = 'google-adsense-account'
-      metaTag.content = 'ca-pub-5942048225240647'
-      document.head.insertBefore(metaTag, document.head.firstChild)
-    }
-  }
-  
-  // Executar imediatamente e após DOM estar pronto
-  ensureAdSenseTag()
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', ensureAdSenseTag)
-  }
-}
 
 // Proteção global contra erros do framer-motion
 if (typeof window !== 'undefined') {
@@ -63,15 +43,13 @@ const RootApp = () => {
     return (
       <BrowserRouter>
         <QueryProvider>
-        <DarkModeProvider>
-          <AuthProvider>
-              <CartProvider>
-            <SystemProvider>
-              <App />
-            </SystemProvider>
-              </CartProvider>
-          </AuthProvider>
-        </DarkModeProvider>
+          <DarkModeProvider>
+            <AuthProvider>
+              <SystemProvider>
+                <App />
+              </SystemProvider>
+            </AuthProvider>
+          </DarkModeProvider>
         </QueryProvider>
       </BrowserRouter>
     )

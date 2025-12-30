@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useEffect, useState, lazy, Suspense, startTransition } from 'react'
 import { collection, doc, getDocs, query, setDoc, serverTimestamp, where, limit } from 'firebase/firestore'
 import { db } from '../firebase/config'
@@ -18,12 +18,10 @@ import {
   ChatBubbleLeftRightIcon,
   BookOpenIcon,
   RocketLaunchIcon,
-  ShareIcon,
-  ShoppingCartIcon
+  ShareIcon
 } from '@heroicons/react/24/solid'
 import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
-import { useCart } from '../hooks/useCart.jsx'
 // Lazy load de componentes pesados que não são críticos para LCP
 const Reviews = lazy(() => import('../components/Reviews'))
 const NewsSection = lazy(() => import('../components/NewsSection'))
@@ -92,7 +90,6 @@ const PublicHome = () => {
   // Carregar cursos
   const [courses, setCourses] = useState([])
   const [loadingCourses, setLoadingCourses] = useState(true)
-  const [recentlyAdded, setRecentlyAdded] = useState(new Set()) // IDs dos cursos adicionados recentemente
   
   // SEO: Adicionar meta tags e Schema.org dinamicamente
   useEffect(() => {
@@ -192,7 +189,7 @@ const PublicHome = () => {
   useEffect(() => {
     // Tratamento de erro mais robusto para desktop
     try {
-    if (!db) {
+      if (!db) {
         setLoadingCourses(false)
         return
       }
@@ -270,7 +267,7 @@ const PublicHome = () => {
               link.rel = 'preload'
               link.as = 'image'
               link.href = imageUrl
-                link.setAttribute('fetchpriority', 'high')
+              link.setAttribute('fetchpriority', 'high')
               document.head.appendChild(link)
             } catch (err) {
               // Ignorar erros de preload (não crítico)
@@ -340,12 +337,10 @@ const PublicHome = () => {
     }).format(value)
   }
 
-  const { addToCart, isInCart } = useCart()
-
   return (
     <section className="space-y-8 sm:space-y-12 md:space-y-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-      {/* Carrossel de Banners */}
-      <HomeBanner />
+        {/* Carrossel de Banners */}
+        <HomeBanner />
       
       {/* Cursos Disponíveis - Movido para o início */}
       <div
@@ -464,44 +459,6 @@ const PublicHome = () => {
                       >
                         <span className="relative z-10">Comprar Agora</span>
                       </Link>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            if (isInCart(course.id)) return
-                            
-                            addToCart(course)
-                            
-                            // Feedback visual usando estado do React
-                            setRecentlyAdded((prev) => {
-                              const newSet = new Set(prev)
-                              newSet.add(course.id)
-                              return newSet
-                            })
-                            
-                            // Remover feedback após 1.5s
-                            setTimeout(() => {
-                              setRecentlyAdded((prev) => {
-                                const newSet = new Set(prev)
-                                newSet.delete(course.id)
-                                return newSet
-                              })
-                            }, 1500)
-                          }}
-                          disabled={isInCart(course.id)}
-                          className={`rounded-xl glass-tech px-4 py-3.5 transition-all flex items-center justify-center hover-scale border border-slate-200/50 dark:border-slate-700/50 ${
-                            isInCart(course.id) || recentlyAdded.has(course.id)
-                              ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 cursor-not-allowed'
-                              : 'text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                          }`}
-                          title={isInCart(course.id) ? 'Já está no carrinho' : 'Adicionar ao carrinho'}
-                        >
-                          {isInCart(course.id) || recentlyAdded.has(course.id) ? (
-                            <span className="text-sm font-semibold">✓</span>
-                          ) : (
-                            <ShoppingCartIcon className="h-5 w-5" />
-                          )}
-                        </button>
                         <button
                           type="button"
                           onClick={async (e) => {
@@ -646,29 +603,6 @@ const PublicHome = () => {
               <strong>estudo para concursos</strong> ou <strong>flashcards interativos</strong>, 
               você encontrou a plataforma ideal. Comece agora e acelere sua aprovação!
             </p>
-            
-            {/* Links Úteis para SEO */}
-            <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-700">
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
-                Recursos e Conteúdo Gratuito
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Link 
-                  to="/guia-estudos" 
-                  className="flex items-center gap-2 p-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                >
-                  <BookOpenIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  <span className="font-semibold text-slate-900 dark:text-white">Guia de Estudos Completo</span>
-                </Link>
-                <Link 
-                  to="/blank" 
-                  className="flex items-center gap-2 p-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                >
-                  <SparklesIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                  <span className="font-semibold text-slate-900 dark:text-white">Blog e Notícias de Concursos</span>
-                </Link>
-              </div>
-            </div>
           </div>
         </div>
       </div>

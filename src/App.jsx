@@ -1,5 +1,5 @@
 import { lazy, Suspense, startTransition } from 'react'
-import { Navigate, Route, Routes, useLocation, Link } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { useDarkMode } from './hooks/useDarkMode.jsx'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
@@ -124,10 +124,10 @@ function App() {
       
       // Se for modo admin, usar BlankPage antigo (com admin integrado)
       if (isAdminMode) {
-      return (
-        <Suspense fallback={<LoadingFallback />}>
-          <Routes>
-            <Route path="/blank" element={<BlankPage />} />
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <Routes>
+              <Route path="/blank" element={<BlankPage />} />
             </Routes>
           </Suspense>
         )
@@ -335,58 +335,11 @@ function App() {
         </Routes>
         </Suspense>
       </main>
-      <footer className="mx-auto w-full max-w-6xl px-2 sm:px-4 py-4 sm:py-6 text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-6">
-          {/* Sobre */}
-          <div className="min-w-0">
-            <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white mb-1.5 sm:mb-2">Sobre</h3>
-            <ul className="space-y-1 sm:space-y-1.5">
-              <li><Link to="/" className="block text-xs hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Início</Link></li>
-              <li><Link to="/guia-estudos" className="block text-xs hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Guia de Estudos</Link></li>
-              <li><Link to="/blank" className="block text-xs hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Blog e Notícias</Link></li>
-              <li><Link to="/pagamento" className="block text-xs hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Planos e Preços</Link></li>
-            </ul>
-          </div>
-          
-          {/* Cursos */}
-          <div className="min-w-0">
-            <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white mb-1.5 sm:mb-2">Cursos</h3>
-            <ul className="space-y-1 sm:space-y-1.5">
-              <li><span className="block text-xs text-slate-400 dark:text-slate-600">Polícia Militar (PMGO)</span></li>
-              <li><span className="block text-xs text-slate-400 dark:text-slate-600">Polícia Civil (PC)</span></li>
-              <li><span className="block text-xs text-slate-400 dark:text-slate-600">Guarda Municipal (GCM)</span></li>
-              <li><Link to="/pagamento" className="block text-xs hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Ver Todos os Cursos</Link></li>
-            </ul>
-          </div>
-          
-          {/* Recursos */}
-          <div className="min-w-0">
-            <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white mb-1.5 sm:mb-2">Recursos</h3>
-            <ul className="space-y-1 sm:space-y-1.5">
-              <li><span className="block text-xs text-slate-400 dark:text-slate-600">Flashcards Interativos</span></li>
-              <li><span className="block text-xs text-slate-400 dark:text-slate-600">Questões Comentadas</span></li>
-              <li><span className="block text-xs text-slate-400 dark:text-slate-600">Simulados Online</span></li>
-              <li><span className="block text-xs text-slate-400 dark:text-slate-600">Assistente de IA</span></li>
-            </ul>
-          </div>
-          
-          {/* Legal */}
-          <div className="min-w-0">
-            <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white mb-1.5 sm:mb-2">Legal</h3>
-            <ul className="space-y-1 sm:space-y-1.5">
-              <li><span className="block text-xs text-slate-400 dark:text-slate-600">Termos de Uso</span></li>
-              <li><span className="block text-xs text-slate-400 dark:text-slate-600">Política de Privacidade</span></li>
-            </ul>
-          </div>
-        </div>
-        
-        <div className="text-center pt-3 sm:pt-4 border-t border-slate-200 dark:border-slate-800">
-          <p className="text-[10px] sm:text-xs leading-tight sm:leading-relaxed">
-            © {new Date().getFullYear()} FlashConCards (Plegimentoria). Todos os direitos reservados.
-            <br className="hidden sm:block" />
-            <span className="block sm:inline text-[10px] sm:text-xs mt-0.5 sm:mt-0">É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.</span>
-          </p>
-        </div>
+      <footer className="mx-auto w-full max-w-6xl px-4 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[60px] flex items-center justify-center">
+        <p>
+          © {new Date().getFullYear()} FlashConCards. Todos os direitos reservados.
+          É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.
+        </p>
       </footer>
       <SupportButton />
       <PopupBanner />

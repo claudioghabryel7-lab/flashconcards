@@ -33,8 +33,7 @@ const Payment = () => {
   const [pixCode, setPixCode] = useState('') // Código PIX copia-e-cola para exibir
   const [pixQrCodeBase64, setPixQrCodeBase64] = useState('') // Imagem base64 do QR Code
   const [currentTransactionId, setCurrentTransactionId] = useState('') // ID da transação atual
-  const [selectedCourse, setSelectedCourse] = useState(null) // Curso selecionado (para compatibilidade)
-  const [checkoutCourses, setCheckoutCourses] = useState([]) // Cursos do carrinho
+  const [selectedCourse, setSelectedCourse] = useState(null) // Curso selecionado
   
   // Dados do cartão
   const [cardData, setCardData] = useState({
@@ -45,128 +44,35 @@ const Payment = () => {
     installments: 1
   })
   
-  // Carregar cursos do carrinho ou curso único da URL
+  // Carregar curso se houver courseId na URL
   useEffect(() => {
-    // Primeiro, verificar se há cursos no localStorage (vindo do carrinho)
-    const savedCourses = localStorage.getItem('checkoutCourses')
-    if (savedCourses) {
-      try {
-        const courses = JSON.parse(savedCourses)
-        setCheckoutCourses(courses)
-        // Limpar do localStorage após carregar
-        localStorage.removeItem('checkoutCourses')
-        
-        // Rolar até o botão de pagamento quando carregar com cursos do carrinho
-        // Usar múltiplos timeouts para garantir que role após o conteúdo estar renderizado
-        const scrollToPaymentButton = () => {
-          const paymentButton = document.getElementById('payment-button')
-          if (paymentButton) {
-            paymentButton.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          } else {
-            // Fallback: rolar até o final da página
-            window.scrollTo({
-              top: document.documentElement.scrollHeight,
-              behavior: 'smooth'
+    const courseId = searchParams.get('course')
+    if (courseId) {
+      const loadCourse = async () => {
+        try {
+          const courseRef = doc(db, 'courses', courseId)
+          const courseDoc = await getDoc(courseRef)
+          if (courseDoc.exists()) {
+            setSelectedCourse({
+              id: courseDoc.id,
+              ...courseDoc.data()
             })
           }
+        } catch (error) {
+          console.error('Erro ao carregar curso:', error)
         }
-        
-        // Tentar rolar imediatamente e depois com delays
-        setTimeout(scrollToPaymentButton, 100)
-        setTimeout(scrollToPaymentButton, 500)
-        setTimeout(scrollToPaymentButton, 1000)
-        setTimeout(scrollToPaymentButton, 1500)
-      } catch (error) {
-        console.error('Erro ao carregar cursos do carrinho:', error)
       }
-    } else {
-      // Se não houver cursos no carrinho, verificar se há courseId na URL
-      const courseId = searchParams.get('course')
-      if (courseId) {
-        const loadCourse = async () => {
-          try {
-            const courseRef = doc(db, 'courses', courseId)
-            const courseDoc = await getDoc(courseRef)
-            if (courseDoc.exists()) {
-              const courseData = {
-                id: courseDoc.id,
-                ...courseDoc.data()
-              }
-              setSelectedCourse(courseData)
-              // Adicionar como único curso no checkout
-              setCheckoutCourses([{
-                id: courseData.id,
-                name: courseData.name,
-                price: courseData.price || 99.90,
-                originalPrice: courseData.originalPrice || 149.99,
-                competition: courseData.competition,
-                imageUrl: courseData.imageUrl || courseData.imageBase64,
-                description: courseData.description
-              }])
-            }
-          } catch (error) {
-            console.error('Erro ao carregar curso:', error)
-          }
-        }
-        loadCourse()
-      }
+      loadCourse()
     }
   }, [searchParams])
   
-  // Calcular totais dos cursos
-  const calculateTotals = () => {
-    if (checkoutCourses.length === 0) {
-      // Fallback para curso único (compatibilidade)
-      if (selectedCourse) {
-        const price = selectedCourse.price || 99.90
-        const originalPrice = selectedCourse.originalPrice || 149.99
-        return {
-          totalPrice: price,
-          totalOriginalPrice: originalPrice,
-          totalDiscount: originalPrice - price,
-          courseIds: [selectedCourse.id]
-        }
-      }
-      // Padrão ALEGO
-      return {
-        totalPrice: 99.90,
-        totalOriginalPrice: 149.99,
-        totalDiscount: 50.09,
-        courseIds: []
-      }
-    }
-    
-    const totalPrice = checkoutCourses.reduce((sum, course) => sum + (course.price || 99.90), 0)
-    const totalOriginalPrice = checkoutCourses.reduce((sum, course) => sum + (course.originalPrice || 149.99), 0)
-    const totalDiscount = totalOriginalPrice - totalPrice
-    const courseIds = checkoutCourses.map(course => course.id).filter(Boolean)
-    
-    return {
-      totalPrice,
-      totalOriginalPrice,
-      totalDiscount,
-      courseIds
-    }
-  }
-
-  const totals = calculateTotals()
-  
-  // Dados do produto (para compatibilidade com código existente)
-  const product = checkoutCourses.length > 0 ? {
-    name: checkoutCourses.length === 1 ? checkoutCourses[0].name : `${checkoutCourses.length} Cursos`,
-    originalPrice: totals.totalOriginalPrice,
-    price: totals.totalPrice,
-    discount: totals.totalDiscount,
-    courseId: totals.courseIds.length === 1 ? totals.courseIds[0] : null, // null se múltiplos cursos
-    courseIds: totals.courseIds, // Array de IDs
-    competition: checkoutCourses.length === 1 ? checkoutCourses[0].competition : 'Múltiplos'
-  } : selectedCourse ? {
+  // Dados do produto (usa curso selecionado ou padrão ALEGO)
+  const product = selectedCourse ? {
     name: selectedCourse.name,
     originalPrice: selectedCourse.originalPrice || 149.99,
     price: selectedCourse.price || 99.90,
     discount: (selectedCourse.originalPrice || 149.99) - (selectedCourse.price || 99.90),
     courseId: selectedCourse.id,
-    courseIds: [selectedCourse.id],
     competition: selectedCourse.competition
   } : {
     name: 'Mentoria Policial Legislativo ALEGO',
@@ -174,7 +80,6 @@ const Payment = () => {
     price: 99.90,
     discount: 50.09,
     courseId: null,
-    courseIds: [],
     competition: 'ALEGO'
   }
 
@@ -207,11 +112,9 @@ const Payment = () => {
         if (status === 'paid') {
           console.log('Pagamento confirmado! Atualizando página...')
           
-          // Atualizar acesso aos cursos no perfil do usuário
+          // Atualizar acesso ao curso no perfil do usuário
           const userId = transactionData.userId
-          const courseIdsToAdd = transactionData.courseIds || (transactionData.courseId ? [transactionData.courseId] : [])
-          
-          if (userId && courseIdsToAdd.length > 0) {
+          if (userId && transactionData.courseId) {
             try {
               const userRef = doc(db, 'users', userId)
               const userDoc = await getDoc(userRef)
@@ -220,22 +123,16 @@ const Payment = () => {
                 const currentData = userDoc.data()
                 const purchasedCourses = currentData.purchasedCourses || []
                 
-                // Adicionar todos os cursos comprados se não estiverem na lista
-                let updatedCourses = [...purchasedCourses]
-                courseIdsToAdd.forEach(courseId => {
-                  if (courseId && !updatedCourses.includes(courseId)) {
-                    updatedCourses.push(courseId)
-                  }
-                })
-                
-                if (updatedCourses.length > purchasedCourses.length) {
+                // Adicionar curso comprado se não estiver na lista
+                if (!purchasedCourses.includes(transactionData.courseId)) {
+                  purchasedCourses.push(transactionData.courseId)
                   await setDoc(userRef, {
-                    purchasedCourses: updatedCourses
+                    purchasedCourses: purchasedCourses
                   }, { merge: true })
                 }
               }
             } catch (error) {
-              console.error('Erro ao atualizar acesso aos cursos:', error)
+              console.error('Erro ao atualizar acesso ao curso:', error)
             }
           }
           
@@ -405,8 +302,7 @@ const Payment = () => {
         status: 'pending',
         createdAt: serverTimestamp(),
         transactionId,
-        courseId: product.courseId, // ID do curso único (para compatibilidade)
-        courseIds: product.courseIds || [], // Array de IDs dos cursos comprados
+        courseId: product.courseId, // ID do curso comprado
         competition: product.competition, // Nome do concurso
         // Para cartão, salvar últimos 4 dígitos
         ...(paymentMethod === 'card' && {
@@ -647,29 +543,24 @@ const Payment = () => {
             userId: accountResult.uid || accountResult.userId,
           }, { merge: true })
 
-          // Ativar acesso aos cursos comprados
+          // Ativar acesso ao curso específico
           const userId = accountResult.uid || accountResult.userId
-          const courseIdsToAdd = transactionData.courseIds || (transactionData.courseId ? [transactionData.courseId] : [])
-          
-          if (userId && courseIdsToAdd.length > 0) {
+          if (userId) {
             const userRef = doc(db, 'users', userId)
             const userDoc = await getDoc(userRef)
             const currentData = userDoc.exists() ? userDoc.data() : {}
             const purchasedCourses = currentData.purchasedCourses || []
             
-            // Adicionar todos os cursos comprados se não estiverem na lista
-            let updatedCourses = [...purchasedCourses]
-            courseIdsToAdd.forEach(courseId => {
-              if (courseId && !updatedCourses.includes(courseId)) {
-                updatedCourses.push(courseId)
-              }
-            })
+            // Adicionar curso comprado se não estiver na lista
+            if (transactionData.courseId && !purchasedCourses.includes(transactionData.courseId)) {
+              purchasedCourses.push(transactionData.courseId)
+            }
             
             await setDoc(userRef, {
               hasActiveSubscription: true,
               subscriptionStartDate: serverTimestamp(),
               lastPaymentDate: serverTimestamp(),
-              purchasedCourses: updatedCourses
+              purchasedCourses: purchasedCourses
             }, { merge: true })
           }
 
@@ -683,32 +574,25 @@ const Payment = () => {
           setErrorMessage('Pagamento aprovado, mas houve erro ao criar conta. Entre em contato com o suporte.')
         }
       } else {
-        // Usuário já logado - apenas ativar acesso aos cursos comprados
-        const courseIdsToAdd = transactionData.courseIds || (transactionData.courseId ? [transactionData.courseId] : [])
-        
-        if (courseIdsToAdd.length > 0) {
-          const userRef = doc(db, 'users', user.uid)
-          const userDoc = await getDoc(userRef)
-          if (userDoc.exists()) {
-            const currentData = userDoc.data()
-            const purchasedCourses = currentData.purchasedCourses || []
-            
-            // Adicionar todos os cursos comprados se não estiverem na lista
-            let updatedCourses = [...purchasedCourses]
-            courseIdsToAdd.forEach(courseId => {
-              if (courseId && !updatedCourses.includes(courseId)) {
-                updatedCourses.push(courseId)
-              }
-            })
-            
-            await setDoc(userRef, {
-              ...currentData,
-              hasActiveSubscription: true,
-              subscriptionStartDate: serverTimestamp(),
-              lastPaymentDate: serverTimestamp(),
-              purchasedCourses: updatedCourses
-            }, { merge: true })
+        // Usuário já logado - apenas ativar acesso ao curso específico
+        const userRef = doc(db, 'users', user.uid)
+        const userDoc = await getDoc(userRef)
+        if (userDoc.exists()) {
+          const currentData = userDoc.data()
+          const purchasedCourses = currentData.purchasedCourses || []
+          
+          // Adicionar curso comprado se não estiver na lista
+          if (transactionData.courseId && !purchasedCourses.includes(transactionData.courseId)) {
+            purchasedCourses.push(transactionData.courseId)
           }
+          
+          await setDoc(userRef, {
+            ...currentData,
+            hasActiveSubscription: true,
+            subscriptionStartDate: serverTimestamp(),
+            lastPaymentDate: serverTimestamp(),
+            purchasedCourses: purchasedCourses
+          }, { merge: true })
         }
       }
       
@@ -749,17 +633,8 @@ const Payment = () => {
               animate={{ opacity: 1, x: 0 }}
               className="rounded-2xl bg-white dark:bg-slate-800 shadow-xl overflow-hidden"
             >
-              {/* Imagem do curso (apenas se for curso único) */}
-              {checkoutCourses.length === 1 && checkoutCourses[0].imageUrl && (
-                <div className="w-full h-48 overflow-hidden">
-                  <img
-                    src={checkoutCourses[0].imageUrl}
-                    alt={checkoutCourses[0].name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
-              {!checkoutCourses.length && selectedCourse && (selectedCourse.imageBase64 || selectedCourse.imageUrl) && (
+              {/* Imagem do curso */}
+              {selectedCourse && (selectedCourse.imageBase64 || selectedCourse.imageUrl) && (
                 <div className="w-full h-48 overflow-hidden">
                   <img
                     src={selectedCourse.imageBase64 || selectedCourse.imageUrl}
@@ -774,46 +649,10 @@ const Payment = () => {
                   <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 px-3 py-1 text-xs font-bold text-white mb-3">
                     <span>🔥 PROMOÇÃO</span>
                   </div>
-                  <h3 className="text-xl font-bold mb-2 text-slate-900 dark:text-white">
-                    {checkoutCourses.length > 0 
-                      ? checkoutCourses.length === 1 
-                        ? checkoutCourses[0].name 
-                        : `${checkoutCourses.length} Cursos Selecionados`
-                      : product.name}
-                  </h3>
+                  <h3 className="text-xl font-bold mb-2 text-slate-900 dark:text-white">{product.name}</h3>
                   
-                  {/* Lista de cursos quando houver múltiplos */}
-                  {checkoutCourses.length > 1 && (
-                    <div className="mb-4 space-y-2 max-h-48 overflow-y-auto">
-                      {checkoutCourses.map((course, index) => (
-                        <div key={course.id || index} className="flex items-start gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-700/50">
-                          {course.imageUrl && (
-                            <img
-                              src={course.imageUrl}
-                              alt={course.name}
-                              className="w-12 h-12 object-cover rounded"
-                            />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
-                              {course.name}
-                            </p>
-                            <p className="text-xs text-slate-600 dark:text-slate-400">
-                              {formatCurrency(course.price || 99.90)}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {/* Descrição do curso (apenas se for curso único) */}
-                  {checkoutCourses.length === 1 && checkoutCourses[0].description && (
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 line-clamp-3">
-                      {checkoutCourses[0].description}
-                    </p>
-                  )}
-                  {!checkoutCourses.length && selectedCourse && selectedCourse.description && (
+                  {/* Descrição do curso */}
+                  {selectedCourse && selectedCourse.description && (
                     <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 line-clamp-3">
                       {selectedCourse.description}
                     </p>
@@ -1241,7 +1080,6 @@ const Payment = () => {
 
                   {/* Botão de Pagamento */}
                   <button
-                    id="payment-button"
                     onClick={handlePayment}
                     disabled={loading}
                     className="w-full rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-4 text-white font-bold text-lg shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"

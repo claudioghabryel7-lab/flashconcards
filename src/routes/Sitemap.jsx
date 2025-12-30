@@ -27,27 +27,11 @@ const Sitemap = () => {
           .map(doc => ({ id: doc.id, ...doc.data() }))
           .filter(course => course.active !== false)
 
-        // Buscar artigos do blog publicados
-        const articlesRef = collection(db, 'blog_articles')
-        const articlesSnapshot = await getDocs(articlesRef)
-        const articles = articlesSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(article => article.status === 'published')
-
-        // Buscar notícias publicadas
-        const newsRef = collection(db, 'posts')
-        const newsSnapshot = await getDocs(newsRef)
-        const news = newsSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(post => post.isNews === true)
-
         // URLs estáticas com palavras-chave
         const staticUrls = [
           { loc: `${baseUrl}/`, changefreq: 'daily', priority: '1.0' },
           { loc: `${baseUrl}/guia-estudos`, changefreq: 'weekly', priority: '0.8' },
           { loc: `${baseUrl}/pagamento`, changefreq: 'weekly', priority: '0.9' },
-          { loc: `${baseUrl}/blank`, changefreq: 'daily', priority: '0.9' },
-          { loc: `${baseUrl}/login`, changefreq: 'monthly', priority: '0.7' },
         ]
 
         // URLs dinâmicas dos cursos
@@ -58,24 +42,8 @@ const Sitemap = () => {
           lastmod: course.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
         }))
 
-        // URLs dos artigos do blog
-        const articleUrls = articles.map(article => ({
-          loc: `${baseUrl}/blank/noticia/${article.id}`,
-          changefreq: 'weekly',
-          priority: '0.8',
-          lastmod: article.updatedAt?.toDate?.()?.toISOString() || article.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
-        }))
-
-        // URLs das notícias
-        const newsUrls = news.map(post => ({
-          loc: `${baseUrl}/noticia/${post.id}`,
-          changefreq: 'weekly',
-          priority: '0.8',
-          lastmod: post.updatedAt?.toDate?.()?.toISOString() || post.createdAt?.toDate?.()?.toISOString() || new Date().toISOString()
-        }))
-
         // Gerar XML
-        const allUrls = [...staticUrls, ...courseUrls, ...articleUrls, ...newsUrls]
+        const allUrls = [...staticUrls, ...courseUrls]
         
         const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

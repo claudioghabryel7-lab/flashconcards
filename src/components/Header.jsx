@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, memo } from 'react'
+import { useMemo, useState, useRef, useEffect, memo } from 'react'
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   AcademicCapIcon,
@@ -13,17 +13,13 @@ import {
   BookOpenIcon,
   UsersIcon,
   ShieldCheckIcon,
-  ShoppingCartIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { useCart } from '../hooks/useCart.jsx'
-import { useState } from 'react'
 
 const Header = () => {
   const { user, logout, isAdmin, profile } = useAuth()
   const { darkMode, toggleDarkMode } = useDarkMode()
-  const { getCartCount, cartItems } = useCart()
   const navigate = useNavigate()
   const location = useLocation()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -176,28 +172,6 @@ const Header = () => {
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-2">
-              {/* Cart Icon */}
-              <button
-                type="button"
-                onClick={() => {
-                  // Salvar itens do carrinho no localStorage
-                  if (cartItems.length > 0) {
-                    localStorage.setItem('checkoutCourses', JSON.stringify(cartItems))
-                  }
-                  // Navegar para página de pagamento
-                  navigate('/pagamento')
-                }}
-                className="relative p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                aria-label="Ir para carrinho"
-              >
-                <ShoppingCartIcon className="h-5 w-5" />
-                {getCartCount() > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                    {getCartCount()}
-                  </span>
-                )}
-              </button>
-
               {/* Dark Mode Toggle */}
               <button
                 type="button"
@@ -382,7 +356,6 @@ const Header = () => {
           </div>
         </>
       )}
-
     </>
   )
 }

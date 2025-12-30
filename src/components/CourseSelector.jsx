@@ -1,5 +1,5 @@
 import { useEffect, useState, startTransition } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { collection, getDocs, query, where, doc, setDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -58,18 +58,13 @@ const CourseSelector = () => {
       // Verificar se o curso ALEGO padrão existe
       const alegoCourse = allCourses.find(c => c.id === 'alego-default')
       
-        // Filtrar cursos: se não tem cursos comprados, mostrar TODOS os cursos disponíveis para compra
-        // Se tem cursos comprados, mostrar apenas os comprados (ou todos se admin)
-        const hasPurchasedCourses = purchasedCourses && purchasedCourses.length > 0
-        
+      // Filtrar apenas cursos comprados (ou todos se admin)
       const filtered = isAdmin
         ? allCourses.filter(c => c.active !== false)
-          : hasPurchasedCourses
-            ? allCourses.filter(c => {
+        : allCourses.filter(c => {
             if (c.id === 'alego-default') return true
             return purchasedCourses.includes(c.id) && c.active !== false
           })
-            : allCourses.filter(c => c.active !== false && c.id !== 'alego-default') // Mostrar todos os cursos disponíveis para compra (exceto ALEGO padrão)
 
       // Ordenar: ALEGO padrão primeiro, depois os outros por nome
       const sorted = filtered.sort((a, b) => {
@@ -160,20 +155,12 @@ const CourseSelector = () => {
             onClick={() => navigate('/')}
             className="rounded-full bg-blue-600 px-6 py-3 text-white font-semibold hover:bg-blue-700 transition"
           >
-            Ver Cursos Disponíveis
+            Voltar para Início
           </button>
         </div>
       </div>
     )
   }
-
-  // Verificar se o usuário tem cursos comprados
-  const purchasedCourses = profile?.purchasedCourses || []
-  const hasPurchasedCourses = purchasedCourses.length > 0
-  const isAdmin = profile?.role === 'admin'
-  
-  // Se não tem cursos comprados e não é admin, mostrar cursos para compra
-  const showingAvailableCourses = !hasPurchasedCourses && !isAdmin
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 px-4 py-6 sm:py-10">
@@ -189,12 +176,10 @@ const CourseSelector = () => {
             <AcademicCapIcon className="h-8 w-8 text-white" />
           </div>
           <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mb-2">
-            {showingAvailableCourses ? 'Cursos Disponíveis' : 'Escolha seu Curso'}
+            Escolha seu Curso
           </h2>
           <p className="text-slate-600 dark:text-slate-400">
-            {showingAvailableCourses 
-              ? 'Escolha um curso para começar seus estudos' 
-              : 'Selecione o curso que deseja estudar agora'}
+            Selecione o curso que deseja estudar agora
           </p>
         </div>
 
@@ -203,50 +188,20 @@ const CourseSelector = () => {
           style={{ touchAction: 'pan-y' }} // Permite rolagem vertical mesmo tocando nos cards
         >
           {courses.map((course) => (
-            <div
+            <button
               key={course.id || 'default'}
-              className={`w-full p-4 rounded-xl border-2 transition-all ${
-                showingAvailableCourses
-                  ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700'
-                  : selectedCourseId === course.id
+              type="button"
+              onClick={() => setSelectedCourseId(course.id)}
+              className={`w-full text-left p-4 rounded-xl border-2 transition-all hover:scale-102 active:scale-98 ${
+                selectedCourseId === course.id
                   ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-lg'
                   : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 bg-white dark:bg-slate-700'
               }`}
-            >
-              {showingAvailableCourses ? (
-                // Layout para cursos disponíveis para compra
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="font-bold text-lg text-slate-900 dark:text-white mb-1">
-                      {course.name}
-                    </p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                      {course.competition || 'Curso'}
-                    </p>
-                    <div className="flex items-baseline gap-2">
-                      {course.originalPrice && course.originalPrice > course.price && (
-                        <span className="text-sm text-slate-400 line-through">
-                          R$ {course.originalPrice.toFixed(2).replace('.', ',')}
-                        </span>
-                      )}
-                      <span className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                        R$ {(course.price || 99.90).toFixed(2).replace('.', ',')}
-                      </span>
-                    </div>
-                  </div>
-                  <Link
-                    to={`/pagamento?course=${course.id}`}
-                    className="ml-4 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition whitespace-nowrap"
-                  >
-                    Comprar
-                  </Link>
-                </div>
-              ) : (
-                // Layout para seleção de curso (quando já tem cursos comprados)
-                <button
-                  type="button"
-                  onClick={() => setSelectedCourseId(course.id)}
-                  className="w-full text-left"
+              style={{
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
+                willChange: 'transform',
+              }}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -278,14 +233,10 @@ const CourseSelector = () => {
                   </span>
                 )}
               </div>
-                </button>
-              )}
-            </div>
+            </button>
           ))}
         </div>
 
-        {!showingAvailableCourses && (
-          <>
         <button
           onClick={handleSelectCourse}
           disabled={selectedCourseId === undefined || saving}
@@ -297,22 +248,6 @@ const CourseSelector = () => {
         <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-4">
           Você pode trocar de curso a qualquer momento nas configurações
         </p>
-          </>
-        )}
-
-        {showingAvailableCourses && (
-          <div className="text-center">
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-              Escolha um curso acima para começar seus estudos
-            </p>
-            <button
-              onClick={() => navigate('/')}
-              className="text-blue-600 dark:text-blue-400 font-semibold hover:underline"
-            >
-              Ver mais cursos na página inicial →
-            </button>
-          </div>
-        )}
       </div>
     </div>
   )
