@@ -175,6 +175,37 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       return
     }
 
+    // Validar tamanho mínimo da redação
+    const wordCount = redacaoTexto.trim().split(/\s+/).length
+    const charCount = redacaoTexto.trim().length
+    
+    if (wordCount < 50 || charCount < 200) {
+      // Para textos muito curtos, atribuir nota zero automaticamente
+      setResultado({
+        nota: 0,
+        criterios: {
+          dominio: 0,
+          compreensao: 0,
+          argumentacao: 0,
+          estrutura: 0,
+          conhecimento: 0
+        },
+        feedback: `Esta redação está muito curta (${wordCount} palavras, ${charCount} caracteres). Uma redação de concurso público deve ter no mínimo 200 palavras e desenvolver adequadamente o tema proposto. Por isso, a nota foi zerada.`,
+        dicas: [
+          'Escreva pelo menos 200 palavras para uma redação completa',
+          'Desenvolva o tema com argumentos e exemplos',
+          'Estruture sua redação com introdução, desenvolvimento e conclusão',
+          'Use parágrafos (4 espaços no início da linha) para organizar suas ideias'
+        ],
+        paragraphCount: detectParagraphs(redacaoTexto),
+        lines: redacaoTexto.split('\n').length,
+        wordCount: wordCount
+      })
+      setIsRunning(false)
+      setAnalizing(false)
+      return
+    }
+
     setIsRunning(false)
     setAnalizing(true)
 
@@ -228,35 +259,53 @@ INFORMAÇÕES DA REDAÇÃO:
 - Total de palavras: ${wordCount}
 - Tamanho do texto: ${redacaoTexto.length} caracteres
 
-${wordCount < 200 ? '⚠️ ATENÇÃO: Esta redação está MUITO CURTA (menos de 200 palavras). Isso deve impactar NEGATIVAMENTE a nota, especialmente em estrutura e argumentação.' : ''}
+${wordCount < 200 ? '⚠️⚠️⚠️ CRÍTICO: Esta redação está MUITO CURTA (menos de 200 palavras). Uma redação de concurso deve ter no mínimo 200 palavras. Isso deve resultar em NOTA MUITO BAIXA ou ZERO, especialmente em estrutura e argumentação.' : ''}
+${wordCount < 100 ? '⚠️⚠️⚠️ CRÍTICO: Esta redação está EXTREMAMENTE CURTA (menos de 100 palavras). Isso deve resultar em NOTA ZERO ou MUITO PRÓXIMA DE ZERO em TODOS os critérios.' : ''}
 ${paragraphCount < 3 ? '⚠️ ATENÇÃO: Esta redação tem poucos parágrafos. Isso deve impactar NEGATIVAMENTE a nota em estrutura textual.' : ''}
+${paragraphCount === 0 ? '⚠️⚠️⚠️ CRÍTICO: Esta redação NÃO TEM PARÁGRAFOS. Isso deve resultar em NOTA ZERO em estrutura textual.' : ''}
 
-Analise a seguinte redação e atribua uma nota de 0 a 1000, seguindo os critérios típicos de concursos públicos:
+REGRAS DE AVALIAÇÃO RIGOROSAS:
+- Se a redação tiver menos de 200 palavras: NOTA MUITO BAIXA (máximo 200 pontos no total)
+- Se a redação tiver menos de 100 palavras: NOTA ZERO ou MUITO PRÓXIMA DE ZERO
+- Se a redação não tiver parágrafos: NOTA ZERO em estrutura
+- Se a redação não desenvolver o tema: NOTA ZERO em compreensão
+- Se a redação não tiver argumentos: NOTA ZERO em argumentação
+- Se a redação for apenas texto sem sentido ou palavras soltas: NOTA ZERO em todos os critérios
 
-CRITÉRIOS DE AVALIAÇÃO (seja RIGOROSO e JUSTO):
+Analise a seguinte redação e atribua uma nota de 0 a 1000, seguindo os critérios típicos de concursos públicos. SEJA RIGOROSO:
+
+CRITÉRIOS DE AVALIAÇÃO (seja EXTREMAMENTE RIGOROSO):
 1. Domínio da modalidade escrita (0-200 pontos): ortografia, acentuação, pontuação, uso adequado da língua
-   - Erros graves de ortografia: reduzir significativamente
-   - Pontuação incorreta: reduzir
+   - Texto sem sentido ou palavras soltas: NOTA ZERO
+   - Erros graves de ortografia: reduzir drasticamente (máximo 50 pontos)
+   - Pontuação incorreta: reduzir significativamente
    - Uso inadequado da língua: reduzir
+   - Texto muito curto: NOTA ZERO ou muito baixa
    
 2. Compreensão do tema (0-200 pontos): adequação ao tema proposto, compreensão da proposta
-   - Se fugir do tema: nota ZERO neste critério
-   - Se abordar parcialmente: nota reduzida
+   - Se não desenvolver o tema: NOTA ZERO
+   - Se fugir do tema: NOTA ZERO
+   - Se for apenas texto sem sentido: NOTA ZERO
+   - Se abordar parcialmente: nota muito baixa (máximo 50 pontos)
    - Se abordar completamente: nota alta
    
 3. Argumentação (0-200 pontos): qualidade dos argumentos, coerência, capacidade de defender pontos de vista
-   - Argumentos fracos ou ausentes: nota baixa
+   - Sem argumentos: NOTA ZERO
+   - Texto sem sentido: NOTA ZERO
+   - Argumentos fracos ou ausentes: nota muito baixa (máximo 30 pontos)
    - Argumentos sólidos e bem desenvolvidos: nota alta
-   - Falta de coerência: reduzir significativamente
+   - Falta de coerência: NOTA ZERO ou muito baixa
    
 4. Estrutura textual (0-200 pontos): organização do texto, parágrafos (linhas com 4 espaços), introdução, desenvolvimento, conclusão
-   - Sem parágrafos adequados: reduzir
-   - Sem introdução/desenvolvimento/conclusão claros: reduzir
+   - Sem parágrafos: NOTA ZERO
+   - Texto muito curto: NOTA ZERO
+   - Sem introdução/desenvolvimento/conclusão: NOTA ZERO
    - Estrutura bem organizada: nota alta
    
 5. Conhecimento sobre o cargo/concurso (0-200 pontos): demonstração de conhecimento sobre a área, atualidade, relevância
-   - Sem conhecimento específico: nota baixa
-   - Conhecimento superficial: nota média
+   - Texto sem sentido: NOTA ZERO
+   - Sem conhecimento específico: NOTA ZERO
+   - Conhecimento superficial: nota muito baixa (máximo 40 pontos)
    - Conhecimento profundo e atualizado: nota alta
 
 REDAÇÃO DO CANDIDATO (ANALISE ESTE TEXTO ESPECÍFICO):
