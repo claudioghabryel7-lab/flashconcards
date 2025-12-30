@@ -74,16 +74,27 @@ const StudyPlanner = ({
   }
 
   const getActivityLink = (tipo, materia, modulo) => {
+    // Validar se matéria e módulo são válidos (não "A DEFINIR" ou vazios)
+    const validMateria = materia && materia.trim() !== '' && materia !== 'A DEFINIR'
+    const validModulo = modulo && modulo.trim() !== '' && modulo !== 'A DEFINIR'
+    
     // Criar parâmetros de query se matéria e módulo estiverem disponíveis
     const params = new URLSearchParams()
-    if (materia) {
-      params.set('materia', materia)
+    if (validMateria) {
+      params.set('materia', materia.trim())
     }
-    if (modulo) {
-      params.set('modulo', modulo)
+    if (validModulo) {
+      params.set('modulo', modulo.trim())
     }
     const queryString = params.toString()
     const query = queryString ? `?${queryString}` : ''
+    
+    // Log para debug
+    if (validMateria && validModulo) {
+      console.log('🔗 Gerando link:', tipo, '-', materia, '-', modulo, '→', query)
+    } else {
+      console.warn('⚠️ Link inválido - matéria ou módulo ausente:', { tipo, materia, modulo })
+    }
     
     switch (tipo) {
       case 'flashcards':
@@ -138,12 +149,12 @@ const StudyPlanner = ({
             </p>
           </div>
         </div>
-        <div className="text-left sm:text-right">
+        <div className="text-left sm:text-right flex flex-col sm:items-end gap-2">
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Atualiza automaticamente às 11:30
+            Atualiza automaticamente às 06:00
           </p>
           {loading && (
-            <p className="text-xs text-alego-600 dark:text-alego-400 mt-1">
+            <p className="text-xs text-alego-600 dark:text-alego-400">
               Gerando novo plano...
             </p>
           )}
@@ -210,8 +221,8 @@ const StudyPlanner = ({
                               <h5 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white break-words">
                                 {atividade.materia}
                                 {atividade.modulo && (
-                                  <span className="block sm:inline sm:ml-1">
-                                    {atividade.modulo}
+                                  <span className="text-slate-600 dark:text-slate-400 font-normal">
+                                    {' - '}{atividade.modulo}
                                   </span>
                                 )}
                               </h5>
@@ -219,6 +230,11 @@ const StudyPlanner = ({
                                 {atividade.prioridade}
                               </span>
                             </div>
+                            {atividade.topico && (
+                              <p className="text-xs sm:text-sm font-medium text-alego-600 dark:text-alego-400 mb-1 break-words">
+                                📌 {atividade.topico}
+                              </p>
+                            )}
                             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mb-2 break-words">
                               {atividade.descricao}
                             </p>

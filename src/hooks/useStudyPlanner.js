@@ -26,8 +26,12 @@ export const useStudyPlanner = (userId, courseId, allCards, cardProgress, progre
     const byModulo = {}
 
     allCards.forEach(card => {
-      const materia = card.materia || 'Geral'
-      const modulo = card.modulo || 'Geral'
+      // Não usar "Geral" - se não houver matéria/módulo, pular o card
+      if (!card.materia || !card.modulo) {
+        return // Pular cards sem matéria/módulo definidos
+      }
+      const materia = card.materia
+      const modulo = card.modulo
       const key = `${materia}::${modulo}`
       const progress = cardProgress[card.id]
 
@@ -234,6 +238,16 @@ export const useStudyPlanner = (userId, courseId, allCards, cardProgress, progre
         return a.retentionRate - b.retentionRate
       })
     
+    // Log para diagnóstico
+    console.log('📚 ProgressStats calculado:', {
+      totalMaterias: Object.keys(byMateria).length,
+      totalModulos: Object.keys(byModulo).length,
+      pendingMateriasCount: pendingMaterias.length,
+      pendingModulosCount: pendingModulos.length,
+      sampleMaterias: pendingMaterias.slice(0, 3).map(([m]) => m),
+      sampleModulos: pendingModulos.slice(0, 3).map(m => `${m.materia} - ${m.modulo}`)
+    })
+    
     // Calcular estatísticas gerais de dificuldade
     let totalAgain = 0
     let totalHard = 0
@@ -410,13 +424,20 @@ ${progressSummary.pendingMaterias.map((m, i) => {
 }).join('\n')}
 
 MÓDULOS PENDENTES (próximos a estudar - priorizar problemáticos):
-${progressSummary.pendingModulos.slice(0, 5).map((m, i) => {
+${progressSummary.pendingModulos.slice(0, 10).map((m, i) => {
   const problematic = m.isProblematic ? '⚠️ PROBLEMÁTICO' : ''
   const reviewInfo = m.cardsNeedingReview > 0 
     ? `(${m.cardsNeedingReview} cards precisam revisão urgente)`
     : ''
-  return `${i + 1}. ${m.materia} - ${m.modulo}: ${m.percentage}% completo ${problematic} ${reviewInfo}`
+  return `${i + 1}. MATÉRIA: "${m.materia}" | MÓDULO: "${m.modulo}" | ${m.percentage}% completo ${problematic} ${reviewInfo}`
 }).join('\n')}
+
+⚠️⚠️⚠️ LISTA COMPLETA DE MÓDULOS DISPONÍVEIS (USE OS NOMES EXATOS) ⚠️⚠️⚠️
+${progressSummary.pendingModulos.slice(0, 20).map((m, i) => {
+  return `- Matéria: "${m.materia}" | Módulo: "${m.modulo}"`
+}).join('\n')}
+
+IMPORTANTE: Use APENAS os nomes EXATOS listados acima. Copie e cole exatamente como aparecem entre aspas.
 
 ${editalStructure ? `ESTRUTURA DO EDITAL (referência):\n${editalStructure}\n` : ''}
 
@@ -445,13 +466,18 @@ ANÁLISE INTELIGENTE OBRIGATÓRIA:
 - Cards que precisam revisão urgente devem ser priorizados HOJE
 - Balance entre revisão de cards difíceis e estudo de conteúdo novo baseado na taxa de retenção
 
-IMPORTANTE:
+IMPORTANTE - CRÍTICO:
 - O plano deve ser específico e acionável
 - Sugira módulos concretos para estudar, priorizando os problemáticos
 - Indique qual ferramenta usar para cada atividade
 - Se há cards urgentes para revisar, inclua isso como PRIMEIRA atividade do dia
 - Balance entre conteúdo novo e revisão baseado na análise de dificuldade
 - Se uma matéria tem muitos "again", sugira estudar ela com mais frequência
+- ⚠️⚠️⚠️ NUNCA use "A DEFINIR" nos campos "materia" e "modulo"
+- ⚠️⚠️⚠️ SEMPRE use os nomes EXATOS das matérias e módulos da lista "MATÉRIAS PENDENTES" e "MÓDULOS PENDENTES" acima
+- ⚠️⚠️⚠️ Se não houver matéria/módulo específico, use os nomes da primeira matéria/módulo da lista pendente
+- ⚠️⚠️⚠️ Os campos "materia" e "modulo" DEVEM conter nomes reais, nunca placeholders
+- ⚠️⚠️⚠️ O campo "topico" deve conter um tópico específico dentro do módulo (ex: "Interpretação de Texto", "Direitos Fundamentais", "Funções Administrativas"). Seja específico e útil para o aluno saber exatamente o que estudar.
 
 FORMATO DE RESPOSTA (JSON):
 {
@@ -460,8 +486,9 @@ FORMATO DE RESPOSTA (JSON):
   "atividades": [
     {
       "tipo": "flashcards" | "questoes" | "simulado" | "redacao" | "mapas",
-      "materia": "Nome da matéria",
-      "modulo": "Nome do módulo (se aplicável)",
+      "materia": "Nome EXATO da matéria da lista acima (NUNCA use 'A DEFINIR')",
+      "modulo": "Nome EXATO do módulo da lista acima (NUNCA use 'A DEFINIR')",
+      "topico": "Tópico específico ou assunto dentro do módulo a ser estudado (ex: 'Interpretação de Texto', 'Direitos Fundamentais', 'Funções Administrativas')",
       "descricao": "O que fazer nesta atividade",
       "tempoEstimado": "Tempo estimado (ex: '30 minutos')",
       "prioridade": "alta" | "media" | "baixa"
@@ -483,6 +510,14 @@ FORMATO DE RESPOSTA (JSON):
   ]
 }
 
+⚠️⚠️⚠️ REGRA ABSOLUTA - CRÍTICO ⚠️⚠️⚠️
+- NUNCA use "A DEFINIR" em nenhum campo do JSON
+- SEMPRE use os nomes EXATOS das matérias e módulos das listas "MATÉRIAS PENDENTES" e "MÓDULOS PENDENTES" acima
+- Se não souber qual matéria/módulo usar, escolha o PRIMEIRO da lista "MÓDULOS PENDENTES"
+- Os campos "materia" e "modulo" DEVEM ser strings com nomes reais, nunca placeholders, nunca "A DEFINIR", nunca vazios
+- Exemplo CORRETO: "materia": "Português", "modulo": "Interpretação de Texto"
+- Exemplo ERRADO: "materia": "A DEFINIR", "modulo": "A DEFINIR"
+
 Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
 
       const result = await model.generateContent(prompt)
@@ -496,7 +531,226 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
         responseText = responseText.replace(/```\n?/g, '').trim()
       }
 
-      const recommendation = JSON.parse(responseText)
+      let recommendation = JSON.parse(responseText)
+      
+      // Log inicial para diagnóstico
+      console.log('📊 Dados disponíveis para mapeamento:', {
+        totalPendingMaterias: progressStats.pendingMaterias.length,
+        totalPendingModulos: progressStats.pendingModulos.length,
+        materias: progressStats.pendingMaterias.slice(0, 5).map(([m]) => m),
+        modulos: progressStats.pendingModulos.slice(0, 5).map(m => `${m.materia} - ${m.modulo}`),
+        atividadesRecebidas: recommendation.atividades?.length || 0
+      })
+      
+      // Validar e corrigir campos "A DEFINIR" - usar matérias/módulos reais
+      // Também mapear nomes similares para nomes exatos dos flashcards
+      if (recommendation.atividades && Array.isArray(recommendation.atividades)) {
+        recommendation.atividades = recommendation.atividades.map((atividade, index) => {
+          // Função para encontrar matéria exata (case-insensitive, normalização, busca parcial)
+          const findExactMateria = (nome) => {
+            if (!nome || nome.trim() === '') return null
+            const normalized = nome.trim().toLowerCase()
+            
+            // Remover palavras comuns que podem variar
+            const normalizedClean = normalized.replace(/^(direito|lei|de|da|do|dos|das)\s+/i, '').trim()
+            
+            // 1. Busca exata
+            let materiaMatch = progressStats.pendingMaterias.find(([m]) => {
+              const mLower = m.trim().toLowerCase()
+              return mLower === normalized || mLower === normalizedClean
+            })
+            if (materiaMatch) return materiaMatch[0]
+            
+            // 2. Busca parcial (contém) - mais flexível
+            materiaMatch = progressStats.pendingMaterias.find(([m]) => {
+              const mLower = m.trim().toLowerCase()
+              const mLowerClean = mLower.replace(/^(direito|lei|de|da|do|dos|das)\s+/i, '').trim()
+              return mLower.includes(normalized) || normalized.includes(mLower) ||
+                     mLowerClean.includes(normalizedClean) || normalizedClean.includes(mLowerClean)
+            })
+            if (materiaMatch) return materiaMatch[0]
+            
+            // 3. Tentar encontrar em módulos
+            const moduloMatch = progressStats.pendingModulos.find(m => {
+              const mLower = m.materia.trim().toLowerCase()
+              const mLowerClean = mLower.replace(/^(direito|lei|de|da|do|dos|das)\s+/i, '').trim()
+              return mLower === normalized || mLower === normalizedClean ||
+                     mLower.includes(normalized) || normalized.includes(mLower) ||
+                     mLowerClean.includes(normalizedClean) || normalizedClean.includes(mLowerClean)
+            })
+            return moduloMatch?.materia
+          }
+          
+          // Função para encontrar módulo exato (com busca parcial também)
+          const findExactModulo = (materiaNome, moduloNome) => {
+            if (!moduloNome || moduloNome.trim() === '') return null
+            const materiaExata = findExactMateria(materiaNome) || materiaNome
+            const normalizedModulo = moduloNome.trim().toLowerCase()
+            
+            // 1. Busca exata
+            let moduloMatch = progressStats.pendingModulos.find(m => 
+              m.materia === materiaExata && 
+              m.modulo.trim().toLowerCase() === normalizedModulo
+            )
+            if (moduloMatch) return moduloMatch.modulo
+            
+            // 2. Busca parcial (contém)
+            moduloMatch = progressStats.pendingModulos.find(m => {
+              if (m.materia !== materiaExata) return false
+              const mLower = m.modulo.trim().toLowerCase()
+              return mLower.includes(normalizedModulo) || normalizedModulo.includes(mLower)
+            })
+            return moduloMatch?.modulo
+          }
+          
+          // Validar e corrigir matéria - SEMPRE garantir que tenha uma matéria válida
+          if (!atividade.materia || atividade.materia === 'A DEFINIR' || atividade.materia.trim() === '' || atividade.materia === 'Geral') {
+            // Usar primeira matéria pendente ou módulo pendente
+            if (progressStats.pendingModulos.length > 0) {
+              atividade.materia = progressStats.pendingModulos[0].materia
+              console.log(`⚠️ Matéria vazia/inválida, usando primeira disponível: "${atividade.materia}"`)
+            } else if (progressStats.pendingMaterias.length > 0) {
+              atividade.materia = progressStats.pendingMaterias[0][0]
+              console.log(`⚠️ Matéria vazia/inválida, usando primeira matéria: "${atividade.materia}"`)
+            } else {
+              // Se não há dados, manter a atividade mas sem matéria específica
+              console.warn(`⚠️ Nenhuma matéria disponível, mantendo atividade sem matéria específica`)
+              atividade.materia = atividade.materia || 'Conteúdo Geral'
+            }
+          } else {
+            // Tentar encontrar matéria exata (mapear nome similar para nome exato)
+            const materiaExata = findExactMateria(atividade.materia)
+            if (materiaExata) {
+              console.log(`✅ Mapeando matéria "${atividade.materia}" → "${materiaExata}"`)
+              atividade.materia = materiaExata
+            } else if (atividade.materia !== 'Geral') {
+              console.warn(`⚠️ Matéria "${atividade.materia}" não encontrada`)
+              console.log('📋 Matérias disponíveis:', progressStats.pendingMaterias.map(([m]) => m))
+              console.log('📋 Módulos disponíveis:', progressStats.pendingModulos.map(m => m.materia))
+              
+              // Tentar usar primeira disponível
+              if (progressStats.pendingModulos.length > 0) {
+                atividade.materia = progressStats.pendingModulos[0].materia
+                console.log(`✅ Usando primeira matéria disponível: "${atividade.materia}"`)
+              } else if (progressStats.pendingMaterias.length > 0) {
+                atividade.materia = progressStats.pendingMaterias[0][0]
+                console.log(`✅ Usando primeira matéria da lista: "${atividade.materia}"`)
+              } else {
+                console.error(`❌ Nenhuma matéria disponível em pendingMaterias ou pendingModulos!`)
+              }
+            }
+          }
+          
+          // Validar e corrigir módulo - SEMPRE garantir que tenha um módulo válido
+          if (!atividade.modulo || atividade.modulo === 'A DEFINIR' || atividade.modulo.trim() === '' || atividade.modulo === 'Geral') {
+            // Usar primeiro módulo pendente da mesma matéria ou primeiro módulo disponível
+            const moduloDaMateria = progressStats.pendingModulos.find(m => m.materia === atividade.materia)
+            if (moduloDaMateria) {
+              atividade.modulo = moduloDaMateria.modulo
+              console.log(`⚠️ Módulo vazio/inválido, usando módulo da matéria: "${atividade.modulo}"`)
+            } else if (progressStats.pendingModulos.length > 0) {
+              atividade.materia = progressStats.pendingModulos[0].materia
+              atividade.modulo = progressStats.pendingModulos[0].modulo
+              console.log(`⚠️ Módulo vazio/inválido, usando primeiro módulo disponível: "${atividade.materia}" - "${atividade.modulo}"`)
+            } else {
+              // Se não há módulos, usar a própria matéria como módulo
+              console.warn(`⚠️ Nenhum módulo disponível, usando matéria como módulo`)
+              atividade.modulo = atividade.materia || 'Geral'
+            }
+          } else {
+            // Tentar encontrar módulo exato (mapear nome similar para nome exato)
+            const moduloExato = findExactModulo(atividade.materia, atividade.modulo)
+            if (moduloExato) {
+              console.log(`✅ Mapeando módulo "${atividade.modulo}" → "${moduloExato}"`)
+              atividade.modulo = moduloExato
+            } else if (atividade.modulo !== 'Geral') {
+              // Se não encontrou, tentar encontrar qualquer módulo da matéria
+              const moduloDaMateria = progressStats.pendingModulos.find(m => 
+                m.materia === atividade.materia
+              )
+              if (moduloDaMateria) {
+                console.warn(`⚠️ Módulo "${atividade.modulo}" não encontrado em "${atividade.materia}", usando "${moduloDaMateria.modulo}"`)
+                atividade.modulo = moduloDaMateria.modulo
+              } else {
+                console.warn(`⚠️ Nenhum módulo encontrado para "${atividade.materia}"`)
+                console.log('📋 Módulos disponíveis:', progressStats.pendingModulos.map(m => `${m.materia} - ${m.modulo}`))
+                
+                // Usar primeiro módulo disponível como último recurso
+                if (progressStats.pendingModulos.length > 0) {
+                  atividade.materia = progressStats.pendingModulos[0].materia
+                  atividade.modulo = progressStats.pendingModulos[0].modulo
+                  console.log(`🔄 Usando primeiro módulo disponível: "${atividade.materia}" - "${atividade.modulo}"`)
+                } else {
+                  // Se não há módulos, usar a própria matéria
+                  atividade.modulo = atividade.materia || 'Geral'
+                  console.warn(`⚠️ Nenhum módulo disponível! Usando matéria como módulo: "${atividade.modulo}"`)
+                  console.error(`❌ pendingModulos está vazio! Total: ${progressStats.pendingModulos.length}`)
+                }
+              }
+            }
+          }
+          
+          // Validar que não ficou "Geral" - mas se não houver dados, permitir
+          if (atividade.materia === 'Geral' || atividade.modulo === 'Geral') {
+            console.warn(`⚠️ Atividade ${index + 1} ainda tem "Geral" após mapeamento!`)
+            console.log('📊 Dados disponíveis:', {
+              pendingMaterias: progressStats.pendingMaterias.length,
+              pendingModulos: progressStats.pendingModulos.length,
+              materias: progressStats.pendingMaterias.map(([m]) => m),
+              modulos: progressStats.pendingModulos.map(m => `${m.materia} - ${m.modulo}`)
+            })
+            
+            // Tentar usar primeiro módulo disponível
+            if (progressStats.pendingModulos.length > 0) {
+              atividade.materia = progressStats.pendingModulos[0].materia
+              atividade.modulo = progressStats.pendingModulos[0].modulo
+              console.log(`🔄 Corrigindo "Geral" para: "${atividade.materia}" - "${atividade.modulo}"`)
+            } else if (progressStats.pendingMaterias.length > 0) {
+              atividade.materia = progressStats.pendingMaterias[0][0]
+              atividade.modulo = atividade.materia
+              console.log(`🔄 Corrigindo "Geral" para: "${atividade.materia}"`)
+            } else {
+              // Se não há dados, manter a atividade mesmo com "Geral" para não perder todas
+              console.warn(`⚠️ Mantendo atividade com "Geral" pois não há dados disponíveis`)
+            }
+          }
+          
+          console.log(`📝 Atividade ${index + 1} final:`, {
+            materia: atividade.materia,
+            modulo: atividade.modulo,
+            tipo: atividade.tipo
+          })
+          
+          return atividade
+        }).filter(atividade => {
+          // Manter atividade se tiver tipo e descrição, mesmo que matéria/módulo não sejam ideais
+          return atividade && atividade.tipo && atividade.descricao
+        })
+        
+        // Garantir que sempre há pelo menos uma atividade
+        if (recommendation.atividades.length === 0 && progressStats.pendingModulos.length > 0) {
+          const firstModulo = progressStats.pendingModulos[0]
+          recommendation.atividades = [{
+            tipo: "flashcards",
+            materia: firstModulo.materia,
+            modulo: firstModulo.modulo,
+            descricao: `Estude os flashcards de ${firstModulo.materia} - ${firstModulo.modulo}`,
+            duracao: 60,
+            prioridade: "alta"
+          }]
+          console.log('✅ Criando atividade padrão pois nenhuma foi gerada')
+        }
+      }
+      
+      // Validar focoDoDia também
+      if (!recommendation.focoDoDia || recommendation.focoDoDia === 'A DEFINIR' || recommendation.focoDoDia.includes('A DEFINIR')) {
+        const firstModulo = progressStats.pendingModulos[0]
+        const firstMateria = progressStats.pendingMaterias[0]
+        recommendation.focoDoDia = firstModulo 
+          ? `${firstModulo.materia} - ${firstModulo.modulo}`
+          : firstMateria?.[0] || 'Continue revisando os flashcards'
+      }
+      
       setDailyRecommendation(recommendation)
       setLoading(false)
       
@@ -526,59 +780,88 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
     const cardsRemaining = progressStats.totalCards - progressStats.studiedCards
     const cardsPerDay = metaDays > 0 ? Math.ceil(cardsRemaining / Math.max(1, metaDays - progressStats.studyDays)) : 0
 
+    // Garantir que temos dados reais - não usar "Geral"
+    const materiaParaUsar = nextModulo?.materia || nextMateria?.[0] || null
+    const moduloParaUsar = nextModulo?.modulo || null
+    
+    const daysRemaining = targetDate ? Math.max(0, dayjs(targetDate).diff(dayjs(), 'days')) : 0
+
+    if (!materiaParaUsar) {
+      console.error('❌ createFallbackRecommendation: Nenhuma matéria disponível!')
+      return {
+        mensagemMotivacional: "Continue focado! Cada dia de estudo te aproxima da aprovação.",
+        focoDoDia: "Continue revisando os flashcards",
+        atividades: [],
+        revisoes: {
+          total: progressStats.difficultyStats?.totalCardsNeedingReview || 0,
+          urgente: (progressStats.difficultyStats?.totalCardsNeedingReview || 0) > 0
+        },
+        progressoMeta: {
+          diasRestantes: daysRemaining,
+          cardsPorDia: cardsPerDay,
+          noCaminho: true
+        },
+        dicaMentor: "Verifique se há flashcards cadastrados no sistema."
+      }
+    }
+
     return {
       mensagemMotivacional: "Continue focado! Cada dia de estudo te aproxima da aprovação.",
-      focoDoDia: nextMateria ? `${nextMateria[0]}` : "Continue revisando os flashcards",
+      focoDoDia: materiaParaUsar ? `${materiaParaUsar}` : "Continue revisando os flashcards",
       atividades: [
         {
           tipo: "flashcards",
-          materia: nextModulo?.materia || "Geral",
-          modulo: nextModulo?.modulo || "Geral",
-          descricao: nextModulo 
-            ? `Estude os flashcards de ${nextModulo.materia} - ${nextModulo.modulo}`
-            : "Continue estudando os flashcards",
-          tempoEstimado: "45 minutos",
+          materia: materiaParaUsar,
+          modulo: moduloParaUsar || materiaParaUsar,
+          descricao: moduloParaUsar
+            ? `Estude os flashcards de ${materiaParaUsar} - ${moduloParaUsar}`
+            : `Estude os flashcards de ${materiaParaUsar}`,
+          duracao: 60,
           prioridade: "alta"
         },
         {
-          tipo: "questoes",
-          materia: nextMateria?.[0] || "Geral",
-          descricao: "Pratique questões para fixar o conteúdo",
-          tempoEstimado: "30 minutos",
+          tipo: "flashquestoes",
+          materia: materiaParaUsar,
+          modulo: moduloParaUsar || materiaParaUsar,
+          descricao: moduloParaUsar
+            ? `Pratique questões de ${materiaParaUsar} - ${moduloParaUsar}`
+            : `Pratique questões de ${materiaParaUsar}`,
+          duracao: 45,
           prioridade: "media"
+        },
+        {
+          tipo: "mapas",
+          materia: materiaParaUsar,
+          modulo: moduloParaUsar || materiaParaUsar,
+          descricao: `Revise ${materiaParaUsar} através de mapas mentais`,
+          duracao: 30,
+          prioridade: "baixa"
         }
       ],
       revisoes: {
-        cardsParaRevisar: progressStats.difficultyStats?.totalCardsNeedingReview || 0,
-        cardsUrgentes: progressStats.difficultyStats?.totalCardsNeedingReview || 0,
-        descricao: progressStats.difficultyStats?.totalCardsNeedingReview > 0
-          ? `Revise os cards que estão vencidos. ATENÇÃO: ${progressStats.difficultyStats.totalCardsNeedingReview} cards difíceis precisam revisão urgente!`
-          : "Revise os cards que estão vencidos"
+        total: progressStats.difficultyStats?.totalCardsNeedingReview || 0,
+        urgente: (progressStats.difficultyStats?.totalCardsNeedingReview || 0) > 0
       },
-      progressoParaMeta: {
-        cardsRestantes: cardsRemaining,
+      progressoMeta: {
+        diasRestantes: daysRemaining,
         cardsPorDia: cardsPerDay,
-        materiasRestantes: progressStats.pendingMaterias.length,
-        mensagem: `Faltam ${cardsRemaining} cards para completar. Estude ${cardsPerDay} cards por dia para atingir a meta.`
+        noCaminho: true
       },
-      dicas: [
-        "Mantenha a consistência nos estudos",
-        "Revise os cards regularmente"
-      ]
+      dicaMentor: "Mantenha a consistência! Estude um pouco todos os dias."
     }
   }
 
-  // Verificar se precisa atualizar automaticamente (11:30 da manhã) - INDIVIDUAL POR USUÁRIO
+  // Verificar se precisa atualizar automaticamente (06:00 da manhã) - INDIVIDUAL POR USUÁRIO
   const shouldUpdateToday = () => {
     if (!userId) return false
     
     const now = dayjs()
     const today = now.format('YYYY-MM-DD')
     
-    // Criar horário de atualização (11:30) para HOJE
-    const updateTime = dayjs().hour(11).minute(30).second(0).millisecond(0)
+    // Criar horário de atualização (06:00) para HOJE
+    const updateTime = dayjs().hour(6).minute(0).second(0).millisecond(0)
     
-    // Verificar se já passou das 11:30 hoje
+    // Verificar se já passou das 06:00 hoje
     const hasPassedUpdateTime = now.isAfter(updateTime) || now.isSame(updateTime)
     
     // Chave única por usuário E curso
@@ -588,7 +871,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
       const lastUpdate = localStorage.getItem(cacheKey)
       
       if (!lastUpdate) {
-        // Primeira vez - atualizar se já passou das 11:30
+        // Primeira vez - atualizar se já passou das 06:00
         return hasPassedUpdateTime
       }
       
@@ -600,11 +883,11 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
         return false
       }
       
-      // Se não atualizou hoje e já passou das 11:30, atualizar
+      // Se não atualizou hoje e já passou das 06:00, atualizar
       return hasPassedUpdateTime
     } catch (err) {
       console.warn('Erro ao verificar última atualização:', err)
-      // Em caso de erro, permitir atualização se já passou das 11:30
+      // Em caso de erro, permitir atualização se já passou das 06:00
       return hasPassedUpdateTime
     }
   }
@@ -636,7 +919,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
         const cachedDate = dayjs(date)
         const today = dayjs().format('YYYY-MM-DD')
         
-        // Se é de hoje, usar cache (mesmo que ainda não tenha passado das 11:30)
+        // Se é de hoje, usar cache (mesmo que ainda não tenha passado das 06:00)
         // Isso evita gerar múltiplas vezes no mesmo dia
         if (cachedDate.format('YYYY-MM-DD') === today) {
           console.log(`📋 Usando recomendação em cache para usuário ${userId} (de ${cachedDate.format('HH:mm')})`)
@@ -687,7 +970,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
       setDailyRecommendation(cached)
       setLoading(false)
       
-      // Verificar se precisa atualizar (já passou das 11:30 e ainda não atualizou hoje)
+      // Verificar se precisa atualizar (já passou das 06:00 e ainda não atualizou hoje)
       // INDIVIDUAL POR USUÁRIO - cada usuário tem seu próprio timestamp
       if (shouldUpdateToday()) {
         const today = dayjs().format('YYYY-MM-DD')
@@ -739,7 +1022,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, courseId, progressStats?.totalCards, progressStats?.studiedCards])
 
-  // Verificar periodicamente se já passou das 11:30 (a cada minuto) - INDIVIDUAL POR USUÁRIO
+  // Verificar periodicamente se já passou das 06:00 (a cada minuto) - INDIVIDUAL POR USUÁRIO
   useEffect(() => {
     if (!userId || !courseId || !progressStats) return
 
@@ -750,8 +1033,8 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
       const currentHour = now.hour()
       const currentMinute = now.minute()
       
-      // Só verificar se estiver próximo ou depois das 11:30 (otimização)
-      if (currentHour > 11 || (currentHour === 11 && currentMinute >= 30)) {
+      // Só verificar se estiver próximo ou depois das 06:00 (otimização)
+      if (currentHour > 6 || (currentHour === 6 && currentMinute >= 0)) {
         if (shouldUpdateToday()) {
           const today = dayjs().format('YYYY-MM-DD')
           const cacheKey = `studyPlanner_lastUpdate_${userId}_${courseId || 'alego'}`

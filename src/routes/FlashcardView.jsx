@@ -29,6 +29,44 @@ const MATERIAS = [
   'Redação',
 ]
 
+// Mapeamento de nomes alternativos para nomes exatos
+const MATERIA_ALIASES = {
+  'língua portuguesa': 'Português',
+  'lingua portuguesa': 'Português',
+  'português': 'Português',
+  'portugues': 'Português',
+  'língua portuguesa interpretação de texto': 'Português',
+  'direito constitucional': 'DIREITO CONSTITUCIONAL',
+  'direito administrativo': 'DIREITO ADMINISTRATIVO',
+  'direito penal': 'DIREITO PENAL',
+  'administração': 'ADMINISTRAÇÃO',
+}
+
+// Mapeamento de módulos alternativos (normalizar variações comuns)
+const normalizeModuloName = (moduloName, materiaName) => {
+  if (!moduloName) return moduloName
+  
+  const normalized = moduloName.trim().toLowerCase()
+  
+  // Mapeamentos comuns para Português
+  if (materiaName && (materiaName.toLowerCase().includes('português') || materiaName.toLowerCase().includes('portuguesa'))) {
+    const moduloAliases = {
+      'interpretação de texto': 'Compreensão e Interpretação Textual',
+      'interpretacao de texto': 'Compreensão e Interpretação Textual',
+      'compreensão textual': 'Compreensão e Interpretação Textual',
+      'compreensao textual': 'Compreensão e Interpretação Textual',
+      'interpretação textual': 'Compreensão e Interpretação Textual',
+      'interpretacao textual': 'Compreensão e Interpretação Textual',
+    }
+    
+    if (moduloAliases[normalized]) {
+      return moduloAliases[normalized]
+    }
+  }
+  
+  return moduloName // Retornar original se não houver mapeamento
+}
+
 // Sistema SRS - Repetição Espaçada Dinâmica
 // Intervalos ajustados dinamicamente baseado na dificuldade percebida
 const SRS_INTERVALS = {
@@ -55,7 +93,7 @@ const SRS_INTERVALS = {
 const FlashcardView = () => {
   const { user, favorites, updateFavorites, profile } = useAuth()
   const { darkMode } = useDarkMode()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [cards, setCards] = useState([])
   const [cardProgress, setCardProgress] = useState({})
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -392,13 +430,222 @@ const FlashcardView = () => {
     const materiaParam = searchParams.get('materia')
     const moduloParam = searchParams.get('modulo')
     
-    if (materiaParam && moduloParam && organizedCards[materiaParam]?.[moduloParam]) {
-      setSelectedMateria(materiaParam)
-      setSelectedModulo(moduloParam)
-      setStudyMode('module')
-      setCurrentIndex(0)
+    console.log('🔍 Verificando parâmetros da URL:', { materiaParam, moduloParam })
+    
+    // Se não há parâmetros, não fazer nada
+    if (!materiaParam || !moduloParam) {
+      console.log('❌ Parâmetros ausentes na URL')
+      return
     }
-  }, [searchParams, organizedCards])
+    
+    // Aguardar até que os cards estejam organizados
+    if (Object.keys(organizedCards).length === 0) {
+      console.log('⏳ Aguardando cards serem organizados... (cards:', cards.length, ')')
+      return
+    }
+    
+    console.log('✅ Cards organizados:', Object.keys(organizedCards).length, 'matérias')
+    console.log('📋 Matérias disponíveis:', Object.keys(organizedCards))
+    
+    // Decodificar os parâmetros (podem vir codificados da URL)
+    const decodedMateria = decodeURIComponent(materiaParam)
+    const decodedModulo = decodeURIComponent(moduloParam)
+    
+    console.log('🔍 Buscando:', { decodedMateria, decodedModulo })
+    
+    // Normalizar nome da matéria usando aliases
+    const normalizedMateriaName = MATERIA_ALIASES[decodedMateria.trim().toLowerCase()] || decodedMateria.trim()
+    
+    // Buscar matéria correspondente (case-insensitive e com normalização de espaços)
+    let materiaMatch = Object.keys(organizedCards).find(m => {
+      const match = m.trim().toLowerCase() === normalizedMateriaName.toLowerCase() ||
+                    m.trim().toLowerCase() === decodedMateria.trim().toLowerCase()
+      if (match) {
+        console.log('✅ Matéria encontrada (exata):', m, '→', decodedMateria)
+      }
+      return match
+    })
+    
+    // Se não encontrou exato, tentar busca parcial
+    if (!materiaMatch) {
+      materiaMatch = Object.keys(organizedCards).find(m => {
+        const mLower = m.trim().toLowerCase()
+        const searchLower = decodedMateria.trim().toLowerCase()
+        const match = mLower.includes(searchLower) || searchLower.includes(mLower)
+        if (match) {
+          console.log('✅ Matéria encontrada (parcial):', m, '→', decodedMateria)
+        }
+        return match
+      })
+    }
+    
+    if (materiaMatch) {
+      const modulos = organizedCards[materiaMatch] || {}
+      console.log('📚 Módulos disponíveis em', materiaMatch, ':', Object.keys(modulos))
+      
+      // Normalizar nome do módulo primeiro
+      const normalizedModuloName = normalizeModuloName(decodedModulo, materiaMatch)
+      console.log('🔍 Módulo normalizado:', decodedModulo, '→', normalizedModuloName)
+      
+      // Buscar módulo correspondente (case-insensitive e com normalização)
+      let moduloMatch = Object.keys(modulos).find(m => {
+        const match = m.trim().toLowerCase() === normalizedModuloName.trim().toLowerCase() ||
+                      m.trim().toLowerCase() === decodedModulo.trim().toLowerCase()
+        if (match) {
+          console.log('✅ Módulo encontrado (exato):', m, '→', decodedModulo)
+        }
+        return match
+      })
+      
+      // Se não encontrou, tentar busca parcial
+      if (!moduloMatch) {
+        moduloMatch = Object.keys(modulos).find(m => {
+          const mLower = m.trim().toLowerCase()
+          const searchLower = normalizedModuloName.trim().toLowerCase()
+          const originalLower = decodedModulo.trim().toLowerCase()
+          const match = mLower.includes(searchLower) || searchLower.includes(mLower) ||
+                       mLower.includes(originalLower) || originalLower.includes(mLower)
+          if (match) {
+            console.log('✅ Módulo encontrado (parcial):', m, '→', decodedModulo)
+          }
+          return match
+        })
+      }
+      
+      if (moduloMatch) {
+        // Criar uma chave única para os parâmetros da URL (para detectar mudanças)
+        const urlKey = `${materiaMatch}::${moduloMatch}`
+        const currentKey = selectedMateria && selectedModulo 
+          ? `${selectedMateria}::${selectedModulo}` 
+          : null
+        
+        console.log('🔑 Comparando chaves:', { urlKey, currentKey })
+        
+        // Se a URL mudou, atualizar a seleção (mesmo que seja uma matéria/módulo diferente)
+        if (currentKey !== urlKey) {
+          console.log('📚 Selecionando automaticamente via URL:', materiaMatch, '-', moduloMatch, '(URL mudou)')
+          setSelectedMateria(materiaMatch)
+          setSelectedModulo(moduloMatch)
+          setStudyMode('module')
+          setCurrentIndex(0)
+          // Expandir a matéria para mostrar o módulo selecionado
+          setExpandedMaterias(prev => ({ ...prev, [materiaMatch]: true }))
+        } else {
+          console.log('✅ Já está selecionado, garantindo expansão')
+          // Já está selecionado, mas garantir que está expandido
+          setExpandedMaterias(prev => ({ ...prev, [materiaMatch]: true }))
+        }
+      } else {
+        console.warn('⚠️ Módulo não encontrado:', decodedModulo, 'em', materiaMatch)
+        console.log('📋 Módulos disponíveis:', Object.keys(modulos))
+        console.log('🔍 Tentando busca parcial...')
+        
+        // Tentar busca parcial (contém o texto)
+        const partialMatch = Object.keys(modulos).find(m => 
+          m.toLowerCase().includes(decodedModulo.toLowerCase()) ||
+          decodedModulo.toLowerCase().includes(m.toLowerCase())
+        )
+        
+        if (partialMatch) {
+          console.log('✅ Módulo encontrado por busca parcial:', partialMatch)
+          setSelectedMateria(materiaMatch)
+          setSelectedModulo(partialMatch)
+          setStudyMode('module')
+          setCurrentIndex(0)
+          setExpandedMaterias(prev => ({ ...prev, [materiaMatch]: true }))
+        }
+      }
+    } else {
+      console.warn('⚠️ Matéria não encontrada:', decodedMateria)
+      console.log('📋 Matérias disponíveis:', Object.keys(organizedCards))
+      console.log('🔍 Tentando busca parcial...')
+      
+      // Tentar busca parcial (contém o texto)
+      const partialMateriaMatch = Object.keys(organizedCards).find(m => 
+        m.toLowerCase().includes(decodedMateria.toLowerCase()) ||
+        decodedMateria.toLowerCase().includes(m.toLowerCase())
+      )
+      
+      if (partialMateriaMatch) {
+        console.log('✅ Matéria encontrada por busca parcial:', partialMateriaMatch)
+        const modulos = organizedCards[partialMateriaMatch] || {}
+        const moduloMatch = Object.keys(modulos).find(m => 
+          m.trim().toLowerCase() === decodedModulo.trim().toLowerCase()
+        ) || Object.keys(modulos).find(m => 
+          m.toLowerCase().includes(decodedModulo.toLowerCase()) ||
+          decodedModulo.toLowerCase().includes(m.toLowerCase())
+        )
+        
+        if (moduloMatch) {
+          console.log('✅ Módulo encontrado:', moduloMatch)
+          setSelectedMateria(partialMateriaMatch)
+          setSelectedModulo(moduloMatch)
+          setStudyMode('module')
+          setCurrentIndex(0)
+          setExpandedMaterias(prev => ({ ...prev, [partialMateriaMatch]: true }))
+        }
+      }
+    }
+  }, [searchParams, organizedCards, selectedMateria, selectedModulo, cards.length])
+  
+  // Forçar tentativa novamente quando cards mudarem (retry mechanism)
+  useEffect(() => {
+    const materiaParam = searchParams.get('materia')
+    const moduloParam = searchParams.get('modulo')
+    
+    if (!materiaParam || !moduloParam) return
+    if (selectedMateria && selectedModulo) return // Já selecionado
+    if (Object.keys(organizedCards).length === 0) return // Ainda não tem cards
+    
+    // Se chegou aqui, tem parâmetros mas não selecionou ainda
+    // Tentar novamente após um pequeno delay
+    const retryTimeout = setTimeout(() => {
+      console.log('🔄 Retentando seleção automática após carregamento dos cards...')
+      const decodedMateria = decodeURIComponent(materiaParam)
+      const decodedModulo = decodeURIComponent(moduloParam)
+      
+      const normalizedMateriaName = MATERIA_ALIASES[decodedMateria.trim().toLowerCase()] || decodedMateria.trim()
+      
+      let materiaMatch = Object.keys(organizedCards).find(m => 
+        m.trim().toLowerCase() === normalizedMateriaName.toLowerCase() ||
+        m.trim().toLowerCase() === decodedMateria.trim().toLowerCase()
+      )
+      
+      if (!materiaMatch) {
+        materiaMatch = Object.keys(organizedCards).find(m => {
+          const mLower = m.trim().toLowerCase()
+          const searchLower = decodedMateria.trim().toLowerCase()
+          return mLower.includes(searchLower) || searchLower.includes(mLower)
+        })
+      }
+      
+      if (materiaMatch) {
+        const modulos = organizedCards[materiaMatch] || {}
+        let moduloMatch = Object.keys(modulos).find(m => 
+          m.trim().toLowerCase() === decodedModulo.trim().toLowerCase()
+        )
+        
+        if (!moduloMatch) {
+          moduloMatch = Object.keys(modulos).find(m => {
+            const mLower = m.trim().toLowerCase()
+            const searchLower = decodedModulo.trim().toLowerCase()
+            return mLower.includes(searchLower) || searchLower.includes(mLower)
+          })
+        }
+        
+        if (moduloMatch) {
+          console.log('✅ Seleção automática bem-sucedida no retry:', materiaMatch, '-', moduloMatch)
+          setSelectedMateria(materiaMatch)
+          setSelectedModulo(moduloMatch)
+          setStudyMode('module')
+          setCurrentIndex(0)
+          setExpandedMaterias(prev => ({ ...prev, [materiaMatch]: true }))
+        }
+      }
+    }, 500) // Tentar novamente após 500ms
+    
+    return () => clearTimeout(retryTimeout)
+  }, [cards.length, organizedCards, searchParams, selectedMateria, selectedModulo])
 
   // Cards filtrados baseado na seleção
   const filteredCards = useMemo(() => {
