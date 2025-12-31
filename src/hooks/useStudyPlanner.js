@@ -723,6 +723,47 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
           : firstMateria?.[0] || 'Continue revisando os flashcards'
       }
       
+      // Garantir que progressoParaMeta está calculado corretamente e atualizado
+      const cardsRemaining = progressStats.totalCards - progressStats.studiedCards
+      const daysRemainingForMeta = targetDate ? Math.max(0, dayjs(targetDate).diff(dayjs(), 'days')) : Math.max(0, metaDays - progressStats.studyDays)
+      const cardsPerDay = daysRemainingForMeta > 0 ? Math.ceil(cardsRemaining / daysRemainingForMeta) : 0
+      const materiasRestantes = progressStats.pendingMaterias.length
+      
+      // Calcular ou validar progressoParaMeta
+      if (!recommendation.progressoParaMeta) {
+        recommendation.progressoParaMeta = {}
+      }
+      
+      // Sempre atualizar com valores calculados (garantir que está atualizado)
+      recommendation.progressoParaMeta = {
+        cardsRestantes: cardsRemaining,
+        cardsPorDia: cardsPerDay,
+        materiasRestantes: materiasRestantes,
+        diasRestantes: daysRemainingForMeta,
+        mensagem: recommendation.progressoParaMeta?.mensagem || 
+          `Para completar todos os cards em ${daysRemainingForMeta} dias, você precisa estudar aproximadamente ${cardsPerDay} cards por dia. Mantenha o ritmo!`
+      }
+      
+      // Garantir que revisões também está atualizado
+      if (!recommendation.revisoes) {
+        recommendation.revisoes = {
+          cardsParaRevisar: progressStats.difficultyStats?.totalCardsNeedingReview || 0,
+          cardsUrgentes: progressStats.difficultyStats?.totalCardsNeedingReview || 0,
+          descricao: progressStats.difficultyStats?.totalCardsNeedingReview > 0
+            ? `Você tem ${progressStats.difficultyStats.totalCardsNeedingReview} cards que precisam de revisão urgente hoje.`
+            : "Como você ainda não estudou nenhum card, não há revisões pendentes para hoje."
+        }
+      } else {
+        // Atualizar valores de revisões com dados atuais
+        recommendation.revisoes.cardsParaRevisar = progressStats.difficultyStats?.totalCardsNeedingReview || 0
+        recommendation.revisoes.cardsUrgentes = progressStats.difficultyStats?.totalCardsNeedingReview || 0
+        if (!recommendation.revisoes.descricao) {
+          recommendation.revisoes.descricao = progressStats.difficultyStats?.totalCardsNeedingReview > 0
+            ? `Você tem ${progressStats.difficultyStats.totalCardsNeedingReview} cards que precisam de revisão urgente hoje.`
+            : "Como você ainda não estudou nenhum card, não há revisões pendentes para hoje."
+        }
+      }
+      
       setDailyRecommendation(recommendation)
       setLoading(false)
       
@@ -758,6 +799,8 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
     
     const daysRemaining = targetDate ? Math.max(0, dayjs(targetDate).diff(dayjs(), 'days')) : 0
 
+    const materiasRestantes = progressStats.pendingMaterias.length
+    
     if (!materiaParaUsar) {
       console.error('❌ createFallbackRecommendation: Nenhuma matéria disponível!')
       return {
@@ -765,15 +808,20 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
         focoDoDia: "Continue revisando os flashcards",
         atividades: [],
         revisoes: {
-          total: progressStats.difficultyStats?.totalCardsNeedingReview || 0,
-          urgente: (progressStats.difficultyStats?.totalCardsNeedingReview || 0) > 0
+          cardsParaRevisar: progressStats.difficultyStats?.totalCardsNeedingReview || 0,
+          cardsUrgentes: progressStats.difficultyStats?.totalCardsNeedingReview || 0,
+          descricao: progressStats.difficultyStats?.totalCardsNeedingReview > 0
+            ? `Você tem ${progressStats.difficultyStats.totalCardsNeedingReview} cards que precisam de revisão urgente hoje.`
+            : "Como você ainda não estudou nenhum card, não há revisões pendentes para hoje."
         },
-        progressoMeta: {
-          diasRestantes: daysRemaining,
+        progressoParaMeta: {
+          cardsRestantes: cardsRemaining,
           cardsPorDia: cardsPerDay,
-          noCaminho: true
+          materiasRestantes: materiasRestantes,
+          diasRestantes: daysRemaining,
+          mensagem: `Para completar todos os cards em ${daysRemaining} dias, você precisa estudar aproximadamente ${cardsPerDay} cards por dia. Mantenha o ritmo!`
         },
-        dicaMentor: "Verifique se há flashcards cadastrados no sistema."
+        dicas: ["Verifique se há flashcards cadastrados no sistema."]
       }
     }
 
@@ -788,17 +836,17 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
           descricao: moduloParaUsar
             ? `Estude os flashcards de ${materiaParaUsar} - ${moduloParaUsar}`
             : `Estude os flashcards de ${materiaParaUsar}`,
-          duracao: 60,
+          tempoEstimado: "60 minutos",
           prioridade: "alta"
         },
         {
-          tipo: "flashquestoes",
+          tipo: "questoes",
           materia: materiaParaUsar,
           modulo: moduloParaUsar || materiaParaUsar,
           descricao: moduloParaUsar
             ? `Pratique questões de ${materiaParaUsar} - ${moduloParaUsar}`
             : `Pratique questões de ${materiaParaUsar}`,
-          duracao: 45,
+          tempoEstimado: "45 minutos",
           prioridade: "media"
         },
         {
@@ -806,20 +854,25 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
           materia: materiaParaUsar,
           modulo: moduloParaUsar || materiaParaUsar,
           descricao: `Revise ${materiaParaUsar} através de mapas mentais`,
-          duracao: 30,
+          tempoEstimado: "30 minutos",
           prioridade: "baixa"
         }
       ],
       revisoes: {
-        total: progressStats.difficultyStats?.totalCardsNeedingReview || 0,
-        urgente: (progressStats.difficultyStats?.totalCardsNeedingReview || 0) > 0
+        cardsParaRevisar: progressStats.difficultyStats?.totalCardsNeedingReview || 0,
+        cardsUrgentes: progressStats.difficultyStats?.totalCardsNeedingReview || 0,
+        descricao: progressStats.difficultyStats?.totalCardsNeedingReview > 0
+          ? `Você tem ${progressStats.difficultyStats.totalCardsNeedingReview} cards que precisam de revisão urgente hoje.`
+          : "Como você ainda não estudou nenhum card, não há revisões pendentes para hoje."
       },
-      progressoMeta: {
-        diasRestantes: daysRemaining,
+      progressoParaMeta: {
+        cardsRestantes: cardsRemaining,
         cardsPorDia: cardsPerDay,
-        noCaminho: true
+        materiasRestantes: materiasRestantes,
+        diasRestantes: daysRemaining,
+        mensagem: `Para completar todos os cards em ${daysRemaining} dias, você precisa estudar aproximadamente ${cardsPerDay} cards por dia. Mantenha o ritmo!`
       },
-      dicaMentor: "Mantenha a consistência! Estude um pouco todos os dias."
+      dicas: ["Mantenha a consistência! Estude um pouco todos os dias."]
     }
   }
 
@@ -930,6 +983,21 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
   }
 
   // Gerar recomendação ao carregar ou quando dados mudarem
+  const [currentDateForUpdate, setCurrentDateForUpdate] = useState(dayjs().format('YYYY-MM-DD'))
+  
+  // Atualizar data atual diariamente para forçar recálculo
+  useEffect(() => {
+    const updateDate = () => {
+      const today = dayjs().format('YYYY-MM-DD')
+      setCurrentDateForUpdate(today)
+    }
+    
+    updateDate()
+    const interval = setInterval(updateDate, 60000) // Verificar a cada minuto
+    
+    return () => clearInterval(interval)
+  }, [])
+  
   useEffect(() => {
     if (!userId || !courseId || !progressStats) {
       setLoading(false)
@@ -992,7 +1060,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
       setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, courseId, progressStats?.totalCards, progressStats?.studiedCards])
+  }, [userId, courseId, progressStats?.totalCards, progressStats?.studiedCards, currentDateForUpdate]) // Adicionar currentDateForUpdate
 
   // Verificar periodicamente se já passou das 06:00 (a cada minuto) - INDIVIDUAL POR USUÁRIO
   useEffect(() => {
@@ -1044,13 +1112,31 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, courseId, progressStats])
 
-  // Calcular data alvo
+  // Calcular data alvo - atualizar diariamente
+  const [currentDate, setCurrentDate] = useState(dayjs().format('YYYY-MM-DD'))
+  
+  // Atualizar data atual diariamente (verificar a cada minuto)
+  useEffect(() => {
+    const updateDate = () => {
+      const today = dayjs().format('YYYY-MM-DD')
+      setCurrentDate(today)
+    }
+    
+    // Atualizar imediatamente
+    updateDate()
+    
+    // Verificar a cada minuto se a data mudou
+    const interval = setInterval(updateDate, 60000)
+    
+    return () => clearInterval(interval)
+  }, [])
+  
   useEffect(() => {
     if (metaDays > 0) {
       const target = dayjs().add(metaDays, 'days')
       setTargetDate(target.format('YYYY-MM-DD'))
     }
-  }, [metaDays])
+  }, [metaDays, currentDate]) // Adicionar currentDate como dependência
 
   return {
     studyPlan,

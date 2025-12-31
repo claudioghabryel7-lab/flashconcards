@@ -423,6 +423,21 @@ const Dashboard = () => {
     return () => unsub()
   }, [selectedCourseId])
 
+  // Forçar atualização diária do progresso por matéria
+  const [currentDate, setCurrentDate] = useState(dayjs().format('YYYY-MM-DD'))
+  
+  useEffect(() => {
+    const updateDate = () => {
+      const today = dayjs().format('YYYY-MM-DD')
+      setCurrentDate(today)
+    }
+    
+    updateDate()
+    const interval = setInterval(updateDate, 60000) // Verificar a cada minuto
+    
+    return () => clearInterval(interval)
+  }, [])
+
   // Calcular estatísticas
   const stats = useMemo(() => {
     const totalDays = new Set(progressData.map((item) => item.date)).size
@@ -435,14 +450,14 @@ const Dashboard = () => {
     // Calcular sequência (streak)
     const dates = progressData.map((item) => item.date).sort().reverse()
     let streak = 0
-    let currentDate = dayjs().startOf('day')
+    let currentDateForStreak = dayjs().startOf('day')
     
     for (const dateStr of dates) {
       const date = dayjs(dateStr)
-      if (date.isSame(currentDate, 'day')) {
+      if (date.isSame(currentDateForStreak, 'day')) {
         streak++
-        currentDate = currentDate.subtract(1, 'day')
-      } else if (date.isBefore(currentDate, 'day')) {
+        currentDateForStreak = currentDateForStreak.subtract(1, 'day')
+      } else if (date.isBefore(currentDateForStreak, 'day')) {
         break
       }
     }
@@ -494,7 +509,7 @@ const Dashboard = () => {
       accuracy,
       dates: dates,
     }
-  }, [progressData, cardProgress, allCards, questoesStats])
+  }, [progressData, cardProgress, allCards, questoesStats, currentDate]) // Adicionar currentDate como dependência
 
   // Cards para revisar (detalhado) - FILTRADO POR CURSO
   const reviewCards = useMemo(() => {

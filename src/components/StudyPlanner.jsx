@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AcademicCapIcon,
@@ -125,7 +125,25 @@ const StudyPlanner = ({
     }
   }
 
-  const daysRemaining = targetDate ? Math.max(0, dayjs(targetDate).diff(dayjs(), 'days')) : 0
+  // Recalcular dias restantes diariamente
+  const [currentDate, setCurrentDate] = useState(dayjs().format('YYYY-MM-DD'))
+  
+  useEffect(() => {
+    const updateDate = () => {
+      const today = dayjs().format('YYYY-MM-DD')
+      setCurrentDate(today)
+    }
+    
+    updateDate()
+    const interval = setInterval(updateDate, 60000) // Verificar a cada minuto
+    
+    return () => clearInterval(interval)
+  }, [])
+  
+  // Usar dias restantes da recomendação (atualizado às 06:00) ou calcular localmente
+  const daysRemaining = dailyRecommendation?.progressoParaMeta?.diasRestantes !== undefined
+    ? dailyRecommendation.progressoParaMeta.diasRestantes
+    : (targetDate ? Math.max(0, dayjs(targetDate).diff(dayjs(), 'days')) : 0)
 
   return (
     <motion.div

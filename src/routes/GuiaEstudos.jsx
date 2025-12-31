@@ -18,6 +18,7 @@ import { useDarkMode } from '../hooks/useDarkMode'
 import { useAuth } from '../hooks/useAuth'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
+import dayjs from 'dayjs'
 
 const GuiaEstudos = () => {
   const { darkMode } = useDarkMode()
@@ -26,6 +27,21 @@ const GuiaEstudos = () => {
   const [progressData, setProgressData] = useState([])
   const [stats, setStats] = useState(null)
   const [visibleSteps, setVisibleSteps] = useState(new Set())
+
+  // Forçar atualização diária das estatísticas
+  const [currentDate, setCurrentDate] = useState(dayjs().format('YYYY-MM-DD'))
+  
+  useEffect(() => {
+    const updateDate = () => {
+      const today = dayjs().format('YYYY-MM-DD')
+      setCurrentDate(today)
+    }
+    
+    updateDate()
+    const interval = setInterval(updateDate, 60000) // Verificar a cada minuto
+    
+    return () => clearInterval(interval)
+  }, [])
 
   // Carregar progresso do usuário
   useEffect(() => {
@@ -58,7 +74,7 @@ const GuiaEstudos = () => {
     )
 
     return () => unsub()
-  }, [user, profile])
+  }, [user, profile, currentDate]) // Adicionar currentDate como dependência
 
   // Animações de entrada ao scroll
   useEffect(() => {
