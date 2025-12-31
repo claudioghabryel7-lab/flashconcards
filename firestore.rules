@@ -234,6 +234,31 @@
         allow delete: if isAdmin();
       }
       
+      // 📚 Progresso do Edital Verticalizado
+      match /editalProgress/{progressId} {
+        // O progressId é: userId_courseId_date_topicKey
+        // Verificar se começa com o uid do usuário autenticado
+        function isOwnerDoc() {
+          return isAuthenticated() && 
+                 (progressId == request.auth.uid || 
+                  progressId.matches('^' + request.auth.uid + '_.*'));
+        }
+        
+        // Permitir leitura se o documento pertence ao usuário (funciona para queries e leitura individual)
+        // Para queries, o Firestore verifica cada documento individualmente
+        allow read: if isAuthenticated() && (
+          isOwnerDoc() || 
+          isAdmin() ||
+          (resource != null && resource.data != null && resource.data.userId == request.auth.uid)
+        );
+        
+        // Usuário pode criar/atualizar seus próprios registros
+        // Validar que o userId no documento corresponde ao usuário autenticado
+        allow create, update: if isAuthenticated() && 
+                                request.resource.data.userId == request.auth.uid;
+        allow delete: if isAdmin();
+      }
+      
       match /presence/{userId} {
         // Usuário pode ler, criar e atualizar seu próprio presence
         allow read, create, update: if isAuthenticated() && isOwner(userId);

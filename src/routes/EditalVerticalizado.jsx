@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
-import { doc, onSnapshot, getDoc, updateDoc, collection, getDocs, query, orderBy } from 'firebase/firestore'
+import { doc, onSnapshot, getDoc, updateDoc, collection, getDocs, query, orderBy, setDoc, serverTimestamp } from 'firebase/firestore'
+import dayjs from 'dayjs'
 import {
   DocumentTextIcon,
   ChevronLeftIcon,
@@ -38,15 +39,78 @@ const EditalVerticalizado = () => {
   const [loading, setLoading] = useState(true)
   const [courseId, setCourseId] = useState(null)
   const [courseName, setCourseName] = useState('')
+  const [highlightedDisciplina, setHighlightedDisciplina] = useState(null)
+  const [highlightedTopico, setHighlightedTopico] = useState(null)
 
-  // Determinar courseId
+  // Determinar courseId e destacar disciplina/tópico se vier dos links
   useEffect(() => {
     const courseFromUrl = searchParams.get('course')
     const courseFromProfile = profile?.selectedCourseId
     
     const finalCourseId = courseFromUrl || courseFromProfile || 'alego-default'
     setCourseId(finalCourseId)
+    
+    // Verificar se há parâmetros de disciplina/tópico para destacar
+    const disciplinaParam = searchParams.get('disciplina')
+    const topicoParam = searchParams.get('topico')
+    
+    if (disciplinaParam) {
+      setHighlightedDisciplina(decodeURIComponent(disciplinaParam))
+    }
+    if (topicoParam) {
+      setHighlightedTopico(decodeURIComponent(topicoParam))
+    }
   }, [searchParams, profile])
+
+  // Scroll para o tópico destacado quando o edital carregar
+  useEffect(() => {
+    if (highlightedTopico && editalVerticalizado && !loading) {
+      setTimeout(() => {
+        // Primeiro, tentar encontrar pela disciplina destacada
+        if (highlightedDisciplina && editalVerticalizado.disciplinas) {
+          const disciplinaIndex = editalVerticalizado.disciplinas.findIndex(
+            (disc) => (disc.nome || '').toLowerCase().includes(highlightedDisciplina.toLowerCase()) ||
+                      highlightedDisciplina.toLowerCase().includes((disc.nome || '').toLowerCase())
+          )
+          
+          if (disciplinaIndex >= 0 && editalVerticalizado.disciplinas[disciplinaIndex].topicos) {
+            // Procurar o tópico dentro da disciplina encontrada
+            const topicoIndex = editalVerticalizado.disciplinas[disciplinaIndex].topicos.findIndex(
+              (topico) => {
+                const topicoNome = (topico.nome || '').toLowerCase().trim()
+                const topicoNumero = (topico.numero || '').toString().toLowerCase().trim()
+                const highlighted = highlightedTopico.toLowerCase().trim()
+                return topicoNome === highlighted || 
+                       topicoNome.includes(highlighted) || 
+                       highlighted.includes(topicoNome) ||
+                       topicoNumero === highlighted
+              }
+            )
+            
+            if (topicoIndex >= 0) {
+              const rowId = `topico-${disciplinaIndex}-${topicoIndex}`
+              const row = document.getElementById(rowId)
+              if (row) {
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                return
+              }
+            }
+          }
+        }
+        
+        // Fallback: procurar em todas as linhas
+        const allRows = document.querySelectorAll('[id^="topico-"]')
+        for (const row of allRows) {
+          const rowText = row.textContent || ''
+          const highlighted = highlightedTopico.toLowerCase().trim()
+          if (rowText.toLowerCase().includes(highlighted) || highlighted.includes(rowText.toLowerCase().substring(0, 50))) {
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            break
+          }
+        }
+      }, 1000)
+    }
+  }, [highlightedTopico, highlightedDisciplina, editalVerticalizado, loading])
 
   // Carregar nome do curso
   useEffect(() => {
@@ -171,12 +235,13 @@ const EditalVerticalizado = () => {
 
   // Função para atualizar checkbox do tópico
   const handleToggleCheckbox = async (disciplinaIdx, topicoIdx, campo) => {
-    if (!courseId || !editalVerticalizado?.disciplinas) return
+    if (!courseId || !editalVerticalizado?.disciplinas || !user) return
 
     try {
       const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
       const disciplinas = [...editalVerticalizado.disciplinas]
       const topico = disciplinas[disciplinaIdx].topicos[topicoIdx]
+      const disciplina = disciplinas[disciplinaIdx]
       
       // Alternar o valor do checkbox
       const novoValor = !topico[campo]
@@ -191,6 +256,35 @@ const EditalVerticalizado = () => {
       await updateDoc(editalRef, {
         disciplinas: disciplinas
       })
+
+      // Verificar se todas as 3 caixas foram marcadas (flashcards, questões, estudado)
+      // Usar o novo valor atualizado para verificar
+      const flashcardsMarcado = campo === 'flashcards' ? novoValor : topico.flashcards
+      const questoesMarcado = campo === 'questoes' ? novoValor : topico.questoes
+      const estudadoMarcado = campo === 'estudado' ? novoValor : topico.estudado
+      const todasMarcadas = flashcardsMarcado && questoesMarcado && estudadoMarcado
+      
+      if (todasMarcadas) {
+          // Salvar progresso do tópico estudado hoje
+          const today = dayjs().format('YYYY-MM-DD')
+          const topicKey = makeTopicKey(topico)
+          const progressKey = `${user.uid}_${courseId}_${today}_${topicKey}`
+          
+          const progressRef = doc(db, 'editalProgress', progressKey)
+          await setDoc(progressRef, {
+            userId: user.uid,
+            courseId: courseId,
+            date: today,
+            disciplina: disciplina.nome,
+            topico: topico.nome || topico.numero,
+            topicKey: topicKey,
+            flashcards: true,
+            questoes: true,
+            estudado: true,
+            completedAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          }, { merge: true })
+        }
     } catch (error) {
       console.error('Erro ao atualizar checkbox:', error)
     }
@@ -301,7 +395,8 @@ const EditalVerticalizado = () => {
                         <span className="sm:hidden">Q</span>
                       </th>
                       <th className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center font-bold text-[10px] sm:text-xs md:text-sm whitespace-nowrap">
-                        Dia
+                        <span className="hidden sm:inline">Estudado</span>
+                        <span className="sm:hidden">Est.</span>
                       </th>
                       <th className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center font-bold text-[10px] sm:text-xs md:text-sm whitespace-nowrap">
                         <span className="hidden sm:inline">Revisões</span>
@@ -357,8 +452,13 @@ const EditalVerticalizado = () => {
                           const nivelPadding = nivelCalculado * (nivelCalculado > 0 ? 10 : 12) // Menos padding em mobile para níveis profundos
                           const paddingLeft = basePadding + nivelPadding
                           
+                          const isHighlighted = highlightedTopico && (
+                            (topico.nome || '').toLowerCase().includes(highlightedTopico.toLowerCase()) ||
+                            highlightedTopico.toLowerCase().includes((topico.nome || '').toLowerCase())
+                          )
+                          
                           return (
-                            <tr key={`${idx}-${topicoIdx}`} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 bg-white dark:bg-slate-800">
+                            <tr key={`${idx}-${topicoIdx}`} id={`topico-${idx}-${topicoIdx}`} className={`${isHighlighted ? 'ring-2 ring-yellow-400 dark:ring-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' : ''} hover:bg-slate-50 dark:hover:bg-slate-700/50 bg-white dark:bg-slate-800`}>
                               <td 
                                 className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 text-slate-900 dark:text-white text-[11px] sm:text-xs md:text-sm break-words"
                                 style={{ 
@@ -417,8 +517,8 @@ const EditalVerticalizado = () => {
                               <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 text-center">
                                 <input
                                   type="checkbox"
-                                  checked={!!topico.dia}
-                                  onChange={() => handleToggleCheckbox(idx, topicoIdx, 'dia')}
+                                  checked={!!topico.estudado}
+                                  onChange={() => handleToggleCheckbox(idx, topicoIdx, 'estudado')}
                                   className="w-5 h-5 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white dark:bg-slate-700 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-slate-800 focus:ring-2 dark:border-slate-600 cursor-pointer touch-manipulation"
                                   style={{ touchAction: 'manipulation' }}
                                 />

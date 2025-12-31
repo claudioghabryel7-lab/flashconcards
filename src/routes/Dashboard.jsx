@@ -11,6 +11,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
 } from 'firebase/firestore'
 import {
@@ -65,20 +66,85 @@ const Dashboard = () => {
   // Planejador de estudos com IA
   const {
     dailyRecommendation,
-    progressStats: plannerStats,
     loading: plannerLoading,
-    targetDate,
-    metaDays,
-    setMetaDays
+    daysRemaining,
+    refreshRecommendation
   } = useStudyPlanner(
     user?.uid,
     selectedCourseId,
-    allCards,
-    cardProgress,
-    progressData,
-    questoesStats,
     editalVerticalizado
   )
+
+  // Função para marcar tópico como estudado no edital
+  const markTopicAsCompleted = async (disciplinaNome, topicoNome) => {
+    if (!selectedCourseId || !user || !editalVerticalizado) {
+      return false
+    }
+
+    try {
+      const editalRef = doc(db, 'courses', selectedCourseId, 'editalVerticalizado', 'principal')
+      const disciplinas = [...(editalVerticalizado.disciplinas || [])]
+      
+      // Encontrar a disciplina
+      const disciplinaIndex = disciplinas.findIndex(d => 
+        d.nome?.toLowerCase().trim() === disciplinaNome.toLowerCase().trim()
+      )
+
+      if (disciplinaIndex === -1) {
+        console.error('Disciplina não encontrada:', disciplinaNome)
+        return false
+      }
+
+      const disciplina = disciplinas[disciplinaIndex]
+      
+      // Encontrar o tópico
+      const topicoIndex = disciplina.topicos?.findIndex(t => 
+        (t.nome?.toLowerCase().trim() === topicoNome.toLowerCase().trim()) ||
+        (t.numero?.toString() === topicoNome)
+      )
+
+      if (topicoIndex === -1 || !disciplina.topicos) {
+        console.error('Tópico não encontrado:', topicoNome)
+        return false
+      }
+
+      const topico = disciplina.topicos[topicoIndex]
+
+      // Marcar como estudado
+      disciplinas[disciplinaIndex].topicos[topicoIndex] = {
+        ...topico,
+        estudado: true
+      }
+
+      // Atualizar no Firestore
+      await updateDoc(editalRef, {
+        disciplinas: disciplinas
+      })
+
+      // Salvar progresso na coleção editalProgress
+      const today = dayjs().format('YYYY-MM-DD')
+      const topicKey = `${disciplinaNome}::${topicoNome}`
+      const progressKey = `${user.uid}_${selectedCourseId}_${today}_${encodeURIComponent(topicKey)}`
+      
+      const progressRef = doc(db, 'editalProgress', progressKey)
+      await setDoc(progressRef, {
+        userId: user.uid,
+        courseId: selectedCourseId,
+        date: today,
+        disciplina: disciplinaNome,
+        topico: topicoNome,
+        topicKey: topicKey,
+        estudado: true,
+        completedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true })
+
+      return true
+    } catch (error) {
+      console.error('Erro ao marcar tópico como estudado:', error)
+      return false
+    }
+  }
 
   // Carregar curso selecionado
   useEffect(() => {
@@ -106,6 +172,7 @@ const Dashboard = () => {
     
     loadCourseData()
   }, [profile])
+
 
   // Carregar progresso do usuário - CORRIGIDO para sincronização correta
   useEffect(() => {
@@ -199,30 +266,35 @@ const Dashboard = () => {
           const allCardProgress = data.cardProgress || {}
           
           // Filtrar cards apenas do curso selecionado
-          // Se o card não tem courseId no progresso, assumir que é do curso padrão (null)
+          // IMPORTANTE: Incluir TODOS os progressos de cards que pertencem ao curso selecionado
           const filteredProgress = {}
+          const currentCourseId = selectedCourseId || null
           
-          // Se temos cards carregados, filtrar pelo curso deles
+          // Criar um mapa de cards por ID para busca rápida
+          const cardsById = {}
           allCards.forEach(card => {
-            const progress = allCardProgress[card.id]
-            if (progress) {
-              // Se o card pertence ao curso selecionado, incluir o progresso
-              const cardCourseId = card.courseId || null
-              const currentCourseId = selectedCourseId || null
-              
-              // Incluir se o curso do card corresponde ao curso selecionado
-              if (cardCourseId === currentCourseId) {
-                filteredProgress[card.id] = progress
-              }
-            }
+            cardsById[card.id] = card
           })
           
-          // Também incluir progressos de cards que ainda não foram carregados mas pertencem ao curso
+          // Filtrar progressos: incluir se o card pertence ao curso selecionado
           Object.keys(allCardProgress).forEach(cardId => {
-            if (!filteredProgress[cardId]) {
-              const progress = allCardProgress[cardId]
-              // Se não temos o card ainda, incluir o progresso (será filtrado depois quando os cards carregarem)
-              filteredProgress[cardId] = progress
+            const progress = allCardProgress[cardId]
+            const card = cardsById[cardId]
+            
+            // Se temos o card carregado, verificar o courseId do card
+            if (card) {
+              const cardCourseId = card.courseId || null
+              // Incluir se o curso do card corresponde ao curso selecionado
+              if (cardCourseId === currentCourseId) {
+                filteredProgress[cardId] = progress
+              }
+            } else {
+              // Se não temos o card ainda, incluir o progresso temporariamente
+              // Será filtrado depois quando os cards carregarem
+              // Mas só incluir se tiver reviewCount > 0 (foi estudado)
+              if (progress?.reviewCount > 0) {
+                filteredProgress[cardId] = progress
+              }
             }
           })
           
@@ -656,18 +728,6 @@ const Dashboard = () => {
           </motion.div>
         </div>
 
-        {/* Planejador de Estudos com IA - Aparece primeiro */}
-        {user && selectedCourseId && (
-          <StudyPlanner
-            dailyRecommendation={dailyRecommendation}
-            progressStats={plannerStats}
-            loading={plannerLoading}
-            targetDate={targetDate}
-            metaDays={metaDays}
-            setMetaDays={setMetaDays}
-          />
-        )}
-
         {/* Edital Verticalizado */}
         {selectedCourseId && (
           <motion.div
@@ -770,6 +830,17 @@ const Dashboard = () => {
               </div>
             )}
           </motion.div>
+        )}
+
+        {/* Planejador de Estudos com IA */}
+        {user && selectedCourseId && (
+          <StudyPlanner
+            dailyRecommendation={dailyRecommendation}
+            loading={plannerLoading}
+            daysRemaining={daysRemaining}
+            refreshRecommendation={refreshRecommendation}
+            markTopicAsCompleted={markTopicAsCompleted}
+          />
         )}
 
         {/* Grid Principal */}

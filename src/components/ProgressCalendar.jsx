@@ -27,13 +27,6 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {}, onMarkDay = 
     }).filter(Boolean)
     
     const studiedSet = new Set(normalized)
-    console.log('📅 Calendário - Datas estudadas:', { 
-      total: studiedSet.size, 
-      dates: Array.from(studiedSet).slice(-5),
-      today: dayjs().format('YYYY-MM-DD'),
-      hasToday: studiedSet.has(dayjs().format('YYYY-MM-DD'))
-    })
-    
     return studiedSet
   }, [dates])
   
@@ -77,18 +70,6 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {}, onMarkDay = 
   const calendarDays = Array.from({ length: totalDays }, (_, index) =>
     weekStart.clone().add(index, 'day').startOf('day')
   )
-  
-  console.log('📅 Calendário (Janela Deslizante de 28 dias):', {
-    hoje: today.format('DD/MM/YYYY'),
-    hojeNumero: today.format('D'),
-    primeiroDiaRange: firstDay.format('DD/MM/YYYY'),
-    ultimoDiaRange: lastDay.format('DD/MM/YYYY'),
-    primeiroDiaGrid: calendarDays[0]?.format('DD/MM/YYYY'),
-    ultimoDiaGrid: calendarDays[calendarDays.length - 1]?.format('DD/MM/YYYY'),
-    hojeNoGrid: calendarDays.find(d => d.isSame(today, 'day'))?.format('DD/MM/YYYY'),
-    totalDiasGrid: calendarDays.length,
-    comportamento: 'Janela deslizante: dias antigos saem, novo dia (hoje) entra, sempre 28 dias no range'
-  })
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6">
