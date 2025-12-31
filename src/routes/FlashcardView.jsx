@@ -227,8 +227,6 @@ const FlashcardView = () => {
           // Comparar o curso normalizado
           return normalizedCardCourseId === selectedCourse
         })
-        // Logs removidos para limpar console 
-          data.slice(0, 3).map(c => ({ id: c.id, courseId: c.courseId, materia: c.materia })))
       } else {
         // Mostrar apenas flashcards sem courseId (ALEGO padrão)
         // Incluir null, undefined, string vazia e 'alego-default'
@@ -236,8 +234,7 @@ const FlashcardView = () => {
           const cardCourseId = card.courseId
           return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined || cardCourseId === 'alego-default'
         })
-        // Logs removidos para limpar console 
-          data.slice(0, 3).map(c => ({ id: c.id, courseId: c.courseId, materia: c.materia })))
+        // Logs removidos para limpar console
       }
       
       // Admin vê todos, mas ainda filtra por curso selecionado
