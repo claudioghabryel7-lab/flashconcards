@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { doc, getDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import dayjs from 'dayjs'
@@ -10,6 +10,8 @@ export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
   const [completedTopics, setCompletedTopics] = useState(new Set())
   const [error, setError] = useState(null)
   const [shouldUpdate, setShouldUpdate] = useState(false)
+  const hasInitialized = useRef(false)
+  const lastEditalRef = useRef(null)
 
   // Calcular dias restantes (30 dias a partir de hoje)
   const targetDate = useMemo(() => {
@@ -313,21 +315,33 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
 
   // Gerar recomendação quando edital estiver disponível (apenas na primeira vez ou quando explicitamente solicitado)
   useEffect(() => {
-    if (userId && courseId && editalVerticalizado) {
-      if (shouldUpdate) {
-        // Atualização explícita solicitada
+    if (!userId || !courseId) {
+      setLoading(false)
+      return
+    }
+
+    // Verificar se o edital foi carregado pela primeira vez (mudou de null para um objeto)
+    const editalJustLoaded = !lastEditalRef.current && editalVerticalizado
+    const isExplicitUpdate = shouldUpdate
+
+    if (editalVerticalizado) {
+      // Atualizar referência do edital
+      lastEditalRef.current = editalVerticalizado
+
+      if (isExplicitUpdate) {
+        // Atualização explícita solicitada (todas atividades concluídas)
         generateDailyRecommendation()
         setShouldUpdate(false)
-      } else if (!dailyRecommendation) {
-        // Só gerar na primeira vez se não houver recomendação
+      } else if (editalJustLoaded || (!hasInitialized.current && !dailyRecommendation)) {
+        // Primeira vez que o edital é carregado
+        hasInitialized.current = true
         generateDailyRecommendation()
       }
-    } else if (!editalVerticalizado) {
+    } else {
       setLoading(false)
     }
-    // NÃO incluir editalVerticalizado nas dependências para evitar atualizações automáticas
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, courseId, shouldUpdate])
+  }, [userId, courseId, shouldUpdate, editalVerticalizado])
 
   // Escutar eventos de atualização (só quando explicitamente solicitado)
   useEffect(() => {
