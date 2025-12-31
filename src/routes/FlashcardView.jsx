@@ -380,11 +380,7 @@ const FlashcardView = () => {
         })
         
         setCardProgress(filteredProgress)
-        // Log removido para limpar console 
-          total: Object.keys(filteredProgress).length, 
-          courseId: currentCourseId || 'alego',
-          cardsLoaded: cards.length
-        })
+        // Log removido para limpar console
       } else {
         setCardProgress({})
       }
