@@ -181,14 +181,14 @@ const FlashcardView = () => {
         const now = Date.now()
         // Usar cache se tiver menos de 24 horas (para funcionar offline por mais tempo)
         if (now - timestamp < 24 * 60 * 60 * 1000 && cachedData && cachedData.length > 0) {
-          console.log('📦 Carregando flashcards do cache')
+          // Log removido para limpar console
           setCards(cachedData)
           setCardsLoading(false)
           cachedDataLoaded = true
         }
       }
     } catch (err) {
-      console.warn('Erro ao ler cache de flashcards:', err)
+      // Log removido para limpar console
     }
     
     // Se estiver offline e já carregou do cache, não tenta buscar do Firebase
@@ -212,8 +212,7 @@ const FlashcardView = () => {
         ? String(selectedCourseId).trim() 
         : null
       
-      console.log(`🔍 FlashcardView - Total de flashcards no banco: ${data.length}`)
-      console.log(`🔍 FlashcardView - Curso selecionado: ${selectedCourse || 'null (ALEGO padrão)'}`)
+      // Logs removidos para limpar console
       
       if (selectedCourse) {
         // Mostrar apenas flashcards do curso selecionado
@@ -228,8 +227,7 @@ const FlashcardView = () => {
           // Comparar o curso normalizado
           return normalizedCardCourseId === selectedCourse
         })
-        console.log(`🔍 FlashcardView - Filtrado por curso "${selectedCourse}": ${data.length} flashcards encontrados`)
-        console.log(`🔍 FlashcardView - Exemplos de courseId nos flashcards:`, 
+        // Logs removidos para limpar console 
           data.slice(0, 3).map(c => ({ id: c.id, courseId: c.courseId, materia: c.materia })))
       } else {
         // Mostrar apenas flashcards sem courseId (ALEGO padrão)
@@ -238,8 +236,7 @@ const FlashcardView = () => {
           const cardCourseId = card.courseId
           return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined || cardCourseId === 'alego-default'
         })
-        console.log(`🔍 FlashcardView - Filtrado para ALEGO padrão: ${data.length} flashcards encontrados`)
-        console.log(`🔍 FlashcardView - Exemplos de courseId nos flashcards:`, 
+        // Logs removidos para limpar console 
           data.slice(0, 3).map(c => ({ id: c.id, courseId: c.courseId, materia: c.materia })))
       }
       
@@ -277,7 +274,7 @@ const FlashcardView = () => {
           })
         )
       } catch (err) {
-        console.warn('Erro ao salvar cache de flashcards:', err)
+        // Log removido para limpar console
       }
     }, (error) => {
       console.error('Erro ao carregar flashcards:', error)
@@ -386,7 +383,7 @@ const FlashcardView = () => {
         })
         
         setCardProgress(filteredProgress)
-        console.log('📊 FlashcardView - Card progress sincronizado:', { 
+        // Log removido para limpar console 
           total: Object.keys(filteredProgress).length, 
           courseId: currentCourseId || 'alego',
           cardsLoaded: cards.length
@@ -430,28 +427,27 @@ const FlashcardView = () => {
     const materiaParam = searchParams.get('materia')
     const moduloParam = searchParams.get('modulo')
     
-    console.log('🔍 Verificando parâmetros da URL:', { materiaParam, moduloParam })
+    // Log removido para limpar console
     
     // Se não há parâmetros, não fazer nada
     if (!materiaParam || !moduloParam) {
-      console.log('❌ Parâmetros ausentes na URL')
+      // Log removido para limpar console
       return
     }
     
     // Aguardar até que os cards estejam organizados
     if (Object.keys(organizedCards).length === 0) {
-      console.log('⏳ Aguardando cards serem organizados... (cards:', cards.length, ')')
+      // Log removido para limpar console
       return
     }
     
-    console.log('✅ Cards organizados:', Object.keys(organizedCards).length, 'matérias')
-    console.log('📋 Matérias disponíveis:', Object.keys(organizedCards))
+    // Logs removidos para limpar console
     
     // Decodificar os parâmetros (podem vir codificados da URL)
     const decodedMateria = decodeURIComponent(materiaParam)
     const decodedModulo = decodeURIComponent(moduloParam)
     
-    console.log('🔍 Buscando:', { decodedMateria, decodedModulo })
+    // Log removido para limpar console
     
     // Normalizar nome da matéria usando aliases
     const normalizedMateriaName = MATERIA_ALIASES[decodedMateria.trim().toLowerCase()] || decodedMateria.trim()
@@ -461,7 +457,7 @@ const FlashcardView = () => {
       const match = m.trim().toLowerCase() === normalizedMateriaName.toLowerCase() ||
                     m.trim().toLowerCase() === decodedMateria.trim().toLowerCase()
       if (match) {
-        console.log('✅ Matéria encontrada (exata):', m, '→', decodedMateria)
+        // Log removido para limpar console
       }
       return match
     })
@@ -473,7 +469,7 @@ const FlashcardView = () => {
         const searchLower = decodedMateria.trim().toLowerCase()
         const match = mLower.includes(searchLower) || searchLower.includes(mLower)
         if (match) {
-          console.log('✅ Matéria encontrada (parcial):', m, '→', decodedMateria)
+          // Log removido para limpar console
         }
         return match
       })
@@ -481,18 +477,18 @@ const FlashcardView = () => {
     
     if (materiaMatch) {
       const modulos = organizedCards[materiaMatch] || {}
-      console.log('📚 Módulos disponíveis em', materiaMatch, ':', Object.keys(modulos))
+      // Log removido para limpar console
       
       // Normalizar nome do módulo primeiro
       const normalizedModuloName = normalizeModuloName(decodedModulo, materiaMatch)
-      console.log('🔍 Módulo normalizado:', decodedModulo, '→', normalizedModuloName)
+      // Log removido para limpar console
       
       // Buscar módulo correspondente (case-insensitive e com normalização)
       let moduloMatch = Object.keys(modulos).find(m => {
         const match = m.trim().toLowerCase() === normalizedModuloName.trim().toLowerCase() ||
                       m.trim().toLowerCase() === decodedModulo.trim().toLowerCase()
         if (match) {
-          console.log('✅ Módulo encontrado (exato):', m, '→', decodedModulo)
+          // Log removido para limpar console
         }
         return match
       })
@@ -506,7 +502,7 @@ const FlashcardView = () => {
           const match = mLower.includes(searchLower) || searchLower.includes(mLower) ||
                        mLower.includes(originalLower) || originalLower.includes(mLower)
           if (match) {
-            console.log('✅ Módulo encontrado (parcial):', m, '→', decodedModulo)
+            // Log removido para limpar console
           }
           return match
         })
@@ -519,11 +515,11 @@ const FlashcardView = () => {
           ? `${selectedMateria}::${selectedModulo}` 
           : null
         
-        console.log('🔑 Comparando chaves:', { urlKey, currentKey })
+        // Log removido para limpar console
         
         // Se a URL mudou, atualizar a seleção (mesmo que seja uma matéria/módulo diferente)
         if (currentKey !== urlKey) {
-          console.log('📚 Selecionando automaticamente via URL:', materiaMatch, '-', moduloMatch, '(URL mudou)')
+          // Log removido para limpar console
           setSelectedMateria(materiaMatch)
           setSelectedModulo(moduloMatch)
           setStudyMode('module')
@@ -531,14 +527,12 @@ const FlashcardView = () => {
           // Expandir a matéria para mostrar o módulo selecionado
           setExpandedMaterias(prev => ({ ...prev, [materiaMatch]: true }))
         } else {
-          console.log('✅ Já está selecionado, garantindo expansão')
+          // Log removido para limpar console
           // Já está selecionado, mas garantir que está expandido
           setExpandedMaterias(prev => ({ ...prev, [materiaMatch]: true }))
         }
       } else {
-        console.warn('⚠️ Módulo não encontrado:', decodedModulo, 'em', materiaMatch)
-        console.log('📋 Módulos disponíveis:', Object.keys(modulos))
-        console.log('🔍 Tentando busca parcial...')
+        // Logs removidos para limpar console
         
         // Tentar busca parcial (contém o texto)
         const partialMatch = Object.keys(modulos).find(m => 
@@ -547,7 +541,7 @@ const FlashcardView = () => {
         )
         
         if (partialMatch) {
-          console.log('✅ Módulo encontrado por busca parcial:', partialMatch)
+          // Log removido para limpar console
           setSelectedMateria(materiaMatch)
           setSelectedModulo(partialMatch)
           setStudyMode('module')
@@ -556,9 +550,7 @@ const FlashcardView = () => {
         }
       }
     } else {
-      console.warn('⚠️ Matéria não encontrada:', decodedMateria)
-      console.log('📋 Matérias disponíveis:', Object.keys(organizedCards))
-      console.log('🔍 Tentando busca parcial...')
+      // Logs removidos para limpar console
       
       // Tentar busca parcial (contém o texto)
       const partialMateriaMatch = Object.keys(organizedCards).find(m => 
@@ -567,7 +559,7 @@ const FlashcardView = () => {
       )
       
       if (partialMateriaMatch) {
-        console.log('✅ Matéria encontrada por busca parcial:', partialMateriaMatch)
+        // Log removido para limpar console
         const modulos = organizedCards[partialMateriaMatch] || {}
         const moduloMatch = Object.keys(modulos).find(m => 
           m.trim().toLowerCase() === decodedModulo.trim().toLowerCase()
@@ -577,7 +569,7 @@ const FlashcardView = () => {
         )
         
         if (moduloMatch) {
-          console.log('✅ Módulo encontrado:', moduloMatch)
+          // Log removido para limpar console
           setSelectedMateria(partialMateriaMatch)
           setSelectedModulo(moduloMatch)
           setStudyMode('module')
@@ -600,7 +592,7 @@ const FlashcardView = () => {
     // Se chegou aqui, tem parâmetros mas não selecionou ainda
     // Tentar novamente após um pequeno delay
     const retryTimeout = setTimeout(() => {
-      console.log('🔄 Retentando seleção automática após carregamento dos cards...')
+      // Log removido para limpar console
       const decodedMateria = decodeURIComponent(materiaParam)
       const decodedModulo = decodeURIComponent(moduloParam)
       
@@ -634,7 +626,7 @@ const FlashcardView = () => {
         }
         
         if (moduloMatch) {
-          console.log('✅ Seleção automática bem-sucedida no retry:', materiaMatch, '-', moduloMatch)
+          // Log removido para limpar console
           setSelectedMateria(materiaMatch)
           setSelectedModulo(moduloMatch)
           setStudyMode('module')
@@ -961,15 +953,15 @@ const FlashcardView = () => {
 
   const generateCardExplanation = async (card) => {
     // 🔥 NOVO: VERIFICAR CACHE PRIMEIRO
-    console.log('🔍 Verificando cache de explicação para flashcard...')
+    // Log removido para limpar console
     const cachedExplanation = await getOrCreateExplanationCache(card.id)
     
     if (cachedExplanation && cachedExplanation.text) {
-      console.log('✅ Explicação encontrada no cache!')
+      // Log removido para limpar console
       return cachedExplanation.text // Retornar explicação do cache
     }
 
-    console.log('📝 Explicação não encontrada no cache. Gerando com IA...')
+    // Log removido para limpar console
 
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY
     if (!apiKey) {
@@ -1005,7 +997,7 @@ const FlashcardView = () => {
         courseEditalPrompt = combinedText
       }
     } catch (err) {
-      console.warn('Erro ao carregar prompt do curso para explicação:', err)
+      // Log removido para limpar console
       // Usar editalPrompt como fallback se houver
       courseEditalPrompt = editalPrompt || ''
     }
@@ -1055,7 +1047,7 @@ Regras:
         explanationText = text
         
         // 🔥 NOVO: SALVAR NO CACHE
-        console.log('💾 Salvando explicação no cache...')
+        // Log removido para limpar console
         await saveExplanationCache(card.id, explanationText)
         
         return explanationText
@@ -1080,10 +1072,10 @@ Regras:
           if (groqApiKey) {
             try {
               const groqResponse = await callGroqAPI(prompt)
-              console.log('✅ Groq gerou explicação com sucesso!')
+              // Log removido para limpar console
               
               // 🔥 NOVO: SALVAR NO CACHE também quando usar Groq
-              console.log('💾 Salvando explicação (via Groq) no cache...')
+              // Log removido para limpar console
               await saveExplanationCache(card.id, groqResponse)
               
               return groqResponse

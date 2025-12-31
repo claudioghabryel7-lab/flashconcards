@@ -6542,7 +6542,13 @@ CRÍTICO:
                           let model = null
                           for (const modelName of modelNames) {
                             try {
-                              model = genAI.getGenerativeModel({ model: modelName })
+                              model = genAI.getGenerativeModel({ 
+                                model: modelName,
+                                generationConfig: {
+                                  maxOutputTokens: 32000, // Aumentar limite de tokens de saída
+                                  temperature: 0.3,
+                                }
+                              })
                               // Testar se o modelo funciona
                               await model.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
                               console.log(`✅ Usando modelo: ${modelName}`)
@@ -6557,14 +6563,87 @@ CRÍTICO:
                             throw new Error('Nenhum modelo Gemini disponível. Verifique sua API key.')
                           }
                           
-                          // Processar edital verticalizado
-                          setMessage('📋 Organizando edital verticalizado em formato de tabela...')
+                          // Processar edital verticalizado em partes para evitar truncamento
+                          // Dividir o edital em chunks menores e processar cada um separadamente
+                          const preferredModel = 'gemini-1.5-pro-latest'
+                          
+                          let modelForProcessing = null
+                          try {
+                            modelForProcessing = genAI.getGenerativeModel({ 
+                              model: preferredModel,
+                              generationConfig: {
+                                maxOutputTokens: 32000,
+                                temperature: 0.3,
+                              }
+                            })
+                            await modelForProcessing.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
+                            console.log(`✅ Usando modelo ${preferredModel} para processar edital`)
+                          } catch (err) {
+                            console.warn(`⚠️ Modelo ${preferredModel} não disponível, usando modelo padrão`)
+                            modelForProcessing = model
+                          }
+                          
+                          // Dividir o edital em partes inteligentes baseado no tamanho
+                          // Isso garante que a resposta da IA não seja truncada
+                          const chunks = []
+                          
+                          // Calcular número ideal de partes baseado no tamanho do edital
+                          // - Editais pequenos (< 20k): 3 partes (garante respostas pequenas)
+                          // - Editais médios (20k-100k): 4-5 partes
+                          // - Editais grandes (> 100k): 6+ partes (50k caracteres por parte)
+                          let numPartes = 3 // Mínimo de 3 partes
+                          const tamanhoEdital = editalVerticalizadoText.length
+                          
+                          if (tamanhoEdital > 100000) {
+                            // Edital muito grande: dividir em partes de ~50k caracteres
+                            numPartes = Math.ceil(tamanhoEdital / 50000)
+                          } else if (tamanhoEdital > 50000) {
+                            // Edital grande: 5 partes
+                            numPartes = 5
+                          } else if (tamanhoEdital > 20000) {
+                            // Edital médio: 4 partes
+                            numPartes = 4
+                          } else {
+                            // Edital pequeno: 3 partes (garante respostas pequenas)
+                            numPartes = 3
+                          }
+                          
+                          const chunkSizeCalculado = Math.ceil(tamanhoEdital / numPartes)
+                          
+                          // Log removido para limpar console
+                          setMessage(`📦 Processando edital em ${numPartes} partes (${tamanhoEdital} caracteres)...`)
+                          
+                          for (let i = 0; i < editalVerticalizadoText.length; i += chunkSizeCalculado) {
+                            const chunk = editalVerticalizadoText.substring(i, i + chunkSizeCalculado)
+                            const parteNum = Math.floor(i / chunkSizeCalculado) + 1
+                            const totalPartes = Math.ceil(editalVerticalizadoText.length / chunkSizeCalculado)
+                            
+                            chunks.push({
+                              texto: chunk,
+                              parte: parteNum,
+                              totalPartes: totalPartes,
+                              inicio: i,
+                              fim: Math.min(i + chunkSizeCalculado, editalVerticalizadoText.length)
+                            })
+                          }
+                          
+                          // Log removido para limpar console
+                          
+                          // Processar cada parte separadamente
+                          const todasDisciplinas = []
+                          let tituloComum = 'EDITAL VERTICALIZADO'
+                          let descricaoComum = ''
+                          
+                          for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
+                            const chunk = chunks[chunkIdx]
+                            setMessage(`📋 Processando parte ${chunk.parte}/${chunk.totalPartes} (${chunk.texto.length} caracteres)...`)
+                            
                           const verticalizadoPrompt = `Você é um especialista em organizar editais de concursos públicos em formato TABULAR VERTICALIZADO para estudos.
 
 Analise o seguinte texto do edital e organize-o em DISCIPLINAS com seus tópicos hierárquicos. O formato deve ser uma TABELA com colunas: DISCIPLINAS, FlashCards, Questões, Dia, Revisões.
 
-Texto do edital:
-${editalVerticalizadoText.substring(0, 100000)} ${editalVerticalizadoText.length > 100000 ? '... (texto truncado)' : ''}
+${chunks.length > 1 ? `⚠️ ATENÇÃO: Este é a PARTE ${chunk.parte} de ${chunk.totalPartes} do edital completo.\n` : ''}${chunks.length > 1 ? `O edital completo tem ${editalVerticalizadoText.length} caracteres e foi dividido para processamento completo.\n` : ''}${chunks.length > 1 ? `Esta parte contém os caracteres de ${chunk.inicio} a ${chunk.fim}.\n` : ''}${chunks.length > 1 ? `Extraia TODAS as disciplinas e tópicos desta parte. Se uma disciplina começar nesta parte e terminar na próxima, extraia o que conseguir desta parte.\n\n` : ''}Texto do edital${chunks.length > 1 ? ` (PARTE ${chunk.parte}/${chunk.totalPartes})` : ''}:
+${chunk.texto}${chunks.length > 1 && chunkIdx < chunks.length - 1 ? '\n\n[... continua na próxima parte ...]' : ''}${chunks.length > 1 && chunkIdx > 0 ? '\n\n[... continuação da parte anterior ...]' : ''}
 
 TAREFA CRÍTICA:
 Extraia do edital TODAS as disciplinas e seus tópicos organizados hierarquicamente. O formato final será uma TABELA onde:
@@ -6660,26 +6739,72 @@ Organize o edital em um formato JSON com a seguinte estrutura EXATA:
   ]
 }
 
-REGRAS CRÍTICAS E OBRIGATÓRIAS:
-1. Extraia TODAS as disciplinas mencionadas no edital
+REGRAS CRÍTICAS E OBRIGATÓRIAS - LEIA COM ATENÇÃO:
+1. ⚠️⚠️⚠️ EXTRAIA TODAS AS DISCIPLINAS - NÃO PARE NO MEIO ⚠️⚠️⚠️
+   - Você DEVE processar TODO o texto do edital do início ao fim
+   - NÃO pare quando achar que já processou o suficiente
+   - NÃO trunque disciplinas ou tópicos
+   - Se o edital tiver 20 disciplinas, você DEVE extrair as 20
+   - Se uma disciplina tiver 50 tópicos, você DEVE extrair os 50
+   - Continue processando até o FINAL do texto fornecido
+
 2. Para cada disciplina, extraia TODOS os tópicos e sub-tópicos na ordem que aparecem no edital
+   - NÃO pule tópicos
+   - NÃO resuma ou agrupe tópicos
+   - Cada tópico numerado deve aparecer como um item separado
+
 3. Mantenha a numeração EXATA do edital (ex: 1.1, 1.1.2, 1.2.5.1) - NÃO invente numeração
+
 4. O campo "nivel" deve refletir a hierarquia baseada na numeração:
    - nivel 0: tópicos principais (ex: 1.1, 1.2, 1.3)
    - nivel 1: primeiro sub-nível (ex: 1.1.2, 1.2.5)
    - nivel 2: segundo sub-nível (ex: 1.2.5.1, 1.2.5.2)
    - nivel 3: terceiro sub-nível (ex: 1.2.5.1.1)
-5. O campo "nome" deve conter APENAS o texto do tópico, SEM a numeração no início
-6. O campo "numero" deve conter a numeração completa (ex: "1.1", "1.1.2", "1.2.5.1")
-7. Os campos flashcards, questoes, dia, revisoes devem ser SEMPRE false inicialmente
-8. O campo "totalQuestoes" deve ser o número total de questões da disciplina mencionado no edital (se houver)
-9. Se o edital não mencionar número de questões, use null ou omita o campo
-10. Retorne APENAS o JSON válido, sem markdown (sem \`\`\`json), sem explicações, sem texto antes ou depois
-11. Comece diretamente com { e termine com }
-12. O JSON deve ser válido e parseável
-13. IMPORTANTE: Se o edital tiver tópicos sem numeração, crie uma numeração lógica baseada na ordem e hierarquia`
 
-                          const verticalizadoResult = await model.generateContent(verticalizadoPrompt)
+5. O campo "nome" deve conter APENAS o texto do tópico, SEM a numeração no início
+
+6. O campo "numero" deve conter a numeração completa (ex: "1.1", "1.1.2", "1.2.5.1")
+
+7. Os campos flashcards, questoes, dia, revisoes devem ser SEMPRE false inicialmente
+
+8. O campo "totalQuestoes" deve ser o número total de questões da disciplina mencionado no edital (se houver)
+
+9. Se o edital não mencionar número de questões, use null ou omita o campo
+
+10. Retorne APENAS o JSON válido, sem markdown (sem \`\`\`json), sem explicações, sem texto antes ou depois
+
+11. Comece diretamente com { e termine com }
+
+12. O JSON deve ser válido e parseável
+
+13. IMPORTANTE: Se o edital tiver tópicos sem numeração, crie uma numeração lógica baseada na ordem e hierarquia
+
+14. ⚠️ VERIFICAÇÃO FINAL: Antes de retornar, verifique se você processou TODAS as disciplinas mencionadas no edital. Se o edital menciona "LÍNGUA PORTUGUESA", "LEGISLAÇÃO", "DIREITO CONSTITUCIONAL", "DIREITO ADMINISTRATIVO", "DIREITO PENAL", "DIREITO PROCESSUAL PENAL", "ADMINISTRAÇÃO", "RACIOCÍNIO LÓGICO", "LÍNGUA INGLESA", "NOÇÕES DE CRIMINOLOGIA", "DIREITOS HUMANOS", "DISTRITO FEDERAL E POLÍTICA PARA MULHERES", "LEGISLAÇÃO PENAL E PROCESSUAL PENAL EXTRAVAGANTE", "DIREITO PENAL MILITAR", "DIREITO PROCESSUAL PENAL MILITAR", etc., TODAS devem estar no JSON final.
+
+15. ⚠️ NÃO TRUNQUE: Se você estiver próximo do limite de tokens, continue mesmo assim. É melhor ter um JSON completo mesmo que grande do que um JSON truncado.
+
+16. ⚠️ FORMATO JSON VÁLIDO: Certifique-se de que:
+    - Todas as strings estão entre aspas duplas (")
+    - Todas as strings estão fechadas corretamente
+    - Não há quebras de linha dentro de strings sem escape (\n)
+    - Não há caracteres de controle inválidos
+    - Todas as vírgulas estão no lugar correto
+    - Todos os colchetes e chaves estão fechados
+
+17. ⚠️ EXEMPLO DE ESTRUTURA CORRETA:
+    - Se o edital tem 15 disciplinas, o JSON deve ter exatamente 15 itens no array "disciplinas"
+    - Cada disciplina deve ter seu array "topicos" completo
+    - NÃO pare na 9ª disciplina se houver 15 no total
+
+18. ⚠️ IMPORTANTE PARA PARTES DIVIDIDAS:
+    - Se este é uma PARTE do edital, extraia TODAS as disciplinas que aparecem nesta parte
+    - Se uma disciplina aparece parcialmente (começa aqui e termina na próxima parte), extraia o que conseguir
+    - Se uma disciplina aparece completa nesta parte, extraia TODOS os tópicos dela
+    - NÃO pule disciplinas só porque podem aparecer em outras partes também
+    - O sistema vai combinar todas as partes depois, então é melhor ter duplicatas do que perder disciplinas
+    - Se você encontrar "DIREITO PENAL", "DIREITO PROCESSUAL PENAL", "DIREITO ADMINISTRATIVO", "DIREITO PENAL MILITAR", "DIREITO PROCESSUAL PENAL MILITAR", "LEGISLAÇÃO PENAL E PROCESSUAL PENAL EXTRAVAGANTE" ou qualquer outra disciplina, EXTRAIA ELA COMPLETA`
+
+                            const verticalizadoResult = await modelForProcessing.generateContent(verticalizadoPrompt)
                           const verticalizadoResponse = await verticalizadoResult.response
                           let verticalizadoText = verticalizadoResponse.text().trim()
                           
@@ -6690,7 +6815,7 @@ REGRAS CRÍTICAS E OBRIGATÓRIAS:
                             verticalizadoText = verticalizadoText.replace(/```\n?/g, '').trim()
                           }
                           
-                          // Função para limpar e validar JSON
+                            // Função para limpar e validar JSON (melhorada)
                           const cleanAndParseJSON = (text) => {
                             // Remover texto antes e depois do JSON
                             let cleaned = text.trim()
@@ -6705,23 +6830,20 @@ REGRAS CRÍTICAS E OBRIGATÓRIAS:
                             try {
                               return JSON.parse(cleaned)
                             } catch (firstErr) {
-                              // Tentar reparar usando jsonrepair (corrige vírgulas sobrando, aspas faltando, etc.)
-                              try {
-                                const repaired = jsonrepair(cleaned)
-                                return JSON.parse(repaired)
-                              } catch (repairErr) {
-                                console.warn('jsonrepair não conseguiu reparar o JSON do edital verticalizado', repairErr)
-                              }
+                              console.warn('⚠️ Erro no parse inicial, tentando reparar...', firstErr.message)
                               
-                              // Se falhar, tentar corrigir caracteres de controle problemáticos
-                              // A estratégia: processar caractere por caractere dentro de strings
+                              // Primeiro: remover caracteres de controle problemáticos
+                              cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ')
+                              
+                              // Segundo: tentar reparar strings não terminadas
+                              // Encontrar todas as strings e garantir que estejam fechadas
                               let result = ''
                               let inString = false
                               let escapeNext = false
+                              let stringStart = -1
                               
                               for (let i = 0; i < cleaned.length; i++) {
                                 const char = cleaned[i]
-                                const code = char.charCodeAt(0)
                                 
                                 if (escapeNext) {
                                   result += char
@@ -6736,58 +6858,234 @@ REGRAS CRÍTICAS E OBRIGATÓRIAS:
                                 }
                                 
                                 if (char === '"' && (i === 0 || cleaned[i-1] !== '\\')) {
-                                  inString = !inString
+                                  if (!inString) {
+                                    // Início de string
+                                    stringStart = i
+                                    inString = true
                                   result += char
+                                  } else {
+                                    // Fim de string
+                                    inString = false
+                                    result += char
+                                  }
                                   continue
                                 }
                                 
-                                // Se estamos dentro de uma string e encontramos caracteres de controle
-                                if (inString && code >= 0x00 && code <= 0x1F && code !== 0x09 && code !== 0x0A && code !== 0x0D) {
-                                  // Escapar caracteres de controle inválidos
-                                  if (code === 0x09) result += '\\t'
-                                  else if (code === 0x0A) result += '\\n'
-                                  else if (code === 0x0D) result += '\\r'
-                                  else result += ' ' // Substituir outros por espaço
-                                } else {
+                                // Se estamos dentro de uma string e encontramos quebra de linha não escapada, fechar a string
+                                if (inString && (char === '\n' || char === '\r')) {
+                                  // Fechar string anterior e abrir nova
+                                  result += '"'
+                                  inString = false
+                                  // Adicionar quebra de linha como espaço
+                                  result += ' '
+                                  continue
+                                }
+                                
                                   result += char
                                 }
+                              
+                              // Se ainda estiver em uma string no final, fechar ela
+                              if (inString) {
+                                result += '"'
+                                console.warn('⚠️ String não terminada encontrada, fechando automaticamente')
                               }
                               
+                              // Tentar parse novamente
                               try {
                                 return JSON.parse(result)
                               } catch (secondErr) {
-                                // Última tentativa: remover todos caracteres de controle
+                                // Tentar reparar usando jsonrepair
+                                try {
+                                  const repaired = jsonrepair(result)
+                                  return JSON.parse(repaired)
+                                } catch (repairErr) {
+                                  console.warn('jsonrepair não conseguiu reparar o JSON', repairErr)
+                                }
+                                
+                                // Última tentativa: remover tudo que não é JSON válido
                                 result = result.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-                                return JSON.parse(result)
+                                // Tentar encontrar o JSON válido mais longo
+                                const validJsonMatch = result.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/)
+                                if (validJsonMatch) {
+                                  return JSON.parse(validJsonMatch[0])
+                                }
+                                
+                                throw new Error(`Não foi possível reparar o JSON. Erro: ${secondErr.message}`)
                               }
                             }
                           }
                           
+                            // Verificar se a resposta foi truncada
+                            const responseLength = verticalizadoText.length
+                            // Log removido para limpar console
+                          
                           // Tentar extrair JSON mesmo se houver texto antes/depois
-                          let editalOrganizado = null
+                            let editalParte = null
                           try {
                             // Tentar parse direto primeiro
-                            editalOrganizado = JSON.parse(verticalizadoText)
+                              editalParte = JSON.parse(verticalizadoText)
                           } catch (parseErr) {
-                            console.warn('⚠️ Erro ao fazer parse direto, tentando limpar e extrair JSON...', parseErr)
+                              // Log removido para limpar console
                             
                             try {
-                              editalOrganizado = cleanAndParseJSON(verticalizadoText)
-                              console.log('✅ JSON extraído e limpo com sucesso')
+                                editalParte = cleanAndParseJSON(verticalizadoText)
+                                // Log removido para limpar console
                             } catch (matchErr) {
-                              console.error('❌ Erro ao fazer parse do JSON limpo:', matchErr)
-                              console.error('📋 Texto original (primeiros 500 caracteres):', verticalizadoText.substring(0, 500))
-                              throw new Error('A IA retornou uma resposta que não contém JSON válido. Tente novamente ou verifique o texto do edital.')
+                                console.error(`❌ Parte ${chunk.parte}: Erro ao fazer parse do JSON limpo:`, matchErr)
+                                throw new Error(`Parte ${chunk.parte}: A IA retornou uma resposta que não contém JSON válido. Erro: ${matchErr.message}`)
+                              }
+                            }
+                            
+                            // Adicionar disciplinas desta parte à lista total
+                            if (editalParte && editalParte.disciplinas && Array.isArray(editalParte.disciplinas)) {
+                              // Evitar duplicatas: verificar se a disciplina já existe
+                              editalParte.disciplinas.forEach(disciplina => {
+                                const existe = todasDisciplinas.find(d => d.nome === disciplina.nome)
+                                if (!existe) {
+                                  todasDisciplinas.push(disciplina)
+                                } else {
+                                  // Se já existe, mesclar tópicos (pode ter sido dividida entre partes)
+                                  const index = todasDisciplinas.findIndex(d => d.nome === disciplina.nome)
+                                  const topicosExistentes = todasDisciplinas[index].topicos || []
+                                  const topicosNovos = disciplina.topicos || []
+                                  
+                                  // Adicionar apenas tópicos que não existem
+                                  topicosNovos.forEach(topico => {
+                                    const topicoExiste = topicosExistentes.find(t => 
+                                      t.numero === topico.numero && t.nome === topico.nome
+                                    )
+                                    if (!topicoExiste) {
+                                      topicosExistentes.push(topico)
+                                    }
+                                  })
+                                  
+                                  todasDisciplinas[index].topicos = topicosExistentes
+                                }
+                              })
+                              
+                              // Salvar título e descrição da primeira parte
+                              if (chunkIdx === 0) {
+                                if (editalParte.titulo) tituloComum = editalParte.titulo
+                                if (editalParte.descricao) descricaoComum = editalParte.descricao
+                              }
+                            } else {
+                              // Log removido para limpar console
                             }
                           }
                           
-                          // Salvar edital verticalizado
+                          // Combinar todas as disciplinas em um único objeto
+                          const editalOrganizado = {
+                            titulo: tituloComum,
+                            descricao: descricaoComum,
+                            disciplinas: todasDisciplinas
+                          }
+                          
+                          // Logs removidos para limpar console
+                          
+                          if (todasDisciplinas.length === 0) {
+                            throw new Error('Nenhuma disciplina foi processada. Verifique o texto do edital.')
+                          }
+                          
+                          // Verificar tamanho do JSON antes de salvar
+                          const jsonString = JSON.stringify(editalOrganizado)
+                          const jsonSizeMB = (new Blob([jsonString]).size / 1024 / 1024).toFixed(2)
+                          console.log(`📊 Tamanho do JSON gerado: ${jsonSizeMB} MB`)
+                          
+                          // Firestore tem limite de 1MB por documento
+                          // Se for muito grande, dividir em partes
+                          if (jsonSizeMB > 0.9) {
+                            console.warn(`⚠️ JSON muito grande (${jsonSizeMB} MB). Dividindo em partes...`)
+                            setMessage(`📦 Edital muito grande (${jsonSizeMB} MB). Dividindo em partes para salvar...`)
+                            
+                            // Dividir disciplinas em chunks menores
+                            const disciplinas = editalOrganizado.disciplinas || []
+                            console.log(`📊 Total de disciplinas a salvar: ${disciplinas.length}`)
+                            
+                            // Calcular quantas partes são necessárias (cada parte com ~5-7 disciplinas para ficar seguro)
+                            const disciplinasPorParte = 5 // Aproximadamente 5 disciplinas por parte para garantir que não exceda 1MB
+                            const totalPartes = Math.ceil(disciplinas.length / disciplinasPorParte)
+                            const chunks = []
+                            
+                            for (let i = 0; i < disciplinas.length; i += disciplinasPorParte) {
+                              const chunk = disciplinas.slice(i, i + disciplinasPorParte)
+                              const parteNum = Math.floor(i / disciplinasPorParte) + 1
+                              
+                              const chunkData = {
+                                titulo: editalOrganizado.titulo,
+                                descricao: editalOrganizado.descricao,
+                                disciplinas: chunk,
+                                parte: parteNum,
+                                totalPartes: totalPartes,
+                                updatedAt: serverTimestamp(),
+                                courseId,
+                              }
+                              
+                              // Verificar tamanho do chunk
+                              const chunkSizeMB = (new Blob([JSON.stringify(chunkData)]).size / 1024 / 1024).toFixed(2)
+                              console.log(`📦 Parte ${parteNum}/${totalPartes}: ${chunk.length} disciplinas (${chunkSizeMB} MB)`)
+                              
+                              chunks.push(chunkData)
+                            }
+                            
+                            // Salvar cada parte
                           const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+                            const partesRef = collection(db, 'courses', courseId, 'editalVerticalizado', 'principal', 'partes')
+                            
+                            // Limpar partes antigas se existirem
+                            try {
+                              const partesAntigas = await getDocs(partesRef)
+                              const deletePromises = partesAntigas.docs.map(d => deleteDoc(d.ref))
+                              await Promise.all(deletePromises)
+                              console.log(`🗑️ Partes antigas removidas`)
+                            } catch (err) {
+                              console.warn('Erro ao limpar partes antigas:', err)
+                            }
+                            
+                            // Salvar primeira parte no documento principal (para compatibilidade)
+                            await setDoc(editalRef, {
+                              ...chunks[0],
+                              temPartes: true,
+                              totalPartes: totalPartes,
+                              totalDisciplinas: disciplinas.length,
+                            }, { merge: true })
+                            console.log(`✅ Parte 1/${totalPartes} salva no documento principal: ${chunks[0].disciplinas.length} disciplinas`)
+                            
+                            // Salvar partes adicionais na subcoleção
+                            for (let i = 1; i < chunks.length; i++) {
+                              const parteRef = doc(partesRef, `parte_${i + 1}`)
+                              await setDoc(parteRef, chunks[i])
+                              console.log(`✅ Parte ${i + 1}/${totalPartes} salva na subcoleção: ${chunks[i].disciplinas.length} disciplinas`)
+                            }
+                            
+                            const totalDisciplinasSalvas = chunks.reduce((sum, c) => sum + c.disciplinas.length, 0)
+                            console.log(`✅ Total de disciplinas salvas: ${totalDisciplinasSalvas} de ${disciplinas.length}`)
+                            
+                            if (totalDisciplinasSalvas !== disciplinas.length) {
+                              console.error(`❌ ERRO: Nem todas as disciplinas foram salvas! Esperado: ${disciplinas.length}, Salvo: ${totalDisciplinasSalvas}`)
+                              setMessage(`⚠️ Atenção: ${totalDisciplinasSalvas} de ${disciplinas.length} disciplinas foram salvas.`)
+                            } else {
+                              setMessage(`✅ Edital salvo em ${totalPartes} partes (${totalDisciplinasSalvas} disciplinas, ${jsonSizeMB} MB total)`)
+                            }
+                            
+                            console.log(`✅ Edital dividido e salvo em ${totalPartes} partes`)
+                          } else {
+                            // Salvar normalmente se for pequeno
+                            const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+                            try {
                           await setDoc(editalRef, {
                             ...editalOrganizado,
+                                temPartes: false,
                             updatedAt: serverTimestamp(),
                             courseId,
                           }, { merge: true })
+                              console.log(`✅ Edital salvo com sucesso (${jsonSizeMB} MB)`)
+                            } catch (firestoreErr) {
+                              if (firestoreErr.message?.includes('size') || firestoreErr.message?.includes('too large')) {
+                                throw new Error(`Edital muito grande para salvar (${jsonSizeMB} MB). Firestore tem limite de 1MB por documento.`)
+                              }
+                              throw firestoreErr
+                            }
+                          }
                           
                           // Processar prompts unificados
                           setMessage('🎯 Gerando prompts unificados...')
@@ -7875,7 +8173,13 @@ ESTRUTURA SUGERIDA:
                           let model = null
                           for (const modelName of modelNames) {
                             try {
-                              model = genAI.getGenerativeModel({ model: modelName })
+                              model = genAI.getGenerativeModel({ 
+                                model: modelName,
+                                generationConfig: {
+                                  maxOutputTokens: 32000, // Aumentar limite de tokens de saída
+                                  temperature: 0.3,
+                                }
+                              })
                               // Testar se o modelo funciona
                               await model.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
                               console.log(`✅ Usando modelo: ${modelName}`)
@@ -7890,12 +8194,43 @@ ESTRUTURA SUGERIDA:
                             throw new Error('Nenhum modelo Gemini disponível. Verifique sua API key.')
                           }
                 
+                          // Usar modelo com maior context window para editais grandes
+                          const preferredModel = 'gemini-1.5-pro-latest'
+                          let modelForProcessing = null
+                          try {
+                            modelForProcessing = genAI.getGenerativeModel({ 
+                              model: preferredModel,
+                              generationConfig: {
+                                maxOutputTokens: 32000,
+                                temperature: 0.3,
+                              }
+                            })
+                            await modelForProcessing.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
+                            console.log(`✅ Usando modelo ${preferredModel} para processar edital grande`)
+                          } catch (err) {
+                            console.warn(`⚠️ Modelo ${preferredModel} não disponível, usando modelo padrão`)
+                            modelForProcessing = model
+                          }
+                          
+                          // Aumentar limite para 1 milhão de caracteres
+                          const maxTextLength = 1000000
+                          const editalTextToProcess = editalVerticalizadoText.length > maxTextLength 
+                            ? editalVerticalizadoText.substring(0, maxTextLength) 
+                            : editalVerticalizadoText
+                          
+                          if (editalVerticalizadoText.length > maxTextLength) {
+                            console.warn(`⚠️ Edital muito extenso (${editalVerticalizadoText.length} caracteres). Processando primeiros ${maxTextLength} caracteres.`)
+                            setMessage(`📋 Processando edital (${editalVerticalizadoText.length} caracteres, usando primeiros ${maxTextLength})...`)
+                          } else {
+                            setMessage(`📋 Processando edital verticalizado (${editalVerticalizadoText.length} caracteres)...`)
+                          }
+                
                 const prompt = `Você é um especialista em organizar editais de concursos públicos de forma verticalizada para estudos.
 
 Analise o seguinte texto do edital e organize-o em seções e subseções de forma clara e estruturada. O formato deve ser técnico e completo, mostrando toda a informação de forma organizada.
 
-Texto do edital:
-${editalVerticalizadoText.substring(0, 100000)} ${editalVerticalizadoText.length > 100000 ? '... (texto truncado)' : ''}
+${editalVerticalizadoText.length > maxTextLength ? `⚠️ ATENÇÃO: Este edital foi truncado para processamento. O texto completo tem ${editalVerticalizadoText.length} caracteres, mas estamos processando apenas os primeiros ${maxTextLength} caracteres. Extraia TODAS as seções e subseções possíveis deste trecho.\n\n` : ''}Texto do edital:
+${editalTextToProcess}${editalVerticalizadoText.length > maxTextLength ? '\n\n[... edital truncado para processamento - extraia todas as seções e subseções possíveis deste trecho ...]' : ''}
 
 Organize o edital em um formato JSON com a seguinte estrutura:
 {
@@ -7918,7 +8253,7 @@ Organize o edital em um formato JSON com a seguinte estrutura:
 
 Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
 
-                const result = await model.generateContent(prompt)
+                const result = await modelForProcessing.generateContent(prompt)
                 const response = await result.response
                 const text = response.text()
                 
@@ -8012,13 +8347,32 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                   }
                 }
                 
+                // Verificar tamanho do JSON antes de salvar
+                const jsonString = JSON.stringify(editalOrganizado)
+                const jsonSizeMB = (new Blob([jsonString]).size / 1024 / 1024).toFixed(2)
+                console.log(`📊 Tamanho do JSON gerado: ${jsonSizeMB} MB`)
+                
+                // Firestore tem limite de 1MB por documento
+                if (jsonSizeMB > 0.95) {
+                  console.warn(`⚠️ JSON muito grande (${jsonSizeMB} MB). Pode ser truncado pelo Firestore.`)
+                  setMessage(`⚠️ Atenção: Edital muito grande (${jsonSizeMB} MB). Alguns dados podem não ser salvos.`)
+                }
+                
                 // Salvar no Firestore
                 const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+                try {
                 await setDoc(editalRef, {
                   ...editalOrganizado,
                   updatedAt: serverTimestamp(),
                   courseId,
                 }, { merge: true })
+                  console.log(`✅ Edital salvo com sucesso (${jsonSizeMB} MB)`)
+                } catch (firestoreErr) {
+                  if (firestoreErr.message?.includes('size') || firestoreErr.message?.includes('too large')) {
+                    throw new Error(`Edital muito grande para salvar (${jsonSizeMB} MB). Firestore tem limite de 1MB por documento. Considere dividir o edital em partes.`)
+                  }
+                  throw firestoreErr
+                }
                 
                 setEditalVerticalizadoData(editalOrganizado)
                 setMessage('✅ Edital verticalizado processado e salvo com sucesso!')

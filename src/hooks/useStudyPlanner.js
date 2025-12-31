@@ -238,15 +238,7 @@ export const useStudyPlanner = (userId, courseId, allCards, cardProgress, progre
         return a.retentionRate - b.retentionRate
       })
     
-    // Log para diagnóstico
-    console.log('📚 ProgressStats calculado:', {
-      totalMaterias: Object.keys(byMateria).length,
-      totalModulos: Object.keys(byModulo).length,
-      pendingMateriasCount: pendingMaterias.length,
-      pendingModulosCount: pendingModulos.length,
-      sampleMaterias: pendingMaterias.slice(0, 3).map(([m]) => m),
-      sampleModulos: pendingModulos.slice(0, 3).map(m => `${m.materia} - ${m.modulo}`)
-    })
+    // Log removido para limpar console
     
     // Calcular estatísticas gerais de dificuldade
     let totalAgain = 0
@@ -533,14 +525,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
 
       let recommendation = JSON.parse(responseText)
       
-      // Log inicial para diagnóstico
-      console.log('📊 Dados disponíveis para mapeamento:', {
-        totalPendingMaterias: progressStats.pendingMaterias.length,
-        totalPendingModulos: progressStats.pendingModulos.length,
-        materias: progressStats.pendingMaterias.slice(0, 5).map(([m]) => m),
-        modulos: progressStats.pendingModulos.slice(0, 5).map(m => `${m.materia} - ${m.modulo}`),
-        atividadesRecebidas: recommendation.atividades?.length || 0
-      })
+      // Log removido para limpar console
       
       // Validar e corrigir campos "A DEFINIR" - usar matérias/módulos reais
       // Também mapear nomes similares para nomes exatos dos flashcards
@@ -608,33 +593,31 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
             // Usar primeira matéria pendente ou módulo pendente
             if (progressStats.pendingModulos.length > 0) {
               atividade.materia = progressStats.pendingModulos[0].materia
-              console.log(`⚠️ Matéria vazia/inválida, usando primeira disponível: "${atividade.materia}"`)
+              // Log removido para limpar console
             } else if (progressStats.pendingMaterias.length > 0) {
               atividade.materia = progressStats.pendingMaterias[0][0]
-              console.log(`⚠️ Matéria vazia/inválida, usando primeira matéria: "${atividade.materia}"`)
+              // Log removido para limpar console
             } else {
               // Se não há dados, manter a atividade mas sem matéria específica
-              console.warn(`⚠️ Nenhuma matéria disponível, mantendo atividade sem matéria específica`)
+              // Log removido para limpar console
               atividade.materia = atividade.materia || 'Conteúdo Geral'
             }
           } else {
             // Tentar encontrar matéria exata (mapear nome similar para nome exato)
             const materiaExata = findExactMateria(atividade.materia)
             if (materiaExata) {
-              console.log(`✅ Mapeando matéria "${atividade.materia}" → "${materiaExata}"`)
+              // Log removido para limpar console
               atividade.materia = materiaExata
             } else if (atividade.materia !== 'Geral') {
-              console.warn(`⚠️ Matéria "${atividade.materia}" não encontrada`)
-              console.log('📋 Matérias disponíveis:', progressStats.pendingMaterias.map(([m]) => m))
-              console.log('📋 Módulos disponíveis:', progressStats.pendingModulos.map(m => m.materia))
+              // Logs removidos para limpar console
               
               // Tentar usar primeira disponível
               if (progressStats.pendingModulos.length > 0) {
                 atividade.materia = progressStats.pendingModulos[0].materia
-                console.log(`✅ Usando primeira matéria disponível: "${atividade.materia}"`)
+                // Log removido para limpar console
               } else if (progressStats.pendingMaterias.length > 0) {
                 atividade.materia = progressStats.pendingMaterias[0][0]
-                console.log(`✅ Usando primeira matéria da lista: "${atividade.materia}"`)
+                // Log removido para limpar console
               } else {
                 console.error(`❌ Nenhuma matéria disponível em pendingMaterias ou pendingModulos!`)
               }
@@ -647,21 +630,21 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
             const moduloDaMateria = progressStats.pendingModulos.find(m => m.materia === atividade.materia)
             if (moduloDaMateria) {
               atividade.modulo = moduloDaMateria.modulo
-              console.log(`⚠️ Módulo vazio/inválido, usando módulo da matéria: "${atividade.modulo}"`)
+              // Log removido para limpar console
             } else if (progressStats.pendingModulos.length > 0) {
               atividade.materia = progressStats.pendingModulos[0].materia
               atividade.modulo = progressStats.pendingModulos[0].modulo
-              console.log(`⚠️ Módulo vazio/inválido, usando primeiro módulo disponível: "${atividade.materia}" - "${atividade.modulo}"`)
+              // Log removido para limpar console
             } else {
               // Se não há módulos, usar a própria matéria como módulo
-              console.warn(`⚠️ Nenhum módulo disponível, usando matéria como módulo`)
+              // Log removido para limpar console
               atividade.modulo = atividade.materia || 'Geral'
             }
           } else {
             // Tentar encontrar módulo exato (mapear nome similar para nome exato)
             const moduloExato = findExactModulo(atividade.materia, atividade.modulo)
             if (moduloExato) {
-              console.log(`✅ Mapeando módulo "${atividade.modulo}" → "${moduloExato}"`)
+              // Log removido para limpar console
               atividade.modulo = moduloExato
             } else if (atividade.modulo !== 'Geral') {
               // Se não encontrou, tentar encontrar qualquer módulo da matéria
@@ -669,21 +652,20 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                 m.materia === atividade.materia
               )
               if (moduloDaMateria) {
-                console.warn(`⚠️ Módulo "${atividade.modulo}" não encontrado em "${atividade.materia}", usando "${moduloDaMateria.modulo}"`)
+                // Log removido para limpar console
                 atividade.modulo = moduloDaMateria.modulo
               } else {
-                console.warn(`⚠️ Nenhum módulo encontrado para "${atividade.materia}"`)
-                console.log('📋 Módulos disponíveis:', progressStats.pendingModulos.map(m => `${m.materia} - ${m.modulo}`))
+                // Logs removidos para limpar console
                 
                 // Usar primeiro módulo disponível como último recurso
                 if (progressStats.pendingModulos.length > 0) {
                   atividade.materia = progressStats.pendingModulos[0].materia
                   atividade.modulo = progressStats.pendingModulos[0].modulo
-                  console.log(`🔄 Usando primeiro módulo disponível: "${atividade.materia}" - "${atividade.modulo}"`)
+                  // Log removido para limpar console
                 } else {
                   // Se não há módulos, usar a própria matéria
                   atividade.modulo = atividade.materia || 'Geral'
-                  console.warn(`⚠️ Nenhum módulo disponível! Usando matéria como módulo: "${atividade.modulo}"`)
+                  // Log removido para limpar console
                   console.error(`❌ pendingModulos está vazio! Total: ${progressStats.pendingModulos.length}`)
                 }
               }
@@ -692,34 +674,24 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
           
           // Validar que não ficou "Geral" - mas se não houver dados, permitir
           if (atividade.materia === 'Geral' || atividade.modulo === 'Geral') {
-            console.warn(`⚠️ Atividade ${index + 1} ainda tem "Geral" após mapeamento!`)
-            console.log('📊 Dados disponíveis:', {
-              pendingMaterias: progressStats.pendingMaterias.length,
-              pendingModulos: progressStats.pendingModulos.length,
-              materias: progressStats.pendingMaterias.map(([m]) => m),
-              modulos: progressStats.pendingModulos.map(m => `${m.materia} - ${m.modulo}`)
-            })
+            // Logs removidos para limpar console
             
             // Tentar usar primeiro módulo disponível
             if (progressStats.pendingModulos.length > 0) {
               atividade.materia = progressStats.pendingModulos[0].materia
               atividade.modulo = progressStats.pendingModulos[0].modulo
-              console.log(`🔄 Corrigindo "Geral" para: "${atividade.materia}" - "${atividade.modulo}"`)
+              // Log removido para limpar console
             } else if (progressStats.pendingMaterias.length > 0) {
               atividade.materia = progressStats.pendingMaterias[0][0]
               atividade.modulo = atividade.materia
-              console.log(`🔄 Corrigindo "Geral" para: "${atividade.materia}"`)
+              // Log removido para limpar console
             } else {
               // Se não há dados, manter a atividade mesmo com "Geral" para não perder todas
-              console.warn(`⚠️ Mantendo atividade com "Geral" pois não há dados disponíveis`)
+              // Log removido para limpar console
             }
           }
           
-          console.log(`📝 Atividade ${index + 1} final:`, {
-            materia: atividade.materia,
-            modulo: atividade.modulo,
-            tipo: atividade.tipo
-          })
+          // Log removido para limpar console
           
           return atividade
         }).filter(atividade => {
@@ -738,7 +710,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
             duracao: 60,
             prioridade: "alta"
           }]
-          console.log('✅ Criando atividade padrão pois nenhuma foi gerada')
+          // Log removido para limpar console
         }
       }
       
@@ -901,9 +873,9 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
       const now = dayjs()
       localStorage.setItem(cacheKey, now.toISOString())
       setLastUpdateDate(now.format('YYYY-MM-DD'))
-      console.log(`✅ Atualização salva para usuário ${userId} às ${now.format('HH:mm:ss')}`)
+      // Log removido para limpar console
     } catch (err) {
-      console.warn('Erro ao salvar última atualização:', err)
+      // Log removido para limpar console
     }
   }
 
@@ -922,7 +894,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
         // Se é de hoje, usar cache (mesmo que ainda não tenha passado das 06:00)
         // Isso evita gerar múltiplas vezes no mesmo dia
         if (cachedDate.format('YYYY-MM-DD') === today) {
-          console.log(`📋 Usando recomendação em cache para usuário ${userId} (de ${cachedDate.format('HH:mm')})`)
+          // Log removido para limpar console
           return data
         } else {
           // Cache de outro dia - remover
@@ -930,7 +902,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
         }
       }
     } catch (err) {
-      console.warn('Erro ao carregar recomendação do cache:', err)
+      // Log removido para limpar console
       // Limpar cache corrompido
       try {
         localStorage.removeItem(cacheKey)
@@ -951,9 +923,9 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
         userId, // Garantir que é do usuário correto
         courseId: courseId || 'alego'
       }))
-      console.log(`💾 Recomendação salva no cache para usuário ${userId}`)
+      // Log removido para limpar console
     } catch (err) {
-      console.warn('Erro ao salvar recomendação no cache:', err)
+      // Log removido para limpar console
     }
   }
 
@@ -982,7 +954,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
           
           // Só atualizar se não atualizou hoje
           if (!lastUpdateDate || lastUpdateDate !== today) {
-            console.log(`🔄 Atualizando recomendação em background para usuário ${userId}`)
+            // Log removido para limpar console
             
             // Atualizar em background sem bloquear a UI
             setTimeout(() => {
@@ -997,7 +969,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
             }, 1000)
           }
         } catch (err) {
-          console.warn('Erro ao verificar última atualização:', err)
+          // Log removido para limpar console
         }
       }
       return
@@ -1006,7 +978,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
     // Se não tem cache, verificar se deve gerar agora
     // INDIVIDUAL POR USUÁRIO - cada usuário tem seu próprio horário de atualização
     if (shouldUpdateToday() || !dailyRecommendation) {
-      console.log(`🔄 Gerando nova recomendação para usuário ${userId}`)
+      // Log removido para limpar console
       generateDailyRecommendation().then(recommendation => {
         if (recommendation) {
           saveCachedRecommendation(recommendation)
@@ -1026,7 +998,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
   useEffect(() => {
     if (!userId || !courseId || !progressStats) return
 
-    console.log(`🕐 Iniciando verificação periódica para usuário ${userId} (curso: ${courseId || 'alego'})`)
+    // Log removido para limpar console
 
     const checkInterval = setInterval(() => {
       const now = dayjs()
@@ -1045,21 +1017,21 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
             
             // Só atualizar se não atualizou hoje
             if (!lastUpdateDate || lastUpdateDate !== today) {
-              console.log(`🔄 Atualizando recomendação para usuário ${userId} às ${now.format('HH:mm:ss')}`)
+              // Log removido para limpar console
               
               // Atualizar automaticamente
               generateDailyRecommendation().then(recommendation => {
                 if (recommendation) {
                   saveCachedRecommendation(recommendation)
                   saveLastUpdate()
-                  console.log(`✅ Recomendação atualizada com sucesso para usuário ${userId}`)
+                  // Log removido para limpar console
                 }
               }).catch(err => {
                 console.error(`❌ Erro ao atualizar recomendação para usuário ${userId}:`, err)
               })
             }
           } catch (err) {
-            console.warn('Erro ao verificar última atualização no intervalo:', err)
+            // Log removido para limpar console
           }
         }
       }
@@ -1067,7 +1039,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
 
     return () => {
       clearInterval(checkInterval)
-      console.log(`🛑 Parando verificação periódica para usuário ${userId}`)
+      // Log removido para limpar console
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, courseId, progressStats])

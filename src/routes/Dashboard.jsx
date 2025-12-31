@@ -165,11 +165,6 @@ const Dashboard = () => {
 
         startTransition(() => {
           setProgressData(data)
-          console.log('📊 Progresso sincronizado:', { 
-            total: data.length, 
-            courseId: selectedCourseId || 'alego',
-            dates: data.map(d => d.date).slice(0, 5)
-          })
         })
       },
       (error) => {
@@ -233,11 +228,6 @@ const Dashboard = () => {
           
           startTransition(() => {
             setCardProgress(filteredProgress)
-            console.log('📊 Card progress sincronizado:', { 
-              total: Object.keys(filteredProgress).length, 
-              courseId: selectedCourseId || 'alego',
-              sample: Object.keys(filteredProgress).slice(0, 3)
-            })
           })
         } else {
           setCardProgress({})
@@ -316,7 +306,7 @@ const Dashboard = () => {
         }
       }
     } catch (err) {
-      console.warn('Erro ao ler cache:', err)
+      // Log removido para limpar console
     }
     
     const cardsRef = collection(db, 'flashcards')
@@ -359,7 +349,7 @@ const Dashboard = () => {
               })
             )
           } catch (err) {
-            console.warn('Erro ao salvar cache:', err)
+            // Log removido para limpar console
           }
 
           retryCount = 0
@@ -381,7 +371,7 @@ const Dashboard = () => {
                 }
               }
             } catch (err) {
-              console.warn('Erro ao ler cache após erro:', err)
+              // Log removido para limpar console
             }
           }
           retryCount++

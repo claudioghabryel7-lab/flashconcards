@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
-import { doc, onSnapshot, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, onSnapshot, getDoc, updateDoc, collection, getDocs, query, orderBy } from 'firebase/firestore'
 import {
   DocumentTextIcon,
   ChevronLeftIcon,
@@ -75,20 +75,94 @@ const EditalVerticalizado = () => {
     }
 
     const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
-    const unsub = onSnapshot(
-      editalRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          setEditalVerticalizado(snapshot.data())
-        } else {
+    
+    const loadEditalCompleto = async () => {
+      try {
+        const snapshot = await getDoc(editalRef)
+        if (!snapshot.exists()) {
           setEditalVerticalizado(null)
+          setLoading(false)
+          return
         }
+        
+        const data = snapshot.data()
+        
+        // Verificar se o edital está dividido em partes
+        if (data.temPartes && data.totalPartes > 1) {
+          // Log removido para limpar console
+          
+          // Carregar todas as partes
+          const partesRef = collection(db, 'courses', courseId, 'editalVerticalizado', 'principal', 'partes')
+          const partesSnapshot = await getDocs(query(partesRef, orderBy('parte')))
+          
+          const todasDisciplinas = [...(data.disciplinas || [])]
+          
+          partesSnapshot.forEach((doc) => {
+            const parteData = doc.data()
+            if (parteData.disciplinas && Array.isArray(parteData.disciplinas)) {
+              todasDisciplinas.push(...parteData.disciplinas)
+              // Log removido para limpar console
+            }
+          })
+          
+          // Combinar todas as disciplinas
+          const editalCompleto = {
+            ...data,
+            disciplinas: todasDisciplinas,
+          }
+          
+          const totalDisciplinas = todasDisciplinas.length
+          const totalTopicos = todasDisciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)
+          // Logs removidos para limpar console
+          
+          setEditalVerticalizado(editalCompleto)
+        } else {
+          // Edital normal (não dividido)
+          const jsonString = JSON.stringify(data)
+          const sizeMB = (new Blob([jsonString]).size / 1024 / 1024).toFixed(2)
+          // Log removido para limpar console
+          
+          if (data.disciplinas && Array.isArray(data.disciplinas)) {
+            const totalDisciplinas = data.disciplinas.length
+            const totalTopicos = data.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)
+            // Logs removidos para limpar console
+            
+            if (totalDisciplinas === 0) {
+              console.warn('⚠️ Nenhuma disciplina encontrada no edital')
+            }
+            
+            if (sizeMB > 0.95) {
+              // Log removido para limpar console
+            }
+          }
+          
+          setEditalVerticalizado(data)
+        }
+        
         setLoading(false)
-      },
-      (error) => {
+      } catch (error) {
         console.error('Erro ao carregar edital verticalizado:', error)
         setEditalVerticalizado(null)
         setLoading(false)
+      }
+    }
+    
+    // Carregar uma vez
+    loadEditalCompleto()
+    
+    // Escutar mudanças
+    const unsub = onSnapshot(
+      editalRef,
+      async (snapshot) => {
+        if (snapshot.exists()) {
+          await loadEditalCompleto()
+        } else {
+          setEditalVerticalizado(null)
+          setLoading(false)
+        }
+      },
+      (error) => {
+        console.error('Erro ao escutar mudanças no edital:', error)
       }
     )
 
@@ -208,7 +282,20 @@ const EditalVerticalizado = () => {
 
           {/* Tabela de Edital Verticalizado */}
           {editalVerticalizado?.disciplinas && Array.isArray(editalVerticalizado.disciplinas) && editalVerticalizado.disciplinas.length > 0 ? (
-            <div className="overflow-x-auto -mx-3 sm:-mx-4 md:mx-0 scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-slate-200 dark:scrollbar-track-slate-700">
+            <>
+              {/* Informações sobre o edital */}
+              <div className="mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-slate-200 dark:border-slate-700">
+                <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    📚 {editalVerticalizado.disciplinas.length} {editalVerticalizado.disciplinas.length === 1 ? 'disciplina' : 'disciplinas'}
+                  </span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    📝 {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)} {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0) === 1 ? 'tópico' : 'tópicos'}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="overflow-x-auto -mx-3 sm:-mx-4 md:mx-0 scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-slate-200 dark:scrollbar-track-slate-700">
               <div className="min-w-full inline-block">
                 <table className="w-full min-w-[500px] sm:min-w-[600px] md:min-w-[640px] border-collapse border border-black dark:border-slate-600 bg-white dark:bg-slate-800 text-xs sm:text-sm">
                   <thead>
@@ -234,7 +321,14 @@ const EditalVerticalizado = () => {
                     </tr>
                   </thead>
                 <tbody>
-                  {editalVerticalizado.disciplinas.map((disciplina, idx) => (
+                  {editalVerticalizado.disciplinas
+                    .filter(disciplina => disciplina && disciplina.nome) // Filtrar disciplinas inválidas
+                    .map((disciplina, idx) => {
+                      // Log para debug (apenas no console, apenas para primeira disciplina)
+                      if (idx === 0) {
+                        // Logs removidos para limpar console
+                      }
+                      return (
                     <React.Fragment key={idx}>
                       {/* Linha principal da disciplina (destaque laranja) */}
                       <tr className="bg-orange-500 dark:bg-orange-600 text-white font-bold">
@@ -256,6 +350,10 @@ const EditalVerticalizado = () => {
                       {disciplina.topicos && Array.isArray(disciplina.topicos) && disciplina.topicos.length > 0 && disciplina.topicos
                         .filter(topico => topico && (topico.nome || topico.numero)) // Filtrar tópicos inválidos
                         .map((topico, topicoIdx) => {
+                          // Log para debug (apenas no console, apenas para primeira disciplina)
+                          if (idx === 0 && topicoIdx === 0) {
+                            // Log removido para limpar console
+                          }
                           if (!topico) return null // Proteção extra
                           
                           // Calcular indentação baseada na numeração (ex: 1.1 = nivel 0, 1.1.2 = nivel 1, 1.2.5.1 = nivel 2)
@@ -349,11 +447,13 @@ const EditalVerticalizado = () => {
                           )
                         })}
                     </React.Fragment>
-                  ))}
+                      )
+                    })}
                 </tbody>
               </table>
+                </div>
               </div>
-            </div>
+            </>
           ) : editalVerticalizado?.secoes && Array.isArray(editalVerticalizado.secoes) && editalVerticalizado.secoes.length > 0 ? (
             <div className="space-y-4 sm:space-y-6">
               {editalVerticalizado.secoes.map((secao, idx) => (
