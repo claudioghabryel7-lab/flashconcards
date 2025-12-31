@@ -259,26 +259,15 @@ const EditalVerticalizado = () => {
             </div>
             <div className="min-w-0 flex-1">
               <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white break-words">
-                {editalVerticalizado.titulo || 'Edital Verticalizado'}
+                {courseName ? `EDITAL VERTICALIZADO ${courseName.toUpperCase()}` : (editalVerticalizado.titulo || 'EDITAL VERTICALIZADO')}
               </h1>
-              {courseName && (
-                <p className="text-xs sm:text-sm md:text-base text-slate-600 dark:text-slate-400 mt-1 break-words">
-                  {courseName}
-                </p>
-              )}
             </div>
           </div>
         </div>
 
         {/* Conteúdo Principal */}
         <div className={`bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-3 sm:p-4 md:p-6 lg:p-8`}>
-          {editalVerticalizado.descricao && (
-            <div className="mb-4 sm:mb-6 pb-4 sm:pb-6 border-b border-slate-200 dark:border-slate-700">
-              <p className="text-xs sm:text-sm md:text-base text-slate-600 dark:text-slate-400 leading-relaxed break-words">
-                {editalVerticalizado.descricao}
-              </p>
-            </div>
-          )}
+          {/* Descrição removida conforme solicitado */}
 
           {/* Tabela de Edital Verticalizado */}
           {editalVerticalizado?.disciplinas && Array.isArray(editalVerticalizado.disciplinas) && editalVerticalizado.disciplinas.length > 0 ? (
