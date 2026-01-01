@@ -4,11 +4,13 @@ import {
   LockClosedIcon,
   ArrowRightCircleIcon,
   UserPlusIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/solid'
 import { useAuth } from '../hooks/useAuth'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
+import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 
 const Login = () => {
   const { login, register, user } = useAuth()
@@ -21,6 +23,10 @@ const Login = () => {
   const [error, setError] = useState('')
   const [trialData, setTrialData] = useState(null)
   const [courseInfo, setCourseInfo] = useState(null)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false)
+  const [forgotPasswordMessage, setForgotPasswordMessage] = useState('')
 
   // Carregar dados do trial se houver token
   useEffect(() => {
@@ -194,6 +200,51 @@ const Login = () => {
     }
   }
 
+  const handleForgotPassword = async (e) => {
+    e.preventDefault()
+    setForgotPasswordMessage('')
+    
+    if (!forgotPasswordEmail.trim()) {
+      setForgotPasswordMessage('❌ Por favor, digite seu email.')
+      return
+    }
+
+    setForgotPasswordLoading(true)
+
+    try {
+      const response = await fetch(FIREBASE_FUNCTIONS.sendPasswordResetEmail, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: forgotPasswordEmail.toLowerCase().trim(),
+          baseUrl: window.location.origin,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao enviar email de redefinição')
+      }
+
+      setForgotPasswordMessage('✅ Email de redefinição enviado! Verifique sua caixa de entrada (e spam) para redefinir sua senha.')
+      setForgotPasswordEmail('')
+      
+      // Fechar modal após 3 segundos
+      setTimeout(() => {
+        setShowForgotPassword(false)
+        setForgotPasswordMessage('')
+      }, 3000)
+    } catch (err) {
+      console.error('Erro ao enviar email de redefinição:', err)
+      setForgotPasswordMessage(`❌ ${err.message || 'Erro ao enviar email. Tente novamente.'}`)
+    } finally {
+      setForgotPasswordLoading(false)
+    }
+  }
+
   return (
     <div className="mx-auto max-w-md rounded-2xl bg-white p-4 sm:p-6 md:p-8 shadow-sm mx-2 sm:mx-auto">
       {trialToken && trialData && (
@@ -277,6 +328,15 @@ const Login = () => {
           {isRegisterMode && (
             <p className="text-xs text-slate-400 mt-1">Mínimo de 6 caracteres</p>
           )}
+          {!isRegisterMode && (
+            <button
+              type="button"
+              onClick={() => setShowForgotPassword(true)}
+              className="text-xs text-alego-600 hover:text-alego-700 font-medium mt-1 text-right w-full"
+            >
+              Esqueci minha senha
+            </button>
+          )}
         </label>
 
         <button
@@ -310,6 +370,92 @@ const Login = () => {
           </button>
         </div>
       </form>
+
+      {/* Modal de Esqueci a Senha */}
+      {showForgotPassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowForgotPassword(false)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 sm:p-8 relative" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => {
+                setShowForgotPassword(false)
+                setForgotPasswordEmail('')
+                setForgotPasswordMessage('')
+              }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition"
+            >
+              <XMarkIcon className="h-6 w-6" />
+            </button>
+
+            <div className="text-center mb-6">
+              <LockClosedIcon className="h-12 w-12 text-alego-600 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-alego-700 mb-2">
+                Esqueci minha senha
+              </h2>
+              <p className="text-sm text-slate-600">
+                Digite seu email e enviaremos um link para redefinir sua senha
+              </p>
+            </div>
+
+            {forgotPasswordMessage && (
+              <div className={`mb-4 rounded-lg p-3 text-sm ${
+                forgotPasswordMessage.startsWith('✅') 
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : 'bg-rose-50 text-rose-700'
+              }`}>
+                {forgotPasswordMessage}
+              </div>
+            )}
+
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <label className="block text-sm font-semibold text-slate-600">
+                Email
+                <div className="mt-1 flex items-center rounded-full border border-slate-200 px-4">
+                  <EnvelopeIcon className="h-4 w-4 text-alego-500 flex-shrink-0" />
+                  <input
+                    type="email"
+                    value={forgotPasswordEmail}
+                    onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                    required
+                    className="w-full border-none bg-transparent px-3 py-3 text-sm focus:outline-none"
+                    placeholder="seuemail@email.com"
+                    disabled={forgotPasswordLoading}
+                  />
+                </div>
+              </label>
+
+              <button
+                type="submit"
+                disabled={forgotPasswordLoading}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-alego-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-alego-700 disabled:opacity-50 min-h-[44px]"
+              >
+                {forgotPasswordLoading ? (
+                  <>
+                    <div className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <EnvelopeIcon className="h-5 w-5" />
+                    Enviar link de redefinição
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForgotPassword(false)
+                  setForgotPasswordEmail('')
+                  setForgotPasswordMessage('')
+                }}
+                className="w-full text-sm text-slate-600 hover:text-slate-700 font-medium"
+              >
+                Cancelar
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
