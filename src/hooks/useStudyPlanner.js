@@ -367,6 +367,23 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
     }
   }, [userId, courseId])
 
+  // Tentar carregar cache imediatamente (antes mesmo do edital estar carregado)
+  useEffect(() => {
+    if (userId && courseId && !hasInitialized.current) {
+      // Tentar carregar do cache primeiro para mostrar mais rápido
+      getCachedRecommendation().then((cached) => {
+        if (cached) {
+          setDailyRecommendation(cached)
+          setLoading(false)
+          hasInitialized.current = true
+        }
+      }).catch(() => {
+        // Ignorar erros, vai tentar novamente quando edital carregar
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, courseId])
+
   // Detectar quando o edital é carregado pela primeira vez (sem reagir a mudanças subsequentes)
   useEffect(() => {
     if (editalVerticalizado && !lastEditalRef.current) {
@@ -374,8 +391,12 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
       lastEditalRef.current = editalVerticalizado
       if (!hasInitialized.current && userId && courseId) {
         hasInitialized.current = true
-        // Carregar recomendação do cache ou gerar nova
-        generateDailyRecommendation(false)
+        // Se já não tem recomendação do cache, gerar nova
+        if (!dailyRecommendation) {
+          generateDailyRecommendation(false)
+        } else {
+          setLoading(false)
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

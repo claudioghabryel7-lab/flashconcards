@@ -25,9 +25,10 @@ const StudyPlanner = ({
   const [completedActivities, setCompletedActivities] = useState(new Set())
   const [isMarkingCompleted, setIsMarkingCompleted] = useState(false)
 
-  if (!dailyRecommendation && !loading) {
-    return null
-  }
+  // Sempre mostrar o planejador, mesmo em loading, para melhor UX
+  // if (!dailyRecommendation && !loading) {
+  //   return null
+  // }
 
   const getActivityIcon = (tipo) => {
     switch (tipo) {
@@ -146,10 +147,10 @@ const StudyPlanner = ({
             <h2 className="text-lg sm:text-2xl md:text-3xl font-black break-words">Planejador de Estudos com IA</h2>
           </div>
 
-          {loading ? (
+          {loading && !dailyRecommendation ? (
             <div className="text-center py-8">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-              <p className="mt-4 text-white/80">Gerando recomendações personalizadas...</p>
+              <p className="mt-4 text-white/80">Carregando recomendações...</p>
             </div>
           ) : dailyRecommendation ? (
             <>
@@ -256,7 +257,16 @@ const StudyPlanner = ({
                 </div>
               </div>
             </>
-          ) : null}
+          ) : loading ? (
+            <div className="text-center py-8">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+              <p className="mt-4 text-white/80">Atualizando recomendações...</p>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-white/80">Carregando recomendações personalizadas...</p>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>
