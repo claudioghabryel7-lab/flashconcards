@@ -58,6 +58,9 @@
     <link rel="modulepreload" href="/src/main.jsx" />
     <link rel="modulepreload" href="/src/App.jsx" />
     <link rel="modulepreload" href="/src/routes/PublicHome.jsx" />
+    <!-- Prefetch de rotas comuns para melhor navegação -->
+    <link rel="prefetch" href="/login" />
+    <link rel="prefetch" href="/dashboard" />
     
     <!-- CSS crítico inline para evitar bloqueio de renderização e CLS -->
     <style>
@@ -66,11 +69,13 @@
       body { 
         margin: 0; 
         padding: 0; 
-        font-family: system-ui, -apple-system, sans-serif;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         background-color: #f8fafc;
         color: #1e293b;
         /* Prevenir reflow forçado */
         contain: layout style;
+        /* Otimizar renderização de texto */
+        text-rendering: optimizeSpeed;
       }
       body.dark {
         background-color: #0f172a;
@@ -82,6 +87,10 @@
         /* Otimizar renderização */
         contain: layout style;
       }
+      /* Header fixo para evitar CLS */
+      header {
+        contain: layout style paint;
+      }
       /* Footer fixo para evitar CLS */
       footer { 
         min-height: 60px; 
@@ -90,6 +99,11 @@
         justify-content: center; 
         padding: 1rem;
         /* Reservar espaço para evitar layout shift */
+        contain: layout style paint;
+      }
+      /* Hero/Banner section - altura mínima para evitar CLS */
+      .hero-section, .banner-section {
+        min-height: 300px;
         contain: layout style paint;
       }
       /* Reviews section - altura fixa para evitar CLS */
@@ -108,6 +122,8 @@
         height: auto;
         /* Otimizar renderização de imagens */
         content-visibility: auto;
+        /* Evitar layout shift */
+        object-fit: cover;
       }
       /* Otimizar renderização de elementos acima da dobra */
       .above-fold {
@@ -129,6 +145,41 @@
         font-style: normal;
         font-weight: 400;
         font-display: swap;
+      }
+      /* Botões e links - estilos críticos */
+      button, a {
+        cursor: pointer;
+        transition: opacity 0.2s;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      /* Container principal - otimizar layout */
+      main {
+        contain: layout style;
+      }
+      /* Loading spinner - evitar CLS */
+      .spinner {
+        display: inline-block;
+        width: 2rem;
+        height: 2rem;
+        border: 3px solid rgba(0,0,0,0.1);
+        border-top-color: currentColor;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      /* Otimizar renderização de cards */
+      .card, [class*="card"] {
+        contain: layout style paint;
+      }
+      /* Preload de recursos críticos - melhorar LCP */
+      .lcp-image {
+        content-visibility: auto;
+        contain-intrinsic-size: 400px 300px;
       }
     </style>
     <!-- CSS não crítico - defer para não bloquear renderização -->

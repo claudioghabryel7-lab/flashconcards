@@ -323,10 +323,15 @@ const PublicHome = () => {
     
     if (hasValidCache) {
       // Carregar em background para atualizar cache (não bloqueia UI)
-      setTimeout(() => loadCourses(), 100)
+      // Usar startTransition para não bloquear renderização
+      startTransition(() => {
+        setTimeout(() => loadCourses(), 100)
+      })
     } else {
-      // Carregar imediatamente se não houver cache
-      loadCourses()
+      // Carregar imediatamente se não houver cache, mas usar startTransition para não bloquear
+      startTransition(() => {
+        loadCourses()
+      })
     }
   }, [])
 
