@@ -367,39 +367,40 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
     }
   }, [userId, courseId])
 
-  // Gerar recomendação quando edital estiver disponível (apenas na primeira vez ou quando explicitamente solicitado)
+  // Detectar quando o edital é carregado pela primeira vez (sem reagir a mudanças subsequentes)
   useEffect(() => {
-    if (!userId || !courseId) {
-      setLoading(false)
+    if (editalVerticalizado && !lastEditalRef.current) {
+      // Edital foi carregado pela primeira vez
+      lastEditalRef.current = editalVerticalizado
+      if (!hasInitialized.current && userId && courseId) {
+        hasInitialized.current = true
+        // Carregar recomendação do cache ou gerar nova
+        generateDailyRecommendation(false)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editalVerticalizado])
+
+  // Gerar recomendação quando explicitamente solicitado (todas atividades concluídas)
+  useEffect(() => {
+    if (!userId || !courseId || !editalVerticalizado) {
+      if (!editalVerticalizado) {
+        setLoading(false)
+      }
       return
     }
 
-    // Verificar se o edital foi carregado pela primeira vez (mudou de null para um objeto)
-    const editalJustLoaded = !lastEditalRef.current && editalVerticalizado
-    const isExplicitUpdate = shouldUpdate
-
-    if (editalVerticalizado) {
-      // Atualizar referência do edital
-      lastEditalRef.current = editalVerticalizado
-
-      if (isExplicitUpdate) {
-        // Atualização explícita solicitada (todas atividades concluídas) - FORÇAR nova geração
-        generateDailyRecommendation(true) // force = true para ignorar cache
-        setShouldUpdate(false)
-      } else if (editalJustLoaded || (!hasInitialized.current && !dailyRecommendation)) {
-        // Primeira vez que o edital é carregado - usar cache se disponível
-        hasInitialized.current = true
-        generateDailyRecommendation(false) // force = false para usar cache se disponível
-      }
-    } else {
-      setLoading(false)
+    if (shouldUpdate) {
+      // Atualização explícita solicitada (todas atividades concluídas) - FORÇAR nova geração
+      generateDailyRecommendation(true) // force = true para ignorar cache
+      setShouldUpdate(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, courseId, shouldUpdate, editalVerticalizado])
+  }, [userId, courseId, shouldUpdate])
 
   // Escutar eventos de atualização (só quando explicitamente solicitado)
   useEffect(() => {
-    if (!userId || !courseId || !editalVerticalizado) return
+    if (!userId || !courseId) return
 
     const handleProgressUpdate = () => {
       loadCompletedTopics().then(() => {
@@ -412,7 +413,9 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
     return () => {
       window.removeEventListener('studyPlannerRefresh', handleProgressUpdate)
     }
-  }, [userId, courseId, editalVerticalizado])
+    // Não incluir editalVerticalizado nas dependências
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, courseId])
 
   // Função para atualizar manualmente (forçar nova geração)
   const refreshRecommendation = async () => {
