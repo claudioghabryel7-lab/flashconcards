@@ -56,11 +56,58 @@ export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
     }
   }
 
+  // Verificar cache da recomendação do dia
+  const getCachedRecommendation = () => {
+    if (!userId || !courseId) return null
+    
+    try {
+      const cacheKey = `studyPlanner_${userId}_${courseId}`
+      const cached = localStorage.getItem(cacheKey)
+      if (cached) {
+        const { recommendation, date } = JSON.parse(cached)
+        const today = dayjs().format('YYYY-MM-DD')
+        // Se o cache é do dia de hoje, usar ele
+        if (date === today && recommendation) {
+          return recommendation
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao ler cache:', error)
+    }
+    return null
+  }
+
+  // Salvar recomendação no cache
+  const saveCachedRecommendation = (recommendation) => {
+    if (!userId || !courseId) return
+    
+    try {
+      const cacheKey = `studyPlanner_${userId}_${courseId}`
+      const today = dayjs().format('YYYY-MM-DD')
+      localStorage.setItem(cacheKey, JSON.stringify({
+        recommendation,
+        date: today
+      }))
+    } catch (error) {
+      console.error('Erro ao salvar cache:', error)
+    }
+  }
+
   // Gerar recomendação diária com IA
-  const generateDailyRecommendation = async () => {
+  const generateDailyRecommendation = async (force = false) => {
     if (!userId || !courseId || !editalVerticalizado) {
       setLoading(false)
       return
+    }
+
+    // Verificar cache primeiro (a menos que seja forçado)
+    if (!force) {
+      const cached = getCachedRecommendation()
+      if (cached) {
+        setDailyRecommendation(cached)
+        setLoading(false)
+        return
+      }
     }
 
     setLoading(true)
@@ -260,6 +307,8 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
         }
       }
 
+      // Salvar no cache e atualizar estado
+      saveCachedRecommendation(recommendation)
       setDailyRecommendation(recommendation)
     } catch (error) {
       console.error('Erro ao gerar recomendação:', error)
@@ -329,13 +378,13 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
       lastEditalRef.current = editalVerticalizado
 
       if (isExplicitUpdate) {
-        // Atualização explícita solicitada (todas atividades concluídas)
-        generateDailyRecommendation()
+        // Atualização explícita solicitada (todas atividades concluídas) - FORÇAR nova geração
+        generateDailyRecommendation(true) // force = true para ignorar cache
         setShouldUpdate(false)
       } else if (editalJustLoaded || (!hasInitialized.current && !dailyRecommendation)) {
-        // Primeira vez que o edital é carregado
+        // Primeira vez que o edital é carregado - usar cache se disponível
         hasInitialized.current = true
-        generateDailyRecommendation()
+        generateDailyRecommendation(false) // force = false para usar cache se disponível
       }
     } else {
       setLoading(false)
@@ -360,8 +409,17 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
     }
   }, [userId, courseId, editalVerticalizado])
 
-  // Função para atualizar manualmente
+  // Função para atualizar manualmente (forçar nova geração)
   const refreshRecommendation = () => {
+    // Limpar cache antes de gerar nova recomendação
+    if (userId && courseId) {
+      try {
+        const cacheKey = `studyPlanner_${userId}_${courseId}`
+        localStorage.removeItem(cacheKey)
+      } catch (error) {
+        console.error('Erro ao limpar cache:', error)
+      }
+    }
     setShouldUpdate(true)
   }
 

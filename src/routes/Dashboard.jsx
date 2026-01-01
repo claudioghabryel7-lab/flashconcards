@@ -728,6 +728,17 @@ const Dashboard = () => {
           </motion.div>
         </div>
 
+        {/* Planejador de Estudos com IA - Acima do Edital */}
+        {user && selectedCourseId && (
+          <StudyPlanner
+            dailyRecommendation={dailyRecommendation}
+            loading={plannerLoading}
+            daysRemaining={daysRemaining}
+            refreshRecommendation={refreshRecommendation}
+            markTopicAsCompleted={markTopicAsCompleted}
+          />
+        )}
+
         {/* Edital Verticalizado */}
         {selectedCourseId && (
           <motion.div
@@ -830,17 +841,6 @@ const Dashboard = () => {
               </div>
             )}
           </motion.div>
-        )}
-
-        {/* Planejador de Estudos com IA */}
-        {user && selectedCourseId && (
-          <StudyPlanner
-            dailyRecommendation={dailyRecommendation}
-            loading={plannerLoading}
-            daysRemaining={daysRemaining}
-            refreshRecommendation={refreshRecommendation}
-            markTopicAsCompleted={markTopicAsCompleted}
-          />
         )}
 
         {/* Grid Principal */}
