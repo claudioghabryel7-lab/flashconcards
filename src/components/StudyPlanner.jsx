@@ -136,14 +136,14 @@ const StudyPlanner = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="mb-8"
+      className="mb-6 sm:mb-8"
     >
-      <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl shadow-xl p-6 sm:p-8 text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+      <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 text-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 sm:w-64 sm:h-64 bg-white/10 rounded-full blur-3xl"></div>
         <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-6">
-            <SparklesIcon className="h-8 w-8" />
-            <h2 className="text-2xl sm:text-3xl font-black">Planejador de Estudos com IA</h2>
+          <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+            <SparklesIcon className="h-6 w-6 sm:h-8 sm:w-8 flex-shrink-0" />
+            <h2 className="text-lg sm:text-2xl md:text-3xl font-black break-words">Planejador de Estudos com IA</h2>
           </div>
 
           {loading ? (
@@ -154,28 +154,28 @@ const StudyPlanner = ({
           ) : dailyRecommendation ? (
             <>
               {/* Mensagem Motivacional */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-4">
-                <div className="flex items-start gap-3">
-                  <LightBulbIcon className="h-6 w-6 text-yellow-300 flex-shrink-0 mt-1" />
-                  <div>
-                    <p className="text-lg font-semibold mb-1">{dailyRecommendation.mensagemMotivacional}</p>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg sm:rounded-xl p-3 sm:p-4 mb-3 sm:mb-4">
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <LightBulbIcon className="h-5 w-5 sm:h-6 sm:w-6 text-yellow-300 flex-shrink-0 mt-0.5 sm:mt-1" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-base sm:text-lg font-semibold mb-1 break-words">{dailyRecommendation.mensagemMotivacional}</p>
                     {dailyRecommendation.conselho && (
-                      <p className="text-white/90 text-sm">{dailyRecommendation.conselho}</p>
+                      <p className="text-white/90 text-xs sm:text-sm break-words">{dailyRecommendation.conselho}</p>
                     )}
                   </div>
                 </div>
               </div>
 
               {/* Foco do Dia */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-6">
-                <h3 className="font-bold text-lg mb-2">🎯 Foco de Hoje</h3>
-                <p className="text-white/90">{dailyRecommendation.focoDoDia}</p>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg sm:rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
+                <h3 className="font-bold text-base sm:text-lg mb-2">🎯 Foco de Hoje</h3>
+                <p className="text-white/90 text-sm sm:text-base break-words">{dailyRecommendation.focoDoDia}</p>
               </div>
 
               {/* Atividades Recomendadas */}
               <div>
-                <h4 className="font-bold text-lg mb-4">📚 Atividades Recomendadas</h4>
-                <div className="space-y-3">
+                <h4 className="font-bold text-base sm:text-lg mb-3 sm:mb-4">📚 Atividades Recomendadas</h4>
+                <div className="space-y-2 sm:space-y-3">
                   {dailyRecommendation.atividades?.map((atividade, index) => {
                     const Icon = BookOpenIcon
                     const colorClass = 'from-indigo-500 to-purple-600'
@@ -188,15 +188,15 @@ const StudyPlanner = ({
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.3, delay: index * 0.1 }}
-                        className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-600"
+                        className="bg-white dark:bg-slate-800 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-600"
                       >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex items-start gap-3 flex-1">
-                            <div className={`p-2 rounded-lg bg-gradient-to-br ${colorClass}`}>
-                              <Icon className="h-5 w-5 text-white" />
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+                          <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
+                            <div className={`p-1.5 sm:p-2 rounded-lg bg-gradient-to-br ${colorClass} flex-shrink-0`}>
+                              <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                             </div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1">
                                 <h5 className="font-semibold text-slate-900 dark:text-white">
                                   {atividade.disciplina}
                                 </h5>

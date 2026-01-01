@@ -234,6 +234,22 @@
         allow delete: if isAdmin();
       }
       
+      // 🤖 Recomendações do Planejador de Estudos (sincronização entre dispositivos)
+      match /studyPlannerRecommendations/{recommendationId} {
+        // O recommendationId é: userId_courseId_date
+        function isOwnerRecommendation() {
+          return isAuthenticated() && 
+                 (resource == null || resource.data.userId == request.auth.uid);
+        }
+        
+        // Usuário pode ler suas próprias recomendações
+        allow read: if isAuthenticated() && (isOwnerRecommendation() || isAdmin());
+        // Usuário pode criar/atualizar suas próprias recomendações
+        allow create, update: if isAuthenticated() && 
+                                request.resource.data.userId == request.auth.uid;
+        allow delete: if isAdmin();
+      }
+
       // 📚 Progresso do Edital Verticalizado
       match /editalProgress/{progressId} {
         // O progressId é: userId_courseId_date_topicKey

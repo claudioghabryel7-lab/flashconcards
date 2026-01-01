@@ -745,18 +745,18 @@ const Dashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.5 }}
-            className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6 mb-8"
+            className="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-4 sm:p-6 mb-6 sm:mb-8"
           >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-                  <DocumentTextIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                  <DocumentTextIcon className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600 dark:text-indigo-400" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
                     Edital Verticalizado
                   </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                  <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                     Edital organizado para estudos
                   </p>
                 </div>
@@ -778,15 +778,15 @@ const Dashboard = () => {
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-xl p-6 border border-indigo-200 dark:border-indigo-800">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+              <div className="space-y-3 sm:space-y-4">
+                <div className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-lg sm:rounded-xl p-4 sm:p-6 border border-indigo-200 dark:border-indigo-800">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-0 mb-3 sm:mb-4">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-2 break-words">
                         {editalVerticalizado.titulo || 'Edital Verticalizado'}
                       </h4>
                       {editalVerticalizado.descricao && (
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mb-2 sm:mb-3 break-words">
                           {editalVerticalizado.descricao}
                         </p>
                       )}
@@ -799,17 +799,17 @@ const Dashboard = () => {
                   </div>
 
                   {editalVerticalizado.secoes && editalVerticalizado.secoes.length > 0 ? (
-                    <div className="space-y-3">
+                    <div className="space-y-2 sm:space-y-3">
                       {editalVerticalizado.secoes.slice(0, 5).map((secao, idx) => (
                         <div
                           key={idx}
-                          className="bg-white dark:bg-slate-700 rounded-lg p-4 border border-slate-200 dark:border-slate-600"
+                          className="bg-white dark:bg-slate-700 rounded-lg p-3 sm:p-4 border border-slate-200 dark:border-slate-600"
                         >
-                          <h5 className="font-semibold text-slate-900 dark:text-white mb-2">
+                          <h5 className="font-semibold text-sm sm:text-base text-slate-900 dark:text-white mb-2 break-words">
                             {secao.titulo}
                           </h5>
                           {secao.conteudo && (
-                            <p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2">
+                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 line-clamp-2 break-words">
                               {secao.conteudo.substring(0, 150)}...
                             </p>
                           )}
@@ -822,9 +822,9 @@ const Dashboard = () => {
                       )}
                     </div>
                   ) : editalVerticalizado.conteudo ? (
-                    <div className="bg-white dark:bg-slate-700 rounded-lg p-4 max-h-96 overflow-y-auto">
+                    <div className="bg-white dark:bg-slate-700 rounded-lg p-3 sm:p-4 max-h-64 sm:max-h-96 overflow-y-auto">
                       <div
-                        className="text-sm text-slate-700 dark:text-slate-300 prose prose-sm dark:prose-invert max-w-none"
+                        className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 prose prose-sm dark:prose-invert max-w-none break-words"
                         dangerouslySetInnerHTML={{ __html: editalVerticalizado.conteudo.substring(0, 500) + '...' }}
                       />
                     </div>
@@ -832,10 +832,10 @@ const Dashboard = () => {
 
                   <Link
                     to={`/edital-verticalizado?course=${selectedCourseId}`}
-                    className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-all text-sm"
+                    className="mt-3 sm:mt-4 inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-all text-xs sm:text-sm w-full sm:w-auto justify-center"
                   >
                     Ver Edital Completo
-                    <ChevronRightIcon className="h-4 w-4" />
+                    <ChevronRightIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                   </Link>
                 </div>
               </div>

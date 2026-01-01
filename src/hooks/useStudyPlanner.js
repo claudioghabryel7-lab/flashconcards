@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { doc, getDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore'
+import { doc, getDoc, setDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import dayjs from 'dayjs'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -56,40 +56,45 @@ export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
     }
   }
 
-  // Verificar cache da recomendação do dia
-  const getCachedRecommendation = () => {
+  // Verificar recomendação salva no Firestore (sincronizado entre dispositivos)
+  const getCachedRecommendation = async () => {
     if (!userId || !courseId) return null
     
     try {
-      const cacheKey = `studyPlanner_${userId}_${courseId}`
-      const cached = localStorage.getItem(cacheKey)
-      if (cached) {
-        const { recommendation, date } = JSON.parse(cached)
-        const today = dayjs().format('YYYY-MM-DD')
-        // Se o cache é do dia de hoje, usar ele
-        if (date === today && recommendation) {
-          return recommendation
+      const today = dayjs().format('YYYY-MM-DD')
+      const recommendationRef = doc(db, 'studyPlannerRecommendations', `${userId}_${courseId}_${today}`)
+      const recommendationDoc = await getDoc(recommendationRef)
+      
+      if (recommendationDoc.exists()) {
+        const data = recommendationDoc.data()
+        // Verificar se é do dia de hoje
+        if (data.date === today && data.recommendation) {
+          return data.recommendation
         }
       }
     } catch (error) {
-      console.error('Erro ao ler cache:', error)
+      console.error('Erro ao ler recomendação do Firestore:', error)
     }
     return null
   }
 
-  // Salvar recomendação no cache
-  const saveCachedRecommendation = (recommendation) => {
+  // Salvar recomendação no Firestore (sincronizado entre dispositivos)
+  const saveCachedRecommendation = async (recommendation) => {
     if (!userId || !courseId) return
     
     try {
-      const cacheKey = `studyPlanner_${userId}_${courseId}`
       const today = dayjs().format('YYYY-MM-DD')
-      localStorage.setItem(cacheKey, JSON.stringify({
+      const recommendationRef = doc(db, 'studyPlannerRecommendations', `${userId}_${courseId}_${today}`)
+      await setDoc(recommendationRef, {
+        userId,
+        courseId,
+        date: today,
         recommendation,
-        date: today
-      }))
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }, { merge: true })
     } catch (error) {
-      console.error('Erro ao salvar cache:', error)
+      console.error('Erro ao salvar recomendação no Firestore:', error)
     }
   }
 
@@ -100,9 +105,9 @@ export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
       return
     }
 
-    // Verificar cache primeiro (a menos que seja forçado)
+    // Verificar cache no Firestore primeiro (a menos que seja forçado)
     if (!force) {
-      const cached = getCachedRecommendation()
+      const cached = await getCachedRecommendation()
       if (cached) {
         setDailyRecommendation(cached)
         setLoading(false)
@@ -410,16 +415,8 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
   }, [userId, courseId, editalVerticalizado])
 
   // Função para atualizar manualmente (forçar nova geração)
-  const refreshRecommendation = () => {
-    // Limpar cache antes de gerar nova recomendação
-    if (userId && courseId) {
-      try {
-        const cacheKey = `studyPlanner_${userId}_${courseId}`
-        localStorage.removeItem(cacheKey)
-      } catch (error) {
-        console.error('Erro ao limpar cache:', error)
-      }
-    }
+  const refreshRecommendation = async () => {
+    // Forçar nova geração (vai sobrescrever no Firestore)
     setShouldUpdate(true)
   }
 
