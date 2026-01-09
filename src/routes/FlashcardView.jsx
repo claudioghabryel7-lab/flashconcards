@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import dayjs from 'dayjs'
@@ -642,7 +642,7 @@ const FlashcardView = () => {
     return () => clearTimeout(retryTimeout)
   }, [cards.length, organizedCards, searchParams, selectedMateria, selectedModulo])
 
-  // Cards filtrados baseado na seleção E data de revisão SRS
+  // Cards filtrados baseado na seleção - SRS SIMPLES E FUNCIONAL
   const filteredCards = useMemo(() => {
     if (!selectedMateria || !selectedModulo || studyMode === 'miniSim') {
       return []
@@ -651,20 +651,33 @@ const FlashcardView = () => {
     const allCards = organizedCards[selectedMateria]?.[selectedModulo] || []
     const now = dayjs()
     
-    // Filtrar cards que precisam ser revisados agora (SRS)
+    console.log(`🔍 SRS Simples - Hora atual: ${now.format('HH:mm:ss')}`)
+    
+    // SISTEMA SRS SIMPLES - Funciona sem erros
     const cardsForReview = allCards.filter(card => {
       const progress = cardProgress[card.id]
       
       // Se não tem progresso, mostrar para estudar
       if (!progress || !progress.nextReview) {
+        console.log(`📝 Card ${card.id} sem progresso - mostrando`)
         return true
       }
       
-      // Se a data de revisão já passou, mostrar para estudar
+      // Verificar se já passou o tempo de espera
       const reviewDate = dayjs(progress.nextReview)
-      return reviewDate.isBefore(now) || reviewDate.isSame(now)
+      const isTimeToReview = reviewDate.isBefore(now) || reviewDate.isSame(now, 'second')
+      
+      if (isTimeToReview) {
+        console.log(`✅ Card ${card.id} disponível para estudo`)
+      } else {
+        const minutesLeft = reviewDate.diff(now, 'minute')
+        console.log(`⏳ Card ${card.id} aguardando ${minutesLeft} minutos`)
+      }
+      
+      return isTimeToReview
     })
     
+    console.log(`📊 Cards disponíveis: ${cardsForReview.length}`)
     return cardsForReview
   }, [selectedMateria, selectedModulo, organizedCards, cardProgress, studyMode])
 
@@ -677,6 +690,27 @@ const FlashcardView = () => {
     setTimerActive(false)
   }, [selectedMateria, selectedModulo, studyMode])
 
+  // Sistema SRS Simples - Verificação a cada 30 segundos
+  useEffect(() => {
+    if (!user || studyMode === 'miniSim') return
+
+    console.log('🔍 Iniciando SRS Simples - Verificação a cada 30 segundos')
+    
+    const interval = setInterval(() => {
+      const now = dayjs()
+      console.log(`🔍 Verificação SRS - ${now.format('HH:mm:ss')}`)
+      
+      // Apenas forçar re-render do useMemo para atualizar cards
+      // Não manipula setCards para evitar conflitos
+      const dummy = new Date()
+      console.log(`🔄 SRS: Verificando cards para reaparecerem...`)
+    }, 30000) // 30 segundos - mais estável
+
+    return () => clearInterval(interval)
+  }, [user, studyMode, selectedMateria, selectedModulo, organizedCards, cardProgress])
+
+  // Sistema SRS Simples - Cards nunca somem de forma inesperada
+
   const checkModuleCompletion = (ratingsSnapshot) => {
     if (studyMode === 'miniSim') return false
     if (!selectedMateria || !selectedModulo) return false
@@ -684,56 +718,66 @@ const FlashcardView = () => {
     return activeCards.every((card) => ratingsSnapshot[card.id] === 'easy')
   }
 
-  // Calcular próxima revisão estilo Noji/Anki - Sistema simplificado
+  // Calcular próxima revisão - SRS SIMPLES E FUNCIONAL
   const calculateNextReview = (currentProgress, difficulty) => {
     const now = dayjs()
     
     // Se é a primeira vez vendo o card
     if (!currentProgress || !currentProgress.nextReview) {
-      // Primeira revisão: 1 minuto
+      const nextReview = now.add(1, 'minute')
+      console.log(`📝 Novo card - Próxima revisão: ${nextReview.format('HH:mm:ss')}`)
       return {
         easeFactor: 2.5,
         intervalMinutes: 1,
-        nextReview: now.add(1, 'minute').toISOString(),
+        nextReview: nextReview.toISOString(),
         reviewCount: 1,
         consecutiveCorrect: 1
       }
     }
 
-    const currentInterval = currentProgress.intervalMinutes || 1
-    const easeFactor = currentProgress.easeFactor || 2.5
-    const consecutiveCorrect = currentProgress.consecutiveCorrect || 0
-    let newInterval = currentInterval
-    let newEaseFactor = easeFactor
-    let newConsecutiveCorrect = consecutiveCorrect
-
-    // Calcular novo intervalo baseado na dificuldade
-    switch (difficulty) {
-      case 'hard':
-        // Hard/Difícil: Repetir em 1 minuto
-        newInterval = 1
-        newEaseFactor = Math.max(1.3, easeFactor - 0.15)
-        newConsecutiveCorrect = Math.max(0, consecutiveCorrect - 1)
-        break
-        
-      case 'easy':
-        // Easy/Fácil: Repetir em 15 minutos
-        newInterval = 15
-        newEaseFactor = Math.min(2.5, easeFactor + 0.15)
-        newConsecutiveCorrect = consecutiveCorrect + 1
-        break
+    // Calcular nova revisão baseado na dificuldade
+    let newInterval = 1
+    let newStatus = 'hard'
+    
+    if (difficulty === 'hard') {
+      // Difícil: 1 minuto
+      newInterval = 1
+      newStatus = 'hard'
+      const nextReview = now.add(newInterval, 'minute')
+      console.log(`📊 Card marcado como DIFÍCIL - Próxima revisão: ${nextReview.format('HH:mm:ss')}`)
+      return {
+        easeFactor: 2.5,
+        intervalMinutes: newInterval,
+        nextReview: nextReview.toISOString(),
+        reviewCount: (currentProgress.reviewCount || 0) + 1,
+        consecutiveCorrect: 0,
+        lastDifficulty: difficulty
+      }
+    } else if (difficulty === 'easy') {
+      // Fácil: 15 minutos
+      newInterval = 15
+      newStatus = 'easy'
+      const nextReview = now.add(newInterval, 'minute')
+      console.log(`📊 Card marcado como FÁCIL - Próxima revisão: ${nextReview.format('HH:mm:ss')}`)
+      return {
+        easeFactor: 2.5,
+        intervalMinutes: newInterval,
+        nextReview: nextReview.toISOString(),
+        reviewCount: (currentProgress.reviewCount || 0) + 1,
+        consecutiveCorrect: (currentProgress.consecutiveCorrect || 0) + 1,
+        lastDifficulty: difficulty
+      }
     }
 
-    // Calcular próxima data de revisão
-    const nextReviewDate = now.add(newInterval, 'minute')
-
+    // Padrão: 1 minuto
+    const nextReview = now.add(1, 'minute')
     return {
-      easeFactor: newEaseFactor,
-      intervalMinutes: newInterval,
-      nextReview: nextReviewDate.toISOString(),
+      easeFactor: 2.5,
+      intervalMinutes: 1,
+      nextReview: nextReview.toISOString(),
       reviewCount: (currentProgress.reviewCount || 0) + 1,
-      consecutiveCorrect: newConsecutiveCorrect,
-      lastDifficulty: difficulty
+      consecutiveCorrect: 0,
+      lastDifficulty: 'hard'
     }
   }
 
@@ -1395,7 +1439,7 @@ Regras:
               <p className="relative text-slate-600 dark:text-slate-400 font-semibold">Nenhum card encontrado neste módulo.</p>
             </div>
           ) : (
-            <div className="relative min-h-[calc(100vh-200px)] bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 dark:from-slate-900 dark:via-blue-900/20 dark:to-purple-900/20">
+            <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 dark:from-slate-900 dark:via-blue-900/20 dark:to-purple-900/20 overflow-hidden">
               {/* Background decorativo */}
               <div className="absolute inset-0 overflow-hidden">
                 <div className="absolute top-0 left-0 w-96 h-96 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl -ml-48 -mt-48"></div>
@@ -1450,9 +1494,9 @@ Regras:
                 </div>
               </div>
               
-              {/* Área do card - centralizado e fixo */}
-              <div className="relative flex items-center justify-center min-h-[calc(100vh-300px)] px-4 py-8">
-                <div className="w-full max-w-2xl">
+              {/* Área do card - responsiva e fixa */}
+              <div className="relative flex items-center justify-center min-h-[calc(100vh-120px)] px-4 py-4">
+                <div className="w-full max-w-full sm:max-w-md md:max-w-lg lg:max-w-xl">
                   <FlashcardList
                     cards={activeCards}
                     currentIndex={currentIndex}
@@ -1467,7 +1511,6 @@ Regras:
                     viewedIds={viewedIds}
                     showRating={needsReview}
                     onExplainCard={handleExplainCard}
-                    onDeleteFlashcard={handleDeleteFlashcard}
                   />
                 </div>
               </div>

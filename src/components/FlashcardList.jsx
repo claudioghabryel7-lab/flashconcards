@@ -21,33 +21,36 @@ const FlashcardList = ({
   const currentCard = cards[currentIndex]
 
   return (
-    <div className="flex flex-col items-center justify-center space-y-6">
+    <div className="flex flex-col items-center justify-center h-full w-full space-y-4 sm:space-y-6">
       {/* Card Principal */}
       {currentCard && (
-        <div className="w-full space-y-6">
-          <FlashcardItem
-            card={currentCard}
-            isFavorite={favorites.includes(currentCard.id)}
-            onToggleFavorite={onToggleFavorite}
-            onRateDifficulty={onRateDifficulty}
-            showRating={showRating}
-            cardProgress={cardProgress && cardProgress[currentCard.id] ? cardProgress[currentCard.id] : null}
-            onExplainCard={onExplainCard}
-            onDeleteFlashcard={onDeleteFlashcard}
-          />
+        <div className="w-full h-full flex flex-col justify-between space-y-4 sm:space-y-6">
+          <div className="flex-1 flex items-center justify-center min-h-0">
+            <FlashcardItem
+              card={currentCard}
+              isFavorite={favorites.includes(currentCard.id)}
+              onToggleFavorite={onToggleFavorite}
+              onRateDifficulty={onRateDifficulty}
+              showRating={showRating}
+              cardProgress={cardProgress && cardProgress[currentCard.id] ? cardProgress[currentCard.id] : null}
+              onExplainCard={onExplainCard}
+              onDeleteFlashcard={onDeleteFlashcard}
+            />
+          </div>
           
           {/* Navegação - Melhorada para mobile */}
-          <div className="flex items-center justify-center gap-4 px-4">
+          <div className="flex items-center justify-center gap-2 sm:gap-4 px-2 sm:px-4 pb-2 sm:pb-0">
             <button
               type="button"
               onClick={onPrev}
-              className="group/btn relative inline-flex items-center justify-center gap-2 rounded-xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border-2 border-blue-500/30 dark:border-blue-400/30 px-6 py-3 text-sm font-bold text-blue-600 dark:text-blue-400 shadow-lg hover:shadow-xl hover:border-blue-500 dark:hover:border-blue-400 hover:scale-105 transition-all overflow-hidden min-w-[120px]"
+              className="group/btn relative inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border-2 border-blue-500/30 dark:border-blue-400/30 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400 shadow-lg hover:shadow-xl hover:border-blue-500 dark:hover:border-blue-400 hover:scale-105 transition-all overflow-hidden min-w-[80px] sm:min-w-[100px]"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
-              <span className="relative z-10">← Anterior</span>
+              <span className="relative z-10">←</span>
+              <span className="relative z-10 hidden sm:inline">Anterior</span>
             </button>
             
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-600 dark:text-slate-400">
+            <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-400 px-2">
               <span>{currentIndex + 1}</span>
               <span>/</span>
               <span>{cards.length}</span>
@@ -56,10 +59,11 @@ const FlashcardList = ({
             <button
               type="button"
               onClick={onNext}
-              className="group/btn relative inline-flex items-center justify-center gap-2 rounded-xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border-2 border-blue-500/30 dark:border-blue-400/30 px-6 py-3 text-sm font-bold text-blue-600 dark:text-blue-400 shadow-lg hover:shadow-xl hover:border-blue-500 dark:hover:border-blue-400 hover:scale-105 transition-all overflow-hidden min-w-[120px]"
+              className="group/btn relative inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border-2 border-blue-500/30 dark:border-blue-400/30 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400 shadow-lg hover:shadow-xl hover:border-blue-500 dark:hover:border-blue-400 hover:scale-105 transition-all overflow-hidden min-w-[80px] sm:min-w-[100px]"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
-              <span className="relative z-10">Próximo →</span>
+              <span className="relative z-10 hidden sm:inline">Próximo</span>
+              <span className="relative z-10">→</span>
             </button>
           </div>
         </div>

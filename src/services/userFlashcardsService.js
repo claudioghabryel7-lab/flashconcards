@@ -41,19 +41,24 @@ export const userFlashcardsService = {
     }
   },
 
-  // Obter todos os flashcards de um usuário// Obter flashcards do usuário (simplificado para evitar erro de índice)
+  // Obter todos os flashcards de um usuário// Obter flashcards do usuário (abordagem simples sem índice composto)
   async getUserFlashcards(userId, courseId = null) {
     try {
-      let q = query(
+      // Consulta simples: apenas por userId, sem orderBy para evitar erro de índice
+      const q = query(
         collection(db, FLASHCARDS_COLLECTION),
         where('userId', '==', userId)
       )
 
-      // Ordenar por data de criação (sem filtros adicionais para evitar erro de índice)
-      q = query(q, orderBy('createdAt', 'desc'))
-
       const querySnapshot = await getDocs(q)
       let flashcards = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      
+      // Ordenar no cliente por data de criação (mais recentes primeiro)
+      flashcards.sort((a, b) => {
+        const dateA = a.createdAt?.toMillis() || 0
+        const dateB = b.createdAt?.toMillis() || 0
+        return dateB - dateA
+      })
       
       // Filtrar por curso no cliente se necessário
       if (courseId && courseId !== 'alego-default') {
@@ -64,6 +69,7 @@ export const userFlashcardsService = {
         )
       }
       
+      console.log(`📝 Carregados ${flashcards.length} flashcards do usuário`)
       return flashcards
     } catch (error) {
       console.error('Erro ao obter flashcards do usuário:', error)
@@ -132,15 +138,19 @@ export const userFlashcardsService = {
       if (quality >= 3) { // Fácil - repetir depois de 15 minutos
         srsData.interval = 15 // 15 minutos
         srsData.status = 'easy'
+        console.log(`📊 Card ${flashcardId} marcado como FÁCIL - Próxima revisão: 15 minutos`)
       } else { // Difícil - repetir depois de 1 minuto
         srsData.interval = 1 // 1 minuto
         srsData.status = 'hard'
+        console.log(`📊 Card ${flashcardId} marcado como DIFÍCIL - Próxima revisão: 1 minuto`)
       }
 
       // Calcular próxima data de revisão
       const nextReview = new Date(now)
       nextReview.setMinutes(nextReview.getMinutes() + srsData.interval)
       srsData.nextReviewDate = nextReview
+      
+      console.log(`⏰ Próxima revisão agendada para: ${nextReview.toLocaleTimeString()}`)
 
       await this.updateFlashcard(flashcardId, { srsData })
       return srsData
@@ -177,12 +187,12 @@ export const userFlashcardsService = {
     }
   },
 
-  // Listener em tempo real para flashcards do usuário (simplificado para evitar erro de índice)
+  // Listener em tempo real para flashcards do usuário (abordagem simples)
   subscribeToUserFlashcards(userId, callback, courseId = null) {
-    let q = query(
+    // Consulta simples: apenas por userId, sem orderBy para evitar erro de índice
+    const q = query(
       collection(db, FLASHCARDS_COLLECTION),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', userId)
     )
 
     return onSnapshot(q, (querySnapshot) => {
@@ -190,6 +200,13 @@ export const userFlashcardsService = {
         id: doc.id, 
         ...doc.data() 
       }))
+      
+      // Ordenar no cliente por data de criação (mais recentes primeiro)
+      flashcards.sort((a, b) => {
+        const dateA = a.createdAt?.toMillis() || 0
+        const dateB = b.createdAt?.toMillis() || 0
+        return dateB - dateA
+      })
       
       // Filtrar por curso no cliente se necessário
       if (courseId && courseId !== 'alego-default') {
