@@ -41,7 +41,7 @@ export const userFlashcardsService = {
     }
   },
 
-  // Obter todos os flashcards de um usuário (integrados com os do sistema)
+  // Obter todos os flashcards de um usuário// Obter flashcards do usuário (simplificado para evitar erro de índice)
   async getUserFlashcards(userId, courseId = null) {
     try {
       let q = query(
@@ -49,18 +49,22 @@ export const userFlashcardsService = {
         where('userId', '==', userId)
       )
 
-      // Filtrar por curso se especificado
-      if (courseId && courseId !== 'alego-default') {
-        q = query(q, where('courseId', '==', courseId))
-      } else if (!courseId || courseId === 'alego-default') {
-        q = query(q, where('courseId', 'in', [null, '', 'alego-default']))
-      }
-
-      // Ordenar por data de criação
+      // Ordenar por data de criação (sem filtros adicionais para evitar erro de índice)
       q = query(q, orderBy('createdAt', 'desc'))
 
       const querySnapshot = await getDocs(q)
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      let flashcards = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      
+      // Filtrar por curso no cliente se necessário
+      if (courseId && courseId !== 'alego-default') {
+        flashcards = flashcards.filter(card => card.courseId === courseId)
+      } else if (!courseId || courseId === 'alego-default') {
+        flashcards = flashcards.filter(card => 
+          !card.courseId || card.courseId === '' || card.courseId === 'alego-default'
+        )
+      }
+      
+      return flashcards
     } catch (error) {
       console.error('Erro ao obter flashcards do usuário:', error)
       throw error
@@ -173,27 +177,29 @@ export const userFlashcardsService = {
     }
   },
 
-  // Listener em tempo real para flashcards do usuário
+  // Listener em tempo real para flashcards do usuário (simplificado para evitar erro de índice)
   subscribeToUserFlashcards(userId, callback, courseId = null) {
     let q = query(
       collection(db, FLASHCARDS_COLLECTION),
-      where('userId', '==', userId)
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
     )
 
-    // Filtrar por curso se especificado
-    if (courseId && courseId !== 'alego-default') {
-      q = query(q, where('courseId', '==', courseId))
-    } else if (!courseId || courseId === 'alego-default') {
-      q = query(q, where('courseId', 'in', [null, '', 'alego-default']))
-    }
-
-    q = query(q, orderBy('createdAt', 'desc'))
-
     return onSnapshot(q, (querySnapshot) => {
-      const flashcards = querySnapshot.docs.map(doc => ({ 
+      let flashcards = querySnapshot.docs.map(doc => ({ 
         id: doc.id, 
         ...doc.data() 
       }))
+      
+      // Filtrar por curso no cliente se necessário
+      if (courseId && courseId !== 'alego-default') {
+        flashcards = flashcards.filter(card => card.courseId === courseId)
+      } else if (!courseId || courseId === 'alego-default') {
+        flashcards = flashcards.filter(card => 
+          !card.courseId || card.courseId === '' || card.courseId === 'alego-default'
+        )
+      }
+      
       callback(flashcards)
     })
   },

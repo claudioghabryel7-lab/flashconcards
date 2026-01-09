@@ -1395,13 +1395,16 @@ Regras:
               <p className="relative text-slate-600 dark:text-slate-400 font-semibold">Nenhum card encontrado neste módulo.</p>
             </div>
           ) : (
-            <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
+            <div className="relative min-h-[calc(100vh-200px)] bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 dark:from-slate-900 dark:via-blue-900/20 dark:to-purple-900/20">
               {/* Background decorativo */}
-              <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+              <div className="absolute inset-0 overflow-hidden">
+                <div className="absolute top-0 left-0 w-96 h-96 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl -ml-48 -mt-48"></div>
+                <div className="absolute bottom-0 right-0 w-96 h-96 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 rounded-full blur-3xl -mr-48 -mb-48"></div>
+              </div>
               
-              <div className="relative space-y-6">
-                {/* Header do módulo */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              {/* Header fixo */}
+              <div className="sticky top-0 z-10 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 px-4 py-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="relative">
                       <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur-md opacity-50"></div>
@@ -1416,47 +1419,57 @@ Regras:
                       <p className="text-base font-bold text-slate-900 dark:text-white">
                         {selectedModulo}
                       </p>
-                      {studyMode === 'miniSim' && (
-                        <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 mt-1">
-                          ⚡ 10 cards aleatórios deste mini simulado
-                        </p>
-                      )}
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         {activeCards.length} {activeCards.length === 1 ? 'card' : 'cards'}
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedMateria(null)
-                      setSelectedModulo(null)
-                      setStudyMode('module')
-                      setMiniSimCards([])
-                    }}
-                    className="group/btn relative inline-flex items-center justify-center gap-2 px-4 py-2 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-all overflow-hidden"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-slate-500/0 via-slate-500/10 to-slate-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
-                    <span className="relative z-10">← Voltar</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={shuffle}
+                      className="group/btn relative inline-flex items-center justify-center gap-2 px-3 py-2 border-2 border-purple-500/30 dark:border-purple-400/30 text-purple-600 dark:text-purple-400 font-bold rounded-xl hover:bg-purple-50/50 dark:hover:bg-purple-900/20 transition-all overflow-hidden"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/10 to-purple-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
+                      <span className="relative z-10 text-sm">🔀 Embaralhar</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMateria(null)
+                        setSelectedModulo(null)
+                        setStudyMode('module')
+                        setMiniSimCards([])
+                      }}
+                      className="group/btn relative inline-flex items-center justify-center gap-2 px-3 py-2 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-all overflow-hidden"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-slate-500/0 via-slate-500/10 to-slate-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
+                      <span className="relative z-10 text-sm">← Voltar</span>
+                    </button>
+                  </div>
                 </div>
+              </div>
               
-                <FlashcardList
-                  cards={activeCards}
-                  currentIndex={currentIndex}
-                  onSelect={setCurrentIndex}
-                  onToggleFavorite={toggleFavorite}
-                  onRateDifficulty={rateDifficulty}
-                  favorites={favorites}
-                  cardProgress={cardProgress}
-                  onPrev={goPrev}
-                  onNext={goNext}
-                  onShuffle={shuffle}
-                  viewedIds={viewedIds}
-                  showRating={needsReview}
-                  onExplainCard={handleExplainCard}
-                  onDeleteFlashcard={handleDeleteFlashcard}
-                />
+              {/* Área do card - centralizado e fixo */}
+              <div className="relative flex items-center justify-center min-h-[calc(100vh-300px)] px-4 py-8">
+                <div className="w-full max-w-2xl">
+                  <FlashcardList
+                    cards={activeCards}
+                    currentIndex={currentIndex}
+                    onSelect={setCurrentIndex}
+                    onToggleFavorite={toggleFavorite}
+                    onRateDifficulty={rateDifficulty}
+                    favorites={favorites}
+                    cardProgress={cardProgress}
+                    onPrev={goPrev}
+                    onNext={goNext}
+                    onShuffle={shuffle}
+                    viewedIds={viewedIds}
+                    showRating={needsReview}
+                    onExplainCard={handleExplainCard}
+                    onDeleteFlashcard={handleDeleteFlashcard}
+                  />
+                </div>
               </div>
             </div>
           )}
