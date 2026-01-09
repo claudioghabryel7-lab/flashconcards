@@ -33,6 +33,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore'
+import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon } from '@heroicons/react/24/outline'
 import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
 import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signOut } from 'firebase/auth'
@@ -6099,6 +6100,7 @@ CRÍTICO:
     { id: 'config', label: '⚙️ Configurações', icon: '⚙️' },
     { id: 'flashcards', label: '📚 Flashcards', icon: '📚' },
     { id: 'users', label: '👥 Usuários', icon: '👥' },
+    { id: 'edital', label: '📋 Edital Verticalizado', icon: '📋' },
     { id: 'banners', label: '🖼️ Banners', icon: '🖼️' },
     { id: 'popup', label: '🔔 Popup Banner', icon: '🔔' },
     { id: 'courses', label: '🎓 Cursos', icon: '🎓' },
@@ -8415,6 +8417,11 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
         </div>
       </div>
               </div>
+            )}
+
+            {/* Tab: Edital Verticalizado */}
+            {activeTab === 'edital' && (
+              <EditalVerticalizadoManager />
             )}
 
             {/* Tab: Banners */}

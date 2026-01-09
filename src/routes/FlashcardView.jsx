@@ -3,6 +3,8 @@ import { useSearchParams, Link } from 'react-router-dom'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import dayjs from 'dayjs'
 import FlashcardList from '../components/FlashcardList'
+import AddUserFlashcardButton from '../components/AddUserFlashcardButton'
+import { userFlashcardsService } from '../services/userFlashcardsService'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
@@ -67,27 +69,12 @@ const normalizeModuloName = (moduloName, materiaName) => {
   return moduloName // Retornar original se não houver mapeamento
 }
 
-// Sistema SRS - Repetição Espaçada Dinâmica
-// Intervalos ajustados dinamicamente baseado na dificuldade percebida
+// Sistema SRS - Repetição Espaçada estilo Noji/Anki
 const SRS_INTERVALS = {
-  // Again: Volta quase imediatamente (10 minutos)
-  again: { minutes: 10 },
-  // Hard/Difícil: Diminui bastante o intervalo - volta para minutos (final da sessão) ou no dia seguinte
-  hard: { 
-    minutes: 30, // Se intervalo atual > 1 dia, volta para 30 minutos (final da sessão)
-    maxDays: 1 // Máximo 1 dia se intervalo atual já é pequeno
-  },
-  // Good: Intervalo médio que aumenta progressivamente
-  good: { 
-    initialDays: 4,
-    multiplier: 1.7 // Multiplicador para aumentar intervalo a cada acerto
-  },
-  // Easy/Fácil: Aumenta significativamente o intervalo (ex: 1 dia -> 4-5 dias)
-  easy: {
-    initialDays: 7,
-    minMultiplier: 4.0, // Mínimo: multiplica por 4x (ex: 1 dia -> 4 dias)
-    multiplier: 5.0 // Multiplicador padrão: 5x (ex: 1 dia -> 5 dias)
-  }
+  // Hard/Difícil: Repetir em 1 minuto
+  hard: { minutes: 1 },
+  // Easy/Fácil: Repetir em 15 minutos  
+  easy: { minutes: 15 }
 }
 
 const FlashcardView = () => {
@@ -95,6 +82,7 @@ const FlashcardView = () => {
   const { darkMode } = useDarkMode()
   const [searchParams, setSearchParams] = useSearchParams()
   const [cards, setCards] = useState([])
+  const [userCards, setUserCards] = useState([]) // Flashcards individuais do usuário
   const [cardProgress, setCardProgress] = useState({})
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selectedMateria, setSelectedMateria] = useState(null)
@@ -116,6 +104,17 @@ const FlashcardView = () => {
   const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
   const [cardsLoading, setCardsLoading] = useState(true) // Estado para evitar flash de cards
   const [timerActive, setTimerActive] = useState(false) // Timer só inicia quando usuário clicar no relógio
+  
+  // Função para recarregar flashcards do usuário
+  const loadUserFlashcards = async () => {
+    if (!user) return
+    try {
+      const userFlashcards = await userFlashcardsService.getUserFlashcards(user.uid, selectedCourseId)
+      setUserCards(userFlashcards)
+    } catch (error) {
+      console.error('Erro ao carregar flashcards do usuário:', error)
+    }
+  }
   
   // Timer de estudo - ativo apenas quando usuário clicar no relógio
   const isStudying = !!selectedMateria && !!selectedModulo
@@ -296,6 +295,13 @@ const FlashcardView = () => {
     return () => unsub()
   }, [user, profile, selectedCourseId])
 
+  // Carregar flashcards do usuário quando mudar o usuário ou curso
+  useEffect(() => {
+    if (user && profile) {
+      loadUserFlashcards()
+    }
+  }, [user, profile, selectedCourseId])
+
   useEffect(() => {
     // Limpar prompt primeiro quando mudar de curso
     setEditalPrompt('')
@@ -388,10 +394,14 @@ const FlashcardView = () => {
     return () => unsub()
   }, [user, selectedCourseId, cards])
 
-  // Organizar cards por matéria e módulo
+  // Organizar cards por matéria e módulo (incluindo cards do usuário)
   const organizedCards = useMemo(() => {
     const organized = {}
-    cards.forEach((card) => {
+    
+    // Combinar cards do sistema com cards do usuário
+    const allCards = [...cards, ...userCards]
+    
+    allCards.forEach((card) => {
       const materia = card.materia || 'Sem matéria'
       const modulo = card.modulo || 'Sem módulo'
       if (!organized[materia]) {
@@ -403,7 +413,7 @@ const FlashcardView = () => {
       organized[materia][modulo].push(card)
     })
     return organized
-  }, [cards])
+  }, [cards, userCards])
 
   // Carregar ordens de módulos para todas as matérias quando necessário
   useEffect(() => {
@@ -632,13 +642,31 @@ const FlashcardView = () => {
     return () => clearTimeout(retryTimeout)
   }, [cards.length, organizedCards, searchParams, selectedMateria, selectedModulo])
 
-  // Cards filtrados baseado na seleção
+  // Cards filtrados baseado na seleção E data de revisão SRS
   const filteredCards = useMemo(() => {
     if (!selectedMateria || !selectedModulo || studyMode === 'miniSim') {
       return []
     }
-    return organizedCards[selectedMateria]?.[selectedModulo] || []
-  }, [selectedMateria, selectedModulo, organizedCards, studyMode])
+    
+    const allCards = organizedCards[selectedMateria]?.[selectedModulo] || []
+    const now = dayjs()
+    
+    // Filtrar cards que precisam ser revisados agora (SRS)
+    const cardsForReview = allCards.filter(card => {
+      const progress = cardProgress[card.id]
+      
+      // Se não tem progresso, mostrar para estudar
+      if (!progress || !progress.nextReview) {
+        return true
+      }
+      
+      // Se a data de revisão já passou, mostrar para estudar
+      const reviewDate = dayjs(progress.nextReview)
+      return reviewDate.isBefore(now) || reviewDate.isSame(now)
+    })
+    
+    return cardsForReview
+  }, [selectedMateria, selectedModulo, organizedCards, cardProgress, studyMode])
 
   const activeCards = studyMode === 'miniSim' ? miniSimCards : filteredCards
 
@@ -656,23 +684,23 @@ const FlashcardView = () => {
     return activeCards.every((card) => ratingsSnapshot[card.id] === 'easy')
   }
 
-  // Calcular próxima revisão estilo Noji - Baseado em dificuldade
+  // Calcular próxima revisão estilo Noji/Anki - Sistema simplificado
   const calculateNextReview = (currentProgress, difficulty) => {
     const now = dayjs()
     
     // Se é a primeira vez vendo o card
     if (!currentProgress || !currentProgress.nextReview) {
-      // Primeira revisão sempre é "Good" (4 dias)
+      // Primeira revisão: 1 minuto
       return {
-        easeFactor: 2.5, // Fator de facilidade inicial
-        intervalDays: SRS_INTERVALS.good.initialDays,
-        nextReview: now.add(SRS_INTERVALS.good.initialDays, 'day').toISOString(),
+        easeFactor: 2.5,
+        intervalMinutes: 1,
+        nextReview: now.add(1, 'minute').toISOString(),
         reviewCount: 1,
         consecutiveCorrect: 1
       }
     }
 
-    const currentInterval = currentProgress.intervalDays || SRS_INTERVALS.good.initialDays
+    const currentInterval = currentProgress.intervalMinutes || 1
     const easeFactor = currentProgress.easeFactor || 2.5
     const consecutiveCorrect = currentProgress.consecutiveCorrect || 0
     let newInterval = currentInterval
@@ -680,84 +708,28 @@ const FlashcardView = () => {
     let newConsecutiveCorrect = consecutiveCorrect
 
     // Calcular novo intervalo baseado na dificuldade
-    // Sistema dinâmico que ajusta intervalos conforme o desempenho
     switch (difficulty) {
-      case 'again':
-        // Again: Volta em 10 minutos
-        newInterval = 0 // Minutos
-        newEaseFactor = Math.max(1.3, easeFactor - 0.2) // Reduz facilidade
-        newConsecutiveCorrect = 0 // Reset contador
-        break
-        
       case 'hard':
-        // Hard/Difícil: Diminui bastante o intervalo
-        // Se intervalo atual > 1 dia, volta para minutos (final da sessão)
-        // Se intervalo atual <= 1 dia, mantém em 1 dia máximo
-        if (currentInterval > 1) {
-          // Intervalo grande: volta para minutos (30 min = final da sessão)
-          newInterval = 0 // Será tratado como minutos
-        } else {
-          // Intervalo já pequeno: mantém em 1 dia máximo
-          newInterval = SRS_INTERVALS.hard.maxDays
-        }
+        // Hard/Difícil: Repetir em 1 minuto
+        newInterval = 1
         newEaseFactor = Math.max(1.3, easeFactor - 0.15)
         newConsecutiveCorrect = Math.max(0, consecutiveCorrect - 1)
         break
         
-      case 'good':
-        // Good: Intervalo aumenta progressivamente
-        if (consecutiveCorrect === 0) {
-          // Primeira vez acertando "Good"
-          newInterval = SRS_INTERVALS.good.initialDays
-        } else {
-          // Aumenta intervalo usando multiplicador
-          newInterval = Math.round(currentInterval * SRS_INTERVALS.good.multiplier)
-        }
-        newEaseFactor = easeFactor // Mantém facilidade
-        newConsecutiveCorrect = consecutiveCorrect + 1
-        break
-        
       case 'easy':
-        // Easy/Fácil: Aumenta SIGNIFICATIVAMENTE o intervalo
-        // Exemplo: Se próxima revisão seria em 1 dia, pula para 4-5 dias
-        if (consecutiveCorrect === 0) {
-          // Primeira vez marcando como Easy
-          newInterval = SRS_INTERVALS.easy.initialDays
-        } else {
-          // Aumenta intervalo de forma significativa
-          // Garante mínimo de 4x o intervalo atual (ex: 1 dia -> 4 dias)
-          // Usa multiplicador de 5x para aumentar ainda mais (ex: 1 dia -> 5 dias)
-          const multipliedInterval = currentInterval * SRS_INTERVALS.easy.multiplier
-          const minInterval = currentInterval * SRS_INTERVALS.easy.minMultiplier
-          // Usa o maior valor entre o multiplicador padrão e o mínimo garantido
-          newInterval = Math.max(
-            Math.round(multipliedInterval),
-            Math.round(minInterval)
-          )
-        }
-        newEaseFactor = Math.min(2.5, easeFactor + 0.15) // Aumenta facilidade
+        // Easy/Fácil: Repetir em 15 minutos
+        newInterval = 15
+        newEaseFactor = Math.min(2.5, easeFactor + 0.15)
         newConsecutiveCorrect = consecutiveCorrect + 1
         break
     }
 
     // Calcular próxima data de revisão
-    let nextReviewDate
-    if (difficulty === 'again') {
-      // Again: 10 minutos
-      nextReviewDate = now.add(SRS_INTERVALS.again.minutes, 'minute')
-    } else if (difficulty === 'hard' && newInterval === 0) {
-      // Hard: Se intervalo foi reduzido para minutos, usar 30 minutos (final da sessão)
-      nextReviewDate = now.add(SRS_INTERVALS.hard.minutes, 'minute')
-    } else {
-      // Outros: dias
-      nextReviewDate = now.add(newInterval, 'day')
-    }
+    const nextReviewDate = now.add(newInterval, 'minute')
 
     return {
       easeFactor: newEaseFactor,
-      intervalDays: newInterval,
-      // Incluir intervalo em minutos se for "hard" e intervalo for 0
-      intervalMinutes: (difficulty === 'hard' && newInterval === 0) ? SRS_INTERVALS.hard.minutes : null,
+      intervalMinutes: newInterval,
       nextReview: nextReviewDate.toISOString(),
       reviewCount: (currentProgress.reviewCount || 0) + 1,
       consecutiveCorrect: newConsecutiveCorrect,
@@ -824,7 +796,52 @@ const FlashcardView = () => {
     await updateFavorites(nextFavorites)
   }
 
-  // Avaliar dificuldade - Estilo Noji (Again/Hard/Good/Easy)
+  const handleDeleteFlashcard = async (flashcardId) => {
+    if (!user) return
+    
+    try {
+      // Deletar flashcard usando o serviço
+      await userFlashcardsService.deleteFlashcard(flashcardId)
+      
+      // Remover da lista de cards local
+      setCards((prevCards) => prevCards.filter(card => card.id !== flashcardId))
+      
+      // Resetar índice se necessário
+      setCurrentIndex((prevIndex) => {
+        const newIndex = prevIndex >= cards.length - 1 ? Math.max(0, cards.length - 2) : prevIndex
+        return newIndex
+      })
+      
+      // Remover dos favoritos se estiver lá
+      if (favorites.includes(flashcardId)) {
+        const newFavorites = favorites.filter(fav => fav !== flashcardId)
+        await updateFavorites(newFavorites)
+      }
+      
+      // Remover do progresso se existir
+      if (cardProgress[flashcardId]) {
+        const newCardProgress = { ...cardProgress }
+        delete newCardProgress[flashcardId]
+        setCardProgress(newCardProgress)
+        
+        // Atualizar no Firestore
+        const userProgressRef = doc(db, 'userProgress', user.uid)
+        await setDoc(
+          userProgressRef,
+          {
+            cardProgress: newCardProgress,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        )
+      }
+      
+    } catch (error) {
+      console.error('Erro ao deletar flashcard:', error)
+    }
+  }
+
+  // Avaliar dificuldade - Sistema Noji/Anki simplificado
   const rateDifficulty = async (cardId, difficulty) => {
     if (!user) return
     
@@ -839,8 +856,6 @@ const FlashcardView = () => {
       ...newProgressData,
       lastDifficulty: difficulty,
       lastReviewed: now.toISOString(),
-      // Manter compatibilidade com sistema antigo
-      stage: Math.floor(newProgressData.consecutiveCorrect / 2), // Stage baseado em acertos consecutivos
     }
     
     // Salvar progresso do usuário (filtrado por curso se necessário)
@@ -869,7 +884,7 @@ const FlashcardView = () => {
       return updated
     })
     
-    // Avançar para próximo card após um pequeno delay
+    // Avançar para próximo card após um pequeno delay (sempre avança)
     setTimeout(() => {
       goNext()
     }, 300)
@@ -895,6 +910,11 @@ const FlashcardView = () => {
 
   const shuffle = () => {
     setCurrentIndex(0)
+    // Embaralhar os cards ativos
+    setCards((prevCards) => {
+      const shuffled = [...prevCards].sort(() => Math.random() - 0.5)
+      return shuffled
+    })
   }
 
   const viewedIds = useMemo(() => {
@@ -1435,6 +1455,7 @@ Regras:
                   viewedIds={viewedIds}
                   showRating={needsReview}
                   onExplainCard={handleExplainCard}
+                  onDeleteFlashcard={handleDeleteFlashcard}
                 />
               </div>
             </div>
@@ -1548,6 +1569,16 @@ Regras:
             </div>
           </div>
         </div>
+      )}
+      
+      {/* Botão flutuante para adicionar flashcards do usuário */}
+      {user && studyMode === 'module' && selectedMateria && selectedModulo && (
+        <AddUserFlashcardButton
+          selectedMateria={selectedMateria}
+          selectedModulo={selectedModulo}
+          selectedCourseId={selectedCourseId}
+          onFlashcardAdded={loadUserFlashcards}
+        />
       )}
       </div>
     </div>

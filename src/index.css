@@ -6,7 +6,7 @@
 @tailwind utilities;
 
 /* Importar estilos modernos do blog */
-@import './styles/blog-modern.css';
+/* @import './styles/blog-modern-fixed.css'; */
 
 * {
   box-sizing: border-box;

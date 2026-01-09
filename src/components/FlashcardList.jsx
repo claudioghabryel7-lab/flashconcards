@@ -15,6 +15,7 @@ const FlashcardList = ({
   viewedIds,
   showRating = false,
   onExplainCard = null,
+  onDeleteFlashcard = null,
 }) => {
   const visited = viewedIds || []
   const currentCard = cards[currentIndex]
@@ -45,6 +46,7 @@ const FlashcardList = ({
             showRating={showRating}
             cardProgress={cardProgress && cardProgress[currentCard.id] ? cardProgress[currentCard.id] : null}
             onExplainCard={onExplainCard}
+            onDeleteFlashcard={onDeleteFlashcard}
           />
         </div>
       )}

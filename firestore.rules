@@ -35,7 +35,32 @@
       }
       
       match /flashcards/{cardId} {
+        // Permitir leitura para todos autenticados
         allow read: if isAuthenticated();
+        // Admin pode criar qualquer flashcard
+        allow create: if isAdmin();
+        // Usuário pode criar flashcards individuais (com userId)
+        allow create: if isAuthenticated() && 
+                     request.resource.data.userId == request.auth.uid;
+        // Admin pode atualizar qualquer flashcard
+        allow update: if isAdmin();
+        // Usuário pode atualizar seus próprios flashcards
+        allow update: if isAuthenticated() && 
+                     exists(/databases/$(database)/documents/flashcards/$(cardId)) &&
+                     get(/databases/$(database)/documents/flashcards/$(cardId)).data.userId == request.auth.uid;
+        // Admin pode deletar qualquer flashcard
+        allow delete: if isAdmin();
+        // Usuário pode deletar seus próprios flashcards
+        allow delete: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/flashcards/$(cardId)) &&
+                      get(/databases/$(database)/documents/flashcards/$(cardId)).data.userId == request.auth.uid;
+      }
+      
+      // Edital Verticalizado - apenas admin pode gerenciar
+      match /editalVerticalizado/{itemId} {
+        // Permitir leitura para todos autenticados
+        allow read: if isAuthenticated();
+        // Apenas admin pode criar, atualizar e deletar
         allow create, update, delete: if isAdmin();
       }
       
