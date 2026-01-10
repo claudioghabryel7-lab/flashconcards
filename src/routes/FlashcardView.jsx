@@ -1511,6 +1511,7 @@ Regras:
                     viewedIds={viewedIds}
                     showRating={needsReview}
                     onExplainCard={handleExplainCard}
+                    onDeleteFlashcard={handleDeleteFlashcard}
                   />
                 </div>
               </div>
