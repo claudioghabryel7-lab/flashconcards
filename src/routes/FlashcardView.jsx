@@ -109,7 +109,9 @@ const FlashcardView = () => {
   const loadUserFlashcards = async () => {
     if (!user) return
     try {
+      console.log('🔍 Carregando flashcards do usuário:', user.uid, 'curso:', selectedCourseId)
       const userFlashcards = await userFlashcardsService.getUserFlashcards(user.uid, selectedCourseId)
+      console.log('📝 Flashcards do usuário carregados:', userFlashcards.length, userFlashcards)
       setUserCards(userFlashcards)
     } catch (error) {
       console.error('Erro ao carregar flashcards do usuário:', error)
@@ -400,6 +402,9 @@ const FlashcardView = () => {
     
     // Combinar cards do sistema com cards do usuário
     const allCards = [...cards, ...userCards]
+    console.log('🔍 Cards do sistema:', cards.length)
+    console.log('🔍 Cards do usuário:', userCards.length)
+    console.log('🔍 Total de cards combinados:', allCards.length)
     
     allCards.forEach((card) => {
       const materia = card.materia || 'Sem matéria'
@@ -412,6 +417,8 @@ const FlashcardView = () => {
       }
       organized[materia][modulo].push(card)
     })
+    
+    console.log('📊 Cards organizados por matéria/módulo:', organized)
     return organized
   }, [cards, userCards])
 
@@ -642,44 +649,17 @@ const FlashcardView = () => {
     return () => clearTimeout(retryTimeout)
   }, [cards.length, organizedCards, searchParams, selectedMateria, selectedModulo])
 
-  // Cards filtrados baseado na seleção - SRS SIMPLES E FUNCIONAL
+  // Cards filtrados baseado na seleção - SIMPLIFICADO SEM SRS
   const filteredCards = useMemo(() => {
     if (!selectedMateria || !selectedModulo || studyMode === 'miniSim') {
       return []
     }
     
+    // Mostrar TODOS os cards - SEM FILTRO SRS
     const allCards = organizedCards[selectedMateria]?.[selectedModulo] || []
-    const now = dayjs()
-    
-    // Sistema SRS - Logs removidos para performance
-    // console.log(`🔍 SRS Simples - Hora atual: ${now.format('HH:mm:ss')}`)
-    
-    // SISTEMA SRS SIMPLES - Funciona sem erros
-    const cardsForReview = allCards.filter(card => {
-      const progress = cardProgress[card.id]
-      
-      // Se não tem progresso, mostrar para estudar
-      if (!progress || !progress.nextReview) {
-        // Logs removidos para performance
-      // console.log(`📝 Card ${card.id} sem progresso - mostrando`)
-        return true
-      }
-      
-      // Verificar se já passou o tempo de espera
-      const reviewDate = dayjs(progress.nextReview)
-      const isTimeToReview = reviewDate.isBefore(now) || reviewDate.isSame(now, 'second')
-      
-      // Logs removidos para performance
-      // console.log(`✅ Card ${card.id} disponível para estudo`)
-      // console.log(`⏳ Card ${card.id} aguardando ${minutesLeft} minutos`)
-      
-      return isTimeToReview
-    })
-    
-    // Log removido para performance
-    // console.log(`📊 Cards disponíveis: ${cardsForReview.length}`)
-    return cardsForReview
-  }, [selectedMateria, selectedModulo, organizedCards, cardProgress, studyMode])
+    console.log('🔍 Total de cards no módulo:', allCards.length)
+    return allCards
+  }, [selectedMateria, selectedModulo, organizedCards, studyMode])
 
   const activeCards = studyMode === 'miniSim' ? miniSimCards : filteredCards
 
