@@ -671,10 +671,7 @@ const FlashcardView = () => {
       
       // Logs removidos para performance
       // console.log(`✅ Card ${card.id} disponível para estudo`)
-      } else {
-        const minutesLeft = reviewDate.diff(now, 'minute')
-        // console.log(`⏳ Card ${card.id} aguardando ${minutesLeft} minutos`)
-      }
+      // console.log(`⏳ Card ${card.id} aguardando ${minutesLeft} minutos`)
       
       return isTimeToReview
     })
