@@ -25,10 +25,10 @@
   --gradient-stark-3: linear-gradient(135deg, #10b981 0%, #00f0ff 100%);
   --gradient-stark-4: linear-gradient(180deg, rgba(0, 240, 255, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
   
-  /* Glassmorphism STARK */
+  /* Glassmorphism STARK - Otimizado */
   --glass-stark: rgba(26, 26, 36, 0.8);
   --glass-stark-border: rgba(0, 240, 255, 0.2);
-  --glass-stark-backdrop: blur(20px);
+  --glass-stark-backdrop: blur(10px);
   
   /* Shadows STARK */
   --shadow-stark-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -41,9 +41,9 @@
   --border-stark: 1px solid rgba(0, 240, 255, 0.1);
   --border-stark-hover: 1px solid rgba(0, 240, 255, 0.3);
   
-  /* Transições */
-  --transition-stark: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Transições - Otimizadas para performance */
+  --transition-stark: transform 0.2s ease, box-shadow 0.2s ease;
+  --transition-fast: transform 0.1s ease;
 }
 
 /* Modo Claro (Fallback) */

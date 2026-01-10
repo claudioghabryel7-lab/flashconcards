@@ -38,12 +38,8 @@ img, video {
   will-change: auto;
 }
 
-/* Otimizações de renderização - Apenas para elementos animados */
-.animate-on-scroll,
-.tech-card,
-.tech-button,
-.hover-scale,
-.hover-lift {
+/* Otimizações de renderização - Apenas para elementos que realmente animam */
+.animate-on-scroll {
   will-change: transform, opacity;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -207,13 +203,10 @@ img[loading="lazy"] {
   }
 }
 
-/* Classes utilitárias para animações - GPU optimized */
+/* Classes utilitárias para animações - Otimizadas */
 .animate-fade-in-up {
   animation: fadeInUp 0.8s ease-out forwards;
   opacity: 0;
-  transform: translateZ(0);
-  will-change: transform, opacity;
-  backface-visibility: hidden;
 }
 
 .animate-fade-in-down {
@@ -255,16 +248,12 @@ img[loading="lazy"] {
   animation: bannerFade 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* Intersection Observer - animações quando visíveis - Otimizado para composição GPU */
+/* Intersection Observer - animações quando visíveis - Otimizado */
 /* CORREÇÃO: Mostrar elementos por padrão, esconder apenas se não tiverem classe visible após delay */
 .animate-on-scroll {
   /* Mostrar por padrão para garantir que conteúdo apareça mesmo se IntersectionObserver falhar */
   opacity: 1;
   transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-  will-change: transform, opacity;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  perspective: 1000px;
 }
 
 /* Apenas esconder se não tiver classe visible após um delay (fallback para IntersectionObserver) */
@@ -326,52 +315,43 @@ img[loading="lazy"] {
   transform: scale(1);
 }
 
-/* Hover effects otimizados - GPU accelerated */
+/* Hover effects otimizados */
 .hover-scale {
   transition: transform 0.3s ease, box-shadow 0.3s ease;
-  transform: translateZ(0);
-  will-change: transform;
 }
 
 .hover-scale:hover {
-  transform: scale(1.05) translateZ(0);
+  transform: scale(1.05);
 }
 
 .hover-lift {
   transition: transform 0.3s ease, box-shadow 0.3s ease;
-  transform: translateZ(0);
-  will-change: transform;
 }
 
 .hover-lift:hover {
-  transform: translateY(-10px) translateZ(0);
+  transform: translateY(-10px);
 }
 
 .hover-rotate {
   transition: transform 0.3s ease;
-  transform: translateZ(0);
-  will-change: transform;
 }
 
 .hover-rotate:hover {
-  transform: rotate(2deg) translateZ(0);
+  transform: rotate(2deg);
 }
 
-/* Scale utilities otimizadas para GPU */
+/* Scale utilities otimizadas */
 .scale-102 {
-  transform: scale(1.02) translateZ(0);
+  transform: scale(1.02);
 }
 
 .scale-98 {
-  transform: scale(0.98) translateZ(0);
+  transform: scale(0.98);
 }
 
-/* Tab indicator animation - GPU optimized */
+/* Tab indicator animation - Otimizado */
 .tab-indicator {
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
-  transform: translateZ(0);
-  will-change: transform;
-  backface-visibility: hidden;
 }
 
 /* Delay utilities */
@@ -426,22 +406,22 @@ img[loading="lazy"] {
 .tech-gradient-bg {
   background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 25%, #10b981 50%, #0ea5e9 75%, #3b82f6 100%);
   background-size: 400% 400%;
-  animation: gradient-shift 15s ease infinite;
+  animation: gradient-shift 20s ease infinite;
 }
 
 .tech-card {
   background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .tech-card:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(59, 130, 246, 0.5);
-  transform: translateY(-4px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2), 0 0 20px rgba(59, 130, 246, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
 }
 
 .tech-glow {
@@ -459,7 +439,7 @@ img[loading="lazy"] {
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  animation: gradient-shift 3s ease infinite;
+  animation: gradient-shift 5s ease infinite;
   opacity: 0;
   transition: opacity 0.3s;
 }

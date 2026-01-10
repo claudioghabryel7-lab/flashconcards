@@ -651,7 +651,8 @@ const FlashcardView = () => {
     const allCards = organizedCards[selectedMateria]?.[selectedModulo] || []
     const now = dayjs()
     
-    console.log(`🔍 SRS Simples - Hora atual: ${now.format('HH:mm:ss')}`)
+    // Sistema SRS - Logs removidos para performance
+    // console.log(`🔍 SRS Simples - Hora atual: ${now.format('HH:mm:ss')}`)
     
     // SISTEMA SRS SIMPLES - Funciona sem erros
     const cardsForReview = allCards.filter(card => {
@@ -659,7 +660,8 @@ const FlashcardView = () => {
       
       // Se não tem progresso, mostrar para estudar
       if (!progress || !progress.nextReview) {
-        console.log(`📝 Card ${card.id} sem progresso - mostrando`)
+        // Logs removidos para performance
+      // console.log(`📝 Card ${card.id} sem progresso - mostrando`)
         return true
       }
       
@@ -667,17 +669,18 @@ const FlashcardView = () => {
       const reviewDate = dayjs(progress.nextReview)
       const isTimeToReview = reviewDate.isBefore(now) || reviewDate.isSame(now, 'second')
       
-      if (isTimeToReview) {
-        console.log(`✅ Card ${card.id} disponível para estudo`)
+      // Logs removidos para performance
+      // console.log(`✅ Card ${card.id} disponível para estudo`)
       } else {
         const minutesLeft = reviewDate.diff(now, 'minute')
-        console.log(`⏳ Card ${card.id} aguardando ${minutesLeft} minutos`)
+        // console.log(`⏳ Card ${card.id} aguardando ${minutesLeft} minutos`)
       }
       
       return isTimeToReview
     })
     
-    console.log(`📊 Cards disponíveis: ${cardsForReview.length}`)
+    // Log removido para performance
+    // console.log(`📊 Cards disponíveis: ${cardsForReview.length}`)
     return cardsForReview
   }, [selectedMateria, selectedModulo, organizedCards, cardProgress, studyMode])
 
@@ -694,16 +697,14 @@ const FlashcardView = () => {
   useEffect(() => {
     if (!user || studyMode === 'miniSim') return
 
-    console.log('🔍 Iniciando SRS Simples - Verificação a cada 30 segundos')
+    // Log removido para performance
+    // console.log('🔍 Iniciando SRS Simples - Verificação a cada 30 segundos')
     
     const interval = setInterval(() => {
-      const now = dayjs()
-      console.log(`🔍 Verificação SRS - ${now.format('HH:mm:ss')}`)
-      
-      // Apenas forçar re-render do useMemo para atualizar cards
-      // Não manipula setCards para evitar conflitos
+      // Verificação SRS silenciosa para performance
       const dummy = new Date()
-      console.log(`🔄 SRS: Verificando cards para reaparecerem...`)
+      // Logs removidos: console.log(`🔍 Verificação SRS - ${now.format('HH:mm:ss')}`)
+      // console.log(`🔄 SRS: Verificando cards para reaparecerem...`)
     }, 30000) // 30 segundos - mais estável
 
     return () => clearInterval(interval)
@@ -725,7 +726,8 @@ const FlashcardView = () => {
     // Se é a primeira vez vendo o card
     if (!currentProgress || !currentProgress.nextReview) {
       const nextReview = now.add(1, 'minute')
-      console.log(`📝 Novo card - Próxima revisão: ${nextReview.format('HH:mm:ss')}`)
+      // Log removido para performance
+      // console.log(`📝 Novo card - Próxima revisão: ${nextReview.format('HH:mm:ss')}`)
       return {
         easeFactor: 2.5,
         intervalMinutes: 1,
@@ -744,7 +746,8 @@ const FlashcardView = () => {
       newInterval = 1
       newStatus = 'hard'
       const nextReview = now.add(newInterval, 'minute')
-      console.log(`📊 Card marcado como DIFÍCIL - Próxima revisão: ${nextReview.format('HH:mm:ss')}`)
+      // Log removido para performance
+      // console.log(`📊 Card marcado como DIFÍCIL - Próxima revisão: ${nextReview.format('HH:mm:ss')}`)
       return {
         easeFactor: 2.5,
         intervalMinutes: newInterval,
@@ -758,7 +761,8 @@ const FlashcardView = () => {
       newInterval = 15
       newStatus = 'easy'
       const nextReview = now.add(newInterval, 'minute')
-      console.log(`📊 Card marcado como FÁCIL - Próxima revisão: ${nextReview.format('HH:mm:ss')}`)
+      // Log removido para performance
+      // console.log(`📊 Card marcado como FÁCIL - Próxima revisão: ${nextReview.format('HH:mm:ss')}`)
       return {
         easeFactor: 2.5,
         intervalMinutes: newInterval,
@@ -931,7 +935,7 @@ const FlashcardView = () => {
     // Avançar para próximo card após um pequeno delay (sempre avança)
     setTimeout(() => {
       goNext()
-    }, 300)
+    }, 200) // Reduzido para melhor responsividade
   }
 
   const resetModuleSession = () => {
