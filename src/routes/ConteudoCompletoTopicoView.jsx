@@ -421,44 +421,76 @@ ONDE:
       let aiText = ''
       let lastError = null
 
-      const prompt = `Você é um especialista em criar conteúdo técnico completo para cursos preparatórios.
+      const prompt = `Você é um especialista em criar conteúdo técnico completo e ESPECÍFICO para cursos preparatórios de concursos públicos.
 
 CONTEXTO (não cite estes nomes no texto final):
 ${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n` : ''}CURSO: ${
         courseName || 'Curso Preparatório'
       }
-TÓPICO DO EDITAL (use APENAS este tópico, sem misturar com outros): ${resolvedTopicKey}
+      
+TÓPICO ESPECÍFICO DO EDITAL (USE APENAS ESTE TÓPICO, NÃO MISTURE COM OUTROS): ${resolvedTopicKey}
+NOME DO TÓPICO: ${effectiveTopicNome || resolvedTopicKey}
 
-EDITAL BASE (trecho):
-${editalText.substring(0, 6000)}${editalText.length > 6000 ? '\n\n[texto truncado]' : ''}
+EDITAL BASE (trecho relevante para este tópico):
+${editalText.substring(0, 8000)}${editalText.length > 8000 ? '\n\n[texto truncado...]' : ''}
+
+⚠️⚠️⚠️ REGRAS CRÍTICAS - EVITE CONTEÚDO GENÉRICO ⚠️⚠️⚠️
+1. FOCO 100% ESPECÍFICO: Crie conteúdo APENAS para o tópico "${effectiveTopicNome || resolvedTopicKey}"
+2. NÃO CRIE conteúdo genérico sobre toda a matéria (ex: se tópico é "Direito Penal", não fale de todo Direito Penal)
+3. SEJA ESPECÍFICO: Use artigos, leis, números, jurisprudência relacionados a ESTE tópico
+4. EVITE ASSUNTOS DIFERENTES: Não mencione outros tópicos do edital
+5. CONTEÚDO TÉCNICO: Use linguagem formal, citations, artigos de lei
+6. PROFUNDIDADE ADEQUADA: Nível técnico para concurso público, não básico
+7. EXEMPLOS PRÁTICOS: Inclua exemplos concretos e aplicáveis
+
+EXEMPLOS DO QUE EVITAR (ERRADO):
+❌ Se tópico é "Dos Crimes contra a Administração Pública": 
+   "O Direito Penal é o ramo do direito que define crimes e penas..."
+❌ Se tópico é "Lei 8.112/90":
+   "A administração pública no Brasil é regida por princípios..."
+
+EXEMPLOS DO QUE CRIAR (CORRETO):
+✅ Se tópico é "Dos Crimes contra a Administração Pública":
+   "Os crimes contra a administração pública estão previstos nos arts. 312 a 337 do Código Penal..."
+✅ Se tópico é "Lei 8.112/90":
+   "A Lei 8.112/90, em seu art. 37, estabelece os requisitos para investidura..."
 
 TAREFA:
-Crie um conteúdo COMPLETO e DETALHADO para o tópico acima, com linguagem técnica e formal.
+Crie um conteúdo COMPLETO, DETALHADO e 100% ESPECÍFICO para o tópico acima, com linguagem técnica e formal.
 
 FORMATO DE RESPOSTA (APENAS JSON VÁLIDO):
 {
-  "titulo": "Título do conteúdo",
-  "materia": "Nome da matéria ou tópico",
-  "subtitulo": "Subtítulo opcional",
-  "numero": "Mesma numeração do tópico do edital, se aplicável",
-  "content": "Conteúdo principal em HTML",
+  "titulo": "Título específico do conteúdo",
+  "materia": "${effectiveTopicNome || resolvedTopicKey}",
+  "subtitulo": "Subtítulo específico opcional",
+  "numero": "${resolvedTopicKey}",
+  "content": "Conteúdo HTML específico e detalhado APENAS deste tópico",
   "secoes": [
     {
-      "titulo": "Nome da seção",
-      "tipo": "lei|sumula|entendimento|conceito",
-      "conteudo": "Conteúdo HTML da seção"
+      "titulo": "Conceito e Definição",
+      "tipo": "conceito",
+      "conteudo": "Conteúdo HTML específico sobre o conceito"
+    },
+    {
+      "titulo": "Legislação Aplicável",
+      "tipo": "lei",
+      "conteudo": "Conteúdo HTML com artigos, leis e numeração"
+    },
+    {
+      "titulo": "Jurisprudência",
+      "tipo": "sumula",
+      "conteudo": "Conteúdo HTML com súmulas e entendimentos"
     }
   ],
-  "tags": ["lista", "de", "tags"]
+  "tags": ["${effectiveTopicNome || resolvedTopicKey}", "específico"]
 }
 
-REGRAS:
-- O conteúdo DEVE ser específico para o tópico acima. Não faça um texto genérico da matéria inteira.
-- Não inclua assuntos que pertençam a outros tópicos do edital.
-- Não mencione concurso, prefeitura ou banca no texto final.
-- Se usar numeração, mantenha a mesma numeração do tópico.
-- Use HTML sem markdown.
-- Comece diretamente com { e termine com } (JSON parseável).`
+REGRAS FINAIS:
+- O conteúdo DEVE ser 100% específico para o tópico "${effectiveTopicNome || resolvedTopicKey}"
+- NÃO inclua informações genéricas sobre toda a matéria
+- Use HTML sem markdown
+- Comece diretamente com { e termine com } (JSON parseável)
+- Inclua artigos de lei, números e referências específicas`
 
       for (const modelName of modelNames) {
         try {

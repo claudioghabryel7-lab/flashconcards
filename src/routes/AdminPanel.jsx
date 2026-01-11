@@ -304,7 +304,7 @@ const AdminPanel = () => {
     }
   }, [activeTab])
 
-  // Carregar edital e PDF salvo (por curso)
+  // Carregar edital do curso selecionado
   useEffect(() => {
     if (!isAdmin) return
     
@@ -314,12 +314,18 @@ const AdminPanel = () => {
     setPdfUrl('')
     
     const loadEdital = async () => {
+      if (!selectedCourseForPrompts) {
+        console.log('⚠️ Nenhum curso selecionado para carregar edital')
+        return
+      }
+      
       try {
-        const courseId = selectedCourseForPrompts || 'alego-default'
-        const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+        console.log('📖 Carregando edital do curso:', selectedCourseForPrompts)
+        const editalRef = doc(db, 'courses', selectedCourseForPrompts, 'prompts', 'edital')
         const editalDoc = await getDoc(editalRef)
         if (editalDoc.exists()) {
           const data = editalDoc.data()
+          console.log('✅ Edital encontrado, carregando campos...')
           setEditalPrompt(data.prompt || '')
           setPdfText(data.pdfText || '')
           setPdfUrl(data.pdfUrl || '')
@@ -327,21 +333,33 @@ const AdminPanel = () => {
           if (data.pdfText) {
             console.log('📄 Texto do PDF carregado:', data.pdfText.length, 'caracteres')
           }
+          
+          setPromptStatus({
+            saved: true,
+            savedAt: data.updatedAt?.toDate?.() || new Date()
+          })
         } else {
+          console.log('⚠️ Edital não encontrado para o curso:', selectedCourseForPrompts)
           // Se não encontrar, deixar vazio (não carregar de outros cursos)
           setEditalPrompt('')
           setPdfText('')
           setPdfUrl('')
+          setPromptStatus(null)
         }
       } catch (err) {
-        console.error('Erro ao carregar edital:', err)
+        console.error('❌ Erro ao carregar edital:', err)
         // Em caso de erro, limpar campos
         setEditalPrompt('')
         setPdfText('')
         setPdfUrl('')
+        setPromptStatus(null)
       }
     }
-    loadEdital()
+    
+    // Carregar edital imediatamente se tiver curso selecionado
+    if (selectedCourseForPrompts) {
+      loadEdital()
+    }
   }, [isAdmin, selectedCourseForPrompts])
 
   // Carregar configurações de questões e BIZUs (por curso)

@@ -21,11 +21,11 @@ const FlashcardList = ({
   const currentCard = cards[currentIndex]
 
   return (
-    <div className="flex flex-col items-center justify-center h-full w-full space-y-4 sm:space-y-6">
+    <div className="flex flex-col items-center justify-center min-h-screen w-full space-y-4 sm:space-y-6 px-4 sm:px-0">
       {/* Card Principal */}
       {currentCard && (
-        <div className="w-full h-full flex flex-col justify-between space-y-4 sm:space-y-6">
-          <div className="flex-1 flex items-center justify-center min-h-0">
+        <div className="w-full h-full flex flex-col justify-center items-center space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+          <div className="w-full flex justify-center items-center min-h-0 px-2 sm:px-0">
             <FlashcardItem
               card={currentCard}
               isFavorite={favorites.includes(currentCard.id)}

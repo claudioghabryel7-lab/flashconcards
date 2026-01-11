@@ -29,9 +29,9 @@ const FlashcardItem = ({
   }
 
   return (
-    <div className='relative mx-auto max-w-md w-full md:max-w-lg px-1 sm:px-0 mb-4'>
+    <div className='relative mx-auto w-full max-w-md sm:max-w-lg px-2 sm:px-0 mb-4'>
       <motion.div
-        className='relative min-h-[400px] sm:min-h-[450px] md:min-h-[500px] max-h-[90vh] w-full cursor-pointer group overflow-visible'
+        className='relative min-h-[400px] sm:min-h-[450px] md:min-h-[500px] max-h-[85vh] sm:max-h-[90vh] w-full cursor-pointer group overflow-visible'
         style={{ perspective: 1200 }}
         onClick={toggle}
         whileHover={{ scale: 1.02 }}
