@@ -258,7 +258,34 @@ MATÉRIA: ${materia}
 
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText}\n\n` : ''}
 
-TAREFA: Criar flashcards educacionais para a matéria "${materia}".`
+TAREFA: Criar flashcards educacionais para a matéria "${materia}".
+
+⚠️ REGRAS CRÍTICAS PARA FLASHCARDS DE CONCURSO PÚBLICO:
+1. NÃO crie flashcards com conteúdo óbvio ou muito básico (ex: "O que é direito?" para concursos jurídicos)
+2. EVITE definições genéricas que não são úteis para prova
+3. FOCO em conceitos específicos, legislações, jurisprudência, doutrina e temas recorrentes
+4. Crie flashcards com nível de dificuldade MÉDIO a AVANÇADO
+5. INCLUA informações específicas: números de leis, artigos, súmulas, datas, valores
+6. CONTEÚDO deve ser 100% acurado e verificável
+7. EVITE perguntas subjetivas ou opiniões
+8. FOQUE em temas que realmente caem nas provas da banca
+9. Crie flashcards que exijam conhecimento técnico e específico
+10. INCLUA detalhes que fazem a diferença na prova
+
+FORMATO OBRIGATÓRIO:
+Retorne APENAS JSON válido com esta estrutura:
+{
+  "flashcards": [
+    {
+      "pergunta": "Pergunta específica e técnica",
+      "resposta": "Resposta detalhada e precisa",
+      "materia": "${materia}",
+      "modulo": "Nome do módulo específico"
+    }
+  ]
+}
+
+QUANTIDADE: Mínimo 15 flashcards de alta qualidade.`
   }
   
   return `${unified.prompt}
@@ -272,12 +299,46 @@ MATÉRIA: ${materia}
 
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText}\n\n` : ''}
 
-TAREFA: Criar flashcards educacionais focados nos temas mais cobrados pela banca ${unified.banca} no concurso ${unified.concursoName}, matéria "${materia}".
+TAREFA: Criar flashcards educacionais de ALTA QUALIDADE para o concurso ${unified.concursoName}, matéria "${materia}", no estilo da banca ${unified.banca}.
 
-REGRAS ESPECÍFICAS:
-- Focar nos temas mais cobrados pela banca ${unified.banca}
-- Conteúdo deve ser relevante para o concurso ${unified.concursoName}
-- Flashcards devem ser claros e objetivos`
+⚠️⚠️⚠️ REGRAS CRÍTICAS PARA FLASHCARDS DE CONCURSO PÚBLICO ⚠️⚠️⚠️
+1. NÃO crie flashcards com conteúdo óbvio ou muito básico
+2. EVITE definições genéricas que não são úteis para prova
+3. FOCO em conceitos específicos, legislações, jurisprudência, doutrina e temas recorrentes
+4. Crie flashcards com nível de dificuldade MÉDIO a AVANÇADO
+5. INCLUA informações específicas: números de leis, artigos, súmulas, datas, valores
+6. CONTEÚDO deve ser 100% acurado e verificável
+7. EVITE perguntas subjetivas ou opiniões
+8. FOQUE em temas que realmente caem nas provas da banca ${unified.banca}
+9. Crie flashcards que exijam conhecimento técnico e específico
+10. INCLUA detalhes que fazem a diferença na prova
+11. ADAPTE o conteúdo ao estilo e foco da banca ${unified.banca}
+12. CONSIDERE as particularidades do concurso ${unified.concursoName}
+
+EXEMPLOS DO QUE EVITAR:
+❌ "O que é administração pública?" (muito genérico)
+❌ "O que significa constitucional?" (óbvio)
+❌ "Direito é o que?" (subjetivo e básico)
+
+EXEMPLOS DO QUE CRIAR:
+✅ "Segundo o art. 37 da CF, quais são os princípios da administração pública?"
+✅ "Qual a diferença entre servidor público efetivo e comissionado segundo a Lei 8.112/90?"
+✅ "Qual o prazo para a Administração anular seus próprios atos segundo a Súmula 473 do STF?"
+
+FORMATO OBRIGATÓRIO:
+Retorne APENAS JSON válido com esta estrutura:
+{
+  "flashcards": [
+    {
+      "pergunta": "Pergunta específica e técnica",
+      "resposta": "Resposta detalhada e precisa",
+      "materia": "${materia}",
+      "modulo": "Nome do módulo específico baseado no conteúdo"
+    }
+  ]
+}
+
+QUANTIDADE: Mínimo 15 flashcards de alta qualidade. Priorize QUALIDADE sobre quantidade.`
 }
 
 /**

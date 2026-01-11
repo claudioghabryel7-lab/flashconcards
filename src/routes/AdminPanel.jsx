@@ -3398,7 +3398,7 @@ IMPORTANTE: Retorne TODAS as matérias e TODOS os módulos. Não deixe nada falt
           setFullCourseProgress(`📝 Gerando flashcards para ${materia.nome} - ${modulo.nome} (${currentModulo}/${totalModulos})...`)
 
           // Gerar flashcards para este módulo
-          const flashcardsPrompt = `Você é um especialista em criar flashcards educacionais para concursos públicos, seguindo o padrão de questões objetivas e diretas.
+          const flashcardsPrompt = `Você é um especialista em criar flashcards educacionais de ALTA QUALIDADE para concursos públicos.
 
 EDITAL DO CONCURSO:
 ${editalPdfTextForGeneration.substring(0, 50000)}${editalPdfTextForGeneration.length > 50000 ? '\n\n[... conteúdo truncado ...]' : ''}
@@ -3407,49 +3407,58 @@ MATÉRIA: ${materia.nome}
 MÓDULO: ${modulo.nome}
 TÓPICOS DO MÓDULO: ${modulo.topicos.join(', ')}
 
+⚠️⚠️⚠️ REGRAS CRÍTICAS PARA FLASHCARDS DE CONCURSO PÚBLICO ⚠️⚠️⚠️
+1. NÃO crie flashcards com conteúdo óbvio ou muito básico
+2. EVITE definições genéricas que não são úteis para prova
+3. FOCO em conceitos específicos, legislações, jurisprudência, doutrina e temas recorrentes
+4. Crie flashcards com nível de dificuldade MÉDIO a AVANÇADO
+5. INCLUA informações específicas: números de leis, artigos, súmulas, datas, valores
+6. CONTEÚDO deve ser 100% acurado e verificável
+7. EVITE perguntas subjetivas ou opiniões
+8. FOQUE em temas que realmente caem nas provas
+9. Crie flashcards que exijam conhecimento técnico e específico
+10. INCLUA detalhes que fazem a diferença na prova
+
 TAREFA:
 Crie flashcards educacionais focados EXCLUSIVAMENTE no CONTEÚDO da matéria e módulo acima. Baseie-se no edital para entender o que será cobrado e crie flashcards no padrão de questões objetivas de concurso.
 
-REGRAS CRÍTICAS PARA OS FLASHCARDS:
-- FOCE 100% NO CONTEÚDO EDUCACIONAL: Os flashcards devem ENSINAR o conteúdo, como se fossem questões objetivas de concurso
-- Estilo de questões objetivas: perguntas diretas e respostas claras e completas (2-4 frases)
+REGRAS ESPECÍFICAS:
+- Estilo de questões objetivas: perguntas diretas e respostas claras e completas
 - Baseie-se EXCLUSIVAMENTE no conteúdo do edital para identificar o que será cobrado
 - Crie 18-25 flashcards por módulo (garanta cobertura completa de todos os tópicos)
 - Cada flashcard deve cobrir um tópico/conceito específico do conteúdo
-- Perguntas devem ser diretas, objetivas e práticas sobre o CONTEÚDO (como questões de prova)
+- Perguntas devem ser diretas, objetivas e práticas sobre o CONTEÚDO
 - Respostas devem explicar o CONTEÚDO de forma clara, educacional e completa
-- NÃO mencione o cargo (ex: evite "para policial legislativo", "para o cargo X")
-- NÃO mencione a banca repetidamente (ex: evite "cai muito na FGV", "a banca X sempre cobra")
-- Pode mencionar a banca APENAS quando for absolutamente necessário para contextualizar (ex: "A banca X costuma cobrar este tema de forma..."), mas máximo 1-2 vezes em todos os flashcards
+- NÃO mencione o cargo ou banca repetidamente
 - O foco deve ser 100% ENSINAR O CONTEÚDO, como se fosse uma questão de prova objetiva
-- Seja natural: flashcards que ensinam o conteúdo, não que ficam repetindo informações sobre o concurso
 - Use linguagem técnica e precisa, como em questões de concurso
-- As perguntas devem ser formuladas como questões objetivas (ex: "O que é...?", "Quais são...?", "Explique...", "Qual a diferença entre...?")
 
-EXEMPLOS DO QUE NÃO FAZER (ERRADO):
-❌ "Por que estudar geopolítica para policial legislativo?"
-❌ "Cai muito na FGV sobre geopolítica para policial legislativo"
-❌ "Para policial legislativo, é importante saber sobre geopolítica porque..."
-❌ "A banca FGV sempre cobra geopolítica para este cargo"
+EXEMPLOS DO QUE EVITAR (ERRADO):
+❌ "O que é geopolítica?" (muito genérico)
+❌ "Por que estudar este conteúdo?" (óbvio)
+❌ "O que significa direito administrativo?" (básico demais)
 
-EXEMPLOS DO QUE FAZER (CORRETO):
-✅ "O que é geopolítica?"
-✅ "Quais são os principais fatores geopolíticos que influenciam as relações internacionais?"
+EXEMPLOS DO QUE CRIAR (CORRETO):
+✅ "Segundo o art. 37 da CF, quais são os princípios da administração pública?"
+✅ "Qual a diferença entre servidor público efetivo e comissionado segundo a Lei 8.112/90?"
+✅ "Qual o prazo para a Administração anular seus próprios atos segundo a Súmula 473 do STF?"
 ✅ "Explique o conceito de poder geopolítico e sua importância nas relações entre Estados."
-✅ "Qual a diferença entre geopolítica e geografia política?"
 
 IMPORTANTE:
 - Crie flashcards para TODOS os tópicos do módulo
 - Não deixe nenhum tópico sem flashcard
 - Garanta cobertura completa do conteúdo do módulo
 - Os flashcards devem ser úteis para estudo, como questões de prova
+- Priorize QUALIDADE sobre quantidade
 
 Retorne APENAS um JSON válido:
 {
   "flashcards": [
     {
-      "pergunta": "Pergunta objetiva sobre o CONTEÚDO (estilo questão de prova)",
-      "resposta": "Resposta educacional clara e completa explicando o CONTEÚDO (2-4 frases)"
+      "pergunta": "Pergunta específica e técnica sobre o CONTEÚDO",
+      "resposta": "Resposta detalhada e precisa explicando o CONTEÚDO",
+      "materia": "${materia.nome}",
+      "modulo": "${modulo.nome}"
     }
   ]
 }
@@ -3853,31 +3862,55 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
             }
 
             // Gerar flashcards para este módulo
-            const flashcardsPrompt = `Você é um especialista em criar flashcards educacionais para concursos públicos.
+            const flashcardsPrompt = `Você é um especialista em criar flashcards educacionais de ALTA QUALIDADE para concursos públicos.
 
 MATÉRIA: ${materia.nome}
 MÓDULO: ${modulo.nome}
 TÓPICOS DO MÓDULO: ${modulo.topicos?.join(', ') || 'Conteúdo geral do módulo'}
 
+⚠️⚠️⚠️ REGRAS CRÍTICAS PARA FLASHCARDS DE CONCURSO PÚBLICO ⚠️⚠️⚠️
+1. NÃO crie flashcards com conteúdo óbvio ou muito básico
+2. EVITE definições genéricas que não são úteis para prova
+3. FOCO em conceitos específicos, legislações, jurisprudência, doutrina e temas recorrentes
+4. Crie flashcards com nível de dificuldade MÉDIO a AVANÇADO
+5. INCLUA informações específicas: números de leis, artigos, súmulas, datas, valores
+6. CONTEÚDO deve ser 100% acurado e verificável
+7. EVITE perguntas subjetivas ou opiniões
+8. FOQUE em temas que realmente caem nas provas
+9. Crie flashcards que exijam conhecimento técnico e específico
+10. INCLUA detalhes que fazem a diferença na prova
+
 TAREFA:
 Crie flashcards educacionais focados EXCLUSIVAMENTE no CONTEÚDO da matéria e módulo acima.
 
-REGRAS CRÍTICAS:
+REGRAS ESPECÍFICAS:
 - FOCE 100% NO CONTEÚDO EDUCACIONAL: flashcards que ENSINAM o conteúdo, como questões objetivas
-- Estilo de questões objetivas: perguntas diretas e respostas claras (2-4 frases)
+- Estilo de questões objetivas: perguntas diretas e respostas claras e completas
 - Crie 18-25 flashcards por módulo (garanta cobertura completa)
 - Cada flashcard deve cobrir um tópico/conceito específico
-- Perguntas devem ser diretas, objetivas e práticas (ex: "O que é...?", "Quais são...?", "Explique...")
-- Respostas devem explicar o CONTEÚDO de forma clara e completa
+- Perguntas devem ser diretas, objetivas e práticas sobre o CONTEÚDO
+- Respostas devem explicar o CONTEÚDO de forma clara, educacional e completa
 - NÃO mencione cargo ou banca repetidamente
 - Use linguagem técnica e precisa, como em questões de concurso
+
+EXEMPLOS DO QUE EVITAR (ERRADO):
+❌ "O que é administração pública?" (muito genérico)
+❌ "Por que estudar este conteúdo?" (óbvio)
+❌ "O que significa direito administrativo?" (básico demais)
+
+EXEMPLOS DO QUE CRIAR (CORRETO):
+✅ "Segundo o art. 37 da CF, quais são os princípios da administração pública?"
+✅ "Qual a diferença entre servidor público efetivo e comissionado segundo a Lei 8.112/90?"
+✅ "Qual o prazo para a Administração anular seus próprios atos segundo a Súmula 473 do STF?"
 
 Retorne APENAS um JSON válido:
 {
   "flashcards": [
     {
-      "pergunta": "Pergunta objetiva sobre o CONTEÚDO",
-      "resposta": "Resposta educacional clara e completa (2-4 frases)"
+      "pergunta": "Pergunta específica e técnica sobre o CONTEÚDO",
+      "resposta": "Resposta detalhada e precisa explicando o CONTEÚDO",
+      "materia": "${materia.nome}",
+      "modulo": "${modulo.nome}"
     }
   ]
 }

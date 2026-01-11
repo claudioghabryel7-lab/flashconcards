@@ -100,6 +100,15 @@ const FlashcardItem = ({
                   {card.modulo}
                 </span>
               )}
+              {cardProgress?.lastDifficulty && (
+                <span className={`px-2 py-1 text-xs rounded-full ${
+                  cardProgress.lastDifficulty === 'easy' 
+                    ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300' 
+                    : 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
+                }`}>
+                  Última: {cardProgress.lastDifficulty === 'easy' ? 'Fácil' : 'Difícil'}
+                </span>
+              )}
             </div>
           </div>
         </motion.div>
@@ -131,6 +140,18 @@ const FlashcardItem = ({
                 className='space-y-2 sm:space-y-2.5 md:space-y-3 mt-2 sm:mt-3 md:mt-4 flex-shrink-0 pb-2 sm:pb-0'
                 style={{ pointerEvents: flipped ? 'auto' : 'none' }}
               >
+                {cardProgress?.lastDifficulty && (
+                  <div className='flex justify-center mb-2'>
+                    <span className={`px-3 py-1 text-xs rounded-full font-medium ${
+                      cardProgress.lastDifficulty === 'easy' 
+                        ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300' 
+                        : 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
+                    }`}>
+                      Última revisão: {cardProgress.lastDifficulty === 'easy' ? 'Fácil' : 'Difícil'}
+                    </span>
+                  </div>
+                )}
+                
                 <p className='text-center text-xs sm:text-sm md:text-base font-bold text-slate-600 dark:text-slate-300 mb-3 sm:mb-4'>
                   Como foi essa revisão?
                 </p>
