@@ -111,14 +111,14 @@ const FlashcardItem = ({
           style={{ backfaceVisibility: 'hidden', transformStyle: 'preserve-3d' }}
         >
           <div className='relative z-10 h-full flex flex-col'>
-            <div className='flex-1 flex flex-col justify-center items-center text-center px-2 sm:px-4 py-4 sm:py-6'>
+            <div className='flex-1 flex flex-col justify-center items-center text-center px-2 sm:px-4 py-4 sm:py-6 min-h-0'>
               <div className='mb-4 sm:mb-6'>
                 <div className='inline-flex px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300'>
                   Resposta
                 </div>
               </div>
               
-              <div className='text-base sm:text-lg md:text-xl font-medium text-slate-800 dark:text-slate-100 leading-relaxed'>
+              <div className='text-base sm:text-lg md:text-xl font-medium text-slate-800 dark:text-slate-100 leading-relaxed overflow-y-auto max-h-[200px] sm:max-h-[300px] md:max-h-[400px] px-1'>
                 {card.resposta}
               </div>
             </div>
