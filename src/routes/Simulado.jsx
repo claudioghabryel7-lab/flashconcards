@@ -483,6 +483,22 @@ CRÍTICO:
     }
     
     setAnalizingRedacao(false)
+    
+    // 🔄 LIMPAR ESTADO COMPLETO para forçar novo simulado na próxima vez
+    setSimuladoInfo(null)  // Limpa informações do simulado atual
+    setQuestions([])     // Limpa questões atuais
+    setAnswers({})        // Limpa respostas
+    setCurrentQuestionIndex(0)  // Reseta índice
+    setTimeLeft(0)          // Reseta tempo
+    setIsRunning(false)       // Para o timer
+    setShowQuestionReview(false) // Esconde tela de revisão
+    setQuestionsToReview([])   // Limpa questões para revisar
+    setRedacaoTema('')       // Limpa tema da redação
+    setRedacaoTexto('')       // Limpa texto da redação
+    setRedacaoTimeLeft(0)    // Reseta tempo da redação
+    setRedacaoIsRunning(false) // Para timer da redação
+    setRedacaoNota(null)      // Limpa nota da redação
+    setAnalizingRedacao(false) // Limpa estado de análise
   }
 
   // Timer
