@@ -137,6 +137,18 @@
           allow create, update, delete: if isAuthenticated() && 
                                           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                                           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          
+          // Flashcards da matéria (subcoleção)
+          match /flashcards/{flashcardId} {
+            allow read: if isAuthenticated();
+            allow create: if isAuthenticated() && 
+                         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+            allow update: if isAuthenticated(); // Usuários podem atualizar para RSR
+            allow delete: if isAuthenticated() && 
+                         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          }
         }
         
         // Prompts do curso (subcoleção) - edital e questões

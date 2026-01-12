@@ -237,7 +237,7 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
+                    <Route
             path="/materia-revisada"
             element={
               <ProtectedRoute requireCourseSelection>

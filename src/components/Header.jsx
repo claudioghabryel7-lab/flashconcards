@@ -76,8 +76,6 @@ const Header = () => {
           { to: '/simulado', label: 'Simulado', auth: true },
           { to: '/treino-redacao', label: 'Treino Redação', auth: true },
           { to: '/mapas-mentais', label: 'Mapas Mentais', auth: true },
-          { to: '/materia-revisada', label: 'Matéria Revisada', auth: true },
-          { to: '/conteudo-completo', label: 'Conteúdo Completo', auth: true },
         ],
       },
       social: {
@@ -318,6 +316,7 @@ const Header = () => {
                           >
                             {item.label}
                           </NavLink>
+                          
                           {/* Botão Sair embaixo de FlashSocial */}
                           {item.label === 'FlashSocial' && (
                             <button

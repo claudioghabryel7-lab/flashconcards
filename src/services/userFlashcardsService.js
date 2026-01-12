@@ -55,9 +55,9 @@ export const userFlashcardsService = {
       
       // Ordenar no cliente por data de criação (mais recentes primeiro)
       flashcards.sort((a, b) => {
-        const dateA = a.createdAt?.toMillis() || 0
-        const dateB = b.createdAt?.toMillis() || 0
-        return dateB - dateA
+        const dateA = a.createdAt?.toDate?.() || new Date(0)
+        const dateB = b.createdAt?.toDate?.() || new Date(0)
+        return dateB.getTime() - dateA.getTime()
       })
       
       // Filtrar por curso no cliente se necessário
@@ -203,9 +203,9 @@ export const userFlashcardsService = {
       
       // Ordenar no cliente por data de criação (mais recentes primeiro)
       flashcards.sort((a, b) => {
-        const dateA = a.createdAt?.toMillis() || 0
-        const dateB = b.createdAt?.toMillis() || 0
-        return dateB - dateA
+        const dateA = a.createdAt?.toDate?.() || new Date(0)
+        const dateB = b.createdAt?.toDate?.() || new Date(0)
+        return dateB.getTime() - dateA.getTime()
       })
       
       // Filtrar por curso no cliente se necessário
