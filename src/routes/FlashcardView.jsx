@@ -104,6 +104,8 @@ const FlashcardView = () => {
   const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
   const [cardsLoading, setCardsLoading] = useState(true) // Estado para evitar flash de cards
   const [timerActive, setTimerActive] = useState(false) // Timer só inicia quando usuário clicar no relógio
+  const [generatingFlashcards, setGeneratingFlashcards] = useState(false) // Estado para loading de geração
+  const [selectedDifficulty, setSelectedDifficulty] = useState('') // Dificuldade selecionada para geração
   
   // Função para recarregar flashcards do usuário
   const loadUserFlashcards = async () => {
@@ -1176,6 +1178,236 @@ Regras:
     })
   }
 
+  // Função para gerar 10 flashcards por IA
+  const generateFlashcardsByDifficulty = async (difficulty) => {
+    if (!selectedMateria || !selectedModulo) {
+      alert('Selecione uma matéria e módulo primeiro!')
+      return
+    }
+
+    if (!user) {
+      alert('Faça login para gerar flashcards!')
+      return
+    }
+
+    setGeneratingFlashcards(true)
+    setSelectedDifficulty(difficulty)
+
+    try {
+      // Importar a função de prompt unificado
+      const { buildFlashcardPrompt } = await import('../utils/unifiedPrompt')
+      
+      // Construir o prompt base
+      const basePrompt = await buildFlashcardPrompt(
+        selectedCourseId || 'alego-default',
+        selectedMateria,
+        editalPrompt || ''
+      )
+
+      // Prompt específico para gerar 10 flashcards com dificuldade
+      const prompt = `${basePrompt}
+
+═══════════════════════════════════════════════════════════════════════════════
+GERAÇÃO DE FLASHCARDS - NÍVEL ${difficulty.toUpperCase()} - CONTEÚDO NOVO
+═══════════════════════════════════════════════════════════════════════════════
+
+MÓDULO ESPECÍFICO: ${selectedModulo}
+NÍVEL DE DIFICULDADE: ${difficulty}
+QUANTIDADE: 10 flashcards
+
+⚠️ INSTRUÇÃO CRÍTICA - CRIE CONTEÚDO 100% NOVO:
+- NÃO repita flashcards existentes
+- Crie perguntas e respostas completamente originais
+- Use diferentes ângulos e perspectivas do conteúdo
+- Explore conceitos que ainda não foram abordados
+- Seja criativo e inovador nas abordagens
+
+REGRAS ESPECÍFICAS PARA NÍVEL ${difficulty.toUpperCase()}:
+${difficulty === 'médio' ? `
+- Questões de complexidade intermediária
+- Exigem raciocínio e aplicação de conceitos
+- Podem envolver múltiplos passos de raciocínio
+- Linguagem técnica mas acessível
+- Foco em situações práticas e casos concretos
+- Crie cenários e exemplos diferentes dos habituais
+` : `
+- Questões de alta complexidade
+- Exigem conhecimento profundo e detalhado
+- Podem envolver exceções, detalhes técnicos ou casos complexos
+- Linguagem altamente técnica e específica
+- Foco em situações complexas, exceções ou casos raros
+- Podem exigir análise comparativa ou interpretação sofricada
+- Explore nuances e detalhes pouco abordados
+`}
+
+ESTRATÉGIAS PARA CRIAR CONTEÚDO NOVO:
+1. Diferentes perspectivas do mesmo conceito
+2. Casos práticos e situações hipotéticas
+3. Comparações e contrastes entre conceitos
+4. Aplicações em contextos variados
+5. Análise de exceções e casos especiais
+6. Interconexões entre diferentes tópicos
+7. Evolução histórica ou contextualização
+8. Implicações práticas e teóricas
+
+TAREFA:
+Crie exatamente 10 flashcards educacionais de nível ${difficulty} para o módulo "${selectedModulo}" da matéria "${selectedMateria}". 
+
+IMPORTANTE: Cada flashcard deve ser único, original e explorar aspectos diferentes do conteúdo. Evite repetir perguntas ou respostas que já existam.
+
+FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON VÁLIDO):
+{
+  "flashcards": [
+    {
+      "pergunta": "Pergunta única e original",
+      "resposta": "Resposta completa e precisa",
+      "materia": "${selectedMateria}",
+      "modulo": "${selectedModulo}",
+      "dificuldade": "${difficulty}",
+      "explicacao": "Explicação detalhada que acrescenta conhecimento"
+    }
+  ]
+}
+
+VALIDAÇÃO FINAL:
+- ✅ 10 flashcards criados
+- ✅ Todos do nível ${difficulty}
+- ✅ Conteúdo 100% original e não repetido
+- ✅ Linguagem apropriada para o nível
+- ✅ Baseado no módulo específico
+- ✅ Formato JSON válido
+
+IMPORTANTE:
+- Retorne APENAS o JSON válido, sem texto adicional
+- Garanta que cada flashcard seja único e contributivo`
+
+      // Chamar a API do Gemini
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        throw new Error('VITE_GEMINI_API_KEY não configurada')
+      }
+      
+      const genAI = new GoogleGenerativeAI(apiKey)
+      
+      // Usar modelos válidos em ordem de prioridade
+      const modelNames = ['gemini-2.0-flash-exp', 'gemini-1.5-pro-latest', 'gemini-1.5-flash-latest']
+      let lastError = null
+      let aiResponse = ''
+      
+      for (const modelName of modelNames) {
+        try {
+          const model = genAI.getGenerativeModel({ model: modelName })
+          const result = await model.generateContent({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 4000,
+            },
+          })
+          
+          const response = await result.response
+          const text = response.text()
+          
+          if (text && text.trim()) {
+            aiResponse = text
+            break
+          }
+        } catch (error) {
+          console.warn(`Modelo ${modelName} falhou:`, error.message)
+          lastError = error
+          continue
+        }
+      }
+      
+      if (!aiResponse) {
+        throw lastError || new Error('Todos os modelos Gemini falharam')
+      }
+      
+      const text = aiResponse
+      
+      // Extrair JSON da resposta
+      let flashcardsData
+      try {
+        // Tentar encontrar JSON na resposta
+        const jsonMatch = text.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          flashcardsData = JSON.parse(jsonMatch[0])
+        } else {
+          throw new Error('JSON não encontrado na resposta')
+        }
+      } catch (error) {
+        console.error('Erro ao parsear JSON:', error)
+        throw new Error('Erro ao processar resposta da IA')
+      }
+
+      // Salvar flashcards gerados
+      const flashcards = flashcardsData.flashcards || []
+      if (flashcards.length === 0) {
+        throw new Error('Nenhum flashcard gerado')
+      }
+
+      // Salvar cada flashcard no Firestore
+      const batch = []
+      const existingCardsInModule = activeCards || []
+      
+      for (let i = 0; i < flashcards.length; i++) {
+        const flashcard = flashcards[i]
+        
+        // Verificar se já existe um flashcard muito similar
+        const isDuplicate = existingCardsInModule.some(existingCard => {
+          const existingQuestion = (existingCard.pergunta || '').toLowerCase().trim()
+          const newQuestion = (flashcard.pergunta || '').toLowerCase().trim()
+          
+          // Verificar similaridade básica
+          return existingQuestion === newQuestion || 
+                 existingQuestion.includes(newQuestion.substring(0, 20)) ||
+                 newQuestion.includes(existingQuestion.substring(0, 20))
+        })
+        
+        if (isDuplicate) {
+          console.warn(`Flashcard duplicado ignorado: ${flashcard.pergunta}`)
+          continue // Pular flashcards duplicados
+        }
+        
+        const cardData = {
+          pergunta: flashcard.pergunta,
+          resposta: flashcard.resposta,
+          materia: flashcard.materia || selectedMateria,
+          modulo: flashcard.modulo || selectedModulo,
+          dificuldade: flashcard.dificuldade || difficulty,
+          explicacao: flashcard.explicacao || '',
+          userId: user.uid,
+          courseId: selectedCourseId || 'alego-default',
+          createdAt: new Date().toISOString(),
+          isAIGenerated: true,
+          generationDifficulty: difficulty,
+        }
+
+        const cardRef = doc(collection(db, 'flashcards'))
+        batch.push(setDoc(cardRef, cardData))
+      }
+
+      if (batch.length === 0) {
+        throw new Error('Todos os flashcards gerados já existem. Tente novamente para criar conteúdo novo.')
+      }
+
+      // Executar todas as operações em lote
+      await Promise.all(batch)
+
+      alert(`✅ ${batch.length} flashcards de nível ${difficulty} gerados e salvos com sucesso!`)
+      
+      // Recarregar flashcards para mostrar os novos
+      // (isso será feito pelo useEffect existente)
+
+    } catch (error) {
+      console.error('Erro ao gerar flashcards:', error)
+      alert(`❌ Erro ao gerar flashcards: ${error.message}`)
+    } finally {
+      setGeneratingFlashcards(false)
+      setSelectedDifficulty('')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -1388,6 +1620,37 @@ Regras:
                           <span>Mini simulado (10 cards)</span>
                         </span>
                       </button>
+
+                      {/* Botões de geração por IA - Médio e Difícil */}
+                      <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 px-1">Gerar com IA:</p>
+                        
+                        <button
+                          type="button"
+                          onClick={() => generateFlashcardsByDifficulty('médio')}
+                          disabled={generatingFlashcards}
+                          className="group/btn relative w-full rounded-lg border-2 border-dashed border-amber-400 dark:border-amber-500 px-3 py-2 text-left text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50/50 dark:hover:bg-amber-900/20 transition-all overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-r from-amber-500/0 via-amber-500/5 to-orange-500/0 opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
+                          <span className="relative z-10 flex items-center gap-2">
+                            <span>{generatingFlashcards && selectedDifficulty === 'médio' ? '⏳' : '🎯'}</span>
+                            <span>{generatingFlashcards && selectedDifficulty === 'médio' ? 'Gerando...' : 'Nível Médio (10 cards)'}</span>
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => generateFlashcardsByDifficulty('difícil')}
+                          disabled={generatingFlashcards}
+                          className="group/btn relative w-full rounded-lg border-2 border-dashed border-red-400 dark:border-red-500 px-3 py-2 text-left text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20 transition-all overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-r from-red-500/0 via-red-500/5 to-rose-500/0 opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
+                          <span className="relative z-10 flex items-center gap-2">
+                            <span>{generatingFlashcards && selectedDifficulty === 'difícil' ? '⏳' : '🔥'}</span>
+                            <span>{generatingFlashcards && selectedDifficulty === 'difícil' ? 'Gerando...' : 'Nível Difícil (10 cards)'}</span>
+                          </span>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1617,6 +1880,28 @@ Regras:
           selectedCourseId={selectedCourseId}
           onFlashcardAdded={loadUserFlashcards}
         />
+      )}
+      
+      {/* Modal de Loading para Geração de Flashcards */}
+      {generatingFlashcards && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 max-w-md mx-4 shadow-2xl border border-slate-200 dark:border-slate-700">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mb-4"></div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                Gerando Flashcards
+              </h3>
+              <p className="text-slate-600 dark:text-slate-400 mb-4">
+                Criando 10 flashcards de nível <span className="font-bold text-blue-600 dark:text-blue-400">{selectedDifficulty}</span> para o módulo "{selectedModulo}"
+              </p>
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  🤖 A IA está analisando o conteúdo e gerando flashcards personalizados...
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
       </div>
     </div>
