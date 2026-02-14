@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, PencilIcon, EyeIcon, ClockIcon, CheckCircleIcon, XCircleIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PencilIcon, EyeIcon, ClockIcon, CheckCircleIcon, XCircleIcon, ArrowDownTrayIcon, BugAntIcon } from '@heroicons/react/24/outline'
 import { userFlashcardsService } from '../services/userFlashcardsService'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import AnkiExportButton from './AnkiExportButton'
+import { debugFlashcards } from '../utils/debugFlashcards'
 
 const UserFlashcardsManager = () => {
   const { user, profile } = useAuth()
@@ -206,6 +207,16 @@ const UserFlashcardsManager = () => {
                 className="w-full"
                 variant="secondary"
               />
+            </div>
+            <div className="mt-2">
+              <button
+                onClick={debugFlashcards}
+                className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-medium text-xs bg-red-600 hover:bg-red-700 text-white transition-all duration-200"
+                title="Debug: Verificar flashcards no banco"
+              >
+                <BugAntIcon className="h-4 w-4" />
+                <span>Debug Flashcards</span>
+              </button>
             </div>
           </div>
         </div>

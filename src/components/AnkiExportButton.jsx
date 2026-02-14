@@ -26,15 +26,35 @@ const AnkiExportButton = ({
     setExportResult(null)
 
     try {
-      // Buscar flashcards do usuário
-      const flashcards = await userFlashcardsService.getUserFlashcards(user.uid)
+      console.log('🚀 Iniciando exportação para Anki...')
+      console.log('📋 Filtros:', { selectedMateria, selectedModulo })
       
-      // Filtrar por matéria/módulo se especificado
+      let flashcards
+      
+      // Se há filtros de matéria/módulo, usar a nova função
+      if (selectedMateria || selectedModulo) {
+        console.log('📚 Usando busca por matéria/módulo...')
+        flashcards = await userFlashcardsService.getFlashcardsByMateriaModulo(
+          selectedMateria, 
+          selectedModulo
+        )
+      } else {
+        // Senão, buscar flashcards do usuário
+        console.log('👤 Usando busca por usuário...')
+        flashcards = await userFlashcardsService.getUserFlashcards(user.uid)
+      }
+      
+      console.log('📝 Flashcards encontrados:', flashcards.length)
+      
+      // Filtrar adicionalmente se necessário (para garantir compatibilidade)
       const filteredFlashcards = flashcards.filter(card => {
-        if (selectedMateria && card.materia !== selectedMateria) return false
-        if (selectedModulo && card.modulo !== selectedModulo) return false
+        if (selectedMateria && card.materia !== selectedMateria && !card.materia?.includes(selectedMateria)) return false
+        if (selectedModulo && card.modulo !== selectedModulo && !card.modulo?.includes(selectedModulo)) return false
         return true
       })
+      
+      console.log('📊 Flashcards filtrados:', filteredFlashcards.length)
+      console.log('📋 Amostra de flashcards:', filteredFlashcards.slice(0, 2))
 
       if (filteredFlashcards.length === 0) {
         setExportResult({ 
@@ -55,10 +75,10 @@ const AnkiExportButton = ({
 
       setExportResult(result)
     } catch (error) {
-      console.error('Erro na exportação:', error)
+      console.error('❌ Erro na exportação:', error)
       setExportResult({ 
         success: false, 
-        message: 'Erro ao exportar flashcards. Tente novamente.' 
+        message: `Erro ao exportar flashcards: ${error.message}` 
       })
     } finally {
       setIsExporting(false)
