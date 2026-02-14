@@ -14,7 +14,6 @@ import { FolderIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon, LockClosedIco
 import { canAccessMateria, canAccessModulo, isTrialMode } from '../utils/trialLimits'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import AnkiExportButton from '../components/AnkiExportButton'
-import SingleFlashcardExport from '../components/SingleFlashcardExport'
 import {
   getOrCreateExplanationCache,
   saveExplanationCache,
@@ -1706,16 +1705,6 @@ IMPORTANTE:
                     </button>
                   </div>
 
-                  {/* Botão de Exportação Individual */}
-                  <div className="flex-1">
-                    <SingleFlashcardExport 
-                      flashcard={currentCard}
-                      deckName={selectedMateria || 'FlashConCards'}
-                      className="w-full"
-                      variant="text"
-                    />
-                  </div>
-                  
                   {/* Botão de Exportação Completa */}
                   <div className="flex-1">
                     <AnkiExportButton 
