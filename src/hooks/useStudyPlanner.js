@@ -13,14 +13,14 @@ export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
   const hasInitialized = useRef(false)
   const lastEditalRef = useRef(null)
 
-  // Calcular dias restantes (30 dias a partir de hoje)
+  // Calcular dias restantes (60 dias a partir de hoje - 2 meses)
   const targetDate = useMemo(() => {
-    return dayjs().add(30, 'days').format('YYYY-MM-DD')
+    return dayjs().add(60, 'days').format('YYYY-MM-DD')
   }, [])
 
   const daysRemaining = useMemo(() => {
     const today = dayjs()
-    const target = dayjs().add(30, 'days')
+    const target = dayjs().add(60, 'days')
     return Math.max(0, target.diff(today, 'day'))
   }, [])
 
@@ -168,7 +168,7 @@ export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
 
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-1.0-pro',
         generationConfig: {
           maxOutputTokens: 8000,
           temperature: 0.7,
@@ -177,7 +177,7 @@ export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
 
       const prompt = `Você é um mentor especializado em concursos públicos e planejamento de estudos.
 
-OBJETIVO: Auxiliar o aluno a completar TODO o edital verticalizado em exatamente ${diasRestantes} dias.
+OBJETIVO: Auxiliar o aluno a completar TODO o edital verticalizado em exatamente ${diasRestantes} dias (2 meses de estudos).
 
 SITUAÇÃO ATUAL:
 - Total de disciplinas: ${totalDisciplinas}
@@ -185,7 +185,7 @@ SITUAÇÃO ATUAL:
 - Tópicos já completos: ${topicosCompletos}
 - Tópicos restantes: ${topicosRestantes}
 - Progresso: ${progressoPercentual}%
-- Dias restantes: ${diasRestantes} dias
+- Dias restantes: ${diasRestantes} dias (2 meses)
 - Meta: Completar ${topicosPorDia} tópicos por dia em média
 
 TÓPICOS JÁ COMPLETOS (NÃO RECOMENDAR):
@@ -197,16 +197,17 @@ ${JSON.stringify(editalStructure, null, 2)}
 TAREFA:
 1. Analise o edital e identifique os tópicos mais importantes e estratégicos para estudar HOJE
 2. Recomende entre 3 a 5 tópicos específicos que o aluno deve estudar hoje
-3. Organize as recomendações para que o aluno possa fechar todo o edital em ${diasRestantes} dias
+3. Organize as recomendações para que o aluno possa fechar todo o edital em ${diasRestantes} dias (2 meses)
 4. Priorize tópicos fundamentais que são base para outros tópicos
 5. Distribua as recomendações entre diferentes disciplinas quando possível
-6. Forneça conselhos motivacionais e estratégicos
+6. Forneça conselhos motivacionais e estratégicos para um plano de 2 meses
 
 IMPORTANTE:
 - NÃO recomende tópicos já completos
 - Foque em tópicos que ainda não foram estudados
 - Considere a hierarquia (tópicos de nível 0 são mais importantes)
-- Selecione tópicos que maximizem o aprendizado
+- Selecione tópicos que maximizem o aprendizado ao longo de 2 meses
+- Mantenha um ritmo sustentável para 60 dias de estudos
 
 FORMATO DE RESPOSTA (JSON OBRIGATÓRIO):
 {
@@ -319,7 +320,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
       console.error('Erro ao gerar recomendação:', error)
       setError(error.message)
       
-      // Fallback: criar recomendação básica
+      // Fallback: criar recomendação básica sem IA
       if (editalVerticalizado?.disciplinas) {
         const primeiraDisciplina = editalVerticalizado.disciplinas.find(d => 
           d.topicos?.some(t => !completedTopics.has(`${d.nome}::${t.nome || t.numero}`))
@@ -348,12 +349,37 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                 topicosCompletos: completedTopics.size,
                 topicosRestantes: 0,
                 progressoPercentual: 0,
-                diasRestantes,
+                diasRestantes: daysRemaining,
                 topicosPorDia: 0
               }
             })
           }
         }
+      }
+      
+      // Se não houver edital, criar recomendação genérica
+      if (!editalVerticalizado?.disciplinas) {
+        setDailyRecommendation({
+          mensagemMotivacional: 'Bem-vindo ao seu planejador de estudos!',
+          conselho: 'Configure seu edital para receber recomendações personalizadas.',
+          focoDoDia: 'Organizar seus materiais de estudo',
+          atividades: [{
+            disciplina: 'Estudos',
+            topico: 'Revisão geral',
+            numero: '',
+            prioridade: 'media',
+            descricao: 'Organize seus materiais e planeje seu cronograma',
+            tempoEstimado: '30min',
+            dica: 'Crie um ambiente de estudo adequado'
+          }],
+          estatisticas: {
+            topicosCompletos: 0,
+            topicosRestantes: 0,
+            progressoPercentual: 0,
+            diasRestantes: daysRemaining,
+            topicosPorDia: 0
+          }
+        })
       }
     } finally {
       setLoading(false)

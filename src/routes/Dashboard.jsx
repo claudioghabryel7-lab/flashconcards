@@ -13,6 +13,8 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
+  getDocs,
 } from 'firebase/firestore'
 import {
   TrophyIcon,
@@ -63,88 +65,107 @@ const Dashboard = () => {
   const [questoesStats, setQuestoesStats] = useState({ correct: 0, wrong: 0, byMateria: {} })
   const { subjectOrder } = useSubjectOrder()
 
-  // Planejador de estudos com IA
+  // Hook do planejador de estudos
   const {
     dailyRecommendation,
-    loading: plannerLoading,
+    loading: loadingPlanner,
+    error: plannerError,
     daysRemaining,
+    targetDate,
+    completedTopics,
     refreshRecommendation
-  } = useStudyPlanner(
-    user?.uid,
-    selectedCourseId,
-    editalVerticalizado
-  )
+  } = useStudyPlanner(user?.uid, selectedCourseId, editalVerticalizado)
 
-  // Função para marcar tópico como estudado no edital
-  const markTopicAsCompleted = async (disciplinaNome, topicoNome) => {
-    if (!selectedCourseId || !user || !editalVerticalizado) {
-      return false
-    }
+  // Calcular total de tópicos do edital
+  const totalTopics = useMemo(() => {
+    if (!editalVerticalizado?.disciplinas) return 0
+    return editalVerticalizado.disciplinas.reduce((total, disciplina) => {
+      return total + (disciplina.topicos?.length || 0)
+    }, 0)
+  }, [editalVerticalizado])
 
+  // Função para marcar tópico como concluído
+  const markTopicAsCompleted = async (disciplina, topico) => {
+    if (!user || !selectedCourseId) return false
+    
     try {
-      const editalRef = doc(db, 'courses', selectedCourseId, 'editalVerticalizado', 'principal')
-      const disciplinas = [...(editalVerticalizado.disciplinas || [])]
+      // Criar ID seguro sem caracteres especiais
+      const safeDisciplina = disciplina.replace(/[^a-zA-Z0-9]/g, '_')
+      const safeTopico = topico.replace(/[^a-zA-Z0-9]/g, '_')
+      const progressId = `${user.uid}_${selectedCourseId}_${safeDisciplina}_${safeTopico}`
       
-      // Encontrar a disciplina
-      const disciplinaIndex = disciplinas.findIndex(d => 
-        d.nome?.toLowerCase().trim() === disciplinaNome.toLowerCase().trim()
-      )
-
-      if (disciplinaIndex === -1) {
-        console.error('Disciplina não encontrada:', disciplinaNome)
-        return false
-      }
-
-      const disciplina = disciplinas[disciplinaIndex]
-      
-      // Encontrar o tópico
-      const topicoIndex = disciplina.topicos?.findIndex(t => 
-        (t.nome?.toLowerCase().trim() === topicoNome.toLowerCase().trim()) ||
-        (t.numero?.toString() === topicoNome)
-      )
-
-      if (topicoIndex === -1 || !disciplina.topicos) {
-        console.error('Tópico não encontrado:', topicoNome)
-        return false
-      }
-
-      const topico = disciplina.topicos[topicoIndex]
-
-      // Marcar como estudado
-      disciplinas[disciplinaIndex].topicos[topicoIndex] = {
-        ...topico,
-        estudado: true
-      }
-
-      // Atualizar no Firestore
-      await updateDoc(editalRef, {
-        disciplinas: disciplinas
-      })
-
-      // Salvar progresso na coleção editalProgress
-      const today = dayjs().format('YYYY-MM-DD')
-      const topicKey = `${disciplinaNome}::${topicoNome}`
-      const progressKey = `${user.uid}_${selectedCourseId}_${today}_${encodeURIComponent(topicKey)}`
-      
-      const progressRef = doc(db, 'editalProgress', progressKey)
+      const progressRef = doc(db, 'editalProgress', progressId)
       await setDoc(progressRef, {
         userId: user.uid,
         courseId: selectedCourseId,
-        date: today,
-        disciplina: disciplinaNome,
-        topico: topicoNome,
-        topicKey: topicKey,
-        estudado: true,
+        disciplina,
+        topico,
         completedAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       }, { merge: true })
-
+      
       return true
     } catch (error) {
-      console.error('Erro ao marcar tópico como estudado:', error)
+      console.error('Erro ao marcar tópico como concluído:', error)
       return false
     }
   }
+
+  // Função para resetar todo o progresso do edital
+  const resetEditalProgress = async () => {
+    if (!user || !selectedCourseId) return false
+    
+    const confirmed = window.confirm('⚠️ ATENÇÃO: Esta ação irá apagar TODO o seu progresso no edital verticalizado. Todos os tópicos marcados como concluídos serão resetados. Deseja continuar?')
+    
+    if (!confirmed) return false
+    
+    try {
+      // Buscar todos os documentos de progresso do usuário para este curso
+      const progressQuery = query(
+        collection(db, 'editalProgress'),
+        where('userId', '==', user.uid),
+        where('courseId', '==', selectedCourseId)
+      )
+      
+      const progressSnapshot = await getDocs(progressQuery)
+      const batch = writeBatch(db)
+      
+      // Adicionar todos os documentos ao batch para deletar
+      progressSnapshot.forEach((docSnapshot) => {
+        batch.delete(docSnapshot.ref)
+      })
+      
+      // Executar o batch
+      await batch.commit()
+      
+      // Limpar recomendações em cache
+      const recommendationsQuery = query(
+        collection(db, 'studyPlannerRecommendations'),
+        where('userId', '==', user.uid),
+        where('courseId', '==', selectedCourseId)
+      )
+      
+      const recommendationsSnapshot = await getDocs(recommendationsQuery)
+      const recommendationsBatch = writeBatch(db)
+      
+      recommendationsSnapshot.forEach((docSnapshot) => {
+        recommendationsBatch.delete(docSnapshot.ref)
+      })
+      
+      await recommendationsBatch.commit()
+      
+      // Forçar atualização do planejador
+      refreshRecommendation()
+      
+      alert('✅ Progresso do edital resetado com sucesso! Comece do zero agora.')
+      return true
+    } catch (error) {
+      console.error('Erro ao resetar progresso:', error)
+      alert('❌ Erro ao resetar progresso. Tente novamente.')
+      return false
+    }
+  }
+
 
   // Carregar curso selecionado
   useEffect(() => {
@@ -650,7 +671,7 @@ const Dashboard = () => {
         </div>
 
         {/* Cards de Estatísticas */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -667,25 +688,6 @@ const Dashboard = () => {
               <p className="text-white/80 text-sm font-semibold mb-1">Sequência</p>
               <p className="text-4xl font-black text-white mb-1">{stats.streak}</p>
               <p className="text-white/70 text-xs">dias consecutivos</p>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500 to-green-600 p-6 shadow-xl"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                  <ClockIcon className="h-6 w-6 text-white" />
-                </div>
-              </div>
-              <p className="text-white/80 text-sm font-semibold mb-1">Horas Estudadas</p>
-              <p className="text-4xl font-black text-white mb-1">{stats.totalHours}</p>
-              <p className="text-white/70 text-xs">total acumulado</p>
             </div>
           </motion.div>
 
@@ -727,17 +729,6 @@ const Dashboard = () => {
             </div>
           </motion.div>
         </div>
-
-        {/* Planejador de Estudos com IA - Acima do Edital */}
-        {user && selectedCourseId && (
-          <StudyPlanner
-            dailyRecommendation={dailyRecommendation}
-            loading={plannerLoading}
-            daysRemaining={daysRemaining}
-            refreshRecommendation={refreshRecommendation}
-            markTopicAsCompleted={markTopicAsCompleted}
-          />
-        )}
 
         {/* Edital Verticalizado */}
         {selectedCourseId && (
@@ -841,6 +832,20 @@ const Dashboard = () => {
               </div>
             )}
           </motion.div>
+        )}
+
+        {/* Planejador de Estudos - 2 Meses */}
+        {selectedCourseId && (
+          <StudyPlanner
+            dailyRecommendation={dailyRecommendation}
+            loading={loadingPlanner}
+            daysRemaining={daysRemaining}
+            refreshRecommendation={refreshRecommendation}
+            markTopicAsCompleted={markTopicAsCompleted}
+            completedTopics={completedTopics}
+            totalTopics={totalTopics}
+            resetEditalProgress={resetEditalProgress}
+          />
         )}
 
         {/* Grid Principal */}

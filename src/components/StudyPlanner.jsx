@@ -8,6 +8,10 @@ import {
   ClockIcon,
   CheckCircleIcon,
   LightBulbIcon,
+  CpuChipIcon,
+  ChartBarIcon,
+  ArrowTrendingUpIcon,
+  ListBulletIcon,
 } from '@heroicons/react/24/outline'
 import { motion } from 'framer-motion'
 import { useDarkMode } from '../hooks/useDarkMode'
@@ -18,7 +22,10 @@ const StudyPlanner = ({
   loading, 
   daysRemaining,
   refreshRecommendation,
-  markTopicAsCompleted
+  markTopicAsCompleted,
+  completedTopics,
+  totalTopics,
+  resetEditalProgress
 }) => {
   const { darkMode } = useDarkMode()
   const navigate = useNavigate()
@@ -67,13 +74,13 @@ const StudyPlanner = ({
   const getPriorityColor = (prioridade) => {
     switch (prioridade) {
       case 'alta':
-        return 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700'
+        return 'bg-red-500/10 text-red-400 border-red-500/30 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
       case 'media':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700'
+        return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800'
       case 'baixa':
-        return 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
+        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800'
       default:
-        return 'bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600'
+        return 'bg-slate-500/10 text-slate-400 border-slate-500/30 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
     }
   }
 
@@ -139,47 +146,110 @@ const StudyPlanner = ({
       transition={{ duration: 0.5 }}
       className="mb-6 sm:mb-8"
     >
-      <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 sm:w-64 sm:h-64 bg-white/10 rounded-full blur-3xl"></div>
+      <div className="bg-slate-900 dark:bg-slate-950 border border-slate-800 dark:border-slate-900 rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl"></div>
         <div className="relative z-10">
           <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-            <SparklesIcon className="h-6 w-6 sm:h-8 sm:w-8 flex-shrink-0" />
-            <h2 className="text-lg sm:text-2xl md:text-3xl font-black break-words">Planejador de Estudos com IA</h2>
+            <div className="p-2 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+              <CpuChipIcon className="h-5 w-5 sm:h-6 sm:w-6 text-cyan-400" />
+            </div>
+            <h2 className="text-lg sm:text-2xl md:text-3xl font-black text-slate-100 dark:text-white break-words">Planejador de Estudos</h2>
+            <div className="ml-auto">
+              <button
+                onClick={resetEditalProgress}
+                className="px-3 py-1.5 bg-red-600/20 border border-red-500/30 text-red-400 rounded-lg font-semibold text-xs transition-colors font-mono hover:bg-red-600/30"
+              >
+                Reset Progress
+              </button>
+            </div>
           </div>
+
+          {/* Barra de Progresso do Edital */}
+          {totalTopics > 0 && (
+            <div className="bg-slate-800/50 dark:bg-slate-900/50 border border-slate-700 dark:border-slate-800 rounded-lg p-3 mb-4 backdrop-blur-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-slate-300 dark:text-slate-400">Progresso do Edital</span>
+                <span className="text-sm font-mono text-cyan-400">
+                  {completedTopics?.size || 0} / {totalTopics}
+                </span>
+              </div>
+              <div className="w-full bg-slate-700 dark:bg-slate-800 rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-cyan-500 to-blue-500 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${totalTopics > 0 ? ((completedTopics?.size || 0) / totalTopics) * 100 : 0}%` }}
+                ></div>
+              </div>
+              <div className="mt-2 text-xs text-slate-500 dark:text-slate-600 text-center font-mono">
+                {totalTopics > 0 ? Math.round(((completedTopics?.size || 0) / totalTopics) * 100) : 0}% completo
+              </div>
+            </div>
+          )}
 
           {loading && !dailyRecommendation ? (
             <div className="text-center py-8">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-              <p className="mt-4 text-white/80">Carregando recomendações...</p>
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400"></div>
+              <p className="mt-4 text-slate-400">Processando recomendações...</p>
             </div>
           ) : dailyRecommendation ? (
             <>
               {/* Mensagem Motivacional */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg sm:rounded-xl p-3 sm:p-4 mb-3 sm:mb-4">
+              <div className="bg-slate-800/50 dark:bg-slate-900/50 border border-slate-700 dark:border-slate-800 rounded-lg sm:rounded-xl p-3 sm:p-4 mb-3 sm:mb-4 backdrop-blur-sm">
                 <div className="flex items-start gap-2 sm:gap-3">
-                  <LightBulbIcon className="h-5 w-5 sm:h-6 sm:w-6 text-yellow-300 flex-shrink-0 mt-0.5 sm:mt-1" />
+                  <div className="p-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-lg flex-shrink-0 mt-0.5 sm:mt-1">
+                    <ArrowTrendingUpIcon className="h-4 w-4 sm:h-5 sm:w-5 text-cyan-400" />
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-base sm:text-lg font-semibold mb-1 break-words">{dailyRecommendation.mensagemMotivacional}</p>
+                    <p className="text-base sm:text-lg font-semibold mb-1 text-slate-100 dark:text-white break-words">{dailyRecommendation.mensagemMotivacional}</p>
                     {dailyRecommendation.conselho && (
-                      <p className="text-white/90 text-xs sm:text-sm break-words">{dailyRecommendation.conselho}</p>
+                      <p className="text-slate-400 dark:text-slate-500 text-xs sm:text-sm break-words">{dailyRecommendation.conselho}</p>
                     )}
                   </div>
                 </div>
               </div>
 
               {/* Foco do Dia */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg sm:rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
-                <h3 className="font-bold text-base sm:text-lg mb-2">🎯 Foco de Hoje</h3>
-                <p className="text-white/90 text-sm sm:text-base break-words">{dailyRecommendation.focoDoDia}</p>
+              <div className="bg-slate-800/50 dark:bg-slate-900/50 border border-slate-700 dark:border-slate-800 rounded-lg sm:rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 backdrop-blur-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+                    <ChartBarIcon className="h-4 w-4 text-cyan-400" />
+                  </div>
+                  <h3 className="font-bold text-base sm:text-lg text-slate-100 dark:text-white">Target Focus</h3>
+                </div>
+                <p className="text-slate-300 dark:text-slate-400 text-sm sm:text-base break-words font-mono">{dailyRecommendation.focoDoDia}</p>
+              </div>
+
+              {/* Edital Verticalizado */}
+              <div className="bg-slate-800/50 dark:bg-slate-900/50 border border-slate-700 dark:border-slate-800 rounded-lg sm:rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 backdrop-blur-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+                    <ListBulletIcon className="h-4 w-4 text-cyan-400" />
+                  </div>
+                  <h3 className="font-bold text-base sm:text-lg text-slate-100 dark:text-white">Verticalized Edital</h3>
+                </div>
+                <p className="text-slate-300 dark:text-slate-400 text-sm sm:text-base break-words font-mono mb-3">
+                  Acesse o edital verticalizado para uma visão completa do conteúdo programático e acompanhamento do seu progresso.
+                </p>
+                <button
+                  onClick={() => navigate('/edital-verticalizado')}
+                  className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-semibold text-sm transition-colors font-mono"
+                >
+                  View Verticalized Edital →
+                </button>
               </div>
 
               {/* Atividades Recomendadas */}
               <div>
-                <h4 className="font-bold text-base sm:text-lg mb-3 sm:mb-4">📚 Atividades Recomendadas</h4>
+                <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                  <div className="p-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+                    <CpuChipIcon className="h-4 w-4 text-cyan-400" />
+                  </div>
+                  <h4 className="font-bold text-base sm:text-lg text-slate-100 dark:text-white">Active Tasks</h4>
+                </div>
                 <div className="space-y-2 sm:space-y-3">
                   {dailyRecommendation.atividades?.map((atividade, index) => {
                     const Icon = BookOpenIcon
-                    const colorClass = 'from-indigo-500 to-purple-600'
+                    const colorClass = 'bg-cyan-500/10 border-cyan-500/20'
                     const activityKey = `${atividade.disciplina}::${atividade.topico}`
                     const isCompleted = completedActivities.has(activityKey)
 
@@ -189,16 +259,16 @@ const StudyPlanner = ({
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.3, delay: index * 0.1 }}
-                        className="bg-white dark:bg-slate-800 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-600"
+                        className="bg-slate-800/50 dark:bg-slate-900/50 border border-slate-700 dark:border-slate-800 rounded-lg sm:rounded-xl p-3 sm:p-4 backdrop-blur-sm"
                       >
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                           <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
-                            <div className={`p-1.5 sm:p-2 rounded-lg bg-gradient-to-br ${colorClass} flex-shrink-0`}>
-                              <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                            <div className={`p-1.5 sm:p-2 rounded-lg ${colorClass} flex-shrink-0`}>
+                              <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-cyan-400" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1">
-                                <h5 className="font-semibold text-slate-900 dark:text-white">
+                                <h5 className="font-semibold text-slate-100 dark:text-white font-mono text-sm">
                                   {atividade.disciplina}
                                 </h5>
                                 <span className={`px-2 py-0.5 rounded text-xs font-medium border ${getPriorityColor(atividade.prioridade)}`}>
@@ -206,28 +276,28 @@ const StudyPlanner = ({
                                 </span>
                               </div>
                               {atividade.topico && (
-                                <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-1">
-                                  📌 {atividade.topico}
+                                <p className="text-sm font-medium text-cyan-400 dark:text-cyan-500 mb-1 font-mono">
+                                  {atividade.topico}
                                 </p>
                               )}
-                              <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                              <p className="text-sm text-slate-400 dark:text-slate-500 mb-2">
                                 {atividade.descricao}
                               </p>
                               {atividade.dica && (
-                                <p className="text-xs text-slate-500 dark:text-slate-500 italic mb-2">
+                                <p className="text-xs text-slate-500 dark:text-slate-600 italic mb-2 font-mono">
                                   💡 {atividade.dica}
                                 </p>
                               )}
-                              <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+                              <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-600">
                                 <div className="flex items-center gap-1">
                                   <ClockIcon className="h-4 w-4" />
                                   {atividade.tempoEstimado}
                                 </div>
                                 <button
                                   onClick={() => goToEdital(atividade.disciplina, atividade.topico)}
-                                  className="text-indigo-600 dark:text-indigo-400 hover:underline"
+                                  className="text-cyan-400 dark:text-cyan-500 hover:underline font-mono"
                                 >
-                                  Ver no Edital →
+                                  View Details →
                                 </button>
                               </div>
                             </div>
@@ -235,19 +305,19 @@ const StudyPlanner = ({
                           <button
                             onClick={() => handleMarkAsCompleted(atividade)}
                             disabled={isMarkingCompleted || isCompleted}
-                            className={`px-4 py-2 text-white rounded-lg font-semibold transition-colors text-sm whitespace-nowrap ${
+                            className={`px-4 py-2 text-white rounded-lg font-semibold transition-colors text-sm whitespace-nowrap font-mono ${
                               isCompleted
-                                ? 'bg-green-500 opacity-75 cursor-not-allowed'
-                                : 'bg-green-600 hover:bg-green-700'
+                                ? 'bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 cursor-not-allowed'
+                                : 'bg-cyan-600 hover:bg-cyan-700 border border-cyan-500'
                             } disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
                           >
                             {isCompleted ? (
                               <>
                                 <CheckCircleIcon className="h-4 w-4" />
-                                Concluído
+                                Complete
                               </>
                             ) : (
-                              'Concluir'
+                              'Execute'
                             )}
                           </button>
                         </div>
@@ -259,12 +329,12 @@ const StudyPlanner = ({
             </>
           ) : loading ? (
             <div className="text-center py-8">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-              <p className="mt-4 text-white/80">Atualizando recomendações...</p>
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400"></div>
+              <p className="mt-4 text-slate-400">Atualizando sistema...</p>
             </div>
           ) : (
             <div className="text-center py-8">
-              <p className="text-white/80">Carregando recomendações personalizadas...</p>
+              <p className="text-slate-400">Inicializando planejador...</p>
             </div>
           )}
         </div>
