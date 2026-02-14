@@ -44,7 +44,7 @@ export const userFlashcardsService = {
   // Obter todos os flashcards de um usuário// Obter flashcards do usuário (abordagem simples sem índice composto)
   async getUserFlashcards(userId, courseId = null) {
     try {
-      console.log('🔍 Buscando flashcards para userId:', userId)
+      console.log('🔍 Buscando flashcards para userId:', userId, 'courseId:', courseId)
       
       // Buscar todos os flashcards (sem filtro de userId para compatibilidade)
       const allQuery = query(collection(db, FLASHCARDS_COLLECTION))
@@ -62,15 +62,32 @@ export const userFlashcardsService = {
         console.log('📝 Usando todos os flashcards (sem userId específico):', flashcards.length)
       }
       
+      // FILTRAR POR CURSO - IMPORTANTE!
+      if (courseId && courseId !== 'alego-default') {
+        flashcards = flashcards.filter(card => {
+          // Incluir se não tiver courseId (flashcards gerais)
+          if (!card.courseId) return true
+          // Incluir se for do curso especificado
+          if (card.courseId === courseId) return true
+          return false
+        })
+        console.log(`🎓 Filtrado por courseId "${courseId}": ${flashcards.length} flashcards`)
+      } else if (!courseId || courseId === 'alego-default') {
+        // Para curso default, incluir apenas flashcards sem courseId ou com courseId default
+        flashcards = flashcards.filter(card => {
+          if (!card.courseId) return true
+          if (card.courseId === '' || card.courseId === 'alego-default') return true
+          return false
+        })
+        console.log(`🎓 Filtrado por curso default: ${flashcards.length} flashcards`)
+      }
+      
       // Ordenar no cliente por data de criação (mais recentes primeiro)
       flashcards.sort((a, b) => {
         const dateA = a.createdAt?.toDate?.() || new Date(0)
         const dateB = b.createdAt?.toDate?.() || new Date(0)
         return dateB.getTime() - dateA.getTime()
       })
-      
-      // REMOVIDO: Filtro de courseId que estava bloqueando os flashcards
-      // Mantém todos os flashcards disponíveis para exportação
       
       console.log(`📝 Final: ${flashcards.length} flashcards disponíveis`)
       return flashcards
@@ -81,9 +98,9 @@ export const userFlashcardsService = {
   },
 
   // Nova função para buscar flashcards por matéria/módulo (para exportação)
-  async getFlashcardsByMateriaModulo(materia = null, modulo = null) {
+  async getFlashcardsByMateriaModulo(materia = null, modulo = null, courseId = null) {
     try {
-      console.log('🔍 Buscando flashcards por matéria/módulo:', { materia, modulo })
+      console.log('🔍 Buscando flashcards por matéria/módulo:', { materia, modulo, courseId })
       
       // Buscar todos os flashcards
       const allQuery = query(collection(db, FLASHCARDS_COLLECTION))
@@ -91,6 +108,23 @@ export const userFlashcardsService = {
       let flashcards = allSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       
       console.log('📊 Total de flashcards no banco:', flashcards.length)
+      
+      // FILTRAR POR CURSO PRIMEIRO
+      if (courseId && courseId !== 'alego-default') {
+        flashcards = flashcards.filter(card => {
+          if (!card.courseId) return true
+          if (card.courseId === courseId) return true
+          return false
+        })
+        console.log(`🎓 Filtrado por courseId "${courseId}": ${flashcards.length} flashcards`)
+      } else if (!courseId || courseId === 'alego-default') {
+        flashcards = flashcards.filter(card => {
+          if (!card.courseId) return true
+          if (card.courseId === '' || card.courseId === 'alego-default') return true
+          return false
+        })
+        console.log(`🎓 Filtrado por curso default: ${flashcards.length} flashcards`)
+      }
       
       // Filtrar por matéria e módulo
       if (materia) {

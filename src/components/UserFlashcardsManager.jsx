@@ -6,7 +6,7 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import AnkiExportButton from './AnkiExportButton'
 import { debugFlashcards } from '../utils/debugFlashcards'
 
-const UserFlashcardsManager = () => {
+const UserFlashcardsManager = ({ selectedCourseId = null }) => {
   const { user, profile } = useAuth()
   const { darkMode } = useDarkMode()
   const [flashcards, setFlashcards] = useState([])
@@ -204,6 +204,7 @@ const UserFlashcardsManager = () => {
               <AnkiExportButton 
                 selectedMateria={filters.materia || null}
                 selectedModulo={filters.modulo || null}
+                selectedCourseId={selectedCourseId}
                 className="w-full"
                 variant="secondary"
               />

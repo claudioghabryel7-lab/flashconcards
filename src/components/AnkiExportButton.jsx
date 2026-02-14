@@ -8,6 +8,7 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 const AnkiExportButton = ({ 
   selectedMateria = null, 
   selectedModulo = null,
+  selectedCourseId = null,
   className = '',
   variant = 'primary' // primary, secondary, text
 }) => {
@@ -27,7 +28,7 @@ const AnkiExportButton = ({
 
     try {
       console.log('🚀 Iniciando exportação para Anki...')
-      console.log('📋 Filtros:', { selectedMateria, selectedModulo })
+      console.log('📋 Filtros:', { selectedMateria, selectedModulo, selectedCourseId })
       
       let flashcards
       
@@ -36,12 +37,13 @@ const AnkiExportButton = ({
         console.log('📚 Usando busca por matéria/módulo...')
         flashcards = await userFlashcardsService.getFlashcardsByMateriaModulo(
           selectedMateria, 
-          selectedModulo
+          selectedModulo,
+          selectedCourseId
         )
       } else {
         // Senão, buscar flashcards do usuário
         console.log('👤 Usando busca por usuário...')
-        flashcards = await userFlashcardsService.getUserFlashcards(user.uid)
+        flashcards = await userFlashcardsService.getUserFlashcards(user.uid, selectedCourseId)
       }
       
       console.log('📝 Flashcards encontrados:', flashcards.length)

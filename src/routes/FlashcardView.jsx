@@ -1741,6 +1741,7 @@ IMPORTANTE:
                     <AnkiExportButton 
                       selectedMateria={selectedMateria}
                       selectedModulo={selectedModulo}
+                      selectedCourseId={selectedCourseId}
                       className="w-full"
                       variant="text"
                     />
