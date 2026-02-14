@@ -147,13 +147,15 @@ const AnkiExportButton = ({
               <div>
                 <div className="font-semibold mb-1">✅ {exportResult.count} flashcards exportados!</div>
                 <div className="text-xs opacity-80">
-                  <div className="mb-1">📁 Arquivo: {selectedMateria ? `${selectedMateria}_flashcards.apkg` : 'FlashConCards_flashcards.apkg'}</div>
+                  <div className="mb-1">📁 Arquivo: {selectedMateria ? `${selectedMateria}_flashcards.csv` : 'FlashConCards_flashcards.csv'}</div>
                   <div className="mb-1">📥 Para importar no Anki:</div>
                   <div className="ml-2">1. Abra o Anki</div>
                   <div className="ml-2">2. Arquivo → Importar</div>
-                  <div className="ml-2">3. Selecione o arquivo .apkg</div>
-                  <div className="ml-2">4. Cards importados automaticamente!</div>
-                  <div className="ml-2 mt-1 text-yellow-600">⚠️ Se der erro, tente: Arquivo → Importar Deck Compartilhado</div>
+                  <div className="ml-2">3. Selecione o arquivo .csv</div>
+                  <div className="ml-2">4. Tipo: CSV separado por vírgula</div>
+                  <div className="ml-2">5. Mapear: Front → Frente, Back → Verso</div>
+                  <div className="ml-2">6. Importar</div>
+                  <div className="ml-2 mt-1 text-green-600">✅ CSV funciona 100% no Anki!</div>
                 </div>
               </div>
             ) 

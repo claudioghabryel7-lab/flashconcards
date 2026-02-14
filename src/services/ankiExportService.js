@@ -6,13 +6,18 @@ class AnkiExportService {
       console.log('🚀 Iniciando exportação para Anki...')
       console.log('📊 Flashcards para exportar:', flashcards.length)
       
-      // Criar um arquivo .apkg válido usando formato simplificado
-      const apkgBlob = await this.createValidAPKG(flashcards, deckName)
+      // Criar formato CSV compatível com Anki
+      const csvContent = this.createCSV(flashcards)
       
-      // Download do arquivo .apkg
-      const filename = `${deckName}_flashcards.apkg`
+      // Criar blob CSV
+      const blob = new Blob([csvContent], { 
+        type: 'text/csv;charset=utf-8' 
+      })
+      
+      // Download do arquivo .csv
+      const filename = `${deckName}_flashcards.csv`
       console.log('📥 Iniciando download:', filename)
-      this.downloadFile(apkgBlob, filename)
+      this.downloadFile(blob, filename)
       
       return { success: true, count: flashcards.length }
     } catch (error) {
@@ -21,98 +26,32 @@ class AnkiExportService {
     }
   }
 
-  static async createValidAPKG(flashcards, deckName) {
-    console.log('🔧 Criando APKG válido...')
+  static createCSV(flashcards) {
+    // Cabeçalho CSV
+    let csv = 'Front,Back,Tags\n'
     
-    const zip = new JSZip()
-    
-    // Criar arquivo media (vazio para cards básicos)
-    zip.file('media', '')
-    
-    // Criar collection.anki2 com estrutura mínima válida
-    const collection = {
-      "conf": {
-        "curModel": 1485022299701,
-        "creationOffset": 0,
-        "collapseTime": 100
-      },
-      "decks": [
-        {
-          "id": 1,
-          "name": deckName,
-          "desc": "Exportado do FlashConCards",
-          "collapsed": false,
-          "conf": 1,
-          "browserCollapsed": false,
-          "dyn": 0,
-          "usn": -1
-        }
-      ],
-      "models": [
-        {
-          "id": 1485022299701,
-          "name": "Basic",
-          "flds": [
-            {"name": "Front", "ord": 0, "sticky": false, "rtl": false, "font": "Arial", "size": 20},
-            {"name": "Back", "ord": 1, "sticky": false, "rtl": false, "font": "Arial", "size": 20}
-          ],
-          "tmpls": [
-            {
-              "name": "Card 1",
-              "ord": 0,
-              "qfmt": "{{Front}}",
-              "afmt": "{{FrontSide}}<hr id=answer>{{Back}}",
-              "bqfmt": "",
-              "bafmt": "",
-              "did": null,
-              "bfont": "",
-              "bsize": 0
-            }
-          ],
-          "css": ".card { font-family: arial; font-size: 20px; text-align: center; color: black; background-color: white; }",
-          "did": 1,
-          "usn": -1,
-          "mtime": 1485022299701,
-          "vers": []
-        }
-      ],
-      "notes": []
-    }
-
-    // Adicionar notes
+    // Adicionar cada flashcard
     flashcards.forEach((card, index) => {
-      const note = {
-        "id": Date.now() + index,
-        "guid": `flashcard_${card.id}_${index}`,
-        "mid": 1485022299701,
-        "mod": Date.now(),
-        "usn": -1,
-        "type": 0,
-        "queue": 0,
-        "due": 0,
-        "ivl": 0,
-        "factor": 0,
-        "reps": 0,
-        "lapses": 0,
-        "left": 0,
-        "flds": JSON.stringify([this.cleanField(card.pergunta), this.cleanField(card.resposta)]),
-        "flags": 0,
-        "data": "",
-        "tags": this.formatTags(card.tags, card.materia, card.modulo)
-      }
-      collection.notes.push(note)
+      const front = this.cleanField(card.pergunta)
+      const back = this.cleanField(card.resposta)
+      const tags = this.formatTags(card.tags, card.materia, card.modulo)
+      
+      // Escapar aspas e adicionar ao CSV
+      const csvFront = this.escapeCSV(front)
+      const csvBack = this.escapeCSV(back)
+      const csvTags = this.escapeCSV(tags)
+      
+      csv += `"${csvFront}","${csvBack}","${csvTags}"\n`
     })
+    
+    console.log('� CSV criado com', flashcards.length, 'linhas')
+    return csv
+  }
 
-    // Adicionar collection ao zip
-    zip.file('collection.anki2', JSON.stringify(collection))
-    
-    console.log('📦 ZIP criado com', collection.notes.length, 'notes')
-    
-    // Gerar blob do APKG
-    const apkgBlob = await zip.generateAsync({ type: 'blob' })
-    console.log('🗜️ APKG gerado, tamanho:', apkgBlob.size)
-    
-    return apkgBlob
+  static escapeCSV(text) {
+    if (!text) return ''
+    // Escapar aspas duplas
+    return text.replace(/"/g, '""')
   }
 
   static cleanField(text) {
