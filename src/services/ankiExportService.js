@@ -6,32 +6,29 @@ class AnkiExportService {
       console.log('🚀 Iniciando exportação para Anki...')
       console.log('📊 Flashcards para exportar:', flashcards.length)
       
-      // Formatar flashcards para o formato Anki
-      const ankiNotes = flashcards.map((card, index) => {
-        const note = {
-          guid: `flashcard_${card.id}_${index}`,
-          model: 'Basic',
-          fields: {
-            Front: this.cleanField(card.pergunta),
-            Back: this.cleanField(card.resposta)
-          },
-          tags: this.formatTags(card.tags, card.materia, card.modulo)
-        }
-        return note
+      // Criar formato de texto simples compatível com Anki
+      const textContent = flashcards.map((card, index) => {
+        const front = this.cleanField(card.pergunta)
+        const back = this.cleanField(card.resposta)
+        const tags = this.formatTags(card.tags, card.materia, card.modulo)
+        
+        // Formato: Frente\tVerso\tTags
+        return `${front}\t${back}\t${tags}`
+      }).join('\n')
+
+      console.log('📝 Conteúdo texto gerado, tamanho:', textContent.length)
+
+      // Criar blob de texto
+      const blob = new Blob([textContent], { 
+        type: 'text/plain;charset=utf-8' 
       })
-
-      console.log('📝 Notas formatadas:', ankiNotes.length)
-
-      // Gerar arquivo de texto simples
-      const apkgContent = await this.generateAPKG(ankiNotes, deckName)
-      console.log('📦 Conteúdo gerado, tamanho:', apkgContent.size)
       
-      // Download do arquivo com nome claro
-      const filename = `${deckName}_flashcards.apkg`
+      // Download do arquivo com nome .txt (mais compatível)
+      const filename = `${deckName}_flashcards.txt`
       console.log('📥 Iniciando download:', filename)
-      this.downloadFile(apkgContent, filename)
+      this.downloadFile(blob, filename)
       
-      return { success: true, count: ankiNotes.length }
+      return { success: true, count: flashcards.length }
     } catch (error) {
       console.error('❌ Erro ao exportar para Anki:', error)
       return { success: false, error: error.message }
