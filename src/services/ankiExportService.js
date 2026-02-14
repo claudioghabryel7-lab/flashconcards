@@ -17,11 +17,11 @@ class AnkiExportService {
         return note
       })
 
-      // Gerar arquivo .apkg
+      // Gerar arquivo de texto simples
       const apkgContent = await this.generateAPKG(ankiNotes, deckName)
       
-      // Download do arquivo
-      this.downloadFile(apkgContent, `${deckName}.apkg`)
+      // Download do arquivo com nome claro
+      this.downloadFile(apkgContent, `${deckName}_flashcards_anki.txt`)
       
       return { success: true, count: ankiNotes.length }
     } catch (error) {
@@ -75,114 +75,21 @@ class AnkiExportService {
   }
 
   static async generateAPKG(notes, deckName) {
-    const zip = new JSZip()
-    
-    // Criar arquivo media (vazio para cards básicos)
-    zip.file('media', '')
-    
-    // Criar arquivo collection.anki2
-    const collection = {
-      config: {
-        collapseTime: 100,
-        creationOffset: 0,
-        curModel: null,
-      },
-      decks: [
-        {
-          id: 1,
-          name: deckName,
-          desc: 'Exportado do FlashConCards',
-          collapsed: false,
-          conf: 1,
-          browserCollapsed: false,
-          dyn: 0,
-          usn: -1,
-          common: {
-            active: 1,
-            'new': {
-              perDay: 20,
-              bury: true,
-              delays: [1, 6, 10, 15, 20, 25],
-              ints: [1, 4, 7],
-              initialFactor: 2500,
-              maxFactor: 13000,
-              separate: true,
-              hardFactor: 1.3,
-              easyFactor: 1.3,
-              minFactor: 1300,
-              maxIvl: 36500,
-            },
-            rev: {
-              perDay: 100,
-              bury: true,
-              ivlFct: 3,
-              maxIvl: 36500,
-              ease4: 1.3,
-              factor: 2.5,
-              minFactor: 1300,
-            },
-            lapse: {
-              minIvl: 1,
-              leechAction: 0,
-              leechFails: 8,
-              mult: 0,
-              delays: [10],
-            },
-          },
-        }
-      ],
-      models: [
-        {
-          id: 1485022299701,
-          name: 'Basic',
-          flds: [
-            { name: 'Front', ord: 0, sticky: false, rtl: false, font: 'Arial', size: 20 },
-            { name: 'Back', ord: 1, sticky: false, rtl: false, font: 'Arial', size: 20 }
-          ],
-          tmpls: [
-            {
-              name: 'Card 1',
-              ord: 0,
-              qfmt: '{{Front}}',
-              afmt: '{{FrontSide}}<hr id=answer>{{Back}}',
-              bqfmt: '',
-              bafmt: '',
-              did: null,
-              bfont: '',
-              bsize: 0
-            }
-          ],
-          css: '.card {\n font-family: arial;\n font-size: 20px;\n text-align: center;\n color: black;\n background-color: white;\n}\n',
-          did: 1,
-          usn: -1,
-          mtime: 1485022299701,
-          vers: []
-        }
-      ],
-      notes: notes.map(note => ({
-        id: note.guid,
-        guid: note.guid,
-        mid: 1485022299701,
-        mod: Date.now(),
-        usn: -1,
-        type: 0,
-        queue: 0,
-        due: 0,
-        ivl: 0,
-        factor: 0,
-        reps: 0,
-        lapses: 0,
-        left: 0,
-        flds: [note.fields.Front, note.fields.Back],
-        flags: 0,
-        data: '',
-        tags: note.tags
-      }))
-    }
+    // Criar formato simples de texto para importação no Anki
+    const textContent = notes.map(note => {
+      const front = this.cleanField(note.fields.Front)
+      const back = this.cleanField(note.fields.Back)
+      const tags = note.tags || ''
+      
+      return `${front}\t${back}\t${tags}`
+    }).join('\n')
 
-    zip.file('collection.anki2', JSON.stringify(collection))
+    // Criar arquivo de texto simples (mais compatível)
+    const blob = new Blob([textContent], { 
+      type: 'text/plain;charset=utf-8' 
+    })
     
-    return await zip.generateAsync({ type: 'blob' })
+    return blob
   }
 
   static downloadFile(content, filename) {
