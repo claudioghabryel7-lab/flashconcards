@@ -6,33 +6,113 @@ class AnkiExportService {
       console.log('🚀 Iniciando exportação para Anki...')
       console.log('📊 Flashcards para exportar:', flashcards.length)
       
-      // Criar formato de texto simples compatível com Anki
-      const textContent = flashcards.map((card, index) => {
-        const front = this.cleanField(card.pergunta)
-        const back = this.cleanField(card.resposta)
-        const tags = this.formatTags(card.tags, card.materia, card.modulo)
-        
-        // Formato: Frente\tVerso\tTags
-        return `${front}\t${back}\t${tags}`
-      }).join('\n')
-
-      console.log('📝 Conteúdo texto gerado, tamanho:', textContent.length)
-
-      // Criar blob de texto
-      const blob = new Blob([textContent], { 
-        type: 'text/plain;charset=utf-8' 
-      })
+      // Criar um arquivo .apkg válido usando formato simplificado
+      const apkgBlob = await this.createValidAPKG(flashcards, deckName)
       
-      // Download do arquivo com nome .txt (mais compatível)
-      const filename = `${deckName}_flashcards.txt`
+      // Download do arquivo .apkg
+      const filename = `${deckName}_flashcards.apkg`
       console.log('📥 Iniciando download:', filename)
-      this.downloadFile(blob, filename)
+      this.downloadFile(apkgBlob, filename)
       
       return { success: true, count: flashcards.length }
     } catch (error) {
       console.error('❌ Erro ao exportar para Anki:', error)
       return { success: false, error: error.message }
     }
+  }
+
+  static async createValidAPKG(flashcards, deckName) {
+    console.log('🔧 Criando APKG válido...')
+    
+    const zip = new JSZip()
+    
+    // Criar arquivo media (vazio para cards básicos)
+    zip.file('media', '')
+    
+    // Criar collection.anki2 com estrutura mínima válida
+    const collection = {
+      "conf": {
+        "curModel": 1485022299701,
+        "creationOffset": 0,
+        "collapseTime": 100
+      },
+      "decks": [
+        {
+          "id": 1,
+          "name": deckName,
+          "desc": "Exportado do FlashConCards",
+          "collapsed": false,
+          "conf": 1,
+          "browserCollapsed": false,
+          "dyn": 0,
+          "usn": -1
+        }
+      ],
+      "models": [
+        {
+          "id": 1485022299701,
+          "name": "Basic",
+          "flds": [
+            {"name": "Front", "ord": 0, "sticky": false, "rtl": false, "font": "Arial", "size": 20},
+            {"name": "Back", "ord": 1, "sticky": false, "rtl": false, "font": "Arial", "size": 20}
+          ],
+          "tmpls": [
+            {
+              "name": "Card 1",
+              "ord": 0,
+              "qfmt": "{{Front}}",
+              "afmt": "{{FrontSide}}<hr id=answer>{{Back}}",
+              "bqfmt": "",
+              "bafmt": "",
+              "did": null,
+              "bfont": "",
+              "bsize": 0
+            }
+          ],
+          "css": ".card { font-family: arial; font-size: 20px; text-align: center; color: black; background-color: white; }",
+          "did": 1,
+          "usn": -1,
+          "mtime": 1485022299701,
+          "vers": []
+        }
+      ],
+      "notes": []
+    }
+
+    // Adicionar notes
+    flashcards.forEach((card, index) => {
+      const note = {
+        "id": Date.now() + index,
+        "guid": `flashcard_${card.id}_${index}`,
+        "mid": 1485022299701,
+        "mod": Date.now(),
+        "usn": -1,
+        "type": 0,
+        "queue": 0,
+        "due": 0,
+        "ivl": 0,
+        "factor": 0,
+        "reps": 0,
+        "lapses": 0,
+        "left": 0,
+        "flds": JSON.stringify([this.cleanField(card.pergunta), this.cleanField(card.resposta)]),
+        "flags": 0,
+        "data": "",
+        "tags": this.formatTags(card.tags, card.materia, card.modulo)
+      }
+      collection.notes.push(note)
+    })
+
+    // Adicionar collection ao zip
+    zip.file('collection.anki2', JSON.stringify(collection))
+    
+    console.log('📦 ZIP criado com', collection.notes.length, 'notes')
+    
+    // Gerar blob do APKG
+    const apkgBlob = await zip.generateAsync({ type: 'blob' })
+    console.log('🗜️ APKG gerado, tamanho:', apkgBlob.size)
+    
+    return apkgBlob
   }
 
   static cleanField(text) {
