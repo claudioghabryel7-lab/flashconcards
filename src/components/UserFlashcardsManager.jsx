@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, PencilIcon, EyeIcon, ClockIcon, CheckCircleIcon, XCircleIcon, ArrowDownTrayIcon, BugAntIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PencilIcon, EyeIcon, ClockIcon, CheckCircleIcon, XCircleIcon, ArrowDownTrayIcon, BugAntIcon, PlayIcon } from '@heroicons/react/24/outline'
 import { userFlashcardsService } from '../services/userFlashcardsService'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import AnkiExportButton from './AnkiExportButton'
 import { debugFlashcards } from '../utils/debugFlashcards'
+import { testDownload } from '../utils/testDownload'
 
 const UserFlashcardsManager = ({ selectedCourseId = null }) => {
   const { user, profile } = useAuth()
@@ -217,6 +218,16 @@ const UserFlashcardsManager = ({ selectedCourseId = null }) => {
               >
                 <BugAntIcon className="h-4 w-4" />
                 <span>Debug Flashcards</span>
+              </button>
+            </div>
+            <div className="mt-2">
+              <button
+                onClick={testDownload}
+                className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-medium text-xs bg-purple-600 hover:bg-purple-700 text-white transition-all duration-200"
+                title="Testar download de arquivo"
+              >
+                <PlayIcon className="h-4 w-4" />
+                <span>Testar Download</span>
               </button>
             </div>
           </div>

@@ -147,13 +147,12 @@ const AnkiExportButton = ({
               <div>
                 <div className="font-semibold mb-1">✅ {exportResult.count} flashcards exportados!</div>
                 <div className="text-xs opacity-80">
-                  <div className="mb-1">📁 Arquivo: {selectedMateria ? `${selectedMateria}_flashcards_anki.txt` : 'FlashConCards_flashcards_anki.txt'}</div>
+                  <div className="mb-1">📁 Arquivo: {selectedMateria ? `${selectedMateria}_flashcards.apkg` : 'FlashConCards_flashcards.apkg'}</div>
                   <div className="mb-1">📥 Para importar no Anki:</div>
                   <div className="ml-2">1. Abra o Anki</div>
                   <div className="ml-2">2. Arquivo → Importar</div>
-                  <div className="ml-2">3. Selecione o arquivo .txt</div>
-                  <div className="ml-2">4. Tipo: Campo separado por Tab</div>
-                  <div className="ml-2">5. Mapear: Frente → Pergunta, Verso → Resposta</div>
+                  <div className="ml-2">3. Selecione o arquivo .apkg</div>
+                  <div className="ml-2">4. Pronto! Cards importados automaticamente</div>
                 </div>
               </div>
             ) 
