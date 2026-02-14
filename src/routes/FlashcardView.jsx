@@ -13,6 +13,7 @@ import { applySubjectOrder, applyModuleOrder, getModuleOrder } from '../utils/su
 import { FolderIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon, LockClosedIcon } from '@heroicons/react/24/outline'
 import { canAccessMateria, canAccessModulo, isTrialMode } from '../utils/trialLimits'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import AnkiExportButton from '../components/AnkiExportButton'
 import {
   getOrCreateExplanationCache,
   saveExplanationCache,
@@ -1733,6 +1734,16 @@ IMPORTANTE:
                       <div className="absolute inset-0 bg-gradient-to-r from-slate-500/0 via-slate-500/10 to-slate-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
                       <span className="relative z-10 text-sm">← Voltar</span>
                     </button>
+                  </div>
+
+                  {/* Botão de Exportação para Anki */}
+                  <div className="flex-1">
+                    <AnkiExportButton 
+                      selectedMateria={selectedMateria}
+                      selectedModulo={selectedModulo}
+                      className="w-full"
+                      variant="text"
+                    />
                   </div>
                 </div>
               </div>

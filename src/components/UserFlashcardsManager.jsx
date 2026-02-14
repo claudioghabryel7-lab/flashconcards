@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, PencilIcon, EyeIcon, ClockIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PencilIcon, EyeIcon, ClockIcon, CheckCircleIcon, XCircleIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import { userFlashcardsService } from '../services/userFlashcardsService'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import AnkiExportButton from './AnkiExportButton'
 
 const UserFlashcardsManager = () => {
   const { user, profile } = useAuth()
@@ -190,13 +191,21 @@ const UserFlashcardsManager = () => {
 
           <div className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
-                <XCircleIcon className="h-6 w-6 text-red-600 dark:text-red-400" />
+              <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                <ArrowDownTrayIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <p className="text-sm text-slate-600 dark:text-slate-400">Atrasados</p>
-                <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{stats.overdue}</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Exportar</p>
+                <p className="text-lg font-bold text-slate-800 dark:text-slate-100">Anki</p>
               </div>
+            </div>
+            <div className="mt-3">
+              <AnkiExportButton 
+                selectedMateria={filters.materia || null}
+                selectedModulo={filters.modulo || null}
+                className="w-full"
+                variant="secondary"
+              />
             </div>
           </div>
         </div>
