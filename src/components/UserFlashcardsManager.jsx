@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, PencilIcon, TrashIcon, EyeIcon, ClockIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PencilIcon, EyeIcon, ClockIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
 import { userFlashcardsService } from '../services/userFlashcardsService'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
@@ -102,18 +102,6 @@ const UserFlashcardsManager = () => {
       tags: card.tags || []
     })
     setShowForm(true)
-  }
-
-  const handleDelete = async (cardId) => {
-    if (!confirm('Tem certeza que deseja excluir este flashcard?')) return
-
-    try {
-      await userFlashcardsService.deleteFlashcard(cardId)
-      loadStats()
-    } catch (error) {
-      console.error('Erro ao excluir flashcard:', error)
-      alert('Erro ao excluir flashcard. Tente novamente.')
-    }
   }
 
   const resetForm = () => {
@@ -414,12 +402,6 @@ const UserFlashcardsManager = () => {
                     className="p-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400"
                   >
                     <PencilIcon className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(card.id)}
-                    className="p-2 text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400"
-                  >
-                    <TrashIcon className="h-5 w-5" />
                   </button>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { HeartIcon, TrashIcon } from '@heroicons/react/24/solid'
+import { HeartIcon } from '@heroicons/react/24/solid'
 
 const FlashcardItem = ({ 
   card, 
@@ -61,22 +61,6 @@ const FlashcardItem = ({
               >
                 <HeartIcon className='h-5 w-5 sm:h-6 sm:w-6' />
               </button>
-              
-              {/* Botão de deletar */}
-              {onDeleteFlashcard && (
-                <button
-                  type='button'
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    if (window.confirm('Tem certeza que deseja apagar este flashcard?')) {
-                      onDeleteFlashcard(card.id)
-                    }
-                  }}
-                  className='group/delete flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl transition-all touch-manipulation text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
-                >
-                  <TrashIcon className='h-5 w-5 sm:h-6 sm:w-6' />
-                </button>
-              )}
             </div>
 
             <div className='flex-1 flex flex-col justify-center items-center text-center px-2 sm:px-4 py-4 sm:py-6'>

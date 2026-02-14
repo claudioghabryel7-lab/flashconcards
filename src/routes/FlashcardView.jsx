@@ -3,7 +3,6 @@ import { useSearchParams, Link } from 'react-router-dom'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import dayjs from 'dayjs'
 import FlashcardList from '../components/FlashcardList'
-import AddUserFlashcardButton from '../components/AddUserFlashcardButton'
 import { userFlashcardsService } from '../services/userFlashcardsService'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -1870,16 +1869,6 @@ IMPORTANTE:
             </div>
           </div>
         </div>
-      )}
-      
-      {/* Botão flutuante para adicionar flashcards do usuário */}
-      {user && studyMode === 'module' && selectedMateria && selectedModulo && (
-        <AddUserFlashcardButton
-          selectedMateria={selectedMateria}
-          selectedModulo={selectedModulo}
-          selectedCourseId={selectedCourseId}
-          onFlashcardAdded={loadUserFlashcards}
-        />
       )}
       
       {/* Modal de Loading para Geração de Flashcards */}
