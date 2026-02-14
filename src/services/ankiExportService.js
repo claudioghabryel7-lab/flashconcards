@@ -1,6 +1,116 @@
 import JSZip from 'jszip/dist/jszip.min.js'
 
 class AnkiExportService {
+  static async exportSingleFlashcard(flashcard, deckName = 'FlashConCards') {
+    try {
+      console.log('🚀 Exportando 1 flashcard para Anki (.apkg)...')
+      console.log('📊 Flashcard:', flashcard.id)
+      
+      // Criar arquivo .apkg real com 1 card
+      const apkgBlob = await this.createSingleCardAPKG(flashcard, deckName)
+      
+      // Download do arquivo .apkg
+      const filename = `${deckName}_flashcard_${flashcard.id}.apkg`
+      console.log('📥 Iniciando download:', filename)
+      this.downloadFile(apkgBlob, filename)
+      
+      return { success: true, count: 1 }
+    } catch (error) {
+      console.error('❌ Erro ao exportar flashcard:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
+  static async createSingleCardAPKG(flashcard, deckName) {
+    console.log('🔧 Criando APKG com 1 card...')
+    
+    const zip = new JSZip()
+    
+    // Criar arquivo media (vazio para cards básicos)
+    zip.file('media', '')
+    
+    // Criar collection.anki2 com estrutura mínima válida
+    const collection = {
+      "conf": {
+        "curModel": 1485022299701,
+        "creationOffset": 0,
+        "collapseTime": 100
+      },
+      "decks": [
+        {
+          "id": 1,
+          "name": deckName,
+          "desc": "Exportado do FlashConCards",
+          "collapsed": false,
+          "conf": 1,
+          "browserCollapsed": false,
+          "dyn": 0,
+          "usn": -1
+        }
+      ],
+      "models": [
+        {
+          "id": 1485022299701,
+          "name": "Basic",
+          "flds": [
+            {"name": "Front", "ord": 0, "sticky": false, "rtl": false, "font": "Arial", "size": 20},
+            {"name": "Back", "ord": 1, "sticky": false, "rtl": false, "font": "Arial", "size": 20}
+          ],
+          "tmpls": [
+            {
+              "name": "Card 1",
+              "ord": 0,
+              "qfmt": "{{Front}}",
+              "afmt": "{{FrontSide}}<hr id=answer>{{Back}}",
+              "bqfmt": "",
+              "bafmt": "",
+              "did": null,
+              "bfont": "",
+              "bsize": 0
+            }
+          ],
+          "css": ".card { font-family: arial; font-size: 20px; text-align: center; color: black; background-color: white; }",
+          "did": 1,
+          "usn": -1,
+          "mtime": 1485022299701,
+          "vers": []
+        }
+      ],
+      "notes": [
+        {
+          "id": Date.now(),
+          "guid": `flashcard_${flashcard.id}`,
+          "mid": 1485022299701,
+          "mod": Date.now(),
+          "usn": -1,
+          "type": 0,
+          "queue": 0,
+          "due": 0,
+          "ivl": 0,
+          "factor": 0,
+          "reps": 0,
+          "lapses": 0,
+          "left": 0,
+          "flds": JSON.stringify([this.cleanField(flashcard.pergunta), this.cleanField(flashcard.resposta)]),
+          "flags": 0,
+          "data": "",
+          "tags": this.formatTags(flashcard.tags, flashcard.materia, flashcard.modulo)
+        }
+      ]
+    }
+
+    // Adicionar collection ao zip
+    zip.file('collection.anki2', JSON.stringify(collection))
+    
+    console.log('📦 ZIP criado com 1 note')
+    
+    // Gerar blob do APKG
+    const apkgBlob = await zip.generateAsync({ type: 'blob' })
+    console.log('🗜️ APKG gerado, tamanho:', apkgBlob.size)
+    
+    return apkgBlob
+  }
+
   static async exportToAnki(flashcards, deckName = 'FlashConCards') {
     try {
       console.log('🚀 Iniciando exportação para Anki...')

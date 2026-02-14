@@ -14,6 +14,7 @@ import { FolderIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon, LockClosedIco
 import { canAccessMateria, canAccessModulo, isTrialMode } from '../utils/trialLimits'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import AnkiExportButton from '../components/AnkiExportButton'
+import SingleFlashcardExport from '../components/SingleFlashcardExport'
 import {
   getOrCreateExplanationCache,
   saveExplanationCache,
@@ -1620,37 +1621,6 @@ IMPORTANTE:
                           <span>Mini simulado (10 cards)</span>
                         </span>
                       </button>
-
-                      {/* Botões de geração por IA - Médio e Difícil */}
-                      <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 px-1">Gerar com IA:</p>
-                        
-                        <button
-                          type="button"
-                          onClick={() => generateFlashcardsByDifficulty('médio')}
-                          disabled={generatingFlashcards}
-                          className="group/btn relative w-full rounded-lg border-2 border-dashed border-amber-400 dark:border-amber-500 px-3 py-2 text-left text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50/50 dark:hover:bg-amber-900/20 transition-all overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <div className="absolute inset-0 bg-gradient-to-r from-amber-500/0 via-amber-500/5 to-orange-500/0 opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
-                          <span className="relative z-10 flex items-center gap-2">
-                            <span>{generatingFlashcards && selectedDifficulty === 'médio' ? '⏳' : '🎯'}</span>
-                            <span>{generatingFlashcards && selectedDifficulty === 'médio' ? 'Gerando...' : 'Nível Médio (10 cards)'}</span>
-                          </span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => generateFlashcardsByDifficulty('difícil')}
-                          disabled={generatingFlashcards}
-                          className="group/btn relative w-full rounded-lg border-2 border-dashed border-red-400 dark:border-red-500 px-3 py-2 text-left text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20 transition-all overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <div className="absolute inset-0 bg-gradient-to-r from-red-500/0 via-red-500/5 to-rose-500/0 opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
-                          <span className="relative z-10 flex items-center gap-2">
-                            <span>{generatingFlashcards && selectedDifficulty === 'difícil' ? '⏳' : '🔥'}</span>
-                            <span>{generatingFlashcards && selectedDifficulty === 'difícil' ? 'Gerando...' : 'Nível Difícil (10 cards)'}</span>
-                          </span>
-                        </button>
-                      </div>
                     </div>
                   )}
                 </div>
@@ -1736,7 +1706,17 @@ IMPORTANTE:
                     </button>
                   </div>
 
-                  {/* Botão de Exportação para Anki */}
+                  {/* Botão de Exportação Individual */}
+                  <div className="flex-1">
+                    <SingleFlashcardExport 
+                      flashcard={currentCard}
+                      deckName={selectedMateria || 'FlashConCards'}
+                      className="w-full"
+                      variant="text"
+                    />
+                  </div>
+                  
+                  {/* Botão de Exportação Completa */}
                   <div className="flex-1">
                     <AnkiExportButton 
                       selectedMateria={selectedMateria}
