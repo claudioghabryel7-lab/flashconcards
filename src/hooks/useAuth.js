@@ -18,9 +18,9 @@ import { auth, db, firebaseInitialized } from '../firebase/config'
 
 const AuthContext = createContext(null)
 
-// Cache para perfil do usuário (TTL: 2 minutos)
+// Cache para perfil do usuário (TTL: 24 horas para melhor persistência)
 const PROFILE_CACHE_KEY = 'auth_profile_cache'
-const PROFILE_CACHE_TTL = 2 * 60 * 1000 // 2 minutos
+const PROFILE_CACHE_TTL = 24 * 60 * 60 * 1000 // 24 horas
 
 const getCachedProfile = (uid) => {
   try {
@@ -28,6 +28,11 @@ const getCachedProfile = (uid) => {
     if (!cached) return null
     const { data, timestamp } = JSON.parse(cached)
     if (Date.now() - timestamp < PROFILE_CACHE_TTL) {
+      return data
+    }
+    // Em desenvolvimento, não limpar cache tão rápido para evitar logout frequente
+    if (import.meta.env.DEV) {
+      console.log('Cache expirado, mas mantendo em desenvolvimento para evitar logout')
       return data
     }
     localStorage.removeItem(`${PROFILE_CACHE_KEY}_${uid}`)
@@ -265,6 +270,15 @@ export const AuthProvider = ({ children }) => {
               // Perfil não existe mas não foi deletado - pode ser um usuário novo
               // Não fazer logout, apenas limpar profile (o onAuthStateChanged vai recriar se necessário)
               console.log('Perfil não encontrado, mas usuário não foi deletado. Aguardando recriação...')
+              // Em desenvolvimento, manter perfil do cache para evitar logout
+              if (import.meta.env.DEV) {
+                const cachedProfile = getCachedProfile(firebaseUser.uid)
+                if (cachedProfile) {
+                  console.log('Mantendo perfil do cache em desenvolvimento')
+                  setProfile(cachedProfile)
+                  return
+                }
+              }
               setProfile(null)
             }
           } catch (deletedCheckError) {
@@ -282,10 +296,20 @@ export const AuthProvider = ({ children }) => {
         // Tratar erro de permissão silenciosamente se for permission-denied
         if (error.code === 'permission-denied') {
           console.warn('Permissão negada ao ler perfil do usuário. Isso é normal se o usuário não estiver completamente autenticado.')
+          // Em desenvolvimento, não resetar profile para evitar logout frequente
+          if (import.meta.env.DEV) {
+            console.log('Mantendo perfil atual em desenvolvimento (erro de permissão)')
+            return
+          }
           // Não resetar profile em caso de erro de permissão para evitar flicker
           return
         }
         console.error('Erro no onSnapshot do perfil:', error)
+        // Em desenvolvimento, não resetar profile para evitar logout frequente
+        if (import.meta.env.DEV) {
+          console.log('Mantendo perfil atual em desenvolvimento (erro geral)')
+          return
+        }
         // Não resetar profile em caso de erro para evitar flicker
       }
     )

@@ -10,6 +10,7 @@ import {
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import AudioReader from '../components/AudioReader'
 
 // Gera uma chave estável e mais específica para cada tópico do edital,
 // combinando numeração + nome. Isso evita colisões entre tópicos diferentes
@@ -559,14 +560,32 @@ const EditalVerticalizado = () => {
                     </p>
                   )}
                   {secao.conteudo ? (
-                    <div
-                      className="prose prose-slate dark:prose-invert max-w-none text-xs sm:text-sm md:text-base text-slate-700 dark:text-slate-300 prose-headings:text-sm sm:prose-headings:text-base md:prose-headings:text-lg"
-                      dangerouslySetInnerHTML={{ __html: secao.conteudo }}
-                    />
+                    <>
+                      <div
+                        className="prose prose-slate dark:prose-invert max-w-none text-xs sm:text-sm md:text-base text-slate-700 dark:text-slate-300 prose-headings:text-sm sm:prose-headings:text-base md:prose-headings:text-lg"
+                        dangerouslySetInnerHTML={{ __html: secao.conteudo }}
+                      />
+                      {/* Leitura de Áudio */}
+                      <div className="mt-4">
+                        <AudioReader 
+                          text={secao.conteudo.replace(/<[^>]*>/g, '')} // Remover HTML para leitura
+                          className="w-full"
+                        />
+                      </div>
+                    </>
                   ) : secao.texto ? (
-                    <div className="text-xs sm:text-sm md:text-base text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed break-words">
-                      {secao.texto}
-                    </div>
+                    <>
+                      <div className="text-xs sm:text-sm md:text-base text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed break-words">
+                        {secao.texto}
+                      </div>
+                      {/* Leitura de Áudio */}
+                      <div className="mt-4">
+                        <AudioReader 
+                          text={secao.texto}
+                          className="w-full"
+                        />
+                      </div>
+                    </>
                   ) : null}
                   
                   {/* Subseções */}
@@ -581,14 +600,32 @@ const EditalVerticalizado = () => {
                             {subsecao.titulo}
                           </h3>
                           {subsecao.conteudo ? (
-                            <div
-                              className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 break-words"
-                              dangerouslySetInnerHTML={{ __html: subsecao.conteudo }}
-                            />
+                            <>
+                              <div
+                                className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 break-words"
+                                dangerouslySetInnerHTML={{ __html: subsecao.conteudo }}
+                              />
+                              {/* Leitura de Áudio */}
+                              <div className="mt-3">
+                                <AudioReader 
+                                  text={subsecao.conteudo.replace(/<[^>]*>/g, '')} // Remover HTML para leitura
+                                  className="w-full"
+                                />
+                              </div>
+                            </>
                           ) : subsecao.texto ? (
-                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words">
-                              {subsecao.texto}
-                            </p>
+                            <>
+                              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words">
+                                {subsecao.texto}
+                              </p>
+                              {/* Leitura de Áudio */}
+                              <div className="mt-3">
+                                <AudioReader 
+                                  text={subsecao.texto}
+                                  className="w-full"
+                                />
+                              </div>
+                            </>
                           ) : null}
                         </div>
                       ))}
