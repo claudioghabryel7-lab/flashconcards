@@ -112,7 +112,7 @@ const TreinoRedacao = () => {
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
       // Usar prompt unificado
       const { buildRedacaoPrompt } = await import('../utils/unifiedPrompt')
@@ -226,7 +226,7 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
       // Contar parágrafos (linhas que começam com 4 espaços)
       const paragraphCount = detectParagraphs(redacaoTexto)

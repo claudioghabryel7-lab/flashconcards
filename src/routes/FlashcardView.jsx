@@ -1288,8 +1288,8 @@ IMPORTANTE:
       
       const genAI = new GoogleGenerativeAI(apiKey)
       
-      // Usar modelos válidos em ordem de prioridade
-      const modelNames = ['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-pro']
+      // Usar apenas modelos confirmados que funcionam
+      const modelNames = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro']
       let lastError = null
       let aiResponse = ''
       

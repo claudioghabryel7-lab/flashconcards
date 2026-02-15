@@ -188,7 +188,7 @@ const Simulado = () => {
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
       // Usar prompt unificado
       const { buildRedacaoPrompt } = await import('../utils/unifiedPrompt')
@@ -301,7 +301,7 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
       // Usar prompt unificado
       const { buildRedacaoAnalysisPrompt } = await import('../utils/unifiedPrompt')
@@ -564,7 +564,7 @@ CRÍTICO:
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
       // Informações do curso para contexto
       const courseContext = courseName ? `\n\nCONCURSO ESPECÍFICO: ${courseName}${courseCompetition && courseCompetition !== courseName ? ` (${courseCompetition})` : ''}` : ''
@@ -783,7 +783,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
       // Filtrar matérias - APENAS as que estão no curso
       const validMaterias = simuladoInfo.materias.filter(m => 
@@ -937,6 +937,26 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       const shuffleAlternatives = (question) => {
         if (!question.alternativas || !question.correta) return question
         
+        // Se as alternativas já foram embaralhadas, não embaralhar novamente
+        if (question.alternativesShuffled) return question
+        
+        // Para questões antigas sem flag, verificar se as alternativas estão na ordem original
+        // Se estiverem na ordem A, B, C, D, E, assumir que já foram embaralhadas alguma vez
+        // e não embaralhar novamente para evitar inconsistência
+        const hasOriginalOrder = ['A', 'B', 'C', 'D', 'E'].every(letter => 
+          question.alternativas && question.alternativas[letter] !== undefined
+        )
+        
+        // Se tem todas as letras na ordem esperada, NÃO embaralhar (para evitar duplo embaralhamento)
+        // Marcar como já embaralhada para manter consistência
+        if (hasOriginalOrder) {
+          return {
+            ...question,
+            alternativesShuffled: true
+          }
+        }
+        
+        // Caso contrário, embaralhar normalmente
         // Converter alternativas em array de pares [letra, texto]
         const alternativesArray = Object.entries(question.alternativas)
         
@@ -959,12 +979,21 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
         return {
           ...question,
           alternativas: newAlternatives,
-          correta: newCorrectAnswer
+          correta: newCorrectAnswer,
+          alternativesShuffled: true // Marcar que já foi embaralhado
         }
       }
       
       // Embaralhar alternativas de todas as questões
-      const questionsWithShuffledAlternatives = organizedQuestions.map(shuffleAlternatives)
+      console.log('🔍 Embaralhando questões novas:', organizedQuestions.length)
+      const questionsWithShuffledAlternatives = organizedQuestions.map((question, index) => {
+        console.log(`📝 Questão ${index + 1}:`, {
+          hasFlag: !!question.alternativesShuffled,
+          alternatives: Object.keys(question.alternativas || {}),
+          correta: question.correta
+        })
+        return shuffleAlternatives(question)
+      })
       
       // Definir questões organizadas por matéria com alternativas embaralhadas
       setQuestions(questionsWithShuffledAlternatives)
@@ -1033,7 +1062,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
       // Usar prompt unificado
       const { buildQuestionPrompt } = await import('../utils/unifiedPrompt')

@@ -50,6 +50,37 @@ const generateVisitorId = async () => {
   }
 }
 
+// Embaralhar alternativas de cada questão (mantendo correspondência com resposta correta)
+const shuffleAlternatives = (question) => {
+  if (!question.alternativas || !question.correta) return question
+  
+  // Converter alternativas em array de pares [letra, texto]
+  const alternativesArray = Object.entries(question.alternativas)
+  
+  // Embaralhar o array
+  const shuffled = [...alternativesArray].sort(() => Math.random() - 0.5)
+  
+  // Criar novo objeto de alternativas com letras A, B, C, D, E na ordem embaralhada
+  const newAlternatives = {}
+  const letterMap = {} // Mapear letra antiga -> letra nova
+  
+  shuffled.forEach(([oldLetter, text], index) => {
+    const newLetter = ['A', 'B', 'C', 'D', 'E'][index]
+    newAlternatives[newLetter] = text
+    letterMap[oldLetter] = newLetter
+  })
+  
+  // Atualizar resposta correta para a nova letra
+  const newCorrectAnswer = letterMap[question.correta] || question.correta
+  
+  return {
+    ...question,
+    alternativas: newAlternatives,
+    correta: newCorrectAnswer,
+    alternativesShuffled: true // Marcar que já foi embaralhado
+  }
+}
+
 const SimuladoShare = () => {
   const { simuladoId } = useParams()
   const navigate = useNavigate()
@@ -150,10 +181,11 @@ const SimuladoShare = () => {
 
         setSimuladoData(data)
         
-        // Se tem questões salvas, usar essas questões
+        // Se tem questões salvas, usar essas questões (NÃO EMBARALHAR NOVAMENTE)
         if (data.questions && data.questions.length > 0) {
           setLoadingStatus('Carregando questões...')
           setLoadingProgress(90)
+          console.log('� Carregando questões do Firestore sem embaralhar:', data.questions.length)
           setQuestions(data.questions)
           setLoadingProgress(100)
           setTimeLeft((data.simuladoInfo?.tempoMinutos || 240) * 60)
@@ -324,7 +356,7 @@ const SimuladoShare = () => {
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
       const simuladoInfo = simuladoData.simuladoInfo
       const validMaterias = simuladoInfo.materias || []
@@ -466,36 +498,6 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
         throw new Error('Nenhuma questão foi gerada. Tente novamente.')
       }
 
-      // Embaralhar alternativas de cada questão (mantendo correspondência com resposta correta)
-      const shuffleAlternatives = (question) => {
-        if (!question.alternativas || !question.correta) return question
-        
-        // Converter alternativas em array de pares [letra, texto]
-        const alternativesArray = Object.entries(question.alternativas)
-        
-        // Embaralhar o array
-        const shuffled = [...alternativesArray].sort(() => Math.random() - 0.5)
-        
-        // Criar novo objeto de alternativas com letras A, B, C, D, E na ordem embaralhada
-        const newAlternatives = {}
-        const letterMap = {} // Mapear letra antiga -> letra nova
-        
-        shuffled.forEach(([oldLetter, text], index) => {
-          const newLetter = ['A', 'B', 'C', 'D', 'E'][index]
-          newAlternatives[newLetter] = text
-          letterMap[oldLetter] = newLetter
-        })
-        
-        // Atualizar resposta correta para a nova letra
-        const newCorrectAnswer = letterMap[question.correta] || question.correta
-        
-        return {
-          ...question,
-          alternativas: newAlternatives,
-          correta: newCorrectAnswer
-        }
-      }
-      
       // Embaralhar alternativas de todas as questões
       const questionsWithShuffledAlternatives = allQuestions.map(shuffleAlternatives)
 
@@ -608,7 +610,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       const linkContext = referenceLink ? await getLinkContextForAI(referenceLink) : ''
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
       const themePrompt = `Você é um especialista em criar temas de redação para concursos públicos.
 
@@ -673,7 +675,7 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
       // Validar tamanho mínimo
       const wordCount = redacaoTexto.trim().split(/\s+/).length

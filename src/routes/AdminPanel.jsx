@@ -1084,7 +1084,7 @@ const AdminPanel = () => {
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
       const courseName = courses.find(c => c.id === courseId)?.name || 'o curso'
       
@@ -4533,7 +4533,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const modelNames = ['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-pro']
+      const modelNames = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro']
       let lastError = null
       let aiResponse = ''
 
@@ -4777,7 +4777,7 @@ CRÍTICO:
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const modelNames = ['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-pro']
+      const modelNames = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro']
       let lastError = null
       let materiasList = []
 
@@ -5072,7 +5072,7 @@ CRÍTICO:
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const modelNames = ['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-pro']
+    const modelNames = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro']
     let lastError = null
     let materiasList = []
 
@@ -5167,7 +5167,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const modelNames = ['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-pro']
+    const modelNames = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro']
     let materiasList = []
 
     // Identificar matérias (mesma lógica)
@@ -5265,7 +5265,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const modelNames = ['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-pro']
+      const modelNames = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro']
       let lastError = null
       let materiasList = []
 
