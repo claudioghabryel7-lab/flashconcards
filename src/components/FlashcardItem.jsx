@@ -29,7 +29,7 @@ const FlashcardItem = ({
   }
 
   return (
-    <div className='relative mx-auto w-full max-w-md sm:max-w-lg px-2 sm:px-0 mb-4'>
+    <div className='relative mx-auto w-full max-w-2xl xl:max-w-3xl px-2 sm:px-0 mb-4'>
       <motion.div
         className='relative min-h-[400px] sm:min-h-[450px] md:min-h-[500px] max-h-[85vh] sm:max-h-[90vh] w-full cursor-pointer group overflow-visible'
         style={{ perspective: 1200 }}

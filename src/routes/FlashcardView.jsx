@@ -401,13 +401,20 @@ const FlashcardView = () => {
   const organizedCards = useMemo(() => {
     const organized = {}
     
-    // Combinar cards do sistema com cards do usuário
+    // Combinar cards do sistema com cards do usuário, evitando duplicatas
     const allCards = [...cards, ...userCards]
     console.log('🔍 Cards do sistema:', cards.length)
     console.log('🔍 Cards do usuário:', userCards.length)
     console.log('🔍 Total de cards combinados:', allCards.length)
     
-    allCards.forEach((card) => {
+    // Usar Set para evitar duplicatas baseado no ID do card
+    const uniqueCards = allCards.filter((card, index, self) => 
+      index === self.findIndex((c) => c.id === card.id)
+    )
+    
+    console.log('🔍 Cards únicos após remoção de duplicatas:', uniqueCards.length)
+    
+    uniqueCards.forEach((card) => {
       const materia = card.materia || 'Sem matéria'
       const modulo = card.modulo || 'Sem módulo'
       if (!organized[materia]) {
@@ -419,7 +426,13 @@ const FlashcardView = () => {
       organized[materia][modulo].push(card)
     })
     
-    console.log('📊 Cards organizados por matéria/módulo:', organized)
+    // Log para debug de quantidades
+    Object.keys(organized).forEach(materia => {
+      Object.keys(organized[materia]).forEach(modulo => {
+        console.log(`📊 ${materia} -> ${modulo}: ${organized[materia][modulo].length} cards`)
+      })
+    })
+    
     return organized
   }, [cards, userCards])
 
@@ -1707,8 +1720,8 @@ IMPORTANTE:
               </div>
               
               {/* Área do card - responsiva e fixa */}
-              <div className="relative flex items-center justify-center min-h-[calc(100vh-120px)] px-4 py-4">
-                <div className="w-full max-w-full sm:max-w-md md:max-w-lg lg:max-w-xl">
+              <div className="relative flex items-center justify-center min-h-[calc(100vh-120px)] px-2 sm:px-4 py-4">
+                <div className="w-full max-w-2xl xl:max-w-3xl">
                   <FlashcardList
                     cards={activeCards}
                     currentIndex={currentIndex}

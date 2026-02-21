@@ -45,6 +45,8 @@ import { createSlug } from '../utils/slug'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import * as pdfjsLib from 'pdfjs-dist'
 import { jsonrepair } from 'jsonrepair'
+import LawDetector from '../utils/lawDetector'
+import LawDownloader from '../utils/lawDownloader'
 
 const MATERIAS = [
   'Português',
@@ -187,6 +189,21 @@ const AdminPanel = () => {
   
   // Estado para curso selecionado nos prompts
   const [selectedCourseForPrompts, setSelectedCourseForPrompts] = useState('alego-default') // Curso para salvar prompts
+  
+  // Estado para teste de prompts
+  const [testPrompt, setTestPrompt] = useState('')
+  const [testMateria, setTestMateria] = useState('')
+  const [testFlashcardResult, setTestFlashcardResult] = useState(null)
+  const [testError, setTestError] = useState('')
+  const [generatingTest, setGeneratingTest] = useState(false)
+  const [savingTestPrompt, setSavingTestPrompt] = useState(false)
+  const [promptHistory, setPromptHistory] = useState([])
+  const [sourceUrl, setSourceUrl] = useState('')
+  const [scrapingContent, setScrapingContent] = useState(false)
+  const [scrapedContent, setScrapedContent] = useState('')
+  const [autoResearch, setAutoResearch] = useState(false)
+  const [researching, setResearching] = useState(false)
+  const [researchContent, setResearchContent] = useState('')
   
   // Estado para gerenciar popup banner
   const [popupBanner, setPopupBanner] = useState({
@@ -3160,8 +3177,34 @@ REGRAS CRÍTICAS:
         }
       }
 
-      // 1. Analisar o edital e extrair matérias e estrutura APENAS DO CARGO ESPECÍFICO
+      // 1. Detectar leis no edital e baixar se necessário
+      setFullCourseProgress('🔍 Detectando leis no edital e baixando textos oficiais...')
+      
+      const lawDetector = new LawDetector()
+      const lawDownloader = new LawDownloader()
+      
+      // Detecta todas as leis mencionadas no edital
+      const detectedLaws = lawDetector.detectLaws(editalPdfTextForGeneration)
+      console.log(`🔍 Detectadas ${detectedLaws.length} leis no edital:`, detectedLaws)
+      
+      // Baixa as leis (verifica cache primeiro)
+      let downloadedLaws = []
+      if (detectedLaws.length > 0) {
+        setFullCourseProgress(`📥 Baixando ${detectedLaws.length} lei(s) de fontes oficiais...`)
+        downloadedLaws = await lawDownloader.downloadMultipleLaws(detectedLaws)
+        console.log(`✅ ${downloadedLaws.length} leis processadas com sucesso`)
+        setFullCourseProgress(`✅ ${downloadedLaws.length} lei(s) disponíveis para geração de flashcards`)
+      }
+
+      // 2. Analisar o edital e extrair matérias e estrutura APENAS DO CARGO ESPECÍFICO
       setFullCourseProgress(`📄 Analisando o edital e extraindo matérias do cargo: ${cargoForGeneration}...`)
+      
+      // Prepara textos das leis para incluir no prompt
+      const lawsText = downloadedLaws.length > 0 ? 
+        `\n\nLEIS E TEXTOS OFICIAIS DISPONÍVEIS:\n${downloadedLaws.map(law => 
+          `\n--- ${law.nome} ---\n${law.texto.substring(0, 5000)}${law.texto.length > 5000 ? '\n\n[... texto completo disponível no cache ...]' : ''}`
+        ).join('\n\n')}` : ''
+      
       const analysisPrompt = `Você é um especialista em análise de editais de concursos públicos.
 
 Analise o edital abaixo e extraia APENAS as informações relevantes para o CARGO ESPECÍFICO mencionado.
@@ -3169,7 +3212,7 @@ Analise o edital abaixo e extraia APENAS as informações relevantes para o CARG
 CARGO ESPECÍFICO: ${cargoForGeneration}
 
 EDITAL:
-${editalPdfTextForGeneration.substring(0, 100000)}${editalPdfTextForGeneration.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}
+${editalPdfTextForGeneration.substring(0, 100000)}${editalPdfTextForGeneration.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}${lawsText}
 
 TAREFA CRÍTICA - EXTRAIR TODAS AS MATÉRIAS E MÓDULOS:
 1. Identifique TODAS as matérias que serão cobradas para o cargo "${cargoForGeneration}"
@@ -3189,7 +3232,7 @@ IMPORTANTE - FILTRO POR CARGO:
 - NÃO inclua matérias de outros cargos
 - Se não encontrar matérias específicas para "${cargoForGeneration}", retorne um JSON vazio
 - Seja ESPECÍFICO e DETALHADO, mas APENAS para o cargo informado
-- Baseie-se EXCLUSIVAMENTE no conteúdo do edital
+- Baseie-se EXCLUSIVAMENTE no conteúdo do edital e nos textos oficiais das leis fornecidos
 - Organize de forma lógica e pedagógica
 - Módulos devem ter tamanho similar (não muito grandes, não muito pequenos)
 - GARANTA que TODAS as matérias do edital para este cargo sejam incluídas
@@ -6136,6 +6179,280 @@ CRÍTICO:
     }
   }
 
+  // Função para pesquisar automaticamente sobre a matéria
+  const researchTopic = async (topic) => {
+    if (!topic.trim()) {
+      return ''
+    }
+
+    try {
+      let planaltoContent = ''
+      let govContent1 = ''
+      let govContent2 = ''
+      let juridicoContent = ''
+
+      // Detectar se é uma lei específica (padrão: Lei XXXXX/YY ou número de lei)
+      const isLaw = /lei\s*\d+\/\d+/i.test(topic) || /^\d+\/\d+$/.test(topic) || /l\s*\d+/i.test(topic)
+      
+      if (isLaw) {
+        // Se for lei, buscar diretamente no Planalto
+        const lawNumber = topic.match(/(\d+\/\d+)/)?.[1] || topic
+        const planaltoResponse = await fetch(`https://r.jina.ai/http://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l${lawNumber.replace(/\//g, '')}.htm`)
+        if (planaltoResponse.ok) {
+          planaltoContent = await planaltoResponse.text()
+        }
+        
+        // Buscar em outros sites gov.br sobre esta lei específica
+        const govSearch1 = await fetch(`https://r.jina.ai/http://www.google.com/search?q=${encodeURIComponent('"' + topic + '" site:planalto.gov.br')}`)
+        if (govSearch1.ok) {
+          govContent1 = await govSearch1.text()
+        }
+      } else {
+        // Se não for lei específica, buscar mais genérico
+        const govSearch1 = await fetch(`https://r.jina.ai/http://www.google.com/search?q=${encodeURIComponent('"' + topic + '" site:planalto.gov.br')}`)
+        if (govSearch1.ok) {
+          govContent1 = await govSearch1.text()
+        }
+      }
+
+      // Buscar em outros sites gov.br
+      const govSearch2 = await fetch(`https://r.jina.ai/http://www.google.com/search?q=${encodeURIComponent('"' + topic + '" site:gov.br')}`)
+      if (govSearch2.ok) {
+        govContent2 = await govSearch2.text()
+      }
+
+      // Buscar em sites jurídicos confiáveis
+      const juridicoSearch = await fetch(`https://r.jina.ai/http://www.google.com/search?q=${encodeURIComponent('"' + topic + '" site:jusbrasil.com.br OR site:stf.jus.br OR site:stj.jus.br')}`)
+      if (juridicoSearch.ok) {
+        juridicoContent = await juridicoSearch.text()
+      }
+
+      // Combinar conteúdo priorizando fontes oficiais
+      const combinedContent = `
+=== PESQUISA AUTOMÁTICA: ${topic.toUpperCase()} ===
+
+${planaltoContent ? `PLANALTO GOV.BR (FONTE OFICIAL):\n${planaltoContent.substring(0, 2500)}\n\n` : ''}
+${govContent1 ? `PESQUISA GOVERNAMENTAL ESPECÍFICA:\n${govContent1.substring(0, 1500)}\n\n` : ''}
+${govContent2 ? 'GOVERNO FEDERAL:\n' + govContent2.substring(0, 1500) + '\n\n' : ''}
+${juridicoContent ? `FONTES JURÍDICAS CONFIÁVEIS:\n${juridicoContent.substring(0, 1500)}` : ''}
+`.trim()
+
+      // Limpar e limitar conteúdo
+      const cleanContent = combinedContent
+        .replace(/<[^>]*>/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .substring(0, 8000)
+
+      return cleanContent
+      
+    } catch (err) {
+      console.error('Erro na pesquisa automática:', err)
+      return ''
+    }
+  }
+
+  // Função para extrair conteúdo de uma URL
+  const scrapeWebsiteContent = async (url) => {
+    if (!url.trim()) {
+      setTestError('❌ Digite uma URL válida.')
+      return
+    }
+
+    setScrapingContent(true)
+    setTestError('')
+
+    try {
+      // Usar uma API proxy para evitar CORS (vamos criar um endpoint no backend)
+      // Por enquanto, vamos simular com uma abordagem client-side
+      const response = await fetch(`https://r.jina.ai/http://${url.replace(/^https?:\/\//, '')}`)
+      
+      if (!response.ok) {
+        throw new Error(`Erro ao acessar o site: ${response.status}`)
+      }
+
+      const content = await response.text()
+      
+      // Limpar o conteúdo
+      const cleanContent = content
+        .replace(/<[^>]*>/g, '') // Remover HTML
+        .replace(/\s+/g, ' ') // Normalizar espaços
+        .trim()
+        .substring(0, 8000) // Limitar para não exceder tokens
+
+      setScrapedContent(cleanContent)
+      setTestError('')
+      setMessage('✅ Conteúdo extraído com sucesso! Use-o como base para seus flashcards.')
+      
+    } catch (err) {
+      console.error('Erro ao extrair conteúdo:', err)
+      setTestError(`❌ Erro ao extrair conteúdo: ${err.message}`)
+    } finally {
+      setScrapingContent(false)
+    }
+  }
+
+  // Função para gerar flashcard de teste
+  const generateTestFlashcard = async () => {
+    if (!testPrompt.trim() || !testMateria.trim()) {
+      setTestError('❌ Preencha todos os campos: Prompt e Matéria.')
+      return
+    }
+
+    setGeneratingTest(true)
+    setTestError('')
+    setTestFlashcardResult(null)
+
+    try {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        throw new Error('VITE_GEMINI_API_KEY não configurada')
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+      // SEMPRE detectar e baixar leis (independente do modo)
+      setMessage('🔍 Detectando leis na matéria...')
+      const lawDetector = new LawDetector()
+      const lawDownloader = new LawDownloader()
+      
+      // Detecta leis no campo matéria
+      const detectedLaws = lawDetector.detectLaws(testMateria)
+      console.log(`🔍 Detectadas ${detectedLaws.length} leis em: ${testMateria}`)
+      console.log('📋 Leis detectadas:', detectedLaws)
+      
+      // Baixa as leis (verifica cache primeiro)
+      let downloadedLaws = []
+      let lawsContent = ''
+      
+      if (detectedLaws.length > 0) {
+        setMessage(`📥 Baixando ${detectedLaws.length} lei(s) de fontes oficiais...`)
+        downloadedLaws = await lawDownloader.downloadMultipleLaws(detectedLaws)
+        console.log(`✅ ${downloadedLaws.length} leis processadas com sucesso`)
+        console.log('📚 Leis baixadas:', downloadedLaws)
+        
+        // Prepara conteúdo das leis para o prompt
+        lawsContent = downloadedLaws.map(law => {
+          const lawText = law.texto.substring(0, 3000) + (law.texto.length > 3000 ? '\n\n[... texto completo disponível no cache ...]' : '')
+          console.log(`📖 Preparando texto da lei ${law.nome}: ${lawText.length} caracteres`)
+          return `--- ${law.nome} ---\n${lawText}`
+        }).join('\n\n')
+        
+        console.log(`📝 Conteúdo das leis preparado: ${lawsContent.length} caracteres`)
+        setMessage(`✅ ${downloadedLaws.length} lei(s) disponíveis para geração`)
+      } else {
+        console.log('⚠️ Nenhuma lei detectada na matéria:', testMateria)
+      }
+
+      // Se estiver no modo de pesquisa automática, pesquisar também
+      let researchContent = ''
+      if (autoResearch) {
+        setMessage('🔍 Pesquisando automaticamente sobre a matéria...')
+        researchContent = await researchTopic(testMateria)
+      }
+
+      const prompt = `${testPrompt}
+
+MATÉRIA: ${testMateria}
+
+${lawsContent ? `LEIS E TEXTOS OFICIAIS:
+${lawsContent}
+
+TAREFA:
+Crie 1 flashcard de teste BASEADO NAS LEIS E TEXTOS OFICIAIS ACIMA.
+
+IMPORTANTE:
+- Use PRINCIPALMENTE os textos oficiais das leis fornecidos
+- Para leis, cite artigos e números específicos quando possível
+- Seja preciso e fiel ao texto oficial
+- Não invente informações que não estão nos textos` : researchContent ? `PESQUISA AUTOMÁTICA:
+${researchContent}
+
+TAREFA:
+Crie 1 flashcard de teste BASEADO NA PESQUISA AUTOMÁTICA ACIMA.
+
+IMPORTANTE:
+- Use APENAS informações pesquisadas
+- Priorize fontes oficiais e governamentais
+- Seja preciso e factual
+- Para leis, cite o artigo e número quando possível` : `TAREFA:
+Crie 1 flashcard de teste para esta matéria.`}
+
+FORMATO JSON:
+{
+  "flashcard": {
+    "pergunta": "Pergunta específica sobre a matéria",
+    "resposta": "Resposta clara e objetiva",
+    "materia": "${testMateria}"
+  }
+}
+
+Retorne APENAS o JSON, sem markdown, sem explicações.`
+
+      const result = await model.generateContent(prompt)
+      const responseText = result.response.text().trim()
+      
+      // Tentar fazer parse do JSON
+      let flashcardData
+      try {
+        const cleanText = responseText.replace(/```json\n?|\n?```/g, '').trim()
+        flashcardData = JSON.parse(cleanText)
+      } catch (parseErr) {
+        throw new Error('Resposta da IA não está em formato JSON válido.')
+      }
+
+      setTestFlashcardResult(flashcardData.flashcard)
+      
+      // Adicionar ao histórico
+      const historyItem = {
+        id: Date.now(),
+        prompt: testPrompt,
+        materia: testMateria,
+        result: flashcardData.flashcard,
+        timestamp: new Date()
+      }
+      setPromptHistory(prev => [historyItem, ...prev.slice(0, 9)]) // Manter últimos 10
+      
+    } catch (err) {
+      console.error('Erro ao gerar flashcard de teste:', err)
+      setTestError(`❌ Erro: ${err.message}`)
+    } finally {
+      setGeneratingTest(false)
+    }
+  }
+
+  // Função para salvar prompt para o sistema
+  const savePromptToSystem = async () => {
+    if (!testPrompt.trim()) {
+      setTestError('❌ Digite um prompt para salvar.')
+      return
+    }
+    
+    setSavingTestPrompt(true)
+    setTestError('')
+    
+    try {
+      // Salvar para todos os cursos (sistema)
+      // Caminho correto: collection/system/document/prompts/collection/flashcards/document/flashcards
+      const systemPromptsRef = doc(db, 'system', 'prompts', 'flashcards', 'config')
+      
+      await setDoc(systemPromptsRef, {
+        prompt: testPrompt.trim(),
+        updatedAt: new Date(),
+        updatedBy: currentAdminUser?.email || 'admin',
+        scope: 'global'
+      }, { merge: true })
+      
+      setTestError('')
+      setMessage('✅ Prompt salvo com sucesso para TODO O SISTEMA! Será usado em todas as gerações de flashcards.')
+    } catch (err) {
+      console.error('Erro ao salvar prompt:', err)
+      setTestError('❌ Erro ao salvar prompt.')
+    } finally {
+      setSavingTestPrompt(false)
+    }
+  }
 
   if (!isAdmin) {
     return (
@@ -6160,6 +6477,7 @@ CRÍTICO:
     { id: 'leads', label: '📋 Leads', icon: '📋' },
     { id: 'simulados', label: '📝 Simulados', icon: '📝' },
     { id: 'trials', label: '🎁 Testes Gratuitos', icon: '🎁' },
+    { id: 'prompt-test', label: '🧪 Teste de Prompts', icon: '🧪' },
   ]
   
   // Estado para gerenciar simulados compartilhados
@@ -11769,6 +12087,338 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Tab: Teste de Prompts */}
+            {activeTab === 'prompt-test' && (
+              <div className="space-y-6">
+                {/* Header */}
+                <div className="relative overflow-hidden bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-2xl shadow-xl border border-purple-200 dark:border-purple-800 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-purple-500/5 to-pink-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  
+                  <div className="relative">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl">
+                        <span className="text-2xl">🧪</span>
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-black text-purple-700 dark:text-purple-300">
+                          Teste de Prompts
+                        </h2>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                          Teste e refine seus prompts antes de usar em produção
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Configuração */}
+                  <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-2xl -mr-16 -mt-16"></div>
+                    
+                    <div className="relative">
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span>⚙️</span> Configuração
+                      </h3>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            📚 Matéria
+                          </label>
+                          <input
+                            type="text"
+                            value={testMateria}
+                            onChange={(e) => setTestMateria(e.target.value)}
+                            placeholder="Ex: Lei 13.869/19"
+                            className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 text-sm font-semibold focus:border-purple-500 focus:outline-none transition-colors"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            🔍 Modo de Pesquisa
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => {
+                                setAutoResearch(false)
+                                setSourceUrl('')
+                                setScrapedContent('')
+                                setResearchContent('')
+                              }}
+                              className={`py-2 px-3 rounded-lg text-xs font-semibold transition-colors ${
+                                !autoResearch && !sourceUrl && !scrapedContent && !researchContent
+                                  ? 'bg-purple-600 text-white'
+                                  : 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-500'
+                              }`}
+                            >
+                              🧠 Sem Pesquisa
+                            </button>
+                            <button
+                              onClick={() => {
+                                setAutoResearch(true)
+                                setSourceUrl('')
+                                setScrapedContent('')
+                                setResearchContent('')
+                              }}
+                              className={`py-2 px-3 rounded-lg text-xs font-semibold transition-colors ${
+                                autoResearch
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-500'
+                              }`}
+                            >
+                              🌐 Pesquisa Automática
+                            </button>
+                          </div>
+                          {autoResearch && (
+                            <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+                              🔍 A pesquisa será feita automaticamente em sites governamentais (Planalto, gov.br) e fontes jurídicas confiáveis ao clicar em "Gerar Flashcard"
+                            </p>
+                          )}
+                        </div>
+
+                        {!autoResearch && (
+                          <div>
+                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                              🌐 Fonte de Conteúdo (URL opcional)
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="url"
+                                value={sourceUrl}
+                                onChange={(e) => setSourceUrl(e.target.value)}
+                                placeholder="https://exemplo.com/artigo"
+                                className="flex-1 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 text-sm font-semibold focus:border-purple-500 focus:outline-none transition-colors"
+                              />
+                              <button
+                                onClick={() => scrapeWebsiteContent(sourceUrl)}
+                                disabled={scrapingContent || !sourceUrl.trim()}
+                                className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-400 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                              >
+                                {scrapingContent ? (
+                                  <>
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    Extraindo...
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>🔍</span>
+                                    Extrair
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                            {scrapedContent && (
+                              <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                <div className="flex justify-between items-start mb-1">
+                                  <p className="text-xs font-semibold text-green-800 dark:text-green-200">
+                                    ✅ Conteúdo extraído ({scrapedContent.length} caracteres)
+                                  </p>
+                                  <button
+                                    onClick={() => {
+                                      setScrapedContent('')
+                                      setSourceUrl('')
+                                    }}
+                                    className="text-xs text-red-600 hover:text-red-800 font-semibold"
+                                  >
+                                    Limpar
+                                  </button>
+                                </div>
+                                <p className="text-xs text-green-700 dark:text-green-300 line-clamp-2">
+                                  {scrapedContent.substring(0, 200)}...
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            🧠 Prompt de Geração
+                          </label>
+                          <textarea
+                            value={testPrompt}
+                            onChange={(e) => setTestPrompt(e.target.value)}
+                            placeholder="Cole aqui o prompt para testar..."
+                            rows={12}
+                            className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 text-sm font-mono focus:border-purple-500 focus:outline-none transition-colors resize-none"
+                          />
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-3">
+                          <button
+                            onClick={generateTestFlashcard}
+                            disabled={generatingTest || !testPrompt.trim() || !testMateria.trim()}
+                            className="py-3 px-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-bold rounded-xl transition-all duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                          >
+                            {generatingTest ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                {autoResearch ? 'Pesquisando e gerando...' : 'Testando...'}
+                              </>
+                            ) : (
+                              <>
+                                <span>🧪</span>
+                                Gerar Flashcard de Teste
+                                {autoResearch && ' (com pesquisa automática)'}
+                              </>
+                            )}
+                          </button>
+                          
+                          <button
+                            onClick={savePromptToSystem}
+                            disabled={savingTestPrompt || !testPrompt.trim()}
+                            className="py-3 px-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-bold rounded-xl transition-all duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                          >
+                            {savingTestPrompt ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                Salvando...
+                              </>
+                            ) : (
+                              <>
+                                <span>💾</span>
+                                Salvar Prompt para o Sistema
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Resultado */}
+                  <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-500/5 to-blue-500/5 rounded-full blur-2xl -mr-16 -mt-16"></div>
+                    
+                    <div className="relative">
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span>📋</span> Resultado
+                      </h3>
+                      
+                      {testError && (
+                        <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                          <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+                            {testError}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {testFlashcardResult ? (
+                        <div className="space-y-4">
+                          <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
+                            <p className="text-sm font-semibold text-green-700 dark:text-green-400 mb-2">
+                              ✅ Flashcard gerado com sucesso!
+                            </p>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-400 mb-1">
+                                Matéria
+                              </label>
+                              <div className="p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                                <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                  {testFlashcardResult.materia}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-400 mb-1">
+                                Pergunta
+                              </label>
+                              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                                  {testFlashcardResult.pergunta}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-400 mb-1">
+                                Resposta
+                              </label>
+                              <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                <p className="text-sm font-semibold text-green-700 dark:text-green-300 whitespace-pre-wrap">
+                                  {testFlashcardResult.resposta}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={() => {
+                              setTestFlashcardResult(null)
+                              setTestError('')
+                            }}
+                            className="w-full py-2 px-4 bg-slate-600 hover:bg-slate-700 text-white font-semibold rounded-lg transition-colors"
+                          >
+                            Limpar Resultado
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-center py-12">
+                          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                            <span className="text-2xl">🧪</span>
+                          </div>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                            Configure os campos e clique em "Gerar Flashcard de Teste" para ver o resultado
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Histórico de Testes */}
+                {promptHistory.length > 0 && (
+                  <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                      <span>📜</span> Histórico de Testes
+                    </h3>
+                    
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {promptHistory.map((item) => (
+                        <div key={item.id} className="p-4 bg-slate-50 dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                {item.materia}
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {new Date(item.timestamp).toLocaleString('pt-BR')}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setTestPrompt(item.prompt)
+                                setTestMateria(item.materia)
+                                setTestFlashcardResult(item.result)
+                                setTestError('')
+                              }}
+                              className="px-3 py-1 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700"
+                            >
+                              Carregar
+                            </button>
+                          </div>
+                          <div className="text-xs">
+                            <p className="font-semibold text-blue-600 dark:text-blue-400">
+                              P: {item.result.pergunta}
+                            </p>
+                            <p className="font-semibold text-green-600 dark:text-green-400">
+                              R: {item.result.resposta.substring(0, 100)}...
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

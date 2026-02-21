@@ -241,6 +241,27 @@ REGRAS ESPECÍFICAS:
 }
 
 /**
+ * Busca o prompt global do sistema (para todos os cursos)
+ * @returns {Promise<string>}
+ */
+export async function getGlobalPrompt() {
+  try {
+    // Caminho correto: collection/system/document/prompts/collection/flashcards/document/config
+    const globalPromptRef = doc(db, 'system', 'prompts', 'flashcards', 'config')
+    const globalPromptDoc = await getDoc(globalPromptRef)
+    
+    if (globalPromptDoc.exists()) {
+      return globalPromptDoc.data().prompt || ''
+    }
+    
+    return ''
+  } catch (err) {
+    console.error('Erro ao buscar prompt global:', err)
+    return ''
+  }
+}
+
+/**
  * Constrói o prompt base para flashcards
  * @param {string} courseId - ID do curso
  * @param {string} materia - Matéria do flashcard
@@ -248,6 +269,36 @@ REGRAS ESPECÍFICAS:
  * @returns {Promise<string>}
  */
 export async function buildFlashcardPrompt(courseId, materia, editalText = '') {
+  // Primeiro tentar buscar o prompt global do sistema
+  const globalPrompt = await getGlobalPrompt()
+  
+  if (globalPrompt) {
+    // Usar prompt global se existir
+    return `${globalPrompt}
+
+MATÉRIA: ${materia}
+
+${editalText ? `CONTEXTO DO EDITAL:\n${editalText}\n\n` : ''}
+
+TAREFA: Criar flashcards educacionais para a matéria "${materia}".
+
+FORMATO OBRIGATÓRIO:
+Retorne APENAS JSON válido com esta estrutura:
+{
+  "flashcards": [
+    {
+      "pergunta": "Pergunta específica e técnica",
+      "resposta": "Resposta detalhada e precisa",
+      "materia": "${materia}",
+      "modulo": "Nome do módulo específico"
+    }
+  ]
+}
+
+QUANTIDADE: Mínimo 15 flashcards de alta qualidade.`
+  }
+  
+  // Fallback para o sistema atual
   const unified = await getUnifiedPrompt(courseId)
   
   if (!unified || !unified.banca || !unified.concursoName) {

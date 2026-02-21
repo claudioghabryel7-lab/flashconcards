@@ -539,6 +539,18 @@
                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       }
       
+      // 📚 Cache de Leis - Sistema de cache de textos oficiais
+      match /leisCache/{lawId} {
+        // Permitir leitura para todos autenticados (para usar textos oficiais)
+        allow read: if isAuthenticated();
+        
+        // Admin pode criar e atualizar leis no cache
+        allow create, update: if isAdmin();
+        
+        // Apenas admin pode deletar leis do cache
+        allow delete: if isAdmin();
+      }
+      
       match /{document=**} {
         allow read, write: if false;
       }
