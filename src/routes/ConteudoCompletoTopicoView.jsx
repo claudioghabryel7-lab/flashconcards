@@ -417,7 +417,7 @@ ONDE:
       setProgress(25)
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const modelNames = ['gemini-2.0-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-flash-latest']
+      const modelNames = ['gemini-2.0-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
       let aiText = ''
       let lastError = null
 
