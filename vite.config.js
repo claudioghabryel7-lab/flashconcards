@@ -1,9 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
 
-// https://vite.dev/config/
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src'),
+    },
+    dedupe: ['react', 'react-dom'],
+  },
   build: {
     // Otimizações de build para melhor TTFB
     minify: 'esbuild', // esbuild é mais rápido que terser
@@ -43,11 +50,10 @@ export default defineConfig({
             }
           }
         },
-        // Otimizar nomes de chunks para melhor cache
-        // Garantir que todos os arquivos JS tenham extensão .js (não .jsx)
-        chunkFileNames: 'assets/js/[name]-[hash].js',
-        entryFileNames: 'assets/js/[name]-[hash].js',
-        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
+        // Otimizar nomes de chunks para melhor cache COM TIMESTAMP
+        chunkFileNames: 'assets/js/[name]-[hash]-' + Date.now() + '.js',
+        entryFileNames: 'assets/js/[name]-[hash]-' + Date.now() + '.js',
+        assetFileNames: 'assets/[ext]/[name]-[hash]-' + Date.now() + '.[ext]',
       },
     },
     // Chunk size warnings
