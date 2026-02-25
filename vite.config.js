@@ -90,9 +90,6 @@ export default defineConfig({
     // Forçar re-otimização se houver problemas
     force: false,
   },
-  resolve: {
-    dedupe: ['react', 'react-dom'],
-  },
   // Otimizações de preview (produção local)
   preview: {
     port: 4173,
