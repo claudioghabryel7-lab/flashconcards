@@ -188,7 +188,7 @@ const Simulado = () => {
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       // Usar prompt unificado
       const { buildRedacaoPrompt } = await import('../utils/unifiedPrompt')
@@ -301,7 +301,7 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       // Usar prompt unificado
       const { buildRedacaoAnalysisPrompt } = await import('../utils/unifiedPrompt')
@@ -564,7 +564,7 @@ CRÍTICO:
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       // Informações do curso para contexto
       const courseContext = courseName ? `\n\nCONCURSO ESPECÍFICO: ${courseName}${courseCompetition && courseCompetition !== courseName ? ` (${courseCompetition})` : ''}` : ''
@@ -783,7 +783,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       // Filtrar matérias - APENAS as que estão no curso
       const validMaterias = simuladoInfo.materias.filter(m => 
@@ -1062,7 +1062,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       // Usar prompt unificado
       const { buildQuestionPrompt } = await import('../utils/unifiedPrompt')

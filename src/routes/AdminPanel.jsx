@@ -1101,7 +1101,7 @@ const AdminPanel = () => {
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       const courseName = courses.find(c => c.id === courseId)?.name || 'o curso'
       
@@ -1840,7 +1840,7 @@ REGRAS CRÍTICAS:
         try {
           setFlashcardGenProgress('Chamando Gemini API...')
           const genAI = new GoogleGenerativeAI(apiKey)
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
           const result = await model.generateContent(prompt)
           responseText = result.response.text()
         } catch (geminiError) {
@@ -3103,9 +3103,9 @@ REGRAS CRÍTICAS:
       const genAI = new GoogleGenerativeAI(apiKey)
       
       // Modelos disponíveis na API paga do Gemini (ordem de prioridade: melhor primeiro)
-      // gemini-2.0-flash: Mais recente, rápido e eficiente (recomendado)
+      // gemini-2.5-flash: Mais recente, rápido e eficiente (recomendado)
       const modelNames = [
-        'gemini-2.0-flash',           // Modelo mais recente e recomendado
+        'gemini-2.5-flash',           // Modelo mais recente e recomendado
         'gemini-1.5-pro-latest',      // Fallback para análises complexas
         'gemini-1.5-pro',             // Fallback Pro
         'gemini-pro'                  // Fallback mais antigo
@@ -3707,7 +3707,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       // Tentar modelos válidos (apenas modelos que funcionam)
       // Modelos disponíveis na API paga do Gemini (ordem de prioridade: melhor primeiro)
       const modelNames = [
-        'gemini-2.0-flash',           // Modelo mais recente e recomendado
+        'gemini-2.5-flash',           // Modelo mais recente e recomendado
         'gemini-1.5-pro-latest',      // Fallback para análises complexas
         'gemini-1.5-pro',             // Fallback Pro
         'gemini-pro'                  // Fallback mais antigo
@@ -4575,7 +4575,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const modelNames = ['gemini-2.0-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
+      const modelNames = ['gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
       let lastError = null
       let aiResponse = ''
 
@@ -4819,7 +4819,7 @@ CRÍTICO:
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const modelNames = ['gemini-2.0-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
+      const modelNames = ['gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
       let lastError = null
       let materiasList = []
 
@@ -5114,7 +5114,7 @@ CRÍTICO:
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const modelNames = ['gemini-2.0-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
+    const modelNames = ['gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
     let lastError = null
     let materiasList = []
 
@@ -5209,7 +5209,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const modelNames = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro']
+    const modelNames = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-pro']
     let materiasList = []
 
     // Identificar matérias (mesma lógica)
@@ -5307,7 +5307,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const modelNames = ['gemini-2.0-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
+      const modelNames = ['gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
       let lastError = null
       let materiasList = []
 
@@ -5997,7 +5997,7 @@ CRÍTICO:
         try {
           console.log('🤖 Tentando usar Gemini...')
           const genAI = new GoogleGenerativeAI(apiKey)
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
           
           const result = await model.generateContent({
             contents: [{ parts: [{ text: systemPrompt }] }],
@@ -6309,7 +6309,7 @@ ${juridicoContent ? `FONTES JURÍDICAS CONFIÁVEIS:\n${juridicoContent.substring
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       // SEMPRE detectar e baixar leis (independente do modo)
       setMessage('🔍 Detectando leis na matéria...')
@@ -6904,7 +6904,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                           
                           // Tentar modelos válidos em ordem de prioridade
                           const modelNames = [
-                            'gemini-2.0-flash',           // Mais recente e rápido
+                            'gemini-2.5-flash',           // Mais recente e rápido
                             'gemini-1.5-pro-latest',      // Fallback para análises complexas
                             'gemini-1.5-pro',             // Fallback Pro
                             'gemini-pro'                  // Fallback mais antigo
@@ -8536,7 +8536,7 @@ ESTRUTURA SUGERIDA:
                           
                           // Tentar modelos válidos em ordem de prioridade
                           const modelNames = [
-                            'gemini-2.0-flash',           // Mais recente e rápido
+                            'gemini-2.5-flash',           // Mais recente e rápido
                             'gemini-1.5-pro-latest',      // Fallback para análises complexas
                             'gemini-1.5-pro',             // Fallback Pro
                             'gemini-pro'                  // Fallback mais antigo
@@ -9193,7 +9193,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                   if (apiKey) {
                                     try {
                                       const genAI = new GoogleGenerativeAI(apiKey)
-                                      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+                                      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
                                       const result = await model.generateContent(prompt)
                                       description = result.response.text().trim()
                                     } catch (geminiErr) {

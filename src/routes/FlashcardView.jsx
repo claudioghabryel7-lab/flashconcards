@@ -1054,7 +1054,7 @@ const FlashcardView = () => {
       courseEditalPrompt = editalPrompt || ''
     }
 
-    const preferredModel = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.0-flash'
+    const preferredModel = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash'
     const fallbackModels = ['gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
     const candidates = [preferredModel, ...fallbackModels].filter(
       (value, idx, arr) => value && arr.indexOf(value) === idx,
@@ -1302,7 +1302,7 @@ IMPORTANTE:
       const genAI = new GoogleGenerativeAI(apiKey)
       
       // Usar apenas modelos confirmados que funcionam
-      const modelNames = ['gemini-2.0-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
+      const modelNames = ['gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
       let lastError = null
       let aiResponse = ''
       

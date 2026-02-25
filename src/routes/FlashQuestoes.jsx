@@ -588,7 +588,7 @@ CRÍTICO:
       // Tentar Gemini primeiro com fallback para modelos alternativos
       if (apiKey) {
         const genAI = new GoogleGenerativeAI(apiKey)
-        const modelNames = ['gemini-2.0-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
+        const modelNames = ['gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
         let lastError = null
         
         for (const modelName of modelNames) {
@@ -961,7 +961,7 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
       if (apiKey) {
         try {
           const genAI = new GoogleGenerativeAI(apiKey)
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
           const result = await model.generateContent(prompt)
           explanation = result.response.text()
         } catch (geminiErr) {

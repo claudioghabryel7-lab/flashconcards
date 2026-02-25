@@ -356,7 +356,7 @@ const SimuladoShare = () => {
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       const simuladoInfo = simuladoData.simuladoInfo
       const validMaterias = simuladoInfo.materias || []
@@ -610,7 +610,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       const linkContext = referenceLink ? await getLinkContextForAI(referenceLink) : ''
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       const themePrompt = `Você é um especialista em criar temas de redação para concursos públicos.
 
@@ -675,7 +675,7 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       // Validar tamanho mínimo
       const wordCount = redacaoTexto.trim().split(/\s+/).length

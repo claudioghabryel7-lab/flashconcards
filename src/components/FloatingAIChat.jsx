@@ -298,7 +298,7 @@ const FloatingAIChat = () => {
       console.log('🔍 Procurando modelo disponível...')
       
       // Tentar modelos conhecidos diretamente (mais rápido) - apenas os que funcionam
-      const knownModels = ['gemini-2.0-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
+      const knownModels = ['gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
       const genAI = new GoogleGenerativeAI(apiKey)
       
       for (const modelName of knownModels) {
