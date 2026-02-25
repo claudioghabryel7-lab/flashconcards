@@ -42,7 +42,7 @@ export default defineConfig({
             }
             // Bibliotecas de IA/PDF em chunk separado (carregadas apenas quando necessário)
             if (id.includes('@google/generative-ai') || id.includes('pdfjs') || id.includes('html2canvas')) {
-              return 'ai-vendor'
+              return 'ai-vendor-gemini-2.5-flash-' + Date.now()
             }
             // Outros vendors (mas não React)
             if (!id.includes('react') && !id.includes('react-dom') && !id.includes('react-router')) {
