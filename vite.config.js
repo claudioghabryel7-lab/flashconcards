@@ -50,10 +50,10 @@ export default defineConfig({
             }
           }
         },
-        // Otimizar nomes de chunks para melhor cache COM TIMESTAMP
-        chunkFileNames: 'assets/js/[name]-[hash]-' + Date.now() + '.js',
-        entryFileNames: 'assets/js/[name]-[hash]-' + Date.now() + '.js',
-        assetFileNames: 'assets/[ext]/[name]-[hash]-' + Date.now() + '.[ext]',
+        // Otimizar nomes de chunks para melhor cache COM TIMESTAMP E VERSÃO
+        chunkFileNames: 'assets/js/[name]-[hash]-' + Date.now() + '-v2.5-flash.js',
+        entryFileNames: 'assets/js/[name]-[hash]-' + Date.now() + '-v2.5-flash.js',
+        assetFileNames: 'assets/[ext]/[name]-[hash]-' + Date.now() + '-v2.5-flash.[ext]',
       },
     },
     // Chunk size warnings
