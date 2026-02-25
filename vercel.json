@@ -5,6 +5,11 @@
   "installCommand": "npm install",
   "framework": "vite",
   "version": 2,
+  "build": {
+    "env": {
+      "BUILD_TIMESTAMP": "2025-02-25-13-00"
+    }
+  },
   "headers": [
     {
       "source": "/assets/(.*\\.js)",
