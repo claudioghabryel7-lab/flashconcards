@@ -6,15 +6,11 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'react-hot-toast'
 import { ThemeProvider } from './hooks/useDarkMode.jsx'
 import { AuthProvider } from './hooks/useAuth.js'
-import { FirebaseProvider } from './context/FirebaseContext.jsx'
-import { LoadingProvider } from './context/LoadingContext.jsx'
-import { StudyTimerProvider } from './hooks/useStudyTimer.jsx'
-import { SubjectOrderProvider } from './hooks/useSubjectOrder.jsx'
 import App from './App.jsx'
 import './index.css'
 import './styles/design-system.css'
 import './styles/stark-design-system.css'
-import './debug-api-key.js' // Debug para verificar API key do framer-motion
+import './debug-api-key.js' // Debug para verificar API key
 
 // Proteção global contra erros do framer-motion
 if (typeof window !== 'undefined') {
