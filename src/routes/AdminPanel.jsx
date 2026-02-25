@@ -168,11 +168,6 @@ const AdminPanel = () => {
   const [resetPasswordError, setResetPasswordError] = useState(null) // { email: string, existsInFirestore: boolean }
   
   
-  // Estado para gerenciar leads
-  const [leads, setLeads] = useState([])
-  const [leadFilter, setLeadFilter] = useState('all') // 'all', 'contacted', 'not_contacted'
-  const [leadNotes, setLeadNotes] = useState({}) // { leadId: notes }
-  
   // Estado para controle de tabs
   const [activeTab, setActiveTab] = useState('config')
   
@@ -878,19 +873,6 @@ const AdminPanel = () => {
 
     // Carregar avaliações
     const reviewsRef = collection(db, 'reviews')
-    // Carregar leads
-    const leadsRef = collection(db, 'leads')
-    const unsubLeads = onSnapshot(leadsRef, (snapshot) => {
-      const leadsData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
-      setLeads(leadsData.sort((a, b) => {
-        const aTime = a.createdAt?.toDate?.() || new Date(0)
-        const bTime = b.createdAt?.toDate?.() || new Date(0)
-        return bTime - aTime
-      }))
-    })
 
     const unsubReviews = onSnapshot(reviewsRef, (snapshot) => {
       const data = snapshot.docs.map((docSnapshot) => ({
@@ -936,7 +918,6 @@ const AdminPanel = () => {
       unsubPopupBanner()
       unsubCourses()
       unsubReviews()
-      unsubLeads()
       unsubTrials()
     }
   }, [])
@@ -6473,7 +6454,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     { id: 'courses', label: '🎓 Cursos', icon: '🎓' },
     { id: 'reviews', label: '⭐ Avaliações', icon: '⭐' },
     { id: 'news', label: '📰 Notícias de Concursos', icon: '📰' },
-    { id: 'leads', label: '📋 Leads', icon: '📋' },
     { id: 'simulados', label: '📝 Simulados', icon: '📝' },
     { id: 'trials', label: '🎁 Testes Gratuitos', icon: '🎁' },
     { id: 'prompt-test', label: '🧪 Teste de Prompts', icon: '🧪' },
@@ -11282,163 +11262,6 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                       })}
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Tab: Leads */}
-            {activeTab === 'leads' && (
-              <div className="space-y-6">
-                <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                      📋 Leads de Simulados
-                    </h2>
-                    <div className="flex gap-2">
-                      <select
-                        value={leadFilter}
-                        onChange={(e) => setLeadFilter(e.target.value)}
-                        className="rounded-xl border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-                      >
-                        <option value="all">Todos</option>
-                        <option value="not_contacted">Não contatados</option>
-                        <option value="contacted">Contatados</option>
-                      </select>
-          </div>
-        </div>
-
-                  {leads.length === 0 ? (
-                    <p className="text-center text-slate-500 dark:text-slate-400 py-8">
-                      Nenhum lead encontrado ainda.
-                    </p>
-                  ) : (
-                    <div className="space-y-4">
-                      {(leadFilter === 'all'
-                        ? leads
-                        : leadFilter === 'contacted'
-                        ? leads.filter(l => l.contacted)
-                        : leads.filter(l => !l.contacted)
-                      ).map((lead) => (
-                        <div
-                          key={lead.id}
-                          className={`rounded-xl p-4 border-2 ${
-                            lead.contacted
-                              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                              : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600'
-                          }`}
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                                  {lead.nome}
-                                </h3>
-                                {lead.contacted && (
-                                  <span className="px-2 py-1 text-xs font-bold rounded-full bg-green-500 text-white">
-                                    Contatado
-                                  </span>
-                                )}
-                                {lead.finalScore && (
-                                  <span className="px-2 py-1 text-xs font-bold rounded-full bg-blue-500 text-white">
-                                    Nota: {lead.finalScore}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                                <div>
-                                  <span className="font-semibold text-slate-600 dark:text-slate-400">Email: </span>
-                                  <span className="text-slate-900 dark:text-white">{lead.email}</span>
-                                </div>
-                                <div>
-                                  <span className="font-semibold text-slate-600 dark:text-slate-400">Telefone: </span>
-                                  <span className="text-slate-900 dark:text-white">{lead.telefone}</span>
-                                </div>
-                                {lead.courseName && (
-                                  <div>
-                                    <span className="font-semibold text-slate-600 dark:text-slate-400">Curso: </span>
-                                    <span className="text-slate-900 dark:text-white">{lead.courseName}</span>
-                                  </div>
-                                )}
-                                {lead.createdAt && (
-                                  <div>
-                                    <span className="font-semibold text-slate-600 dark:text-slate-400">Data: </span>
-                                    <span className="text-slate-900 dark:text-white">
-                                      {lead.createdAt.toDate?.().toLocaleDateString('pt-BR', {
-                                        day: '2-digit',
-                                        month: '2-digit',
-                                        year: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                      }) || 'N/A'}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                              {lead.notes && (
-                                <div className="mt-2 p-2 bg-white dark:bg-slate-800 rounded-lg">
-                                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Notas:</p>
-                                  <p className="text-sm text-slate-900 dark:text-white">{lead.notes}</p>
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              <button
-                                onClick={async () => {
-                                  const phone = lead.telefone.replace(/\D/g, '')
-                                  const message = `Olá ${lead.nome}! Vi que você fez o simulado. Gostaria de saber mais sobre nossos cursos?`
-                                  window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank')
-                                }}
-                                className="px-4 py-2 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700 transition-colors"
-                              >
-                                📱 WhatsApp
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    await updateDoc(doc(db, 'leads', lead.id), {
-                                      contacted: !lead.contacted,
-                                      updatedAt: serverTimestamp(),
-                                    })
-                                    setMessage(`Lead ${lead.contacted ? 'desmarcado' : 'marcado'} como contatado.`)
-                                  } catch (err) {
-                                    console.error('Erro ao atualizar lead:', err)
-                                    setMessage('Erro ao atualizar lead.')
-                                  }
-                                }}
-                                className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${
-                                  lead.contacted
-                                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                                }`}
-                              >
-                                {lead.contacted ? '✓ Contatado' : 'Marcar Contatado'}
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  const notes = prompt('Adicionar notas sobre este lead:', lead.notes || '')
-                                  if (notes !== null) {
-                                    try {
-                                      await updateDoc(doc(db, 'leads', lead.id), {
-                                        notes: notes,
-                                        updatedAt: serverTimestamp(),
-                                      })
-                                      setMessage('Notas atualizadas.')
-                                    } catch (err) {
-                                      console.error('Erro ao atualizar notas:', err)
-                                      setMessage('Erro ao atualizar notas.')
-                                    }
-                                  }
-                                }}
-                                className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-sm hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
-                              >
-                                📝 Notas
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
