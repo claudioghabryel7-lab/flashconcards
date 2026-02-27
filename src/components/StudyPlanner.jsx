@@ -144,9 +144,9 @@ const StudyPlanner = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="mb-6 sm:mb-8"
+      className="w-full mb-4 sm:mb-6 lg:mb-8"
     >
-      <div className="bg-slate-900 dark:bg-slate-950 border border-slate-800 dark:border-slate-900 rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 relative overflow-hidden">
+      <div className="bg-slate-900 dark:bg-slate-950 border border-slate-800 dark:border-slate-900 rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 lg:p-8 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl"></div>
         <div className="relative z-10">
@@ -155,12 +155,13 @@ const StudyPlanner = ({
               <CpuChipIcon className="h-5 w-5 sm:h-6 sm:w-6 text-cyan-400" />
             </div>
             <h2 className="text-lg sm:text-2xl md:text-3xl font-black text-slate-100 dark:text-white break-words">Planejador de Estudos</h2>
-            <div className="ml-auto">
+            <div className="ml-auto flex-shrink-0">
               <button
                 onClick={resetEditalProgress}
-                className="px-3 py-1.5 bg-red-600/20 border border-red-500/30 text-red-400 rounded-lg font-semibold text-xs transition-colors font-mono hover:bg-red-600/30"
+                className="px-2 py-1.5 sm:px-3 bg-red-600/20 border border-red-500/30 text-red-400 rounded-lg font-semibold text-xs transition-colors font-mono hover:bg-red-600/30 whitespace-nowrap"
               >
-                Reset Progress
+                <span className="hidden sm:inline">Reset Progress</span>
+                <span className="sm:hidden">Reset</span>
               </button>
             </div>
           </div>
@@ -261,65 +262,66 @@ const StudyPlanner = ({
                         transition={{ duration: 0.3, delay: index * 0.1 }}
                         className="bg-slate-800/50 dark:bg-slate-900/50 border border-slate-700 dark:border-slate-800 rounded-lg sm:rounded-xl p-3 sm:p-4 backdrop-blur-sm"
                       >
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-                          <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
-                            <div className={`p-1.5 sm:p-2 rounded-lg ${colorClass} flex-shrink-0`}>
-                              <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-cyan-400" />
+                        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3 sm:gap-4">
+                        <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
+                          <div className={`p-1.5 sm:p-2 rounded-lg ${colorClass} flex-shrink-0`}>
+                            <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-cyan-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1">
+                              <h5 className="font-semibold text-slate-100 dark:text-white font-mono text-sm break-words">
+                                {atividade.disciplina}
+                              </h5>
+                              <span className={`px-2 py-0.5 rounded text-xs font-medium border ${getPriorityColor(atividade.prioridade)} flex-shrink-0`}>
+                                {atividade.prioridade}
+                              </span>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1">
-                                <h5 className="font-semibold text-slate-100 dark:text-white font-mono text-sm">
-                                  {atividade.disciplina}
-                                </h5>
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium border ${getPriorityColor(atividade.prioridade)}`}>
-                                  {atividade.prioridade}
-                                </span>
-                              </div>
-                              {atividade.topico && (
-                                <p className="text-sm font-medium text-cyan-400 dark:text-cyan-500 mb-1 font-mono">
-                                  {atividade.topico}
-                                </p>
-                              )}
-                              <p className="text-sm text-slate-400 dark:text-slate-500 mb-2">
-                                {atividade.descricao}
+                            {atividade.topico && (
+                              <p className="text-sm font-medium text-cyan-400 dark:text-cyan-500 mb-1 font-mono break-words">
+                                {atividade.topico}
                               </p>
-                              {atividade.dica && (
-                                <p className="text-xs text-slate-500 dark:text-slate-600 italic mb-2 font-mono">
-                                  💡 {atividade.dica}
-                                </p>
-                              )}
-                              <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-600">
-                                <div className="flex items-center gap-1">
-                                  <ClockIcon className="h-4 w-4" />
-                                  {atividade.tempoEstimado}
-                                </div>
-                                <button
-                                  onClick={() => goToEdital(atividade.disciplina, atividade.topico)}
-                                  className="text-cyan-400 dark:text-cyan-500 hover:underline font-mono"
-                                >
-                                  View Details →
-                                </button>
+                            )}
+                            <p className="text-sm text-slate-400 dark:text-slate-500 mb-2 break-words">
+                              {atividade.descricao}
+                            </p>
+                            {atividade.dica && (
+                              <p className="text-xs text-slate-500 dark:text-slate-600 italic mb-2 font-mono break-words">
+                                💡 {atividade.dica}
+                              </p>
+                            )}
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-slate-500 dark:text-slate-600">
+                              <div className="flex items-center gap-1">
+                                <ClockIcon className="h-4 w-4" />
+                                {atividade.tempoEstimado}
                               </div>
+                              <button
+                                onClick={() => goToEdital(atividade.disciplina, atividade.topico)}
+                                className="text-cyan-400 dark:text-cyan-500 hover:underline font-mono self-start sm:self-auto"
+                              >
+                                View Details →
+                              </button>
                             </div>
                           </div>
-                          <button
-                            onClick={() => handleMarkAsCompleted(atividade)}
-                            disabled={isMarkingCompleted || isCompleted}
-                            className={`px-4 py-2 text-white rounded-lg font-semibold transition-colors text-sm whitespace-nowrap font-mono ${
-                              isCompleted
-                                ? 'bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 cursor-not-allowed'
-                                : 'bg-cyan-600 hover:bg-cyan-700 border border-cyan-500'
-                            } disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
-                          >
-                            {isCompleted ? (
-                              <>
-                                <CheckCircleIcon className="h-4 w-4" />
-                                Complete
-                              </>
-                            ) : (
-                              'Execute'
-                            )}
-                          </button>
+                        </div>
+                        <button
+                          onClick={() => handleMarkAsCompleted(atividade)}
+                          disabled={isMarkingCompleted || isCompleted}
+                          className={`w-full lg:w-auto px-4 py-2 text-white rounded-lg font-semibold transition-colors text-sm whitespace-nowrap font-mono mt-2 lg:mt-0 ${
+                            isCompleted
+                              ? 'bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 cursor-not-allowed'
+                              : 'bg-cyan-600 hover:bg-cyan-700 border border-cyan-500'
+                          } disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+                        >
+                          {isCompleted ? (
+                            <>
+                              <CheckCircleIcon className="h-4 w-4" />
+                              <span className="hidden sm:inline">Complete</span>
+                              <span className="sm:hidden">✓</span>
+                            </>
+                          ) : (
+                            'Execute'
+                          )}
+                        </button>
                         </div>
                       </motion.div>
                     )

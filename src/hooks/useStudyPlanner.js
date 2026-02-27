@@ -162,18 +162,21 @@ export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
 
       // Chamar IA para gerar recomendações
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      console.log('🔑 API Key disponível:', !!apiKey)
       if (!apiKey) {
         throw new Error('VITE_GEMINI_API_KEY não configurada')
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
+      console.log('🤖 Inicializando modelo Gemini...')
       const model = genAI.getGenerativeModel({
-        model: 'gemini-1.0-pro',
+        model: 'gemini-2.5-flash',
         generationConfig: {
           maxOutputTokens: 8000,
           temperature: 0.7,
         }
       })
+      console.log('📝 Enviando prompt para IA...')
 
       const prompt = `Você é um mentor especializado em concursos públicos e planejamento de estudos.
 
@@ -237,7 +240,9 @@ FORMATO DE RESPOSTA (JSON OBRIGATÓRIO):
 Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
 
       const result = await model.generateContent(prompt)
+      console.log('✅ Resposta recebida da IA')
       let aiResponse = result.response.text()
+      console.log('📄 Resposta bruta:', aiResponse.substring(0, 200) + '...')
 
       // Limpar resposta da IA (remover markdown se houver)
       aiResponse = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
@@ -317,7 +322,8 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
       saveCachedRecommendation(recommendation)
       setDailyRecommendation(recommendation)
     } catch (error) {
-      console.error('Erro ao gerar recomendação:', error)
+      console.error('❌ Erro ao gerar recomendação:', error)
+      console.error('📋 Stack trace:', error.stack)
       setError(error.message)
       
       // Fallback: criar recomendação básica sem IA
