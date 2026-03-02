@@ -8,6 +8,7 @@ import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useStudyTimer } from '../hooks/useStudyTimer'
+import { useStudySession } from '../hooks/useStudySession'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder, applyModuleOrder, getModuleOrder } from '../utils/subjectOrder'
 import { FolderIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon, LockClosedIcon } from '@heroicons/react/24/outline'
@@ -105,6 +106,12 @@ const FlashcardView = () => {
   const [timerActive, setTimerActive] = useState(false) // Timer só inicia quando usuário clicar no relógio
   const [generatingFlashcards, setGeneratingFlashcards] = useState(false) // Estado para loading de geração
   const [selectedDifficulty, setSelectedDifficulty] = useState('') // Dificuldade selecionada para geração
+  
+  // Hook de rastreamento de sessão de estudo
+  const { sessionActive, sessionStartTime, resetInactivityTimeout } = useStudySession(
+    user?.uid, 
+    selectedMateria
+  )
   
   // Função para recarregar flashcards do usuário
   const loadUserFlashcards = async () => {
@@ -817,18 +824,21 @@ const FlashcardView = () => {
   }
 
   const goNext = () => {
+    resetInactivityTimeout() // Resetar timeout de inatividade
     setCurrentIndex((prev) =>
       prev + 1 >= activeCards.length ? 0 : prev + 1,
     )
   }
 
   const goPrev = () => {
+    resetInactivityTimeout() // Resetar timeout de inatividade
     setCurrentIndex((prev) =>
       prev - 1 < 0 ? activeCards.length - 1 : prev - 1,
     )
   }
 
   const toggleFavorite = async (id) => {
+    resetInactivityTimeout() // Resetar timeout de inatividade
     const nextFavorites = favorites.includes(id)
       ? favorites.filter((fav) => fav !== id)
       : [...favorites, id]

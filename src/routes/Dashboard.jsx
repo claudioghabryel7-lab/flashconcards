@@ -47,6 +47,7 @@ import InstallPWAButton from '../components/InstallPWAButton'
 import PreloadOfflineButton from '../components/PreloadOfflineButton'
 import StudyPlanner from '../components/StudyPlanner'
 import { useStudyPlanner } from '../hooks/useStudyPlanner'
+import StudyTimeChart from '../components/StudyTimeChart'
 
 dayjs.locale('pt-br')
 
@@ -1075,6 +1076,11 @@ const Dashboard = () => {
           </Link>
 
         </motion.div>
+
+        {/* Gráfico de Tempo de Estudo */}
+        <div className="mt-8">
+          <StudyTimeChart userId={user?.uid} />
+        </div>
       </div>
     </div>
   )
