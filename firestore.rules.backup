@@ -1,0 +1,568 @@
+  rules_version = '2';
+  service cloud.firestore {
+    match /databases/{database}/documents {
+      
+      function isAuthenticated() {
+        return request.auth != null;
+      }
+      
+      function isOwner(userId) {
+        return isAuthenticated() && request.auth.uid == userId;
+      }
+      
+      function isAdmin() {
+        return isAuthenticated() && 
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      match /users/{userId} {
+        // Permitir leitura para todos autenticados (para ranking) - apenas campos públicos
+        // Também permitir leitura do próprio perfil mesmo se não estiver completamente autenticado
+        allow read: if isAuthenticated() || (request.auth != null && request.auth.uid == userId);
+        allow create: if isAuthenticated() && isOwner(userId);
+        allow update: if isAuthenticated() && (
+          (isOwner(userId) && 
+          (request.resource.data.role == resource.data.role ||
+            !resource.data.hasAny(['role']) ||
+            // Permitir que o próprio usuário atualize role para 'admin' se o role atual não for 'admin'
+            // Isso permite que o email do admin atualize seu próprio role
+            (request.resource.data.role == 'admin' && 
+             resource.data.role != 'admin'))) ||
+          isAdmin()
+        );
+        allow delete: if isAdmin();
+      }
+      
+      match /flashcards/{cardId} {
+        // Permitir leitura para todos autenticados
+        allow read: if isAuthenticated();
+        // Admin pode criar qualquer flashcard
+        allow create: if isAdmin();
+        // Usuário pode criar flashcards individuais (com userId)
+        allow create: if isAuthenticated() && 
+                     request.resource.data.userId == request.auth.uid;
+        // Admin pode atualizar qualquer flashcard
+        allow update: if isAdmin();
+        // Usuário pode atualizar seus próprios flashcards
+        allow update: if isAuthenticated() && 
+                     exists(/databases/$(database)/documents/flashcards/$(cardId)) &&
+                     get(/databases/$(database)/documents/flashcards/$(cardId)).data.userId == request.auth.uid;
+        // Admin pode deletar qualquer flashcard
+        allow delete: if isAdmin();
+        // Usuário pode deletar seus próprios flashcards
+        allow delete: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/flashcards/$(cardId)) &&
+                      get(/databases/$(database)/documents/flashcards/$(cardId)).data.userId == request.auth.uid;
+      }
+      
+      // Edital Verticalizado - apenas admin pode gerenciar
+      match /editalVerticalizado/{itemId} {
+        // Permitir leitura para todos autenticados
+        allow read: if isAuthenticated();
+        // Apenas admin pode criar, atualizar e deletar
+        allow create, update, delete: if isAdmin();
+      }
+      
+      match /progress/{progressId} {
+        // Permitir leitura para todos autenticados (para ranking)
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+        allow delete: if isAdmin();
+      }
+      
+      match /userProgress/{userId} {
+        // Permitir leitura para todos autenticados (para ranking)
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated() && userId == request.auth.uid;
+        allow delete: if isAdmin();
+      }
+      
+      match /chats/{userId}/messages/{messageId} {
+        allow read: if isAuthenticated() && (userId == request.auth.uid || isAdmin());
+        allow create: if isAuthenticated() && userId == request.auth.uid;
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+      
+      match /config/{configId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isAdmin();
+      }
+      
+      // 🔔 Popup Banner (configuração especial)
+      match /config/popupBanner {
+        // Permitir leitura pública (para mostrar popup na página inicial)
+        allow read: if true;
+        // Admin pode criar, atualizar e deletar
+        allow create, update, delete: if isAuthenticated() && 
+                                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      match /homeBanners/{bannerId} {
+        // Permitir leitura pública (sem autenticação) para banners na página inicial
+        allow read: if true;
+        // Admin pode criar, atualizar e deletar - VERIFICAÇÃO EXPANDIDA
+        allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow update: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow delete: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      
+      // 🎓 Cursos Preparatórios
+      match /courses/{courseId} {
+        // Permitir leitura pública de cursos ativos (para página inicial)
+        allow read: if true;
+        // Admin pode criar, atualizar e deletar
+        allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow update: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow delete: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        
+        // Matérias do curso (subcoleção)
+        match /subjects/{subjectId} {
+          allow read: if isAuthenticated();
+          allow create, update, delete: if isAuthenticated() && 
+                                          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          
+          // Flashcards da matéria (subcoleção)
+          match /flashcards/{flashcardId} {
+            allow read: if isAuthenticated();
+            allow create: if isAuthenticated() && 
+                         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+            allow update: if isAuthenticated(); // Usuários podem atualizar para RSR
+            allow delete: if isAuthenticated() && 
+                         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          }
+        }
+        
+        // Prompts do curso (subcoleção) - edital e questões
+        match /prompts/{promptId} {
+          // Permitir leitura pública (para gerar questões de simulados compartilhados)
+          allow read: if true;
+          // Apenas admin pode criar, atualizar e deletar - VERIFICAÇÃO EXPANDIDA
+          allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          allow update: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          allow delete: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        }
+        
+        // Configurações do curso (subcoleção) - ordem de matérias e módulos
+        match /config/{configId} {
+          // Permitir leitura para usuários autenticados
+          allow read: if isAuthenticated();
+          // Apenas admin pode criar, atualizar e deletar
+          allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          allow update: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          allow delete: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        }
+        
+        // Edital Verticalizado (subcoleção)
+        match /editalVerticalizado/{docId} {
+          // Permitir leitura para usuários autenticados
+          allow read: if isAuthenticated();
+          // Apenas admin pode criar e deletar
+          allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          // Permitir que usuários autenticados atualizem (para marcar checkboxes dia, horas, revisoes)
+          // Admin pode atualizar tudo
+          allow update: if isAuthenticated();
+          allow delete: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        }
+        
+        // Matérias Revisadas (subcoleção)
+        match /materiasRevisadas/{docId} {
+          // Permitir leitura para usuários autenticados
+          allow read: if isAuthenticated();
+          // Apenas admin pode criar, atualizar e deletar
+          allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          allow update: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+          allow delete: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        }
+        
+        // Conteúdos Completos (subcoleção)
+        match /conteudosCompletos/{docId} {
+          // Permitir leitura para usuários autenticados
+          allow read: if isAuthenticated();
+          // Usuários autenticados podem criar conteúdo (gerar do edital verticalizado)
+          allow create: if isAuthenticated();
+          // Usuários autenticados podem atualizar (para regenerar ou corrigir)
+          allow update: if isAuthenticated();
+          // Apenas admin pode deletar
+          allow delete: if isAdmin();
+        }
+      }
+      
+      match /reviews/{reviewId} {
+        // Leitura pública de todas as avaliações (filtro de aprovadas é feito no código)
+        allow read: if true;
+        // Usuários autenticados podem criar avaliações
+        allow create: if isAuthenticated();
+        // Apenas admin pode atualizar ou deletar
+        allow update, delete: if isAuthenticated() && 
+                                exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                                get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      // ✅ CORRIGIDO: Regra expandida diretamente para deletedUsers
+      match /deletedUsers/{userId} {
+        // Permitir que qualquer usuário autenticado possa ler seu próprio registro (para verificar se foi deletado)
+        // Admin pode ler qualquer registro
+        allow read: if isAuthenticated() && (
+          request.auth.uid == userId ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
+        
+        // Admin pode criar - VERIFICAÇÃO EXPANDIDA
+        allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        
+        allow update, delete: if false;
+      }
+      
+      match /questoesStats/{docId} {
+        // O docId pode ser apenas userId ou userId_courseKey
+        // Verificar se começa com o uid do usuário autenticado
+        function isOwnerDoc() {
+          return isAuthenticated() && 
+                 (docId == request.auth.uid || 
+                  docId.matches('^' + request.auth.uid + '_.*'));
+        }
+        
+        allow read: if isAuthenticated() && (isOwnerDoc() || isAdmin());
+        allow create, update: if isAuthenticated() && isOwnerDoc();
+        allow delete: if isAdmin();
+      }
+      
+      // 🤖 Recomendações do Planejador de Estudos (sincronização entre dispositivos)
+      match /studyPlannerRecommendations/{recommendationId} {
+        // O recommendationId é: userId_courseId_date
+        function isOwnerRecommendation() {
+          return isAuthenticated() && 
+                 (resource == null || resource.data.userId == request.auth.uid);
+        }
+        
+        // Usuário pode ler suas próprias recomendações
+        allow read: if isAuthenticated() && (isOwnerRecommendation() || isAdmin());
+        // Usuário pode criar/atualizar suas próprias recomendações
+        allow create, update: if isAuthenticated() && 
+                                request.resource.data.userId == request.auth.uid;
+        allow delete: if isAdmin();
+      }
+
+      // 📚 Progresso do Edital Verticalizado
+      match /editalProgress/{progressId} {
+        // O progressId é: userId_courseId_date_topicKey
+        // Verificar se começa com o uid do usuário autenticado
+        function isOwnerDoc() {
+          return isAuthenticated() && 
+                 (progressId == request.auth.uid || 
+                  progressId.matches('^' + request.auth.uid + '_.*'));
+        }
+        
+        // Permitir leitura se o documento pertence ao usuário (funciona para queries e leitura individual)
+        // Para queries, o Firestore verifica cada documento individualmente
+        allow read: if isAuthenticated() && (
+          isOwnerDoc() || 
+          isAdmin() ||
+          (resource != null && resource.data != null && resource.data.userId == request.auth.uid)
+        );
+        
+        // Usuário pode criar/atualizar seus próprios registros
+        // Validar que o userId no documento corresponde ao usuário autenticado
+        allow create, update: if isAuthenticated() && 
+                                request.resource.data.userId == request.auth.uid;
+        allow delete: if isAdmin();
+      }
+      
+      match /presence/{userId} {
+        // Usuário pode ler, criar e atualizar seu próprio presence
+        allow read, create, update: if isAuthenticated() && isOwner(userId);
+        // Admin pode ler qualquer presence (para ver status de todos os usuários)
+        allow read: if isAdmin();
+        allow delete: if false;
+      }
+      
+      // 🎁 Testes Gratuitos
+      match /testTrials/{trialId} {
+        // Leitura pública (para validar token)
+        allow read: if true;
+        // Admin pode criar e deletar
+        allow create, delete: if isAdmin();
+        // Admin pode atualizar tudo, usuários autenticados podem atualizar apenas registeredUsers
+        allow update: if isAdmin() || 
+                      (isAuthenticated() && 
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredUsers', 'accessCount', 'lastAccessedAt']));
+      }
+      
+      match /passwordResetTokens/{tokenId} {
+        // Apenas admin pode criar tokens
+        allow create: if isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        // Leitura pública do token (para validar na página de reset)
+        allow read: if true;
+        // Apenas admin pode atualizar ou deletar
+        allow update, delete: if isAuthenticated() && 
+                                exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                                get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      // 🔥 NOVO: Cache de Questões (compartilhado entre alunos)
+      match /questoesCache/{cacheId} {
+        // Todos autenticados podem ler (para usar questões do cache)
+        allow read: if isAuthenticated();
+        // Usuários autenticados podem criar/atualizar (sistema cria cache automaticamente)
+        // Validação: deve ter estrutura correta (questoes, materia, modulo)
+        allow create: if isAuthenticated() && 
+                       request.resource.data.keys().hasAll(['questoes', 'materia', 'modulo']) &&
+                       request.resource.data.questoes is list &&
+                       request.resource.data.likes is int &&
+                       request.resource.data.dislikes is int;
+        allow update: if isAuthenticated() && 
+                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'dislikes', 'updatedAt']) ||
+                        isAdmin());
+        // Admin pode deletar
+        allow delete: if isAdmin();
+      }
+      
+      // 🔥 NOVO: Cache de Explicações (compartilhado entre alunos)
+      match /explanationsCache/{explanationId} {
+        // Todos autenticados podem ler (para usar explicações do cache)
+        allow read: if isAuthenticated();
+        // Usuários autenticados podem criar (sistema cria cache automaticamente)
+        // Validação: deve ter estrutura correta (text)
+        allow create: if isAuthenticated() && 
+                       request.resource.data.keys().hasAll(['text']) &&
+                       request.resource.data.text is string &&
+                       request.resource.data.likes is int &&
+                       request.resource.data.dislikes is int;
+        // Apenas atualização de likes/dislikes ou admin pode atualizar tudo
+        allow update: if isAuthenticated() && 
+                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'dislikes', 'updatedAt']) ||
+                        isAdmin());
+        // Admin pode deletar
+        allow delete: if isAdmin();
+      }
+      
+      // 🔥 NOVO: Cache de Mapas Mentais (compartilhado entre alunos)
+      match /mindMapsCache/{cacheId} {
+        // Todos autenticados podem ler (para usar mapas do cache)
+        allow read: if isAuthenticated();
+        // Usuários autenticados podem criar (sistema cria cache automaticamente)
+        // Validação: deve ter estrutura correta (structure, materia, modulo)
+        allow create: if isAuthenticated() && 
+                       request.resource.data.keys().hasAll(['materia', 'modulo']) &&
+                       request.resource.data.likes is int &&
+                       request.resource.data.dislikes is int;
+        // Apenas atualização de likes/dislikes ou admin pode atualizar tudo
+        allow update: if isAuthenticated() && 
+                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'dislikes', 'updatedAt']) ||
+                        isAdmin());
+        // Admin pode deletar
+        allow delete: if isAdmin();
+      }
+      
+      // 💳 Transações de Pagamento
+      match /transactions/{transactionId} {
+        // Permitir criação de transações por qualquer pessoa (checkout público)
+        // Isso permite que usuários não autenticados iniciem o processo de pagamento
+        allow create: if true;
+        
+        // Permitir leitura de transações:
+        // - Qualquer pessoa pode ler transações (para verificar status após pagamento)
+        // - O transactionId é único e aleatório, então é seguro permitir leitura pública
+        allow read: if true;
+        
+        // Permitir atualização:
+        // - Qualquer pessoa pode atualizar transações
+        // - Isso é necessário para que usuários não autenticados possam atualizar com dados do PIX
+        // - O transactionId é único e aleatório, então é relativamente seguro
+        // - Funções Firebase usam Admin SDK e bypassam essas regras automaticamente
+        allow update: if true;
+        
+        // Apenas admin pode deletar
+        allow delete: if isAdmin();
+      }
+      
+      // Regras para blog_articles (portal de notícias)
+      match /blog_articles/{articleId} {
+        // Leitura: qualquer pessoa (mesmo sem login) pode ler artigos publicados
+        // Para queries de coleção, precisamos permitir leitura se o documento não existir (!resource.exists)
+        // ou se atender às condições abaixo
+        allow read: if !resource.exists || 
+                     resource.data.status == 'published' || 
+                     (resource.data.status == 'scheduled' && resource.data.scheduledAt != null && resource.data.scheduledAt <= request.time) ||
+                     (isAuthenticated() && isAdmin()) ||
+                     (isAuthenticated() && resource.data.authorId == request.auth.uid);
+        
+        // Criação: apenas usuários autenticados
+        allow create: if isAuthenticated() && 
+                       request.resource.data.authorId == request.auth.uid;
+        
+        // Atualização: apenas o autor ou admin
+        allow update: if isAuthenticated() && (
+          resource.data.authorId == request.auth.uid || 
+          isAdmin()
+        );
+        
+        // Exclusão: apenas o autor ou admin
+        allow delete: if isAuthenticated() && (
+          resource.data.authorId == request.auth.uid || 
+          isAdmin()
+        );
+      }
+      
+      // 📱 Feed Social - Posts
+      
+      match /posts/{postId} {
+        // Permitir leitura pública de todos os posts (o código filtra para mostrar apenas notícias)
+        // Isso é necessário para permitir queries na collection inteira
+        // A filtragem por isNews é feita no código (NewsSection.jsx)
+        allow read: if true;
+        
+        // Usuários autenticados podem criar posts
+        allow create: if isAuthenticated() && 
+                       request.resource.data.authorId == request.auth.uid &&
+                       (request.resource.data.isNews == null || isAdmin());
+        
+        // Atualizações: qualquer usuário autenticado pode atualizar posts
+        // Isso permite curtir, comentar e compartilhar
+        // Protegendo apenas o authorId para não permitir mudança de autor
+        // Admin pode marcar/desmarcar como notícia
+        allow update: if isAuthenticated() && 
+                       request.resource.data.authorId == resource.data.authorId &&
+                       (request.resource.data.isNews == resource.data.isNews || isAdmin());
+        
+        // Apenas o autor ou admin pode deletar
+        allow delete: if isAuthenticated() && 
+                       (resource.data.authorId == request.auth.uid || isAdmin());
+      }
+      
+      // 📸 Stories - FlashSocial
+      match /stories/{storyId} {
+        // Todos autenticados podem ler stories não expiradas
+        allow read: if isAuthenticated();
+        
+        // Usuários autenticados podem criar suas próprias stories
+        allow create: if isAuthenticated() && 
+                       request.resource.data.authorId == request.auth.uid;
+        
+        // Apenas o autor pode deletar sua própria story
+        allow delete: if isAuthenticated() && 
+                       (resource.data.authorId == request.auth.uid || isAdmin());
+        // Stories não podem ser atualizadas (só criadas/deletadas)
+        allow update: if false;
+      }
+      
+      // 📝 Simulados Compartilhados
+      match /sharedSimulados/{simuladoId} {
+        // Leitura pública (para acessar simulado compartilhado)
+        allow read: if true;
+        // Apenas admin pode criar (compartilhar)
+        allow create: if isAuthenticated() && 
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        // Admin pode atualizar tudo
+        // Usuários autenticados podem atualizar apenas 'attempts' e 'questions' 
+        // (para registrar tentativas de simulado compartilhado)
+        // Nota: Esta regra permite que qualquer autenticado atualize, o que pode ser um risco
+        // Se necessário, adicionar validação de token de acesso ou limitação por IP
+        allow update: if (isAuthenticated() && 
+                          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+                     || 
+                     (isAuthenticated() &&
+                      resource != null &&
+                      resource.data != null &&
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attempts']) ||
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['questions']) ||
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attempts', 'questions'])));
+        // Apenas admin pode deletar
+        allow delete: if isAuthenticated() && 
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      // 📋 Leads de Simulados
+      match /leads/{leadId} {
+        // Apenas admin pode ler leads
+        allow read: if isAuthenticated() && 
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        // Qualquer pessoa pode criar lead (formulário público)
+        allow create: if true;
+        // Apenas admin pode atualizar (marcar como contatado, adicionar notas)
+        allow update: if isAuthenticated() && 
+                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        // Apenas admin pode deletar
+        allow delete: if isAuthenticated() && 
+                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      // 📚 Cache de Leis - Sistema de cache de textos oficiais
+      match /leisCache/{lawId} {
+        // Permitir leitura para todos autenticados (para usar textos oficiais)
+        allow read: if isAuthenticated();
+        
+        // Admin pode criar e atualizar leis no cache
+        allow create, update: if isAdmin();
+        
+        // Apenas admin pode deletar leis do cache
+        allow delete: if isAdmin();
+      }
+      
+      // ⚙️ Configurações do Sistema
+      match /config/{configId} {
+        // Permitir leitura para todos autenticados (para ler link do WhatsApp)
+        allow read: if isAuthenticated();
+        // Apenas admin pode criar e atualizar configurações
+        allow create, update: if isAdmin();
+        // Apenas admin pode deletar configurações
+        allow delete: if isAdmin();
+      }
+      
+      match /{document=**} {
+        allow read, write: if false;
+      }
+    }
+  }

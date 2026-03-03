@@ -4,8 +4,6 @@ import { useAuth } from './hooks/useAuth'
 import { useDarkMode } from './hooks/useDarkMode.jsx'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
 import Header from './components/Header'
-import ModernHeader from './components/ModernHeader'
-import ModernFooter from './components/ModernFooter'
 import SupportButton from './components/SupportButton'
 import PopupBanner from './components/PopupBanner'
 import OfflineIndicator from './components/OfflineIndicator'
@@ -161,7 +159,7 @@ function App() {
           minHeight: '100vh'
         }}
       >
-      <ModernHeader />
+      <Header />
       <main className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 py-4 sm:py-6 md:py-8 overflow-x-hidden relative z-10">
         <Suspense fallback={<LoadingFallback />}>
         <Routes>
@@ -348,7 +346,12 @@ function App() {
         </Routes>
         </Suspense>
       </main>
-      <ModernFooter />
+      <footer className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[60px] flex items-center justify-center">
+        <p>
+          © {new Date().getFullYear()} FlashConCards. Todos os direitos reservados.
+          É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.
+        </p>
+      </footer>
       <SupportButton />
       <PopupBanner />
       <OfflineIndicator />

@@ -29,56 +29,56 @@ const NewsSection = lazy(() => import('../components/NewsSection'))
 const features = [
   {
     icon: BookOpenIcon,
-    title: 'FlashCards 2.0',
-    description: 'Sistema de repetição espaçada com IA avançada. Algoritmo otimizado para 2026 com análise de padrões de aprendizado e reforço personalizado.',
+    title: 'Flashcards Inteligentes',
+    description: 'Sistema de repetição espaçada (SRS) que adapta o ritmo de estudos ao seu desempenho. Mais de 8 matérias completas com módulos organizados.',
     color: 'from-blue-500 to-blue-600'
   },
   {
     icon: QuestionMarkCircleIcon,
-    title: 'FlashQuestões Ultra',
-    description: 'Questões geradas por Gemini 2.5 Flash com análise profunda. Banco ilimitado com explicações contextuais e índice de acerto em tempo real.',
+    title: 'FlashQuestões',
+    description: 'Questões fictícias no estilo das principais bancas geradas por IA. Questões personalizadas por módulo com explicações detalhadas (BIZUs) e índice de acerto.',
     color: 'from-purple-500 to-purple-600'
   },
   {
     icon: ChatBubbleLeftRightIcon,
-    title: 'Flash Mentor Pro',
-    description: 'Assistente IA 24/7 com conhecimento atualizado. Dúvidas sobre edital, estratégias de estudo e simulações personalizadas.',
+    title: 'Flash Mentor - IA Personalizada',
+    description: 'Assistente de IA que responde dúvidas sobre o edital, explica conceitos e orienta seus estudos 24/7. Baseado no edital do concurso.',
     color: 'from-green-500 to-green-600'
   },
   {
     icon: RocketLaunchIcon,
-    title: 'Planner Inteligente',
-    description: 'Bot que cria cronogramas personalizados baseados em sua rotina. Análise de desempenho e sugestões otimizadas para máxima eficiência.',
+    title: 'Como Estudar? - Bot Guia',
+    description: 'Bot inteligente que analisa seu progresso e sugere qual módulo estudar. Acompanha fases de estudo e calcula dias restantes para completar tudo.',
     color: 'from-orange-500 to-orange-600'
   },
   {
     icon: ChartBarIcon,
-    title: 'Analytics Avançado',
-    description: 'Dashboard completo com métricas detalhadas. Previsão de aprovação, pontos fracos identificados e plano de recuperação automático.',
+    title: 'Progresso Completo',
+    description: 'Acompanhe seu progresso com calendário visual, streak de estudos, estatísticas por matéria e visualização clara do que já foi estudado.',
     color: 'from-indigo-500 to-indigo-600'
   },
   {
     icon: CalendarIcon,
-    title: 'Gamificação Total',
-    description: 'Sistema de conquistas, streaks bônus e desafios semanais. Competição saudável com ranking nacional e recompensas exclusivas.',
+    title: 'Calendário de Progresso',
+    description: 'Visualize todos os dias que você estudou em um calendário interativo. Mantenha sua sequência de estudos e aumente seu streak.',
     color: 'from-pink-500 to-pink-600'
   },
   {
     icon: LightBulbIcon,
-    title: 'IA Explicativa',
-    description: 'Explicações adaptativas que evoluem com seu nível. Contextualização com casos reais e aplicação prática do conteúdo.',
+    title: 'Explicações com IA',
+    description: 'Receba explicações detalhadas de cada flashcard geradas por IA, contextualizadas com o edital do concurso para melhor compreensão.',
     color: 'from-teal-500 to-teal-600'
   }
 ]
 
 const benefits = [
-  'FlashCards 2.0 com IA avançada e algoritmo otimizado',
-  'FlashQuestões Ultra com Gemini 2.5 Flash',
-  'Flash Mentor Pro - Assistente IA 24/7',
-  'Planner Inteligente com cronogramas personalizados',
-  'Analytics Avançado com previsão de aprovação',
-  'Gamificação Total com conquistas e ranking',
-  'IA Explicativa adaptativa e contextual',
+  'Flashcards com sistema de repetição espaçada (SRS)',
+  'FlashQuestões geradas por IA no estilo das principais bancas',
+  'Flash Mentor - IA que responde dúvidas sobre o edital',
+  'Bot "Como Estudar?" - guia personalizado de estudos',
+  'Progresso completo com estatísticas e métricas',
+  'Calendário visual e streak de estudos',
+  'Explicações detalhadas geradas por IA',
 ]
 
 const PublicHome = () => {
@@ -357,14 +357,14 @@ const PublicHome = () => {
         <div className="text-center space-y-3">
           <div className="inline-block">
             <span className="tech-badge px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-              🚀 Edição 2026
+              Cursos Premium
             </span>
           </div>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-black gradient-text-tech mb-2">
-            Transforme Sua Carreira em 2026
+            Cursos Preparatórios Disponíveis
           </h2>
           <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-            FlashCards Inteligentes com IA Para Concurso Público - PM, PC, GCM e mais. Aprovação garantida com tecnologia de ponta.
+            FlashCards Para Concurso Público - Polícia Militar, Polícia Civil, GCM e muito mais. Escolha o curso ideal para sua aprovação.
           </p>
         </div>
         {loadingCourses ? (
@@ -506,97 +506,6 @@ const PublicHome = () => {
         )}
       </div>
 
-      {/* Novidades 2026 */}
-      <div className="space-y-8">
-        <div className="text-center space-y-3">
-          <div className="inline-block">
-            <span className="tech-badge px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-              ✨ Novidades 2026
-            </span>
-          </div>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black gradient-text-tech mb-2">
-            O Que Há de Novo?
-          </h2>
-          <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-            Descubra as atualizações mais recentes que vão revolucionar seus estudos
-          </p>
-        </div>
-
-        <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
-          <div className="tech-card rounded-2xl p-6 border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20">
-            <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center mb-4">
-              <RocketLaunchIcon className="h-6 w-6 text-white" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-              Gemini 2.5 Flash
-            </h3>
-            <p className="text-slate-600 dark:text-slate-400">
-              IA ultrarrápida com geração de questões 70% mais rápida. Respostas mais precisas e contexto atualizado.
-            </p>
-          </div>
-
-          <div className="tech-card rounded-2xl p-6 border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20">
-            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center mb-4">
-              <ChartBarIcon className="h-6 w-6 text-white" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-              Analytics Avançado
-            </h3>
-            <p className="text-slate-600 dark:text-slate-400">
-              Previsão de aprovação com machine learning. Identificação automática de pontos fracos e plano de recuperação.
-            </p>
-          </div>
-
-          <div className="tech-card rounded-2xl p-6 border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
-            <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl flex items-center justify-center mb-4">
-              <TrophyIcon className="h-6 w-6 text-white" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-              Gamificação Total
-            </h3>
-            <p className="text-slate-600 dark:text-slate-400">
-              Sistema de conquistas, desafios semanais e ranking nacional. Recompensas exclusivas e competição saudável.
-            </p>
-          </div>
-
-          <div className="tech-card rounded-2xl p-6 border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20">
-            <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-amber-500 rounded-xl flex items-center justify-center mb-4">
-              <CalendarIcon className="h-6 w-6 text-white" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-              Planner Inteligente
-            </h3>
-            <p className="text-slate-600 dark:text-slate-400">
-              Cronogramas personalizados que se adaptam à sua rotina. Otimização automática do tempo de estudo.
-            </p>
-          </div>
-
-          <div className="tech-card rounded-2xl p-6 border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
-            <div className="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center mb-4">
-              <ShieldCheckIcon className="h-6 w-6 text-white" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-              LGPD Compliance
-            </h3>
-            <p className="text-slate-600 dark:text-slate-400">
-              Total conformidade com LGPD. Consentimento explícito e proteção total dos seus dados pessoais.
-            </p>
-          </div>
-
-          <div className="tech-card rounded-2xl p-6 border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-900/20 dark:to-rose-900/20">
-            <div className="w-12 h-12 bg-gradient-to-r from-pink-500 to-rose-500 rounded-xl flex items-center justify-center mb-4">
-              <ChatBubbleLeftRightIcon className="h-6 w-6 text-white" />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-              Comunidade Integrada
-            </h3>
-            <p className="text-slate-600 dark:text-slate-400">
-              Grupo WhatsApp exclusivo e sistema de comunicados. Conecte-se com outros alunos e compartilhe experiências.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Hero Section - Tech Senior */}
       <div 
         ref={heroRef}
@@ -611,19 +520,19 @@ const PublicHome = () => {
         <div className="relative z-10 space-y-6">
           <div className="inline-block">
             <span className="tech-badge px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider text-white/90 border border-white/30">
-              🚀 Edição 2026
+              Plataforma Completa
             </span>
           </div>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-black leading-tight">
-            A Revolução dos Estudos
+            FlashConCards - Flashcards para
             <span className="block mt-2 bg-gradient-to-r from-white via-blue-100 to-cyan-100 bg-clip-text text-transparent">
-              Chegou em 2026
+              Concursos Públicos
             </span>
           </h1>
           <p className="text-lg sm:text-xl text-white/90 leading-relaxed max-w-xl">
-            <strong>FlashCards 2.0</strong> com IA avançada para <strong>concurso público</strong>, <strong>concurso polícia militar</strong>, <strong>concurso policial</strong>, PMGO, PC, GCM. 
-            <strong>Gemini 2.5 Flash</strong>, analytics avançado e gamificação total. 
-            A plataforma mais <strong>moderna e eficiente</strong> para sua aprovação em 2026.
+            Estude para <strong>concurso público</strong>, <strong>concurso polícia militar</strong>, <strong>concurso policial</strong>, PMGO, PC, GCM e muito mais. 
+            <strong>Flashcards interativos</strong> com sistema de repetição espaçada (SRS), questões comentadas e simulados. 
+            A melhor plataforma de <strong>flashcards para concursos</strong> do Brasil.
           </p>
           <div className="flex flex-col sm:flex-row flex-wrap gap-4 pt-4">
             <Link
