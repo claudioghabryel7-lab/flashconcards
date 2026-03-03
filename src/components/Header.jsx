@@ -112,9 +112,9 @@ const Header = () => {
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
+      <header className="sticky top-0 z-50 w-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-700">
+        <div className="mx-auto max-w-7xl px-3 sm:px-4 lg:px-6">
+          <div className="flex items-center justify-between h-14 sm:h-16">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 group">
               <div className="relative">
@@ -258,7 +258,7 @@ const Header = () => {
           {/* Drawer */}
           <div
             ref={drawerRef}
-            className="fixed inset-y-0 left-0 w-80 md:w-96 max-w-[90vw] bg-white dark:bg-slate-900 shadow-xl z-50 flex flex-col animate-slide-in-left"
+            className="fixed inset-y-0 left-0 w-72 sm:w-80 max-w-[85vw] bg-white dark:bg-slate-900 shadow-xl z-50 flex flex-col animate-slide-in-left"
           >
             {/* Drawer Header */}
             <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">

@@ -19,6 +19,8 @@ dist-ssr
 .env
 .env.local
 .env.production
+.env.example
+.env.example.template
 
 # Editor directories and files
 .vscode/*

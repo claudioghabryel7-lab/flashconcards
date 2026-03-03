@@ -366,7 +366,7 @@ const FlashQuestoes = () => {
     })
   }, [organizedModules, subjectOrderConfig])
 
-  // Função para chamar Groq API
+  // Função para chamar Groq API (OTIMIZADA)
   const callGroqAPI = async (prompt) => {
     const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
     if (!groqApiKey) {
@@ -381,11 +381,11 @@ const FlashQuestoes = () => {
           'Authorization': `Bearer ${groqApiKey}`,
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'llama-3.1-8b-instant', // Modelo mais rápido
           messages: [
             {
               role: 'system',
-              content: 'Você é um especialista em criar questões de concursos públicos no estilo FGV.',
+              content: 'Especialista em concursos. Crie questões diretas e objetivas.',
             },
             {
               role: 'user',
@@ -393,7 +393,7 @@ const FlashQuestoes = () => {
             },
           ],
           temperature: 0.7,
-          max_tokens: 16000, // Aumentado para permitir mais questões
+          max_tokens: 8192, // Reduzido para velocidade
         }),
       })
 
@@ -418,7 +418,7 @@ const FlashQuestoes = () => {
   const [individualRatings, setIndividualRatings] = useState({}) // { questionIndex: { liked: bool, disliked: bool, loading: bool } }
   const [questionScores, setQuestionScores] = useState({}) // { questionIndex: { likes, dislikes, score } }
 
-  // Gerar questões com IA (COM CACHE INTELIGENTE)
+  // Gerar questões com IA (COM CACHE INTELIGENTE E OTIMIZADO)
   const generateQuestions = async () => {
     if (!selectedMateria || !selectedModulo) {
       alert('Selecione uma matéria e um módulo primeiro!')
@@ -443,6 +443,9 @@ const FlashQuestoes = () => {
     setCacheInfo(null)
     setIndividualRatings({})
     setQuestionScores({})
+
+    // Mostrar feedback imediato
+    console.log('🚀 Iniciando geração de questões otimizada...')
 
     try {
       // 🔥 NOVO: VERIFICAR CACHE PRIMEIRO (com courseId)
@@ -510,13 +513,14 @@ const FlashQuestoes = () => {
         throw new Error(`Nenhum flashcard encontrado para "${selectedMateria}" - "${selectedModulo}". Crie flashcards primeiro no painel administrativo.`)
       }
 
-      // Formatar conteúdo dos flashcards para incluir no prompt
-      const flashcardsContent = moduleFlashcards
+      // 🔥 OTIMIZAÇÃO: Limitar conteúdo para evitar prompts muito longos
+      const maxFlashcards = Math.min(moduleFlashcards.length, 15) // Limitar a 15 flashcards para não sobrecarregar
+      const selectedFlashcards = moduleFlashcards.slice(0, maxFlashcards)
+      
+      // Formatar conteúdo dos flashcards de forma mais concisa
+      const flashcardsContent = selectedFlashcards
         .map((card, idx) => {
-          return `Flashcard ${idx + 1}:
-Pergunta: ${card.pergunta || ''}
-Resposta: ${card.resposta || ''}
-${card.explicacao ? `Explicação: ${card.explicacao}` : ''}`
+          return `${idx + 1}. Q: ${card.pergunta || ''}\n   R: ${card.resposta || ''}${card.explicacao ? `\n   Exp: ${card.explicacao.substring(0, 200)}...` : ''}`
         })
         .join('\n\n')
 
@@ -526,69 +530,58 @@ ${card.explicacao ? `Explicação: ${card.explicacao}` : ''}`
         selectedCourseId || 'alego-default',
         selectedMateria,
         editalPrompt,
-        `⚠️ CONTEÚDO PRINCIPAL - FLASHCARDS DO MÓDULO "${selectedModulo}" (${moduleFlashcards.length} flashcards):
-Use ESTE conteúdo como base principal para criar as questões. As questões devem estar diretamente relacionadas ao conteúdo abaixo:
+        `CONTEÚDO BASE - Flashcards do módulo "${selectedModulo}" (${selectedFlashcards.length} de ${moduleFlashcards.length} flashcards):
+Use este conteúdo para criar questões:
 
 ${flashcardsContent}`
       )
 
-      // Calcular quantidade ideal de questões baseado no número de flashcards
-      const idealQuestionCount = Math.max(30, Math.floor(moduleFlashcards.length / 1.2))
-      const minQuestionCount = Math.max(20, Math.floor(moduleFlashcards.length / 2))
+      // 🔥 OTIMIZAÇÃO: Reduzir quantidade para gerar mais rápido
+      const idealQuestionCount = Math.max(15, Math.floor(selectedFlashcards.length * 1.5))
+      const minQuestionCount = Math.max(10, selectedFlashcards.length)
       
       const prompt = `${basePrompt}
 
-TAREFA: Criar questões FICTÍCIAS de múltipla escolha para a matéria "${selectedMateria}" no módulo "${selectedModulo}". 
+TAREFA: Criar questões de múltipla escolha para "${selectedMateria}" - "${selectedModulo}".
 
-🚨 INSTRUÇÃO CRÍTICA SOBRE QUANTIDADE:
-Este módulo tem ${moduleFlashcards.length} flashcards. Você DEVE gerar PELO MENOS ${idealQuestionCount} questões (ideal: ${idealQuestionCount}+ questões).
-- Mínimo obrigatório: ${minQuestionCount} questões
-- Quantidade ideal: ${idealQuestionCount} questões ou mais
-- NÃO pare em 10 questões - isso é insuficiente
-- Gere o MÁXIMO de questões possível dentro do limite de tokens da API
-- Cada flashcard deve ter pelo menos 1 questão correspondente
-- Quanto mais questões você gerar, melhor será a cobertura do conteúdo
-- NÃO há limite máximo - gere quantas conseguir
+QUANTIDADE (OTIMIZADA PARA VELOCIDADE):
+- Mínimo: ${minQuestionCount} questões
+- Ideal: ${idealQuestionCount} questões
+- Foque em qualidade sobre quantidade
+- Cada flashcard deve gerar pelo menos 1 questão
 
-CRÍTICO:
-- As questões devem ser baseadas NO CONTEÚDO DOS FLASHCARDS acima
-- NÃO crie questões genéricas sobre o edital
-- Foque no conteúdo específico dos flashcards fornecidos
-- Cada questão deve testar o conhecimento sobre os conceitos apresentados nos flashcards
-- Varie os tipos de questões para cobrir diferentes aspectos de cada flashcard
+CONTEÚDO:
+- Baseie-se APENAS nos flashcards fornecidos
+- Seja direto e objetivo
+- Evite questões muito longas
 
-FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
-Retorne APENAS um objeto JSON válido no seguinte formato:
-
+FORMATO (JSON puro):
 {
   "questoes": [
     {
-      "enunciado": "Texto completo da questão",
+      "enunciado": "pergunta clara e concisa",
       "alternativas": {
-        "A": "Texto da alternativa A",
-        "B": "Texto da alternativa B",
-        "C": "Texto da alternativa C",
-        "D": "Texto da alternativa D",
-        "E": "Texto da alternativa E"
+        "A": "alt A",
+        "B": "alt B", 
+        "C": "alt C",
+        "D": "alt D",
+        "E": "alt E"
       },
       "correta": "A",
-      "justificativa": "Explicação breve de por que a alternativa correta está certa"
+      "justificativa": "explicação breve"
     }
   ]
 }
 
-CRÍTICO: 
-- Retorne APENAS o JSON, sem markdown (sem \`\`\`json)
-- Sem explicações antes ou depois
-- Sem texto adicional
-- Apenas o objeto JSON puro começando com { e terminando com }`
+IMPORTANTE: Retorne APENAS o JSON, sem markdown.`
 
       let aiResponse = ''
 
-      // Tentar Gemini primeiro com fallback para modelos alternativos
+      // Tentar Gemini primeiro com modelos otimizados para velocidade
       if (apiKey) {
         const genAI = new GoogleGenerativeAI(apiKey)
-        const modelNames = ['gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
+        // 🔥 OTIMIZAÇÃO: Usar modelos mais rápidos primeiro
+        const modelNames = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro-latest', 'gemini-pro']
         let lastError = null
         
         for (const modelName of modelNames) {
@@ -597,7 +590,7 @@ CRÍTICO:
             const model = genAI.getGenerativeModel({ 
               model: modelName,
               generationConfig: {
-                maxOutputTokens: 16000, // Aumentado para permitir mais questões
+                maxOutputTokens: 8192, // Reduzido para mais velocidade
                 temperature: 0.7,
               }
             })

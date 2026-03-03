@@ -46,8 +46,12 @@ import { DocumentTextIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import InstallPWAButton from '../components/InstallPWAButton'
 import PreloadOfflineButton from '../components/PreloadOfflineButton'
 import StudyPlanner from '../components/StudyPlanner'
+import WhatsAppGroupLink from '../components/WhatsAppGroupLink'
+import LGPDConsent from '../components/LGPDConsent'
+import UserPhoneList from '../components/UserPhoneList'
+import MessageBroadcast from '../components/MessageBroadcast'
 import { useStudyPlanner } from '../hooks/useStudyPlanner'
-import StudyTimeChart from '../components/StudyTimeChart'
+// import StudyTimeChart from '../components/StudyTimeChart' // TEMPORARIAMENTE DESATIVADO
 
 dayjs.locale('pt-br')
 
@@ -968,6 +972,37 @@ const Dashboard = () => {
           </motion.div>
         </div>
 
+        {/* WhatsApp Group Link */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.75 }}
+        >
+          <WhatsAppGroupLink />
+        </motion.div>
+
+        {/* User Phone List - Apenas para Admins */}
+        {profile?.role === 'admin' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.8 }}
+          >
+            <UserPhoneList />
+          </motion.div>
+        )}
+
+        {/* Message Broadcast - Apenas para Admins */}
+        {profile?.role === 'admin' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.85 }}
+          >
+            <MessageBroadcast />
+          </motion.div>
+        )}
+
         {/* Progresso por Matéria */}
         {stats.bySubject && Object.keys(stats.bySubject).length > 0 && (
           <motion.div
@@ -1077,11 +1112,14 @@ const Dashboard = () => {
 
         </motion.div>
 
-        {/* Gráfico de Tempo de Estudo */}
-        <div className="mt-8">
+        {/* Gráfico de Tempo de Estudo - TEMPORARIAMENTE DESATIVADO */}
+        {/* <div className="mt-8">
           <StudyTimeChart userId={user?.uid} />
-        </div>
+        </div> */}
       </div>
+
+      {/* LGPD Consent Banner */}
+      <LGPDConsent />
     </div>
   )
 }

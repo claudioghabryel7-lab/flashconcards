@@ -44,6 +44,7 @@ const Sitemap = lazy(() => import('./routes/Sitemap'))
 const BlankPage = lazy(() => import('./routes/BlankPage'))
 const BlankLayout = lazy(() => import('./components/blog/BlankLayout'))
 const ListaArtigos = lazy(() => import('./routes/ListaArtigos'))
+const PoliticaPrivacidade = lazy(() => import('./routes/PoliticaPrivacidade'))
 
 const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
   const { user, profile, loading, isAdmin } = useAuth()
@@ -159,7 +160,7 @@ function App() {
         }}
       >
       <Header />
-      <main className="mx-auto w-full max-w-6xl px-2 sm:px-4 py-4 sm:py-6 md:py-8 overflow-x-hidden relative z-10">
+      <main className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 py-4 sm:py-6 md:py-8 overflow-x-hidden relative z-10">
         <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/" element={<PublicHome />} />
@@ -339,12 +340,13 @@ function App() {
           <Route path="/teste/:token" element={<TestTrial />} />
           {/* Sitemap XML - Acessível sem login */}
           <Route path="/sitemap.xml" element={<Sitemap />} />
+          <Route path="/politica-privacidade" element={<PoliticaPrivacidade />} />
           {/* Rotas do blog são tratadas acima no isBlankPage */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
       </main>
-      <footer className="mx-auto w-full max-w-6xl px-4 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[60px] flex items-center justify-center">
+      <footer className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[60px] flex items-center justify-center">
         <p>
           © {new Date().getFullYear()} FlashConCards. Todos os direitos reservados.
           É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.

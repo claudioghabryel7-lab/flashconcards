@@ -783,7 +783,14 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+      // 🔥 OTIMIZAÇÃO: Usar modelo mais rápido para simulado
+      const model = genAI.getGenerativeModel({ 
+        model: 'gemini-1.5-flash',
+        generationConfig: {
+          maxOutputTokens: 8192, // Reduzido para mais velocidade
+          temperature: 0.7,
+        }
+      })
 
       // Filtrar matérias - APENAS as que estão no curso
       const validMaterias = simuladoInfo.materias.filter(m => 

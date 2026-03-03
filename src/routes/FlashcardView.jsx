@@ -1090,7 +1090,10 @@ Regras:
     let isQuotaError = false
     let explanationText = ''
 
-    for (const modelName of candidates) {
+    // 🔥 OTIMIZAÇÃO: Usar modelos mais rápidos primeiro
+    const optimizedCandidates = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-pro']
+    
+    for (const modelName of optimizedCandidates) {
       try {
         const model = genAI.getGenerativeModel({ model: modelName })
 
@@ -1098,7 +1101,7 @@ Regras:
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 400,
+            maxOutputTokens: 300, // Reduzido para mais velocidade
           },
         })
 
@@ -1311,8 +1314,8 @@ IMPORTANTE:
       
       const genAI = new GoogleGenerativeAI(apiKey)
       
-      // Usar apenas modelos confirmados que funcionam
-      const modelNames = ['gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
+      // 🔥 OTIMIZAÇÃO: Usar modelos mais rápidos primeiro
+      const modelNames = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-pro']
       let lastError = null
       let aiResponse = ''
       
@@ -1323,7 +1326,7 @@ IMPORTANTE:
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: 4000,
+              maxOutputTokens: 2048, // Reduzido para mais velocidade
             },
           })
           

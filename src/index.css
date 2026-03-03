@@ -8,6 +8,7 @@
 /* Importar estilos modernos do blog */
 /* @import './styles/blog-modern-fixed.css'; */
 
+/* Reset e base para responsividade */
 * {
   box-sizing: border-box;
 }
@@ -15,6 +16,7 @@
 html {
   overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
   scroll-behavior: smooth;
 }
 
@@ -22,14 +24,105 @@ body {
   @apply bg-gradient-to-br from-slate-50 via-blue-50/30 to-cyan-50/20 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200;
   overflow-x: hidden;
   width: 100%;
+  max-width: 100vw;
   position: relative;
   font-feature-settings: 'rlig' 1, 'calt' 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
   min-height: 100vh;
   width: 100%;
+  max-width: 100vw;
   overflow-x: hidden;
+}
+
+/* Container base responsivo */
+.container-responsive {
+  width: 100%;
+  max-width: 100%;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (min-width: 640px) {
+  .container-responsive {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .container-responsive {
+    max-width: 768px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-responsive {
+    max-width: 1024px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .container-responsive {
+    max-width: 1280px;
+  }
+}
+
+/* Evitar overflow horizontal */
+.overflow-x-hidden-mobile {
+  overflow-x: hidden;
+}
+
+/* Ajustes para iOS */
+@supports (-webkit-touch-callout: none) {
+  .ios-safe-area {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Botões mobile-friendly */
+.btn-mobile {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.75rem 1rem;
+}
+
+/* Textos responsivos */
+.text-responsive {
+  font-size: clamp(0.875rem, 2.5vw, 1rem);
+  line-height: 1.5;
+}
+
+/* Cards responsivos */
+.card-responsive {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+/* Grid responsivo */
+.grid-responsive {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .grid-responsive {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-responsive {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 /* Melhorias de Performance */
