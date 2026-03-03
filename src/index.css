@@ -1,5 +1,6 @@
 @import './styles/design-system.css';
 @import './styles/stark-design-system.css';
+@import './styles/next-modern.css';
 
 @tailwind base;
 @tailwind components;
