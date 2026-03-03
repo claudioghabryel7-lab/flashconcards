@@ -66,6 +66,8 @@ export default defineConfig({
     hmr: {
       overlay: false, // Desabilita overlay de erros para melhor performance
     },
+    // Configurar fallback para rotas em desenvolvimento
+    historyApiFallback: true,
   },
   // Pre-bundling otimizado para melhor TTFB
   optimizeDeps: {
