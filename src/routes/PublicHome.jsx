@@ -353,8 +353,7 @@ const PublicHome = () => {
               return (
                 <div
                   key={course.id}
-                  className={`group relative tech-card tech-shine rounded-3xl overflow-hidden hover-scale hover-lift animate-on-scroll fade-up visible`}
-                  style={{ animationDelay: `${index * 0.1}s` }}
+                  className="group bg-white dark:bg-slate-800 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-slate-200 dark:border-slate-700"
                 >
                   {/* Gradient Background Effect */}
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-cyan-500/5 to-green-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
@@ -363,15 +362,15 @@ const PublicHome = () => {
                   <div className="tech-glow absolute inset-0 rounded-3xl pointer-events-none"></div>
                   
                   <div className="relative z-10">
-                    {/* Imagem do curso - com dimensões fixas para evitar CLS */}
+                    {/* Imagem do curso - simplificada para mobile */}
                     {(course.imageUrl || course.imageBase64) ? (
                       <div className="w-full h-52 overflow-hidden relative bg-slate-200 dark:bg-slate-700" style={{ aspectRatio: '16/9', minHeight: '208px' }}>
                         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent z-10 pointer-events-none"></div>
-                        <LazyImage
+                        <img
                           src={course.imageUrl || course.imageBase64}
                           alt={course.name}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                          priority={index < 6}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
                         />
                       </div>
                     ) : (
