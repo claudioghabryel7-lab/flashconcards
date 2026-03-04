@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { collection, onSnapshot, query } from 'firebase/firestore'
 import { db } from '../firebase/config'
-import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import { useDarkMode } from '../hooks/useDarkMode'
 import LazyImage from './LazyImage'
 
 const NewsSection = () => {
@@ -10,191 +10,213 @@ const NewsSection = () => {
   const [news, setNews] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!db) {
       setLoading(false)
+      setError('Erro de conexão com o banco de dados')
       return
     }
 
     const postsRef = collection(db, 'posts')
     
-    // Usar query simples sem índice composto - filtrar e ordenar no código
     const tryLoadNews = () => {
       try {
-        // Query simples sem where/orderBy para evitar necessidade de índice
-        // Buscar todos os posts e filtrar no código
         const q = query(postsRef)
 
         const unsub = onSnapshot(
           q,
           (snapshot) => {
-            const data = snapshot.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            }))
-            
-            // Filtrar apenas isNews === true (garantir)
-            const filteredData = data.filter(item => item.isNews === true)
-            
-            // Ordenar por data manualmente (sempre fazer isso no código)
-            filteredData.sort((a, b) => {
-              const aTime = a.createdAt?.toMillis?.() || (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0) || 0
-              const bTime = b.createdAt?.toMillis?.() || (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0) || 0
-              return bTime - aTime
-            })
-            
-            setNews(filteredData)
-            setLoading(false)
+            try {
+              const newsData = snapshot.docs.map(doc => {
+                const data = doc.data()
+                return {
+                  id: doc.id,
+                  ...data,
+                  title: data.title || 'Sem título',
+                  text: data.text || '',
+                  fullText: data.fullText || data.text || '',
+                  imageUrl: data.imageUrl || data.imageBase64 || null,
+                  createdAt: data.createdAt || null,
+                  category: data.category || 'Geral'
+                }
+              })
+              
+              const filteredAndSorted = newsData
+                .filter(item => item.active !== false)
+                .sort((a, b) => {
+                  const dateA = a.createdAt?.toMillis?.() || 0
+                  const dateB = b.createdAt?.toMillis?.() || 0
+                  return dateB - dateA
+                })
+
+              setNews(filteredAndSorted)
+              setLoading(false)
+              setError(null)
+            } catch (err) {
+              console.error('[NewsSection] Erro ao processar dados:', err)
+              setError('Erro ao processar notícias')
+              setLoading(false)
+            }
           },
-          (error) => {
-            // Ignorar erros de índice (pode ser cache do navegador)
-            if (error.code === 'failed-precondition') {
-              console.warn('Índice necessário. Limpe o cache do navegador ou crie o índice no Firebase Console.')
-              // Tentar carregar sem filtro como fallback
-              return
-            }
-            if (error.code === 'permission-denied') {
-              console.warn('Permissão negada. Verifique as regras do Firestore.')
-            } else {
-              console.error('Erro ao carregar notícias:', error)
-            }
-            setNews([])
+          (err) => {
+            console.error('[NewsSection] Erro no listener:', err)
+            setError('Erro ao carregar notícias')
             setLoading(false)
           }
         )
 
         return unsub
       } catch (err) {
-        console.error('Erro ao criar query:', err)
-        setNews([])
+        console.error('[NewsSection] Erro ao carregar notícias:', err)
+        setError('Erro ao configurar carregamento')
         setLoading(false)
-        return () => {}
       }
     }
 
-    const unsub = tryLoadNews()
+    const unsubscribe = tryLoadNews()
+    
     return () => {
-      if (unsub) unsub()
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        unsubscribe()
+      }
     }
   }, [])
 
-  // Filtrar notícias por busca
-  const filteredNews = news.filter((item) => {
+  const filteredNews = news.filter(item => {
     if (!searchTerm.trim()) return true
-    const search = searchTerm.toLowerCase()
+    const searchLower = searchTerm.toLowerCase()
     return (
-      item.text?.toLowerCase().includes(search) ||
-      item.authorName?.toLowerCase().includes(search) ||
-      item.fullText?.toLowerCase().includes(search)
+      (item.title || '').toLowerCase().includes(searchLower) ||
+      (item.text || '').toLowerCase().includes(searchLower) ||
+      (item.category || '').toLowerCase().includes(searchLower)
     )
   })
 
-  if (loading) {
+  if (error) {
     return (
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-alego-600 mx-auto"></div>
-      </div>
+      <section className="py-12">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300 mb-2">
+            Erro ao carregar notícias
+          </h3>
+          <p className="text-slate-500 dark:text-slate-400 mb-4">
+            {error}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 bg-alego-600 text-white font-semibold rounded-lg hover:bg-alego-700 transition"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </section>
     )
   }
 
-  if (news.length === 0) {
-    return null
+  if (loading) {
+    return (
+      <section className="py-12">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-alego-600 border-t-transparent"></div>
+          <p className="mt-4 text-slate-600 dark:text-slate-400">Carregando notícias...</p>
+        </div>
+      </section>
+    )
+  }
+
+  if (filteredNews.length === 0) {
+    return (
+      <section className="py-12">
+        <div className="text-center">
+          <div className="text-6xl mb-4">📰</div>
+          <h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300 mb-2">
+            Nenhuma notícia encontrada
+          </h3>
+          <p className="text-slate-500 dark:text-slate-400">
+            {searchTerm ? 'Tente buscar com outros termos.' : 'Nenhuma notícia disponível no momento.'}
+          </p>
+        </div>
+      </section>
+    )
   }
 
   return (
-    <section className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-alego-700 dark:text-alego-300 mb-3">
-          📰 Notícias
+    <section className="py-12">
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
+          Últimas Notícias
         </h2>
-        <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
-          Fique por dentro das últimas novidades
+        <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+          Fique por dentro das novidades sobre concursos públicos e dicas de estudo
         </p>
       </div>
 
-      {/* Busca */}
-      <div className="max-w-2xl mx-auto">
-        <div className="relative">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar notícias..."
-            className="w-full rounded-full border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-3 pl-12 text-sm focus:border-alego-400 focus:outline-none"
-          />
-          <svg
-            className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </div>
+      <div className="max-w-md mx-auto mb-8">
+        <input
+          type="text"
+          placeholder="Buscar notícias..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-alego-500 dark:bg-slate-800 dark:text-white"
+        />
       </div>
 
-      {/* Grid de Notícias */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredNews.length === 0 ? (
-          <div className="col-span-full text-center py-8">
-            <p className="text-slate-600 dark:text-slate-400">
-              {searchTerm ? 'Nenhuma notícia encontrada.' : 'Nenhuma notícia disponível.'}
-            </p>
-          </div>
-        ) : (
-          filteredNews.slice(0, 6).map((item) => (
-            <Link
-              key={item.id}
-              to={`/noticia/${item.id}`}
-              className="group block rounded-2xl bg-white dark:bg-slate-800 overflow-hidden shadow-lg hover:shadow-2xl transition border border-slate-200 dark:border-slate-700"
-            >
-              {/* Imagem da notícia */}
-              {item.imageBase64 && (
-                <div className="w-full h-48 overflow-hidden bg-black">
-                  <LazyImage
-                    src={item.imageBase64}
-                    alt={item.text || 'Notícia'}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                  />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredNews.slice(0, 6).map((item, index) => (
+          <Link
+            key={item.id}
+            to={`/noticia/${item.id}`}
+            className="group bg-white dark:bg-slate-800 rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105 overflow-hidden border border-slate-200 dark:border-slate-700"
+          >
+            <div className="aspect-w-16 aspect-h-9 bg-slate-100 dark:bg-slate-700">
+              {item.imageUrl ? (
+                <LazyImage
+                  src={item.imageUrl}
+                  alt={item.title}
+                  className="w-full h-48 object-cover group-hover:scale-110 transition-transform duration-500"
+                  width={400}
+                  height={225}
+                  quality={75}
+                />
+              ) : (
+                <div className="w-full h-48 bg-gradient-to-br from-alego-500 to-alego-600 flex items-center justify-center">
+                  <div className="text-center text-white p-4">
+                    <div className="text-4xl mb-2">📰</div>
+                    <span className="text-sm">Notícia</span>
+                  </div>
                 </div>
               )}
-              
-              {/* Conteúdo */}
-              <div className="p-6">
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2 line-clamp-2 group-hover:text-alego-600 dark:group-hover:text-alego-400 transition">
-                  {item.text || 'Notícia'}
-                </h3>
-                
-                <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400 mb-3">
-                  {item.authorAvatar && (
-                    <img
-                      src={item.authorAvatar}
-                      alt={item.authorName}
-                      className="h-6 w-6 rounded-full object-cover"
-                    />
-                  )}
-                  <span>{item.authorName || 'Autor'}</span>
-                  <span>•</span>
-                  <span>
-                    {item.createdAt?.toDate?.().toLocaleDateString('pt-BR') || 'Data não disponível'}
-                  </span>
-                </div>
-                
-                <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2">
-                  {item.fullText || item.text || ''}
-                </p>
-                
-                <div className="mt-4 text-alego-600 dark:text-alego-400 font-semibold text-sm">
-                  Ler mais →
-                </div>
+            </div>
+            
+            <div className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold text-alego-600 dark:text-alego-400 bg-alego-100 dark:bg-alego-900/30 px-2 py-1 rounded">
+                  {item.category}
+                </span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {item.createdAt?.toDate?.().toLocaleDateString('pt-BR') || 'Data não disponível'}
+                </span>
               </div>
-            </Link>
-          ))
-        )}
+              
+              <h3 className="font-semibold text-slate-900 dark:text-white mb-2 line-clamp-2">
+                {item.title}
+              </h3>
+              
+              <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2">
+                {item.fullText || item.text || ''}
+              </p>
+              
+              <div className="mt-4 text-alego-600 dark:text-alego-400 font-semibold text-sm">
+                Ler mais →
+              </div>
+            </div>
+          </Link>
+        ))}
       </div>
 
-      {/* Ver todas as notícias */}
       {filteredNews.length > 6 && (
         <div className="text-center">
           <Link
