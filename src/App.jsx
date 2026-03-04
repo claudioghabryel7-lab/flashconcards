@@ -1,5 +1,5 @@
 import { lazy, Suspense, startTransition } from 'react'
-import { Navigate, Route, Routes, useLocation, BrowserRouter as Router } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { useDarkMode } from './hooks/useDarkMode.jsx'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
