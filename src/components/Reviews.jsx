@@ -304,10 +304,6 @@ const Reviews = () => {
                 ))}
               </div>
             </div>
-
-            {/* Gradientes nas laterais para efeito visual */}
-            <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-white via-white/80 to-transparent dark:from-slate-50 dark:via-slate-800/80 dark:to-transparent pointer-events-none z-10"></div>
-            <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-white via-white/80 to-transparent dark:from-slate-50 dark:via-slate-800/80 dark:to-transparent pointer-events-none z-10"></div>
           </div>
 
           {/* Tablet: Grid de 2 colunas */}
@@ -346,7 +342,7 @@ const Reviews = () => {
             ))}
           </div>
 
-          {/* Mobile: 1 coluna com carrossel vertical */}
+          {/* Mobile: Cards verticais estáticos (sem carrossel) */}
           <div className="md:hidden space-y-4">
             {reviews.slice(0, 3).map((review, index) => (
               <motion.div
