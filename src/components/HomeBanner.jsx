@@ -171,8 +171,13 @@ const HomeBanner = () => {
   // Mostrar skeleton enquanto carrega para evitar flash
   if (loading) {
     return (
-      <div className="relative w-full overflow-hidden rounded-3xl shadow-xl mb-6 sm:mb-8 border border-slate-200 dark:border-slate-700 h-[200px] sm:h-[300px] md:h-[400px] lg:h-[500px]">
-        <div className="w-full h-full bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 animate-pulse" />
+      <div className="banner-aligned-content mb-6 sm:mb-8">
+        <div className="banner-container border border-slate-200 dark:border-slate-700">
+          {/* Container com aspect ratio responsivo */}
+          <div className="banner-aspect-ratio">
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 animate-pulse" />
+          </div>
+        </div>
       </div>
     )
   }
@@ -184,32 +189,40 @@ const HomeBanner = () => {
   const currentBanner = banners[currentIndex]
 
   return (
-    <div className="relative w-full overflow-hidden rounded-3xl shadow-xl mb-6 sm:mb-8 border border-slate-200/50 dark:border-slate-700/50 h-[200px] sm:h-[300px] md:h-[400px] lg:h-[500px] above-fold">
-      <div
-        key={currentBanner.id}
-        className="relative w-full h-full animate-banner-fade"
-      >
-        {currentBanner.link ? (
-          <Link to={currentBanner.link} className="block w-full h-full group">
-            <LazyImage
-              src={currentBanner.imageUrl || currentBanner.imageBase64}
-              alt={currentBanner.title || 'Banner'}
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-              style={{ objectFit: 'cover', objectPosition: 'center' }}
-              priority={true}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          </Link>
-        ) : (
-          <LazyImage
-            src={currentBanner.imageUrl || currentBanner.imageBase64}
-            alt={currentBanner.title || 'Banner'}
-            className="w-full h-full object-cover"
-            style={{ objectFit: 'cover', objectPosition: 'center' }}
-            priority={true}
-          />
-        )}
-      </div>
+    <div className="banner-aligned-content mb-6 sm:mb-8">
+      <div className="banner-container border border-slate-200/50 dark:border-slate-700/50 above-fold">
+        {/* Container com aspect ratio responsivo baseado em 1080x602 (~16:9) */}
+        <div className="banner-aspect-ratio">
+          <div
+            key={currentBanner.id}
+            className="relative w-full h-full animate-banner-fade"
+          >
+            {currentBanner.link ? (
+              <Link to={currentBanner.link} className="block w-full h-full group">
+                <LazyImage
+                  src={currentBanner.imageUrl || currentBanner.imageBase64}
+                  alt={currentBanner.title || 'Banner'}
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  width={1920}
+                  height={1080}
+                  quality={90}
+                  priority={true}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              </Link>
+            ) : (
+              <LazyImage
+                src={currentBanner.imageUrl || currentBanner.imageBase64}
+                alt={currentBanner.title || 'Banner'}
+                className="w-full h-full object-cover"
+                width={1920}
+                height={1080}
+                quality={90}
+                priority={true}
+              />
+            )}
+          </div>
+        </div>
 
       {/* Indicadores */}
       {banners.length > 1 && (
@@ -259,6 +272,7 @@ const HomeBanner = () => {
           </button>
         </>
       )}
+      </div>
     </div>
   )
 }

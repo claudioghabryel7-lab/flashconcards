@@ -1,4 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
+import { getCachedOptimizedUrl } from '../utils/imageOptimizer'
+
+// Cache simples para URLs de imagens já carregadas
+const imageCache = new Map()
+const loadingPromises = new Map()
 
 const LazyImage = ({ 
   src, 
@@ -8,6 +13,9 @@ const LazyImage = ({
   onError = null,
   priority = false, // Se true, carrega imediatamente sem lazy loading
   retryCount = 0, // Número de tentativas
+  width, // Largura desejada para otimização
+  height, // Altura desejada para otimização
+  quality = 80, // Qualidade da imagem (1-100)
   ...props 
 }) => {
   const [imageSrc, setImageSrc] = useState(null)
@@ -27,15 +35,77 @@ const LazyImage = ({
       return
     }
 
-    // Definir imageSrc imediatamente para renderizar a tag <img> 
-    // O navegador vai cuidar do lazy loading se loading="lazy" estiver definido
-    setImageSrc(src)
+    // Verificar cache primeiro
+    if (imageCache.has(src)) {
+      const cachedData = imageCache.get(src)
+      setImageSrc(cachedData.url)
+      setIsLoading(false)
+      setHasError(cachedData.error)
+      return
+    }
+
+    // Verificar se já está carregando
+    if (loadingPromises.has(src)) {
+      loadingPromises.get(src).then(data => {
+        setImageSrc(data.url)
+        setIsLoading(false)
+        setHasError(data.error)
+      }).catch(() => {
+        setHasError(true)
+        setIsLoading(false)
+      })
+      return
+    }
+
+    // Iniciar carregamento
     setIsLoading(true)
     setHasError(false)
     setRetries(0)
 
+    // Criar promise de carregamento
+    const loadPromise = new Promise((resolve, reject) => {
+      const img = new Image()
+      
+      img.onload = () => {
+        const data = { url: src, error: false }
+        imageCache.set(src, data)
+        resolve(data)
+      }
+      
+      img.onerror = () => {
+        const data = { url: src, error: true }
+        imageCache.set(src, data)
+        reject(data)
+      }
+      
+      // Para imagens Firebase, usar URL otimizada
+      const optimizedSrc = getCachedOptimizedUrl(src, {
+        width: width || 800,
+        height: height || 600,
+        quality: quality
+      })
+      
+      img.src = optimizedSrc
+    })
+
+    loadingPromises.set(src, loadPromise)
+    
+    loadPromise.then(data => {
+      setImageSrc(data.url)
+      setIsLoading(false)
+      setHasError(data.error)
+      loadingPromises.delete(src)
+    }).catch(() => {
+      setHasError(true)
+      setIsLoading(false)
+      loadingPromises.delete(src)
+    })
+
     return () => {
-      // Cleanup: não precisa fazer nada, o navegador cuida do cancelamento do carregamento
+      // Cleanup
+      if (loadingPromises.has(src)) {
+        loadingPromises.delete(src)
+      }
     }
   }, [src])
 

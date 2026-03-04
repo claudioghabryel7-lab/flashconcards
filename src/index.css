@@ -13,6 +13,7 @@
   box-sizing: border-box;
 }
 
+/* Reset de zoom e escala para desktop */
 html {
   overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
@@ -21,7 +22,10 @@ html {
 }
 
 body {
-  @apply bg-gradient-to-br from-slate-50 via-blue-50/30 to-cyan-50/20 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200;
+  background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 30%, #ecfeff 100%);
+  color: #1e293b;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   overflow-x: hidden;
   width: 100%;
   max-width: 100vw;
@@ -29,6 +33,18 @@ body {
   font-feature-settings: 'rlig' 1, 'calt' 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  font-size: 16px;
+  margin: 0;
+  padding: 0;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+    color: #f1f5f9;
+  }
 }
 
 #root {
@@ -46,6 +62,187 @@ body {
   padding-right: 0.75rem;
   margin-left: auto;
   margin-right: auto;
+}
+
+/* Container principal para alinhamento com banner */
+.main-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+/* Alinhamento perfeito com banner */
+.banner-aligned-content {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+@media (min-width: 640px) {
+  .main-container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .banner-aligned-content {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .main-container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+  
+  .banner-aligned-content {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .main-container {
+    max-width: 1280px;
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+  
+  .banner-aligned-content {
+    max-width: 1280px;
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+/* Banner responsivo com aspect ratio perfeito */
+.banner-container {
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.5rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.banner-aspect-ratio {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9; /* Proporção aproximada de 1080x602 */
+  max-width: 100vw;
+  overflow: hidden;
+}
+
+/* Ajustes para mobile */
+@media (max-width: 640px) {
+  .banner-aspect-ratio {
+    aspect-ratio: 4/3; /* Um pouco mais alto em mobile para melhor visualização */
+    min-height: 240px; /* Altura mínima garantida */
+  }
+  
+  /* Garantir que o banner não fique muito pequeno */
+  .banner-container {
+    margin-bottom: 1rem;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .banner-aspect-ratio {
+    aspect-ratio: 16/9;
+    min-height: 300px;
+  }
+}
+
+@media (min-width: 1025px) {
+  .banner-aspect-ratio {
+    aspect-ratio: 16/9;
+    min-height: 400px;
+    max-height: 602px; /* Altura máxima baseada na sua especificação */
+  }
+}
+
+/* Animação de fade para banners */
+@keyframes banner-fade {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-banner-fade {
+  animation: banner-fade 0.6s ease-out;
+}
+
+/* Estilos específicos para mobile em portrait */
+.mobile-portrait .banner-aspect-ratio {
+  aspect-ratio: 9/16; /* Mais alto em portrait */
+  min-height: 320px;
+  max-height: 500px;
+}
+
+/* Estilos específicos para mobile em landscape */
+.mobile-landscape .banner-aspect-ratio {
+  aspect-ratio: 16/9;
+  min-height: 200px;
+  max-height: 280px;
+}
+
+/* Estilos para tablet */
+.tablet-landscape .banner-aspect-ratio {
+  aspect-ratio: 16/9;
+  min-height: 350px;
+  max-height: 450px;
+}
+
+.tablet-portrait .banner-aspect-ratio {
+  aspect-ratio: 4/3;
+  min-height: 400px;
+  max-height: 500px;
+}
+
+/* Estilos para desktop */
+.desktop-landscape .banner-aspect-ratio {
+  aspect-ratio: 16/9;
+  min-height: 400px;
+  max-height: 602px; /* Baseado na sua especificação */
+}
+
+.desktop-portrait .banner-aspect-ratio {
+  aspect-ratio: 16/9;
+  min-height: 350px;
+  max-height: 500px;
+}
+
+/* Garantir que imagens do banner não sejam distorcidas */
+.banner-aspect-ratio img {
+  object-fit: cover;
+  object-position: center;
+  width: 100%;
+  height: 100%;
+}
+
+/* Ajuste para telas ultra-wide */
+@media (min-width: 1440px) {
+  .banner-aspect-ratio {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+}
+
+/* Ajuste para telas muito pequenas */
+@media (max-width: 360px) {
+  .mobile-portrait .banner-aspect-ratio {
+    min-height: 280px;
+    aspect-ratio: 2/3; /* Um pouco mais compacto */
+  }
 }
 
 @media (min-width: 640px) {
@@ -109,19 +306,265 @@ body {
 /* Grid responsivo */
 .grid-responsive {
   display: grid;
-  gap: 1rem;
+  gap: 1.5rem;
   grid-template-columns: 1fr;
+  padding: 0;
+  margin: 0;
 }
 
 @media (min-width: 640px) {
   .grid-responsive {
     grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
   }
 }
 
 @media (min-width: 1024px) {
   .grid-responsive {
     grid-template-columns: repeat(3, 1fr);
+    gap: 2.5rem;
+  }
+}
+
+/* Cards com alinhamento perfeito */
+.card-aligned {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border-radius: 1.5rem;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.card-aligned:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Imagem do card com proporção correta */
+.card-image-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+}
+
+.card-image-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transition: transform 0.7s ease;
+}
+
+.card-aligned:hover .card-image-container img {
+  transform: scale(1.05);
+}
+
+/* Animação do carrossel horizontal infinito */
+@keyframes scroll-horizontal {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scroll-horizontal {
+  animation: scroll-horizontal 20s linear infinite;
+}
+
+/* Pausar animação no hover */
+.animate-scroll-horizontal:hover {
+  animation-play-state: paused;
+}
+
+/* Estilos para Reviews */
+.reviews-container {
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+}
+
+/* Garantir visibilidade dos botões de compra - CSS direto */
+.tech-button {
+  display: inline-flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  position: relative !important;
+  z-index: 999 !important;
+  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%) !important;
+  color: white !important;
+  padding: 12px 24px !important;
+  border-radius: 12px !important;
+  font-weight: bold !important;
+  text-decoration: none !important;
+  transition: all 0.3s ease !important;
+}
+
+.tech-button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.4) !important;
+}
+
+/* Garantir que todos os links dentro dos cards sejam visíveis */
+.card-aligned a,
+.grid a {
+  display: inline-flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Forçar visibilidade dos containers de botões */
+.flex.gap-3 {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  gap: 12px !important;
+}
+
+/* Truncamento de texto com line-clamp */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-4 {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Animações suaves para reviews */
+.review-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.review-card:hover {
+  transform: translateY(-4px) scale(1.02);
+}
+
+/* Estrelas animadas */
+.star-rating {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.star-rating button {
+  transition: transform 0.2s ease;
+}
+
+.star-rating button:hover {
+  transform: scale(1.2);
+}
+
+/* Carrossel mobile suave */
+.carousel-container {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Indicadores de carrossel */
+.carousel-indicators {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem 0;
+}
+
+.carousel-indicators button {
+  transition: all 0.3s ease;
+}
+
+.carousel-indicators button:hover {
+  transform: scale(1.2);
+}
+
+/* Formulário de avaliação */
+.review-form {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Loading skeleton */
+.review-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Dark mode para reviews */
+@media (prefers-color-scheme: dark) {
+  .reviews-container {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  }
+  
+  .review-skeleton {
+    background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+    background-size: 200% 100%;
+  }
+}
+
+/* Conteúdo do card */
+.card-content {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .card-content {
+    padding: 2rem;
+  }
+}
+
+/* Prevenir zoom excessivo em desktop */
+@media (min-width: 1024px) {
+  .card-aligned {
+    max-height: 600px;
+  }
+  
+  .card-content h3 {
+    font-size: 1.25rem;
+    line-height: 1.4;
+  }
+  
+  .card-content p {
+    font-size: 0.875rem;
+    line-height: 1.5;
   }
 }
 
@@ -551,10 +994,14 @@ img[loading="lazy"] {
 }
 
 .tech-button {
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative !important;
+  overflow: hidden !important;
+  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  z-index: 10 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 .tech-button::before {
@@ -564,7 +1011,7 @@ img[loading="lazy"] {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
   transition: left 0.5s;
 }
 
@@ -575,6 +1022,18 @@ img[loading="lazy"] {
 .tech-button:hover {
   transform: translateY(-2px);
   box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+}
+
+.card-aligned .tech-button {
+  position: relative !important;
+  z-index: 20 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.card-aligned .flex.gap-3 {
+  position: relative !important;
+  z-index: 20 !important;
 }
 
 .tech-badge {

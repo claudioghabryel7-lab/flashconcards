@@ -4,15 +4,15 @@ import { collection, doc, getDocs, query, setDoc, serverTimestamp, where, limit 
 import { db } from '../firebase/config'
 import LazyImage from '../components/LazyImage'
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver'
+import { preloadImages } from '../utils/imageOptimizer'
 // Lazy load de ícones - carregar apenas quando necessário
 import { 
   ShieldCheckIcon, 
   SparklesIcon, 
   ClockIcon,
   AcademicCapIcon,
-  BookOpenIcon,
-  RocketLaunchIcon,
-  ShareIcon
+  ShareIcon,
+  MagnifyingGlassIcon
 } from '@heroicons/react/24/solid'
 import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
@@ -39,6 +39,19 @@ const PublicHome = () => {
   // Carregar cursos
   const [courses, setCourses] = useState([])
   const [loadingCourses, setLoadingCourses] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+
+  // Filtrar cursos com base na busca
+  const filteredCourses = courses.filter(course => {
+    if (!searchTerm.trim()) return true
+    
+    const searchLower = searchTerm.toLowerCase()
+    const nameMatch = (course.name || '').toLowerCase().includes(searchLower)
+    const competitionMatch = (course.competition || '').toLowerCase().includes(searchLower)
+    const descriptionMatch = (course.description || '').toLowerCase().includes(searchLower)
+    
+    return nameMatch || competitionMatch || descriptionMatch
+  })
   
   // SEO: Adicionar meta tags e Schema.org dinamicamente
   useEffect(() => {
@@ -204,24 +217,18 @@ const PublicHome = () => {
           setLoadingCourses(false)
         })
         
-        // Preload apenas das primeiras 3 imagens (prioridade alta)
-        // Apenas imageUrl (URL externa), não imageBase64 (muito pesado)
-        sortedData.slice(0, 3).forEach((course) => {
-          const imageUrl = course.imageUrl // Apenas imageUrl, não imageBase64
-          if (imageUrl && typeof imageUrl === 'string' && !imageUrl.startsWith('data:')) {
-            try {
-              // Preload usando link tag (mais eficiente)
-              const link = document.createElement('link')
-              link.rel = 'preload'
-              link.as = 'image'
-              link.href = imageUrl
-              link.setAttribute('fetchpriority', 'high')
-              document.head.appendChild(link)
-            } catch (err) {
-              // Ignorar erros de preload (não crítico)
-            }
-          }
-        })
+        // Preload inteligente das primeiras imagens com otimização
+        const priorityImages = sortedData
+          .slice(0, 3)
+          .map(course => course.imageUrl)
+          .filter(url => url && typeof url === 'string' && !url.startsWith('data:'))
+        
+        if (priorityImages.length > 0) {
+          preloadImages(priorityImages, 'high').catch(err => {
+            // Ignorar erros de preload (não crítico)
+            console.warn('Erro no preload de imagens:', err)
+          })
+        }
         
         // Salvar no cache (apenas dados essenciais para evitar quota)
         try {
@@ -291,7 +298,8 @@ const PublicHome = () => {
   }
 
   return (
-    <section className="space-y-8 sm:space-y-12 md:space-y-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <div className="main-container">
+      <section className="space-y-8 sm:space-y-12 md:space-y-16">
         {/* Carrossel de Banners */}
         <HomeBanner />
         
@@ -321,14 +329,14 @@ const PublicHome = () => {
             </Suspense>
           </div>
         </div>
-      
-      {/* Cursos Disponíveis - Movido para o início */}
-      <div
-        id="cursos"
-        data-courses-section
-        ref={coursesRef}
-        className={`space-y-8 ${coursesVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up visible'}`}
-      >
+        
+        {/* Cursos Disponíveis */}
+        <div
+          id="cursos"
+          data-courses-section
+          ref={coursesRef}
+          className={`space-y-8 ${coursesVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up visible'}`}
+        >
         <div className="text-center space-y-3">
           <div className="inline-block">
             <span className="tech-badge px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
@@ -342,18 +350,49 @@ const PublicHome = () => {
             FlashCards Para Concurso Público - Polícia Militar, Polícia Civil, GCM e muito mais. Escolha o curso ideal para sua aprovação.
           </p>
         </div>
+
+        {/* Campo de Busca de Cursos */}
+        <div className="max-w-2xl mx-auto mb-8">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <MagnifyingGlassIcon className="h-6 w-6 text-slate-400" />
+            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar cursos por nome, concurso ou área..."
+              className="w-full pl-12 pr-4 py-4 text-lg border-2 border-slate-300 dark:border-slate-600 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-lg"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {searchTerm && (
+            <p className="mt-3 text-center text-slate-600 dark:text-slate-400">
+              {filteredCourses.length} curso{filteredCourses.length !== 1 ? 's' : ''} encontrado{filteredCourses.length !== 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
         {loadingCourses ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
             <p className="mt-4 text-slate-600 dark:text-slate-400">Carregando cursos...</p>
           </div>
-        ) : courses.length > 0 ? (
-          <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {courses.map((course, index) => {
+        ) : filteredCourses.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredCourses.map((course, index) => {
               return (
                 <div
                   key={course.id}
-                  className={`group relative tech-card tech-shine rounded-3xl overflow-hidden hover-scale hover-lift animate-on-scroll fade-up visible`}
+                  className="group bg-white dark:bg-slate-800 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-slate-200 dark:border-slate-700"
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
                   {/* Gradient Background Effect */}
@@ -363,19 +402,22 @@ const PublicHome = () => {
                   <div className="tech-glow absolute inset-0 rounded-3xl pointer-events-none"></div>
                   
                   <div className="relative z-10">
-                    {/* Imagem do curso - com dimensões fixas para evitar CLS */}
+                    {/* Imagem do curso - com container alinhado */}
                     {(course.imageUrl || course.imageBase64) ? (
-                      <div className="w-full h-52 overflow-hidden relative bg-slate-200 dark:bg-slate-700" style={{ aspectRatio: '16/9', minHeight: '208px' }}>
+                      <div className="card-image-container">
                         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent z-10 pointer-events-none"></div>
                         <LazyImage
                           src={course.imageUrl || course.imageBase64}
                           alt={course.name}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                           priority={index < 6}
+                          width={400}
+                          height={225}
+                          quality={index < 6 ? 85 : 75}
                         />
                       </div>
                     ) : (
-                      <div className="w-full h-52 overflow-hidden relative bg-slate-200 dark:bg-slate-700 flex items-center justify-center" style={{ aspectRatio: '16/9', minHeight: '208px' }}>
+                      <div className="card-image-container flex items-center justify-center">
                         <div className="text-center p-4">
                           <svg className="w-12 h-12 mx-auto mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -385,7 +427,7 @@ const PublicHome = () => {
                       </div>
                     )}
                     
-                    <div className="p-6 sm:p-7">
+                    <div className="card-content">
                       <div className="mb-4 flex items-center gap-2 flex-wrap">
                         {course.featured && (
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 px-4 py-1.5 text-xs font-black text-white shadow-lg relative overflow-hidden">
@@ -430,15 +472,22 @@ const PublicHome = () => {
                         )}
                       </div>
                       
-                      <div className="flex gap-3">
+                      <div className="flex gap-3 relative z-30">
                         <Link
                           to={`/pagamento?course=${course.id}`}
                           onClick={trackButtonClick}
-                        className="flex-1 tech-button rounded-xl px-6 py-3.5 text-center text-sm font-bold text-white shadow-lg relative overflow-hidden"
-                        aria-label={`Comprar curso ${course.name}`}
-                      >
-                        <span className="relative z-10">Comprar Agora</span>
-                      </Link>
+                          className="flex-1 tech-button rounded-xl px-6 py-3.5 text-center text-sm font-bold text-white shadow-lg relative overflow-visible"
+                          aria-label={`Comprar curso ${course.name}`}
+                          style={{ 
+                            position: 'relative !important',
+                            zIndex: '30 !important',
+                            opacity: '1 !important',
+                            visibility: 'visible !important',
+                            display: 'flex !important'
+                          }}
+                        >
+                          <span className="relative z-10">Comprar Agora</span>
+                        </Link>
                         <button
                           type="button"
                           onClick={async (e) => {
@@ -463,8 +512,14 @@ const PublicHome = () => {
                               alert('Link copiado para a área de transferência!')
                             }
                           }}
-                          className="rounded-xl glass-tech px-4 py-3.5 text-slate-700 dark:text-slate-300 transition-all flex items-center justify-center hover-scale border border-slate-200/50 dark:border-slate-700/50"
+                          className="rounded-xl glass-tech px-4 py-3.5 text-slate-700 dark:text-slate-300 transition-all flex items-center justify-center hover-scale border border-slate-200/50 dark:border-slate-700/50 relative z-30"
                           title="Compartilhar curso"
+                          style={{ 
+                            position: 'relative !important',
+                            zIndex: '30 !important',
+                            opacity: '1 !important',
+                            visibility: 'visible !important'
+                          }}
                         >
                           <ShareIcon className="h-5 w-5" />
                         </button>
@@ -476,7 +531,28 @@ const PublicHome = () => {
           </div>
         ) : (
           <div className="text-center py-12 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-            <p className="text-slate-600 dark:text-slate-400">Nenhum curso disponível no momento.</p>
+            {searchTerm ? (
+              <>
+                <MagnifyingGlassIcon className="h-12 w-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                  Nenhum curso encontrado
+                </h3>
+                <p className="text-slate-600 dark:text-slate-400 mb-4">
+                  Tente buscar com outros termos ou limpe a busca para ver todos os cursos disponíveis.
+                </p>
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Limpar Busca
+                </button>
+              </>
+            ) : (
+              <p className="text-slate-600 dark:text-slate-400">Nenhum curso disponível no momento.</p>
+            )}
           </div>
         )}
       </div>
@@ -645,7 +721,8 @@ const PublicHome = () => {
           <NewsSection />
         </Suspense>
       </div>
-    </section>
+      </section>
+    </div>
   )
 }
 

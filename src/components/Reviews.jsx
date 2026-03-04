@@ -2,12 +2,13 @@ import { useEffect, useState, startTransition } from 'react'
 import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
+import { useNavigate } from 'react-router-dom'
 import { StarIcon } from '@heroicons/react/24/solid'
-import { StarIcon as StarOutlineIcon } from '@heroicons/react/24/outline'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const Reviews = () => {
   const { user, profile } = useAuth()
+  const navigate = useNavigate()
   const [reviews, setReviews] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -19,7 +20,7 @@ const Reviews = () => {
   const [submitting, setSubmitting] = useState(false)
   const [hoveredStar, setHoveredStar] = useState(0)
 
-  // Carregar avaliações (usar getDocs para dados estáticos - melhor performance)
+  // Carregar avaliações
   useEffect(() => {
     if (!db) {
       setLoading(false)
@@ -35,9 +36,8 @@ const Reviews = () => {
             id: doc.id,
             ...doc.data(),
           }))
-          .filter((review) => review.approved !== false) // Filtrar apenas aprovadas
+          .filter((review) => review.approved !== false)
         
-        // Ordenar manualmente por data (mais recente primeiro)
         data.sort((a, b) => {
           const dateA = a.createdAt?.toDate?.() || new Date(0)
           const dateB = b.createdAt?.toDate?.() || new Date(0)
@@ -49,563 +49,264 @@ const Reviews = () => {
           setLoading(false)
         })
       } catch (error) {
-        console.error('Erro ao carregar avaliações:', error)
-        setReviews([])
+        console.error('[Reviews] Erro ao carregar avaliações:', error)
         setLoading(false)
       }
     }
 
     loadReviews()
-    
-    // Recarregar a cada 30 segundos para manter atualizado (sem listener contínuo)
-    const interval = setInterval(loadReviews, 30000)
-    return () => clearInterval(interval)
-  }, [])
+  }, [db])
 
-  // Verificar se usuário já avaliou
-  const userHasReviewed = user && reviews.some(r => r.userId === user.uid)
-
-  // Auto-play do carrossel de avaliações (todas as telas)
+  // Auto-avançar carrossel mobile
   useEffect(() => {
-    if (reviews.length === 0) return
-
+    if (reviews.length <= 1) return
+    
     const timer = setInterval(() => {
       setCurrentReviewIndex((prev) => (prev + 1) % reviews.length)
-    }, 5000) // 5 segundos por avaliação
-
+    }, 5000)
+    
     return () => clearInterval(timer)
   }, [reviews.length])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!user) {
-      alert('Você precisa estar logado para avaliar.')
-      return
-    }
-
-    if (formData.rating === 0) {
-      alert('Por favor, selecione uma avaliação com estrelas.')
-      return
-    }
-
-    if (!formData.comment.trim()) {
-      alert('Por favor, escreva um comentário.')
-      return
-    }
+    if (!db || !user || submitting) return
 
     setSubmitting(true)
     try {
       await addDoc(collection(db, 'reviews'), {
         userId: user.uid,
-        userName: profile?.displayName || user.email,
-        userEmail: user.email,
+        userName: profile?.name || user.displayName || 'Aluno',
         rating: formData.rating,
         comment: formData.comment.trim(),
-        approved: false, // Admin precisa aprovar
         createdAt: serverTimestamp(),
+        approved: false,
       })
-
+      
       setFormData({ rating: 0, comment: '' })
       setShowForm(false)
-      alert('Avaliação enviada! Ela será publicada após aprovação do administrador.')
-    } catch (err) {
-      console.error('Erro ao enviar avaliação:', err)
-      alert('Erro ao enviar avaliação. Tente novamente.')
+    } catch (error) {
+      console.error('[Reviews] Erro ao enviar avaliação:', error)
     } finally {
       setSubmitting(false)
     }
   }
 
-  const renderStars = (rating, interactive = false, onStarClick = null) => {
-    return (
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((star) => {
-          const isFilled = interactive 
-            ? star <= (hoveredStar || formData.rating)
-            : star <= rating
-          
-          const StarComponent = isFilled ? StarIcon : StarOutlineIcon
-          
-          return (
-            <button
-              key={star}
-              type={interactive ? "button" : "button"}
-              onClick={interactive && onStarClick ? () => onStarClick(star) : undefined}
-              onMouseEnter={interactive ? () => setHoveredStar(star) : undefined}
-              onMouseLeave={interactive ? () => setHoveredStar(0) : undefined}
-              disabled={!interactive || submitting}
-              className={interactive ? "cursor-pointer transition-transform hover:scale-110" : ""}
-              aria-label={interactive ? `Avaliar com ${star} ${star === 1 ? 'estrela' : 'estrelas'}` : `${isFilled ? 'Estrela preenchida' : 'Estrela vazia'} ${star} de 5`}
-              aria-pressed={interactive ? (star <= formData.rating ? 'true' : 'false') : undefined}
-            >
-              <StarComponent
-                className={`h-5 w-5 ${
-                  isFilled ? 'text-yellow-400' : 'text-gray-300'
-                }`}
-                aria-hidden="true"
-              />
-            </button>
-          )
-        })}
-      </div>
-    )
+  const renderStars = (rating = 0, interactive = false, onClick) => {
+    return [1, 2, 3, 4, 5].map((star) => {
+      const isFilled = star <= rating
+      const isHovered = star <= hoveredStar
+      
+      return (
+        <button
+          key={star}
+          type={interactive ? 'button' : ''}
+          onClick={interactive ? () => onClick?.(star) : undefined}
+          onMouseEnter={interactive ? () => setHoveredStar(star) : undefined}
+          onMouseLeave={interactive ? () => setHoveredStar(0) : undefined}
+          disabled={!interactive}
+          className={`transition-all duration-200 ${interactive ? 'hover:scale-110' : ''}`}
+        >
+          <StarIcon
+            className={`h-5 w-5 ${
+              isFilled || (interactive && isHovered)
+                ? 'text-yellow-400 fill-yellow-400'
+                : 'text-gray-300'
+            }`}
+          />
+        </button>
+      )
+    })
   }
+
+  const userHasReviewed = reviews.some(review => review.userId === user?.uid)
 
   if (loading) {
     return (
-      <div className="reviews-container space-y-4">
-        <div className="h-48 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-2xl" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg animate-pulse">
+            <div className="flex gap-1 mb-4">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <div key={star} className="h-5 w-5 bg-gray-300 rounded-full"></div>
+              ))}
+            </div>
+            <div className="h-20 bg-gray-300 rounded-lg mb-4"></div>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 bg-gray-300 rounded-full"></div>
+              <div className="flex-1">
+                <div className="h-4 bg-gray-300 rounded w-24 mb-2"></div>
+                <div className="h-3 bg-gray-300 rounded w-16"></div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     )
   }
 
-  const averageRating = reviews.length > 0
-    ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-    : 0
-
-  const currentReview = reviews[currentReviewIndex]
-
   return (
-    <div className="reviews-container space-y-6">
-      {/* Cabeçalho */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-black text-alego-700 dark:text-alego-300 mb-2">
-            ⭐ Avaliações dos Alunos
-          </h2>
-          {reviews.length > 0 && (
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1">
-                {renderStars(Math.round(averageRating))}
-                <span className="text-lg font-bold text-alego-600 dark:text-alego-400 ml-1">
-                  {averageRating.toFixed(1)}
-                </span>
-              </div>
-              <span className="text-sm text-slate-600 dark:text-slate-400">
-                ({reviews.length} {reviews.length === 1 ? 'avaliação' : 'avaliações'})
-              </span>
-            </div>
-          )}
-        </div>
-        {user && !userHasReviewed && (
-          <button
-            type="button"
-            onClick={() => setShowForm(!showForm)}
-            className="rounded-xl bg-gradient-to-r from-alego-600 to-alego-700 px-6 py-3 text-sm font-bold text-white hover:from-alego-700 hover:to-alego-800 transition-all shadow-lg hover:shadow-xl hover:scale-105"
-          >
-            {showForm ? 'Cancelar' : '✨ Avaliar'}
-          </button>
+    <div className="space-y-8">
+      {/* Botão para adicionar avaliação - visível para todos */}
+      <div className="text-center">
+        <button
+          onClick={() => {
+            if (!user) {
+              // Redirecionar para login/cadastro se não estiver logado
+              navigate('/login')
+              return
+            }
+            setShowForm(!showForm)
+          }}
+          className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl hover:scale-105"
+        >
+          <StarIcon className="h-5 w-5" />
+          {user ? 'Deixar sua avaliação' : 'Avaliar como aluno'}
+        </button>
+        {!user && (
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+            🎓 Crie sua conta gratuita e compartilhe sua experiência com nossa comunidade
+          </p>
         )}
       </div>
 
       {/* Formulário de avaliação */}
-      {showForm && user && !userHasReviewed && (
-        <motion.form
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          onSubmit={handleSubmit}
-          className="rounded-2xl bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border-2 border-alego-200 dark:border-alego-700 p-6 sm:p-8 space-y-5 shadow-xl"
-        >
-          <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
-              Sua avaliação
-            </label>
-            <div className="flex gap-1 scale-125 origin-left">
-              {renderStars(0, true, (rating) => setFormData(prev => ({ ...prev, rating })))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
-              Seu comentário
-            </label>
-            <textarea
-              value={formData.comment}
-              onChange={(e) => setFormData(prev => ({ ...prev, comment: e.target.value }))}
-              placeholder="Compartilhe sua experiência com a plataforma..."
-              rows={4}
-              className="w-full rounded-xl border-2 border-slate-300 dark:border-slate-600 p-4 text-sm focus:border-alego-500 focus:outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 transition-all resize-none"
-              disabled={submitting}
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={submitting || formData.rating === 0 || !formData.comment.trim()}
-            className="rounded-xl bg-gradient-to-r from-alego-600 to-alego-700 px-8 py-3 text-sm font-bold text-white hover:from-alego-700 hover:to-alego-800 transition-all shadow-lg hover:shadow-xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+      <AnimatePresence>
+        {showForm && user && !userHasReviewed && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl border border-slate-200 dark:border-slate-700"
           >
-            {submitting ? 'Enviando...' : '📤 Enviar Avaliação'}
-          </button>
-        </motion.form>
-      )}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Sua avaliação
+                </label>
+                <div className="flex gap-1">
+                  {renderStars(formData.rating, true, (rating) => 
+                    setFormData(prev => ({ ...prev, rating }))
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Seu comentário
+                </label>
+                <textarea
+                  value={formData.comment}
+                  onChange={(e) => setFormData(prev => ({ ...prev, comment: e.target.value }))}
+                  placeholder="Compartilhe sua experiência com a plataforma..."
+                  rows={3}
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-600 p-3 text-sm focus:border-blue-500 focus:outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 transition-all resize-none"
+                  disabled={submitting}
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={submitting || formData.rating === 0 || !formData.comment.trim()}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl px-6 py-3 font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? 'Enviando...' : 'Enviar avaliação'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition-all"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Carrossel Dinâmico de Avaliações */}
+      {/* Carrossel de 3 comentários em loop */}
       {reviews.length === 0 ? (
-        <div className="text-center py-12 px-6 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 border-2 border-slate-200 dark:border-slate-700">
-          <div className="text-5xl mb-4">💬</div>
-          <p className="text-lg font-semibold text-slate-600 dark:text-slate-400 mb-2">
+        <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+          <div className="text-6xl mb-4">💬</div>
+          <h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300 mb-2">
             Nenhuma avaliação ainda
-          </p>
-          <p className="text-sm text-slate-500 dark:text-slate-500">
+          </h3>
+          <p className="text-slate-500 dark:text-slate-400">
             Seja o primeiro a compartilhar sua experiência!
           </p>
         </div>
       ) : (
-        <div className="relative">
-          {/* Carrossel Desktop - Mostra 3 comentários por vez */}
-          <div className="hidden lg:block relative overflow-hidden rounded-2xl">
-            <div className="relative h-[320px]">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentReviewIndex}
-                  initial={{ opacity: 0, y: 50 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -50, scale: 0.95 }}
-                  transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
-                  className="grid grid-cols-3 gap-4 lg:gap-6 h-full"
-                >
-                  {/* Mostrar 3 avaliações por vez */}
-                  {[0, 1, 2].map((offset) => {
-                    const reviewIndex = (currentReviewIndex + offset) % reviews.length
-                    const review = reviews[reviewIndex]
-                    if (!review) return null
-                    
-                    return (
-                      <motion.div
-                        key={`${review.id}-${offset}`}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.4, delay: offset * 0.1 }}
-                        className="group relative rounded-2xl bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border border-slate-200/60 dark:border-slate-700/60 p-6 shadow-lg hover:shadow-2xl transition-all hover:scale-105 hover:-translate-y-2"
-                      >
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-alego-500/10 to-purple-500/10 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                        <div className="relative z-10 h-full flex flex-col">
-                          {/* Estrelas */}
-                          <div className="flex gap-1 mb-3">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <StarIcon
-                                key={star}
-                                className={`h-4 w-4 transition-all ${
-                                  star <= review.rating 
-                                    ? 'text-yellow-400 fill-yellow-400 scale-110' 
-                                    : 'text-gray-300'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                          
-                          {/* Comentário */}
-                          <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-4 leading-relaxed line-clamp-5 flex-1">
-                            "{review.comment}"
-                          </p>
-                          
-                          {/* Autor e Data */}
-                          <div className="flex items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700 mt-auto">
-                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-alego-500 to-alego-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
-                              {(review.userName || 'A')[0].toUpperCase()}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
-                                {review.userName || 'Aluno'}
-                              </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400">
-                                {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric'
-                                }) || 'Data não disponível'}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )
-                  })}
-                </motion.div>
-              </AnimatePresence>
-
-              {/* Botões de navegação Desktop */}
-              {reviews.length > 3 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentReviewIndex((prev) => (prev - 1 + reviews.length) % reviews.length)}
-                    className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/95 hover:bg-white dark:bg-slate-800/95 dark:hover:bg-slate-800 rounded-xl p-3 shadow-2xl transition-all hover:scale-110 z-20 backdrop-blur-sm border border-slate-200 dark:border-slate-700"
-                    aria-label="Avaliações anteriores"
-                  >
-                    <svg className="w-6 h-6 text-gray-800 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentReviewIndex((prev) => (prev + 1) % reviews.length)}
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/95 hover:bg-white dark:bg-slate-800/95 dark:hover:bg-slate-800 rounded-xl p-3 shadow-2xl transition-all hover:scale-110 z-20 backdrop-blur-sm border border-slate-200 dark:border-slate-700"
-                    aria-label="Próximas avaliações"
-                  >
-                    <svg className="w-6 h-6 text-gray-800 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </>
-              )}
-
-              {/* Indicadores Desktop */}
-              {reviews.length > 3 && (
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-20">
-                  {Array.from({ length: Math.ceil(reviews.length / 3) }).map((_, index) => {
-                    const isActive = Math.floor(currentReviewIndex / 3) === index
-                    return (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => setCurrentReviewIndex(index * 3)}
-                      className={`h-3 w-3 rounded-full transition-all duration-300 shadow-md min-w-[12px] min-h-[12px] ${
-                        isActive
-                          ? 'w-8 bg-alego-600 dark:bg-alego-400 scale-110'
-                          : 'bg-white/60 dark:bg-slate-400/60 hover:bg-white/80 dark:hover:bg-slate-400/80'
-                      }`}
-                      aria-label={`Ir para página ${index + 1}`}
-                      style={{ willChange: 'transform, width' }}
-                    />
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Carrossel Tablet - Mostra 2 comentários por vez */}
-          <div className="hidden md:block lg:hidden relative overflow-hidden rounded-2xl">
-            <div className="relative h-[300px]">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentReviewIndex}
-                  initial={{ opacity: 0, x: 100 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -100 }}
-                  transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
-                  className="grid grid-cols-2 gap-4 h-full"
-                >
-                  {[0, 1].map((offset) => {
-                    const reviewIndex = (currentReviewIndex + offset) % reviews.length
-                    const review = reviews[reviewIndex]
-                    if (!review) return null
-                    
-                    return (
-                      <motion.div
-                        key={`${review.id}-${offset}`}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.4, delay: offset * 0.1 }}
-                        className="group relative rounded-2xl bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-lg hover:shadow-2xl transition-all hover:scale-105"
-                      >
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-alego-500/10 to-purple-500/10 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <div className="relative z-10 h-full flex flex-col">
-                          <div className="flex gap-1 mb-3">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <StarIcon
-                                key={star}
-                                className={`h-4 w-4 ${
-                                  star <= review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                          <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-4 leading-relaxed line-clamp-4 flex-1">
-                            "{review.comment}"
-                          </p>
-                          <div className="flex items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700 mt-auto">
-                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-alego-500 to-alego-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
-                              {(review.userName || 'A')[0].toUpperCase()}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
-                                {review.userName || 'Aluno'}
-                              </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400">
-                                {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric'
-                                }) || 'Data não disponível'}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )
-                  })}
-                </motion.div>
-              </AnimatePresence>
-
-              {reviews.length > 2 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentReviewIndex((prev) => (prev - 1 + reviews.length) % reviews.length)}
-                    className="absolute left-3 top-1/2 transform -translate-y-1/2 bg-white/95 hover:bg-white dark:bg-slate-800/95 rounded-xl p-2.5 shadow-xl transition-all hover:scale-110 z-10"
-                  >
-                    <svg className="w-5 h-5 text-gray-800 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentReviewIndex((prev) => (prev + 1) % reviews.length)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 bg-white/95 hover:bg-white dark:bg-slate-800/95 rounded-xl p-2.5 shadow-xl transition-all hover:scale-110 z-10"
-                  >
-                    <svg className="w-5 h-5 text-gray-800 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                  <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 flex gap-2 z-10">
-                    {Array.from({ length: Math.ceil(reviews.length / 2) }).map((_, index) => {
-                      const isActive = Math.floor(currentReviewIndex / 2) === index
-                      return (
-                        <button
-                          key={index}
-                          type="button"
-                          onClick={() => setCurrentReviewIndex(index * 2)}
-                          className={`h-3 w-3 rounded-full transition-all min-w-[12px] min-h-[12px] ${
-                            isActive ? 'w-6 bg-alego-600 dark:bg-alego-400' : 'bg-white/60 dark:bg-slate-400/60'
-                          }`}
-                          aria-label={`Ir para página ${index + 1}`}
-                          style={{ willChange: 'transform, width' }}
-                        />
-                      )
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Carrossel Mobile - 1 comentário por vez */}
-          <div className="md:hidden relative">
-            <div className="relative w-full overflow-hidden rounded-2xl shadow-xl h-[320px]">
-              <AnimatePresence mode="wait">
-                {currentReview && (
-                  <motion.div
-                    key={currentReview.id}
-                    initial={{ opacity: 0, x: 300, scale: 0.95 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: -300, scale: 0.95 }}
-                    transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
-                    className="absolute inset-0 p-6 bg-gradient-to-br from-white via-slate-50 to-alego-50/30 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700"
-                  >
-                    <div className="flex flex-col h-full justify-between">
-                      {/* Estrelas com animação */}
-                      <motion.div 
-                        className="flex gap-1 justify-center mb-4"
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ delay: 0.2, type: "spring" }}
-                      >
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <motion.div
-                            key={star}
-                            initial={{ opacity: 0, rotate: -180 }}
-                            animate={{ opacity: 1, rotate: 0 }}
-                            transition={{ delay: 0.1 * star }}
-                          >
-                            <StarIcon
-                              className={`h-6 w-6 ${
-                                star <= currentReview.rating 
-                                  ? 'text-yellow-400 fill-yellow-400' 
-                                  : 'text-gray-300'
-                              }`}
-                            />
-                          </motion.div>
-                        ))}
-                      </motion.div>
-                      
-                      {/* Comentário */}
-                      <motion.p 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
-                        className="text-base font-medium text-slate-800 dark:text-slate-200 text-center leading-relaxed mb-6 flex-1 flex items-center justify-center"
-                      >
-                        "{currentReview.comment}"
-                      </motion.p>
-                      
-                      {/* Autor e Data */}
-                      <motion.div 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.4 }}
-                        className="flex items-center gap-3 justify-center pt-4 border-t border-slate-200 dark:border-slate-700"
-                      >
-                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-alego-500 to-alego-600 flex items-center justify-center text-white font-bold text-base shadow-lg">
-                          {(currentReview.userName || 'A')[0].toUpperCase()}
-                        </div>
-                        <div className="text-left">
-                          <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                            {currentReview.userName || 'Aluno'}
-                          </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {currentReview.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric'
-                            }) || 'Data não disponível'}
-                          </p>
-                        </div>
-                      </motion.div>
+        <div className="relative overflow-hidden rounded-2xl">
+          {/* Container principal */}
+          <div className="relative">
+            <div className="flex animate-scroll-horizontal">
+              {/* Primeiro conjunto de avaliações */}
+              {reviews.map((review, index) => (
+                <div key={`first-${review.id}`} className="w-1/3 flex-shrink-0 px-2">
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-slate-200 dark:border-slate-700 h-full">
+                    <div className="flex gap-1 mb-4">
+                      {renderStars(review.rating)}
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Botões de navegação Mobile */}
-              {reviews.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentReviewIndex((prev) => (prev - 1 + reviews.length) % reviews.length)}
-                    className="absolute left-3 top-1/2 transform -translate-y-1/2 bg-white/95 hover:bg-white dark:bg-slate-800/95 dark:hover:bg-slate-800 rounded-xl p-2.5 shadow-xl transition-all hover:scale-110 z-10 backdrop-blur-sm"
-                    aria-label="Avaliação anterior"
-                  >
-                    <svg className="w-6 h-6 text-gray-800 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentReviewIndex((prev) => (prev + 1) % reviews.length)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 bg-white/95 hover:bg-white dark:bg-slate-800/95 dark:hover:bg-slate-800 rounded-xl p-2.5 shadow-xl transition-all hover:scale-110 z-10 backdrop-blur-sm"
-                    aria-label="Próxima avaliação"
-                  >
-                    <svg className="w-6 h-6 text-gray-800 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </>
-              )}
-
-              {/* Indicadores Mobile */}
-              {reviews.length > 1 && (
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-10">
-                  {reviews.map((_, index) => (
-                    <motion.button
-                      key={index}
-                      type="button"
-                      onClick={() => setCurrentReviewIndex(index)}
-                      initial={false}
-                      animate={{
-                        width: index === currentReviewIndex ? 32 : 8,
-                        backgroundColor: index === currentReviewIndex 
-                          ? 'rgb(37 99 235)' 
-                          : 'rgba(255, 255, 255, 0.6)'
-                      }}
-                      className={`h-2 rounded-full transition-all duration-300 shadow-md`}
-                      aria-label={`Ir para avaliação ${index + 1}`}
-                    />
-                  ))}
+                    <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed line-clamp-4 h-24">
+                      "{review.comment}"
+                    </p>
+                    <div className="flex items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg">
+                        {(review.userName || 'A')[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                          {review.userName || 'Aluno'}
+                        </p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                          {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          }) || 'Recentemente'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              )}
+              ))}
+              
+              {/* Segundo conjunto duplicado para loop infinito */}
+              {reviews.map((review, index) => (
+                <div key={`second-${review.id}`} className="w-1/3 flex-shrink-0 px-2">
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-slate-200 dark:border-slate-700 h-full">
+                    <div className="flex gap-1 mb-4">
+                      {renderStars(review.rating)}
+                    </div>
+                    <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed line-clamp-4 h-24">
+                      "{review.comment}"
+                    </p>
+                    <div className="flex items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg">
+                        {(review.userName || 'A')[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                          {review.userName || 'Aluno'}
+                        </p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                          {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          }) || 'Recentemente'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
+
+          {/* Gradientes nas laterais para efeito visual */}
+          <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-white via-white/80 to-transparent dark:from-slate-50 dark:via-slate-800/80 dark:to-transparent pointer-events-none z-10"></div>
+          <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-white via-white/80 to-transparent dark:from-slate-50 dark:via-slate-800/80 dark:to-transparent pointer-events-none z-10"></div>
         </div>
       )}
     </div>
@@ -613,4 +314,3 @@ const Reviews = () => {
 }
 
 export default Reviews
-
