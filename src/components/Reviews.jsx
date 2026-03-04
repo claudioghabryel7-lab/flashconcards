@@ -342,14 +342,11 @@ const Reviews = () => {
             ))}
           </div>
 
-          {/* Mobile: Cards verticais estáticos (sem carrossel) */}
+          {/* Mobile: Cards simples sem animações */}
           <div className="md:hidden space-y-4">
-            {reviews.slice(0, 3).map((review, index) => (
-              <motion.div
+            {reviews.slice(0, 3).map((review) => (
+              <div
                 key={review.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
                 className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700"
               >
                 <div className="flex gap-1 mb-3">
@@ -371,7 +368,7 @@ const Reviews = () => {
                     </p>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
