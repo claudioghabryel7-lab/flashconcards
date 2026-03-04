@@ -360,74 +360,36 @@ const Reviews = () => {
             ))}
           </div>
 
-          {/* Mobile: Usar mesma estrutura do desktop */}
+          {/* Mobile: Estrutura adaptada para mobile */}
           <div className="md:hidden">
-            <div className="relative overflow-hidden rounded-2xl">
-              <div className="relative">
-                <div className="flex animate-scroll-horizontal">
-                  {/* Primeiro conjunto de avaliações */}
-                  {reviews.map((review, index) => (
-                    <div key={`mobile-first-${review.id}`} className="w-1/3 flex-shrink-0 px-2">
-                      <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-slate-200 dark:border-slate-700 h-full">
-                        <div className="flex gap-1 mb-4">
-                          {renderStars(review.rating)}
-                        </div>
-                        <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed line-clamp-4 h-24">
-                          "{review.comment}"
-                        </p>
-                        <div className="flex items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-                          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg">
-                            {(review.userName || 'A')[0].toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
-                              {review.userName || 'Aluno'}
-                            </p>
-                            <p className="text-sm text-slate-500 dark:text-slate-400">
-                              {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric'
-                              }) || 'Recentemente'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+            <div className="space-y-4">
+              {reviews.slice(0, 3).map((review) => (
+                <div key={`mobile-${review.id}`} className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-slate-200 dark:border-slate-700">
+                  <div className="flex gap-1 mb-4">
+                    {renderStars(review.rating)}
+                  </div>
+                  <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed">
+                    "{review.comment}"
+                  </p>
+                  <div className="flex items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg">
+                      {(review.userName || 'A')[0].toUpperCase()}
                     </div>
-                  ))}
-                  
-                  {/* Segundo conjunto duplicado para loop infinito */}
-                  {reviews.map((review, index) => (
-                    <div key={`mobile-second-${review.id}`} className="w-1/3 flex-shrink-0 px-2">
-                      <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-slate-200 dark:border-slate-700 h-full">
-                        <div className="flex gap-1 mb-4">
-                          {renderStars(review.rating)}
-                        </div>
-                        <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed line-clamp-4 h-24">
-                          "{review.comment}"
-                        </p>
-                        <div className="flex items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-                          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg">
-                            {(review.userName || 'A')[0].toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
-                              {review.userName || 'Aluno'}
-                            </p>
-                            <p className="text-sm text-slate-500 dark:text-slate-400">
-                              {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric'
-                              }) || 'Recentemente'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                        {review.userName || 'Aluno'}
+                      </p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric'
+                        }) || 'Recentemente'}
+                      </p>
                     </div>
-                  ))}
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
