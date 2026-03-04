@@ -18,7 +18,8 @@ import {
   ChatBubbleLeftRightIcon,
   BookOpenIcon,
   RocketLaunchIcon,
-  ShareIcon
+  ShareIcon,
+  MagnifyingGlassIcon
 } from '@heroicons/react/24/solid'
 import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
@@ -90,6 +91,19 @@ const PublicHome = () => {
   // Carregar cursos
   const [courses, setCourses] = useState([])
   const [loadingCourses, setLoadingCourses] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+
+  // Filtrar cursos com base na busca
+  const filteredCourses = courses.filter(course => {
+    if (!searchTerm.trim()) return true
+    
+    const searchLower = searchTerm.toLowerCase()
+    const nameMatch = (course.name || '').toLowerCase().includes(searchLower)
+    const competitionMatch = (course.competition || '').toLowerCase().includes(searchLower)
+    const descriptionMatch = (course.description || '').toLowerCase().includes(searchLower)
+    
+    return nameMatch || competitionMatch || descriptionMatch
+  })
   
   // SEO: Adicionar meta tags e Schema.org dinamicamente
   useEffect(() => {
@@ -367,14 +381,45 @@ const PublicHome = () => {
             FlashCards Para Concurso Público - Polícia Militar, Polícia Civil, GCM e muito mais. Escolha o curso ideal para sua aprovação.
           </p>
         </div>
+
+        {/* Campo de Busca de Cursos */}
+        <div className="max-w-2xl mx-auto mb-8">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <MagnifyingGlassIcon className="h-6 w-6 text-slate-400" />
+            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar cursos por nome, concurso ou área..."
+              className="w-full pl-12 pr-4 py-4 text-lg border-2 border-slate-300 dark:border-slate-600 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-lg"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {searchTerm && (
+            <p className="mt-3 text-center text-slate-600 dark:text-slate-400">
+              {filteredCourses.length} curso{filteredCourses.length !== 1 ? 's' : ''} encontrado{filteredCourses.length !== 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
         {loadingCourses ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
             <p className="mt-4 text-slate-600 dark:text-slate-400">Carregando cursos...</p>
           </div>
-        ) : courses.length > 0 ? (
+        ) : filteredCourses.length > 0 ? (
           <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {courses.map((course, index) => {
+            {filteredCourses.map((course, index) => {
               return (
                 <div
                   key={course.id}
@@ -501,7 +546,28 @@ const PublicHome = () => {
           </div>
         ) : (
           <div className="text-center py-12 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-            <p className="text-slate-600 dark:text-slate-400">Nenhum curso disponível no momento.</p>
+            {searchTerm ? (
+              <>
+                <MagnifyingGlassIcon className="h-12 w-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                  Nenhum curso encontrado
+                </h3>
+                <p className="text-slate-600 dark:text-slate-400 mb-4">
+                  Tente buscar com outros termos ou limpe a busca para ver todos os cursos disponíveis.
+                </p>
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Limpar Busca
+                </button>
+              </>
+            ) : (
+              <p className="text-slate-600 dark:text-slate-400">Nenhum curso disponível no momento.</p>
+            )}
           </div>
         )}
       </div>
