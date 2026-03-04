@@ -7,6 +7,7 @@ import { StarIcon } from '@heroicons/react/24/solid'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const Reviews = () => {
+  console.log('🔍 Reviews componente carregando...')
   const { user, profile } = useAuth()
   const navigate = useNavigate()
   const [reviews, setReviews] = useState([])

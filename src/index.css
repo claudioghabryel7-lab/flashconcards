@@ -422,6 +422,74 @@ body {
   }
 }
 
+/* FORÇAR VISIBILIDADE TOTAL NO MOBILE - EMERGÊNCIA */
+@media (max-width: 768px) {
+  * {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  body {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  .container,
+  .main-container,
+  section,
+  div,
+  img,
+  p,
+  h1, h2, h3, h4, h5, h6 {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  .hidden {
+    display: block !important;
+  }
+  
+  .md\\:hidden {
+    display: block !important;
+  }
+  
+  .lg\\:block {
+    display: block !important;
+  }
+  
+  .reviews-container,
+  .reviews-container *,
+  .space-y-4,
+  .space-y-4 > * {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  .bg-white,
+  .dark\\:bg-slate-800 {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background: white !important;
+  }
+  
+  .dark .bg-white {
+    background: #1e293b !important;
+  }
+  
+  img {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+}
+
 /* Garantir visibilidade dos botões de compra - CSS direto */
 .tech-button {
   display: inline-flex !important;
