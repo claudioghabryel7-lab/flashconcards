@@ -6438,7 +6438,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     return (
       <div className="rounded-2xl bg-white p-8 text-center shadow-sm">
         <p className="text-lg font-semibold text-alego-600">
-          Acesso restrito à coordenação da mentoria.
+          Acesso restrito à administração da plataforma.
         </p>
       </div>
     )

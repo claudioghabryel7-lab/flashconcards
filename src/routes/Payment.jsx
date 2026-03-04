@@ -75,7 +75,7 @@ const Payment = () => {
     courseId: selectedCourse.id,
     competition: selectedCourse.competition
   } : {
-    name: 'Mentoria Policial Legislativo ALEGO',
+    name: 'Plano Premium FlashConCards',
     originalPrice: 149.99,
     price: 99.90,
     discount: 50.09,

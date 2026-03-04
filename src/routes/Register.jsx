@@ -5,7 +5,7 @@ const Register = () => {
     <div className="mx-auto max-w-md rounded-2xl bg-white p-8 shadow-sm">
       <h2 className="text-3xl font-bold text-alego-700">Comece sua jornada</h2>
       <p className="mt-2 text-sm text-slate-500">
-        Entre em contato com o administrador para criar sua conta e acessar a mentoria intensiva.
+        Entre em contato com o administrador para criar sua conta e acessar a plataforma de estudos.
       </p>
       <div className="mt-6 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-700">
         <p className="font-semibold">📧 Como criar sua conta:</p>

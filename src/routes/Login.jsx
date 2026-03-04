@@ -267,7 +267,7 @@ const Login = () => {
       <p className="mt-2 text-xs sm:text-sm text-slate-500">
         {isRegisterMode 
           ? 'Crie sua conta para começar a estudar'
-          : 'Acesse sua mentoria exclusiva para o concurso de Polícia Legislativa.'
+          : 'Acesse sua conta para começar a estudar para concursos públicos.'
         }
       </p>
       {error && (
