@@ -23,21 +23,36 @@ const Reviews = () => {
 
   // Carregar avaliações
   useEffect(() => {
+    console.log('🔍 Reviews useEffect iniciado...')
+    console.log('🔍 db disponível:', !!db)
+    
     if (!db) {
+      console.log('❌ Firebase db não disponível!')
       setLoading(false)
       return
     }
 
     const loadReviews = async () => {
+      console.log('🔄 Iniciando carregamento das avaliações...')
       try {
         const reviewsRef = collection(db, 'reviews')
+        console.log('📁 Collection criada:', reviewsRef)
+        
         const snapshot = await getDocs(reviewsRef)
+        console.log('📸 Snapshot obtido:', snapshot.size, 'documentos')
+        
         const data = snapshot.docs
-          .map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
+          .map((doc) => {
+            console.log('📄 Documento:', doc.id, doc.data())
+            return {
+              id: doc.id,
+              ...doc.data(),
+            }
+          })
           .filter((review) => review.approved !== false)
+        
+        console.log('✅ Dados processados:', data.length, 'avaliações')
+        console.log('📊 Primeira avaliação:', data[0])
         
         data.sort((a, b) => {
           const dateA = a.createdAt?.toDate?.() || new Date(0)
@@ -45,12 +60,14 @@ const Reviews = () => {
           return dateB - dateA
         })
         
+        console.log('🔄 Aplicando startTransition...')
         startTransition(() => {
           setReviews(data)
           setLoading(false)
+          console.log('✅ Reviews carregadas com sucesso!')
         })
       } catch (error) {
-        console.error('[Reviews] Erro ao carregar avaliações:', error)
+        console.error('❌ [Reviews] Erro ao carregar avaliações:', error)
         setLoading(false)
       }
     }
