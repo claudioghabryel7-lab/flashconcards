@@ -39,6 +39,8 @@ const ConteudoCompletoView = lazy(() => import('./routes/ConteudoCompletoView'))
 const ConteudoCompletoTopicoView = lazy(() => import('./routes/ConteudoCompletoTopicoView'))
 const RankingSimulado = lazy(() => import('./routes/RankingSimulado'))
 const EditalVerticalizado = lazy(() => import('./routes/EditalVerticalizado'))
+// Importação direta para testar
+import CalendarioProgresso from './routes/CalendarioProgresso'
 const Tutorial = lazy(() => import('./routes/Tutorial'))
 const Sitemap = lazy(() => import('./routes/Sitemap'))
 const BlankPage = lazy(() => import('./routes/BlankPage'))
@@ -283,6 +285,14 @@ function App() {
             element={
               <ProtectedRoute requireCourseSelection>
                 <EditalVerticalizado />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/calendario"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <CalendarioProgresso />
               </ProtectedRoute>
             }
           />

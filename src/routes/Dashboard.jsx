@@ -39,7 +39,6 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder } from '../utils/subjectOrder'
-import ProgressCalendar from '../components/ProgressCalendar'
 import { isTrialMode, getTrialData } from '../utils/trialLimits'
 import { motion } from 'framer-motion'
 import { DocumentTextIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
@@ -59,7 +58,6 @@ const Dashboard = () => {
   const { user, profile } = useAuth()
   const { darkMode } = useDarkMode()
   const [progressData, setProgressData] = useState([])
-  const [saving, setSaving] = useState(false)
   const [cardProgress, setCardProgress] = useState({})
   const [allCards, setAllCards] = useState([])
   const [loading, setLoading] = useState(true)
@@ -605,7 +603,6 @@ const Dashboard = () => {
       bySubject,
       cardsToReview: cardsToReview.length,
       accuracy,
-      dates: dates,
     }
   }, [progressData, cardProgress, allCards, questoesStats, currentDate]) // Adicionar currentDate como dependência
 
@@ -854,77 +851,12 @@ const Dashboard = () => {
         )}
 
         {/* Grid Principal */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Calendário de Progresso */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.6 }}
-            className="lg:col-span-2"
-          >
-            <ProgressCalendar
-              dates={stats.dates}
-              streak={stats.streak}
-              bySubject={stats.bySubject}
-              onMarkDay={async (dateStr) => {
-                if (!user || saving) return
-                try {
-                  setSaving(true)
-                  const courseKey = selectedCourseId || 'alego'
-                  const progressDoc = doc(db, 'progress', `${user.uid}_${courseKey}_${dateStr}`)
-                  
-                  // Verificar se já existe
-                  const existing = await getDoc(progressDoc)
-                  const existingData = existing.exists() ? existing.data() : null
-                  const hasHours = existingData && existingData.hours > 0
-                  
-                  // Verificar se já está marcado (tem horas > 0)
-                  const isMarked = hasHours && parseFloat(existingData.hours) > 0
-                  
-                  if (isMarked && parseFloat(existingData.hours) <= 0.1) {
-                    // Se só tem 0.1 horas (marcação manual), pode desmarcar
-                    await setDoc(
-                      progressDoc,
-                      {
-                        uid: user.uid,
-                        date: dateStr,
-                        hours: 0, // Desmarcar removendo horas
-                        courseId: selectedCourseId || null,
-                        lastUpdated: dayjs().format('HH:mm:ss'),
-                        updatedAt: serverTimestamp(),
-                      },
-                      { merge: true }
-                    )
-                  } else if (!isMarked) {
-                    // Marcar o dia com 0.1 horas para aparecer no calendário
-                    await setDoc(
-                      progressDoc,
-                      {
-                        uid: user.uid,
-                        date: dateStr,
-                        hours: 0.1, // Mínimo para aparecer no calendário
-                        courseId: selectedCourseId || null,
-                        lastUpdated: dayjs().format('HH:mm:ss'),
-                        updatedAt: serverTimestamp(),
-                      },
-                      { merge: true }
-                    )
-                  }
-                  setSaving(false)
-                } catch (err) {
-                  console.error('Erro ao marcar dia:', err)
-                  setSaving(false)
-                  alert('Erro ao marcar dia. Verifique as regras do Firestore.')
-                }
-              }}
-            />
-          </motion.div>
-
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Cards para Revisar */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.65 }}
+            transition={{ duration: 0.5, delay: 0.6 }}
             className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6"
           >
             <div className="flex items-center justify-between mb-6">
