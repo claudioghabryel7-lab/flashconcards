@@ -1,0 +1,236 @@
+/* Estilos simplificados para conteúdo gerado por IA */
+
+/* Container principal para conteúdo IA com base no prose do Tailwind */
+.ia-content-enhanced {
+  @apply prose prose-slate dark:prose-invert max-w-none;
+  @apply prose-lg;
+}
+
+/* Estilos para parágrafos com espaçamento adequado */
+.ia-content-enhanced p {
+  @apply mb-4 leading-relaxed;
+}
+
+/* Primeiro parágrafo com destaque sutil */
+.ia-content-enhanced p:first-of-type {
+  @apply text-base sm:text-lg font-medium;
+}
+
+/* Negrito com melhor destaque */
+.ia-content-enhanced strong,
+.ia-content-enhanced b {
+  @apply font-bold;
+  background: linear-gradient(to right, rgb(239 246 255), rgb(224 231 255));
+  @apply px-2 py-1 rounded;
+  @apply border-l-4 border-blue-500;
+}
+
+/* Dark mode para negrito */
+.dark .ia-content-enhanced strong,
+.dark .ia-content-enhanced b {
+  background: linear-gradient(to right, rgb(30 58 138 / 0.2), rgb(67 56 202 / 0.2));
+  @apply border-l-4 border-blue-400;
+}
+
+/* Títulos com hierarquia visual */
+.ia-content-enhanced h1 {
+  @apply text-2xl sm:text-3xl font-bold;
+  @apply border-b-2 border-slate-200 dark:border-slate-700 pb-2 mb-4;
+}
+
+.ia-content-enhanced h2 {
+  @apply text-xl sm:text-2xl font-bold;
+  @apply border-l-4 border-blue-500 dark:border-blue-400;
+  @apply pl-4 bg-slate-50 dark:bg-slate-800/50;
+  @apply py-2 -ml-4 rounded-r mb-3;
+}
+
+.ia-content-enhanced h3 {
+  @apply text-lg sm:text-xl font-bold;
+  @apply border-l-4 border-indigo-500 dark:border-indigo-400;
+  @apply pl-3 mb-2;
+}
+
+/* Tabelas com design moderno */
+.ia-content-enhanced table {
+  @apply w-full border-collapse my-6;
+  @apply border-2 border-slate-300 dark:border-slate-600;
+  @apply rounded-lg overflow-hidden shadow-lg;
+}
+
+.ia-content-enhanced thead {
+  @apply bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-800 dark:to-indigo-800;
+}
+
+.ia-content-enhanced th {
+  @apply px-4 py-3 text-left font-bold text-white;
+  @apply text-sm sm:text-base;
+  @apply border-r border-blue-700 dark:border-blue-900;
+}
+
+.ia-content-enhanced th:last-child {
+  @apply border-r-0;
+}
+
+.ia-content-enhanced tbody {
+  @apply bg-white dark:bg-slate-800;
+}
+
+.ia-content-enhanced tr {
+  @apply border-b border-slate-200 dark:border-slate-700;
+  @apply hover:bg-slate-50 dark:hover:bg-slate-700/50;
+  @apply transition-colors duration-150;
+}
+
+.ia-content-enhanced tr:last-child {
+  @apply border-b-0;
+}
+
+.ia-content-enhanced td {
+  @apply px-4 py-3 text-slate-700 dark:text-slate-300;
+  @apply border-r border-slate-200 dark:border-slate-700;
+  @apply text-sm sm:text-base;
+}
+
+.ia-content-enhanced td:last-child {
+  @apply border-r-0;
+}
+
+.ia-content-enhanced td:first-child {
+  @apply font-semibold text-slate-800 dark:text-slate-200;
+  @apply bg-slate-50 dark:bg-slate-900/50;
+}
+
+/* Listas com melhor organização */
+.ia-content-enhanced ul,
+.ia-content-enhanced ol {
+  @apply my-4 space-y-2;
+}
+
+.ia-content-enhanced li {
+  @apply ml-4 pl-2;
+  @apply border-l-2 border-slate-200 dark:border-slate-700;
+  @apply hover:border-blue-300 dark:hover:border-blue-600;
+  @apply transition-colors duration-200;
+}
+
+/* Links com estilo moderno */
+.ia-content-enhanced a {
+  @apply text-blue-600 dark:text-blue-400;
+  @apply underline decoration-2 underline-offset-2;
+  @apply hover:text-blue-800 dark:hover:text-blue-300;
+  @apply transition-all duration-200;
+  @apply font-medium;
+}
+
+/* Citações com destaque */
+.ia-content-enhanced blockquote {
+  @apply border-l-4 border-blue-500 dark:border-blue-400;
+  @apply pl-4 py-2 my-4;
+  @apply bg-blue-50 dark:bg-blue-900/20;
+  @apply italic;
+  @apply rounded-r-lg;
+}
+
+/* Código inline */
+.ia-content-enhanced code {
+  @apply bg-slate-100 dark:bg-slate-800;
+  @apply text-pink-600 dark:text-pink-400;
+  @apply px-2 py-1 rounded;
+  @apply text-sm font-mono;
+  @apply border border-slate-300 dark:border-slate-700;
+}
+
+/* Blocos de código */
+.ia-content-enhanced pre {
+  @apply bg-slate-900 dark:bg-slate-950;
+  @apply text-slate-100;
+  @apply p-4 rounded-lg overflow-x-auto;
+  @apply my-4 border border-slate-700 dark:border-slate-800;
+}
+
+.ia-content-enhanced pre code {
+  @apply bg-transparent text-transparent;
+  @apply p-0 border-none;
+}
+
+/* Responsividade para mobile */
+@media (max-width: 640px) {
+  .ia-content-enhanced {
+    @apply prose-sm;
+  }
+  
+  .ia-content-enhanced table {
+    @apply text-xs;
+  }
+  
+  .ia-content-enhanced th,
+  .ia-content-enhanced td {
+    @apply px-2 py-2;
+  }
+  
+  .ia-content-enhanced h1 {
+    @apply text-xl;
+  }
+  
+  .ia-content-enhanced h2 {
+    @apply text-lg;
+  }
+}
+
+/* Estilos específicos para o aviso legal */
+.ia-content-enhanced .aviso {
+  @apply mt-8 p-4 border-l-4 border-yellow-500 dark:border-yellow-400;
+  @apply bg-yellow-50 dark:bg-yellow-900/20;
+  @apply rounded-r-lg;
+  @apply text-yellow-800 dark:text-yellow-200;
+  @apply text-sm;
+  @apply shadow-sm;
+  @apply transition-all duration-200;
+}
+
+.ia-content-enhanced .aviso:hover {
+  @apply shadow-md;
+  @apply bg-yellow-100 dark:bg-yellow-900/30;
+}
+
+.ia-content-enhanced .aviso strong {
+  @apply font-bold text-yellow-900 dark:text-yellow-100;
+  @apply block mb-1;
+}
+
+/* Ícone de aviso */
+.ia-content-enhanced .aviso strong::before {
+  content: "⚠️";
+  @apply mr-2;
+}
+
+/* Estilos para o cabeçalho de contexto */
+.ia-content-enhanced .context-header {
+  @apply mt-6 mb-4 p-4 border-l-4 border-blue-500 dark:border-blue-400;
+  @apply bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20;
+  @apply rounded-r-lg;
+  @apply shadow-sm;
+  @apply transition-all duration-200;
+}
+
+.ia-content-enhanced .context-header:hover {
+  @apply shadow-md;
+  @apply bg-gradient-to-r from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30;
+}
+
+.ia-content-enhanced .context-header span {
+  @apply block;
+}
+
+.ia-content-enhanced .context-header span:first-child {
+  @apply text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1;
+}
+
+.ia-content-enhanced .context-header span:nth-child(2) {
+  @apply text-sm font-bold text-blue-900 dark:text-blue-100 mb-1;
+}
+
+.ia-content-enhanced .context-header span:last-child {
+  @apply text-xs text-blue-600 dark:text-blue-400;
+}

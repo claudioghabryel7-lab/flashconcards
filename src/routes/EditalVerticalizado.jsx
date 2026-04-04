@@ -11,6 +11,7 @@ import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import AudioReader from '../components/AudioReader'
+import { processIAContent, isHtmlContent } from '../utils/iaContentProcessor'
 
 // Gera uma chave estável e mais específica para cada tópico do edital,
 // combinando numeração + nome. Isso evita colisões entre tópicos diferentes
@@ -30,6 +31,55 @@ const makeTopicKey = (topico) => {
   // Nova forma: "numero :: nome" (separador pouco provável de aparecer no texto)
   const combined = `${numero} :: ${nome}`
   return encodeURIComponent(combined)
+}
+
+// Função auxiliar para extrair contexto hierárquico
+const extractContextFromEdital = (editalData, topicoKey) => {
+  if (!editalData?.disciplinas || !topicoKey) return null
+  
+  // Buscar em todas as disciplinas pelo tópico
+  for (const disciplina of editalData.disciplinas) {
+    if (!disciplina.topicos) continue
+    
+    const topico = disciplina.topicos.find(t => {
+      const topicKey = makeTopicKey(t)
+      return topicKey === topicoKey || 
+             t.nome === topicoKey || 
+             t.numero === topicoKey
+    })
+    
+    if (topico) {
+      return {
+        disciplina: disciplina.nome || 'Disciplina não identificada',
+        topico: topico.nome || topico.numero || 'Tópico não identificado',
+        topicoNumero: topico.numero || '',
+        curso: courseName || 'Curso não identificado'
+      }
+    }
+  }
+  
+  return null
+}
+
+// Função auxiliar para processar conteúdo antes de renderizar
+const processContentForDisplay = (content, contexto = null) => {
+  if (!content) return content
+  
+  // Se já for HTML, processa com o processador IA incluindo contexto
+  if (isHtmlContent(content)) {
+    return processIAContent(content, contexto)
+  }
+  
+  // Se for texto puro, converte para parágrafos HTML
+  const paragraphs = content.split('\n\n').filter(p => p.trim())
+  if (paragraphs.length > 1) {
+    return paragraphs
+      .map(p => `<p>${p.trim().replace(/\n/g, '<br>')}</p>`)
+      .join('\n\n')
+  }
+  
+  // Se for uma única linha, envolve em parágrafo
+  return `<p>${content.trim()}</p>`
 }
 
 const EditalVerticalizado = () => {
@@ -562,8 +612,10 @@ const EditalVerticalizado = () => {
                   {secao.conteudo ? (
                     <>
                       <div
-                        className="prose prose-slate dark:prose-invert max-w-none text-xs sm:text-sm md:text-base text-slate-700 dark:text-slate-300 prose-headings:text-sm sm:prose-headings:text-base md:prose-headings:text-lg"
-                        dangerouslySetInnerHTML={{ __html: secao.conteudo }}
+                        className="ia-content-enhanced text-xs sm:text-sm md:text-base"
+                        dangerouslySetInnerHTML={{ 
+                          __html: processContentForDisplay(secao.conteudo) 
+                        }}
                       />
                       {/* Leitura de Áudio */}
                       <div className="mt-4">
@@ -602,8 +654,10 @@ const EditalVerticalizado = () => {
                           {subsecao.conteudo ? (
                             <>
                               <div
-                                className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 break-words"
-                                dangerouslySetInnerHTML={{ __html: subsecao.conteudo }}
+                                className="ia-content-enhanced text-xs sm:text-sm"
+                                dangerouslySetInnerHTML={{ 
+                                  __html: processContentForDisplay(subsecao.conteudo) 
+                                }}
                               />
                               {/* Leitura de Áudio */}
                               <div className="mt-3">
@@ -635,10 +689,11 @@ const EditalVerticalizado = () => {
               ))}
             </div>
           ) : editalVerticalizado?.conteudo ? (
-            <div className="prose prose-slate dark:prose-invert max-w-none">
+            <div className="ia-content-enhanced">
               <div
-                className="text-slate-700 dark:text-slate-300 leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: editalVerticalizado.conteudo }}
+                dangerouslySetInnerHTML={{ 
+                  __html: processContentForDisplay(editalVerticalizado.conteudo) 
+                }}
               />
             </div>
           ) : (

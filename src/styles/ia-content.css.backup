@@ -1,0 +1,320 @@
+/* Estilos personalizados para conteúdo gerado por IA */
+
+/* Container principal para conteúdo IA */
+.ia-content {
+  @apply prose prose-slate dark:prose-invert max-w-none;
+  @apply prose-lg;
+}
+
+/* Estilos para parágrafos com espaçamento adequado */
+.ia-content p {
+  @apply mb-4 leading-relaxed text-justify;
+  @apply text-slate-700 dark:text-slate-300;
+  @apply text-sm sm:text-base;
+}
+
+/* Primeiro parágrafo com destaque sutil */
+.ia-content p:first-of-type {
+  @apply text-base sm:text-lg font-medium;
+  @apply text-slate-800 dark:text-slate-200;
+}
+
+/* Negrito com melhor contraste e estilo */
+.ia-content strong,
+.ia-content b {
+  @apply font-bold text-slate-900 dark:text-white;
+  @apply bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20;
+  @apply px-2 py-1 rounded;
+  @apply border-l-4 border-blue-500 dark:border-blue-400;
+}
+
+/* Títulos com hierarquia visual clara */
+.ia-content h1,
+.ia-content h2,
+.ia-content h3,
+.ia-content h4,
+.ia-content h5,
+.ia-content h6 {
+  @apply font-bold text-slate-900 dark:text-white;
+  @apply mb-3 mt-6 first:mt-0;
+  @apply scroll-mt-20;
+}
+
+.ia-content h1 {
+  @apply text-2xl sm:text-3xl;
+  @apply border-b-2 border-slate-200 dark:border-slate-700 pb-2;
+  @apply bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800 dark:to-blue-900/20;
+  @apply px-4 py-2 -mx-4 rounded-lg;
+}
+
+.ia-content h2 {
+  @apply text-xl sm:text-2xl;
+  @apply border-l-4 border-blue-500 dark:border-blue-400;
+  @apply pl-4 bg-slate-50 dark:bg-slate-800/50;
+  @apply py-2 -ml-4 rounded-r;
+}
+
+.ia-content h3 {
+  @apply text-lg sm:text-xl;
+  @apply border-l-3 border-indigo-500 dark:border-indigo-400;
+  @apply pl-3;
+}
+
+.ia-content h4 {
+  @apply text-base sm:text-lg;
+  @apply text-blue-700 dark:text-blue-300;
+}
+
+/* Listas com melhor organização */
+.ia-content ul,
+.ia-content ol {
+  @apply my-4 space-y-2;
+  @apply text-slate-700 dark:text-slate-300;
+}
+
+.ia-content ul {
+  @apply list-disc list-inside;
+}
+
+.ia-content ol {
+  @apply list-decimal list-inside;
+}
+
+.ia-content li {
+  @apply ml-4 pl-2;
+  @apply border-l-2 border-slate-200 dark:border-slate-700;
+  @apply hover:border-blue-300 dark:hover:border-blue-600;
+  @apply transition-colors duration-200;
+}
+
+/* Tabelas com design moderno e responsivo */
+.ia-content table {
+  @apply w-full border-collapse;
+  @apply my-6 overflow-hidden rounded-lg shadow-lg;
+  @apply border-2 border-slate-300 dark:border-slate-600;
+}
+
+.ia-content thead {
+  @apply bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-800 dark:to-indigo-800;
+}
+
+.ia-content th {
+  @apply px-4 py-3 text-left font-bold text-white;
+  @apply text-sm sm:text-base;
+  @apply border-r border-blue-700 dark:border-blue-900;
+  @apply last:border-r-0;
+}
+
+.ia-content tbody {
+  @apply bg-white dark:bg-slate-800;
+}
+
+.ia-content tr {
+  @apply border-b border-slate-200 dark:border-slate-700;
+  @apply hover:bg-slate-50 dark:hover:bg-slate-700/50;
+  @apply transition-colors duration-150;
+}
+
+.ia-content tr:last-child {
+  @apply border-b-0;
+}
+
+.ia-content td {
+  @apply px-4 py-3 text-slate-700 dark:text-slate-300;
+  @apply border-r border-slate-200 dark:border-slate-700;
+  @apply text-sm sm:text-base;
+  @apply last:border-r-0;
+}
+
+/* Células de cabeçalho no corpo */
+.ia-content td:first-child {
+  @apply font-semibold text-slate-800 dark:text-slate-200;
+  @apply bg-slate-50 dark:bg-slate-900/50;
+}
+
+/* Links com estilo moderno */
+.ia-content a {
+  @apply text-blue-600 dark:text-blue-400;
+  @apply underline decoration-2 underline-offset-2;
+  @apply hover:text-blue-800 dark:hover:text-blue-300;
+  @apply hover:decoration-blue-500 dark:hover:decoration-blue-400;
+  @apply transition-all duration-200;
+  @apply font-medium;
+}
+
+/* Citações com destaque */
+.ia-content blockquote {
+  @apply border-l-4 border-blue-500 dark:border-blue-400;
+  @apply pl-4 py-2 my-4;
+  @apply bg-blue-50 dark:bg-blue-900/20;
+  @apply italic text-slate-700 dark:text-slate-300;
+  @apply rounded-r-lg;
+}
+
+/* Código inline */
+.ia-content code {
+  @apply bg-slate-100 dark:bg-slate-800;
+  @apply text-pink-600 dark:text-pink-400;
+  @apply px-2 py-1 rounded;
+  @apply text-sm font-mono;
+  @apply border border-slate-300 dark:border-slate-700;
+}
+
+/* Blocos de código */
+.ia-content pre {
+  @apply bg-slate-900 dark:bg-slate-950;
+  @apply text-slate-100;
+  @apply p-4 rounded-lg overflow-x-auto;
+  @apply my-4 border border-slate-700 dark:border-slate-800;
+}
+
+.ia-content pre code {
+  @apply bg-transparent text-transparent;
+  @apply p-0 border-none;
+}
+
+/* Separadores horizontais */
+.ia-content hr {
+  @apply my-8 border-0;
+  @apply h-1 bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-600 to-transparent;
+}
+
+/* Imagens responsivas */
+.ia-content img {
+  @apply max-w-full h-auto rounded-lg shadow-md;
+  @apply my-4 border border-slate-200 dark:border-slate-700;
+  @apply hover:shadow-lg transition-shadow duration-200;
+}
+
+/* Notas e avisos */
+.ia-content .nota,
+.ia-content .aviso,
+.ia-content .importante {
+  @apply p-4 my-4 rounded-lg border-l-4;
+}
+
+.ia-content .nota {
+  @apply bg-blue-50 dark:bg-blue-900/20 border-blue-500 dark:border-blue-400;
+  @apply text-blue-800 dark:text-blue-200;
+}
+
+.ia-content .aviso {
+  @apply bg-yellow-50 dark:bg-yellow-900/20 border-yellow-500 dark:border-yellow-400;
+  @apply text-yellow-800 dark:text-yellow-200;
+}
+
+.ia-content .importante {
+  @apply bg-red-50 dark:bg-red-900/20 border-red-500 dark:border-red-400;
+  @apply text-red-800 dark:text-red-200;
+}
+
+/* Cards de conteúdo */
+.ia-content .card {
+  @apply bg-white dark:bg-slate-800;
+  @apply border border-slate-200 dark:border-slate-700;
+  @apply rounded-lg p-4 my-4;
+  @apply shadow-sm hover:shadow-md transition-shadow duration-200;
+}
+
+/* Grid para layout organizado */
+.ia-content .grid-2 {
+  @apply grid grid-cols-1 md:grid-cols-2 gap-4 my-4;
+}
+
+.ia-content .grid-3 {
+  @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 my-4;
+}
+
+/* Flex para alinhamento personalizado */
+.ia-content .flex-center {
+  @apply flex items-center justify-center;
+}
+
+.ia-content .flex-between {
+  @apply flex items-center justify-between;
+}
+
+/* Textos com cores semanticas */
+.ia-content .text-primary {
+  @apply text-blue-600 dark:text-blue-400 font-semibold;
+}
+
+.ia-content .text-success {
+  @apply text-green-600 dark:text-green-400 font-semibold;
+}
+
+.ia-content .text-warning {
+  @apply text-yellow-600 dark:text-yellow-400 font-semibold;
+}
+
+.ia-content .text-danger {
+  @apply text-red-600 dark:text-red-400 font-semibold;
+}
+
+/* Badges */
+.ia-content .badge {
+  @apply inline-block px-2 py-1 text-xs font-semibold rounded-full;
+}
+
+.ia-content .badge-blue {
+  @apply bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200;
+}
+
+.ia-content .badge-green {
+  @apply bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200;
+}
+
+.ia-content .badge-red {
+  @apply bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200;
+}
+
+/* Responsividade para mobile */
+@media (max-width: 640px) {
+  .ia-content {
+    @apply prose-sm;
+  }
+  
+  .ia-content table {
+    @apply text-xs;
+  }
+  
+  .ia-content th,
+  .ia-content td {
+    @apply px-2 py-2;
+  }
+  
+  .ia-content h1 {
+    @apply text-xl;
+  }
+  
+  .ia-content h2 {
+    @apply text-lg;
+  }
+}
+
+/* Animações sutis para melhor UX */
+.ia-content p,
+.ia-content li,
+.ia-content td {
+  @apply transition-all duration-200;
+}
+
+/* Focus para acessibilidade */
+.ia-content a:focus {
+  @apply outline-none ring-2 ring-blue-500 ring-offset-2;
+}
+
+/* Print styles */
+@media print {
+  .ia-content {
+    @apply text-black;
+  }
+  
+  .ia-content a {
+    @apply text-black underline;
+  }
+  
+  .ia-content table {
+    @apply border border-black;
+  }
+}

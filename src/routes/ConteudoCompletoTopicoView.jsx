@@ -1,10 +1,54 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy } from 'firebase/firestore'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+
+// Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
+const makeTopicKey = (topico) => {
+  if (!topico) return ''
+  const numero = (topico.numero || '').toString().trim()
+  const nome = (topico.nome || '').toString().trim()
+
+  if (!numero && !nome) return ''
+  if (!numero || !nome) {
+    const base = numero || nome
+    return encodeURIComponent(base)
+  }
+
+  const combined = `${numero} :: ${nome}`
+  return encodeURIComponent(combined)
+}
+
+// Função para extrair contexto hierárquico do edital
+const extractContextFromEdital = (editalData, topicoKey) => {
+  if (!editalData?.disciplinas || !topicoKey) return null
+  
+  // Buscar em todas as disciplinas pelo tópico
+  for (const disciplina of editalData.disciplinas) {
+    if (!disciplina.topicos) continue
+    
+    const topico = disciplina.topicos.find(t => {
+      const topicKey = makeTopicKey(t)
+      return topicKey === topicoKey || 
+             t.nome === topicoKey || 
+             t.numero === topicoKey
+    })
+    
+    if (topico) {
+      return {
+        disciplina: disciplina.nome || 'Disciplina não identificada',
+        topico: topico.nome || topico.numero || 'Tópico não identificado',
+        topicoNumero: topico.numero || '',
+        curso: '' // Será preenchido depois
+      }
+    }
+  }
+  
+  return null
+}
 
 const normalizeKey = (text = '') => {
   return decodeURIComponent(text || '').trim()
@@ -405,6 +449,39 @@ ONDE:
       const editalData = editalDoc.exists() ? editalDoc.data() : {}
       const editalText = (editalData.pdfText || editalData.prompt || '').toString()
 
+      // Carregar edital verticalizado para extrair contexto da disciplina
+      let editalVerticalizado = null
+      try {
+        const editalVerticalRef = doc(db, 'courses', resolvedCourseId, 'editalVerticalizado', 'principal')
+        const editalVerticalDoc = await getDoc(editalVerticalRef)
+        if (editalVerticalDoc.exists()) {
+          const data = editalVerticalDoc.data()
+          
+          // Verificar se o edital está dividido em partes
+          if (data.temPartes && data.totalPartes > 1) {
+            const partesRef = collection(db, 'courses', resolvedCourseId, 'editalVerticalizado', 'principal', 'partes')
+            const partesSnapshot = await getDocs(query(partesRef, orderBy('parte')))
+            
+            const todasDisciplinas = [...(data.disciplinas || [])]
+            partesSnapshot.forEach((doc) => {
+              const parteData = doc.data()
+              if (parteData.disciplinas && Array.isArray(parteData.disciplinas)) {
+                todasDisciplinas.push(...parteData.disciplinas)
+              }
+            })
+            
+            editalVerticalizado = {
+              ...data,
+              disciplinas: todasDisciplinas,
+            }
+          } else {
+            editalVerticalizado = data
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar edital verticalizado para contexto:', err)
+      }
+
       if (!editalText || editalText.trim().length === 0) {
         throw new Error('Edital não encontrado para este curso. Gere o edital primeiro.')
       }
@@ -421,6 +498,15 @@ ONDE:
       let aiText = ''
       let lastError = null
 
+      // Extrair contexto hierárquico do edital
+      let contextoDisciplina = null
+      if (editalVerticalizado) {
+        contextoDisciplina = extractContextFromEdital(editalVerticalizado, resolvedTopicKey)
+        if (contextoDisciplina) {
+          contextoDisciplina.curso = courseName || concursoName || 'Curso Preparatório'
+        }
+      }
+
       const prompt = `Você é um especialista em criar conteúdo técnico completo e ESPECÍFICO para cursos preparatórios de concursos públicos.
 
 CONTEXTO (não cite estes nomes no texto final):
@@ -428,32 +514,32 @@ ${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n
         courseName || 'Curso Preparatório'
       }
       
-TÓPICO ESPECÍFICO DO EDITAL (USE APENAS ESTE TÓPICO, NÃO MISTURE COM OUTROS): ${resolvedTopicKey}
+${contextoDisciplina ? `DISCIPLINA ESPECÍFICA: ${contextoDisciplina.disciplina}\n` : ''}TÓPICO ESPECÍFICO DO EDITAL (USE APENAS ESTE TÓPICO, NÃO MISTURE COM OUTROS): ${resolvedTopicKey}
 NOME DO TÓPICO: ${effectiveTopicNome || resolvedTopicKey}
 
 EDITAL BASE (trecho relevante para este tópico):
 ${editalText.substring(0, 8000)}${editalText.length > 8000 ? '\n\n[texto truncado...]' : ''}
 
 ⚠️⚠️⚠️ REGRAS CRÍTICAS - EVITE CONTEÚDO GENÉRICO ⚠️⚠️⚠️
-1. FOCO 100% ESPECÍFICO: Crie conteúdo APENAS para o tópico "${effectiveTopicNome || resolvedTopicKey}"
-2. NÃO CRIE conteúdo genérico sobre toda a matéria (ex: se tópico é "Direito Penal", não fale de todo Direito Penal)
-3. SEJA ESPECÍFICO: Use artigos, leis, números, jurisprudência relacionados a ESTE tópico
+1. FOCO 100% ESPECÍFICO: Crie conteúdo APENAS para o tópico "${effectiveTopicNome || resolvedTopicKey}"${contextoDisciplina ? ` DENTRO DA DISCIPLINA "${contextoDisciplina.disciplina}"` : ''}
+2. NÃO CRIE conteúdo genérico sobre toda a matéria (ex: se tópico é "Conceitos" em "Direito Constitucional", não fale de todo Direito Constitucional)
+3. SEJA ESPECÍFICO: Use artigos, leis, números, jurisprudência relacionados a ESTE tópico ${contextoDisciplina ? `nesta disciplina` : ''}
 4. EVITE ASSUNTOS DIFERENTES: Não mencione outros tópicos do edital
 5. CONTEÚDO TÉCNICO: Use linguagem formal, citations, artigos de lei
 6. PROFUNDIDADE ADEQUADA: Nível técnico para concurso público, não básico
 7. EXEMPLOS PRÁTICOS: Inclua exemplos concretos e aplicáveis
 
 EXEMPLOS DO QUE EVITAR (ERRADO):
-❌ Se tópico é "Dos Crimes contra a Administração Pública": 
-   "O Direito Penal é o ramo do direito que define crimes e penas..."
-❌ Se tópico é "Lei 8.112/90":
+❌ Se tópico é "Conceitos" em "Direito Constitucional": 
+   "O Direito Constitucional é o ramo do direito que estuda as constituições..."
+❌ Se tópico é "Conceitos" em "Direito Administrativo":
    "A administração pública no Brasil é regida por princípios..."
 
 EXEMPLOS DO QUE CRIAR (CORRETO):
-✅ Se tópico é "Dos Crimes contra a Administração Pública":
-   "Os crimes contra a administração pública estão previstos nos arts. 312 a 337 do Código Penal..."
-✅ Se tópico é "Lei 8.112/90":
-   "A Lei 8.112/90, em seu art. 37, estabelece os requisitos para investidura..."
+✅ Se tópico é "Conceitos" em "Direito Constitucional":
+   "Conceito de Constituição: Segundo José Afonso da Silva, constituição é..."
+✅ Se tópico é "Conceitos" em "Direito Administrativo":
+   "Conceito de ato administrativo: Segundo Hely Lopes Meirelles, ato administrativo é..."
 
 TAREFA:
 Crie um conteúdo COMPLETO, DETALHADO e 100% ESPECÍFICO para o tópico acima, com linguagem técnica e formal.
