@@ -32,6 +32,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore'
 import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon } from '@heroicons/react/24/outline'
@@ -722,6 +723,107 @@ const AdminPanel = () => {
     
     return () => unsub()
   }, [selectedCourseForFlashcards])
+
+  // Função para limpar todo o conteúdo gerado
+  const handleClearAllGeneratedContent = async () => {
+    if (!confirm('⚠️ ATENÇÃO: Esta ação irá APAGAR PERMANENTEMENTE todo o conteúdo gerado:\n\n• Flashcards\n• Matérias Revisadas\n• Conteúdos Completos\n• Progresso de estudos\n• Estatísticas de questões\n\nEsta ação NÃO PODE SER DESFEITA!\n\nDeseja continuar?')) {
+      return
+    }
+
+    try {
+      setMessage('🔄 Iniciando limpeza geral... Isso pode levar alguns minutos...')
+      
+      const collectionsToClean = [
+        'flashcards',
+        'materiaRevisada',
+        'conteudoCompleto',
+        'progress',
+        'questoesStats'
+      ]
+
+      let totalDeleted = 0
+
+      for (const collectionName of collectionsToClean) {
+        try {
+          const collectionRef = collection(db, collectionName)
+          const snapshot = await getDocs(collectionRef)
+          
+          if (snapshot.docs.length > 0) {
+            const batch = writeBatch(db)
+            
+            snapshot.docs.forEach((doc) => {
+              batch.delete(doc.ref)
+            })
+            
+            await batch.commit()
+            totalDeleted += snapshot.docs.length
+            console.log(`✅ ${snapshot.docs.length} documentos apagados da coleção ${collectionName}`)
+          }
+        } catch (error) {
+          console.error(`❌ Erro ao limpar coleção ${collectionName}:`, error)
+        }
+      }
+
+      // Limpar também as subcoleções de cursos
+      try {
+        const coursesSnapshot = await getDocs(collection(db, 'courses'))
+        
+        for (const courseDoc of coursesSnapshot.docs) {
+          const courseId = courseDoc.id
+          
+          // Limpar subjects
+          try {
+            const subjectsRef = collection(db, 'courses', courseId, 'subjects')
+            const subjectsSnapshot = await getDocs(subjectsRef)
+            
+            if (subjectsSnapshot.docs.length > 0) {
+              const batch = writeBatch(db)
+              subjectsSnapshot.docs.forEach((doc) => {
+                batch.delete(doc.ref)
+              })
+              await batch.commit()
+              totalDeleted += subjectsSnapshot.docs.length
+              console.log(`✅ ${subjectsSnapshot.docs.length} subjects apagados do curso ${courseId}`)
+            }
+          } catch (error) {
+            console.error(`❌ Erro ao limpar subjects do curso ${courseId}:`, error)
+          }
+
+          // Limpar editalVerticalizado
+          try {
+            const editalRef = collection(db, 'courses', courseId, 'editalVerticalizado')
+            const editalSnapshot = await getDocs(editalRef)
+            
+            if (editalSnapshot.docs.length > 0) {
+              const batch = writeBatch(db)
+              editalSnapshot.docs.forEach((doc) => {
+                batch.delete(doc.ref)
+              })
+              await batch.commit()
+              totalDeleted += editalSnapshot.docs.length
+              console.log(`✅ ${editalSnapshot.docs.length} documentos de edital apagados do curso ${courseId}`)
+            }
+          } catch (error) {
+            console.error(`❌ Erro ao limpar edital do curso ${courseId}:`, error)
+          }
+        }
+      } catch (error) {
+        console.error('❌ Erro ao limpar cursos:', error)
+      }
+
+      setMessage(`✅ LIMPEZA CONCLUÍDA!\n\n📊 Total de ${totalDeleted} documentos apagados permanentemente.\n\nO sistema está completamente limpo e pronto para novo conteúdo.`)
+      
+      // Limpar estados locais
+      setFlashcards([])
+      setAllFlashcards([])
+      setCourseSubjects({})
+      setSelectedCourseForFlashcards('alego-default')
+      
+    } catch (error) {
+      console.error('❌ Erro na limpeza geral:', error)
+      setMessage(`❌ Erro durante a limpeza: ${error.message}`)
+    }
+  }
 
   // Carregar usuários, banners, etc.
   useEffect(() => {
@@ -6495,6 +6597,26 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
           <div className="absolute bottom-0 left-0 w-72 h-72 bg-gradient-to-tr from-indigo-500/10 to-purple-500/10 rounded-full blur-3xl -ml-36 -mb-36"></div>
           
           <div className="relative">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-3xl sm:text-4xl font-black bg-gradient-to-r from-alego-600 to-purple-600 bg-clip-text text-transparent">
+                  🚀 Painel Administrativo
+                </h1>
+                <p className="text-slate-600 dark:text-slate-400 mt-2">
+                  Sistema completo de gerenciamento de conteúdo e usuários
+                </p>
+              </div>
+              
+              {/* Botão de Limpeza Geral */}
+              <button
+                onClick={handleClearAllGeneratedContent}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg transition-all flex items-center gap-2"
+                title="Apagar TODO o conteúdo gerado permanentemente"
+              >
+                <TrashIcon className="h-5 w-5" />
+                <span>🗑️ Limpar Tudo</span>
+              </button>
+            </div>
             <div className="flex items-center gap-3 mb-3">
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur-lg opacity-50 animate-pulse"></div>
