@@ -583,6 +583,7 @@ REGRAS FINAIS:
 - Faça frases motivacionais referente ao cargo(concurso) do tópico ex: você vai ser o futuro (Curso)
 - No final coloque umas questões referente ao tópico
 - Faça piadas 
+- Diga coisas assim no estilo de (tem cursinhos que não falam isso),(essa dica é só aqui)
 - O conteúdo DEVE ser 100% específico para o tópico "${effectiveTopicNome || resolvedTopicKey}"
 - NÃO inclua informações genéricas sobre toda a matéria
 - Use HTML sem markdown
