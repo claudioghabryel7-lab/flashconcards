@@ -343,6 +343,28 @@ const ConteudoCompletoTopicoView = () => {
       return
     }
 
+    // Se for admin, forçar regeneração direta
+    if (profile?.role === 'admin') {
+      try {
+        setValidating(true)
+        setValidationMessage('Admin: Forçando regeneração do conteúdo...')
+        
+        const success = await handleGenerateContent()
+        if (success) {
+          setValidationMessage('Admin: Conteúdo regenerado com sucesso!')
+        } else {
+          setValidationMessage('Admin: Erro ao regenerar conteúdo. Tente novamente.')
+        }
+      } catch (err) {
+        console.error('Erro ao forçar regeneração:', err)
+        setValidationMessage('Admin: Não foi possível regenerar o conteúdo. Tente novamente.')
+      } finally {
+        setValidating(false)
+      }
+      return
+    }
+
+    // Fluxo normal para usuários comuns (com validação)
     try {
       setValidating(true)
       setValidationMessage('')
@@ -767,8 +789,9 @@ REGRAS FINAIS:
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition"
               >
                 {validating
-                  ? 'Analisando matéria…'
-                  : 'Matéria errada? Validar e regenerar'}
+                  ? (profile?.role === 'admin' ? 'Admin: Regenerando...' : 'Analisando matéria…')
+                  : (profile?.role === 'admin' ? 'Admin: Forçar regeneração' : 'Matéria errada? Validar e regenerar')
+                }
               </button>
               {validationMessage && (
                 <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-md text-left lg:text-right">
