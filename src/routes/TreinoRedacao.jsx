@@ -114,7 +114,7 @@ const TreinoRedacao = () => {
       const genAI = new GoogleGenerativeAI(apiKey)
       // 🔥 OTIMIZAÇÃO: Usar modelo mais rápido para gerar tema
       const model = genAI.getGenerativeModel({ 
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         generationConfig: {
           maxOutputTokens: 1024, // Reduzido para tema simples
           temperature: 0.8,
@@ -235,7 +235,7 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       const genAI = new GoogleGenerativeAI(apiKey)
       // 🔥 OTIMIZAÇÃO: Usar modelo mais rápido para análise
       const model = genAI.getGenerativeModel({ 
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         generationConfig: {
           maxOutputTokens: 4096, // Reduzido para análise mais rápida
           temperature: 0.3, // Menos temperatura para mais consistência
