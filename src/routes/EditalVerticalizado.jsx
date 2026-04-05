@@ -6,6 +6,9 @@ import {
   DocumentTextIcon,
   ChevronLeftIcon,
   BookOpenIcon,
+  PencilIcon,
+  XMarkIcon,
+  CheckIcon,
 } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -92,6 +95,13 @@ const EditalVerticalizado = () => {
   const [courseName, setCourseName] = useState('')
   const [highlightedDisciplina, setHighlightedDisciplina] = useState(null)
   const [highlightedTopico, setHighlightedTopico] = useState(null)
+  
+  // Estados para edição de tópicos
+  const [editingTopico, setEditingTopico] = useState(null)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editNome, setEditNome] = useState('')
+  const [editNumero, setEditNumero] = useState('')
+  const [editLoading, setEditLoading] = useState(false)
 
   // Determinar courseId e destacar disciplina/tópico se vier dos links
   useEffect(() => {
@@ -353,6 +363,62 @@ const EditalVerticalizado = () => {
     }
   }
 
+  // Função para abrir modal de edição de tópico
+  const handleEditTopico = (disciplinaIdx, topicoIdx) => {
+    const topico = editalVerticalizado.disciplinas[disciplinaIdx].topicos[topicoIdx]
+    setEditingTopico({ disciplinaIdx, topicoIdx })
+    setEditNome(topico.nome || '')
+    setEditNumero(topico.numero || '')
+    setEditModalOpen(true)
+  }
+
+  // Função para salvar alterações do tópico
+  const handleSaveTopico = async () => {
+    if (!editingTopico || !courseId || !editalVerticalizado) return
+
+    try {
+      setEditLoading(true)
+      const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+      const disciplinas = [...editalVerticalizado.disciplinas]
+      
+      // Atualizar o tópico
+      disciplinas[editingTopico.disciplinaIdx].topicos[editingTopico.topicoIdx] = {
+        ...disciplinas[editingTopico.disciplinaIdx].topicos[editingTopico.topicoIdx],
+        nome: editNome.trim(),
+        numero: editNumero.trim()
+      }
+
+      // Atualizar no Firestore
+      await updateDoc(editalRef, {
+        disciplinas: disciplinas
+      })
+
+      // Atualizar estado local
+      setEditalVerticalizado({
+        ...editalVerticalizado,
+        disciplinas: disciplinas
+      })
+
+      // Fechar modal
+      setEditModalOpen(false)
+      setEditingTopico(null)
+      setEditNome('')
+      setEditNumero('')
+    } catch (error) {
+      console.error('Erro ao salvar tópico:', error)
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
+  // Função para cancelar edição
+  const handleCancelEdit = () => {
+    setEditModalOpen(false)
+    setEditingTopico(null)
+    setEditNome('')
+    setEditNumero('')
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -465,6 +531,12 @@ const EditalVerticalizado = () => {
                         <span className="hidden sm:inline">Revisões</span>
                         <span className="sm:hidden">Rev</span>
                       </th>
+                      {profile?.role === 'admin' && (
+                        <th className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center font-bold text-[10px] sm:text-xs md:text-sm whitespace-nowrap">
+                          <span className="hidden sm:inline">Editar</span>
+                          <span className="sm:hidden">Ed</span>
+                        </th>
+                      )}
                     </tr>
                   </thead>
                 <tbody>
@@ -491,6 +563,9 @@ const EditalVerticalizado = () => {
                         <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center"></td>
                         <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center"></td>
                         <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center"></td>
+                        {profile?.role === 'admin' && (
+                          <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center"></td>
+                        )}
                       </tr>
                       
                       {/* Tópicos da disciplina */}
@@ -595,6 +670,17 @@ const EditalVerticalizado = () => {
                                   style={{ touchAction: 'manipulation' }}
                                 />
                               </td>
+                              {profile?.role === 'admin' && (
+                                <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 text-center">
+                                  <button
+                                    onClick={() => handleEditTopico(idx, topicoIdx)}
+                                    className="inline-flex items-center justify-center p-1.5 sm:p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                    title="Editar tópico"
+                                  >
+                                    <PencilIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                                  </button>
+                                </td>
+                              )}
                             </tr>
                           )
                         })}
@@ -725,6 +811,79 @@ const EditalVerticalizado = () => {
           )}
         </div>
       </div>
+
+      {/* Modal de Edição de Tópico */}
+      {editModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                Editar Tópico
+              </h3>
+              <button
+                onClick={handleCancelEdit}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Numeração
+                </label>
+                <input
+                  type="text"
+                  value={editNumero}
+                  onChange={(e) => setEditNumero(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-alego-500 focus:border-alego-500 dark:bg-slate-700 dark:text-white"
+                  placeholder="Ex: 1.1, 1.2.3, etc."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Nome do Tópico
+                </label>
+                <input
+                  type="text"
+                  value={editNome}
+                  onChange={(e) => setEditNome(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-alego-500 focus:border-alego-500 dark:bg-slate-700 dark:text-white"
+                  placeholder="Nome do tópico"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleCancelEdit}
+                className="flex-1 px-4 py-2 text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveTopico}
+                disabled={editLoading || !editNome.trim()}
+                className="flex-1 px-4 py-2 bg-alego-600 text-white rounded-lg font-medium hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {editLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <CheckIcon className="h-4 w-4" />
+                    Salvar
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
