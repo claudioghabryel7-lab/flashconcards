@@ -32,7 +32,6 @@ import {
   Timestamp,
   updateDoc,
   where,
-  writeBatch,
 } from 'firebase/firestore'
 import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon } from '@heroicons/react/24/outline'
@@ -723,107 +722,6 @@ const AdminPanel = () => {
     
     return () => unsub()
   }, [selectedCourseForFlashcards])
-
-  // Função para limpar todo o conteúdo gerado
-  const handleClearAllGeneratedContent = async () => {
-    if (!confirm('⚠️ ATENÇÃO: Esta ação irá APAGAR PERMANENTEMENTE todo o conteúdo gerado:\n\n• Flashcards\n• Matérias Revisadas\n• Conteúdos Completos\n• Progresso de estudos\n• Estatísticas de questões\n\nEsta ação NÃO PODE SER DESFEITA!\n\nDeseja continuar?')) {
-      return
-    }
-
-    try {
-      setMessage('🔄 Iniciando limpeza geral... Isso pode levar alguns minutos...')
-      
-      const collectionsToClean = [
-        'flashcards',
-        'materiaRevisada',
-        'conteudoCompleto',
-        'progress',
-        'questoesStats'
-      ]
-
-      let totalDeleted = 0
-
-      for (const collectionName of collectionsToClean) {
-        try {
-          const collectionRef = collection(db, collectionName)
-          const snapshot = await getDocs(collectionRef)
-          
-          if (snapshot.docs.length > 0) {
-            const batch = writeBatch(db)
-            
-            snapshot.docs.forEach((doc) => {
-              batch.delete(doc.ref)
-            })
-            
-            await batch.commit()
-            totalDeleted += snapshot.docs.length
-            console.log(`✅ ${snapshot.docs.length} documentos apagados da coleção ${collectionName}`)
-          }
-        } catch (error) {
-          console.error(`❌ Erro ao limpar coleção ${collectionName}:`, error)
-        }
-      }
-
-      // Limpar também as subcoleções de cursos
-      try {
-        const coursesSnapshot = await getDocs(collection(db, 'courses'))
-        
-        for (const courseDoc of coursesSnapshot.docs) {
-          const courseId = courseDoc.id
-          
-          // Limpar subjects
-          try {
-            const subjectsRef = collection(db, 'courses', courseId, 'subjects')
-            const subjectsSnapshot = await getDocs(subjectsRef)
-            
-            if (subjectsSnapshot.docs.length > 0) {
-              const batch = writeBatch(db)
-              subjectsSnapshot.docs.forEach((doc) => {
-                batch.delete(doc.ref)
-              })
-              await batch.commit()
-              totalDeleted += subjectsSnapshot.docs.length
-              console.log(`✅ ${subjectsSnapshot.docs.length} subjects apagados do curso ${courseId}`)
-            }
-          } catch (error) {
-            console.error(`❌ Erro ao limpar subjects do curso ${courseId}:`, error)
-          }
-
-          // Limpar editalVerticalizado
-          try {
-            const editalRef = collection(db, 'courses', courseId, 'editalVerticalizado')
-            const editalSnapshot = await getDocs(editalRef)
-            
-            if (editalSnapshot.docs.length > 0) {
-              const batch = writeBatch(db)
-              editalSnapshot.docs.forEach((doc) => {
-                batch.delete(doc.ref)
-              })
-              await batch.commit()
-              totalDeleted += editalSnapshot.docs.length
-              console.log(`✅ ${editalSnapshot.docs.length} documentos de edital apagados do curso ${courseId}`)
-            }
-          } catch (error) {
-            console.error(`❌ Erro ao limpar edital do curso ${courseId}:`, error)
-          }
-        }
-      } catch (error) {
-        console.error('❌ Erro ao limpar cursos:', error)
-      }
-
-      setMessage(`✅ LIMPEZA CONCLUÍDA!\n\n📊 Total de ${totalDeleted} documentos apagados permanentemente.\n\nO sistema está completamente limpo e pronto para novo conteúdo.`)
-      
-      // Limpar estados locais
-      setFlashcards([])
-      setAllFlashcards([])
-      setCourseSubjects({})
-      setSelectedCourseForFlashcards('alego-default')
-      
-    } catch (error) {
-      console.error('❌ Erro na limpeza geral:', error)
-      setMessage(`❌ Erro durante a limpeza: ${error.message}`)
-    }
-  }
 
   // Carregar usuários, banners, etc.
   useEffect(() => {
@@ -6597,26 +6495,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
           <div className="absolute bottom-0 left-0 w-72 h-72 bg-gradient-to-tr from-indigo-500/10 to-purple-500/10 rounded-full blur-3xl -ml-36 -mb-36"></div>
           
           <div className="relative">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h1 className="text-3xl sm:text-4xl font-black bg-gradient-to-r from-alego-600 to-purple-600 bg-clip-text text-transparent">
-                  🚀 Painel Administrativo
-                </h1>
-                <p className="text-slate-600 dark:text-slate-400 mt-2">
-                  Sistema completo de gerenciamento de conteúdo e usuários
-                </p>
-              </div>
-              
-              {/* Botão de Limpeza Geral */}
-              <button
-                onClick={handleClearAllGeneratedContent}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg transition-all flex items-center gap-2"
-                title="Apagar TODO o conteúdo gerado permanentemente"
-              >
-                <TrashIcon className="h-5 w-5" />
-                <span>🗑️ Limpar Tudo</span>
-              </button>
-            </div>
             <div className="flex items-center gap-3 mb-3">
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur-lg opacity-50 animate-pulse"></div>
@@ -7002,6 +6880,9 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                         
                         try {
                           const courseId = selectedCourseForPrompts || 'alego-default'
+                          console.log('💾 AdminPanel: Salvando edital no courseId:', courseId)
+                          console.log('💾 AdminPanel: selectedCourseForPrompts:', selectedCourseForPrompts)
+                          console.log('💾 AdminPanel: courseId final:', courseId)
                           const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
                           
                           // Tentar modelos válidos em ordem de prioridade
@@ -7086,8 +6967,31 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                           // Log removido para limpar console
                           setMessage(`📦 Processando edital em ${numPartes} partes (${tamanhoEdital} caracteres)...`)
                           
+                          // Log para debug - verificar se o texto foi atualizado
+                          console.log('📋 Texto do edital recebido:', {
+                            tamanho: editalVerticalizadoText.length,
+                            primeiros200: editalVerticalizadoText.substring(0, 200),
+                            ultimos200: editalVerticalizadoText.substring(editalVerticalizadoText.length - 200)
+                          })
+                          
+                          // MELHORIA: Dividir com sobreposição para não perder disciplinas
+                          const overlapSize = 500 // 500 caracteres de sobreposição entre partes
+                          
                           for (let i = 0; i < editalVerticalizadoText.length; i += chunkSizeCalculado) {
-                            const chunk = editalVerticalizadoText.substring(i, i + chunkSizeCalculado)
+                            let inicio = i
+                            let fim = Math.min(i + chunkSizeCalculado, editalVerticalizadoText.length)
+                            
+                            // Adicionar sobreposição (exceto na primeira parte)
+                            if (i > 0) {
+                              inicio = Math.max(0, i - overlapSize)
+                            }
+                            
+                            // Adicionar sobreposição (exceto na última parte)
+                            if (fim < editalVerticalizadoText.length) {
+                              fim = Math.min(editalVerticalizadoText.length, fim + overlapSize)
+                            }
+                            
+                            const chunk = editalVerticalizadoText.substring(inicio, fim)
                             const parteNum = Math.floor(i / chunkSizeCalculado) + 1
                             const totalPartes = Math.ceil(editalVerticalizadoText.length / chunkSizeCalculado)
                             
@@ -7095,8 +6999,9 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                               texto: chunk,
                               parte: parteNum,
                               totalPartes: totalPartes,
-                              inicio: i,
-                              fim: Math.min(i + chunkSizeCalculado, editalVerticalizadoText.length)
+                              inicio: inicio,
+                              fim: fim,
+                              temSobreposicao: i > 0 && fim < editalVerticalizadoText.length
                             })
                           }
                           
@@ -7115,7 +7020,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
 
 Analise o seguinte texto do edital e organize-o em DISCIPLINAS com seus tópicos hierárquicos. O formato deve ser uma TABELA com colunas: DISCIPLINAS, FlashCards, Questões, Dia, Revisões.
 
-${chunks.length > 1 ? `⚠️ ATENÇÃO: Este é a PARTE ${chunk.parte} de ${chunk.totalPartes} do edital completo.\n` : ''}${chunks.length > 1 ? `O edital completo tem ${editalVerticalizadoText.length} caracteres e foi dividido para processamento completo.\n` : ''}${chunks.length > 1 ? `Esta parte contém os caracteres de ${chunk.inicio} a ${chunk.fim}.\n` : ''}${chunks.length > 1 ? `Extraia TODAS as disciplinas e tópicos desta parte. Se uma disciplina começar nesta parte e terminar na próxima, extraia o que conseguir desta parte.\n\n` : ''}Texto do edital${chunks.length > 1 ? ` (PARTE ${chunk.parte}/${chunk.totalPartes})` : ''}:
+${chunks.length > 1 ? `⚠️ ATENÇÃO: Este é a PARTE ${chunk.parte} de ${chunk.totalPartes} do edital completo.\n` : ''}${chunks.length > 1 ? `O edital completo tem ${editalVerticalizadoText.length} caracteres e foi dividido para processamento completo.\n` : ''}${chunks.length > 1 ? `Esta parte contém os caracteres de ${chunk.inicio} a ${chunk.fim}.\n` : ''}${chunks.length > 1 ? `Esta parte ${chunk.temSobreposicao ? 'TEM SOBREPOSIÇÃO' : 'NÃO TEM SOBREPOSIÇÃO'} com a parte anterior.\n` : ''}${chunks.length > 1 ? `Extraia TODAS as disciplinas e tópicos desta parte. Se uma disciplina começar nesta parte e terminar na próxima, extraia o que conseguir desta parte.\n\n` : ''}Texto do edital${chunks.length > 1 ? ` (PARTE ${chunk.parte}/${chunk.totalPartes})` : ''}:
 ${chunk.texto}${chunks.length > 1 && chunkIdx < chunks.length - 1 ? '\n\n[... continua na próxima parte ...]' : ''}${chunks.length > 1 && chunkIdx > 0 ? '\n\n[... continuação da parte anterior ...]' : ''}
 
 TAREFA CRÍTICA:
@@ -7271,11 +7176,17 @@ REGRAS CRÍTICAS E OBRIGATÓRIAS - LEIA COM ATENÇÃO:
 
 18. ⚠️ IMPORTANTE PARA PARTES DIVIDIDAS:
     - Se este é uma PARTE do edital, extraia TODAS as disciplinas que aparecem nesta parte
-    - Se uma disciplina aparece parcialmente (começa aqui e termina na próxima parte), extraia o que conseguir
+    - Se uma disciplina aparece parcialmente (começa aqui e termina na próxima), extraia o que conseguir
     - Se uma disciplina aparece completa nesta parte, extraia TODOS os tópicos dela
     - NÃO pule disciplinas só porque podem aparecer em outras partes também
     - O sistema vai combinar todas as partes depois, então é melhor ter duplicatas do que perder disciplinas
-    - Se você encontrar "DIREITO PENAL", "DIREITO PROCESSUAL PENAL", "DIREITO ADMINISTRATIVO", "DIREITO PENAL MILITAR", "DIREITO PROCESSUAL PENAL MILITAR", "LEGISLAÇÃO PENAL E PROCESSUAL PENAL EXTRAVAGANTE" ou qualquer outra disciplina, EXTRAIA ELA COMPLETA`
+    - Se você encontrar "DIREITO PENAL", "DIREITO PROCESSUAL PENAL", "DIREITO ADMINISTRATIVO", "DIREITO PENAL MILITAR", "DIREITO PROCESSUAL PENAL MILITAR", "LEGISLAÇÃO PENAL E PROCESSUAL PENAL EXTRAVAGANTE" ou qualquer outra disciplina, EXTRAIA ELA COMPLETA
+
+19. ⚠️ MELHORIA: Se esta parte tem sobreposição com a anterior, foque em extrair disciplinas que podem ter sido perdidas na divisão
+
+20. ⚠️ VERIFICAÇÃO DUPLA: Antes de retornar, conte quantas disciplinas você extraiu e compare com o esperado baseado no tamanho do texto. Se extraiu menos disciplinas do que o esperado, revise o texto novamente.
+
+21. ⚠️ PRIORIDADE ABSOLUTA: É MELHOR extrair disciplinas duplicadas do que perder disciplinas importantes. Se tiver dúvida, INCLUA a disciplina.`
 
                             const verticalizadoResult = await modelForProcessing.generateContent(verticalizadoPrompt)
                           const verticalizadoResponse = await verticalizadoResult.response
@@ -7411,28 +7322,65 @@ REGRAS CRÍTICAS E OBRIGATÓRIAS - LEIA COM ATENÇÃO:
                             
                             // Adicionar disciplinas desta parte à lista total
                             if (editalParte && editalParte.disciplinas && Array.isArray(editalParte.disciplinas)) {
-                              // Evitar duplicatas: verificar se a disciplina já existe
+                              // MELHORIA: Lógica mais permissiva para evitar perda de disciplinas
                               editalParte.disciplinas.forEach(disciplina => {
-                                const existe = todasDisciplinas.find(d => d.nome === disciplina.nome)
-                                if (!existe) {
-                                  todasDisciplinas.push(disciplina)
+                                // Verificação mais flexível - considera nomes similares
+                                const existeIndex = todasDisciplinas.findIndex(d => {
+                                  // Comparação normalizada (remove espaços extras, maiúsculas/minúsculas)
+                                  const nomeExistente = d.nome?.trim().toLowerCase().replace(/\s+/g, ' ')
+                                  const nomeNovo = disciplina.nome?.trim().toLowerCase().replace(/\s+/g, ' ')
+                                  
+                                  // Considera igual se os nomes forem idênticos após normalização
+                                  return nomeExistente === nomeNovo
+                                })
+                                
+                                if (existeIndex === -1) {
+                                  // Disciplina não existe - adicionar normalmente
+                                  todasDisciplinas.push({
+                                    ...disciplina,
+                                    _parteOrigem: chunk.parte, // Marcar de onde veio
+                                    _chunkInfo: `${chunk.parte}/${chunk.totalPartes}`
+                                  })
+                                  console.log(`✅ Disciplina nova adicionada: ${disciplina.nome} (parte ${chunk.parte})`)
                                 } else {
-                                  // Se já existe, mesclar tópicos (pode ter sido dividida entre partes)
-                                  const index = todasDisciplinas.findIndex(d => d.nome === disciplina.nome)
-                                  const topicosExistentes = todasDisciplinas[index].topicos || []
+                                  // Disciplina já existe - mesclar tópicos de forma mais inteligente
+                                  const disciplinaExistente = todasDisciplinas[existeIndex]
+                                  const topicosExistentes = disciplinaExistente.topicos || []
                                   const topicosNovos = disciplina.topicos || []
                                   
-                                  // Adicionar apenas tópicos que não existem
+                                  console.log(`🔄 Mesclando disciplina: ${disciplina.nome} (parte ${chunk.parte})`)
+                                  
+                                  // Adicionar todos os tópicos novos (mesmo que possam existir)
+                                  // É melhor ter duplicatas do que perder tópicos
                                   topicosNovos.forEach(topico => {
-                                    const topicoExiste = topicosExistentes.find(t => 
-                                      t.numero === topico.numero && t.nome === topico.nome
-                                    )
+                                    // Verificação mais flexível para tópicos
+                                    const topicoExiste = topicosExistentes.find(t => {
+                                      const numExistente = t.numero?.trim()
+                                      const numNovo = topico.numero?.trim()
+                                      const nomeExistente = t.nome?.trim().toLowerCase().replace(/\s+/g, ' ')
+                                      const nomeNovo = topico.nome?.trim().toLowerCase().replace(/\s+/g, ' ')
+                                      
+                                      return numExistente === numNovo || nomeExistente === nomeNovo
+                                    })
+                                    
                                     if (!topicoExiste) {
-                                      topicosExistentes.push(topico)
+                                      topicosExistentes.push({
+                                        ...topico,
+                                        _parteOrigem: chunk.parte
+                                      })
+                                      console.log(`  ✅ Tópico novo: ${topico.numero} - ${topico.nome}`)
+                                    } else {
+                                      console.log(`  ⚠️ Tópico já existe: ${topico.numero} - ${topico.nome}`)
                                     }
                                   })
                                   
-                                  todasDisciplinas[index].topicos = topicosExistentes
+                                  // Atualizar disciplina existente com os novos tópicos
+                                  todasDisciplinas[existeIndex] = {
+                                    ...disciplinaExistente,
+                                    topicos: topicosExistentes,
+                                    _mesclado: true,
+                                    _partesMescladas: [...(disciplinaExistente._partesMescladas || []), chunk.parte].sort()
+                                  }
                                 }
                               })
                               
@@ -7463,6 +7411,15 @@ REGRAS CRÍTICAS E OBRIGATÓRIAS - LEIA COM ATENÇÃO:
                           const jsonString = JSON.stringify(editalOrganizado)
                           const jsonSizeMB = (new Blob([jsonString]).size / 1024 / 1024).toFixed(2)
                           console.log(`📊 Tamanho do JSON gerado: ${jsonSizeMB} MB`)
+                          console.log(`📊 Total de disciplinas processadas: ${todasDisciplinas.length}`)
+                          console.log(`📊 Disciplinas encontradas:`, todasDisciplinas.map(d => d.nome))
+                          
+                          // Log detalhado para debug
+                          if (todasDisciplinas.length < 5) {
+                            console.warn(`⚠️ POUCAS DISCIPLINAS ENCONTRADAS (${todasDisciplinas.length}). Possível perda de conteúdo!`)
+                            console.warn(`📋 Texto processado (primeiros 2000 chars):`, editalVerticalizadoText.substring(0, 2000))
+                            console.warn(`📋 Texto processado (últimos 2000 chars):`, editalVerticalizadoText.substring(editalVerticalizadoText.length - 2000))
+                          }
                           
                           // Firestore tem limite de 1MB por documento
                           // Se for muito grande, dividir em partes
@@ -7750,6 +7707,19 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem 
                           }, { merge: true })
                           
                           setEditalVerticalizadoData(editalOrganizado)
+                          
+                          // Limpar estados para garantir atualização da interface
+                          setEditalVerticalizadoText('')
+                          setEditalVerticalizadoFile(null)
+                          setExtractingEditalVerticalizado(false)
+                          setSavingEditalVerticalizado(false)
+                          
+                          console.log('✅ Estados limpos após processamento')
+                          console.log('📊 Edital processado com sucesso:', {
+                            totalDisciplinas: todasDisciplinas.length,
+                            tamanhoJSON: jsonSizeMB + 'MB',
+                            partes: numPartes
+                          })
                           
                           // FASE 2: Gerar todo o conteúdo automaticamente (se confirmado)
                           const shouldGenerateAll = window.confirm(

@@ -185,26 +185,36 @@ const EditalVerticalizado = () => {
   // Carregar edital verticalizado
   useEffect(() => {
     if (!courseId) {
+      console.log('❌ EditalVerticalizado: courseId está vazio')
       setLoading(false)
       return
     }
+
+    console.log('🎯 EditalVerticalizado: Iniciando carregamento para courseId:', courseId)
 
     const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
     
     const loadEditalCompleto = async () => {
       try {
+        console.log('📋 EditalVerticalizado: Carregando edital do courseId:', courseId)
         const snapshot = await getDoc(editalRef)
         if (!snapshot.exists()) {
+          console.log('❌ EditalVerticalizado: Documento não encontrado')
           setEditalVerticalizado(null)
           setLoading(false)
           return
         }
         
         const data = snapshot.data()
+        console.log('📊 EditalVerticalizado: Dados carregados:', {
+          temPartes: data.temPartes,
+          totalPartes: data.totalPartes,
+          disciplinasPrincipais: data.disciplinas?.length || 0
+        })
         
         // Verificar se o edital está dividido em partes
         if (data.temPartes && data.totalPartes > 1) {
-          // Log removido para limpar console
+          console.log('📦 EditalVerticalizado: Carregando edital dividido em partes...')
           
           // Carregar todas as partes
           const partesRef = collection(db, 'courses', courseId, 'editalVerticalizado', 'principal', 'partes')
@@ -216,7 +226,7 @@ const EditalVerticalizado = () => {
             const parteData = doc.data()
             if (parteData.disciplinas && Array.isArray(parteData.disciplinas)) {
               todasDisciplinas.push(...parteData.disciplinas)
-              // Log removido para limpar console
+              console.log(`📋 Parte ${parteData.parte}: ${parteData.disciplinas.length} disciplinas`)
             }
           })
           
@@ -228,28 +238,19 @@ const EditalVerticalizado = () => {
           
           const totalDisciplinas = todasDisciplinas.length
           const totalTopicos = todasDisciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)
-          // Logs removidos para limpar console
+          console.log(`✅ EditalVerticalizado: Carregado com sucesso - ${totalDisciplinas} disciplinas, ${totalTopicos} tópicos`)
           
           setEditalVerticalizado(editalCompleto)
         } else {
           // Edital normal (não dividido)
+          console.log('📋 EditalVerticalizado: Carregando edital normal...')
           const jsonString = JSON.stringify(data)
           const sizeMB = (new Blob([jsonString]).size / 1024 / 1024).toFixed(2)
-          // Log removido para limpar console
+          console.log(`📊 EditalVerticalizado: Edital normal (${sizeMB} MB)`)
           
-          if (data.disciplinas && Array.isArray(data.disciplinas)) {
-            const totalDisciplinas = data.disciplinas.length
-            const totalTopicos = data.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)
-            // Logs removidos para limpar console
-            
-            if (totalDisciplinas === 0) {
-              console.warn('⚠️ Nenhuma disciplina encontrada no edital')
-            }
-            
-            if (sizeMB > 0.95) {
-              // Log removido para limpar console
-            }
-          }
+          const totalDisciplinas = data.disciplinas?.length || 0
+          const totalTopicos = data.disciplinas?.reduce((sum, d) => sum + (d.topicos?.length || 0), 0) || 0
+          console.log(`✅ EditalVerticalizado: Carregado com sucesso - ${totalDisciplinas} disciplinas, ${totalTopicos} tópicos`)
           
           setEditalVerticalizado(data)
         }
@@ -269,9 +270,20 @@ const EditalVerticalizado = () => {
     const unsub = onSnapshot(
       editalRef,
       async (snapshot) => {
+        console.log('🔄 EditalVerticalizado: Mudança detectada no Firestore')
         if (snapshot.exists()) {
-          await loadEditalCompleto()
+          console.log('📋 EditalVerticalizado: Documento existe, recarregando...')
+          
+          // Forçar atualização limpando o estado primeiro
+          setEditalVerticalizado(null)
+          setLoading(true)
+          
+          // Pequeno delay para garantir que o estado seja limpo
+          setTimeout(async () => {
+            await loadEditalCompleto()
+          }, 100)
         } else {
+          console.log('❌ EditalVerticalizado: Documento não existe')
           setEditalVerticalizado(null)
           setLoading(false)
         }
