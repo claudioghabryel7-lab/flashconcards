@@ -572,6 +572,17 @@ FORMATO DE RESPOSTA (APENAS JSON VÁLIDO):
 }
 
 REGRAS FINAIS:
+- Cuidado para não misturar direito(sumulas etc) em matérias que não são de direito
+- Fale Didaticamente com o aluno falando "aqui seu professor Flash o seu amigo que vai ver você aprovado (cite o concurso)"
+- Use bordões(mas sem exagerar)
+- Não Economize nas palavras e no material, o material tem que ser completo sem faltar nada
+- Veja Qual concurso que é, dê dicas das bancas tradicionais(cespe,Cebraspe,Ibcf,funesp,fgv,aocp,iades etc)
+- Seja Extensivo no Conteúdo mas não redundante
+- Não deixe nada para trás do tópico que está sendo gerado, gere todos os detalhes
+- Cuidado pra não repetir o conteudo no mesmo material
+- Faça frases motivacionais referente ao cargo(concurso) do tópico ex: você vai ser o futuro (Curso)
+- No final coloque umas questões referente ao tópico
+- Faça piadas 
 - O conteúdo DEVE ser 100% específico para o tópico "${effectiveTopicNome || resolvedTopicKey}"
 - NÃO inclua informações genéricas sobre toda a matéria
 - Use HTML sem markdown
