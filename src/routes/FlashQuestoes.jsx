@@ -578,9 +578,9 @@ ${flashcardsContent}`
         numAlternativas = 2
       }
 
-      // 🔥 OTIMIZAÇÃO: Reduzir quantidade para gerar mais rápido
-      const idealQuestionCount = Math.max(15, Math.floor(selectedFlashcards.length * 1.5))
-      const minQuestionCount = Math.max(10, selectedFlashcards.length)
+      // 🔥 OTIMIZAÇÃO: Reduzir quantidade para evitar truncamento
+      const idealQuestionCount = 10 // Reduzido para 10 questões
+      const minQuestionCount = 8 // Mínimo 8 questões
       
       const prompt = `${basePrompt}
 
@@ -591,11 +591,11 @@ CONFIGURAÇÃO DAS QUESTÕES:
 - Banca Examinadora: ${bancaExaminadora}
 - Estilo: Adapte as questões ao estilo da banca informada
 
-QUANTIDADE (OTIMIZADA PARA VELOCIDADE):
-- Mínimo: ${minQuestionCount} questões
-- Ideal: ${idealQuestionCount} questões
-- Foque em qualidade sobre quantidade
-- Cada flashcard deve gerar pelo menos 1 questão
+QUANTIDADE (EXATA - SEM VARIAÇÃO):
+- Exatamente 10 questões
+- Nem mais, nem menos
+- Complete todas as 10 questões
+- Não truncar no meio
 
 CONTEÚDO:
 - Baseie-se APENAS nos flashcards fornecidos
@@ -615,24 +615,32 @@ FORMATO (OBRIGATÓRIO - JSON PURO):
   ]
 }
 
-REGRAS CRÍTICAS:
-1. Retorne APENAS o JSON puro, sem markdown, sem texto adicional
-2. Não use blocos de código markdown
-3. Complete TODAS as questões até o final
-4. Não truncar o JSON
-5. Use exatamente o formato acima
+REGRAS CRÍTICAS (OBRIGATÓRIO):
+1. Retorne APENAS o JSON puro - ZERO texto antes ou depois
+2. NÃO USE blocos de código markdown
+3. Complete EXATAMENTE 10 questões - não pare no meio
+4. NÃO TRUNCAR o JSON - termine com }
+5. Use EXATAMENTE o formato mostrado
 6. Para Certo/Errado: A = Certo, B = Errado
-7. Adapte o conteúdo ao estilo da banca "${bancaExaminadora}"
+7. Adapte ao estilo da banca "${bancaExaminadora}"
+8. VERIFIQUE se o JSON está completo antes de enviar
 
-EXEMPLO DO FORMATO EXATO:
+EXEMPLO DO FORMATO EXATO (COM 10 QUESTÕES):
 {
   "questoes": [
     {
-      "enunciado": "Texto da pergunta",
+      "enunciado": "Texto da pergunta 1",
       "alternativas": ${JSON.stringify(alternativasFormat)},
       "correta": "A",
-      "justificativa": "Explicação"
+      "justificativa": "Explicação 1"
+    },
+    {
+      "enunciado": "Texto da pergunta 2",
+      "alternativas": ${JSON.stringify(alternativasFormat)},
+      "correta": "B",
+      "justificativa": "Explicação 2"
     }
+    // ... COMPLETE ATÉ 10 QUESTÕES
   ]
 }`
 
@@ -720,18 +728,35 @@ EXEMPLO DO FORMATO EXATO:
       
       jsonText = jsonText.substring(firstBrace, lastBrace + 1)
       
-      // 🔥 CORREÇÃO: Tentar reparar JSON truncado
-      if (jsonText.endsWith(',') || jsonText.endsWith('"') || !jsonText.endsWith('}')) {
-        console.warn('JSON parece estar truncado, tentando reparar...')
+      // 🔥 CORREÇÃO: Reparar JSON truncado de forma mais inteligente
+      if (!jsonText.endsWith('}')) {
+        console.warn('JSON truncado detectado, tentando reparar...')
         
-        // Encontrar o último objeto completo
-        const lastCompleteObject = jsonText.lastIndexOf('}')
-        if (lastCompleteObject > jsonText.lastIndexOf(',')) {
-          jsonText = jsonText.substring(0, lastCompleteObject + 1)
+        // Encontrar o último objeto completo de questão
+        const questionPattern = /{\s*"enunciado"[^}]*}/g
+        const matches = [...jsonText.matchAll(questionPattern)]
+        
+        if (matches.length > 0) {
+          // Pegar apenas as questões completas
+          const completeQuestions = matches.map(match => match[0])
           
-          // Fechar o array e o objeto principal
-          if (jsonText.includes('"questoes":[')) {
-            jsonText = jsonText.replace(/(\s*),?\s*$/, '\n  ]\n}')
+          // Reconstruir o JSON com as questões completas
+          jsonText = `{
+  "questoes": [
+${completeQuestions.join(',\n')}
+  ]
+}`
+          console.log(`✅ JSON reparado com ${completeQuestions.length} questões completas`)
+        } else {
+          // Se não encontrar questões completas, tentar reparação simples
+          const lastCompleteObject = jsonText.lastIndexOf('}')
+          if (lastCompleteObject > jsonText.lastIndexOf(',')) {
+            jsonText = jsonText.substring(0, lastCompleteObject + 1)
+            
+            // Fechar o array e o objeto principal
+            if (jsonText.includes('"questoes":[')) {
+              jsonText = jsonText.replace(/(\s*),?\s*$/, '\n  ]\n}')
+            }
           }
         }
       }
