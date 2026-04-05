@@ -8,7 +8,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder, applyModuleOrder } from '../utils/subjectOrder'
-import { FolderIcon, ChevronRightIcon, ChevronDownIcon, LightBulbIcon, CheckCircleIcon, XCircleIcon, HandThumbUpIcon, HandThumbDownIcon, ChartBarIcon, BookOpenIcon } from '@heroicons/react/24/outline'
+import { FolderIcon, ChevronRightIcon, ChevronDownIcon, LightBulbIcon, CheckCircleIcon, XCircleIcon, HandThumbUpIcon, HandThumbDownIcon, ChartBarIcon, BookOpenIcon, XMarkIcon, CheckIcon } from '@heroicons/react/24/outline'
 import { 
   getOrCreateQuestionsCache, 
   saveQuestionsCache, 
@@ -56,6 +56,12 @@ const FlashQuestoes = () => {
   const [selectedCourseId, setSelectedCourseId] = useState(null) // Curso selecionado (null = ALEGO padrão)
   const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
   const [selectedCourse, setSelectedCourse] = useState(null) // Dados completos do curso selecionado
+  
+  // Estados para configuração de questões
+  const [showConfigModal, setShowConfigModal] = useState(false)
+  const [questoesTipo, setQuestoesTipo] = useState('ABCD') // ABCD, ABCDE, CertoErrado
+  const [bancaExaminadora, setBancaExaminadora] = useState('')
+  const [configValid, setConfigValid] = useState(false)
 
   // Usar curso selecionado do perfil do usuário
   useEffect(() => {
@@ -98,6 +104,12 @@ const FlashQuestoes = () => {
     
     return () => unsub()
   }, [profile])
+
+  // Validar configuração de questões
+  useEffect(() => {
+    const isValid = questoesTipo && bancaExaminadora.trim().length > 0
+    setConfigValid(isValid)
+  }, [questoesTipo, bancaExaminadora])
   
   // Carregar flashcards para obter módulos (filtrado por curso)
   useEffect(() => {
@@ -434,6 +446,18 @@ const FlashQuestoes = () => {
       // Questões são ilimitadas - sem verificação de limite
     }
 
+    // Mostrar modal de configuração primeiro
+    setShowConfigModal(true)
+  }
+
+  // Função para gerar questões após configuração
+  const generateQuestionsWithConfig = async () => {
+    if (!configValid) {
+      alert('Preencha todos os campos de configuração!')
+      return
+    }
+
+    setShowConfigModal(false)
     setGenerating(true)
     setQuestions([])
     setCurrentQuestionIndex(0)
@@ -446,11 +470,12 @@ const FlashQuestoes = () => {
 
     // Mostrar feedback imediato
     console.log('🚀 Iniciando geração de questões otimizada...')
+    console.log('📋 Configuração:', { questoesTipo, bancaExaminadora })
 
     try {
-      // 🔥 NOVO: VERIFICAR CACHE PRIMEIRO (com courseId)
-      console.log('🔍 Verificando cache de questões...', { selectedMateria, selectedModulo, selectedCourseId })
-      const cachedData = await getOrCreateQuestionsCache(selectedMateria, selectedModulo, selectedCourseId)
+      // 🔥 NOVO: VERIFICAR CACHE PRIMEIRO (com courseId e configuração)
+      console.log('🔍 Verificando cache de questões...', { selectedMateria, selectedModulo, selectedCourseId, questoesTipo, bancaExaminadora })
+      const cachedData = await getOrCreateQuestionsCache(selectedMateria, selectedModulo, selectedCourseId, questoesTipo, bancaExaminadora)
       
       if (cachedData && cachedData.questoes && cachedData.questoes.length > 0) {
         // Se o cache tiver menos de 20 questões, forçar nova geração (cache antigo com limite)
@@ -458,7 +483,8 @@ const FlashQuestoes = () => {
           console.log(`⚠️ Cache encontrado mas com apenas ${cachedData.questoes.length} questões. Forçando nova geração para ter mais questões...`)
           // Deletar cache antigo para forçar nova geração
           const courseKey = selectedCourseId || 'alego-default'
-          const cacheId = `${courseKey}_${selectedMateria}_${selectedModulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+          const configKey = `${questoesTipo}_${bancaExaminadora.replace(/[^a-zA-Z0-9]/g, '_')}`
+          const cacheId = `${courseKey}_${selectedMateria}_${selectedModulo}_${configKey}`.replace(/[^a-zA-Z0-9_]/g, '_')
           try {
             const { deleteDoc, doc } = await import('firebase/firestore')
             await deleteDoc(doc(db, 'questoesCache', cacheId))
@@ -478,7 +504,8 @@ const FlashQuestoes = () => {
           
           // Verificar se precisa remover por score baixo (com courseId)
           const courseKey = selectedCourseId || 'alego-default'
-          await autoRemoveBadCache('questoesCache', `${courseKey}_${selectedMateria}_${selectedModulo}`.replace(/[^a-zA-Z0-9_]/g, '_'))
+          const configKey = `${questoesTipo}_${bancaExaminadora.replace(/[^a-zA-Z0-9]/g, '_')}`
+          await autoRemoveBadCache('questoesCache', `${courseKey}_${selectedMateria}_${selectedModulo}_${configKey}`.replace(/[^a-zA-Z0-9_]/g, '_'))
           
           setGenerating(false)
           
@@ -536,13 +563,33 @@ Use este conteúdo para criar questões:
 ${flashcardsContent}`
       )
 
+      // 🔥 CONFIGURAÇÃO DINÂMICA BASEADA NO TIPO DE QUESTÃO
+      let alternativasFormat = {}
+      let numAlternativas = 4
+      
+      if (questoesTipo === 'ABCDE') {
+        alternativasFormat = { "A": "alt A", "B": "alt B", "C": "alt C", "D": "alt D", "E": "alt E" }
+        numAlternativas = 5
+      } else if (questoesTipo === 'ABCD') {
+        alternativasFormat = { "A": "alt A", "B": "alt B", "C": "alt C", "D": "alt D" }
+        numAlternativas = 4
+      } else if (questoesTipo === 'CertoErrado') {
+        alternativasFormat = { "A": "Certo", "B": "Errado" }
+        numAlternativas = 2
+      }
+
       // 🔥 OTIMIZAÇÃO: Reduzir quantidade para gerar mais rápido
       const idealQuestionCount = Math.max(15, Math.floor(selectedFlashcards.length * 1.5))
       const minQuestionCount = Math.max(10, selectedFlashcards.length)
       
       const prompt = `${basePrompt}
 
-TAREFA: Criar questões de múltipla escolha para "${selectedMateria}" - "${selectedModulo}".
+TAREFA: Criar questões de ${questoesTipo === 'CertoErrado' ? 'Certo ou Errado' : 'múltipla escolha'} para "${selectedMateria}" - "${selectedModulo}".
+
+CONFIGURAÇÃO DAS QUESTÕES:
+- Tipo: ${questoesTipo}
+- Banca Examinadora: ${bancaExaminadora}
+- Estilo: Adapte as questões ao estilo da banca informada
 
 QUANTIDADE (OTIMIZADA PARA VELOCIDADE):
 - Mínimo: ${minQuestionCount} questões
@@ -554,26 +601,24 @@ CONTEÚDO:
 - Baseie-se APENAS nos flashcards fornecidos
 - Seja direto e objetivo
 - Evite questões muito longas
+- Adapte o estilo e linguagem à banca "${bancaExaminadora}"
 
 FORMATO (JSON puro):
 {
   "questoes": [
     {
       "enunciado": "pergunta clara e concisa",
-      "alternativas": {
-        "A": "alt A",
-        "B": "alt B", 
-        "C": "alt C",
-        "D": "alt D",
-        "E": "alt E"
-      },
+      "alternativas": ${JSON.stringify(alternativasFormat)},
       "correta": "A",
       "justificativa": "explicação breve"
     }
   ]
 }
 
-IMPORTANTE: Retorne APENAS o JSON, sem markdown.`
+IMPORTANTE: 
+- Retorne APENAS o JSON, sem markdown
+- Para Certo/Errado: A = Certo, B = Errado
+- Adapte o conteúdo ao estilo da banca "${bancaExaminadora}"`
 
       let aiResponse = ''
 
@@ -1317,6 +1362,112 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal de Configuração de Questões */}
+      {showConfigModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                Configurar Questões
+              </h3>
+              <button
+                onClick={() => setShowConfigModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Tipo de Questão
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center p-3 border border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                    <input
+                      type="radio"
+                      name="questoesTipo"
+                      value="ABCD"
+                      checked={questoesTipo === 'ABCD'}
+                      onChange={(e) => setQuestoesTipo(e.target.value)}
+                      className="mr-3 text-alego-600 focus:ring-alego-500"
+                    />
+                    <div>
+                      <span className="font-medium text-slate-900 dark:text-white">A, B, C, D</span>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">4 alternativas</p>
+                    </div>
+                  </label>
+                  
+                  <label className="flex items-center p-3 border border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                    <input
+                      type="radio"
+                      name="questoesTipo"
+                      value="ABCDE"
+                      checked={questoesTipo === 'ABCDE'}
+                      onChange={(e) => setQuestoesTipo(e.target.value)}
+                      className="mr-3 text-alego-600 focus:ring-alego-500"
+                    />
+                    <div>
+                      <span className="font-medium text-slate-900 dark:text-white">A, B, C, D, E</span>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">5 alternativas</p>
+                    </div>
+                  </label>
+                  
+                  <label className="flex items-center p-3 border border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                    <input
+                      type="radio"
+                      name="questoesTipo"
+                      value="CertoErrado"
+                      checked={questoesTipo === 'CertoErrado'}
+                      onChange={(e) => setQuestoesTipo(e.target.value)}
+                      className="mr-3 text-alego-600 focus:ring-alego-500"
+                    />
+                    <div>
+                      <span className="font-medium text-slate-900 dark:text-white">Certo ou Errado</span>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Apenas 2 alternativas</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Banca Examinadora
+                </label>
+                <input
+                  type="text"
+                  value={bancaExaminadora}
+                  onChange={(e) => setBancaExaminadora(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-alego-500 focus:border-alego-500 dark:bg-slate-700 dark:text-white"
+                  placeholder="Ex: CESPE, FCC, IBFC, etc."
+                />
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  As questões serão adaptadas ao estilo da banca informada
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowConfigModal(false)}
+                className="flex-1 px-4 py-2 text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={generateQuestionsWithConfig}
+                disabled={!configValid}
+                className="flex-1 px-4 py-2 bg-alego-600 text-white rounded-lg font-medium hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                <CheckIcon className="h-4 w-4" />
+                Gerar Questões
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

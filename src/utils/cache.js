@@ -9,11 +9,12 @@ import { db } from '../firebase/config'
 /**
  * Obter ou criar cache de questões para um módulo
  */
-export const getOrCreateQuestionsCache = async (materia, modulo, courseId = null) => {
+export const getOrCreateQuestionsCache = async (materia, modulo, courseId = null, questoesTipo = null, bancaExaminadora = null) => {
   try {
-    // Incluir courseId no cacheId para separar questões por curso
+    // Incluir courseId, tipo e banca no cacheId para separar questões por configuração
     const courseKey = courseId || 'alego-default'
-    const cacheId = `${courseKey}_${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    const configKey = questoesTipo && bancaExaminadora ? `${questoesTipo}_${bancaExaminadora.replace(/[^a-zA-Z0-9]/g, '_')}` : 'default'
+    const cacheId = `${courseKey}_${materia}_${modulo}_${configKey}`.replace(/[^a-zA-Z0-9_]/g, '_')
     const cacheRef = doc(db, 'questoesCache', cacheId)
     const cacheSnap = await getDoc(cacheRef)
     
@@ -57,19 +58,22 @@ export const getOrCreateQuestionsCache = async (materia, modulo, courseId = null
 }
 
 /**
- * Salvar questões no cache
+ * Salvar cache de questões para um módulo
  */
-export const saveQuestionsCache = async (materia, modulo, questoes, courseId = null) => {
+export const saveQuestionsCache = async (materia, modulo, questoes, courseId = null, questoesTipo = null, bancaExaminadora = null) => {
   try {
-    // Incluir courseId no cacheId para separar questões por curso
+    // Incluir courseId, tipo e banca no cacheId para separar questões por configuração
     const courseKey = courseId || 'alego-default'
-    const cacheId = `${courseKey}_${materia}_${modulo}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    const configKey = questoesTipo && bancaExaminadora ? `${questoesTipo}_${bancaExaminadora.replace(/[^a-zA-Z0-9]/g, '_')}` : 'default'
+    const cacheId = `${courseKey}_${materia}_${modulo}_${configKey}`.replace(/[^a-zA-Z0-9_]/g, '_')
     const cacheRef = doc(db, 'questoesCache', cacheId)
     
     await setDoc(cacheRef, {
       courseId: courseKey,
       materia,
       modulo,
+      questoesTipo,
+      bancaExaminadora,
       questoes,
       likes: 0,
       dislikes: 0,
