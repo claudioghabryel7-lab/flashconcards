@@ -603,7 +603,7 @@ CONTEÚDO:
 - Evite questões muito longas
 - Adapte o estilo e linguagem à banca "${bancaExaminadora}"
 
-FORMATO (JSON puro):
+FORMATO (OBRIGATÓRIO - JSON PURO):
 {
   "questoes": [
     {
@@ -615,10 +615,26 @@ FORMATO (JSON puro):
   ]
 }
 
-IMPORTANTE: 
-- Retorne APENAS o JSON, sem markdown
-- Para Certo/Errado: A = Certo, B = Errado
-- Adapte o conteúdo ao estilo da banca "${bancaExaminadora}"`
+REGRAS CRÍTICAS:
+1. Retorne APENAS o JSON puro, sem markdown, sem texto adicional
+2. Não use blocos de código markdown
+3. Complete TODAS as questões até o final
+4. Não truncar o JSON
+5. Use exatamente o formato acima
+6. Para Certo/Errado: A = Certo, B = Errado
+7. Adapte o conteúdo ao estilo da banca "${bancaExaminadora}"
+
+EXEMPLO DO FORMATO EXATO:
+{
+  "questoes": [
+    {
+      "enunciado": "Texto da pergunta",
+      "alternativas": ${JSON.stringify(alternativasFormat)},
+      "correta": "A",
+      "justificativa": "Explicação"
+    }
+  ]
+}`
 
       let aiResponse = ''
 
@@ -683,21 +699,41 @@ IMPORTANTE:
         throw new Error('A IA não retornou uma resposta. Tente novamente.')
       }
 
-      // Extrair JSON da resposta
+      // 🔥 MELHORADO: Tratamento robusto da resposta da IA
       let jsonText = aiResponse.trim()
       
-      // Remover markdown se houver
-      if (jsonText.includes('```json')) {
-        jsonText = jsonText.split('```json')[1].split('```')[0].trim()
-      } else if (jsonText.includes('```')) {
-        jsonText = jsonText.split('```')[1].split('```')[0].trim()
+      // Remover markdown se presente
+      if (jsonText.startsWith('```json')) {
+        jsonText = jsonText.replace(/```json\s*/i, '').replace(/```\s*$/, '').trim()
+      } else if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/```\s*/, '').replace(/```\s*$/, '').trim()
       }
-
+      
       // Remover texto antes do primeiro { e depois do último }
       const firstBrace = jsonText.indexOf('{')
       const lastBrace = jsonText.lastIndexOf('}')
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        jsonText = jsonText.substring(firstBrace, lastBrace + 1)
+      
+      if (firstBrace === -1 || lastBrace === -1 || firstBrace >= lastBrace) {
+        console.error('JSON não encontrado na resposta. Resposta bruta:', aiResponse.substring(0, 1000))
+        throw new Error('A IA não retornou um JSON válido. Resposta pode estar em formato incorreto.')
+      }
+      
+      jsonText = jsonText.substring(firstBrace, lastBrace + 1)
+      
+      // 🔥 CORREÇÃO: Tentar reparar JSON truncado
+      if (jsonText.endsWith(',') || jsonText.endsWith('"') || !jsonText.endsWith('}')) {
+        console.warn('JSON parece estar truncado, tentando reparar...')
+        
+        // Encontrar o último objeto completo
+        const lastCompleteObject = jsonText.lastIndexOf('}')
+        if (lastCompleteObject > jsonText.lastIndexOf(',')) {
+          jsonText = jsonText.substring(0, lastCompleteObject + 1)
+          
+          // Fechar o array e o objeto principal
+          if (jsonText.includes('"questoes":[')) {
+            jsonText = jsonText.replace(/(\s*),?\s*$/, '\n  ]\n}')
+          }
+        }
       }
 
       // Tentar fazer parse do JSON
@@ -706,8 +742,22 @@ IMPORTANTE:
         parsedData = JSON.parse(jsonText)
       } catch (parseErr) {
         console.error('Erro ao fazer parse do JSON:', parseErr)
+        console.error('JSON processado:', jsonText.substring(0, 1000))
         console.error('Resposta da IA:', aiResponse.substring(0, 500))
-        throw new Error(`Erro ao processar resposta da IA: ${parseErr.message}. A resposta pode estar em formato inválido.`)
+        
+        // 🔥 TENTATIVA DE RECUPERAÇÃO: Tentar extrair questões manualmente
+        try {
+          const questionsMatch = jsonText.match(/"questoes":\s*\[(.*?)\]/s)
+          if (questionsMatch) {
+            const questionsText = '{"questoes":[' + questionsMatch[1] + ']}'
+            parsedData = JSON.parse(questionsText)
+            console.log('✅ JSON recuperado manualmente')
+          } else {
+            throw new Error('Não foi possível recuperar o JSON')
+          }
+        } catch (recoveryErr) {
+          throw new Error(`Erro ao processar resposta da IA: ${parseErr.message}. A resposta pode estar em formato inválido.`)
+        }
       }
       
       if (!parsedData.questoes || !Array.isArray(parsedData.questoes)) {
