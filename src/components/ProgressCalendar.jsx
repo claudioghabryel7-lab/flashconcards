@@ -143,6 +143,17 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {}, onMarkDay = 
             const isInRange = (day.isSame(firstDay, 'day') || day.isAfter(firstDay, 'day')) && 
                               (day.isSame(lastDay, 'day') || day.isBefore(lastDay, 'day'))
             
+            // 🔥 DEBUG: Log para hoje
+            if (isToday) {
+              console.log('📅 Hoje no calendário:', {
+                key,
+                done,
+                isInRange,
+                bySubjectKey: bySubject[key],
+                materia: bySubject[key]?.materia
+              })
+            }
+            
             // Determinar cor baseado no estado
             let bgColor = 'bg-slate-200 dark:bg-slate-700'
             let borderColor = ''
@@ -196,9 +207,9 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {}, onMarkDay = 
                 </div>
                 
                 {/* Matéria estudada - mostrar abaixo do número */}
-                {done && (isInRange || isToday) && bySubject[key]?.materia && (
-                  <div className="absolute top-5 left-1 right-1 text-[7px] sm:text-[8px] text-white/90 font-medium truncate leading-tight px-0.5 bg-black/20 rounded" title={bySubject[key].materia}>
-                    {bySubject[key].materia}
+                {done && (isInRange || isToday) && bySubject[day.format('YYYY-MM-DD')]?.materia && (
+                  <div className="absolute top-5 left-1 right-1 text-[7px] sm:text-[8px] text-white/90 font-medium truncate leading-tight px-0.5 bg-black/20 rounded" title={bySubject[day.format('YYYY-MM-DD')].materia}>
+                    {bySubject[day.format('YYYY-MM-DD')].materia}
                   </div>
                 )}
                 

@@ -4,6 +4,8 @@ import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import ProgressCalendar from '../components/ProgressCalendar'
+import EditalProgressChart from '../components/EditalProgressChart'
+import WeeklyStudyChart from '../components/WeeklyStudyChart'
 import dayjs from 'dayjs'
 
 dayjs.locale('pt-br')
@@ -43,10 +45,14 @@ const CalendarioProgresso = () => {
             date: data.date,
             hours: data.hours || 0,
             courseId: data.courseId,
+            materia: data.materia, // 🔥 DEBUG: Verificar se matéria está vindo
             lastUpdated: data.lastUpdated
           })
         }
       })
+
+      // 🔥 DEBUG: Mostrar dados brutos do Firestore
+      console.log('📅 Firestore - Dados brutos:', progressData)
 
       // Ordenar no cliente por data
       progressData.sort((a, b) => b.date.localeCompare(a.date))
@@ -66,7 +72,7 @@ const CalendarioProgresso = () => {
       const bySubject = {}
       progressData.forEach(item => {
         if (item.hours > 0) {
-          const date = dayjs(item.date).format('DD/MM')
+          const date = item.date // Já está em YYYY-MM-DD
           if (!bySubject[date]) {
             bySubject[date] = { hours: 0, count: 0, materia: null }
           }
@@ -78,6 +84,12 @@ const CalendarioProgresso = () => {
           }
         }
       })
+      
+      // 🔥 DEBUG: Mostrar dados do bySubject
+      console.log('📅 Calendário - bySubject:', bySubject)
+      console.log('📅 Calendário - studyDates:', studyDates)
+      console.log('📅 Calendário - hoje:', new Date().toISOString().split('T')[0])
+      
       setStudyBySubject(bySubject)
       
       setLoading(false)
@@ -232,6 +244,12 @@ const CalendarioProgresso = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Gráficos lado a lado */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <EditalProgressChart courseId={profile?.selectedCourseId} />
+        <WeeklyStudyChart courseId={profile?.selectedCourseId} />
       </div>
 
       {/* Calendar */}

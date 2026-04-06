@@ -330,6 +330,52 @@ const EditalVerticalizado = () => {
         disciplinas: disciplinas
       })
 
+      // 🔥 NOVO: Registrar matéria no calendário se checkbox "estudado" for marcado
+      if (campo === 'estudado' && novoValor) {
+        try {
+          const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+          const courseKey = courseId || 'alego'
+          const progressDoc = doc(db, 'progress', `${user.uid}_${courseKey}_${today}`)
+          
+          // 🔥 DEBUG: Mostrar dados que estão sendo salvos
+          console.log('📅 EditalVerticalizado - Salvando matéria:', {
+            today,
+            courseKey,
+            materia: disciplina.nome,
+            userId: user.uid
+          })
+          
+          // Verificar se já existe registro para hoje
+          const { getDoc } = await import('firebase/firestore')
+          const existing = await getDoc(progressDoc)
+          
+          if (existing.exists()) {
+            // Atualizar registro existente para adicionar matéria
+            await setDoc(progressDoc, {
+              ...existing.data(),
+              materia: disciplina.nome, // Adicionar/atualizar matéria
+              lastUpdated: new Date().toTimeString(),
+            }, { merge: true })
+            console.log('📅 EditalVerticalizado - Matéria atualizada no calendário:', disciplina.nome)
+          } else {
+            // Criar novo registro
+            await setDoc(progressDoc, {
+              uid: user.uid,
+              date: today,
+              hours: 0.1, // Mínimo para aparecer no calendário
+              courseId: courseId || null,
+              materia: disciplina.nome, // Adicionar matéria estudada
+              lastUpdated: new Date().toTimeString(),
+            })
+            console.log('📅 EditalVerticalizado - Matéria criada no calendário:', disciplina.nome)
+          }
+          
+          console.log('✅ Matéria registrada no calendário:', disciplina.nome)
+        } catch (calendarError) {
+          console.error('Erro ao registrar matéria no calendário:', calendarError)
+        }
+      }
+
       // Verificar se todas as 3 caixas foram marcadas (flashcards, questões, estudado)
       // Usar o novo valor atualizado para verificar
       const flashcardsMarcado = campo === 'flashcards' ? novoValor : topico.flashcards
