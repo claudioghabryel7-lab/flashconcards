@@ -4,6 +4,7 @@ import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTi
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
@@ -156,6 +157,7 @@ const ConteudoCompletoTopicoView = () => {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { darkMode } = useDarkMode()
+  const { user, profile } = useAuth()
   const [conteudo, setConteudo] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -164,6 +166,43 @@ const ConteudoCompletoTopicoView = () => {
   const [progress, setProgress] = useState(0)
   const [validating, setValidating] = useState(false)
   const [validationMessage, setValidationMessage] = useState('')
+
+  // Função para registrar matéria estudada no calendário
+  const registrarMateriaEstudada = async (materia) => {
+    if (!user || !profile?.selectedCourseId) return
+    
+    try {
+      const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+      const courseKey = profile.selectedCourseId || 'alego'
+      const progressDoc = doc(db, 'progress', `${user.uid}_${courseKey}_${today}`)
+      
+      // Verificar se já existe registro para hoje
+      const existing = await getDoc(progressDoc)
+      
+      if (existing.exists()) {
+        // Atualizar registro existente para adicionar matéria
+        await setDoc(progressDoc, {
+          ...existing.data(),
+          materia: materia, // Adicionar/atualizar matéria
+          lastUpdated: new Date().toTimeString(),
+        }, { merge: true })
+      } else {
+        // Criar novo registro
+        await setDoc(progressDoc, {
+          uid: user.uid,
+          date: today,
+          hours: 0.1, // Mínimo para aparecer no calendário
+          courseId: profile.selectedCourseId || null,
+          materia: materia, // Adicionar matéria estudada
+          lastUpdated: new Date().toTimeString(),
+        })
+      }
+      
+      console.log('✅ Matéria registrada no calendário:', materia)
+    } catch (error) {
+      console.error('Erro ao registrar matéria estudada:', error)
+    }
+  }
 
   const resolvedCourseId = useMemo(() => courseId || 'alego-default', [courseId])
   const resolvedTopicKey = useMemo(() => normalizeKey(topicKey), [topicKey])
@@ -333,6 +372,18 @@ const ConteudoCompletoTopicoView = () => {
 
     loadConteudo()
   }, [resolvedTopicKey, resolvedCourseId])
+
+  // Registrar automaticamente a matéria estudada quando o conteúdo for carregado
+  useEffect(() => {
+    if (conteudo && conteudo.materia && !loading) {
+      // Registrar a matéria no calendário com um pequeno delay para garantir que o componente esteja montado
+      const timer = setTimeout(() => {
+        registrarMateriaEstudada(conteudo.materia)
+      }, 2000) // 2 segundos após carregar
+
+      return () => clearTimeout(timer)
+    }
+  }, [conteudo, loading])
 
   const handleValidateTopic = async () => {
     if (!resolvedCourseId || !resolvedTopicKey || !conteudo) return

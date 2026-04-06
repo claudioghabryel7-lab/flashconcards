@@ -68,10 +68,14 @@ const CalendarioProgresso = () => {
         if (item.hours > 0) {
           const date = dayjs(item.date).format('DD/MM')
           if (!bySubject[date]) {
-            bySubject[date] = { hours: 0, count: 0 }
+            bySubject[date] = { hours: 0, count: 0, materia: null }
           }
           bySubject[date].hours += item.hours
           bySubject[date].count += 1
+          // Adicionar matéria se disponível
+          if (item.materia) {
+            bySubject[date].materia = item.materia
+          }
         }
       })
       setStudyBySubject(bySubject)
@@ -124,7 +128,7 @@ const CalendarioProgresso = () => {
   }
 
   // Marcar dia como estudado (baseado no Dashboard)
-  const handleMarkDay = async (dateStr) => {
+  const handleMarkDay = async (dateStr, materia = null) => {
     if (!user || !profile?.selectedCourseId || saving) return
     
     try {
@@ -139,12 +143,13 @@ const CalendarioProgresso = () => {
         // Se já existe, remover (desmarcar)
         await deleteDoc(progressDoc)
       } else {
-        // Se não existe, criar com horas mínimas
+        // Se não existe, criar com horas mínimas e matéria
         await setDoc(progressDoc, {
           uid: user.uid,
           date: dateStr,
           hours: 0.1, // Mínimo para aparecer no calendário
           courseId: profile.selectedCourseId || null,
+          materia: materia, // Adicionar matéria estudada
           lastUpdated: dayjs().format('HH:mm:ss'),
         })
       }

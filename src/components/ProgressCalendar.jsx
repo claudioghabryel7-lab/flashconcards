@@ -195,6 +195,13 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {}, onMarkDay = 
                   {day.format('D')}
                 </div>
                 
+                {/* Matéria estudada - mostrar abaixo do número */}
+                {done && (isInRange || isToday) && bySubject[key]?.materia && (
+                  <div className="absolute top-5 left-1 right-1 text-[7px] sm:text-[8px] text-white/90 font-medium truncate leading-tight px-0.5 bg-black/20 rounded" title={bySubject[key].materia}>
+                    {bySubject[key].materia}
+                  </div>
+                )}
+                
                 {/* Checkmark quando estudou */}
                 {showCheck && (
                   <div className="absolute inset-0 flex items-center justify-center">
