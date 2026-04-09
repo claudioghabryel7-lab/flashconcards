@@ -723,6 +723,36 @@ const AdminPanel = () => {
     return () => unsub()
   }, [selectedCourseForFlashcards])
 
+  // Carregar edital verticalizado quando selecionar curso para geração completa
+  useEffect(() => {
+    if (!selectedCourseForFullGeneration) {
+      setEditalVerticalizadoData(null)
+      return
+    }
+    
+    const loadEditalVerticalizado = async () => {
+      try {
+        console.log('📖 Carregando edital verticalizado do curso:', selectedCourseForFullGeneration)
+        const editalRef = doc(db, 'courses', selectedCourseForFullGeneration, 'editalVerticalizado', 'principal')
+        const editalDoc = await getDoc(editalRef)
+        
+        if (editalDoc.exists()) {
+          const data = editalDoc.data()
+          console.log('✅ Edital verticalizado encontrado:', data.titulo)
+          setEditalVerticalizadoData(data)
+        } else {
+          console.log('⚠️ Edital verticalizado não encontrado para o curso:', selectedCourseForFullGeneration)
+          setEditalVerticalizadoData(null)
+        }
+      } catch (err) {
+        console.error('❌ Erro ao carregar edital verticalizado:', err)
+        setEditalVerticalizadoData(null)
+      }
+    }
+    
+    loadEditalVerticalizado()
+  }, [selectedCourseForFullGeneration])
+
   // Carregar usuários, banners, etc.
   useEffect(() => {
     const usersRef = collection(db, 'users')
@@ -3033,8 +3063,32 @@ REGRAS CRÍTICAS:
 
   // Gerar automaticamente módulos e flashcards completos a partir do PDF do edital
   const generateFullCourseFromEdital = async (courseId, isRegenerating = false) => {
-    if (!editalPdfTextForGeneration.trim()) {
-      setMessage('❌ Faça upload do PDF do edital primeiro.')
+    // Verificar se tem edital verticalizado disponível
+    let editalText = ''
+    let editalSource = ''
+    
+    if (editalVerticalizadoData && editalVerticalizadoData.disciplinas) {
+      // Usar edital verticalizado se disponível
+      // Converter disciplinas em texto para a IA analisar
+      const disciplinasText = editalVerticalizadoData.disciplinas.map(disciplina => {
+        let disciplinaTexto = `MATÉRIA: ${disciplina.nome}\n`
+        if (disciplina.topicos && Array.isArray(disciplina.topicos)) {
+          disciplina.topicos.forEach(topico => {
+            disciplinaTexto += `- ${topico}\n`
+          })
+        }
+        return disciplinaTexto
+      }).join('\n')
+      
+      editalText = disciplinasText
+      editalSource = 'edital verticalizado'
+      console.log('✅ Usando edital verticalizado com', editalText.length, 'caracteres')
+    } else if (editalPdfTextForGeneration.trim()) {
+      // Fallback para PDF do upload
+      editalText = editalPdfTextForGeneration
+      editalSource = 'PDF do edital'
+    } else {
+      setMessage('❌ Nenhum edital disponível. Configure o edital verticalizado primeiro ou faça upload do PDF.')
       return
     }
 
@@ -3044,8 +3098,8 @@ REGRAS CRÍTICAS:
     }
 
     const confirmMessage = isRegenerating 
-      ? `⚠️ ATENÇÃO: Isso vai REGENERAR o curso:\n\n- Deletar TODOS os flashcards existentes\n- Manter as matérias e módulos existentes\n- Gerar novos flashcards focados no CONTEÚDO (não no cargo)\n\nBaseado no edital do PDF.\n\nIsso pode demorar vários minutos. Deseja continuar?`
-      : `⚠️ ATENÇÃO: Isso vai gerar AUTOMATICAMENTE:\n\n- Todas as matérias do cargo: ${cargoForGeneration}\n- Todos os módulos de cada matéria\n- Todos os flashcards de cada módulo (focados no CONTEÚDO)\n\nBaseado no edital do PDF.\n\nIsso pode demorar vários minutos. Deseja continuar?`
+      ? `⚠️ ATENÇÃO: Isso vai REGENERAR o curso:\n\n- Deletar TODOS os flashcards existentes\n- Manter as matérias e módulos existentes\n- Gerar novos flashcards focados no CONTEÚDO (não no cargo)\n\nBaseado no ${editalSource}.\n\nIsso pode demorar vários minutos. Deseja continuar?`
+      : `⚠️ ATENÇÃO: Isso vai gerar AUTOMATICAMENTE:\n\n- Todas as matérias do cargo: ${cargoForGeneration}\n- Todos os módulos de cada matéria\n- Todos os flashcards de cada módulo (focados no CONTEÚDO)\n\nBaseado no ${editalSource}.\n\nIsso pode demorar vários minutos. Deseja continuar?`
 
     if (!window.confirm(confirmMessage)) {
       return
@@ -3192,7 +3246,7 @@ Analise o edital abaixo e extraia APENAS as informações relevantes para o CARG
 CARGO ESPECÍFICO: ${cargoForGeneration}
 
 EDITAL:
-${editalPdfTextForGeneration.substring(0, 100000)}${editalPdfTextForGeneration.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}${lawsText}
+${editalText.substring(0, 100000)}${editalText.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}${lawsText}
 
 TAREFA CRÍTICA - EXTRAIR TODAS AS MATÉRIAS E MÓDULOS:
 1. Identifique TODAS as matérias que serão cobradas para o cargo "${cargoForGeneration}"
@@ -9811,8 +9865,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                         <div>
                           <p className="text-sm text-slate-600 mb-4">
                             {regeneratingCourse 
-                              ? 'Informe o cargo específico e faça upload do PDF do edital. A IA vai REGENERAR os flashcards focados no CONTEÚDO (não no cargo):'
-                              : 'Informe o cargo específico e faça upload do PDF do edital. A IA vai analisar o documento e gerar automaticamente:'}
+                              ? 'Informe o cargo específico. A IA vai usar automaticamente o edital verticalizado configurado (ou PDF do edital se não houver verticalizado) para REGERAR os flashcards focados no CONTEÚDO (não no cargo):'
+                              : 'Informe o cargo específico. A IA vai usar automaticamente o edital verticalizado configurado (ou PDF do edital se não houver verticalizado) para analisar e gerar automaticamente:'}
                           </p>
                           <ul className="text-xs text-slate-500 space-y-1 mb-4 ml-4 list-disc">
                             {regeneratingCourse ? (
@@ -9848,31 +9902,51 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                           </p>
                         </div>
 
-                        <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">
-                            PDF do Edital *
-                          </label>
-                          <input
-                            type="file"
-                            accept=".pdf"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              if (file) {
-                                extractPdfForFullGeneration(file)
-                              }
-                            }}
-                            disabled={generatingFullCourse || extractingPdf}
-                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
-                          />
-                          {extractingPdf && (
-                            <p className="text-xs text-blue-600 mt-2">📄 Extraindo texto do PDF...</p>
-                          )}
-                          {editalPdfTextForGeneration && !extractingPdf && (
-                            <p className="text-xs text-green-600 mt-2">
-                              ✅ PDF processado! {editalPdfTextForGeneration.length.toLocaleString()} caracteres extraídos.
+                        {/* Mostrar campo de PDF apenas se não tiver edital verticalizado */}
+                        {!editalVerticalizadoData && (
+                          <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">
+                              PDF do Edital *
+                            </label>
+                            <input
+                              type="file"
+                              accept=".pdf"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (file) {
+                                  extractPdfForFullGeneration(file)
+                                }
+                              }}
+                              disabled={generatingFullCourse || extractingPdf}
+                              className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                            />
+                            {extractingPdf && (
+                              <p className="text-xs text-blue-600 mt-2">📄 Extraindo texto do PDF...</p>
+                            )}
+                            {editalPdfTextForGeneration && !extractingPdf && (
+                              <p className="text-xs text-green-600 mt-2">
+                                ✅ PDF processado! {editalPdfTextForGeneration.length.toLocaleString()} caracteres extraídos.
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Mostrar status do edital verticalizado se disponível */}
+                        {editalVerticalizadoData && (
+                          <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4">
+                            <p className="text-sm font-semibold text-emerald-700 mb-2">
+                              ✅ Edital Verticalizado Disponível
                             </p>
-                          )}
-                        </div>
+                            <p className="text-xs text-emerald-600">
+                              Usando o edital verticalizado configurado: {editalVerticalizadoData.titulo || 'Sem título'}
+                            </p>
+                            {editalVerticalizadoData.updatedAt && (
+                              <p className="text-xs text-emerald-500 mt-1">
+                                Atualizado em: {editalVerticalizadoData.updatedAt.toDate?.().toLocaleDateString('pt-BR')}
+                              </p>
+                            )}
+                          </div>
+                        )}
 
                         {fullCourseProgress && (
                           <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
@@ -9890,7 +9964,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                 generateFullCourseFromEdital(selectedCourseForFullGeneration, regeneratingCourse)
                               }
                             }}
-                            disabled={!editalPdfTextForGeneration || !cargoForGeneration.trim() || generatingFullCourse || extractingPdf}
+                            disabled={(!editalVerticalizadoData && !editalPdfTextForGeneration) || !cargoForGeneration.trim() || generatingFullCourse || extractingPdf}
                             className="flex-1 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {generatingFullCourse ? 'Gerando...' : (regeneratingCourse ? '🔄 Regenerar Flashcards' : '🚀 Gerar Curso Completo')}
