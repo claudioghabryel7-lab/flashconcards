@@ -100,12 +100,12 @@ export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
 
   // Gerar recomendação diária com IA
   const generateDailyRecommendation = async (force = false) => {
-    if (!userId || !courseId || !editalVerticalizado) {
+    if (!userId || !courseId) {
       setLoading(false)
       return
     }
 
-    // Verificar cache no Firestore primeiro (a menos que seja forçado)
+    // Mostrar loading imediatamente se não tiver cache
     if (!force) {
       const cached = await getCachedRecommendation()
       if (cached) {
@@ -117,6 +117,33 @@ export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
 
     setLoading(true)
     setError(null)
+
+    // Se não tiver edital, criar recomendação básica imediatamente
+    if (!editalVerticalizado) {
+      setDailyRecommendation({
+        mensagemMotivacional: 'Carregando seu planejador...',
+        conselho: 'Aguarde enquanto organizamos seus materiais de estudo.',
+        focoDoDia: 'Configuração inicial',
+        atividades: [{
+          disciplina: 'Sistema',
+          topico: 'Carregando',
+          numero: '',
+          prioridade: 'media',
+          descricao: 'Preparando seu plano de estudos personalizado...',
+          tempoEstimado: '1min',
+          dica: 'Estamos quase prontos!'
+        }],
+        estatisticas: {
+          topicosCompletos: 0,
+          topicosRestantes: 0,
+          progressoPercentual: 0,
+          diasRestantes: daysRemaining,
+          topicosPorDia: 0
+        }
+      })
+      setLoading(false)
+      return
+    }
 
     try {
       // Carregar tópicos completos
@@ -451,11 +478,12 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, courseId, shouldUpdate])
 
-  // Escutar eventos de atualização (só quando explicitamente solicitado)
+  // Escutar eventos de atualização (resposta imediata)
   useEffect(() => {
     if (!userId || !courseId) return
 
     const handleProgressUpdate = () => {
+      // Atualização imediata dos tópicos completos
       loadCompletedTopics().then(() => {
         setShouldUpdate(true)
       })
@@ -466,8 +494,6 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
     return () => {
       window.removeEventListener('studyPlannerRefresh', handleProgressUpdate)
     }
-    // Não incluir editalVerticalizado nas dependências
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, courseId])
 
   // Função para atualizar manualmente (forçar nova geração)

@@ -102,31 +102,29 @@ const StudyPlanner = ({
         const newCompleted = new Set([...completedActivities, activityKey])
         setCompletedActivities(newCompleted)
 
-        // Verificar se TODAS as atividades foram concluídas
-        const allActivities = dailyRecommendation?.atividades || []
-        const allKeys = allActivities.map(a => `${a.disciplina}::${a.topico}`)
-        const totalActivities = allKeys.length
-        const completedCount = newCompleted.size
+        // ATUALIZAÇÃO IMEDIATA: Disparar evento para atualizar o planejador
+        window.dispatchEvent(new CustomEvent('studyPlannerRefresh'))
         
-        // Verificação rigorosa: todas as chaves devem estar no conjunto de completas
-        const allKeysCompleted = allKeys.length > 0 && allKeys.every(key => newCompleted.has(key))
-        const allCompleted = totalActivities > 0 && totalActivities === completedCount && allKeysCompleted
+        // Feedback visual imediato
+        setTimeout(() => {
+          // Verificar se TODAS as atividades foram concluídas
+          const allActivities = dailyRecommendation?.atividades || []
+          const allKeys = allActivities.map(a => `${a.disciplina}::${a.topico}`)
+          const totalActivities = allKeys.length
+          const completedCount = newCompleted.size
+          
+          // Verificação rigorosa: todas as chaves devem estar no conjunto de completas
+          const allKeysCompleted = allKeys.length > 0 && allKeys.every(key => newCompleted.has(key))
+          const allCompleted = totalActivities > 0 && totalActivities === completedCount && allKeysCompleted
 
-        // SÓ atualizar se TODAS foram concluídas
-        if (allCompleted) {
-          // Aguardar um pouco antes de atualizar para garantir que o estado foi atualizado
-          setTimeout(() => {
-            // Disparar evento para atualizar o planejador
-            window.dispatchEvent(new CustomEvent('studyPlannerRefresh'))
-            
-            // Atualizar recomendação após um pequeno delay
+          // Se TODAS foram concluídas, gerar novas recomendações
+          if (allCompleted) {
             setTimeout(() => {
               refreshRecommendation()
               setCompletedActivities(new Set())
-            }, 300)
-          }, 200)
-        }
-        // Se não foram todas concluídas, NÃO faz nada - apenas marca localmente como concluído
+            }, 500)
+          }
+        }, 100)
       }
     } catch (error) {
       console.error('Erro ao marcar como concluído:', error)
@@ -306,13 +304,21 @@ const StudyPlanner = ({
                         <button
                           onClick={() => handleMarkAsCompleted(atividade)}
                           disabled={isMarkingCompleted || isCompleted}
-                          className={`w-full lg:w-auto px-4 py-2 text-white rounded-lg font-semibold transition-colors text-sm whitespace-nowrap font-mono mt-2 lg:mt-0 ${
+                          className={`w-full lg:w-auto px-4 py-2 text-white rounded-lg font-semibold transition-all duration-300 text-sm whitespace-nowrap font-mono mt-2 lg:mt-0 ${
                             isCompleted
                               ? 'bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 cursor-not-allowed'
-                              : 'bg-cyan-600 hover:bg-cyan-700 border border-cyan-500'
+                              : isMarkingCompleted
+                              ? 'bg-yellow-600/20 border border-yellow-500/30 text-yellow-400 animate-pulse'
+                              : 'bg-cyan-600 hover:bg-cyan-700 border border-cyan-500 hover:scale-105 active:scale-95'
                           } disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
                         >
-                          {isCompleted ? (
+                          {isMarkingCompleted ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-400"></div>
+                              <span className="hidden sm:inline">Salvando...</span>
+                              <span className="sm:hidden">...</span>
+                            </>
+                          ) : isCompleted ? (
                             <>
                               <CheckCircleIcon className="h-4 w-4" />
                               <span className="hidden sm:inline">Complete</span>
