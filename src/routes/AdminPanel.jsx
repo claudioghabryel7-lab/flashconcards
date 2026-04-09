@@ -3522,12 +3522,15 @@ Crie flashcards educacionais focados EXCLUSIVAMENTE no CONTEÚDO da matéria e m
 REGRAS ESPECÍFICAS:
 - Estilo de questões objetivas: perguntas diretas e respostas claras e completas
 - Baseie-se EXCLUSIVAMENTE no conteúdo do edital para identificar o que será cobrado
-- Crie 50-100 flashcards por módulo (garanta cobertura completa de todos os tópicos)
-- Cada flashcard deve cobrir um tópico/conceito específico do conteúdo
+- Crie 40-60 flashcards por módulo (garanta cobertura completa de todos os tópicos)
+- CRIE UM FLASHCARD INDIVIDUAL PARA CADA TÓPICO - NUNCA JUNTE VÁRIOS TÓPICOS EM UM SÓ FLASHCARD
+- Cada flashcard deve focar em UM ÚNICO tópico/conceito específico
 - Perguntas devem ser diretas, objetivas e práticas sobre o CONTEÚDO
-- Respostas devem explicar o CONTEÚDO de forma clara, educacional e completa
+- Respostas devem explicar o CONTEÚDO de forma COMPLETA, DETALHADA e EXAUSTIVA
+- NÃO abrevie, não resuma, não omita informações importantes
+- EXPLIQUE cada conceito por completo, como se fosse uma aula
 - NÃO mencione o cargo ou banca repetidamente
-- O foco deve ser 100% ENSINAR O CONTEÚDO, como se fosse uma questão de prova objetiva
+- O foco deve ser 100% ENSINAR O CONTEÚDO de forma completa
 - Use linguagem técnica e precisa, como em questões de concurso
 
 EXEMPLOS DO QUE EVITAR (ERRADO):
@@ -3547,7 +3550,15 @@ IMPORTANTE:
 - Garanta cobertura completa do conteúdo do módulo
 - Os flashcards devem ser úteis para estudo, como questões de prova
 - Priorize QUALIDADE sobre quantidade
-- Não crie 2 tópicos ou 3 em apenas 1, sempre faça os tópicos separados 1 por 1 exemplo: Tópico 1 Tópico 2 Tópico 3 Tópico 4 = FlashCards Gerados(Tópico 1 e 2), (Tópico 3 e 4) NÃO É DESSE JEITO!!! O CERTO É (TÓPICO 1), (TÓPICO 2), (TÓPICO 3), (TÓPICO 4)
+- NÃO JUNTE VÁRIOS TÓPICOS EM UM SÓ FLASHCARD - ISSO É PROIBIDO
+- CRIE UM FLASHCARD SEPARADO PARA CADA TÓPICO INDIVIDUAL
+- SE HOUVER 10 TÓPICOS, CRIE 10 FLASHCARDS DIFERENTES
+- SE HOUVER 20 TÓPICOS, CRIE 20 FLASHCARDS DIFERENTES
+- CADA FLASHCARD DEVE FOCAR EM APENAS UM TÓPICO ESPECÍFICO
+- EXPLIQUE CADA TÓPICO DE FORMA COMPLETA E DETALHADA
+- NÃO ABREVIE, NÃO RESUMA, NÃO OMITA INFORMAÇÕES IMPORTANTES
+- EXEMPLO: Tópicos = [A, B, C, D] -> Flashcards = [Flashcard sobre A, Flashcard sobre B, Flashcard sobre C, Flashcard sobre D]
+- NUNCA: Flashcards = [Flashcard sobre A e B, Flashcard sobre C e D]
 Retorne APENAS um JSON válido:
 {
   "flashcards": [
