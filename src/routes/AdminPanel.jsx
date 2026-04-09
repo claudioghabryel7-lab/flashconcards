@@ -3460,6 +3460,7 @@ TÓPICOS DO MÓDULO: ${modulo.topicos.join(', ')}
 9. Crie flashcards que exijam conhecimento técnico e específico
 10. INCLUA detalhes que fazem a diferença na prova
 11. faça flashcards estilo Gran Cursos, AlfaCon, Estratégia
+12. Veja qual concurso é e crie os flashcards de acordo com aquele concurso, os cards com a maior probabilidade de cair aquele tópico, não exclua oque pode cair ...
 
 TAREFA:
 Crie flashcards educacionais focados EXCLUSIVAMENTE no CONTEÚDO da matéria e módulo acima. Baseie-se no edital para entender o que será cobrado e crie flashcards no padrão de questões objetivas de concurso.
