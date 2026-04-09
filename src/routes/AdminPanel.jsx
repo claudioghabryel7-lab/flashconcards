@@ -3459,6 +3459,7 @@ TÓPICOS DO MÓDULO: ${modulo.topicos.join(', ')}
 8. FOQUE em temas que realmente caem nas provas
 9. Crie flashcards que exijam conhecimento técnico e específico
 10. INCLUA detalhes que fazem a diferença na prova
+11. faça flashcards estilo Gran Cursos, AlfaCon, Estratégia
 
 TAREFA:
 Crie flashcards educacionais focados EXCLUSIVAMENTE no CONTEÚDO da matéria e módulo acima. Baseie-se no edital para entender o que será cobrado e crie flashcards no padrão de questões objetivas de concurso.
@@ -3466,7 +3467,7 @@ Crie flashcards educacionais focados EXCLUSIVAMENTE no CONTEÚDO da matéria e m
 REGRAS ESPECÍFICAS:
 - Estilo de questões objetivas: perguntas diretas e respostas claras e completas
 - Baseie-se EXCLUSIVAMENTE no conteúdo do edital para identificar o que será cobrado
-- Crie 18-25 flashcards por módulo (garanta cobertura completa de todos os tópicos)
+- Crie 50-100 flashcards por módulo (garanta cobertura completa de todos os tópicos)
 - Cada flashcard deve cobrir um tópico/conceito específico do conteúdo
 - Perguntas devem ser diretas, objetivas e práticas sobre o CONTEÚDO
 - Respostas devem explicar o CONTEÚDO de forma clara, educacional e completa
@@ -3491,7 +3492,7 @@ IMPORTANTE:
 - Garanta cobertura completa do conteúdo do módulo
 - Os flashcards devem ser úteis para estudo, como questões de prova
 - Priorize QUALIDADE sobre quantidade
-
+- Não crie 2 tópicos ou 3 em apenas 1, sempre faça os tópicos separados 1 por 1 exemplo: Tópico 1 Tópico 2 Tópico 3 Tópico 4 = FlashCards Gerados(Tópico 1 e 2), (Tópico 3 e 4) NÃO É DESSE JEITO!!! O CERTO É (TÓPICO 1), (TÓPICO 2), (TÓPICO 3), (TÓPICO 4)
 Retorne APENAS um JSON válido:
 {
   "flashcards": [

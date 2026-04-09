@@ -596,9 +596,12 @@ QUANTIDADE (EXATA - SEM VARIAÇÃO):
 - Nem mais, nem menos
 - Complete todas as 10 questões
 - Não truncar no meio
+- Se truncar refaça de novo até dar certo, não termine enquanto não der certo
+- As questões tem que ser de maior probabilidade de cair no concurso do curso específico que o usuario está estudando
+- veja qual o curso do aluno e adapte as questões para ele de uma forma que seja oque pode cair com maior incidência
 
 CONTEÚDO:
-- Baseie-se APENAS nos flashcards fornecidos
+- Baseie-se no edital verticalizado em EditalVerticalizado.jsx
 - Seja direto e objetivo
 - Evite questões muito longas
 - Adapte o estilo e linguagem à banca "${bancaExaminadora}"
