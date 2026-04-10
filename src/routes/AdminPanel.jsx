@@ -6950,6 +6950,30 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                           console.log('💾 AdminPanel: Salvando edital no courseId:', courseId)
                           console.log('💾 AdminPanel: selectedCourseForPrompts:', selectedCourseForPrompts)
                           console.log('💾 AdminPanel: courseId final:', courseId)
+                          
+                          // LIMPAR EDITAL VERTICALIZADO ANTIGO ANTES DE SALVAR O NOVO
+                          console.log('Limpando edital verticalizado antigo...')
+                          const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+                          try {
+                            await deleteDoc(editalRef)
+                            console.log('Edital verticalizado antigo removido com sucesso')
+                          } catch (deleteErr) {
+                            console.log('Nenhum edital antigo encontrado para remover (isso é normal):', deleteErr.message)
+                          }
+                          
+                          // Também limpar partes antigas se existirem
+                          const partesRef = collection(db, 'courses', courseId, 'editalVerticalizado', 'principal', 'partes')
+                          try {
+                            const partesSnapshot = await getDocs(partesRef)
+                            const deletePromises = partesSnapshot.docs.map(doc => deleteDoc(doc.ref))
+                            await Promise.all(deletePromises)
+                            if (partesSnapshot.docs.length > 0) {
+                              console.log(`${partesSnapshot.docs.length} partes antigas removidas`)
+                            }
+                          } catch (partesErr) {
+                            console.log('Nenhuma parte antiga encontrada para remover (isso é normal):', partesErr.message)
+                          }
+                          
                           const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
                           
                           // Tentar modelos válidos em ordem de prioridade
