@@ -90,6 +90,8 @@ const EditalVerticalizado = () => {
   const { darkMode } = useDarkMode()
   const [searchParams] = useSearchParams()
   const [editalVerticalizado, setEditalVerticalizado] = useState(null)
+  const [editalVerticalizadoBase, setEditalVerticalizadoBase] = useState(null) // Dados base do curso (sem progresso)
+  const [userProgress, setUserProgress] = useState(null) // Progresso individual do usuário
   const [loading, setLoading] = useState(true)
   const [courseId, setCourseId] = useState(null)
   const [courseName, setCourseName] = useState('')
@@ -250,7 +252,9 @@ const EditalVerticalizado = () => {
           const totalTopicos = todasDisciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)
           console.log(`✅ EditalVerticalizado: Carregado com sucesso - ${totalDisciplinas} disciplinas, ${totalTopicos} tópicos`)
           
-          setEditalVerticalizado(editalCompleto)
+          setEditalVerticalizadoBase(editalCompleto)
+          // Carregar progresso individual do usuário
+          await loadUserProgress(editalCompleto)
         } else {
           // Edital normal (não dividido)
           console.log('📋 EditalVerticalizado: Carregando edital normal...')
@@ -262,7 +266,9 @@ const EditalVerticalizado = () => {
           const totalTopicos = data.disciplinas?.reduce((sum, d) => sum + (d.topicos?.length || 0), 0) || 0
           console.log(`✅ EditalVerticalizado: Carregado com sucesso - ${totalDisciplinas} disciplinas, ${totalTopicos} tópicos`)
           
-          setEditalVerticalizado(data)
+          setEditalVerticalizadoBase(data)
+          // Carregar progresso individual do usuário
+          await loadUserProgress(data)
         }
         
         setLoading(false)
@@ -306,12 +312,102 @@ const EditalVerticalizado = () => {
     return () => unsub()
   }, [courseId])
 
+  // Função para carregar progresso individual do usuário
+  const loadUserProgress = async (editalBase) => {
+    if (!user || !courseId || !editalBase?.disciplinas) return
+    
+    try {
+      console.log('👤 Carregando progresso individual do usuário:', user.uid)
+      
+      // Carregar progresso do usuário
+      const userProgressRef = doc(db, 'userEditalProgress', user.uid, 'courses', courseId)
+      const userProgressDoc = await getDoc(userProgressRef)
+      
+      let userProgressData = {}
+      if (userProgressDoc.exists()) {
+        userProgressData = userProgressDoc.data().progress || {}
+        console.log('📊 Progresso do usuário carregado:', Object.keys(userProgressData).length, 'tópicos')
+      }
+      
+      // Combinar dados base com progresso individual
+      const editalComProgresso = {
+        ...editalBase,
+        disciplinas: editalBase.disciplinas.map(disciplina => ({
+          ...disciplina,
+          topicos: disciplina.topicos.map(topico => {
+            const topicKey = makeTopicKey(topico)
+            const progressoTopico = userProgressData[topicKey] || {}
+            
+            return {
+              ...topico,
+              flashcards: progressoTopico.flashcards || false,
+              questoes: progressoTopico.questoes || false,
+              estudado: progressoTopico.estudado || false
+            }
+          })
+        }))
+      }
+      
+      setEditalVerticalizado(editalComProgresso)
+      setUserProgress(userProgressData)
+      
+    } catch (error) {
+      console.error('Erro ao carregar progresso do usuário:', error)
+      // Em caso de erro, usar apenas os dados base
+      setEditalVerticalizado(editalBase)
+    }
+  }
+
+  // Função para salvar progresso individual do usuário
+  const saveUserProgress = async (disciplinaIdx, topicoIdx, campo, novoValor) => {
+    if (!user || !courseId || !editalVerticalizadoBase?.disciplinas) return
+    
+    try {
+      const topico = editalVerticalizadoBase.disciplinas[disciplinaIdx].topicos[topicoIdx]
+      const topicKey = makeTopicKey(topico)
+      
+      // Referência ao documento de progresso do usuário
+      const userProgressRef = doc(db, 'userEditalProgress', user.uid, 'courses', courseId)
+      
+      // Carregar progresso atual
+      const userProgressDoc = await getDoc(userProgressRef)
+      let progressData = {}
+      
+      if (userProgressDoc.exists()) {
+        progressData = userProgressDoc.data().progress || {}
+      }
+      
+      // Atualizar progresso do tópico específico
+      if (!progressData[topicKey]) {
+        progressData[topicKey] = {}
+      }
+      
+      progressData[topicKey][campo] = novoValor
+      
+      // Salvar no Firestore
+      await setDoc(userProgressRef, {
+        userId: user.uid,
+        courseId: courseId,
+        progress: progressData,
+        updatedAt: serverTimestamp()
+      }, { merge: true })
+      
+      console.log('✅ Progresso individual salvo:', { topicKey, campo, novoValor })
+      
+      // Atualizar estado local
+      setUserProgress(progressData)
+      
+    } catch (error) {
+      console.error('Erro ao salvar progresso do usuário:', error)
+      throw error
+    }
+  }
+
   // Função para atualizar checkbox do tópico
   const handleToggleCheckbox = async (disciplinaIdx, topicoIdx, campo) => {
     if (!courseId || !editalVerticalizado?.disciplinas || !user) return
 
     try {
-      const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
       const disciplinas = [...editalVerticalizado.disciplinas]
       const topico = disciplinas[disciplinaIdx].topicos[topicoIdx]
       const disciplina = disciplinas[disciplinaIdx]
@@ -319,14 +415,16 @@ const EditalVerticalizado = () => {
       // Alternar o valor do checkbox
       const novoValor = !topico[campo]
       
-      // Atualizar o tópico
+      // Salvar progresso individual do usuário
+      await saveUserProgress(disciplinaIdx, topicoIdx, campo, novoValor)
+      
+      // Atualizar estado local imediatamente
       disciplinas[disciplinaIdx].topicos[topicoIdx] = {
         ...topico,
         [campo]: novoValor
       }
-
-      // Atualizar no Firestore
-      await updateDoc(editalRef, {
+      setEditalVerticalizado({
+        ...editalVerticalizado,
         disciplinas: disciplinas
       })
 
@@ -420,30 +518,36 @@ const EditalVerticalizado = () => {
 
   // Função para salvar alterações do tópico
   const handleSaveTopico = async () => {
-    if (!editingTopico || !courseId || !editalVerticalizado) return
+    if (!editingTopico || !courseId || !editalVerticalizadoBase) return
 
     try {
       setEditLoading(true)
-      const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
-      const disciplinas = [...editalVerticalizado.disciplinas]
       
-      // Atualizar o tópico
-      disciplinas[editingTopico.disciplinaIdx].topicos[editingTopico.topicoIdx] = {
-        ...disciplinas[editingTopico.disciplinaIdx].topicos[editingTopico.topicoIdx],
+      // Atualizar apenas os dados base (não o progresso)
+      const disciplinasBase = [...editalVerticalizadoBase.disciplinas]
+      
+      // Atualizar o tópico nos dados base
+      disciplinasBase[editingTopico.disciplinaIdx].topicos[editingTopico.topicoIdx] = {
+        ...disciplinasBase[editingTopico.disciplinaIdx].topicos[editingTopico.topicoIdx],
         nome: editNome.trim(),
         numero: editNumero.trim()
       }
 
-      // Atualizar no Firestore
+      // Atualizar no Firestore (apenas dados base)
+      const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
       await updateDoc(editalRef, {
-        disciplinas: disciplinas
+        disciplinas: disciplinasBase
       })
 
-      // Atualizar estado local
-      setEditalVerticalizado({
-        ...editalVerticalizado,
-        disciplinas: disciplinas
-      })
+      // Atualizar estado base
+      const novoEditalBase = {
+        ...editalVerticalizadoBase,
+        disciplinas: disciplinasBase
+      }
+      setEditalVerticalizadoBase(novoEditalBase)
+
+      // Recarregar progresso do usuário com os novos dados base
+      await loadUserProgress(novoEditalBase)
 
       // Fechar modal
       setEditModalOpen(false)
