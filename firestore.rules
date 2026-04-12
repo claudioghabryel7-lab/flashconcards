@@ -1,206 +1,430 @@
 rules_version = '2';
-  service cloud.firestore {
-    match /databases/{database}/documents {
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    match /users/{userId} {
+      allow read: if isAuthenticated() || (request.auth != null && request.auth.uid == userId);
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && (
+        (isOwner(userId) && 
+        (request.resource.data.role == resource.data.role ||
+          !resource.data.hasAny(['role']) ||
+          (request.resource.data.role == 'admin' && 
+           resource.data.role != 'admin'))) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+    
+    match /flashcards/{cardId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin();
+      allow create: if isAuthenticated() && 
+                   request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+      allow update: if isAuthenticated() && 
+                   exists(/databases/$(database)/documents/flashcards/$(cardId)) &&
+                   get(/databases/$(database)/documents/flashcards/$(cardId)).data.userId == request.auth.uid;
+      allow delete: if isAdmin();
+      allow delete: if isAuthenticated() && 
+                    exists(/databases/$(database)/documents/flashcards/$(cardId)) &&
+                    get(/databases/$(database)/documents/flashcards/$(cardId)).data.userId == request.auth.uid;
+    }
+    
+    match /progress/{progressId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+    
+    match /userProgress/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+    
+    match /chats/{userId}/messages/{messageId} {
+      allow read: if isAuthenticated() && (userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && userId == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+    
+    match /config/{configId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+    
+    match /config/popupBanner {
+      allow read: if true;
+      allow create, update, delete: if isAuthenticated() && 
+                                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    match /homeBanners/{bannerId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow update: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow delete: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    match /courses/{courseId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow update: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow delete: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       
-      function isAuthenticated() {
-        return request.auth != null;
-      }
-      
-      function isOwner(userId) {
-        return isAuthenticated() && request.auth.uid == userId;
-      }
-      
-      function isAdmin() {
-        return isAuthenticated() && 
-              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-      }
-      
-      match /users/{userId} {
-        // Permitir leitura para todos autenticados (para ranking) - apenas campos públicos
-        // Também permitir leitura do próprio perfil mesmo se não estiver completamente autenticado
-        allow read: if isAuthenticated() || (request.auth != null && request.auth.uid == userId);
-        allow create: if isAuthenticated() && isOwner(userId);
-        allow update: if isAuthenticated() && (
-          (isOwner(userId) && 
-          (request.resource.data.role == resource.data.role ||
-            !resource.data.hasAny(['role']) ||
-            // Permitir que o próprio usuário atualize role para 'admin' se o role atual não for 'admin'
-            // Isso permite que o email do admin atualize seu próprio role
-            (request.resource.data.role == 'admin' && 
-             resource.data.role != 'admin'))) ||
-          isAdmin()
-        );
-        allow delete: if isAdmin();
-      }
-      
-      match /flashcards/{cardId} {
-        // Permitir leitura para todos autenticados
+      match /subjects/{subjectId} {
         allow read: if isAuthenticated();
-        // Admin pode criar qualquer flashcard
-        allow create: if isAdmin();
-        // Usuário pode criar flashcards individuais (com userId)
-        allow create: if isAuthenticated() && 
-                     request.resource.data.userId == request.auth.uid;
-        // Admin pode atualizar qualquer flashcard
-        allow update: if isAdmin();
-        // Usuário pode atualizar seus próprios flashcards
-        allow update: if isAuthenticated() && 
-                     exists(/databases/$(database)/documents/flashcards/$(cardId)) &&
-                     get(/databases/$(database)/documents/flashcards/$(cardId)).data.userId == request.auth.uid;
-        // Admin pode deletar qualquer flashcard
-        allow delete: if isAdmin();
-        // Usuário pode deletar seus próprios flashcards
-        allow delete: if isAuthenticated() && 
-                     exists(/databases/$(database)/documents/flashcards/$(cardId)) &&
-                     get(/databases/$(database)/documents/flashcards/$(cardId)).data.userId == request.auth.uid;
-      }
-      
-      // 📋 Cache de Questões
-      match /questoesCache/{cacheId} {
-        // Permitir leitura para todos autenticados
-        allow read: if isAuthenticated();
-        // Admin pode criar e atualizar cache
-        allow create, update: if isAdmin();
-        // Apenas admin pode deletar cache
-        allow delete: if isAdmin();
-      }
-      
-      // 📋 Cache de Explicações
-      match /explanationCache/{cacheId} {
-        // Permitir leitura para todos autenticados
-        allow read: if isAuthenticated();
-        // Admin pode criar e atualizar cache
-        allow create, update: if isAdmin();
-        // Apenas admin pode deletar cache
-        allow delete: if isAdmin();
-      }
-      
-      // 📊 Progresso do Edital
-      match /editalProgress/{progressId} {
-        // Permitir leitura do próprio progresso
-        allow read: if isAuthenticated() && 
-                     progressId.startsWith(request.auth.uid + '_');
-        // Permitir criação do próprio progresso
-        allow create: if isAuthenticated() && 
-                     progressId.startsWith(request.auth.uid + '_');
-        // Permitir atualização do próprio progresso
-        allow update: if isAuthenticated() && 
-                     progressId.startsWith(request.auth.uid + '_');
-        // Admin pode ler tudo
-        allow read: if isAdmin();
-        // Admin pode criar qualquer progresso
-        allow create: if isAdmin();
-        // Admin pode atualizar qualquer progresso
-        allow update: if isAdmin();
-        // Apenas admin pode deletar
-        allow delete: if isAdmin();
-      }
-      
-      // 📅 Progresso Diário
-      match /dailyProgress/{progressId} {
-        // Permitir leitura do próprio progresso
-        allow read: if isAuthenticated() && 
-                     progressId.startsWith(request.auth.uid + '_');
-        // Permitir criação do próprio progresso
-        allow create: if isAuthenticated() && 
-                     progressId.startsWith(request.auth.uid + '_');
-        // Permitir atualização do próprio progresso
-        allow update: if isAuthenticated() && 
-                     progressId.startsWith(request.auth.uid + '_');
-        // Admin pode ler tudo
-        allow read: if isAdmin();
-        // Admin pode criar qualquer progresso
-        allow create: if isAdmin();
-        // Admin pode atualizar qualquer progresso
-        allow update: if isAdmin();
-        // Apenas admin pode deletar
-        allow delete: if isAdmin();
-      }
-      
-      // 📝 Simulados Compartilhados
-      match /simulados/{simuladoId} {
-        // Permitir leitura para todos autenticados
-        allow read: if isAuthenticated();
-        // Admin pode criar simulados
-        allow create: if isAuthenticated() && 
-                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-        // Admin pode atualizar tudo
-        // Usuários autenticados podem atualizar apenas 'attempts' e 'questions' 
-        // (para registrar tentativas de simulado compartilhado)
-        // Nota: Esta regra permite que qualquer autenticado atualize, o que pode ser um risco
-        // Se necessário, adicionar validação de token de acesso ou limitação por IP
-        allow update: if (isAuthenticated() && 
-                          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
-                     || 
-                     (isAuthenticated() &&
-                      resource != null &&
-                      resource.data != null &&
-                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attempts']) ||
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['questions']) ||
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attempts', 'questions'])));
-        // Apenas admin pode deletar
-        allow delete: if isAuthenticated() && 
-                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-      }
-      
-      // 📋 Leads de Simulados
-      match /leads/{leadId} {
-        // Apenas admin pode ler leads
-        allow read: if isAuthenticated() && 
-                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-        // Qualquer pessoa pode criar lead (formulário público)
-        allow create: if true;
-        // Apenas admin pode atualizar (marcar como contatado, adicionar notas)
-        allow update: if isAuthenticated() && 
+        allow create, update, delete: if isAuthenticated() && 
+                                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        
+        match /flashcards/{flashcardId} {
+          allow read: if isAuthenticated();
+          allow create: if isAuthenticated() && 
                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-        // Apenas admin pode deletar
+          allow update: if isAuthenticated();
+          allow delete: if isAuthenticated() && 
+                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        }
+      }
+      
+      match /prompts/{promptId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow update: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
         allow delete: if isAuthenticated() && 
-                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       }
       
-      // 📚 Cache de Leis - Sistema de cache de textos oficiais
-      match /leisCache/{lawId} {
-        // Permitir leitura para todos autenticados (para usar textos oficiais)
-        allow read: if isAuthenticated();
-        
-        // Admin pode criar e atualizar leis no cache
-        allow create, update: if isAdmin();
-        
-        // Apenas admin pode deletar leis do cache
-        allow delete: if isAdmin();
-      }
-      
-      // ⚙️ Configurações do Sistema
       match /config/{configId} {
-        // Permitir leitura para todos autenticados (para ler link do WhatsApp)
         allow read: if isAuthenticated();
-        // Apenas admin pode criar e atualizar configurações
-        allow create, update: if isAdmin();
-        // Apenas admin pode deletar configurações
-        allow delete: if isAdmin();
+        allow create: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow update: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow delete: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       }
       
-      // 📢 Histórico de Mensagens (Broadcast)
-      match /broadcastHistory/{messageId} {
-        // Apenas admin pode ler histórico de mensagens
-        allow read: if isAdmin();
-        // Apenas admin pode criar mensagens no histórico
-        allow create: if isAdmin();
-        // Apenas admin pode atualizar mensagens (se necessário)
-        allow update: if isAdmin();
-        // Apenas admin pode deletar mensagens
-        allow delete: if isAdmin();
+      match /editalVerticalizado/{docId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow update: if isAuthenticated();
+        allow delete: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       }
       
-      match /{document=**} {
-        allow read, write: if false;
+      match /materiasRevisadas/{docId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow update: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow delete: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      
+      match /conteudosCompletos/{docId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated();
+        allow delete: if isAdmin();
       }
     }
+    
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && 
+                              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    match /deletedUsers/{userId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+      allow create: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow update, delete: if false;
+    }
+    
+    match /questoesStats/{docId} {
+      function isOwnerDoc() {
+        return isAuthenticated() && 
+               (docId == request.auth.uid || 
+                docId.matches('^' + request.auth.uid + '_.*'));
+      }
+      
+      allow read: if isAuthenticated() && (isOwnerDoc() || isAdmin());
+      allow create, update: if isAuthenticated() && isOwnerDoc();
+      allow delete: if isAdmin();
+    }
+    
+    match /studyPlannerRecommendations/{recommendationId} {
+      function isOwnerRecommendation() {
+        return isAuthenticated() && 
+               (resource == null || resource.data.userId == request.auth.uid);
+      }
+      
+      allow read: if isAuthenticated() && (isOwnerRecommendation() || isAdmin());
+      allow create, update: if isAuthenticated() && 
+                              request.resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+    
+    match /editalProgress/{progressId} {
+      function isOwnerDoc() {
+        return isAuthenticated() && 
+               (progressId == request.auth.uid || 
+                progressId.matches('^' + request.auth.uid + '_.*'));
+      }
+      
+      allow read: if isAuthenticated() && (
+        isOwnerDoc() || 
+        isAdmin() ||
+        (resource != null && resource.data != null && resource.data.userId == request.auth.uid)
+      );
+      
+      allow create, update: if isAuthenticated() && 
+                              request.resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+    
+    match /presence/{userId} {
+      allow read, create, update: if isAuthenticated() && isOwner(userId);
+      allow read: if isAdmin();
+      allow delete: if false;
+    }
+    
+    match /testTrials/{trialId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || 
+                    (isAuthenticated() && 
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredUsers', 'accessCount', 'lastAccessedAt']));
+    }
+    
+    match /passwordResetTokens/{tokenId} {
+      allow create: if isAuthenticated() && 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow read: if true;
+      allow update, delete: if isAuthenticated() && 
+                              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    match /questoesCache/{cacheId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+                     request.resource.data.keys().hasAll(['questoes', 'materia', 'modulo']) &&
+                     request.resource.data.questoes is list &&
+                     request.resource.data.likes is int &&
+                     request.resource.data.dislikes is int;
+      allow update: if isAuthenticated() && 
+                     (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'dislikes', 'updatedAt']) ||
+                      isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    match /explanationsCache/{explanationId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+                     request.resource.data.keys().hasAll(['text']) &&
+                     request.resource.data.text is string &&
+                     request.resource.data.likes is int &&
+                     request.resource.data.dislikes is int;
+      allow update: if isAuthenticated() && 
+                     (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'dislikes', 'updatedAt']) ||
+                      isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    match /mindMapsCache/{cacheId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+                     request.resource.data.keys().hasAll(['materia', 'modulo']) &&
+                     request.resource.data.likes is int &&
+                     request.resource.data.dislikes is int;
+      allow update: if isAuthenticated() && 
+                     (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'dislikes', 'updatedAt']) ||
+                      isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    match /transactions/{transactionId} {
+      allow create: if true;
+      allow read: if true;
+      allow update: if true;
+      allow delete: if isAdmin();
+    }
+    
+    match /blog_articles/{articleId} {
+      allow read: if !resource.exists || 
+                   resource.data.status == 'published' || 
+                   (resource.data.status == 'scheduled' && resource.data.scheduledAt != null && resource.data.scheduledAt <= request.time) ||
+                   (isAuthenticated() && isAdmin()) ||
+                   (isAuthenticated() && resource.data.authorId == request.auth.uid);
+      
+      allow create: if isAuthenticated() && 
+                     request.resource.data.authorId == request.auth.uid;
+      
+      allow update: if isAuthenticated() && (
+        resource.data.authorId == request.auth.uid || 
+        isAdmin()
+      );
+      
+      allow delete: if isAuthenticated() && (
+        resource.data.authorId == request.auth.uid || 
+        isAdmin()
+      );
+    }
+    
+    match /posts/{postId} {
+      allow read: if true;
+      
+      allow create: if isAuthenticated() && 
+                     request.resource.data.authorId == request.auth.uid &&
+                     (request.resource.data.isNews == null || isAdmin());
+      
+      allow update: if isAuthenticated() && 
+                     request.resource.data.authorId == resource.data.authorId &&
+                     (request.resource.data.isNews == resource.data.isNews || isAdmin());
+      
+      allow delete: if isAuthenticated() && 
+                     (resource.data.authorId == request.auth.uid || isAdmin());
+    }
+    
+    match /stories/{storyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+                     request.resource.data.authorId == request.auth.uid;
+      allow delete: if isAuthenticated() && 
+                     (resource.data.authorId == request.auth.uid || isAdmin());
+      allow update: if false;
+    }
+    
+    match /sharedSimulados/{simuladoId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && 
+                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow update: if (isAuthenticated() && 
+                        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+                   || 
+                   (isAuthenticated() &&
+                    resource != null &&
+                    resource.data != null &&
+                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attempts']) ||
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['questions']) ||
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attempts', 'questions'])));
+      allow delete: if isAuthenticated() && 
+                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    match /leads/{leadId} {
+      allow read: if isAuthenticated() && 
+                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow create: if true;
+      allow update: if isAuthenticated() && 
+                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow delete: if isAuthenticated() && 
+                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    match /leisCache/{lawId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // Progresso Individual do Edital Verticalizado
+    match /userEditalProgress/{userId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && isOwner(userId);
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+      
+      match /courses/{courseId} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId);
+        allow update: if isAuthenticated() && isOwner(userId);
+        allow read: if isAdmin();
+        allow create: if isAdmin();
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+    
+    // Online Status
+    match /onlineStatus/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isOwner(userId);
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
+}
