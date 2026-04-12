@@ -175,6 +175,17 @@ service cloud.firestore {
         allow update: if isAuthenticated();
         allow delete: if isAdmin();
       }
+      
+      match /flashcards/{flashcardId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && 
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow update: if isAuthenticated();
+        allow delete: if isAuthenticated() && 
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
     }
     
     match /reviews/{reviewId} {

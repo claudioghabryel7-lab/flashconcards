@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
-import { doc, onSnapshot, getDoc, updateDoc, collection, getDocs, query, orderBy, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, onSnapshot, getDoc, updateDoc, collection, getDocs, query, orderBy, setDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import dayjs from 'dayjs'
 import {
   DocumentTextIcon,
@@ -9,6 +9,8 @@ import {
   PencilIcon,
   XMarkIcon,
   CheckIcon,
+  SparklesIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -104,6 +106,12 @@ const EditalVerticalizado = () => {
   const [editNome, setEditNome] = useState('')
   const [editNumero, setEditNumero] = useState('')
   const [editLoading, setEditLoading] = useState(false)
+
+  // Estados para geração de flashcards
+  const [generatingFlashcards, setGeneratingFlashcards] = useState(false)
+  const [flashcardsModalOpen, setFlashcardsModalOpen] = useState(false)
+  const [generationStatus, setGenerationStatus] = useState('')
+  const [existingFlashcards, setExistingFlashcards] = useState(null)
 
   // Determinar courseId e destacar disciplina/tópico se vier dos links
   useEffect(() => {
@@ -569,6 +577,228 @@ const EditalVerticalizado = () => {
     setEditNumero('')
   }
 
+  // Função para verificar flashcards existentes
+  const checkExistingFlashcards = async () => {
+    if (!courseId || !editalVerticalizadoBase?.disciplinas) return
+
+    try {
+      const flashcardsRef = collection(db, 'courses', courseId, 'flashcards')
+      const flashcardsSnapshot = await getDocs(flashcardsRef)
+      const existing = []
+      
+      flashcardsSnapshot.forEach(doc => {
+        existing.push({
+          id: doc.id,
+          ...doc.data()
+        })
+      })
+      
+      setExistingFlashcards(existing)
+    } catch (error) {
+      console.error('Erro ao verificar flashcards existentes:', error)
+    }
+  }
+
+  // Função para gerar flashcards baseada na estrutura do edital (sempre apaga existentes)
+  const generateFlashcardsFromEdital = async () => {
+    if (!courseId || !editalVerticalizadoBase?.disciplinas) return
+
+    setGeneratingFlashcards(true)
+    setGenerationStatus('Preparando estrutura do edital...')
+    
+    try {
+      // Preparar estrutura do edital para a IA
+      const editalStructure = {
+        curso: courseName,
+        disciplinas: editalVerticalizadoBase.disciplinas.map(disciplina => ({
+          nome: disciplina.nome,
+          topicos: disciplina.topicos?.map(topico => ({
+            numero: topico.numero,
+            nome: topico.nome
+          })) || []
+        }))
+      }
+      
+      setGenerationStatus(`Estrutura preparada: ${editalStructure.disciplinas.length} disciplinas, ${editalStructure.disciplinas.reduce((sum, d) => sum + d.topicos.length, 0)} tópicos...`)
+
+      // Prompt para a IA gerar flashcards idênticos à estrutura
+      const prompt = `Gere flashcards educacionais e didáticos para cada tópico do edital abaixo.
+
+ESTRUTURA DO EDITAL:
+${JSON.stringify(editalStructure, null, 2)}
+
+INSTRUÇÕES:
+1. Gere EXATAMENTE os flashcards seguindo a estrutura acima - disciplina por disciplina, tópico por tópico
+2. Para CADA tópico, gere 3-5 flashcards de qualidade
+3. Os flashcards devem ser educacionais, didáticos e focados no aprendizado
+4. Formato JSON:
+{
+  "flashcards": [
+    {
+      "disciplina": "nome da disciplina",
+      "topico": "nome do tópico",
+      "topicoNumero": "número do tópico",
+      "frente": "pergunta ou conceito claro",
+      "verso": "resposta detalhada e explicativa",
+      "dificuldade": "fácil|médio|difícil"
+    }
+  ]
+}
+
+REGRAS IMPORTANTES:
+- Mantenha EXATAMENTE a mesma estrutura de disciplinas e tópicos
+- Cada flashcard deve referenciar sua disciplina e tópico corretamente
+- Seja claro e objetivo na frente, detalhado no verso
+- Adapte o conteúdo para estudo e memorização
+- Não invente disciplinas ou tópicos que não existem na estrutura
+- Use linguagem formal e educacional
+- FOCE 100% NO CONTEÚDO EDUCACIONAL: flashcards que ENSINAM o conteúdo, como questões objetivas
+- Estilo de questões objetivas: perguntas diretas e respostas claras e completas
+- Garanta Cobertura completa
+- Cada flashcard deve cobrir um tópico/conceito específico
+- Perguntas devem ser diretas, objetivas e práticas sobre o CONTEÚDO
+- Respostas devem explicar o CONTEÚDO de forma clara, educacional e completa
+- NÃO mencione cargo ou banca repetidamente
+- Use linguagem técnica e precisa, como em questões de concurso
+- Não gere conteúdo genérico ou flashcards óbvios
+- Gere conteúdos atualizados e relevantes para o concurso`
+
+      setGenerationStatus('Enviando solicitação para a IA...')
+
+      // Chamar API da IA
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + import.meta.env.VITE_GEMINI_API_KEY, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 8000,
+          }
+        })
+      })
+
+      setGenerationStatus('Processando resposta da IA...')
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error?.message || 'Erro na API da IA')
+      }
+
+      setGenerationStatus('Analisando conteúdo gerado...')
+      
+      const generatedText = data.candidates[0]?.content?.parts[0]?.text
+      
+      // Encontrar o início e fim do array flashcards
+      const flashcardsStart = generatedText.indexOf('"flashcards"')
+      const arrayStart = generatedText.indexOf('[', flashcardsStart)
+      const arrayEnd = generatedText.lastIndexOf(']')
+      
+      if (flashcardsStart === -1 || arrayStart === -1 || arrayEnd === -1) {
+        console.error('Texto gerado pela IA:', generatedText)
+        throw new Error('Não foi possível encontrar o array de flashcards na resposta')
+      }
+      
+      // Extrair apenas o array flashcards
+      const flashcardsJson = '{"flashcards":' + generatedText.substring(arrayStart, arrayEnd + 1) + '}'
+      
+      setGenerationStatus('Validando estrutura dos flashcards...')
+      
+      let flashcardsData = null
+      
+      try {
+        // Tentar fazer o parse direto
+        flashcardsData = JSON.parse(flashcardsJson)
+      } catch (parseError) {
+        console.error('Erro ao fazer parse do JSON:', parseError.message)
+        console.error('JSON extraído:', flashcardsJson)
+        
+        // Tentar corrigir problemas comuns de formatação
+        let fixedJson = flashcardsJson
+          .replace(/,\s*}/g, '}')  // Vírgula antes de fechar objeto
+          .replace(/,\s*]/g, ']')  // Vírgula antes de fechar array
+          .replace(/\n\s*\}/g, '}')  // Nova linha antes de fechar objeto
+          .replace(/\n\s*\]/g, ']')  // Nova linha antes de fechar array
+        
+        try {
+          flashcardsData = JSON.parse(fixedJson)
+          console.log('JSON corrigido com sucesso')
+        } catch (fixError) {
+          throw new Error(`JSON inválido mesmo após correção: ${fixError.message}`)
+        }
+      }
+      
+      if (!flashcardsData.flashcards || !Array.isArray(flashcardsData.flashcards)) {
+        console.error('Estrutura recebida:', flashcardsData)
+        throw new Error('Formato de flashcards inválido - esperado array em flashcards')
+      }
+
+      setGenerationStatus(`Encontrados ${flashcardsData.flashcards.length} flashcards. Preparando para salvar...`)
+
+      // Salvar flashcards no Firestore
+      const batch = writeBatch(db)
+      const flashcardsRef = collection(db, 'courses', courseId, 'flashcards')
+      
+      // SEMPRE apagar os flashcards existentes antes de gerar novos
+      if (existingFlashcards?.length > 0) {
+        setGenerationStatus(`Apagando ${existingFlashcards.length} flashcards existentes...`)
+        existingFlashcards.forEach(flashcard => {
+          const docRef = doc(db, 'courses', courseId, 'flashcards', flashcard.id)
+          batch.delete(docRef)
+        })
+      }
+
+      setGenerationStatus(`Salvando ${flashcardsData.flashcards.length} novos flashcards...`)
+      
+      // Adicionar novos flashcards
+      flashcardsData.flashcards.forEach((flashcard, index) => {
+        const docRef = doc(flashcardsRef)
+        batch.set(docRef, {
+          ...flashcard,
+          userId: user.uid,
+          courseId: courseId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          order: index
+        })
+      })
+
+      setGenerationStatus('Executando operação no banco de dados...')
+      await batch.commit()
+      
+      setGenerationStatus(`✅ ${flashcardsData.flashcards.length} flashcards gerados com sucesso!`)
+      
+      // Atualizar lista de flashcards existentes
+      await checkExistingFlashcards()
+      
+      // Fechar modal após 2 segundos
+      setTimeout(() => {
+        setFlashcardsModalOpen(false)
+        setGenerationStatus('')
+      }, 2000)
+
+    } catch (error) {
+      console.error('Erro ao gerar flashcards:', error)
+      setGenerationStatus(`❌ Erro: ${error.message}`)
+    } finally {
+      setGeneratingFlashcards(false)
+    }
+  }
+
+  // Abrir modal de flashcards
+  const openFlashcardsModal = async () => {
+    await checkExistingFlashcards()
+    setFlashcardsModalOpen(true)
+    setGenerationStatus('')
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -639,52 +869,57 @@ const EditalVerticalizado = () => {
         </div>
 
         {/* Conteúdo Principal */}
-        <div className={`bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-3 sm:p-4 md:p-6 lg:p-8`}>
+        <div className={`bg-gradient-to-br from-white via-white to-slate-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200/50 dark:border-slate-700/50 p-4 sm:p-6 md:p-8 lg:p-10 backdrop-blur-sm`}>
           {/* Descrição removida conforme solicitado */}
 
           {/* Tabela de Edital Verticalizado */}
           {editalVerticalizado?.disciplinas && Array.isArray(editalVerticalizado.disciplinas) && editalVerticalizado.disciplinas.length > 0 ? (
             <>
               {/* Informações sobre o edital */}
-              <div className="mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-slate-200 dark:border-slate-700">
-                <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">
-                    📚 {editalVerticalizado.disciplinas.length} {editalVerticalizado.disciplinas.length === 1 ? 'disciplina' : 'disciplinas'}
-                  </span>
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">
-                    📝 {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)} {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0) === 1 ? 'tópico' : 'tópicos'}
-                  </span>
+              <div className="mb-6 sm:mb-8 pb-4 sm:pb-6 border-b border-gradient-to-r from-transparent via-slate-200 to-transparent dark:via-slate-700">
+                <div className="flex flex-wrap items-center justify-between gap-4 sm:gap-6">
+                  <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-full border border-blue-200 dark:border-blue-800/50">
+                      <span className="text-lg">{'\ud83d\udcda'}</span>
+                      <span className="font-bold text-blue-700 dark:text-blue-300 text-sm sm:text-base">
+                        {editalVerticalizado.disciplinas.length} {editalVerticalizado.disciplinas.length === 1 ? 'disciplina' : 'disciplinas'}
+                      </span>
+                    </div>
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 rounded-full border border-green-200 dark:border-green-800/50">
+                      <span className="text-lg">{'\ud83d\udcdd'}</span>
+                      <span className="font-bold text-green-700 dark:text-green-300 text-sm sm:text-base">
+                        {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)} {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0) === 1 ? 'tópico' : 'tópicos'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
               
-              <div className="overflow-x-auto -mx-3 sm:-mx-4 md:mx-0 scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-slate-200 dark:scrollbar-track-slate-700">
+              <div className="overflow-x-auto -mx-3 sm:-mx-4 md:mx-0 scrollbar-thin scrollbar-thumb-indigo-500 scrollbar-track-slate-200 dark:scrollbar-track-slate-700">
               <div className="min-w-full inline-block">
-                <table className="w-full min-w-[500px] sm:min-w-[600px] md:min-w-[640px] border-collapse border border-black dark:border-slate-600 bg-white dark:bg-slate-800 text-xs sm:text-sm">
+                <table className="w-full min-w-[500px] sm:min-w-[600px] md:min-w-[640px] border-separate border-spacing-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl overflow-hidden shadow-xl">
                   <thead>
-                    <tr className="bg-blue-700 dark:bg-blue-800 text-white">
-                      <th className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-left font-bold text-[10px] sm:text-xs md:text-sm">
-                        DISCIPLINAS
+                    <tr className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 text-white shadow-lg">
+                      <th className="px-4 sm:px-6 md:px-8 py-3 sm:py-4 text-left font-bold text-xs sm:text-sm md:text-base tracking-wide">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{'\ud83d\udcda'}</span>
+                          DISCIPLINAS
+                        </div>
                       </th>
-                      <th className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center font-bold text-[10px] sm:text-xs md:text-sm whitespace-nowrap">
-                        <span className="hidden sm:inline">FlashCards</span>
-                        <span className="sm:hidden">FC</span>
-                      </th>
-                      <th className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center font-bold text-[10px] sm:text-xs md:text-sm whitespace-nowrap">
-                        <span className="hidden sm:inline">Questões</span>
-                        <span className="sm:hidden">Q</span>
-                      </th>
-                      <th className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center font-bold text-[10px] sm:text-xs md:text-sm whitespace-nowrap">
-                        <span className="hidden sm:inline">Estudado</span>
-                        <span className="sm:hidden">Est.</span>
-                      </th>
-                      <th className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center font-bold text-[10px] sm:text-xs md:text-sm whitespace-nowrap">
-                        <span className="hidden sm:inline">Revisões</span>
-                        <span className="sm:hidden">Rev</span>
+                      <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-center font-bold text-xs sm:text-sm md:text-base tracking-wide whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-lg">{'\u2705'}</span>
+                          <span className="hidden sm:inline">Estudado</span>
+                          <span className="sm:hidden">Est.</span>
+                        </div>
                       </th>
                       {profile?.role === 'admin' && (
-                        <th className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center font-bold text-[10px] sm:text-xs md:text-sm whitespace-nowrap">
-                          <span className="hidden sm:inline">Editar</span>
-                          <span className="sm:hidden">Ed</span>
+                        <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-center font-bold text-xs sm:text-sm md:text-base tracking-wide whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="text-lg">{'\u270f\ufe0f'}</span>
+                            <span className="hidden sm:inline">Editar</span>
+                            <span className="sm:hidden">Ed</span>
+                          </div>
                         </th>
                       )}
                     </tr>
@@ -699,22 +934,32 @@ const EditalVerticalizado = () => {
                       }
                       return (
                     <React.Fragment key={idx}>
-                      {/* Linha principal da disciplina (destaque laranja) */}
-                      <tr className="bg-orange-500 dark:bg-orange-600 text-white font-bold">
-                        <td className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-[11px] sm:text-xs md:text-sm lg:text-base">
-                          <span className="break-words">{disciplina.nome || 'Disciplina sem nome'}</span>
-                          {disciplina.totalQuestoes && (
-                            <span className="block sm:inline sm:ml-1 text-[10px] sm:text-xs">
-                              ({disciplina.totalQuestoes} Questões)
-                            </span>
-                          )}
+                      {/* Linha principal da disciplina (destaque com gradiente moderno) */}
+                      <tr className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 dark:from-amber-600 dark:via-orange-600 dark:to-amber-600 text-white font-bold shadow-lg">
+                        <td className="px-4 sm:px-6 md:px-8 py-3 sm:py-4 text-sm sm:text-base md:text-lg">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{'\ud83d\udcd6'}</span>
+                            <div className="flex-1">
+                              <span className="break-words font-extrabold tracking-wide">{disciplina.nome || 'Disciplina sem nome'}</span>
+                              {disciplina.totalQuestoes && (
+                                <span className="block sm:inline sm:ml-2 text-xs sm:text-sm opacity-90 font-medium">
+                                  ({disciplina.totalQuestoes} Questões)
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </td>
-                        <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center"></td>
-                        <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center"></td>
-                        <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center"></td>
-                        <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center"></td>
+                        <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-center">
+                          <div className="flex items-center justify-center">
+                            <span className="text-lg opacity-70">{'\u2b55'}</span>
+                          </div>
+                        </td>
                         {profile?.role === 'admin' && (
-                          <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center"></td>
+                          <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-center">
+                            <div className="flex items-center justify-center">
+                              <span className="text-lg opacity-70">{'\ud83d\udd12'}</span>
+                            </div>
+                          </td>
                         )}
                       </tr>
                       
@@ -746,85 +991,68 @@ const EditalVerticalizado = () => {
                           )
                           
                           return (
-                            <tr key={`${idx}-${topicoIdx}`} id={`topico-${idx}-${topicoIdx}`} className={`${isHighlighted ? 'ring-2 ring-yellow-400 dark:ring-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' : ''} hover:bg-slate-50 dark:hover:bg-slate-700/50 bg-white dark:bg-slate-800`}>
+                            <tr key={`${idx}-${topicoIdx}`} id={`topico-${idx}-${topicoIdx}`} className={`${isHighlighted ? 'ring-2 ring-yellow-400 dark:ring-yellow-500 bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20' : ''} bg-gradient-to-r from-slate-50/50 to-white/50 dark:from-slate-700/30 dark:to-slate-800/30 hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-blue-900/20 dark:hover:to-indigo-900/20 transition-all duration-200 border-b border-slate-100 dark:border-slate-700/50`}>
                               <td 
-                                className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 text-slate-900 dark:text-white text-[11px] sm:text-xs md:text-sm break-words"
+                                className="px-4 sm:px-6 md:px-8 py-3 sm:py-4 text-slate-900 dark:text-white text-sm sm:text-base"
                                 style={{ 
-                                  paddingLeft: `${paddingLeft}px`
+                                  paddingLeft: `${paddingLeft + 16}px`
                                 }}
                               >
-                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                   <div className="min-w-0 flex-1">
-                                    {topico.numero && <span className="font-medium whitespace-nowrap text-[10px] sm:text-xs">{topico.numero} </span>}
-                                    <span className="break-words">{topico.nome || ''}</span>
+                                    <div className="flex items-start gap-2">
+                                      {topico.numero && (
+                                        <span className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 bg-gradient-to-br from-indigo-500 to-purple-500 text-white text-xs sm:text-sm font-bold rounded-full flex-shrink-0 mt-0.5">
+                                          {topico.numero.split('.').pop()}
+                                        </span>
+                                      )}
+                                      <div className="flex-1">
+                                        <span className="break-words font-medium text-slate-800 dark:text-slate-200 leading-relaxed">{topico.nome || ''}</span>
+                                      </div>
+                                    </div>
                                   </div>
                                   {(() => {
                                     const topicKey = makeTopicKey(topico)
                                     // Validar que o topicKey não está vazio antes de criar o link
                                     if (!topicKey || topicKey.trim() === '') {
                                       return (
-                                        <span className="inline-flex items-center gap-1 px-2 py-1.5 sm:py-1 rounded-md text-[10px] sm:text-xs font-semibold bg-slate-400 text-white cursor-not-allowed whitespace-nowrap flex-shrink-0" title="Tópico sem identificação válida">
-                                          <BookOpenIcon className="h-3 w-3 sm:h-4 sm:w-4" />
-                                          <span className="hidden sm:inline">Estudar</span>
-                                          <span className="sm:hidden">Est.</span>
+                                        <span className="inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-slate-400 to-slate-500 text-white text-xs sm:text-sm font-semibold rounded-lg cursor-not-allowed whitespace-nowrap flex-shrink-0 shadow-md opacity-60" title="Tópico sem identificação válida">
+                                          <BookOpenIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                                          <span className="hidden sm:inline">Indisponível</span>
+                                          <span className="sm:hidden">{'\u274c'}</span>
                                         </span>
                                       )
                                     }
                                     return (
                                       <Link
                                         to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
-                                        className="inline-flex items-center gap-1 px-2 py-1.5 sm:py-1 rounded-md text-[10px] sm:text-xs font-semibold bg-alego-600 text-white hover:bg-alego-700 transition whitespace-nowrap flex-shrink-0 active:scale-95"
+                                        className="inline-flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white text-xs sm:text-sm font-semibold rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200 whitespace-nowrap flex-shrink-0"
                                         title="Estudar conteúdo deste tópico"
                                       >
-                                        <BookOpenIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                        <BookOpenIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                                         <span className="hidden sm:inline">Estudar</span>
-                                        <span className="sm:hidden">Est.</span>
+                                        <span className="sm:hidden">{'\ud83d\udcd6'}</span>
                                       </Link>
                                     )
                                   })()}
                                 </div>
                               </td>
-                              <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={!!topico.flashcards}
-                                  onChange={() => handleToggleCheckbox(idx, topicoIdx, 'flashcards')}
-                                  className="w-5 h-5 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white dark:bg-slate-700 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-slate-800 focus:ring-2 dark:border-slate-600 cursor-pointer touch-manipulation"
-                                  style={{ touchAction: 'manipulation' }}
-                                />
-                              </td>
-                              <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={!!topico.questoes}
-                                  onChange={() => handleToggleCheckbox(idx, topicoIdx, 'questoes')}
-                                  className="w-5 h-5 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white dark:bg-slate-700 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-slate-800 focus:ring-2 dark:border-slate-600 cursor-pointer touch-manipulation"
-                                  style={{ touchAction: 'manipulation' }}
-                                />
-                              </td>
-                              <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={!!topico.estudado}
-                                  onChange={() => handleToggleCheckbox(idx, topicoIdx, 'estudado')}
-                                  className="w-5 h-5 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white dark:bg-slate-700 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-slate-800 focus:ring-2 dark:border-slate-600 cursor-pointer touch-manipulation"
-                                  style={{ touchAction: 'manipulation' }}
-                                />
-                              </td>
-                              <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={!!topico.revisoes}
-                                  onChange={() => handleToggleCheckbox(idx, topicoIdx, 'revisoes')}
-                                  className="w-5 h-5 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white dark:bg-slate-700 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-slate-800 focus:ring-2 dark:border-slate-600 cursor-pointer touch-manipulation"
-                                  style={{ touchAction: 'manipulation' }}
-                                />
+                              <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-center">
+                                <div className="flex items-center justify-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!topico.estudado}
+                                    onChange={() => handleToggleCheckbox(idx, topicoIdx, 'estudado')}
+                                    className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600 bg-white dark:bg-slate-700 border-2 border-emerald-300 dark:border-emerald-600 rounded-lg focus:ring-emerald-500 dark:focus:ring-emerald-400 focus:ring-2 cursor-pointer transform hover:scale-110 transition-all duration-200"
+                                    style={{ touchAction: 'manipulation' }}
+                                  />
+                                </div>
                               </td>
                               {profile?.role === 'admin' && (
-                                <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 text-center">
+                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 text-center">
                                   <button
                                     onClick={() => handleEditTopico(idx, topicoIdx)}
-                                    className="inline-flex items-center justify-center p-1.5 sm:p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                    className="inline-flex items-center justify-center p-2 sm:p-3 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 dark:hover:text-indigo-400 dark:hover:bg-indigo-900/30 rounded-lg transition-all duration-200 transform hover:scale-110"
                                     title="Editar tópico"
                                   >
                                     <PencilIcon className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -1030,6 +1258,83 @@ const EditalVerticalizado = () => {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Geração de Flashcards */}
+      {flashcardsModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-lg w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                🎴 Gerar Flashcards com IA
+              </h3>
+              <button
+                onClick={() => setFlashcardsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Informações sobre o edital */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                  📋 Estrutura do Edital
+                </h4>
+                <div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                  <p><strong>Curso:</strong> {courseName}</p>
+                  <p><strong>Disciplinas:</strong> {editalVerticalizadoBase?.disciplinas?.length || 0}</p>
+                  <p><strong>Tópicos:</strong> {editalVerticalizadoBase?.disciplinas?.reduce((sum, d) => sum + (d.topicos?.length || 0), 0) || 0}</p>
+                </div>
+              </div>
+
+              {/* Status de flashcards existentes */}
+              {existingFlashcards !== null && (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                  <h4 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-2">
+                    📚 Flashcards Existentes
+                  </h4>
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                    {existingFlashcards.length === 0 
+                      ? 'Nenhum flashcard encontrado. Serão gerados novos flashcards.'
+                      : `Encontrados ${existingFlashcards.length} flashcards. Eles serão APAGADOS e substituídos por novos.`
+                    }
+                  </p>
+                </div>
+              )}
+
+              {/* Status da geração */}
+              {generationStatus && (
+                <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
+                  <p className="text-sm text-gray-800 dark:text-gray-200">
+                    {generationStatus}
+                  </p>
+                </div>
+              )}
+
+              {/* Botão de ação */}
+              <div className="pt-2">
+                <button
+                  onClick={() => generateFlashcardsFromEdital()}
+                  disabled={generatingFlashcards}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <SparklesIcon className="h-5 w-5" />
+                  {generatingFlashcards ? 'Gerando Flashcards...' : 'Gerar Flashcards'}
+                </button>
+              </div>
+
+              {/* Informações importantes */}
+              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                <p>• <strong>⚠️ ATENÇÃO:</strong> Todos os flashcards existentes serão APAGADOS</p>
+                <p>• A IA seguirá exatamente a estrutura do edital (disciplinas e tópicos)</p>
+                <p>• Serão gerados 3-5 flashcards por tópico</p>
+                <p>• O processo é irreversível - faça backup se necessário</p>
+              </div>
             </div>
           </div>
         </div>

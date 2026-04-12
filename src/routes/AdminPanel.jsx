@@ -1733,7 +1733,153 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
     }
   }
 
-  // Gerar flashcards por IA a partir de conteúdo colado (estilo Noji)
+  // Gerar flashcards a partir do edital verticalizado (nova função)
+  const generateFlashcardsFromEdital = async () => {
+    console.log('🎴 Botão de gerar flashcards do edital clicado!')
+    console.log('📋 Curso selecionado:', selectedCourseForFlashcards)
+    
+    const courseIdToUse = selectedCourseForFlashcards || 'alego-default'
+    
+    if (!courseIdToUse) {
+      setMessage('❌ Selecione um curso para gerar flashcards')
+      return
+    }
+
+    setGeneratingFlashcards(true)
+    setFlashcardGenProgress('Carregando edital verticalizado...')
+    setMessage('')
+
+    try {
+      // Carregar edital verticalizado
+      const editalRef = doc(db, 'courses', courseIdToUse, 'editalVerticalizado', 'principal')
+      const editalDoc = await getDoc(editalRef)
+      
+      if (!editalDoc.exists()) {
+        throw new Error('Edital verticalizado não encontrado para este curso')
+      }
+
+      const editalData = editalDoc.data()
+      setFlashcardGenProgress('Estrutura carregada, gerando flashcards...')
+
+      // Preparar estrutura simplificada para a IA
+      const disciplinas = editalData.disciplinas || []
+      const totalTopicos = disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)
+      
+      setFlashcardGenProgress(`Gerando flashcards para ${disciplinas.length} disciplinas, ${totalTopicos} tópicos...`)
+
+      // Construir prompt simples
+      let prompt = `Gere flashcards educacionais para o edital abaixo.\n\n`
+      prompt += `CURSO: ${editalData.titulo || 'Curso'}\n\n`
+      
+      disciplinas.forEach((disciplina, idx) => {
+        prompt += `DISCIPLINA ${idx + 1}: ${disciplina.nome}\n`
+        if (disciplina.topicos && disciplina.topicos.length > 0) {
+          disciplina.topicos.forEach((topico, tidx) => {
+            prompt += `- Tópico ${tidx + 1}: ${topico.numero || ''} ${topico.nome || ''}\n`
+          })
+        }
+        prompt += '\n'
+      })
+
+      prompt += `\nINSTRUÇÕES:\n`
+      prompt += `1. Gere 3-5 flashcards por tópico\n`
+      prompt += `2. Formato: PERGUNTA || RESPOSTA\n`
+      prompt += `3. Seja objetivo e educacional\n`
+      prompt += `4. Retorne apenas JSON válido:\n`
+      prompt += `{"flashcards": [{"frente": "pergunta", "verso": "resposta"}]}\n`
+
+      setFlashcardGenProgress('Enviando para IA...')
+
+      // Chamar API
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + import.meta.env.VITE_GEMINI_API_KEY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 8000
+          }
+        })
+      })
+
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error?.message || 'Erro na API')
+      }
+
+      setFlashcardGenProgress('Processando resposta...')
+
+      const generatedText = data.candidates[0]?.content?.parts[0]?.text
+      
+      // Extrair JSON de forma simples
+      let flashcardsData = null
+      try {
+        // Procurar por JSON
+        const jsonMatch = generatedText.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          flashcardsData = JSON.parse(jsonMatch[0])
+        } else {
+          // Tentar extrair apenas o array
+          const arrayMatch = generatedText.match(/\[[\s\S]*\]/)
+          if (arrayMatch) {
+            flashcardsData = { flashcards: JSON.parse('[' + arrayMatch[0] + ']') }
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao processar JSON:', err)
+        throw new Error('Não foi possível processar a resposta da IA')
+      }
+
+      if (!flashcardsData || !flashcardsData.flashcards) {
+        throw new Error('Nenhum flashcard válido gerado')
+      }
+
+      setFlashcardGenProgress(`Salvando ${flashcardsData.flashcards.length} flashcards...`)
+
+      // Apagar flashcards existentes e salvar novos
+      const batch = writeBatch(db)
+      const flashcardsRef = collection(db, 'courses', courseIdToUse, 'flashcards')
+      
+      // Verificar e apagar existentes
+      const existingSnapshot = await getDocs(flashcardsRef)
+      existingSnapshot.forEach(doc => {
+        batch.delete(doc.ref)
+      })
+
+      // Adicionar novos flashcards
+      flashcardsData.flashcards.forEach((flashcard, index) => {
+        const docRef = doc(flashcardsRef)
+        batch.set(docRef, {
+          ...flashcard,
+          userId: 'admin',
+          courseId: courseIdToUse,
+          materia: selectedCourseForFlashcards?.name || 'Flashcards Gerados',
+          modulo: 'Edital Verticalizado',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          order: index
+        })
+      })
+
+      await batch.commit()
+
+      setMessage(`✅ ${flashcardsData.flashcards.length} flashcards gerados com sucesso do edital verticalizado!`)
+      setFlashcardGenProgress('Concluído!')
+
+    } catch (error) {
+      console.error('Erro ao gerar flashcards do edital:', error)
+      setMessage(`❌ Erro: ${error.message}`)
+    } finally {
+      setGeneratingFlashcards(false)
+      setTimeout(() => {
+        setFlashcardGenProgress('')
+      }, 3000)
+    }
+  }
+
+  // Gerar flashcards por IA a partir do conteúdo colado (estilo Noji)
   const generateFlashcardsFromContent = async () => {
     if (!flashcardForm.materia || !flashcardForm.modulo || !aiContentInput.trim()) {
       setMessage('❌ Selecione matéria, módulo e cole o conteúdo.')
@@ -3061,45 +3207,17 @@ REGRAS CRÍTICAS:
     }
   }
 
-  // Gerar automaticamente módulos e flashcards completos a partir do PDF do edital
+  // Gerar automaticamente módulos e flashcards completos a partir do edital verticalizado
   const generateFullCourseFromEdital = async (courseId, isRegenerating = false) => {
     // Verificar se tem edital verticalizado disponível
-    let editalText = ''
-    let editalSource = ''
-    
-    if (editalVerticalizadoData && editalVerticalizadoData.disciplinas) {
-      // Usar edital verticalizado se disponível
-      // Converter disciplinas em texto para a IA analisar
-      const disciplinasText = editalVerticalizadoData.disciplinas.map(disciplina => {
-        let disciplinaTexto = `MATÉRIA: ${disciplina.nome}\n`
-        if (disciplina.topicos && Array.isArray(disciplina.topicos)) {
-          disciplina.topicos.forEach(topico => {
-            disciplinaTexto += `- ${topico}\n`
-          })
-        }
-        return disciplinaTexto
-      }).join('\n')
-      
-      editalText = disciplinasText
-      editalSource = 'edital verticalizado'
-      console.log('✅ Usando edital verticalizado com', editalText.length, 'caracteres')
-    } else if (editalPdfTextForGeneration.trim()) {
-      // Fallback para PDF do upload
-      editalText = editalPdfTextForGeneration
-      editalSource = 'PDF do edital'
-    } else {
-      setMessage('❌ Nenhum edital disponível. Configure o edital verticalizado primeiro ou faça upload do PDF.')
-      return
-    }
-
-    if (!cargoForGeneration.trim()) {
-      setMessage('❌ Informe o cargo específico para filtrar as matérias corretas.')
+    if (!editalVerticalizadoData || !editalVerticalizadoData.disciplinas) {
+      setMessage('Nenhum edital verticalizado disponível. Configure o edital verticalizado primeiro.')
       return
     }
 
     const confirmMessage = isRegenerating 
-      ? `⚠️ ATENÇÃO: Isso vai REGENERAR o curso:\n\n- Deletar TODOS os flashcards existentes\n- Manter as matérias e módulos existentes\n- Gerar novos flashcards focados no CONTEÚDO (não no cargo)\n\nBaseado no ${editalSource}.\n\nIsso pode demorar vários minutos. Deseja continuar?`
-      : `⚠️ ATENÇÃO: Isso vai gerar AUTOMATICAMENTE:\n\n- Todas as matérias do cargo: ${cargoForGeneration}\n- Todos os módulos de cada matéria\n- Todos os flashcards de cada módulo (focados no CONTEÚDO)\n\nBaseado no ${editalSource}.\n\nIsso pode demorar vários minutos. Deseja continuar?`
+      ? `ATENÇÃO: Isso vai REGENERAR o curso usando o edital verticalizado:\n\n- Deletar TODOS os flashcards existentes\n- Manter as matérias existentes\n- Gerar flashcards para CADA tópico do edital verticalizado\n- Usar nomes completos das matérias (sem abreviações)\n\nIsso pode demorar vários minutos. Deseja continuar?`
+      : `ATENÇÃO: Isso vai gerar AUTOMATICAMENTE usando o edital verticalizado:\n\n- Todas as matérias do edital verticalizado\n- Um módulo para CADA tópico\n- Flashcards para cada módulo\n- Usar nomes completos das matérias (sem abreviações)\n\nIsso pode demorar vários minutos. Deseja continuar?`
 
     if (!window.confirm(confirmMessage)) {
       return
@@ -3196,217 +3314,23 @@ REGRAS CRÍTICAS:
             }
           }
         } catch (listErr) {
-          console.warn('⚠️ Erro ao listar modelos:', listErr)
+          console.warn('Erro ao listar modelos:', listErr)
         }
       }
       
-      if (!model) {
-        // Se nenhum modelo Gemini funcionar, tentar Groq como fallback
-        const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
-        if (groqApiKey) {
-          console.log('⚠️ Nenhum modelo Gemini disponível, usando Groq como fallback...')
-          // Continuar com Groq (será usado mais tarde se necessário)
-        } else {
-          throw new Error('Nenhum modelo de IA disponível. Verifique se VITE_GEMINI_API_KEY está configurada corretamente no arquivo .env')
-        }
-      }
-
-      // 1. Detectar leis no edital e baixar se necessário
-      setFullCourseProgress('🔍 Detectando leis no edital e baixando textos oficiais...')
+      // Preparar estrutura de matérias e módulos diretamente do edital verticalizado
+      setFullCourseProgress('Preparando estrutura do edital verticalizado...')
       
-      const lawDetector = new LawDetector()
-      const lawDownloader = new LawDownloader()
-      
-      // Detecta todas as leis mencionadas no edital
-      const detectedLaws = lawDetector.detectLaws(editalPdfTextForGeneration)
-      console.log(`🔍 Detectadas ${detectedLaws.length} leis no edital:`, detectedLaws)
-      
-      // Baixa as leis (verifica cache primeiro)
-      let downloadedLaws = []
-      if (detectedLaws.length > 0) {
-        setFullCourseProgress(`📥 Baixando ${detectedLaws.length} lei(s) de fontes oficiais...`)
-        downloadedLaws = await lawDownloader.downloadMultipleLaws(detectedLaws)
-        console.log(`✅ ${downloadedLaws.length} leis processadas com sucesso`)
-        setFullCourseProgress(`✅ ${downloadedLaws.length} lei(s) disponíveis para geração de flashcards`)
-      }
+      const materiasComModulos = editalVerticalizadoData.disciplinas.map(disciplina => ({
+        nome: disciplina.nome, // Usar nome completo sem abreviações
+        modulos: (disciplina.topicos || []).map(topico => ({
+          nome: typeof topico === 'string' ? topico : (topico.nome || topico.numero || 'Tópico sem nome'),
+          topicos: Array.isArray(topico) ? topico : (topico.conteudos || [topico.nome || topico.numero || 'Tópico sem nome'])
+        }))
+      }))
 
-      // 2. Analisar o edital e extrair matérias e estrutura APENAS DO CARGO ESPECÍFICO
-      setFullCourseProgress(`📄 Analisando o edital e extraindo matérias do cargo: ${cargoForGeneration}...`)
-      
-      // Prepara textos das leis para incluir no prompt
-      const lawsText = downloadedLaws.length > 0 ? 
-        `\n\nLEIS E TEXTOS OFICIAIS DISPONÍVEIS:\n${downloadedLaws.map(law => 
-          `\n--- ${law.nome} ---\n${law.texto.substring(0, 5000)}${law.texto.length > 5000 ? '\n\n[... texto completo disponível no cache ...]' : ''}`
-        ).join('\n\n')}` : ''
-      
-      const analysisPrompt = `Você é um especialista em análise de editais de concursos públicos.
-
-Analise o edital abaixo e extraia APENAS as informações relevantes para o CARGO ESPECÍFICO mencionado.
-
-CARGO ESPECÍFICO: ${cargoForGeneration}
-
-EDITAL:
-${editalText.substring(0, 100000)}${editalText.length > 100000 ? '\n\n[... conteúdo truncado ...]' : ''}${lawsText}
-
-TAREFA CRÍTICA - EXTRAIR TODAS AS MATÉRIAS E MÓDULOS:
-1. Identifique TODAS as matérias que serão cobradas para o cargo "${cargoForGeneration}"
-2. IGNORE completamente matérias de outros cargos que possam estar no edital
-3. Procure no edital a seção específica do cargo "${cargoForGeneration}" e suas matérias
-4. Para CADA matéria identificada, encontre TODOS os tópicos/conteúdos principais mencionados no edital
-5. Organize os tópicos em módulos lógicos (4-8 módulos por matéria, dependendo do tamanho)
-6. Cada módulo deve ter um nome descritivo e claro
-7. NÃO deixe nenhuma matéria sem módulos
-8. NÃO deixe nenhum módulo sem tópicos
-9. Seja COMPLETO e EXAUSTIVO - extraia TUDO que está no edital para este cargo
-
-IMPORTANTE - FILTRO POR CARGO:
-- O edital pode conter múltiplos cargos (ex: Policial, Escrivão, Delegado, etc.)
-- Você DEVE filtrar e extrair APENAS as matérias do cargo "${cargoForGeneration}"
-- Se o edital mencionar "Cargo: ${cargoForGeneration}" ou similar, foque APENAS nessa seção
-- NÃO inclua matérias de outros cargos
-- Se não encontrar matérias específicas para "${cargoForGeneration}", retorne um JSON vazio
-- Seja ESPECÍFICO e DETALHADO, mas APENAS para o cargo informado
-- Baseie-se EXCLUSIVAMENTE no conteúdo do edital e nos textos oficiais das leis fornecidos
-- Organize de forma lógica e pedagógica
-- Módulos devem ter tamanho similar (não muito grandes, não muito pequenos)
-- GARANTA que TODAS as matérias do edital para este cargo sejam incluídas
-- GARANTA que CADA matéria tenha pelo menos 3 módulos
-
-Retorne APENAS um JSON válido no seguinte formato:
-{
-  "materias": [
-    {
-      "nome": "Nome da Matéria",
-      "modulos": [
-        {
-          "nome": "Nome do Módulo 1",
-          "topicos": ["tópico 1", "tópico 2", "tópico 3", ...]
-        },
-        {
-          "nome": "Nome do Módulo 2",
-          "topicos": ["tópico 1", "tópico 2", "tópico 3", ...]
-        }
-      ]
-    }
-  ]
-}
-
-IMPORTANTE: Retorne TODAS as matérias e TODOS os módulos. Não deixe nada faltando. Retorne APENAS o JSON, sem markdown, sem explicações.`
-
-      if (!model) {
-        throw new Error('Modelo de IA não disponível. Verifique as configurações da API.')
-      }
-
-      // Tentar usar o modelo - se falhar, tentar próximo modelo
-      let analysisResult = null
-      let analysisText = ''
-      
-      // Função auxiliar para detectar erro de quota
-      const isQuotaError = (err) => {
-        const errorMsg = err.message?.toLowerCase() || ''
-        const errorString = JSON.stringify(err) || ''
-        return (
-          errorMsg.includes('429') ||
-          errorMsg.includes('quota') ||
-          errorMsg.includes('quota exceeded') ||
-          errorMsg.includes('free_tier_requests') ||
-          errorMsg.includes('too many requests') ||
-          errorMsg.includes('resource_exhausted') ||
-          errorMsg.includes('rate limit') ||
-          errorString.includes('429') ||
-          errorString.includes('quota') ||
-          errorString.includes('free_tier_requests') ||
-          err.status === 429 ||
-          err.code === 429
-        )
-      }
-      
-      // Função auxiliar para extrair tempo de espera do erro
-      const extractWaitTime = (err) => {
-        const errorMsg = err.message || ''
-        const retryMatch = errorMsg.match(/retry in ([\d.]+)/i) || 
-                          errorMsg.match(/(\d+\.?\d*)\s*seconds?/i)
-        return retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : null
-      }
-      
-      try {
-        analysisResult = await model.generateContent(analysisPrompt)
-        analysisText = analysisResult.response.text().trim()
-      } catch (modelErr) {
-        // Verificar se é erro de quota
-        if (isQuotaError(modelErr)) {
-          const waitTime = extractWaitTime(modelErr)
-          const waitSeconds = waitTime || 60
-          
-          setFullCourseProgress(`⏳ Quota excedida. Aguardando ${waitSeconds} segundos antes de tentar novamente...`)
-          
-          // Aguardar o tempo sugerido
-          await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
-          
-          // Tentar novamente uma vez
-          try {
-            analysisResult = await model.generateContent(analysisPrompt)
-            analysisText = analysisResult.response.text().trim()
-            setFullCourseProgress('✅ Retry bem-sucedido após aguardar quota!')
-          } catch (retryErr) {
-            if (isQuotaError(retryErr)) {
-              throw new Error(`Quota da API excedida. Você atingiu o limite de 200 requisições/dia do plano gratuito. Aguarde até amanhã ou faça upgrade para um plano pago em https://ai.google.dev/pricing`)
-            }
-            throw retryErr
-          }
-        } else {
-          // Se não for erro de quota, tentar outros modelos
-          console.warn('⚠️ Primeiro modelo falhou, tentando outros...', modelErr.message)
-          
-          for (const fallbackModelName of modelNames.slice(1)) {
-            try {
-              const fallbackModel = genAI.getGenerativeModel({ model: fallbackModelName })
-              analysisResult = await fallbackModel.generateContent(analysisPrompt)
-              analysisText = analysisResult.response.text().trim()
-              model = fallbackModel // Usar este modelo para as próximas chamadas
-              console.log(`✅ Usando modelo alternativo: ${fallbackModelName}`)
-              break
-            } catch (fallbackErr) {
-              // Se for erro de quota no fallback, parar e informar
-              if (isQuotaError(fallbackErr)) {
-                const waitTime = extractWaitTime(fallbackErr)
-                const waitSeconds = waitTime || 60
-                throw new Error(`Quota da API excedida. Aguarde ${waitSeconds} segundos ou faça upgrade para um plano pago em https://ai.google.dev/pricing`)
-              }
-              console.warn(`⚠️ Modelo ${fallbackModelName} também falhou, tentando próximo...`)
-              continue
-            }
-          }
-          
-          if (!analysisResult) {
-            throw new Error('Nenhum modelo de IA funcionou. Verifique sua API key e permissões.')
-          }
-        }
-      }
-      
-      // Limpar markdown se houver
-      if (analysisText.startsWith('```json')) {
-        analysisText = analysisText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      } else if (analysisText.startsWith('```')) {
-        analysisText = analysisText.replace(/```\n?/g, '').trim()
-      }
-
-      const analysis = JSON.parse(analysisText)
-      const materias = analysis.materias || []
-
-      if (materias.length === 0) {
-        throw new Error('Nenhuma matéria foi identificada no edital.')
-      }
-
-      // Validar que todas as matérias têm módulos
-      const materiasComModulos = materias.filter(m => m.modulos && m.modulos.length > 0)
-      if (materiasComModulos.length < materias.length) {
-        const materiasSemModulos = materias.filter(m => !m.modulos || m.modulos.length === 0)
-        console.warn('⚠️ Algumas matérias não têm módulos:', materiasSemModulos.map(m => m.nome))
-        setFullCourseProgress(`⚠️ ${materiasSemModulos.length} matéria(s) sem módulos detectada(s). Continuando com as que têm módulos...`)
-      }
-
-      setFullCourseProgress(`✅ ${materiasComModulos.length} matéria(s) identificada(s) com módulos. Iniciando criação...`)
+      console.log('Estrutura preparada:', materiasComModulos.length, 'matérias')
+      setFullCourseProgress(` ${materiasComModulos.length} matéria(s) do edital verticalizado. Iniciando criação...`)
 
       // 2. Criar matérias no curso (apenas se não estiver regenerando)
       const subjectsRef = collection(db, 'courses', courseId, 'subjects')
@@ -3895,7 +3819,7 @@ Retorne APENAS um JSON válido:
     {
       "nome": "Nome da Matéria",
       "ehNova": true/false,
-      "modulos": [
+      "modulos": [ç, ç-
         {
           "nome": "Nome do Módulo",
           "topicos": ["tópico 1", "tópico 2", ...]
@@ -9804,6 +9728,22 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                       </button>
                                       <button
                                         type="button"
+                                        onClick={() => {
+                                          setSelectedCourseForFlashcards(course.id)
+                                          setFlashcardGenProgress('Preparando para gerar flashcards do edital...')
+                                          // Chamar a função de geração após pequeno delay para garantir que o estado foi atualizado
+                                          setTimeout(() => {
+                                            generateFlashcardsFromEdital()
+                                          }, 100)
+                                        }}
+                                        disabled={generatingFlashcards}
+                                        className="rounded-lg bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Gerar flashcards automaticamente baseados na estrutura do edital verticalizado"
+                                      >
+                                        🎴 Gerar Flashcards do Edital
+                                      </button>
+                                      <button
+                                        type="button"
                                         onClick={(e) => {
                                           e.preventDefault()
                                           e.stopPropagation()
@@ -11185,6 +11125,34 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                       <SparklesIcon className="h-6 w-6" />
                       Gerar Flashcards por IA (Estilo Noji)
                     </p>
+                    
+                    {/* Botão para gerar flashcards do edital verticalizado */}
+                    <div className="mt-4 p-4 bg-white dark:bg-slate-800 rounded-lg border border-purple-200 dark:border-purple-700">
+                      <p className="text-sm font-semibold text-purple-700 dark:text-purple-300 mb-2">
+                        🎴 Gerar Flashcards do Edital Verticalizado
+                      </p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+                        Gera flashcards automaticamente baseados na estrutura completa do edital verticalizado do curso selecionado.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={generateFlashcardsFromEdital}
+                        disabled={generatingFlashcards || !selectedCourseForFlashcards}
+                        className="w-full rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed hover:from-indigo-700 hover:to-purple-700 transition-all"
+                      >
+                        {generatingFlashcards ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                            Gerando...
+                          </>
+                        ) : (
+                          <>
+                            <DocumentTextIcon className="h-4 w-4" />
+                            Gerar Flashcards do Edital
+                          </>
+                        )}
+                      </button>
+                    </div>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                       Cole o conteúdo abaixo e a IA gerará flashcards automaticamente para o módulo selecionado.
                     </p>
