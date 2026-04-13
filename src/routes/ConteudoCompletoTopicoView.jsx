@@ -623,6 +623,7 @@ FORMATO DE RESPOSTA (APENAS JSON VÁLIDO):
 }
 
 REGRAS FINAIS:
+- Antes de gerar, pesquise o concurso e veja qual a banca examinadora do concurso(se não estiver aberto pegue do último concurso)
 - Cuidado para não misturar direito(sumulas etc) em matérias que não são de direito
 - Fale Didaticamente com o aluno falando "aqui seu professor Flash o seu amigo que vai ver você aprovado (cite o concurso)"
 - Use bordões(mas sem exagerar)
