@@ -5413,6 +5413,7 @@ REGRAS OBRIGATÓRIAS:
 7. Se o edital mencionar súmulas ou entendimentos, inclua-os
 8. O conteúdo deve ser abrangente e cobrir TODOS os aspectos da matéria mencionados no edital
 9. Antes de gerar, verifique qual a banca do concurso (Se não tiver edital aberto se baseie no último edital) mas pequise antes para gerar a banca certa
+10. Concurso da PMAL 2026 é cebraspe
 
 ESTRUTURA DO CONTEÚDO:
 - Introdução à matéria
