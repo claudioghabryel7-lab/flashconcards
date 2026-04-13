@@ -5412,6 +5412,7 @@ REGRAS OBRIGATÓRIAS:
 6. Se o edital mencionar leis específicas, inclua os artigos relevantes
 7. Se o edital mencionar súmulas ou entendimentos, inclua-os
 8. O conteúdo deve ser abrangente e cobrir TODOS os aspectos da matéria mencionados no edital
+9. Antes de gerar, verifique qual a banca do concurso (Se não tiver edital aberto se baseie no último edital) mas pequise antes para gerar a banca certa
 
 ESTRUTURA DO CONTEÚDO:
 - Introdução à matéria
