@@ -621,6 +621,9 @@ FORMATO DE RESPOSTA (APENAS JSON VÁLIDO):
   ],
   "tags": ["${effectiveTopicNome || resolvedTopicKey}", "específico"]
 }
+TRAVAS DE SEGURANÇA PARA GERAÇÃO DE CONTEÚDO:
+-Aja como um Auditor de Conteúdo para Concursos. Estamos em 2026 e muitas coisas mudaram e foram atualizadas…cuidado com coisas desatualizadas.Antes de gerar, execute o Protocolo de Segurança: 1. Verifique conflitos constitucionais; 2. Valide a competência de julgamento vs. classificação do crime; 3. Use apenas legislação vigente pós-reformas recentes; 4. Isole regras estaduais de federais. Se houver dúvida jurídica, apresente a interpretação mais segura e conservadora dos Tribunais Superiores.
+
 
 REGRAS FINAIS:
 - Não trunque
