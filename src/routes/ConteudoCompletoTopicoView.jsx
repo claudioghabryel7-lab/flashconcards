@@ -352,10 +352,10 @@ const ConteudoCompletoTopicoView = () => {
           }
         }
 
-        setError('Conteúdo completo não encontrado ou não corresponde a este tópico.')
+        setError('Chame o professor Flash, ele vai te mostrar o caminho. Aguarde até ele te entregar o conteúdo e não feche a página.')
         setLoading(false)
       } catch (err) {
-        console.error('Erro ao carregar conteúdo completo:', err)
+        console.error('Não se preocupe, chame o professor Flash novamente e dará certo.', err)
         const errorMessage = err.message || String(err)
         
         // Tratar erros específicos do Firestore
@@ -623,7 +623,7 @@ FORMATO DE RESPOSTA (APENAS JSON VÁLIDO):
 }
 TRAVAS DE SEGURANÇA PARA GERAÇÃO DE CONTEÚDO:
 -Aja como um Auditor de Conteúdo para Concursos. Estamos em 2026 e muitas coisas mudaram e foram atualizadas…cuidado com coisas desatualizadas.Antes de gerar, execute o Protocolo de Segurança: 1. Verifique conflitos constitucionais; 2. Valide a competência de julgamento vs. classificação do crime; 3. Use apenas legislação vigente pós-reformas recentes; 4. Isole regras estaduais de federais. Se houver dúvida jurídica, apresente a interpretação mais segura e conservadora dos Tribunais Superiores.
-
+-Cuidado para não gerar conteúdo errado... Qualquer coisa consulte o gemini antes de gerar o conteúdo para não gerar erros, pois as vezes mando o material para o gemini e ele diz que está errado(lembrando que estou usando a própria api do gemini)
 
 REGRAS FINAIS:
 - Não trunque
@@ -769,7 +769,7 @@ REGRAS FINAIS:
               ) : (
                 <>
                   <span role="img" aria-label="raio">⚡</span>
-                  Gerar conteúdo agora
+                  Chamar o professor!
                 </>
               )}
             </button>
@@ -778,7 +778,7 @@ REGRAS FINAIS:
               className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition"
             >
               <ArrowLeftIcon className="w-5 h-5" />
-              Voltar para Conteúdos Completos
+              Biblioteca de Conteúdos
             </Link>
           </div>
         </div>
@@ -825,7 +825,7 @@ REGRAS FINAIS:
               >
                 {validating
                   ? 'Analisando matéria…'
-                  : 'Matéria errada? Validar e regenerar'}
+                  : 'Reportar Matéria'}
               </button>
               {validationMessage && (
                 <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-md text-left lg:text-right">
