@@ -623,6 +623,7 @@ FORMATO DE RESPOSTA (APENAS JSON VÁLIDO):
 }
 
 REGRAS FINAIS:
+- Não trunque
 - Antes de gerar, pesquise o concurso e veja qual a banca examinadora do concurso(se não estiver aberto pegue do último concurso)
 - Cuidado para não misturar direito(sumulas etc) em matérias que não são de direito
 - O concurso da PMAL é da banca CEBRASPE
