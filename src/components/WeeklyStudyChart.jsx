@@ -34,31 +34,40 @@ const WeeklyStudyChart = ({ courseId }) => {
 
     setLoading(true)
     try {
-      // Buscar dados de progresso como no CalendarioProgresso
+      // Buscar dados de progresso do edital verticalizado
+      const userProgressRef = doc(db, 'userEditalProgress', user.uid, 'courses', courseId)
+      const userProgressSnap = await getDoc(userProgressRef)
+      
+      let userProgressData = {}
+      if (userProgressSnap.exists()) {
+        userProgressData = userProgressSnap.data().progress || {}
+      }
+      
+      // Buscar dados de progresso diário (para datas)
       const progressQuery = query(
         collection(db, 'progress'),
         where('uid', '==', user.uid),
+        where('courseId', '==', courseId),
         orderBy('date', 'desc')
       )
 
       const querySnapshot = await getDocs(progressQuery)
-      const progressData = []
+      const dailyProgressData = []
       
       querySnapshot.forEach((doc) => {
         const data = doc.data()
-        if (data.date && (!courseId || data.courseId === courseId)) {
-          progressData.push({
+        if (data.date && data.materia) {
+          dailyProgressData.push({
             date: data.date,
-            hours: data.hours || 0,
-            courseId: data.courseId,
-            materia: data.materia,
-            lastUpdated: data.lastUpdated
+            disciplina: data.materia, // Usar materia como disciplina
+            topico: data.materia, // Para compatibilidade
+            estudado: (data.hours || 0) > 0 // Considerar estudado se tiver horas
           })
         }
       })
 
-      // 🔥 DEBUG: Mostrar dados brutos
-      console.log('📅 WeeklyStudyChart - Dados brutos:', progressData)
+      // DEBUG: Mostrar dados encontrados
+      console.log('WeeklyStudyChart - Dados diários encontrados:', dailyProgressData)
 
       // Criar array com os dias da semana (Segunda a Domingo)
       const today = dayjs()
@@ -70,17 +79,24 @@ const WeeklyStudyChart = ({ courseId }) => {
         const dateStr = date.format('YYYY-MM-DD')
         
         // Encontrar dados para este dia
-        const dayData = progressData.find(item => item.date === dateStr)
+        const dayTopics = dailyProgressData.filter(item => item.date === dateStr && item.estudado)
+        
+        // Extrair matérias únicas do dia
+        const materiasDoDia = [...new Set(dayTopics.map(item => item.disciplina).filter(Boolean))]
         
         weekDays.push({
           date: dateStr,
           dayName: date.format('ddd'),
           dayNumber: date.format('D'),
           dayFull: date.format('dddd'),
-          materias: dayData && dayData.hours > 0 && dayData.materia ? [dayData.materia] : [],
-          estudado: dayData ? dayData.hours > 0 : false
+          materias: materiasDoDia,
+          estudado: dayTopics.length > 0,
+          topicosEstudados: dayTopics.length
         })
       }
+
+      // DEBUG: Mostrar dados da semana processados
+      console.log('WeeklyStudyChart - Dados da semana:', weekDays)
 
       // Preparar dados para o gráfico
       const chartData = weekDays.map(day => ({
@@ -97,11 +113,13 @@ const WeeklyStudyChart = ({ courseId }) => {
       const totalDays = weekDays.length
       const studiedDays = weekDays.filter(day => day.estudado).length
       const totalMaterias = weekDays.reduce((acc, day) => acc + day.materias.length, 0)
+      const totalTopicos = weekDays.reduce((acc, day) => acc + (day.topicosEstudados || 0), 0)
 
       setStats({
         totalDays,
         studiedDays,
-        totalMaterias
+        totalMaterias,
+        totalTopicos
       })
 
       setWeekData(chartData)
@@ -184,7 +202,7 @@ const WeeklyStudyChart = ({ courseId }) => {
       </div>
 
       {/* Estatísticas */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="text-center">
           <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.totalDays}</p>
           <p className="text-xs text-slate-600 dark:text-slate-400">Dias na semana</p>
@@ -195,7 +213,11 @@ const WeeklyStudyChart = ({ courseId }) => {
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalMaterias}</p>
-          <p className="text-xs text-slate-600 dark:text-slate-400">Total matérias</p>
+          <p className="text-xs text-slate-600 dark:text-slate-400">Matérias</p>
+        </div>
+        <div className="text-center">
+          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.totalTopicos || 0}</p>
+          <p className="text-xs text-slate-600 dark:text-slate-400">Tópicos</p>
         </div>
       </div>
 

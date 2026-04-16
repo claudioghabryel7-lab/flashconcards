@@ -33,7 +33,7 @@ const EditalProgressChart = ({ courseId }) => {
 
     setLoading(true)
     try {
-      // Buscar edital verticalizado
+      // Buscar edital verticalizado para obter a estrutura
       const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
       const editalSnap = await getDoc(editalRef)
       
@@ -46,26 +46,56 @@ const EditalProgressChart = ({ courseId }) => {
       const editalData = editalSnap.data()
       const disciplinas = editalData.disciplinas || []
       
+      // Buscar progresso do usuário
+      const userProgressRef = doc(db, 'userEditalProgress', user.uid, 'courses', courseId)
+      const userProgressSnap = await getDoc(userProgressRef)
+      
+      let userProgressData = {}
+      if (userProgressSnap.exists()) {
+        userProgressData = userProgressSnap.data().progress || {}
+      }
+      
+      console.log('Dados de progresso do usuário:', userProgressData)
+      
       // Calcular progresso por disciplina
       let totalTopicos = 0
       let topicosEstudados = 0
       let topicosNaoEstudados = 0
-      let topicosParciais = 0
+
+      // Função para gerar chave do tópico (igual à usada no EditalVerticalizado)
+      const makeTopicKey = (topico) => {
+        if (!topico) return ''
+        const numero = (topico.numero || '').toString().trim()
+        const nome = (topico.nome || '').toString().trim()
+
+        // Mantém compatibilidade com dados antigos: se só tiver um dos dois, usa ele.
+        if (!numero && !nome) return ''
+        if (!numero || !nome) {
+          const base = numero || nome
+          return encodeURIComponent(base)
+        }
+
+        // Nova forma: "numero :: nome" (separador pouco provável de aparecer no texto)
+        const combined = `${numero} :: ${nome}`
+        return encodeURIComponent(combined)
+      }
 
       disciplinas.forEach(disciplina => {
         if (disciplina.topicos) {
           disciplina.topicos.forEach(topico => {
             totalTopicos++
             
-            // Verificar checkboxes
-            const flashcardsMarcado = topico.flashcards || false
-            const questoesMarcado = topico.questoes || false
-            const estudadoMarcado = topico.estudado || false
+            // Usar exatamente a mesma função makeTopicKey
+            const topicKey = makeTopicKey(topico)
             
-            if (estudadoMarcado && flashcardsMarcado && questoesMarcado) {
+            // Verificar progresso do usuário para este tópico
+            const topicoProgress = userProgressData[topicKey] || {}
+            const estudadoMarcado = topicoProgress.estudado || false
+            
+            console.log(`Tópico: ${topicKey}, Estudado: ${estudadoMarcado}`)
+            
+            if (estudadoMarcado) {
               topicosEstudados++
-            } else if (flashcardsMarcado || questoesMarcado || estudadoMarcado) {
-              topicosParciais++
             } else {
               topicosNaoEstudados++
             }
@@ -77,16 +107,9 @@ const EditalProgressChart = ({ courseId }) => {
       const chartData = []
       if (topicosEstudados > 0) {
         chartData.push({
-          name: 'Estudadas (completas)',
+          name: 'Estudadas',
           value: topicosEstudados,
           color: COLORS.estudadas
-        })
-      }
-      if (topicosParciais > 0) {
-        chartData.push({
-          name: 'Parcialmente estudadas',
-          value: topicosParciais,
-          color: COLORS.parcialmente
         })
       }
       if (topicosNaoEstudados > 0) {
@@ -98,18 +121,17 @@ const EditalProgressChart = ({ courseId }) => {
       }
 
       // Calcular estatísticas
-      const topicosComProgresso = topicosEstudados + topicosParciais
-      const porcentagemEstudada = totalTopicos > 0 ? Math.round((topicosComProgresso / totalTopicos) * 100) : 0
+      const porcentagemEstudada = totalTopicos > 0 ? Math.round((topicosEstudados / totalTopicos) * 100) : 0
       const porcentagemRestante = 100 - porcentagemEstudada
 
       setStats({
         total: totalTopicos,
         estudadas: topicosEstudados,
         naoEstudadas: topicosNaoEstudados,
-        parcialmente: topicosParciais,
+        parcialmente: 0,
         porcentagemEstudada,
         porcentagemRestante,
-        topicosComProgresso
+        topicosComProgresso: topicosEstudados
       })
 
       setProgressData(chartData)

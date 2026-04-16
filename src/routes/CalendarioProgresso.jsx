@@ -5,7 +5,6 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import ProgressCalendar from '../components/ProgressCalendar'
 import EditalProgressChart from '../components/EditalProgressChart'
-import WeeklyStudyChart from '../components/WeeklyStudyChart'
 import dayjs from 'dayjs'
 
 dayjs.locale('pt-br')
@@ -246,10 +245,9 @@ const CalendarioProgresso = () => {
         </div>
       </div>
 
-      {/* Gráficos lado a lado */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      {/* Gráfico de Progresso */}
+      <div className="mb-8">
         <EditalProgressChart courseId={profile?.selectedCourseId} />
-        <WeeklyStudyChart courseId={profile?.selectedCourseId} />
       </div>
 
       {/* Calendar */}
