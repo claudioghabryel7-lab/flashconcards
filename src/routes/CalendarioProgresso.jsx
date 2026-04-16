@@ -251,12 +251,12 @@ const CalendarioProgresso = () => {
       </div>
 
       {/* Calendar */}
-      <div className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+      <div className="bg-white dark:bg-slate-800 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+        <div className="mb-4 sm:mb-6">
+          <h2 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white mb-1 sm:mb-2">
             Calendário de Estudos
           </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
             Clique nos dias para marcar como estudado {saving && '(salvando...)'}
           </p>
         </div>

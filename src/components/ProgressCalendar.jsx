@@ -72,69 +72,74 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {}, onMarkDay = 
   )
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6">
+    <div className="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-3 sm:p-4 md:p-6">
       {/* Header do Calendário */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <CalendarIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+      <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <CalendarIcon className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 dark:text-blue-400" />
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
               Calendário de Progresso
             </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              {today.format('MMMM [de] YYYY').replace(/^\w/, (c) => c.toUpperCase())} • Últimos 28 dias
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+              {today.format('MMM/YYYY').replace(/^\w/, (c) => c.toUpperCase())} · 28 dias
             </p>
           </div>
         </div>
-        <div className="text-right">
-          <div className="flex items-center gap-2">
-            <FireIcon className="h-5 w-5 text-amber-500" />
+        <div className="text-center sm:text-right">
+          <div className="flex items-center justify-center sm:justify-end gap-1 sm:gap-2">
+            <FireIcon className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Sequência
+              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Seq.
               </p>
-              <p className="text-2xl font-black text-amber-500">{streak} dias</p>
+              <p className="text-lg sm:text-2xl font-black text-amber-500">{streak}d</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Legenda */}
-      <div className="mb-4 flex flex-wrap items-center justify-end gap-3 sm:gap-4 text-xs">
-        <div className="flex items-center gap-2">
-          <div className="h-3 w-3 rounded bg-slate-200 dark:bg-slate-700"></div>
-          <span className="text-slate-500 dark:text-slate-400">Sem estudo</span>
+      <div className="mb-3 sm:mb-4 flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-3 text-[10px] sm:text-xs">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded bg-slate-200 dark:bg-slate-700"></div>
+          <span className="text-slate-500 dark:text-slate-400 hidden xs:inline">Sem estudo</span>
+          <span className="text-slate-500 dark:text-slate-400 xs:hidden">Não</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="h-3 w-3 rounded bg-green-500 dark:bg-green-500"></div>
-          <span className="text-slate-500 dark:text-slate-400">Estudou</span>
+        <div className="flex items-center gap-1 sm:gap-2">
+          <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded bg-green-500 dark:bg-green-500"></div>
+          <span className="text-slate-500 dark:text-slate-400 hidden xs:inline">Estudou</span>
+          <span className="text-slate-500 dark:text-slate-400 xs:hidden">Sim</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="h-3 w-3 rounded bg-green-600 dark:bg-green-600 ring-2 ring-green-400"></div>
-          <span className="text-slate-500 dark:text-slate-400">Hoje (estudou)</span>
+        <div className="flex items-center gap-1 sm:gap-2">
+          <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded bg-green-600 dark:bg-green-600 ring-1 sm:ring-2 ring-green-400"></div>
+          <span className="text-slate-500 dark:text-slate-400 hidden xs:inline">Hoje (estudou)</span>
+          <span className="text-slate-500 dark:text-slate-400 xs:hidden">Hoje+</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="h-3 w-3 rounded bg-blue-200 dark:bg-blue-800 border-2 border-blue-400"></div>
-          <span className="text-slate-500 dark:text-slate-400">Hoje (sem estudo)</span>
+        <div className="flex items-center gap-1 sm:gap-2">
+          <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded bg-blue-200 dark:bg-blue-800 border border-blue-400"></div>
+          <span className="text-slate-500 dark:text-slate-400 hidden xs:inline">Hoje (sem estudo)</span>
+          <span className="text-slate-500 dark:text-slate-400 xs:hidden">Hoje-</span>
         </div>
       </div>
 
       {/* Calendário Grid */}
-      <div className="space-y-2">
+      <div className="space-y-1 sm:space-y-2">
         {/* Labels dos dias da semana */}
-        <div className="grid grid-cols-7 gap-2 mb-2">
-          {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day) => (
+        <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-1 sm:mb-2">
+          {['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].map((day, index) => (
             <div
-              key={day}
-              className="text-center text-xs font-semibold text-slate-500 dark:text-slate-400"
+              key={index}
+              className="text-center text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400"
             >
-              {day}
+              <span className="hidden sm:inline">{['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'][index]}</span>
+              <span className="sm:hidden">{day}</span>
             </div>
           ))}
         </div>
 
         {/* Grid de dias */}
-        <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+        <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-2">
           {calendarDays.map((day) => {
             const key = day.format('YYYY-MM-DD')
             const done = studied.has(key)
@@ -192,13 +197,13 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {}, onMarkDay = 
               <div
                 key={key}
                 onClick={handleClick}
-                className={`group relative aspect-square rounded-md ${bgColor} ${borderColor} transition-all duration-200 ${
+                className={`group relative aspect-square rounded-sm sm:rounded-md ${bgColor} ${borderColor} transition-all duration-200 ${
                   canMark ? 'cursor-pointer hover:scale-105 hover:shadow-md' : ''
                 } ${!isInRange && !isFuture && !isToday ? 'opacity-30' : ''}`}
                 title={`${day.format('DD/MM/YYYY')}${isInRange || isToday ? (done ? ' - Estudou (clique para desmarcar)' : ' - Sem estudo (clique para marcar)') : ''}`}
               >
                 {/* Número do dia - sempre mostrar */}
-                <div className={`absolute top-1 left-1 text-[9px] sm:text-[10px] font-semibold ${
+                <div className={`absolute top-0.5 left-0.5 sm:top-1 sm:left-1 text-[8px] sm:text-[9px] md:text-[10px] font-semibold ${
                   done && (isInRange || isToday) ? 'text-white/70' : 
                   (isInRange || isToday) ? 'text-slate-600 dark:text-slate-400' :
                   'text-slate-400 dark:text-slate-600'
@@ -206,10 +211,10 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {}, onMarkDay = 
                   {day.format('D')}
                 </div>
                 
-                {/* Matéria estudada - mostrar abaixo do número */}
+                {/* Matéria estudada - mostrar abaixo do número (apenas em telas maiores) */}
                 {done && (isInRange || isToday) && bySubject[day.format('YYYY-MM-DD')]?.materia && (
-                  <div className="absolute top-5 left-1 right-1 text-[7px] sm:text-[8px] text-white/90 font-medium truncate leading-tight px-0.5 bg-black/20 rounded" title={bySubject[day.format('YYYY-MM-DD')].materia}>
-                    {bySubject[day.format('YYYY-MM-DD')].materia}
+                  <div className="hidden sm:block absolute top-4 sm:top-5 left-1 right-1 text-[6px] sm:text-[7px] md:text-[8px] text-white/90 font-medium truncate leading-tight px-0.5 bg-black/20 rounded" title={bySubject[day.format('YYYY-MM-DD')].materia}>
+                    {bySubject[day.format('YYYY-MM-DD')].materia.length > 8 ? bySubject[day.format('YYYY-MM-DD')].materia.substring(0, 8) + '...' : bySubject[day.format('YYYY-MM-DD')].materia}
                   </div>
                 )}
                 
@@ -217,7 +222,7 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {}, onMarkDay = 
                 {showCheck && (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <svg
-                      className="w-3 h-3 sm:w-4 sm:h-4 text-white"
+                      className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 text-white"
                       fill="currentColor"
                       viewBox="0 0 20 20"
                     >
@@ -232,7 +237,7 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {}, onMarkDay = 
                 
                 {/* Indicador de hoje */}
                 {showTodayIndicator && (
-                  <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-blue-500 dark:bg-blue-400 rounded-full ring-2 ring-white dark:ring-slate-800"></div>
+                  <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-500 dark:bg-blue-400 rounded-full ring-1 sm:ring-2 ring-white dark:ring-slate-800"></div>
                 )}
               </div>
             )

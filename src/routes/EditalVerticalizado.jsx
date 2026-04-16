@@ -869,40 +869,41 @@ REGRAS IMPORTANTES:
         </div>
 
         {/* Conteúdo Principal */}
-        <div className={`bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-3 sm:p-4 md:p-6 lg:p-8`}>
+        <div className={`bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-2 sm:p-3 md:p-4 lg:p-6`}>
           {/* Descrição removida conforme solicitado */}
 
           {/* Tabela de Edital Verticalizado */}
           {editalVerticalizado?.disciplinas && Array.isArray(editalVerticalizado.disciplinas) && editalVerticalizado.disciplinas.length > 0 ? (
             <>
               {/* Informações sobre o edital */}
-              <div className="mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-slate-200 dark:border-slate-700">
-                <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
-                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">
+              <div className="mb-3 sm:mb-4 pb-2 sm:pb-3 border-b border-slate-200 dark:border-slate-700">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-slate-600 dark:text-slate-400">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs sm:text-sm">
                       {editalVerticalizado.disciplinas.length} {editalVerticalizado.disciplinas.length === 1 ? 'disciplina' : 'disciplinas'}
                     </span>
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs sm:text-sm">
                       {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)} {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0) === 1 ? 'tópico' : 'tópicos'}
                     </span>
                   </div>
                 </div>
               </div>
               
-              <div className="overflow-x-auto -mx-3 sm:-mx-4 md:mx-0 scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-slate-200 dark:scrollbar-track-slate-700">
+              <div className="overflow-x-auto -mx-2 sm:-mx-3 md:-mx-4 lg:mx-0 scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-slate-200 dark:scrollbar-track-slate-700">
               <div className="min-w-full inline-block">
-                <table className="w-full min-w-[500px] sm:min-w-[600px] md:min-w-[640px] border-collapse border border-black dark:border-slate-600 bg-white dark:bg-slate-800 text-xs sm:text-sm">
+                <table className="w-full min-w-[400px] sm:min-w-[500px] md:min-w-[600px] lg:min-w-[640px] border-collapse border border-black dark:border-slate-600 bg-white dark:bg-slate-800 text-[10px] sm:text-xs md:text-sm">
                   <thead>
                     <tr className="bg-blue-700 dark:bg-blue-800 text-white">
-                      <th className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-left font-bold text-[10px] sm:text-xs md:text-sm">
-                        DISCIPLINAS
+                      <th className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-left font-bold text-[9px] sm:text-xs md:text-sm">
+                        <span className="sm:hidden">DISC.</span>
+                        <span className="hidden sm:inline">DISCIPLINAS</span>
                       </th>
-                      <th className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center font-bold text-[10px] sm:text-xs md:text-sm whitespace-nowrap">
+                      <th className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
                         <span className="hidden sm:inline">Estudado</span>
                         <span className="sm:hidden">Est.</span>
                       </th>
                       {profile?.role === 'admin' && (
-                        <th className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center font-bold text-[10px] sm:text-xs md:text-sm whitespace-nowrap">
+                        <th className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
                           <span className="hidden sm:inline">Editar</span>
                           <span className="sm:hidden">Ed</span>
                         </th>
@@ -921,17 +922,19 @@ REGRAS IMPORTANTES:
                     <React.Fragment key={idx}>
                       {/* Linha principal da disciplina (destaque laranja) */}
                       <tr className="bg-orange-500 dark:bg-orange-600 text-white font-bold">
-                        <td className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-[11px] sm:text-xs md:text-sm lg:text-base">
-                          <span className="break-words">{disciplina.nome || 'Disciplina sem nome'}</span>
-                          {disciplina.totalQuestoes && (
-                            <span className="block sm:inline sm:ml-1 text-[10px] sm:text-xs">
-                              ({disciplina.totalQuestoes} Questões)
-                            </span>
-                          )}
+                        <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm lg:text-base">
+                          <div className="break-words">
+                            <span className="font-bold">{disciplina.nome || 'Disciplina sem nome'}</span>
+                            {disciplina.totalQuestoes && (
+                              <span className="block sm:inline sm:ml-1 text-[9px] sm:text-xs opacity-90">
+                                ({disciplina.totalQuestoes} Q)
+                              </span>
+                            )}
+                          </div>
                         </td>
-                        <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center"></td>
+                        <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
                         {profile?.role === 'admin' && (
-                          <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 md:py-3 text-center"></td>
+                          <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
                         )}
                       </tr>
                       
@@ -965,59 +968,63 @@ REGRAS IMPORTANTES:
                           return (
                             <tr key={`${idx}-${topicoIdx}`} id={`topico-${idx}-${topicoIdx}`} className={`${isHighlighted ? 'ring-2 ring-yellow-400 dark:ring-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' : ''} hover:bg-slate-50 dark:hover:bg-slate-700/50 bg-white dark:bg-slate-800`}>
                               <td 
-                                className="border border-black dark:border-slate-600 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 text-slate-900 dark:text-white text-[11px] sm:text-xs md:text-sm break-words"
+                                className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 text-slate-900 dark:text-white text-[9px] sm:text-xs md:text-sm break-words"
                                 style={{ 
-                                  paddingLeft: `${paddingLeft}px`
+                                  paddingLeft: `${Math.max(paddingLeft - 4, 8)}px` // Reduzir padding em mobile
                                 }}
                               >
-                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <div className="flex flex-col gap-1.5 sm:gap-2">
                                   <div className="min-w-0 flex-1">
-                                    {topico.numero && <span className="font-medium whitespace-nowrap text-[10px] sm:text-xs">{topico.numero} </span>}
-                                    <span className="break-words">{topico.nome || ''}</span>
+                                    <div className="flex items-start gap-1 sm:gap-2">
+                                      {topico.numero && <span className="font-medium whitespace-nowrap text-[9px] sm:text-xs">{topico.numero} </span>}
+                                      <span className="break-words leading-tight">{topico.nome || ''}</span>
+                                    </div>
                                   </div>
-                                  {(() => {
-                                    const topicKey = makeTopicKey(topico)
-                                    // Validar que o topicKey não está vazio antes de criar o link
-                                    if (!topicKey || topicKey.trim() === '') {
+                                  <div className="flex items-center justify-between gap-2">
+                                    {(() => {
+                                      const topicKey = makeTopicKey(topico)
+                                      // Validar que o topicKey não está vazio antes de criar o link
+                                      if (!topicKey || topicKey.trim() === '') {
+                                        return (
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[9px] sm:text-xs font-semibold bg-slate-400 text-white cursor-not-allowed whitespace-nowrap flex-shrink-0" title="Tópico sem identificação válida">
+                                            <BookOpenIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                            <span className="hidden xs:inline sm:inline">Estudar</span>
+                                            <span className="xs:hidden sm:hidden">E</span>
+                                          </span>
+                                        )
+                                      }
                                       return (
-                                        <span className="inline-flex items-center gap-1 px-2 py-1.5 sm:py-1 rounded-md text-[10px] sm:text-xs font-semibold bg-slate-400 text-white cursor-not-allowed whitespace-nowrap flex-shrink-0" title="Tópico sem identificação válida">
+                                        <Link
+                                          to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
+                                          className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[9px] sm:text-xs font-semibold bg-alego-600 text-white hover:bg-alego-700 transition whitespace-nowrap flex-shrink-0 active:scale-95"
+                                          title="Estudar conteúdo deste tópico"
+                                        >
                                           <BookOpenIcon className="h-3 w-3 sm:h-4 sm:w-4" />
-                                          <span className="hidden sm:inline">Estudar</span>
-                                          <span className="sm:hidden">Est.</span>
-                                        </span>
+                                          <span className="hidden xs:inline sm:inline">Estudar</span>
+                                          <span className="xs:hidden sm:hidden">E</span>
+                                        </Link>
                                       )
-                                    }
-                                    return (
-                                      <Link
-                                        to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
-                                        className="inline-flex items-center gap-1 px-2 py-1.5 sm:py-1 rounded-md text-[10px] sm:text-xs font-semibold bg-alego-600 text-white hover:bg-alego-700 transition whitespace-nowrap flex-shrink-0 active:scale-95"
-                                        title="Estudar conteúdo deste tópico"
-                                      >
-                                        <BookOpenIcon className="h-3 w-3 sm:h-4 sm:w-4" />
-                                        <span className="hidden sm:inline">Estudar</span>
-                                        <span className="sm:hidden">Est.</span>
-                                      </Link>
-                                    )
-                                  })()}
+                                    })()}
+                                  </div>
                                 </div>
                               </td>
-                              <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 text-center">
+                              <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
                                 <input
                                   type="checkbox"
                                   checked={!!topico.estudado}
                                   onChange={() => handleToggleCheckbox(idx, topicoIdx, 'estudado')}
-                                  className="w-5 h-5 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white dark:bg-slate-700 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-slate-800 focus:ring-2 dark:border-slate-600 cursor-pointer touch-manipulation"
+                                  className="w-4 h-4 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white dark:bg-slate-700 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-slate-800 focus:ring-2 dark:border-slate-600 cursor-pointer touch-manipulation"
                                   style={{ touchAction: 'manipulation' }}
                                 />
                               </td>
                               {profile?.role === 'admin' && (
-                                <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 py-2 sm:py-2.5 text-center">
+                                <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
                                   <button
                                     onClick={() => handleEditTopico(idx, topicoIdx)}
-                                    className="inline-flex items-center justify-center p-1.5 sm:p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                    className="inline-flex items-center justify-center p-1 sm:p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 rounded transition-colors"
                                     title="Editar tópico"
                                   >
-                                    <PencilIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                                    <PencilIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                                   </button>
                                 </td>
                               )}
