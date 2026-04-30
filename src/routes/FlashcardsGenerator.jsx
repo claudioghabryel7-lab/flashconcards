@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { doc, getDoc, collection, query, where, orderBy, onSnapshot, writeBatch, serverTimestamp } from 'firebase/firestore'
+import {
+  collection,
+  doc,
+  addDoc,
+  setDoc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  limit,
+  writeBatch,
+  serverTimestamp,
+  onSnapshot
+} from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode'
@@ -9,6 +23,55 @@ import {
   SparklesIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline'
+
+// Função para normalizar perguntas (remover pontuação, espaços extras, etc.)
+const normalizeQuestion = (question) => {
+  return question
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '') // Remove pontuação
+    .replace(/\s+/g, ' ') // Remove espaços extras
+    .trim()
+}
+
+// Função para calcular similaridade entre strings (algoritmo de Levenshtein simplificado)
+const calculateSimilarity = (str1, str2) => {
+  const longer = str1.length > str2.length ? str1 : str2
+  const shorter = str1.length > str2.length ? str2 : str1
+  
+  if (longer.length === 0) return 1.0
+  
+  const editDistance = levenshteinDistance(longer, shorter)
+  return (longer.length - editDistance) / longer.length
+}
+
+// Função de distância de Levenshtein
+const levenshteinDistance = (str1, str2) => {
+  const matrix = []
+  
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i]
+  }
+  
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j
+  }
+  
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1]
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        )
+      }
+    }
+  }
+  
+  return matrix[str2.length][str1.length]
+}
 
 export default function FlashcardsGenerator() {
   const { user } = useAuth()
@@ -45,8 +108,8 @@ export default function FlashcardsGenerator() {
     }
 
     setCourseId(courseIdParam)
-    setSelectedDisciplina({ nome: disciplina })
-    setSelectedTopico({ nome: topico, numero: topicoNumero })
+    setSelectedDisciplina({ nome: typeof disciplina === 'string' ? disciplina : disciplina?.nome || '' })
+    setSelectedTopico({ nome: typeof topico === 'string' ? topico : topico?.nome || '', numero: typeof topicoNumero === 'string' ? topicoNumero : topico?.numero || '' })
 
     // Carregar dados
     loadCourseName(courseIdParam)
@@ -195,29 +258,36 @@ export default function FlashcardsGenerator() {
     setGenerationStatus('Preparando conteúdo para geração...')
 
     try {
-      console.log('Iniciando geração direta de flashcards com IA...')
+      console.log('Iniciando geração em lote de flashcards...')
       
-      // Gerar flashcards diretamente com IA baseado no tópico
-      const topicInfo = {
-        disciplina: selectedDisciplina.nome,
-        topicoNumero: selectedTopico.numero || '',
-        topicoNome: selectedTopico.nome || '',
-        curso: courseName
-      }
+      const totalFlashcards = 50
+      const batchSize = 10
+      const totalBatches = Math.ceil(totalFlashcards / batchSize)
+      const savedFlashcards = []
       
-      console.log('Informações do tópico:', topicInfo)
-      setGenerationStatus('Gerando flashcards com IA...')
-
-      // Função para gerar flashcards em partes
-      const generateFlashcardsInParts = async () => {
-        const allFlashcards = []
-        const parts = 2 // Gerar em 2 partes de 5 flashcards cada
-        const flashcardsPerPart = 5
-
-        for (let part = 0; part < parts; part++) {
-          setGenerationStatus(`Gerando flashcards - Parte ${part + 1} de ${parts}...`)
+      // Obter flashcards existentes para evitar duplicação
+      const existingFlashcards = userFlashcards.filter(card => 
+        card.materia === selectedDisciplina.nome && 
+        card.topico === selectedTopico.nome
+      )
+      
+      // Normalizar perguntas existentes para comparação
+      const normalizedExistingQuestions = existingFlashcards.map(card => 
+        normalizeQuestion(card.pergunta)
+      )
+      
+      // Gerar flashcards em lotes de 10
+      for (let batch = 0; batch < totalBatches; batch++) {
+        const batchNumber = batch + 1
+        const remainingFlashcards = Math.min(batchSize, totalFlashcards - (batch * batchSize))
+        
+        setGenerationStatus(`Gerando lote ${batchNumber}/${totalBatches} (${remainingFlashcards} flashcards)...`)
+        
+        try {
+          // Criar lista de perguntas existentes para evitar duplicação
+          const existingQuestions = existingFlashcards.map(card => card.pergunta).join('\n- ')
           
-          const prompt = `Gere ${flashcardsPerPart} flashcards educacionais de alta qualidade sobre o tópico abaixo.
+          const prompt = `Gere ${remainingFlashcards} flashcards educacionais de alta qualidade sobre o tópico abaixo.
 
 CONTEXTO:
 - Curso: ${courseName}
@@ -225,12 +295,19 @@ CONTEXTO:
 - Tópico: ${selectedTopico.numero} ${selectedTopico.nome}
 
 INSTRUÇÕES:
-1. Gere EXATAMENTE ${flashcardsPerPart} flashcards
-2. Cada flashcard deve ser uma pergunta direta sobre o conteúdo
-3. As respostas devem ser claras, completas e educacionais
-4. Use seu conhecimento sobre ${selectedDisciplina.nome} para criar flashcards relevantes
-5. Adapte o nível de dificuldade para estudantes de concurso público
-6. Formato JSON:
+1. Gere EXATAMENTE ${remainingFlashcards} flashcards
+2. Cada flashcard deve focar em um aspecto diferente do tópico
+3. Varie o nível de dificuldade (fácil, médio, difícil)
+4. Use seu conhecimento sobre ${selectedDisciplina.nome}
+5. Adapte para estudantes de concurso público
+6. NÃO REPITA nenhuma pergunta já existente
+7. Crie conteúdo NOVO e ORIGINAL
+8. Garanta diversidade nos temas abordados
+
+PERGUNTAS JÁ EXISTENTES (NÃO REPETIR):
+- ${existingQuestions}
+
+Formato JSON:
 {
   "flashcards": [
     {
@@ -241,27 +318,17 @@ INSTRUÇÕES:
   ]
 }
 
-REGRAS IMPORTANTES:
-- Crie conteúdo educacional relevante para ${selectedDisciplina.nome}
-- Seja didático e focado em aprendizado
-- Perguntas devem testar conhecimento real
-- Respostas devem ensinar e explicar conceitos
-- Linguagem formal e técnica adequada para concursos
-- Seja conciso e direto
-- Foque nos pontos mais importantes do tópico
-
 IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
 
           // Verificar API Key
           const apiKey = import.meta.env.VITE_GEMINI_API_KEY
           if (!apiKey) {
-            console.log('API Key não encontrada!')
-            throw new Error('API Key da Gemini não configurada. Verifique o arquivo .env')
+            throw new Error('API Key da Gemini não configurada')
           }
 
-          console.log(`Gerando parte ${part + 1} de ${parts}...`)
+          console.log('Gerando lote de flashcards...')
           
-          // Chamar API da Gemini
+          // Chamar API da Gemini com JSON nativo
           const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey, {
             method: 'POST',
             headers: {
@@ -274,130 +341,141 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
                 }]
               }],
               generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 2000, // Reduzido para evitar truncamento
+                temperature: 0.8,
+                maxOutputTokens: 4096,
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: "object",
+                  properties: {
+                    flashcards: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          pergunta: { type: "string" },
+                          resposta: { type: "string" },
+                          dificuldade: { type: "string" }
+                        },
+                        required: ["pergunta", "resposta", "dificuldade"]
+                      },
+                      minItems: 1,
+                      maxItems: 10
+                    }
+                  },
+                  required: ["flashcards"]
+                }
               }
             })
           })
 
           if (!response.ok) {
             const errorData = await response.text()
-            console.log('Erro na API da IA:', response.status, errorData)
-            throw new Error(`Erro na API da IA: ${response.status} - ${errorData}`)
+            throw new Error(`Erro na API: ${response.status}`)
           }
 
           const data = await response.json()
           const generatedText = data.candidates[0]?.content?.parts[0]?.text
 
-          console.log(`Resposta bruta da IA - Parte ${part + 1}:`, generatedText.substring(0, 300) + '...')
+          console.log('Resposta da IA recebida, processando...')
 
-          // Extrair JSON da resposta com tratamento mais robusto
-          let flashcardsData = null
+          // Parse direto do JSON (responseMimeType garante JSON válido)
+          let flashcardData = null
           try {
-            // Tentar diferentes métodos de extração de JSON
-            let jsonString = null
-            
-            // Método 1: Procurar por ```json ... ``` (prioridade máxima)
-            const codeBlockMatch = generatedText.match(/```json\s*([\s\S]*?)\s*```/)
-            if (codeBlockMatch) {
-              jsonString = codeBlockMatch[1]
-              console.log('JSON encontrado em bloco de código')
-            }
-            
-            // Método 2: Procurar por { ... } completo
-            if (!jsonString) {
-              const jsonMatch = generatedText.match(/\{[\s\S]*\}/)
-              if (jsonMatch) {
-                jsonString = jsonMatch[0]
-                console.log('JSON encontrado com regex de objeto')
-              }
-            }
-            
-            // Método 3: Procurar por array diretamente
-            if (!jsonString) {
-              const arrayMatch = generatedText.match(/\[[\s\S]*\]/)
-              if (arrayMatch) {
-                jsonString = '{"flashcards":' + arrayMatch[0] + '}'
-                console.log('JSON encontrado com regex de array')
-              }
-            }
-            
-            if (!jsonString) {
-              console.log('JSON não encontrado na resposta')
-              console.log('Resposta bruta:', generatedText.substring(0, 300) + '...')
-              throw new Error('JSON não encontrado na resposta')
-            }
-            
-            console.log('JSON extraído:', jsonString.substring(0, 200) + '...')
-            
-            // Limpar o JSON antes de fazer parse
-            jsonString = jsonString
-              .replace(/,\s*}/g, '}')  // Remove vírgulas antes de }
-              .replace(/,\s*]/g, ']')  // Remove vírgulas antes de ]
-              .replace(/\n/g, '')      // Remove quebras de linha
-              .replace(/\r/g, '')      // Remove carriage returns
-              .replace(/\t/g, '')      // Remove tabs
+            // Sanitizar resposta antes do parse
+            const cleanedText = generatedText
+              .replace(/```json|```/g, "")
+              .replace(/^[\s\S]*?(?=\{)/, '') // Remove texto antes do JSON
               .trim()
             
-            flashcardsData = JSON.parse(jsonString)
-            
-            console.log(`JSON parseado com sucesso - Parte ${part + 1}:`, flashcardsData.flashcards?.length || 0, 'flashcards')
+            flashcardData = JSON.parse(cleanedText)
+            console.log('JSON parseado com sucesso')
           } catch (parseError) {
-            console.error('Erro ao fazer parse do JSON:', parseError)
-            console.error('Resposta completa da IA:', generatedText)
-            throw new Error('Formato inválido na resposta da IA: ' + parseError.message)
+            console.log('Falha no parse, tentando extração manual...')
+            
+            // Fallback: extração manual
+            const jsonMatch = generatedText.match(/\{[\s\S]*\}/)
+            if (jsonMatch) {
+              const cleanedJson = jsonMatch[0].replace(/```json|```/g, "").trim()
+              flashcardData = JSON.parse(cleanedJson)
+              console.log('JSON extraído manualmente')
+            } else {
+              throw new Error('Não foi possível extrair JSON da resposta')
+            }
           }
 
-          if (!flashcardsData.flashcards || !Array.isArray(flashcardsData.flashcards)) {
+          // Validar estrutura
+          if (!flashcardData || !flashcardData.flashcards || !Array.isArray(flashcardData.flashcards)) {
             throw new Error('Estrutura de flashcards inválida')
           }
 
-          allFlashcards.push(...flashcardsData.flashcards)
-          
-          // Pequena pausa entre as chamadas para não sobrecarregar a API
-          if (part < parts - 1) {
-            await new Promise(resolve => setTimeout(resolve, 1000))
-          }
-        }
+          // Filtrar e validar cada flashcard
+          const validFlashcards = flashcardData.flashcards.filter((flashcard, index) => {
+            if (!flashcard.pergunta || !flashcard.resposta || !flashcard.dificuldade) {
+              console.log(`Flashcard ${index + 1} inválido, ignorando...`)
+              return false
+            }
+            
+            // Verificar duplicata com normalização
+            const normalizedQuestion = normalizeQuestion(flashcard.pergunta)
+            const isDuplicate = normalizedExistingQuestions.some(existing => 
+              calculateSimilarity(normalizedQuestion, existing) > 0.8
+            )
+            
+            if (isDuplicate) {
+              console.log(`Flashcard ${index + 1} é duplicado, ignorando...`)
+              return false
+            }
+            
+            return true
+          })
 
-        return allFlashcards
+          console.log(`${validFlashcards.length} flashcards válidos após filtragem`)
+
+          // Salvar todos os flashcards válidos
+          setGenerationStatus(`Salvando ${validFlashcards.length} flashcards...`)
+          
+          for (let i = 0; i < validFlashcards.length; i++) {
+            const flashcard = validFlashcards[i]
+            
+            const docRef = doc(collection(db, 'users', user.uid, 'flashcards'))
+            
+            await setDoc(docRef, {
+              pergunta: flashcard.pergunta,
+              resposta: flashcard.resposta,
+              materia: selectedDisciplina.nome,
+              topico: selectedTopico.nome,
+              topicoNumero: selectedTopico.numero,
+              dificuldade: flashcard.dificuldade,
+              courseId: courseId,
+              courseName: courseName,
+              userId: user.uid,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              reviewCount: 0,
+              lastReview: null,
+              order: existingFlashcards.length + i
+            })
+            
+            savedFlashcards.push(flashcard)
+            console.log(`Flashcard ${i + 1}/${validFlashcards.length} salvo com sucesso`)
+          }
+          
+          // Adicionar flashcards existentes à lista para evitar duplicação nos próximos lotes
+          existingFlashcards.push(...validFlashcards)
+          
+        } catch (batchError) {
+          console.error(`Erro no lote ${batchNumber}:`, batchError)
+          // Continuar para o próximo lote em caso de erro
+          continue
+        }
       }
 
-      const flashcardsData = { flashcards: await generateFlashcardsInParts() }
+      if (savedFlashcards.length === 0) {
+        throw new Error('Nenhum flashcard válido foi gerado')
+      }
 
-      setGenerationStatus(`Salvando ${flashcardsData.flashcards.length} flashcards...`)
-
-      // Salvar flashcards no Firestore
-      console.log('Iniciando salvamento de flashcards no Firestore...')
-      
-      const batch = writeBatch(db)
-      
-      flashcardsData.flashcards.forEach((flashcard, index) => {
-        const docRef = doc(collection(db, 'users', user.uid, 'flashcards'))
-        console.log(`Preparando flashcard ${index + 1}:`, flashcard.pergunta.substring(0, 50) + '...')
-        
-        batch.set(docRef, {
-          pergunta: flashcard.pergunta,
-          resposta: flashcard.resposta,
-          materia: selectedDisciplina.nome,
-          topico: selectedTopico.nome,
-          topicoNumero: selectedTopico.numero,
-          dificuldade: flashcard.dificuldade || 'médio',
-          courseId: courseId,
-          courseName: courseName,
-          userId: user.uid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          reviewCount: 0,
-          lastReview: null,
-          order: index
-        })
-      })
-
-      console.log('Executando batch commit...')
-      await batch.commit()
-      
-      setGenerationStatus(`Flashcards gerados com sucesso!`)
+      setGenerationStatus(`✅ Sucesso! ${savedFlashcards.length} flashcards gerados e salvos!`)
+      console.log(`Geração concluída: ${savedFlashcards.length} flashcards salvos`)
       
       // Fechar e redirecionar após 2 segundos
       setTimeout(() => {
@@ -406,12 +484,13 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
       
     } catch (error) {
       console.error('Erro ao gerar flashcards:', error)
-      setGenerationStatus(`Erro: ${error.message}`)
+      setGenerationStatus(`❌ Erro: ${error.message}`)
     } finally {
       setGeneratingFlashcards(false)
     }
   }
 
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -447,7 +526,7 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
               </p>
             )}
             <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400">
-              {selectedDisciplina?.nome} - {selectedTopico?.numero} {selectedTopico?.nome}
+              {selectedDisciplina?.nome || ''} - {selectedTopico?.numero || ''} {selectedTopico?.nome || ''}
             </p>
           </div>
         </div>
@@ -458,7 +537,7 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
             {/* Informações */}
             <div className="text-center">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                Serão gerados <span className="font-bold text-blue-600 dark:text-blue-400">10 flashcards</span> para este tópico
+                Serão gerados <span className="font-bold text-blue-600 dark:text-blue-400">50 flashcards</span> para este tópico
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-500">
                 Limite máximo: 50 flashcards por tópico

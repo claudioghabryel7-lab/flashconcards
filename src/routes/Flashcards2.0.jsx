@@ -10,6 +10,7 @@ import {
   SparklesIcon,
   XMarkIcon,
   DocumentTextIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline'
 
 export default function Flashcards2_0() {
@@ -54,6 +55,27 @@ export default function Flashcards2_0() {
 
     // Carregar edital verticalizado e flashcards do usuário
     loadEditalAndFlashcards(finalCourseId)
+
+    // Adicionar listener para eventos de storage (quando retorna de outras páginas)
+    const handleStorageChange = () => {
+      console.log('Storage change detectado, recarregando flashcards...')
+      loadUserFlashcards()
+    }
+
+    // Adicionar listener para foco na janela (quando retorna de outras abas)
+    const handleFocus = () => {
+      console.log('Janela focada, verificando atualizações...')
+      loadUserFlashcards()
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('focus', handleFocus)
+
+    // Limpar listeners
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('focus', handleFocus)
+    }
   }, [user, navigate, searchParams, profile])
 
   // Carregar flashcards do usuário com otimização
@@ -418,6 +440,21 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
     }
   }
 
+  // Apagar flashcard individualmente
+  const deleteFlashcard = async (flashcardId) => {
+    if (!window.confirm('Tem certeza que deseja apagar este flashcard?')) {
+      return
+    }
+
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'flashcards', flashcardId))
+      console.log('Flashcard apagado com sucesso')
+    } catch (error) {
+      console.error('Erro ao apagar flashcard:', error)
+      alert('Erro ao apagar flashcard. Tente novamente.')
+    }
+  }
+
   // Abrir página de geração de flashcards
   const openGenerationPage = (disciplina, topico) => {
     // Verificar limite de 50 flashcards por tópico
@@ -430,15 +467,20 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
       alert(`Este tópico já possui ${topicFlashcards.length} flashcards. O limite máximo é de 50 flashcards por tópico para melhor performance.`)
       return
     }
-    
-    // Navegar para página de geração com parâmetros
-    navigate('/flashcards-generator', {
-      state: {
-        disciplina: disciplina.nome,
-        topico: topico.nome,
-        topicoNumero: topico.numero,
-        courseId: courseId
-      }
+
+    console.log('Navegando para página de geração:', {
+      disciplina: disciplina.nome,
+      topico: topico.nome,
+      courseId: courseId
+    })
+
+    navigate('/flashcards-generator', { 
+      state: { 
+        disciplina: disciplina, 
+        topico: topico, 
+        courseId: courseId,
+        courseName: courseName
+      } 
     })
   }
 
@@ -488,18 +530,7 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
     }
   }
 
-  // Excluir flashcard
-  const deleteFlashcard = async (flashcardId) => {
-    if (!confirm('Tem certeza que deseja excluir este flashcard?')) return
-
-    try {
-      await deleteDoc(doc(db, 'users', user.uid, 'flashcards', flashcardId))
-    } catch (error) {
-      console.error('Erro ao excluir flashcard:', error)
-      alert('Erro ao excluir flashcard. Tente novamente.')
-    }
-  }
-
+  
   const filteredFlashcards = userFlashcards.filter(card =>
     card.pergunta.toLowerCase().includes(searchTerm.toLowerCase()) ||
     card.resposta.toLowerCase().includes(searchTerm.toLowerCase())
@@ -949,13 +980,13 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
                   }`}
                   style={{ backfaceVisibility: 'hidden' }}
                 >
-                  <div className="text-center">
+                  <div className="text-center px-4 py-2 overflow-hidden">
                     <div className={`text-xs uppercase tracking-wide mb-4 font-semibold ${
                       darkMode ? 'text-blue-200' : 'text-blue-100'
                     }`}>
                       {selectedCard.materia}
                     </div>
-                    <h3 className="text-2xl font-bold mb-6 leading-relaxed">
+                    <h3 className="text-2xl font-bold mb-6 leading-relaxed break-words overflow-hidden">
                       {selectedCard.pergunta}
                     </h3>
                     <div className={`text-sm opacity-75 ${darkMode ? 'text-blue-200' : 'text-blue-100'}`}>
@@ -974,13 +1005,13 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
                     transform: 'rotateY(180deg)'
                   }}
                 >
-                  <div className="text-center">
+                  <div className="text-center px-4 py-2 overflow-hidden">
                     <div className={`text-xs uppercase tracking-wide mb-4 font-semibold ${
                       darkMode ? 'text-green-200' : 'text-green-100'
                     }`}>
                       Resposta
                     </div>
-                    <p className="text-xl leading-relaxed">
+                    <p className="text-xl leading-relaxed break-words overflow-hidden">
                       {selectedCard.resposta}
                     </p>
                     <div className={`text-sm opacity-75 mt-6 ${darkMode ? 'text-green-200' : 'text-green-100'}`}>
@@ -997,9 +1028,22 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
                 <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   {selectedCard.topicoNumero} {selectedCard.topico}
                 </span>
-                <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Revisões: {selectedCard.reviewCount || 0}
-                </span>
+                <div className="flex items-center gap-4">
+                  <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Revisões: {selectedCard.reviewCount || 0}
+                  </span>
+                  <button
+                    onClick={() => deleteFlashcard(selectedCard.id)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      darkMode 
+                        ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20' 
+                        : 'text-red-600 hover:text-red-800 hover:bg-red-50'
+                    }`}
+                    title="Apagar flashcard"
+                  >
+                    <TrashIcon className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
