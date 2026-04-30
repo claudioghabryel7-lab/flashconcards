@@ -13,6 +13,7 @@ import {
   TrophyIcon,
   ArrowDownIcon,
   SparklesIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 
 const TreinoRedacao = () => {
@@ -175,10 +176,32 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
     generateTheme()
   }
 
+  // Finalizar redação e analisar
+  const handleFinish = () => {
+    console.log('🚨 handleFinish iniciado - analizing antes:', analizing)
+    setIsRunning(false)
+    setAnalizing(true)
+    console.log('🚨 handleFinish - setAnalizing(true) aplicado')
+    handleAnalyze()
+  }
+
   // Analisar e avaliar redação
-  const handleFinish = async () => {
+  const handleAnalyze = async () => {
+    console.log('🚨 INÍCIO DA FUNÇÃO handleAnalyze - DEBUG INICIAL')
+    console.log('🚨 analizing no início do handleAnalyze:', analizing)
+    
+    // Garantir que analizing seja true no início
+    setAnalizing(true)
+    console.log('🚨 setAnalizing(true) garantido no handleAnalyze')
+    
+    console.log('🚨 redacaoTexto:', redacaoTexto)
+    console.log('🚨 redacaoTema:', redacaoTema)
+    console.log('🚨 VITE_GEMINI_API_KEY existe:', !!import.meta.env.VITE_GEMINI_API_KEY)
+    
     if (!redacaoTexto.trim()) {
-      alert('Por favor, escreva sua redação antes de finalizar.')
+      console.log('🚨 Saindo - redação vazia')
+      setAnalizing(false)
+      alert('Digite sua redação antes de analisar.')
       return
     }
 
@@ -186,9 +209,14 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
     const wordCount = redacaoTexto.trim().split(/\s+/).length
     const charCount = redacaoTexto.trim().length
     
+    console.log('🚨 DEBUG - wordCount:', wordCount, 'charCount:', charCount)
+    console.log('🚨 DEBUG - wordCount < 50:', wordCount < 50, 'charCount < 200:', charCount < 200)
+    
     if (wordCount < 50 || charCount < 200) {
-      // Para textos muito curtos, atribuir nota zero automaticamente
-      setResultado({
+      console.log('🚨 ENTRANDO NA VALIDAÇÃO DE TEXTO CURTO - VAI GERAR RESULTADO SEM REDAÇÃO MODELO')
+      
+      // Para textos muito curtos, atribuir nota zero automaticamente MAS GERAR REDAÇÃO MODELO
+      const resultadoComModelo = {
         nota: 0,
         criterios: {
           dominio: 0,
@@ -206,8 +234,49 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
         ],
         paragraphCount: detectParagraphs(redacaoTexto),
         lines: redacaoTexto.split('\n').length,
-        wordCount: wordCount
-      })
+        wordCount: wordCount,
+        // GERAR REDAÇÃO MODELO PERSONALIZADA COM GEMINI 2.5
+        redacaoModelo: await (async () => {
+          try {
+            const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+            
+            const promptModelo = `Crie uma redação NOTA 1000 PERFEITA sobre o tema específico: "${redacaoTema}".
+            
+            CONTEXTO: Este é um tema para concurso da Polícia Militar de Alagoas (PMAL), banca CESPE.
+            
+            REQUISITOS OBRIGATÓRIOS:
+            - Introdução: apresentação específica do tema com tese clara (1 parágrafo)
+            - Desenvolvimento: 2 parágrafos com argumentos específicos sobre PMAL, direitos humanos e combate à criminalidade
+            - Conclusão: retomada da tese com propostas específicas para PMAL (1 parágrafo)
+            
+            CONTEÚDO ESPECÍFICO QUE DEVE CONTER:
+            - Atuação da Polícia Militar de Alagoas
+            - Proteção dos direitos humanos no contexto policial
+            - Combate à criminalidade em Alagoas
+            - Desafios contemporâneos da segurança pública
+            - Exemplos práticos e dados relevantes de Alagoas
+            - Soluções realistas para PMAL
+            
+            ESTRUTURA:
+            - 20-30 linhas totais
+            - Linguagem formal e técnica (estilo CESPE)
+            - Argumentos fundamentados na realidade de Alagoas
+            - Coesão e coerência perfeitas
+            
+            Retorne APENAS a redação, sem explicações ou markdown.`
+            
+            const result = await model.generateContent(promptModelo)
+            return result.response.text().trim()
+          } catch (error) {
+            console.error('Erro ao gerar redação modelo personalizada:', error)
+            return `Redação modelo sobre "${redacaoTema}" - Em desenvolvimento...`
+          }
+        })()
+      }
+      
+      console.log('🚨 GERANDO RESULTADO COM REDAÇÃO MODELO NO TEXTO CURTO')
+      setResultado(resultadoComModelo)
       setIsRunning(false)
       setAnalizing(false)
       return
@@ -327,39 +396,52 @@ REDAÇÃO DO CANDIDATO (ANALISE ESTE TEXTO ESPECÍFICO):
 ${redacaoTexto}
 ═══════════════════════════════════════════════════════════════════════════════
 
-⚠️ LEMBRE-SE:
-- Esta é uma redação ÚNICA com conteúdo específico
-- Analise CADA palavra, CADA parágrafo, CADA argumento
-- A nota deve ser PROPORCIONAL à qualidade REAL do texto acima
-- NÃO use notas genéricas ou padrões
-- Se o texto tiver muitos erros, a nota deve ser BAIXA
-- Se o texto for excelente, a nota deve ser ALTA
-- VARIE as notas conforme a qualidade REAL
+⚠️ AVALIAÇÃO REALISTA E INDIVIDUAL ⚠️:
+- Esta é uma redação ÚNICA - analise o CONTEÚDO REAL apresentado
+- Seja rigoroso: notas de 600+ são EXCELENTES e raras
+- Notas de 400-599 são BOAS (acima da média)
+- Notas de 200-399 são MÉDIAS (dentro do esperado)
+- Notas abaixo de 200 são FRACAS (com muitos problemas)
+- NOTA ZERO para textos sem sentido, fora do tema ou muito curtos
+- A nota deve refletir EXATAMENTE a qualidade do texto específico
+
+TABELA DE REFERÊNCIA REALISTA:
+- 900-1000: Redação exemplar, perfeita ou quase perfeita
+- 800-899: Excelente, com mínimos erros
+- 700-799: Muito boa, com alguns pequenos erros
+- 600-699: Boa, com erros moderados
+- 500-599: Acima da média, com vários erros
+- 400-499: Média, com problemas significativos
+- 300-399: Abaixo da média, com muitos problemas
+- 200-299: Fraca, com sérios problemas
+- 100-199: Muito fraca, quase sem sentido
+- 0-99: Sem sentido, fora do tema ou muito curta
 
 Retorne APENAS um objeto JSON válido no seguinte formato:
 
 {
-  "nota": 750,
+  "nota": 450,
   "criterios": {
-    "dominio": 160,
-    "compreensao": 170,
-    "argumentacao": 180,
-    "estrutura": 150,
+    "dominio": 80,
+    "compreensao": 90,
+    "argumentacao": 100,
+    "estrutura": 90,
     "conhecimento": 90
   },
-  "feedback": "Feedback DETALHADO e ESPECÍFICO sobre esta redação em particular. Mencione erros específicos encontrados, pontos fortes específicos, e áreas de melhoria específicas. Seja ESPECÍFICO sobre o conteúdo analisado (máximo 300 palavras).",
+  "feedback": "Feedback DETALHADO e ESPECÍFICO sobre esta redação. Mencione os erros reais encontrados, pontos fortes específicos, e explique PORQUE a nota foi X. Seja rigoroso e honesto (máximo 300 palavras).",
   "dicas": [
-    "Dica específica 1 baseada no conteúdo real da redação",
-    "Dica específica 2 baseada no conteúdo real da redação",
-    "Dica específica 3 baseada no conteúdo real da redação"
-  ]
+    "Dica específica 1 baseada nos erros reais desta redação",
+    "Dica específica 2 baseada nos erros reais desta redação",
+    "Dica específica 3 para melhorar esta redação específica"
+  ],
+  "redacaoModelo": "ESCREVA UMA REDAÇÃO NOTA 1000 PERFEITA sobre '${redacaoTema}' no estilo da banca ${banca || 'CESPE'}. Esta deve ser uma redação EXEMPLAR que serviria como esqueleto ideal para tirar nota máxima. REQUISITOS OBRIGATÓRIOS: 1) Introdução perfeita com tese clara; 2) 2-3 parágrafos de desenvolvimento com argumentos sólidos, dados específicos e exemplos concretos; 3) Conclusão que retoma a tese e propõe soluções; 4) Linguagem formal impecável; 5) Cohesão e coerência perfeitas; 6) 20-30 linhas totais; 7) Estrutura clara com parágrafos bem definidos (4 espaços). Crie uma redação que seria considerada EXCELENTE pela banca ${banca || 'CESPE'}."
 }
 
 CRÍTICO: 
 - Retorne APENAS o JSON, sem markdown, sem explicações
-- A nota DEVE refletir a qualidade REAL do texto fornecido
-- NÃO use notas genéricas ou padrões
-- Analise o CONTEÚDO REAL desta redação específica`
+- A nota DEVE ser realista baseada na qualidade REAL do texto
+- Inclua OBRIGATORIAMENTE a redaçãoModelo como referência
+- Analise o CONTEÚDO REAL e específico desta redação`
 
       // Garantir que estamos analisando o texto atual (não um cache)
       const contentHash = redacaoTexto.substring(0, 50) + redacaoTexto.length + wordCount + paragraphCount
@@ -377,7 +459,7 @@ CRÍTICO:
         contents: [{ parts: [{ text: analysisPrompt }] }],
         generationConfig: {
           temperature: 0.9, // Alta temperatura para mais variabilidade nas avaliações
-          maxOutputTokens: 2000,
+          maxOutputTokens: 4000, // Aumentado para caber a redação modelo
           topP: 0.95,
         }
       })
@@ -435,11 +517,88 @@ CRÍTICO:
         nota: parsed.nota,
         criterios: parsed.criterios,
         feedbackPreview: parsed.feedback?.substring(0, 80) + '...',
+        redacaoModeloExiste: !!parsed.redacaoModelo,
+        redacaoModeloPreview: parsed.redacaoModelo?.substring(0, 100) + '...',
+        todasChaves: Object.keys(parsed),
         timestamp: new Date().toISOString()
       })
 
+      // Garantir que redacaoModelo exista, gerando uma se necessário
+      let resultadoFinal = { ...parsed }
+      
+      console.log('🔍 FALLBACK DEBUG - resultadoFinal.redacaoModelo antes:', resultadoFinal.redacaoModelo)
+      console.log('🔍 FALLBACK DEBUG - !resultadoFinal.redacaoModelo:', !resultadoFinal.redacaoModelo)
+      
+      if (!resultadoFinal.redacaoModelo) {
+        console.warn('⚠️ Redação modelo não retornada pela IA, gerando fallback...')
+        console.log('🔍 FALLBACK DEBUG - redacaoTema:', redacaoTema)
+        
+        // Gerar redação modelo fallback
+        try {
+          console.log('🔍 FALLBACK DEBUG - Iniciando geração do fallback...')
+          const modelFallback = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+          const fallbackPrompt = `Gere UMA redação NOTA 1000 PERFEITA sobre o tema "${redacaoTema}" no estilo da banca CESPE. 
+          
+          REQUISITOS OBRIGATÓRIOS:
+          - Introdução perfeita com tese clara
+          - 2-3 parágrafos de desenvolvimento com argumentos sólidos
+          - Conclusão que retoma a tese
+          - Linguagem formal impecável
+          - 20-30 linhas totais
+          - Estrutura clara com parágrafos bem definidos
+          
+          Retorne APENAS a redação, sem explicações ou markdown.`
+          
+          console.log('🔍 FALLBACK DEBUG - Enviando prompt para IA...')
+          const fallbackResult = await modelFallback.generateContent(fallbackPrompt)
+          resultadoFinal.redacaoModelo = fallbackResult.response.text().trim()
+          console.log('✅ Redação modelo fallback gerada com sucesso:', resultadoFinal.redacaoModelo?.substring(0, 100) + '...')
+        } catch (fallbackError) {
+          console.error('❌ Erro ao gerar redação modelo fallback:', fallbackError)
+          resultadoFinal.redacaoModelo = `Redação modelo não disponível no momento. Tente novamente para gerar uma redação exemplar sobre "${redacaoTema}".`
+        }
+      } else {
+        console.log('🔍 FALLBACK DEBUG - redacaoModelo já existe, não precisa gerar fallback')
+      }
+
+      // GARANTIR REDAÇÃO MODELO COM GEMINI 2.5 - TENTATIVA FINAL
+      if (!resultadoFinal.redacaoModelo) {
+        console.warn('⚠️ AINDA SEM REDAÇÃO MODELO - TENTATIVA FINAL COM GEMINI 2.5')
+        
+        try {
+          const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
+          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+          
+          const promptFinal = `Crie uma redação NOTA 1000 PERFEITA sobre o tema: "${redacaoTema}".
+          
+          ESTRUTURA OBRIGATÓRIA:
+          - Introdução: apresentação do tema com tese clara (1 parágrafo)
+          - Desenvolvimento: 2 parágrafos com argumentos sólidos e exemplos
+          - Conclusão: retomada da tese e proposta de soluções (1 parágrafo)
+          
+          REQUISITOS:
+          - Linguagem formal e acadêmica
+          - 20-30 linhas totais
+          - Argumentos coerentes e bem fundamentados
+          - Coesão e coerência perfeitas
+          - Parágrafos bem definidos
+          
+          Retorne APENAS a redação, sem explicações.`
+          
+          const result = await model.generateContent(promptFinal)
+          resultadoFinal.redacaoModelo = result.response.text().trim()
+          console.log('✅ Redação modelo gerada com Gemini 2.5:', resultadoFinal.redacaoModelo?.substring(0, 50) + '...')
+        } catch (finalError) {
+          console.error('❌ Erro na tentativa final:', finalError)
+          // Apenas como último recurso
+          resultadoFinal.redacaoModelo = `Redação modelo sobre "${redacaoTema}" - Em desenvolvimento...`
+        }
+      }
+
+      console.log('🔍 FINAL DEBUG - resultadoFinal.redacaoModelo antes de setResultado:', resultadoFinal.redacaoModelo?.substring(0, 50) + '...')
+
       setResultado({
-        ...parsed,
+        ...resultadoFinal,
         paragraphCount,
         lines,
         wordCount,
@@ -553,6 +712,24 @@ CRÍTICO:
                 </ul>
               </div>
             )}
+
+            {/* Redação Modelo (Esqueleto) - DEBUG */}
+            {console.log('🔍 RENDER DEBUG - resultado:', resultado, 'redacaoModelo:', resultado?.redacaoModelo, 'tipo:', typeof resultado?.redacaoModelo)}
+            {console.log('🔍 RENDER DEBUG - resultado.redacaoModelo truthy:', !!resultado?.redacaoModelo)}
+            <div className="mb-6 p-6 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
+              <h3 className="text-xl font-bold mb-4 text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                <DocumentTextIcon className="h-6 w-6" />
+                🏆 Redação Nota 1000 (Esqueleto Perfeito)
+              </h3>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
+                Esta é uma redação EXEMPLAR que tiraria nota máxima na banca CESPE. Use como referência ideal de estrutura, argumentação e qualidade.
+              </p>
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-amber-300 dark:border-amber-700">
+                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap font-serif">
+                  {resultado?.redacaoModelo || '⚠️ Redação modelo não encontrada. Verifique o console para debug.'}
+                </p>
+              </div>
+            </div>
 
             {/* Botões */}
             <div className="flex gap-4">
@@ -688,6 +865,43 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
           </div>
         </div>
 
+        {/* Overlay de carregamento */}
+        {analizing && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-alego-600 border-t-transparent mx-auto mb-4"></div>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+                  Analisando sua redação
+                </h3>
+                <p className="text-slate-600 dark:text-slate-400 mb-4">
+                  A IA está avaliando sua redação e gerando o modelo exemplar...
+                </p>
+                
+                {/* Barra de progresso animada */}
+                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-4">
+                  <div className="bg-alego-600 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
+                </div>
+                
+                <div className="space-y-2 text-sm text-slate-500 dark:text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span>Analisando estrutura e argumentação</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{animationDelay: '0.5s'}}></div>
+                    <span>Calculando nota realista</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{animationDelay: '1s'}}></div>
+                    <span>Gerando redação modelo personalizada</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Botões */}
         <div className="flex gap-4">
           <button
@@ -698,12 +912,12 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
             {analizing ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                Analisando redação...
+                <span>Analisando redação...</span>
               </>
             ) : (
               <>
                 <TrophyIcon className="h-5 w-5" />
-                Finalizar e Ver Resultado
+                <span>Finalizar e Ver Resultado</span>
               </>
             )}
           </button>
