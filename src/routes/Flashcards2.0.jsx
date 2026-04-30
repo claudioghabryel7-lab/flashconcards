@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { doc, getDoc, collection, addDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, setDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
+import { doc, getDoc, collection, query, where, orderBy, onSnapshot, writeBatch, serverTimestamp, limit, addDoc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode'
@@ -28,15 +28,18 @@ export default function Flashcards2_0() {
   const [selectedDisciplina, setSelectedDisciplina] = useState(null)
   const [selectedTopico, setSelectedTopico] = useState(null)
   const [flashcardCount, setFlashcardCount] = useState(10)
-  const [generatingFlashcards, setGeneratingFlashcards] = useState(false)
-  const [generationStatus, setGenerationStatus] = useState('')
-  const [showGenerationModal, setShowGenerationModal] = useState(false)
 
   // Estados para flashcards gerados
   const [userFlashcards, setUserFlashcards] = useState([])
   const [selectedCard, setSelectedCard] = useState(null)
   const [isFlipped, setIsFlipped] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  
+  // Estados para visualização de flashcards por tópico
+  const [showTopicFlashcards, setShowTopicFlashcards] = useState(false)
+  const [selectedTopicFlashcards, setSelectedTopicFlashcards] = useState([])
+  const [currentCardIndex, setCurrentCardIndex] = useState(0)
+  const [selectedTopicInfo, setSelectedTopicInfo] = useState(null)
 
   useEffect(() => {
     if (!user) {
@@ -53,33 +56,78 @@ export default function Flashcards2_0() {
     loadEditalAndFlashcards(finalCourseId)
   }, [user, navigate, searchParams, profile])
 
-  // Carregar flashcards do usuário
+  // Carregar flashcards do usuário com otimização
   const loadUserFlashcards = async () => {
     if (!user || !courseId) return
 
     try {
+      console.log('Carregando flashcards do usuário...')
+      
+      // Query com limite para melhor performance
       const flashcardsQuery = query(
         collection(db, 'users', user.uid, 'flashcards'),
-        where('courseId', '==', courseId)
+        where('courseId', '==', courseId),
+        limit(1000) // Limitar para evitar sobrecarga
       )
 
+      // Timeout para evitar carregamento infinito
+      const timeoutId = setTimeout(() => {
+        console.log('Timeout no carregamento de flashcards, usando cache local se disponível')
+      }, 10000) // 10 segundos
+
       const unsubscribeFlashcards = onSnapshot(flashcardsQuery, (snapshot) => {
+        clearTimeout(timeoutId)
+        
+        console.log(`Flashcards carregados: ${snapshot.docs.length} documentos`)
+        
         const flashcardsData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }))
+        
         // Ordenar localmente por createdAt
         flashcardsData.sort((a, b) => {
           const dateA = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0
           const dateB = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0
           return dateB - dateA
         })
+        
+        console.log('Flashcards processados e ordenados')
         setUserFlashcards(flashcardsData)
+      }, (error) => {
+        clearTimeout(timeoutId)
+        console.error('Erro no listener de flashcards:', error)
+        // Tentar carregar uma vez se o listener falhar
+        loadFlashcardsOnce()
       })
+
+      // Função de fallback para carregar uma vez
+      const loadFlashcardsOnce = async () => {
+        try {
+          const snapshot = await getDocs(flashcardsQuery)
+          const flashcardsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }))
+          
+          flashcardsData.sort((a, b) => {
+            const dateA = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0
+            const dateB = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0
+            return dateB - dateA
+          })
+          
+          setUserFlashcards(flashcardsData)
+          console.log('Flashcards carregados via fallback (getDocs)')
+        } catch (fallbackError) {
+          console.error('Erro no fallback de flashcards:', fallbackError)
+          setUserFlashcards([]) // Setar array vazio para não quebrar a UI
+        }
+      }
 
       return unsubscribeFlashcards
     } catch (error) {
       console.error('Erro ao carregar flashcards:', error)
+      setUserFlashcards([]) // Setar array vazio para não quebrar a UI
     }
   }
 
@@ -173,53 +221,37 @@ export default function Flashcards2_0() {
     setGenerationStatus('Preparando conteúdo para geração...')
 
     try {
-      // Buscar conteúdo completo do tópico
-      const topicKey = `${selectedDisciplina.nome}::${selectedTopico.numero || ''}::${selectedTopico.nome || ''}`
-      console.log('📋 Buscando conteúdo do tópico:', topicKey)
+      console.log('Iniciando geração direta de flashcards com IA...')
       
-      try {
-        console.log('🔍 ETAPA 1: Buscando documento do conteúdo...')
-        const contentDoc = await getDoc(doc(db, 'courses', courseId, 'conteudoCompleto', topicKey))
-        console.log('✅ ETAPA 1: Documento de conteúdo buscado com sucesso')
-        
-        if (!contentDoc.exists()) {
-          console.log('❌ Conteúdo do tópico não encontrado:', topicKey)
-          throw new Error('Conteúdo do tópico não encontrado')
-        }
-
-        console.log('🔍 ETAPA 2: Extraindo dados do conteúdo...')
-        const contentData = contentDoc.data()
-        const topicContent = contentData.conteudo || contentData.texto || ''
-        console.log('✅ ETAPA 2: Dados do conteúdo extraídos com sucesso')
-
-        if (!topicContent.trim()) {
-          console.log('❌ Conteúdo do tópico está vazio')
-          throw new Error('Conteúdo do tópico está vazio')
-        }
-
-        console.log('✅ Conteúdo encontrado, iniciando geração de flashcards...')
-        setGenerationStatus('Gerando flashcards com IA...')
-      } catch (error) {
-        console.error('❌ ERRO NA ETAPA DE CONTEÚDO:', error)
-        throw error
+      // Gerar flashcards diretamente com IA baseado no tópico
+      const topicInfo = {
+        disciplina: selectedDisciplina.nome,
+        topicoNumero: selectedTopico.numero || '',
+        topicoNome: selectedTopico.nome || '',
+        curso: courseName
       }
+      
+      console.log('Informações do tópico:', topicInfo)
+      setGenerationStatus('Gerando flashcards com IA...')
 
-      // Prompt para gerar flashcards baseado no conteúdo
-      const prompt = `Gere ${flashcardCount} flashcards educacionais de alta qualidade sobre o conteúdo abaixo.
+      // Prompt para gerar flashcards diretamente baseado no tópico
+      const prompt = `Gere ${flashcardCount} flashcards educacionais de alta qualidade sobre o tópico abaixo.
 
 CONTEXTO:
 - Curso: ${courseName}
 - Disciplina: ${selectedDisciplina.nome}
 - Tópico: ${selectedTopico.numero} ${selectedTopico.nome}
 
-CONTEÚDO DO TÓPICO:
-${topicContent}
+TÓPICO:
+${selectedDisciplina.nome} - ${selectedTopico.numero} ${selectedTopico.nome}
 
 INSTRUÇÕES:
 1. Gere EXATAMENTE ${flashcardCount} flashcards
 2. Cada flashcard deve ser uma pergunta direta sobre o conteúdo
 3. As respostas devem ser claras, completas e educacionais
-4. Formato JSON:
+4. Use seu conhecimento sobre ${selectedDisciplina.nome} para criar flashcards relevantes
+5. Adapte o nível de dificuldade para estudantes de concurso público
+6. Formato JSON:
 {
   "flashcards": [
     {
@@ -231,105 +263,142 @@ INSTRUÇÕES:
 }
 
 REGRAS IMPORTANTES:
-- Use apenas o conteúdo fornecido
-- Seja didático e educacional
+- Crie conteúdo educacional relevante para ${selectedDisciplina.nome}
+- Seja didático e focado em aprendizado
 - Perguntas devem testar conhecimento real
-- Respostas devem ensinar e explicar
-- Linguagem formal e técnica
-- Foque 100% em conceitos importantes do conteúdo
-- Não gere conteúdo genérico ou óbvio
+- Respostas devem ensinar e explicar conceitos
+- Linguagem formal e técnica adequada para concursos
+- Foque nos pontos mais importantes do tópico
 
 IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
 
-      try {
-        console.log('🔍 ETAPA 3: Chamando API Gemini...')
-        // Chamar API da Gemini
-        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + import.meta.env.VITE_GEMINI_API_KEY, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: prompt
-              }]
-            }],
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 4000,
-            }
-          })
-        })
-
-        if (!response.ok) {
-          console.error('❌ ERRO NA API GEMINI:', response.status, response.statusText)
-          throw new Error('Erro na API da IA')
-        }
-
-        console.log('✅ ETAPA 3: API Gemini respondida com sucesso')
-        const data = await response.json()
-        const generatedText = data.candidates[0]?.content?.parts[0]?.text
-
-        console.log('🔍 ETAPA 4: Processando resposta da IA...')
-        // Extrair JSON da resposta
-        let flashcardsData = null
-        try {
-          // Limpar resposta e extrair JSON
-          const jsonMatch = generatedText.match(/\{[\s\S]*\}/)
-          if (!jsonMatch) {
-            throw new Error('JSON não encontrado na resposta')
-          }
-          
-          flashcardsData = JSON.parse(jsonMatch[0])
-          console.log('✅ ETAPA 4: JSON processado com sucesso')
-        } catch (parseError) {
-          console.error('❌ ERRO NO PROCESSAMENTO JSON:', parseError)
-          throw new Error('Formato inválido na resposta da IA')
-        }
-
-        if (!flashcardsData.flashcards || !Array.isArray(flashcardsData.flashcards)) {
-          throw new Error('Estrutura de flashcards inválida')
-        }
-
-        setGenerationStatus(`Salvando ${flashcardsData.flashcards.length} flashcards...`)
-
-        console.log('🔍 ETAPA 5: Iniciando salvamento no Firestore...')
-        // Salvar flashcards no Firestore
-        console.log('💾 Iniciando salvamento de flashcards no Firestore...')
-        console.log('📋 Coleção: users/' + user.uid + '/flashcards')
-        
-        const batch = writeBatch(db)
-        
-        flashcardsData.flashcards.forEach((flashcard, index) => {
-          const docRef = doc(collection(db, 'users', user.uid, 'flashcards'))
-          console.log(`📝 Preparando flashcard ${index + 1}:`, flashcard.pergunta.substring(0, 50) + '...')
-          
-          batch.set(docRef, {
-            pergunta: flashcard.pergunta,
-            resposta: flashcard.resposta,
-            materia: selectedDisciplina.nome,
-            topico: selectedTopico.nome,
-            topicoNumero: selectedTopico.numero,
-            dificuldade: flashcard.dificuldade || 'médio',
-            courseId: courseId,
-            courseName: courseName,
-            userId: user.uid,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            reviewCount: 0,
-            lastReview: null,
-            order: index
-          })
-        })
-
-        console.log('🚀 ETAPA 6: Executando batch commit...')
-        await batch.commit()
-        console.log('✅ ETAPA 6: Batch commit executado com sucesso')
-      } catch (error) {
-        console.error('❌ ERRO NAS ETAPAS 3-6 (API/SALVAMENTO):', error)
-        throw error
+      // Verificar API Key
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        console.log('API Key não encontrada!')
+        throw new Error('API Key da Gemini não configurada. Verifique o arquivo .env')
       }
+
+      console.log('API Key encontrada, iniciando chamada da IA...')
+      
+      // Chamar API da Gemini
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 4000,
+          }
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        console.log('Erro na API da IA:', response.status, errorData)
+        throw new Error(`Erro na API da IA: ${response.status} - ${errorData}`)
+      }
+
+      const data = await response.json()
+      const generatedText = data.candidates[0]?.content?.parts[0]?.text
+
+      console.log('Resposta bruta da IA:', generatedText.substring(0, 500) + '...')
+
+      // Extrair JSON da resposta com tratamento mais robusto
+      let flashcardsData = null
+      try {
+        // Tentar diferentes métodos de extração de JSON
+        let jsonString = null
+        
+        // Método 1: Procurar por { ... } completo
+        const jsonMatch = generatedText.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          jsonString = jsonMatch[0]
+        }
+        
+        // Método 2: Procurar por ```json ... ```
+        if (!jsonString) {
+          const codeBlockMatch = generatedText.match(/```json\s*([\s\S]*?)\s*```/)
+          if (codeBlockMatch) {
+            jsonString = codeBlockMatch[1]
+          }
+        }
+        
+        // Método 3: Procurar por array diretamente
+        if (!jsonString) {
+          const arrayMatch = generatedText.match(/\[[\s\S]*\]/)
+          if (arrayMatch) {
+            jsonString = '{"flashcards":' + arrayMatch[0] + '}'
+          }
+        }
+        
+        if (!jsonString) {
+          console.log('JSON não encontrado na resposta')
+          throw new Error('JSON não encontrado na resposta')
+        }
+        
+        console.log('JSON extraído:', jsonString.substring(0, 200) + '...')
+        
+        // Limpar o JSON antes de fazer parse
+        jsonString = jsonString
+          .replace(/,\s*}/g, '}')  // Remove vírgulas antes de }
+          .replace(/,\s*]/g, ']')  // Remove vírgulas antes de ]
+          .replace(/\n/g, '')      // Remove quebras de linha
+          .replace(/\r/g, '')      // Remove carriage returns
+          .trim()
+        
+        flashcardsData = JSON.parse(jsonString)
+        
+        console.log('JSON parseado com sucesso:', flashcardsData)
+      } catch (parseError) {
+        console.error('Erro ao fazer parse do JSON:', parseError)
+        console.error('Resposta completa da IA:', generatedText)
+        throw new Error('Formato inválido na resposta da IA: ' + parseError.message)
+      }
+
+      if (!flashcardsData.flashcards || !Array.isArray(flashcardsData.flashcards)) {
+        throw new Error('Estrutura de flashcards inválida')
+      }
+
+      setGenerationStatus(`Salvando ${flashcardsData.flashcards.length} flashcards...`)
+
+      // Salvar flashcards no Firestore
+      console.log('💾 Iniciando salvamento de flashcards no Firestore...')
+      console.log('📋 Coleção: users/' + user.uid + '/flashcards')
+      
+      const batch = writeBatch(db)
+      
+      flashcardsData.flashcards.forEach((flashcard, index) => {
+        const docRef = doc(collection(db, 'users', user.uid, 'flashcards'))
+        console.log(`📝 Preparando flashcard ${index + 1}:`, flashcard.pergunta.substring(0, 50) + '...')
+        
+        batch.set(docRef, {
+          pergunta: flashcard.pergunta,
+          resposta: flashcard.resposta,
+          materia: selectedDisciplina.nome,
+          topico: selectedTopico.nome,
+          topicoNumero: selectedTopico.numero,
+          dificuldade: flashcard.dificuldade || 'médio',
+          courseId: courseId,
+          courseName: courseName,
+          userId: user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          reviewCount: 0,
+          lastReview: null,
+          order: index
+        })
+      })
+
+      console.log('🚀 Executando batch commit...')
+      await batch.commit()
       
       setGenerationStatus(`✅ ${flashcardsData.flashcards.length} flashcards gerados com sucesso!`)
       
@@ -342,29 +411,81 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
       }, 2000)
 
     } catch (error) {
-      console.error('❌ Erro ao gerar flashcards:', error)
-      console.error('❌ Detalhes do erro:', {
-        code: error.code,
-        message: error.message,
-        stack: error.stack,
-        selectedDisciplina: selectedDisciplina?.nome,
-        selectedTopico: selectedTopico?.nome,
-        courseId: courseId,
-        userId: user?.uid
-      })
+      console.error('Erro ao gerar flashcards:', error)
       setGenerationStatus(`❌ Erro: ${error.message}`)
     } finally {
       setGeneratingFlashcards(false)
     }
   }
 
-  // Abrir modal de geração
-  const openGenerationModal = (disciplina, topico) => {
-    setSelectedDisciplina(disciplina)
-    setSelectedTopico(topico)
-    setShowGenerationModal(true)
-    setGenerationStatus('')
-    setFlashcardCount(10)
+  // Abrir página de geração de flashcards
+  const openGenerationPage = (disciplina, topico) => {
+    // Verificar limite de 50 flashcards por tópico
+    const topicFlashcards = userFlashcards.filter(card => 
+      card.materia === disciplina.nome && 
+      card.topico === topico.nome
+    )
+    
+    if (topicFlashcards.length >= 50) {
+      alert(`Este tópico já possui ${topicFlashcards.length} flashcards. O limite máximo é de 50 flashcards por tópico para melhor performance.`)
+      return
+    }
+    
+    // Navegar para página de geração com parâmetros
+    navigate('/flashcards-generator', {
+      state: {
+        disciplina: disciplina.nome,
+        topico: topico.nome,
+        topicoNumero: topico.numero,
+        courseId: courseId
+      }
+    })
+  }
+
+  // Abrir página de visualização de flashcards do tópico
+  const openTopicFlashcardsPage = (disciplina, topico) => {
+    const topicFlashcards = userFlashcards.filter(card => 
+      card.materia === disciplina.nome && 
+      card.topico === topico.nome
+    )
+    
+    if (topicFlashcards.length === 0) {
+      alert('Nenhum flashcard encontrado para este tópico.')
+      return
+    }
+
+    // Limitar a 50 flashcards mais recentes para melhor performance
+    const limitedFlashcards = topicFlashcards.slice(0, 50)
+    
+    if (topicFlashcards.length > 50) {
+      console.log(`Limitando exibição para 50 flashcards mais recentes de ${topicFlashcards.length} totais`)
+    }
+
+    // Navegar para página de visualização com parâmetros
+    navigate('/flashcards-viewer', {
+      state: {
+        disciplina: disciplina.nome,
+        topico: topico.nome,
+        topicoNumero: topico.numero,
+        courseId: courseId,
+        flashcards: limitedFlashcards // Passar flashcards já limitados
+      }
+    })
+  }
+
+  // Navegação entre flashcards
+  const nextCard = () => {
+    if (currentCardIndex < selectedTopicFlashcards.length - 1) {
+      setCurrentCardIndex(currentCardIndex + 1)
+      setIsFlipped(false)
+    }
+  }
+
+  const prevCard = () => {
+    if (currentCardIndex > 0) {
+      setCurrentCardIndex(currentCardIndex - 1)
+      setIsFlipped(false)
+    }
   }
 
   // Excluir flashcard
@@ -561,19 +682,17 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
                                     <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
                                       <div className="flex items-center justify-center gap-1">
                                         <button
-                                          onClick={() => openGenerationModal(disciplina, topico)}
+                                          onClick={() => openGenerationPage(disciplina, topico)}
                                           className="inline-flex items-center justify-center p-1 sm:p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:text-green-400 dark:hover:bg-green-900/20 rounded transition-colors"
-                                          title="Gerar flashcards"
+                                          title="Gerar flashcards em página separada"
                                         >
                                           <SparklesIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                                         </button>
                                         {topicFlashcards.length > 0 && (
                                           <button
-                                            onClick={() => {
-                                              // Abrir modal com flashcards do tópico
-                                            }}
+                                            onClick={() => openTopicFlashcardsPage(disciplina, topico)}
                                             className="inline-flex items-center justify-center p-1 sm:p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 rounded transition-colors"
-                                            title="Ver flashcards"
+                                            title="Ver flashcards em página separada"
                                           >
                                             <BookOpenIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                                           </button>
@@ -658,25 +777,26 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
         </div>
       </div>
 
-      {/* Modal de Geração de Flashcards */}
-      {showGenerationModal && (
+      
+      {/* Modal de Visualização de Flashcards do Tópico */}
+      {showTopicFlashcards && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 w-full max-w-md`}>
-            <div className="flex justify-between items-start mb-4">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start mb-4 px-6">
               <div>
                 <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  Gerar Flashcards
+                  Flashcards do Tópico
                 </h2>
                 <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-1`}>
-                  {selectedDisciplina?.nome} - {selectedTopico?.numero} {selectedTopico?.nome}
+                  {selectedTopicInfo?.disciplina} - {selectedTopicInfo?.topico}
                 </p>
               </div>
               <button
                 onClick={() => {
-                  setShowGenerationModal(false)
-                  setSelectedDisciplina(null)
-                  setSelectedTopico(null)
-                  setGenerationStatus('')
+                  setShowTopicFlashcards(false)
+                  setSelectedTopicFlashcards([])
+                  setCurrentCardIndex(0)
+                  setIsFlipped(false)
                 }}
                 className={`text-gray-500 hover:text-gray-700 ${darkMode ? 'text-gray-400 hover:text-gray-200' : ''}`}
               >
@@ -684,66 +804,111 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown ou explicações.`
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Quantidade de Flashcards
-                </label>
-                <select
-                  value={flashcardCount}
-                  onChange={(e) => setFlashcardCount(Number(e.target.value))}
-                  className={`w-full px-4 py-2 rounded-lg border ${
-                    darkMode
-                      ? 'bg-gray-700 border-gray-600 text-white'
-                      : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                >
-                  <option value={5}>5 flashcards</option>
-                  <option value={10}>10 flashcards</option>
-                  <option value={15}>15 flashcards</option>
-                  <option value={20}>20 flashcards</option>
-                </select>
-              </div>
-
-              {generationStatus && (
-                <div className={`p-3 rounded-lg text-sm ${
-                  generationStatus.includes('✅') 
-                    ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                    : generationStatus.includes('❌')
-                    ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                }`}>
-                  {generationStatus}
+            {selectedTopicFlashcards.length > 0 && (
+              <>
+                {/* Contador e Navegação */}
+                <div className="flex justify-between items-center mb-4 px-6">
+                  <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Flashcard {currentCardIndex + 1} de {selectedTopicFlashcards.length}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={prevCard}
+                      disabled={currentCardIndex === 0}
+                      className={`px-3 py-1 rounded ${
+                        currentCardIndex === 0
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      onClick={nextCard}
+                      disabled={currentCardIndex === selectedTopicFlashcards.length - 1}
+                      className={`px-3 py-1 rounded ${
+                        currentCardIndex === selectedTopicFlashcards.length - 1
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      Próximo
+                    </button>
+                  </div>
                 </div>
-              )}
 
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => {
-                    setShowGenerationModal(false)
-                    setSelectedDisciplina(null)
-                    setSelectedTopico(null)
-                    setGenerationStatus('')
-                  }}
-                  disabled={generatingFlashcards}
-                  className={`px-4 py-2 rounded-lg ${
-                    darkMode
-                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={generateFlashcardsFromContent}
-                  disabled={generatingFlashcards}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  <SparklesIcon className="w-4 h-4" />
-                  {generatingFlashcards ? 'Gerando...' : 'Gerar Flashcards'}
-                </button>
-              </div>
-            </div>
+                {/* Container do Flashcard com Flip 3D */}
+                <div className="relative h-96 mx-6 mb-6" style={{ perspective: '1000px' }}>
+                  <div 
+                    className={`absolute inset-0 w-full h-full transition-transform duration-700 cursor-pointer`}
+                    style={{
+                      transformStyle: 'preserve-3d',
+                      transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
+                    }}
+                    onClick={() => setIsFlipped(!isFlipped)}
+                  >
+                    {/* Frente do Flashcard */}
+                    <div 
+                      className={`absolute inset-0 w-full h-full rounded-xl shadow-xl flex flex-col justify-center items-center p-8 ${
+                        darkMode ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white' : 'bg-gradient-to-br from-blue-500 to-blue-600 text-white'
+                      }`}
+                      style={{ backfaceVisibility: 'hidden' }}
+                    >
+                      <div className="text-center">
+                        <div className={`text-xs uppercase tracking-wide mb-4 font-semibold ${
+                          darkMode ? 'text-blue-200' : 'text-blue-100'
+                        }`}>
+                          {selectedTopicFlashcards[currentCardIndex].materia}
+                        </div>
+                        <h3 className="text-2xl font-bold mb-6 leading-relaxed">
+                          {selectedTopicFlashcards[currentCardIndex].pergunta}
+                        </h3>
+                        <div className={`text-sm opacity-75 ${darkMode ? 'text-blue-200' : 'text-blue-100'}`}>
+                          Clique para ver a resposta
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Verso do Flashcard */}
+                    <div 
+                      className={`absolute inset-0 w-full h-full rounded-xl shadow-xl flex flex-col justify-center items-center p-8 ${
+                        darkMode ? 'bg-gradient-to-br from-green-600 to-green-700 text-white' : 'bg-gradient-to-br from-green-500 to-green-600 text-white'
+                      }`}
+                      style={{ 
+                        backfaceVisibility: 'hidden',
+                        transform: 'rotateY(180deg)'
+                      }}
+                    >
+                      <div className="text-center">
+                        <div className={`text-xs uppercase tracking-wide mb-4 font-semibold ${
+                          darkMode ? 'text-green-200' : 'text-green-100'
+                        }`}>
+                          Resposta
+                        </div>
+                        <p className="text-xl leading-relaxed">
+                          {selectedTopicFlashcards[currentCardIndex].resposta}
+                        </p>
+                        <div className={`text-sm opacity-75 mt-6 ${darkMode ? 'text-green-200' : 'text-green-100'}`}>
+                          Clique para voltar à pergunta
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Informações do Flashcard */}
+                <div className="px-6 pb-6">
+                  <div className="flex items-center justify-between">
+                    <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {selectedTopicFlashcards[currentCardIndex].topicoNumero} {selectedTopicFlashcards[currentCardIndex].topico}
+                    </span>
+                    <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Dificuldade: {selectedTopicFlashcards[currentCardIndex].dificuldade || 'médio'}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -63,12 +63,17 @@ service cloud.firestore {
     
     // Flashcards 2.0 - Flashcards diretos do usuário
     match /users/{userId}/flashcards/{cardId} {
-      allow read, write, delete: if request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
     }
     
     // Flashcards 2.0 - Coleção de flashcards do usuário
     match /users/{userId}/flashcards {
-      allow read, list: if request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow list: if isOwner(userId);
     }
     
     match /progress/{progressId} {
@@ -113,6 +118,16 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && 
                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Conteúdo completo dos cursos para geração de flashcards
+    match /courses/{courseId}/conteudoCompleto/{contentId} {
+      allow read: if isAuthenticated();
+    }
+    
+    // Conteúdos completos (forma plural) para compatibilidade
+    match /courses/{courseId}/conteudosCompletos/{contentId} {
+      allow read: if isAuthenticated();
     }
     
     match /courses/{courseId} {
