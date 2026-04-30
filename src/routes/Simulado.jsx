@@ -42,6 +42,9 @@ const Simulado = () => {
   const [questionType, setQuestionType] = useState('multiple') // 'multiple' ou 'certo_errado'
   const [alternativesCount, setAlternativesCount] = useState(5) // 4 ou 5 alternativas
   const [showConfigModal, setShowConfigModal] = useState(false) // Modal de configuração
+  const [generationProgress, setGenerationProgress] = useState(0) // Progresso 0-100%
+  const [examinerMessage, setExaminerMessage] = useState('') // Mensagem do examinador
+  const [userBanca, setUserBanca] = useState('') // Banca informada pelo usuário
   const [loadingTip, setLoadingTip] = useState('')
   const [showQuestionReview, setShowQuestionReview] = useState(false) // Mostrar tela de revisão
   const [questionsToReview, setQuestionsToReview] = useState([]) // Questões para revisar
@@ -104,7 +107,8 @@ const Simulado = () => {
           const banca = courseData.banca || courseData.examiningBoard || ''
           setCourseBanca(banca)
           
-          // Lógica para determinar tipo de prova baseado na banca
+          // Lógica para determinar tipo de prova baseado na banca (apenas como sugestão inicial)
+          // O usuário pode alterar no modal de configuração
           if (banca.toLowerCase().includes('cebrasp') || 
               banca.toLowerCase().includes('cetro') ||
               banca.toLowerCase().includes('ibfc') ||
@@ -114,7 +118,7 @@ const Simulado = () => {
             setQuestionType('multiple')
           }
           
-          console.log('🎯 Banca detectada:', banca, 'Tipo de prova:', questionType)
+          console.log('🎯 Banca detectada no curso:', banca, 'Tipo de prova sugerido:', questionType)
         } else {
           setCourseName('ALEGO Policial Legislativo')
           setCourseCompetition('ALEGO')
@@ -155,9 +159,67 @@ const Simulado = () => {
     loadCourseData()
   }, [profile])
 
+  // Mensagens do examinador simulando dia de prova
+  const examinerMessages = [
+    "O examinador está lendo as regras",
+    "Use caneta esferográfica preta ou azul",
+    "Não vire a prova até eu falar que pode virar",
+    "Verifiquem se estão com todos os materiais necessários",
+    "A prova terá duração de 4 horas",
+    "Não é permitido o uso de calculadora",
+    "Desliguem todos os celulares e dispositivos eletrônicos",
+    "Aguardem a distribuição das provas",
+    "Confiram seus dados no cabeçalho da prova",
+    "Não escrevam nas margens da folha de resposta",
+    "A prova será corrigida por processamento eletrônico",
+    "Mantenha a carteira de identidade em local visível",
+    "Não haverá tempo adicional para preenchimento",
+    "Leiam com atenção cada questão antes de responder",
+    "Marquem apenas uma alternativa por questão",
+    "Rasuras serão anuladas automaticamente",
+    "A prova contém 120 questões objetivas",
+    "Verifiquem se a prova está completa",
+    "Qualquer irregularidade deve ser comunicada",
+    "Não será permitido empréstimo de material",
+    "Aguardem o sinal para iniciar a prova",
+    "Mantenham silêncio absoluto durante a prova",
+    "A saída só será permitida após 1 hora",
+    "Ao terminar, entreguem a prova ao fiscal",
+    "Não será permitido ir ao banheiro durante a prova",
+    "Verifiquem se marcaram todas as respostas",
+    "A prova vale 100 pontos no total",
+    "Cada questão tem o mesmo peso",
+    "Não discutam entre si durante a prova",
+    "Mantenham os objetos pessoais guardados",
+    "A prova está sendo gravada por câmeras",
+    "Qualquer tentativa de fraude será punida",
+    "Verifiquem se preencheram o gabarito corretamente",
+    "Aguardem o fiscal recolher as provas",
+    "Não será permitido sair antes do tempo",
+    "A prova está começando a ser impressa",
+    "Fiscal está verificando o número de provas",
+    "Contagem das provas está sendo feita",
+    "Verificação de segurança do material",
+    "Preparando a sala para início da prova",
+    "Fiscal está orientando os candidatos",
+    "Últimas instruções estão sendo dadas",
+    "Sistema de gravação está sendo ativado",
+    "Verificação final do ambiente",
+    "Tudo pronto para início da prova",
+    "Podem começar, boa prova!"
+  ]
+
+  // Função para atualizar progresso e mensagens
+  const updateProgress = (progress) => {
+    setGenerationProgress(progress)
+    const messageIndex = Math.floor((progress / 100) * (examinerMessages.length - 1))
+    setExaminerMessage(examinerMessages[messageIndex])
+  }
+
   // Função para iniciar o simulado após configuração
   const handleStartSimulado = async () => {
     setShowConfigModal(false)
+    setGenerationProgress(0)
     await analyzeEdital()
   }
 
@@ -511,22 +573,6 @@ CRÍTICO:
     }
     
     setAnalizingRedacao(false)
-    
-    // 🔄 LIMPAR ESTADO COMPLETO para forçar novo simulado na próxima vez
-    setSimuladoInfo(null)  // Limpa informações do simulado atual
-    setQuestions([])     // Limpa questões atuais
-    setAnswers({})        // Limpa respostas
-    setCurrentQuestionIndex(0)  // Reseta índice
-    setTimeLeft(0)          // Reseta tempo
-    setIsRunning(false)       // Para o timer
-    setShowQuestionReview(false) // Esconde tela de revisão
-    setQuestionsToReview([])   // Limpa questões para revisar
-    setRedacaoTema('')       // Limpa tema da redação
-    setRedacaoTexto('')       // Limpa texto da redação
-    setRedacaoTimeLeft(0)    // Reseta tempo da redação
-    setRedacaoIsRunning(false) // Para timer da redação
-    setRedacaoNota(null)      // Limpa nota da redação
-    setAnalizingRedacao(false) // Limpa estado de análise
   }
 
   // Timer
@@ -563,6 +609,8 @@ CRÍTICO:
 
     setAnalyzing(true)
     setLoading(true)
+    setGenerationProgress(0)
+    setExaminerMessage(examinerMessages[0])
 
     try {
       const courseId = selectedCourseId || 'alego-default'
@@ -613,6 +661,7 @@ CRÍTICO:
         }
         
         console.log('📚 Usando edital verticalizado com', editalText.length, 'caracteres')
+        updateProgress(10)
       } else {
         // Fallback para edital tradicional
         const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
@@ -622,6 +671,7 @@ CRÍTICO:
           const data = editalDoc.data()
           editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
           console.log('📄 Usando edital tradicional como fallback')
+          updateProgress(15)
         } else {
           // Fallback antigo
           const oldEditalDoc = await getDoc(doc(db, 'config', 'edital'))
@@ -629,6 +679,7 @@ CRÍTICO:
             const data = oldEditalDoc.data()
             editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
             console.log('📄 Usando edital antigo como fallback final')
+            updateProgress(15)
           }
         }
       }
@@ -644,6 +695,8 @@ CRÍTICO:
 
       const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+      
+      updateProgress(20)
 
       // Informações do curso para contexto
       const courseContext = courseName ? `\n\nCONCURSO ESPECÍFICO: ${courseName}${courseCompetition && courseCompetition !== courseName ? ` (${courseCompetition})` : ''}` : ''
@@ -707,7 +760,9 @@ Retorne APENAS um objeto JSON válido no seguinte formato:
 
 CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
 
+      updateProgress(30)
       const result = await model.generateContent(analysisPrompt)
+      updateProgress(50)
       const responseText = result.response.text().trim()
 
       // Extrair JSON
@@ -882,8 +937,12 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
 
       // Gerar questões para cada matéria válida
       const allQuestions = []
+      const totalMaterias = validMaterias.length
       
-      for (const materia of validMaterias) {
+      for (let i = 0; i < validMaterias.length; i++) {
+        const materia = validMaterias[i]
+        const materiaProgress = 60 + (i / totalMaterias) * 30 // 60-90%
+        updateProgress(materiaProgress)
         if (!courseMaterias.includes(materia.nome) && courseMaterias.length > 0) {
           console.warn(`⚠️ Matéria "${materia.nome}" não está no curso, pulando...`)
           continue
@@ -928,7 +987,7 @@ Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de ${questionType === 'c
 
 REGRAS ESPECÍFICAS:
 - Questões devem ser ESPECÍFICAS para o concurso mencionado (${courseCompetition})
-- Banca examinadora: ${courseBanca || 'Não especificada'}
+- Banca examinadora: ${userBanca || courseBanca || 'Não especificada'}
 - Baseie-se EXCLUSIVAMENTE no edital fornecido acima
 - NÃO use conteúdo de outros concursos ou matérias genéricas
 ${questionType === 'certo_errado' ? 
@@ -1111,6 +1170,17 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       setAnswers({})
       setIsFinished(false)
       setResults(null)
+      
+      // Progresso final
+      updateProgress(100)
+      setExaminerMessage("Podem começar, boa prova!")
+      
+      // Manter mensagem final por 2 segundos antes de limpar
+      setTimeout(() => {
+        setGenerationProgress(0)
+        setExaminerMessage('')
+      }, 2000)
+      
     } catch (err) {
       console.error('Erro ao gerar simulado:', err)
       alert(`Erro ao gerar simulado: ${err.message}`)
@@ -1587,11 +1657,45 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
                 )}
               </button>
 
-              {analyzing && loadingTip && (
-                <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                  <p className="text-sm text-green-700 dark:text-green-300 text-center font-medium">
-                    💡 {loadingTip}
-                  </p>
+              {(analyzing || generationProgress > 0) && (
+                <div className="mt-6 space-y-4">
+                  {/* Barra de Progresso */}
+                  <div className="bg-slate-200 dark:bg-slate-700 rounded-full h-4 overflow-hidden">
+                    <div 
+                      className="bg-gradient-to-r from-blue-500 to-alego-600 h-full rounded-full transition-all duration-500 ease-out flex items-center justify-center"
+                      style={{ width: `${generationProgress}%` }}
+                    >
+                      {generationProgress > 10 && (
+                        <span className="text-xs text-white font-semibold">
+                          {generationProgress}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Mensagem do Examinador */}
+                  {examinerMessage && (
+                    <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                        <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                          Examinador:
+                        </p>
+                      </div>
+                      <p className="text-sm text-amber-800 dark:text-amber-200 italic">
+                        "{examinerMessage}"
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Loading Tips (se existir) */}
+                  {analyzing && loadingTip && (
+                    <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                      <p className="text-sm text-green-700 dark:text-green-300 text-center font-medium">
+                        💡 {loadingTip}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1607,6 +1711,8 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
           setQuestionType={setQuestionType}
           alternativesCount={alternativesCount}
           setAlternativesCount={setAlternativesCount}
+          userBanca={userBanca}
+          setUserBanca={setUserBanca}
           loading={loading || analyzing}
         />
       </div>
@@ -2190,47 +2296,202 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
               <h2 className="text-xl font-bold mt-2">{currentQuestion.enunciado}</h2>
             </div>
 
-            <div className="space-y-3">
-              {Object.entries(currentQuestion.alternativas).map(([letra, texto]) => {
-                const isSelected = answers[currentQuestionIndex] === letra
-                const isCorrect = letra === currentQuestion.correta
-                const showResult = isFinished
-
-                return (
+            {/* Renderização condicional: Certo/Errado vs Múltipla Escolha */}
+            {currentQuestion.tipo === 'certo_errado' ? (
+              <>
+                {/* Interface para Certo/Errado */}
+                <div className="flex gap-4">
                   <button
-                    key={letra}
                     onClick={() => {
-                      if (!showResult) {
-                        setAnswers({ ...answers, [currentQuestionIndex]: letra })
+                      if (!isFinished && !answers[currentQuestionIndex]) {
+                        setAnswers({ ...answers, [currentQuestionIndex]: 'C' })
+                        // Avançar automaticamente após responder
+                        setTimeout(() => {
+                          if (currentQuestionIndex < questions.length - 1) {
+                            setCurrentQuestionIndex(currentQuestionIndex + 1)
+                          }
+                        }, 500)
                       }
                     }}
-                    disabled={showResult}
-                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                      isSelected
-                        ? showResult
-                          ? isCorrect
-                            ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                            : 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                          : 'border-alego-600 bg-alego-50 dark:bg-alego-900/20'
-                        : showResult && isCorrect
-                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                        : 'border-slate-200 dark:border-slate-700 hover:border-alego-400'
+                    disabled={isFinished || !!answers[currentQuestionIndex]}
+                    className={`flex-1 p-6 rounded-xl border-2 font-bold text-lg transition-all ${
+                      answers[currentQuestionIndex] === 'C'
+                        ? currentQuestion.correta === 'C'
+                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                          : 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                        : currentQuestion.correta === 'C' && answers[currentQuestionIndex]
+                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                        : answers[currentQuestionIndex]
+                        ? 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500'
+                        : 'border-slate-300 dark:border-slate-600 hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 text-green-700 dark:text-green-300'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-alego-600">{letra})</span>
-                      <span>{texto}</span>
-                      {showResult && isCorrect && (
-                        <CheckCircleIcon className="h-5 w-5 text-green-500 ml-auto" />
-                      )}
-                      {showResult && isSelected && !isCorrect && (
-                        <XCircleIcon className="h-5 w-5 text-red-500 ml-auto" />
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-2xl">✓</span>
+                      <span>CERTO</span>
+                      {answers[currentQuestionIndex] && currentQuestion.correta === 'C' && (
+                        <span className="ml-2 text-green-600 font-bold">✓</span>
                       )}
                     </div>
                   </button>
-                )
-              })}
-            </div>
+
+                  <button
+                    onClick={() => {
+                      if (!isFinished && !answers[currentQuestionIndex]) {
+                        setAnswers({ ...answers, [currentQuestionIndex]: 'E' })
+                        // Avançar automaticamente após responder
+                        setTimeout(() => {
+                          if (currentQuestionIndex < questions.length - 1) {
+                            setCurrentQuestionIndex(currentQuestionIndex + 1)
+                          }
+                        }, 500)
+                      }
+                    }}
+                    disabled={isFinished || !!answers[currentQuestionIndex]}
+                    className={`flex-1 p-6 rounded-xl border-2 font-bold text-lg transition-all ${
+                      answers[currentQuestionIndex] === 'E'
+                        ? currentQuestion.correta === 'E'
+                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                          : 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                        : currentQuestion.correta === 'E' && answers[currentQuestionIndex]
+                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                        : answers[currentQuestionIndex]
+                        ? 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500'
+                        : 'border-slate-300 dark:border-slate-600 hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-700 dark:text-red-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-2xl">✗</span>
+                      <span>ERRADO</span>
+                      {answers[currentQuestionIndex] && currentQuestion.correta === 'E' && (
+                        <span className="ml-2 text-green-600 font-bold">✓</span>
+                      )}
+                    </div>
+                  </button>
+                </div>
+
+                {/* Feedback imediato */}
+                {answers[currentQuestionIndex] && (
+                  <div className={`mt-4 p-3 rounded-lg border ${
+                    answers[currentQuestionIndex] === currentQuestion.correta
+                      ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                      : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {answers[currentQuestionIndex] === currentQuestion.correta ? (
+                        <>
+                          <span className="text-green-600 font-bold">✓</span>
+                          <span className="text-green-700 dark:text-green-300 font-medium">
+                            Resposta correta! {currentQuestion.correta === 'C' ? 'A afirmação é CERTA.' : 'A afirmação é ERRADA.'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-red-600 font-bold">✗</span>
+                          <span className="text-red-700 dark:text-red-300 font-medium">
+                            Resposta incorreta. A resposta correta é: {currentQuestion.correta === 'C' ? 'CERTO' : 'ERRADO'}.
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Interface para Múltipla Escolha */}
+                <div className="space-y-3">
+                  {currentQuestion.alternativas && Object.entries(currentQuestion.alternativas).map(([letra, texto]) => {
+                    const isSelected = answers[currentQuestionIndex] === letra
+                    const isCorrect = letra === currentQuestion.correta
+                    const hasAnswered = !!answers[currentQuestionIndex]
+
+                    return (
+                      <button
+                        key={letra}
+                        onClick={() => {
+                          if (!hasAnswered && !isFinished) {
+                            setAnswers({ ...answers, [currentQuestionIndex]: letra })
+                            // Avançar automaticamente após responder
+                            setTimeout(() => {
+                              if (currentQuestionIndex < questions.length - 1) {
+                                setCurrentQuestionIndex(currentQuestionIndex + 1)
+                              }
+                            }, 500)
+                          }
+                        }}
+                        disabled={hasAnswered || isFinished}
+                        className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
+                          hasAnswered
+                            ? isCorrect
+                              ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                              : isSelected
+                              ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                              : 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                            : isSelected
+                            ? 'border-alego-500 bg-alego-50 dark:bg-alego-900/20'
+                            : 'border-slate-300 dark:border-slate-600 hover:border-alego-400 hover:bg-alego-50 dark:hover:bg-alego-900/20'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className={`flex-shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-sm ${
+                            hasAnswered
+                              ? isCorrect
+                                ? 'border-green-500 text-green-600 bg-green-100 dark:bg-green-900/50'
+                                : isSelected
+                                ? 'border-red-500 text-red-600 bg-red-100 dark:bg-red-900/50'
+                                : 'border-green-500 text-green-600 bg-green-100 dark:bg-green-900/50'
+                              : isSelected
+                              ? 'border-alego-500 text-alego-600 bg-alego-100 dark:bg-alego-900/50'
+                              : 'border-slate-400 text-slate-600 bg-slate-100 dark:bg-slate-800'
+                          }`}>
+                            {letra}
+                            {hasAnswered && isCorrect && (
+                              <span className="ml-1 text-green-600">✓</span>
+                            )}
+                          </span>
+                          <span className={`flex-1 ${
+                            hasAnswered && isCorrect ? 'font-semibold text-green-700 dark:text-green-300' :
+                            hasAnswered && isSelected && !isCorrect ? 'text-red-700 dark:text-red-300' :
+                            hasAnswered && !isSelected ? 'text-green-600 dark:text-green-400 font-medium' :
+                            'text-slate-700 dark:text-slate-300'
+                          }`}>
+                            {texto}
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Feedback imediato para múltipla escolha */}
+                {answers[currentQuestionIndex] && (
+                  <div className={`mt-4 p-3 rounded-lg border ${
+                    answers[currentQuestionIndex] === currentQuestion.correta
+                      ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                      : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {answers[currentQuestionIndex] === currentQuestion.correta ? (
+                        <>
+                          <span className="text-green-600 font-bold">✓</span>
+                          <span className="text-green-700 dark:text-green-300 font-medium">
+                            Resposta correta! Alternativa {currentQuestion.correta} é a resposta certa.
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-red-600 font-bold">✗</span>
+                          <span className="text-red-700 dark:text-red-300 font-medium">
+                            Resposta incorreta. A resposta correta é a alternativa {currentQuestion.correta}.
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -2284,6 +2545,8 @@ const SimuladoConfigModal = ({
   setQuestionType, 
   alternativesCount, 
   setAlternativesCount,
+  userBanca,
+  setUserBanca,
   loading 
 }) => {
   if (!show) return null
@@ -2336,6 +2599,23 @@ const SimuladoConfigModal = ({
                 </div>
               </label>
             </div>
+          </div>
+
+          {/* Banca Examinadora */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+              Banca Examinadora
+            </label>
+            <input
+              type="text"
+              value={userBanca}
+              onChange={(e) => setUserBanca(e.target.value)}
+              placeholder="Ex: FGV, CESPE, CEBRASP, FCC, etc..."
+              className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:ring-2 focus:ring-alego-500 focus:border-alego-500 transition-colors"
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+              Informe a banca organizadora do concurso para gerar questões no estilo correto
+            </p>
           </div>
 
           {/* Número de Alternativas (apenas para múltipla escolha) */}

@@ -27,6 +27,7 @@ const BlogNewsView = lazy(() => import('./routes/BlogNewsView'))
 const Simulado = lazy(() => import('./routes/Simulado'))
 const SimuladoShare = lazy(() => import('./routes/SimuladoShare'))
 const TreinoRedacao = lazy(() => import('./routes/TreinoRedacao'))
+const Flashcards2_0 = lazy(() => import('./routes/Flashcards2.0'))
 const GuiaEstudos = lazy(() => import('./routes/GuiaEstudos'))
 const TestTrial = lazy(() => import('./routes/TestTrial'))
 const MateriaRevisada = lazy(() => import('./routes/MateriaRevisada'))
@@ -290,6 +291,14 @@ function App() {
             element={
               <ProtectedRoute requireCourseSelection={false}>
                 <SocialFeed />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/flashcards2.0"
+            element={
+              <ProtectedRoute>
+                <Flashcards2_0 />
               </ProtectedRoute>
             }
           />
