@@ -38,6 +38,10 @@ const Simulado = () => {
   const [courseName, setCourseName] = useState('')
   const [courseCompetition, setCourseCompetition] = useState('')
   const [courseMaterias, setCourseMaterias] = useState([]) // Matérias do curso (dos flashcards)
+  const [courseBanca, setCourseBanca] = useState('') // Banca examinadora
+  const [questionType, setQuestionType] = useState('multiple') // 'multiple' ou 'certo_errado'
+  const [alternativesCount, setAlternativesCount] = useState(5) // 4 ou 5 alternativas
+  const [showConfigModal, setShowConfigModal] = useState(false) // Modal de configuração
   const [loadingTip, setLoadingTip] = useState('')
   const [showQuestionReview, setShowQuestionReview] = useState(false) // Mostrar tela de revisão
   const [questionsToReview, setQuestionsToReview] = useState([]) // Questões para revisar
@@ -95,9 +99,27 @@ const Simulado = () => {
           const courseData = courseDoc.data()
           setCourseName(courseData.name || courseData.competition || '')
           setCourseCompetition(courseData.competition || courseData.name || '')
+          
+          // Detectar banca examinadora e tipo de prova
+          const banca = courseData.banca || courseData.examiningBoard || ''
+          setCourseBanca(banca)
+          
+          // Lógica para determinar tipo de prova baseado na banca
+          if (banca.toLowerCase().includes('cebrasp') || 
+              banca.toLowerCase().includes('cetro') ||
+              banca.toLowerCase().includes('ibfc') ||
+              banca.toLowerCase().includes('aocp') && banca.toLowerCase().includes('pm')) {
+            setQuestionType('certo_errado')
+          } else {
+            setQuestionType('multiple')
+          }
+          
+          console.log('🎯 Banca detectada:', banca, 'Tipo de prova:', questionType)
         } else {
           setCourseName('ALEGO Policial Legislativo')
           setCourseCompetition('ALEGO')
+          setCourseBanca('')
+          setQuestionType('multiple')
         }
 
         // Carregar matérias do curso (dos flashcards)
@@ -132,6 +154,12 @@ const Simulado = () => {
     
     loadCourseData()
   }, [profile])
+
+  // Função para iniciar o simulado após configuração
+  const handleStartSimulado = async () => {
+    setShowConfigModal(false)
+    await analyzeEdital()
+  }
 
   // Finalizar questões objetivas e ir para redação
   const finishObjectiveQuestions = async () => {
@@ -538,24 +566,75 @@ CRÍTICO:
 
     try {
       const courseId = selectedCourseId || 'alego-default'
-      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
-      const editalDoc = await getDoc(editalRef)
+      
+      // Buscar edital verticalizado primeiro
+      const editalVerticalizadoRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+      const editalVerticalizadoDoc = await getDoc(editalVerticalizadoRef)
 
       let editalText = ''
-      if (editalDoc.exists()) {
-        const data = editalDoc.data()
-        editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
+      if (editalVerticalizadoDoc.exists()) {
+        const data = editalVerticalizadoDoc.data()
+        
+        // Construir texto do edital verticalizado
+        if (data.titulo) {
+          editalText += `TÍTULO: ${data.titulo}\n\n`
+        }
+        if (data.descricao) {
+          editalText += `DESCRIÇÃO: ${data.descricao}\n\n`
+        }
+        
+        // Adicionar disciplinas e tópicos
+        if (data.disciplinas && Array.isArray(data.disciplinas)) {
+          editalText += 'DISCIPLINAS E TÓPICOS:\n\n'
+          data.disciplinas.forEach((disciplina, index) => {
+            editalText += `${index + 1}. ${disciplina.nome || disciplina.disciplina}\n`
+            if (disciplina.topicos && Array.isArray(disciplina.topicos)) {
+              disciplina.topicos.forEach((topico, topicoIndex) => {
+                editalText += `   ${topicoIndex + 1}.1. ${topico.titulo || topico}\n`
+                if (topico.conteudo) {
+                  editalText += `      Conteúdo: ${topico.conteudo.substring(0, 200)}...\n`
+                }
+              })
+            }
+            editalText += '\n'
+          })
+        }
+        
+        // Adicionar seções se existirem
+        if (data.secoes && Array.isArray(data.secoes)) {
+          editalText += 'SEÇÕES ADICIONAIS:\n\n'
+          data.secoes.forEach((secao, index) => {
+            editalText += `${index + 1}. ${secao.titulo}\n`
+            if (secao.conteudo) {
+              editalText += `   ${secao.conteudo.substring(0, 300)}...\n`
+            }
+            editalText += '\n'
+          })
+        }
+        
+        console.log('📚 Usando edital verticalizado com', editalText.length, 'caracteres')
       } else {
-        // Fallback
-        const oldEditalDoc = await getDoc(doc(db, 'config', 'edital'))
-        if (oldEditalDoc.exists()) {
-          const data = oldEditalDoc.data()
+        // Fallback para edital tradicional
+        const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+        const editalDoc = await getDoc(editalRef)
+
+        if (editalDoc.exists()) {
+          const data = editalDoc.data()
           editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
+          console.log('📄 Usando edital tradicional como fallback')
+        } else {
+          // Fallback antigo
+          const oldEditalDoc = await getDoc(doc(db, 'config', 'edital'))
+          if (oldEditalDoc.exists()) {
+            const data = oldEditalDoc.data()
+            editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
+            console.log('📄 Usando edital antigo como fallback final')
+          }
         }
       }
 
       if (!editalText.trim()) {
-        throw new Error('Edital não encontrado. Configure o edital do curso primeiro no painel administrativo.')
+        throw new Error('Edital não encontrado. Configure o edital verticalizado do curso primeiro no painel administrativo.')
       }
 
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
@@ -845,15 +924,22 @@ INSTRUÇÕES FINAIS:
 - NÃO invente informações que não estejam nos flashcards ou edital acima
 - Cada questão deve testar conhecimento presente nos flashcards deste curso
 
-Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha para a matéria "${materia.nome}".
+Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de ${questionType === 'certo_errado' ? 'Certo ou Errado' : 'múltipla escolha'} para a matéria "${materia.nome}".
 
 REGRAS ESPECÍFICAS:
-- Questões devem ser ESPECÍFICAS para o concurso mencionado
+- Questões devem ser ESPECÍFICAS para o concurso mencionado (${courseCompetition})
+- Banca examinadora: ${courseBanca || 'Não especificada'}
 - Baseie-se EXCLUSIVAMENTE no edital fornecido acima
 - NÃO use conteúdo de outros concursos ou matérias genéricas
-- Cada questão deve ter 5 alternativas (A, B, C, D, E)
+${questionType === 'certo_errado' ? 
+`- Cada questão deve ser uma afirmação que pode ser CERTEIRA ou ERRADA
+- Use o formato "C" para Certo e "E" para Errado
+- As afirmações devem testar conhecimento específico do edital
+- Enunciados claros e objetivos na forma de afirmações` :
+`- Cada questão deve ter ${alternativesCount} alternativas (${alternativesCount === 4 ? 'A, B, C, D' : 'A, B, C, D, E'})
 - Apenas UMA alternativa está correta
-- As alternativas incorretas devem ser plausíveis (distratores inteligentes)
+- As alternativas incorretas devem ser plausíveis (distratores inteligentes)`
+}
 - Questões devem ser FICTÍCIAS (não são questões reais de provas anteriores)
 - Enunciados claros e objetivos
 - Foque no conteúdo específico do edital deste concurso
@@ -862,22 +948,37 @@ REGRAS ESPECÍFICAS:
 FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
 Retorne APENAS um objeto JSON válido:
 
-{
+${questionType === 'certo_errado' ? `{
+  "questoes": [
+    {
+      "enunciado": "Texto completo da afirmação",
+      "tipo": "certo_errado",
+      "correta": "C",
+      "materia": "${materia.nome}"
+    }
+  ]
+}` : `{
   "questoes": [
     {
       "enunciado": "Texto completo da questão",
       "alternativas": {
+        ${alternativesCount === 4 ? `
+        "A": "Texto da alternativa A",
+        "B": "Texto da alternativa B",
+        "C": "Texto da alternativa C",
+        "D": "Texto da alternativa D"` : `
         "A": "Texto da alternativa A",
         "B": "Texto da alternativa B",
         "C": "Texto da alternativa C",
         "D": "Texto da alternativa D",
-        "E": "Texto da alternativa E"
+        "E": "Texto da alternativa E"`
+        }
       },
       "correta": "A",
       "materia": "${materia.nome}"
     }
   ]
-}
+}`}
 
 CRÍTICO: Retorne APENAS o JSON, sem markdown.`
 
@@ -1469,7 +1570,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
               )}
 
               <button
-                onClick={analyzeEdital}
+                onClick={() => setShowConfigModal(true)}
                 disabled={loading || analyzing}
                 className="w-full mt-6 bg-alego-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
@@ -1481,7 +1582,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
                 ) : (
                   <>
                     <PlayIcon className="h-5 w-5" />
-                    Analisar Edital e Preparar Simulado
+                    Configurar e Preparar Simulado
                   </>
                 )}
               </button>
@@ -1496,6 +1597,18 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
             </div>
           </div>
         </div>
+
+        {/* Modal de Configuração do Simulado */}
+        <SimuladoConfigModal
+          show={showConfigModal}
+          onClose={() => setShowConfigModal(false)}
+          onStart={handleStartSimulado}
+          questionType={questionType}
+          setQuestionType={setQuestionType}
+          alternativesCount={alternativesCount}
+          setAlternativesCount={setAlternativesCount}
+          loading={loading || analyzing}
+        />
       </div>
     )
   }
@@ -2156,6 +2269,143 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
               <ArrowRightIcon className="h-5 w-5" />
             </button>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Modal de Configuração do Simulado
+const SimuladoConfigModal = ({ 
+  show, 
+  onClose, 
+  onStart, 
+  questionType, 
+  setQuestionType, 
+  alternativesCount, 
+  setAlternativesCount,
+  loading 
+}) => {
+  if (!show) return null
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+          Configurar Simulado
+        </h2>
+
+        <div className="space-y-6">
+          {/* Tipo de Prova */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+              Tipo de Prova
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                <input
+                  type="radio"
+                  name="questionType"
+                  value="multiple"
+                  checked={questionType === 'multiple'}
+                  onChange={(e) => setQuestionType(e.target.value)}
+                  className="mr-3"
+                />
+                <div>
+                  <div className="font-medium text-slate-900 dark:text-white">Múltipla Escolha</div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400">
+                    Questões com alternativas A, B, C, D, E
+                  </div>
+                </div>
+              </label>
+              
+              <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                <input
+                  type="radio"
+                  name="questionType"
+                  value="certo_errado"
+                  checked={questionType === 'certo_errado'}
+                  onChange={(e) => setQuestionType(e.target.value)}
+                  className="mr-3"
+                />
+                <div>
+                  <div className="font-medium text-slate-900 dark:text-white">Certo ou Errado</div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400">
+                    Afirmações com resposta Certo (C) ou Errado (E)
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Número de Alternativas (apenas para múltipla escolha) */}
+          {questionType === 'multiple' && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                Número de Alternativas
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                  <input
+                    type="radio"
+                    name="alternativesCount"
+                    value={4}
+                    checked={alternativesCount === 4}
+                    onChange={(e) => setAlternativesCount(parseInt(e.target.value))}
+                    className="mr-3"
+                  />
+                  <div>
+                    <div className="font-medium text-slate-900 dark:text-white">4 Alternativas</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">
+                      A, B, C, D
+                    </div>
+                  </div>
+                </label>
+                
+                <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                  <input
+                    type="radio"
+                    name="alternativesCount"
+                    value={5}
+                    checked={alternativesCount === 5}
+                    onChange={(e) => setAlternativesCount(parseInt(e.target.value))}
+                    className="mr-3"
+                  />
+                  <div>
+                    <div className="font-medium text-slate-900 dark:text-white">5 Alternativas</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">
+                      A, B, C, D, E
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* Botões */}
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={onClose}
+              disabled={loading}
+              className="flex-1 px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={onStart}
+              disabled={loading}
+              className="flex-1 px-4 py-3 rounded-lg bg-alego-600 text-white hover:bg-alego-700 font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  Preparando...
+                </>
+              ) : (
+                'Iniciar Simulado'
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -71,11 +71,8 @@ const Header = () => {
           { to: '/dashboard', label: 'Dashboard', auth: true },
           { to: '/edital-verticalizado', label: 'Edital Verticalizado', auth: true },
           { to: '/calendario', label: 'Calendário de Progresso', auth: true },
-          { to: '/flashcards', label: 'Flashcards', auth: true },
-          { to: '/flashquestoes', label: 'FlashQuestões', auth: true },
           { to: '/simulado', label: 'Simulado', auth: true },
           { to: '/treino-redacao', label: 'Treino Redação', auth: true },
-          { to: '/mapas-mentais', label: 'Mapas Mentais', auth: true },
         ],
       },
       social: {

@@ -43,13 +43,7 @@ import { isTrialMode, getTrialData } from '../utils/trialLimits'
 import { motion } from 'framer-motion'
 import { DocumentTextIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import InstallPWAButton from '../components/InstallPWAButton'
-import PreloadOfflineButton from '../components/PreloadOfflineButton'
-import StudyPlanner from '../components/StudyPlanner'
-import WhatsAppGroupLink from '../components/WhatsAppGroupLink'
 import LGPDConsent from '../components/LGPDConsent'
-import UserPhoneList from '../components/UserPhoneList'
-import MessageBroadcast from '../components/MessageBroadcast'
-import { useStudyPlanner } from '../hooks/useStudyPlanner'
 // import StudyTimeChart from '../components/StudyTimeChart' // TEMPORARIAMENTE DESATIVADO
 
 dayjs.locale('pt-br')
@@ -68,108 +62,7 @@ const Dashboard = () => {
   const [questoesStats, setQuestoesStats] = useState({ correct: 0, wrong: 0, byMateria: {} })
   const { subjectOrder } = useSubjectOrder()
 
-  // Hook do planejador de estudos
-  const {
-    dailyRecommendation,
-    loading: loadingPlanner,
-    error: plannerError,
-    daysRemaining,
-    targetDate,
-    completedTopics,
-    refreshRecommendation
-  } = useStudyPlanner(user?.uid, selectedCourseId, editalVerticalizado)
-
-  // Calcular total de tópicos do edital
-  const totalTopics = useMemo(() => {
-    if (!editalVerticalizado?.disciplinas) return 0
-    return editalVerticalizado.disciplinas.reduce((total, disciplina) => {
-      return total + (disciplina.topicos?.length || 0)
-    }, 0)
-  }, [editalVerticalizado])
-
-  // Função para marcar tópico como concluído
-  const markTopicAsCompleted = async (disciplina, topico) => {
-    if (!user || !selectedCourseId) return false
-    
-    try {
-      // Criar ID seguro sem caracteres especiais
-      const safeDisciplina = disciplina.replace(/[^a-zA-Z0-9]/g, '_')
-      const safeTopico = topico.replace(/[^a-zA-Z0-9]/g, '_')
-      const progressId = `${user.uid}_${selectedCourseId}_${safeDisciplina}_${safeTopico}`
-      
-      const progressRef = doc(db, 'editalProgress', progressId)
-      await setDoc(progressRef, {
-        userId: user.uid,
-        courseId: selectedCourseId,
-        disciplina,
-        topico,
-        completedAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      }, { merge: true })
-      
-      return true
-    } catch (error) {
-      console.error('Erro ao marcar tópico como concluído:', error)
-      return false
-    }
-  }
-
-  // Função para resetar todo o progresso do edital
-  const resetEditalProgress = async () => {
-    if (!user || !selectedCourseId) return false
-    
-    const confirmed = window.confirm('⚠️ ATENÇÃO: Esta ação irá apagar TODO o seu progresso no edital verticalizado. Todos os tópicos marcados como concluídos serão resetados. Deseja continuar?')
-    
-    if (!confirmed) return false
-    
-    try {
-      // Buscar todos os documentos de progresso do usuário para este curso
-      const progressQuery = query(
-        collection(db, 'editalProgress'),
-        where('userId', '==', user.uid),
-        where('courseId', '==', selectedCourseId)
-      )
-      
-      const progressSnapshot = await getDocs(progressQuery)
-      const batch = writeBatch(db)
-      
-      // Adicionar todos os documentos ao batch para deletar
-      progressSnapshot.forEach((docSnapshot) => {
-        batch.delete(docSnapshot.ref)
-      })
-      
-      // Executar o batch
-      await batch.commit()
-      
-      // Limpar recomendações em cache
-      const recommendationsQuery = query(
-        collection(db, 'studyPlannerRecommendations'),
-        where('userId', '==', user.uid),
-        where('courseId', '==', selectedCourseId)
-      )
-      
-      const recommendationsSnapshot = await getDocs(recommendationsQuery)
-      const recommendationsBatch = writeBatch(db)
-      
-      recommendationsSnapshot.forEach((docSnapshot) => {
-        recommendationsBatch.delete(docSnapshot.ref)
-      })
-      
-      await recommendationsBatch.commit()
-      
-      // Forçar atualização do planejador
-      refreshRecommendation()
-      
-      alert('✅ Progresso do edital resetado com sucesso! Comece do zero agora.')
-      return true
-    } catch (error) {
-      console.error('Erro ao resetar progresso:', error)
-      alert('❌ Erro ao resetar progresso. Tente novamente.')
-      return false
-    }
-  }
-
-
+  
   // Carregar curso selecionado
   useEffect(() => {
     if (!profile) return
@@ -656,82 +549,22 @@ const Dashboard = () => {
             </div>
             <div className="flex gap-3">
               <Link
-                to="/flashcards"
+                to="/simulado"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-alego-600 to-alego-700 text-white rounded-xl font-semibold hover:from-alego-700 hover:to-alego-800 shadow-lg hover:shadow-xl transition-all"
               >
-                <PlayIcon className="h-5 w-5" />
-                Estudar Agora
+                <TrophyIcon className="h-5 w-5" />
+                Fazer Simulado
               </Link>
             </div>
           </div>
         </motion.div>
 
-        {/* Botões de Instalação e Preparação Offline */}
-        <div className="mb-6 space-y-3">
+        {/* Botões de Instalação PWA */}
+        <div className="mb-6">
           <InstallPWAButton />
-          <PreloadOfflineButton />
         </div>
 
-        {/* Cards de Estatísticas */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 p-6 shadow-xl"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                  <FireIcon className="h-6 w-6 text-white" />
-                </div>
-              </div>
-              <p className="text-white/80 text-sm font-semibold mb-1">Sequência</p>
-              <p className="text-4xl font-black text-white mb-1">{stats.streak}</p>
-              <p className="text-white/70 text-xs">dias consecutivos</p>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 p-6 shadow-xl"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                  <BookOpenIcon className="h-6 w-6 text-white" />
-                </div>
-              </div>
-              <p className="text-white/80 text-sm font-semibold mb-1">Cards Estudados</p>
-              <p className="text-4xl font-black text-white mb-1">{stats.studiedCards}</p>
-              <p className="text-white/70 text-xs">de {stats.totalCards} total</p>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 p-6 shadow-xl"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                  <ChartBarIcon className="h-6 w-6 text-white" />
-                </div>
-              </div>
-              <p className="text-white/80 text-sm font-semibold mb-1">Taxa de Acerto</p>
-              <p className="text-4xl font-black text-white mb-1">{stats.accuracy}%</p>
-              <p className="text-white/70 text-xs">em revisões</p>
-            </div>
-          </motion.div>
-        </div>
-
+        
         {/* Edital Verticalizado */}
         {selectedCourseId && (
           <motion.div
@@ -836,199 +669,17 @@ const Dashboard = () => {
           </motion.div>
         )}
 
-        {/* Planejador de Estudos - 2 Meses */}
-        {selectedCourseId && (
-          <StudyPlanner
-            dailyRecommendation={dailyRecommendation}
-            loading={loadingPlanner}
-            daysRemaining={daysRemaining}
-            refreshRecommendation={refreshRecommendation}
-            markTopicAsCompleted={markTopicAsCompleted}
-            completedTopics={completedTopics}
-            totalTopics={totalTopics}
-            resetEditalProgress={resetEditalProgress}
-          />
-        )}
 
-        {/* Grid Principal */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Cards para Revisar */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.6 }}
-            className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-                  <ArrowPathIcon className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                    Para Revisar
-                  </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    Cards pendentes
-                  </p>
-                </div>
-              </div>
-            </div>
 
-            {stats.cardsToReview > 0 ? (
-              <div className="space-y-4">
-                <div className="text-center py-4">
-                  <p className="text-4xl font-black text-amber-600 dark:text-amber-400 mb-2">
-                    {stats.cardsToReview}
-                  </p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    {stats.cardsToReview === 1 ? 'card aguardando' : 'cards aguardando'}
-                  </p>
-                </div>
-                <Link
-                  to="/flashcards"
-                  className="block w-full text-center px-4 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl font-semibold hover:from-amber-600 hover:to-amber-700 transition-all shadow-lg hover:shadow-xl"
-                >
-                  Revisar Agora
-                  <ArrowRightOutline className="h-4 w-4 inline-block ml-2" />
-                </Link>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <CheckCircleIcon className="h-12 w-12 text-green-500 mx-auto mb-3" />
-                <p className="text-slate-600 dark:text-slate-400 font-medium">
-                  Todos os cards estão em dia!
-                </p>
-              </div>
-            )}
-          </motion.div>
-        </div>
 
-        {/* WhatsApp Group Link */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.75 }}
-        >
-          <WhatsAppGroupLink />
-        </motion.div>
-
-        {/* User Phone List - Apenas para Admins */}
-        {profile?.role === 'admin' && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.8 }}
-          >
-            <UserPhoneList />
-          </motion.div>
-        )}
-
-        {/* Message Broadcast - Apenas para Admins */}
-        {profile?.role === 'admin' && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.85 }}
-          >
-            <MessageBroadcast />
-          </motion.div>
-        )}
-
-        {/* Progresso por Matéria */}
-        {stats.bySubject && Object.keys(stats.bySubject).length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.7 }}
-            className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6 mb-8"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                  <AcademicCapIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                    Progresso por Matéria
-                  </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    Acompanhe seu avanço em cada área
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.entries(stats.bySubject)
-                .sort((a, b) => b[1].percentage - a[1].percentage)
-                .map(([materia, materiaStats]) => {
-                  const percentage = materiaStats.percentage
-                  const studied = materiaStats.studiedCards
-                  const total = materiaStats.totalCards
-
-                  return (
-                    <div
-                      key={materia}
-                      className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4 border border-slate-200 dark:border-slate-600"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-semibold text-slate-900 dark:text-white text-sm">
-                          {materia}
-                        </h4>
-                        <span className="text-lg font-black text-blue-600 dark:text-blue-400">
-                          {percentage}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2 mb-2">
-                        <div
-                          className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-500"
-                          style={{ width: `${percentage}%` }}
-                        ></div>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {studied} de {total} cards estudados
-                      </p>
-                    </div>
-                  )
-                })}
-            </div>
-          </motion.div>
-        )}
-
+        
         {/* Links Rápidos */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.8 }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4"
         >
-          <Link
-            to="/flashcards"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
-            <div className="relative z-10">
-              <BookOpenIcon className="h-8 w-8 text-white mb-3" />
-              <h3 className="text-lg font-bold text-white mb-1">Flashcards</h3>
-              <p className="text-white/80 text-sm">Estude com repetição espaçada</p>
-              <ArrowRightOutline className="h-5 w-5 text-white mt-3 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
-
-          <Link
-            to="/flashquestoes"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
-            <div className="relative z-10">
-              <LightBulbIcon className="h-8 w-8 text-white mb-3" />
-              <h3 className="text-lg font-bold text-white mb-1">FlashQuestões</h3>
-              <p className="text-white/80 text-sm">Questões geradas por IA</p>
-              <ArrowRightOutline className="h-5 w-5 text-white mt-3 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
-
           <Link
             to="/simulado"
             className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-500 to-green-600 p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
@@ -1038,6 +689,19 @@ const Dashboard = () => {
               <TrophyIcon className="h-8 w-8 text-white mb-3" />
               <h3 className="text-lg font-bold text-white mb-1">Simulado</h3>
               <p className="text-white/80 text-sm">Teste seus conhecimentos</p>
+              <ArrowRightOutline className="h-5 w-5 text-white mt-3 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+
+          <Link
+            to="/treino-redacao"
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+            <div className="relative z-10">
+              <DocumentTextIcon className="h-8 w-8 text-white mb-3" />
+              <h3 className="text-lg font-bold text-white mb-1">Treino de Redação</h3>
+              <p className="text-white/80 text-sm">Pratique escrevendo redações</p>
               <ArrowRightOutline className="h-5 w-5 text-white mt-3 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>

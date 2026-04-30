@@ -13,16 +13,13 @@ import PublicHome from './routes/PublicHome'
 // Lazy load de rotas pesadas
 const AdminPanel = lazy(() => import('./routes/AdminPanel'))
 const Dashboard = lazy(() => import('./routes/Dashboard'))
-const FlashcardView = lazy(() => import('./routes/FlashcardView'))
 const Login = lazy(() => import('./routes/Login'))
 const SetupUser = lazy(() => import('./routes/SetupUser'))
-const FlashQuestoes = lazy(() => import('./routes/FlashQuestoes'))
 const QuestionView = lazy(() => import('./routes/QuestionView'))
 const ResetPassword = lazy(() => import('./routes/ResetPassword'))
 const Payment = lazy(() => import('./routes/Payment'))
 const CourseSelector = lazy(() => import('./components/CourseSelector'))
 const CourseShare = lazy(() => import('./routes/CourseShare'))
-const MindMapView = lazy(() => import('./routes/MindMapView'))
 const SocialFeed = lazy(() => import('./routes/SocialFeed'))
 const UserProfile = lazy(() => import('./routes/UserProfile'))
 const NewsView = lazy(() => import('./routes/NewsView'))
@@ -193,22 +190,6 @@ function App() {
             }
           />
           <Route
-            path="/flashcards"
-            element={
-              <ProtectedRoute requireCourseSelection>
-                <FlashcardView />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/flashquestoes"
-            element={
-              <ProtectedRoute requireCourseSelection>
-                <FlashQuestoes />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/flashquestoes/responder"
             element={
               <ProtectedRoute>
@@ -229,14 +210,6 @@ function App() {
             element={
               <ProtectedRoute requireCourseSelection>
                 <TreinoRedacao />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/mapas-mentais"
-            element={
-              <ProtectedRoute requireCourseSelection>
-                <MindMapView />
               </ProtectedRoute>
             }
           />
