@@ -61,6 +61,16 @@ service cloud.firestore {
       }
     }
     
+    // Flashcards 2.0 - Flashcards diretos do usuário
+    match /users/{userId}/flashcards/{cardId} {
+      allow read, write, delete: if request.auth.uid == userId;
+    }
+    
+    // Flashcards 2.0 - Coleção de flashcards do usuário
+    match /users/{userId}/flashcards {
+      allow read, list: if request.auth.uid == userId;
+    }
+    
     match /progress/{progressId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
