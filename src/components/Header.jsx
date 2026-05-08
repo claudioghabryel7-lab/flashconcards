@@ -73,7 +73,6 @@ const Header = () => {
           { to: '/calendario', label: 'Calendário de Progresso', auth: true },
           { to: '/simulado', label: 'Simulado', auth: true },
           { to: '/treino-redacao', label: 'Treino Redação', auth: true },
-          { to: '/flashcards2.0', label: 'Flashcards 2.0', auth: true },
         ],
       },
       social: {

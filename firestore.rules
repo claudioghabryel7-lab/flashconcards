@@ -45,37 +45,6 @@ service cloud.firestore {
                     get(/databases/$(database)/documents/flashcards/$(cardId)).data.userId == request.auth.uid;
     }
     
-    // Flashcards 2.0 - Decks individuais por usuário
-    match /users/{userId}/flashcardDecks/{deckId} {
-      allow read: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId);
-      
-      // Cards dentro do deck
-      match /cards/{cardId} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId);
-        allow update: if isOwner(userId);
-        allow delete: if isOwner(userId);
-      }
-    }
-    
-    // Flashcards 2.0 - Flashcards diretos do usuário
-    match /users/{userId}/flashcards/{cardId} {
-      allow read: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId);
-    }
-    
-    // Flashcards 2.0 - Coleção de flashcards do usuário
-    match /users/{userId}/flashcards {
-      allow read: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow list: if isOwner(userId);
-    }
-    
     match /progress/{progressId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
@@ -118,16 +87,6 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && 
                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-    
-    // Conteúdo completo dos cursos para geração de flashcards
-    match /courses/{courseId}/conteudoCompleto/{contentId} {
-      allow read: if isAuthenticated();
-    }
-    
-    // Conteúdos completos (forma plural) para compatibilidade
-    match /courses/{courseId}/conteudosCompletos/{contentId} {
-      allow read: if isAuthenticated();
     }
     
     match /courses/{courseId} {

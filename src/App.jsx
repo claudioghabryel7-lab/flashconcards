@@ -27,9 +27,6 @@ const BlogNewsView = lazy(() => import('./routes/BlogNewsView'))
 const Simulado = lazy(() => import('./routes/Simulado'))
 const SimuladoShare = lazy(() => import('./routes/SimuladoShare'))
 const TreinoRedacao = lazy(() => import('./routes/TreinoRedacao'))
-const Flashcards2_0 = lazy(() => import('./routes/Flashcards2.0'))
-const FlashcardsViewer = lazy(() => import('./routes/FlashcardsViewer'))
-const FlashcardsGenerator = lazy(() => import('./routes/FlashcardsGenerator'))
 const GuiaEstudos = lazy(() => import('./routes/GuiaEstudos'))
 const TestTrial = lazy(() => import('./routes/TestTrial'))
 const MateriaRevisada = lazy(() => import('./routes/MateriaRevisada'))
@@ -152,10 +149,7 @@ function App() {
       )
     }
     
-    // Verificar se é a página de FlashcardsViewer para não mostrar Header/Footer
-      const isFlashcardsViewer = location.pathname === '/flashcards-viewer'
-      
-      return (
+    return (
       <div 
         className="min-h-screen transition-colors"
         style={{
@@ -164,8 +158,8 @@ function App() {
           minHeight: '100vh'
         }}
       >
-      {!isFlashcardsViewer && <Header />}
-      <main className={`mx-auto w-full ${isFlashcardsViewer ? '' : 'max-w-7xl px-3 sm:px-4 lg:px-6 py-4 sm:py-6 md:py-8'} overflow-x-hidden relative z-10`}>
+      <Header />
+      <main className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 py-4 sm:py-6 md:py-8 overflow-x-hidden relative z-10">
         <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/" element={<PublicHome />} />
@@ -300,30 +294,6 @@ function App() {
             }
           />
           <Route
-            path="/flashcards2.0"
-            element={
-              <ProtectedRoute>
-                <Flashcards2_0 />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/flashcards-viewer"
-            element={
-              <ProtectedRoute>
-                <FlashcardsViewer />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/flashcards-generator"
-            element={
-              <ProtectedRoute>
-                <FlashcardsGenerator />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/profile/:userId"
             element={
               <ProtectedRoute requireCourseSelection={false}>
@@ -359,19 +329,15 @@ function App() {
         </Routes>
         </Suspense>
       </main>
-      {!isFlashcardsViewer && (
-        <>
-          <footer className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[60px] flex items-center justify-center">
-            <p>
-              © {new Date().getFullYear()} FlashConCards. Todos os direitos reservados.
-              É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.
-            </p>
-          </footer>
-          <SupportButton />
-          <PopupBanner />
-          <OfflineIndicator />
-        </>
-      )}
+      <footer className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[60px] flex items-center justify-center">
+        <p>
+          © {new Date().getFullYear()} FlashConCards. Todos os direitos reservados.
+          É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.
+        </p>
+      </footer>
+      <SupportButton />
+      <PopupBanner />
+      <OfflineIndicator />
     </div>
     )
   } catch (error) {
