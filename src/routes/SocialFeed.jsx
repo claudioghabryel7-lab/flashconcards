@@ -716,80 +716,97 @@ const SocialFeed = () => {
               {/* Comentários */}
               {showComments && (
                 <div className="px-4 pb-4 border-t border-slate-200 dark:border-slate-700">
-                  <div className="pt-4 space-y-3 max-h-96 overflow-y-auto">
+                  <div className="pt-4 space-y-4 max-h-96 overflow-y-auto">
                     {comments.map((comment) => (
-                      <div key={comment.id} className="flex gap-3">
-                        {comment.authorAvatar ? (
-                          <img
-                            src={comment.authorAvatar}
-                            alt={comment.authorName}
-                            className="h-8 w-8 rounded-full object-cover flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-alego-500 to-alego-700 flex items-center justify-center flex-shrink-0">
-                            <span className="text-white font-bold text-xs">
-                              {(comment.authorName || 'U')[0].toUpperCase()}
-                            </span>
+                      <div key={comment.id} className="group">
+                        <div className="flex gap-3">
+                          {comment.authorAvatar ? (
+                            <img
+                              src={comment.authorAvatar}
+                              alt={comment.authorName}
+                              className="h-10 w-10 rounded-full object-cover flex-shrink-0 ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-blue-500 transition-all"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-blue-500 transition-all shadow-md">
+                              <span className="text-white font-bold text-sm">
+                                {(comment.authorName || 'U')[0].toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-3 group-hover:bg-slate-100 dark:group-hover:bg-slate-800 transition-all">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                                  {comment.authorName}
+                                </p>
+                                <span className="text-xs text-slate-400 dark:text-slate-500">
+                                  • {formatDate(comment.createdAt)}
+                                </span>
+                              </div>
+                              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed break-words">
+                                {comment.text}
+                              </p>
+                            </div>
                           </div>
-                        )}
-                        <div className="flex-1">
-                          <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                            {comment.authorName}
-                          </p>
-                          <p className="text-sm text-slate-600 dark:text-slate-400 break-words">
-                            {comment.text}
-                          </p>
                         </div>
                       </div>
                     ))}
                     {comments.length === 0 && (
-                      <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-2">
-                        Nenhum comentário ainda. Seja o primeiro!
-                      </p>
+                      <div className="text-center py-6">
+                        <div className="text-4xl mb-2">💬</div>
+                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                          Nenhum comentário ainda
+                        </p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                          Seja o primeiro a comentar!
+                        </p>
+                      </div>
                     )}
                   </div>
 
                   {/* Input de comentário */}
-                  <div className="flex gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <div className="flex gap-3 mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                     {user.photoURL ? (
                       <img
                         src={user.photoURL}
                         alt={user.displayName || 'Você'}
-                        className="h-8 w-8 rounded-full object-cover flex-shrink-0"
+                        className="h-10 w-10 rounded-full object-cover flex-shrink-0 ring-2 ring-slate-200 dark:ring-slate-700"
                       />
                     ) : (
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-alego-500 to-alego-700 flex items-center justify-center flex-shrink-0">
-                        <span className="text-white font-bold text-xs">
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 ring-2 ring-slate-200 dark:ring-slate-700 shadow-md">
+                        <span className="text-white font-bold text-sm">
                           {(profile?.displayName || user.email || 'U')[0].toUpperCase()}
                         </span>
                       </div>
                     )}
-                    <input
-                      type="text"
-                      value={commentInputs[post.id] || ''}
-                      onChange={(e) => setCommentInputs(prev => ({
-                        ...prev,
-                        [post.id]: e.target.value
-                      }))}
-                      onKeyPress={(e) => e.key === 'Enter' && hasCourseAccess && addComment(post.id)}
-                      placeholder={hasCourseAccess ? "Escreva um comentário..." : "Você precisa ter acesso a um curso para comentar"}
-                      disabled={!hasCourseAccess}
-                      className={`flex-1 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 py-2 text-sm focus:border-alego-400 focus:outline-none ${
-                        !hasCourseAccess ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    />
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        value={commentInputs[post.id] || ''}
+                        onChange={(e) => setCommentInputs(prev => ({
+                          ...prev,
+                          [post.id]: e.target.value
+                        }))}
+                        onKeyPress={(e) => e.key === 'Enter' && hasCourseAccess && addComment(post.id)}
+                        placeholder={hasCourseAccess ? "Escreva um comentário..." : "Você precisa ter acesso a um curso para comentar"}
+                        disabled={!hasCourseAccess}
+                        className={`w-full rounded-full border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all ${
+                          !hasCourseAccess ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => addComment(post.id)}
                       disabled={!hasCourseAccess}
-                      className={`rounded-full bg-alego-600 px-4 py-2 text-sm font-semibold text-white transition ${
+                      className={`rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all ${
                         hasCourseAccess 
-                          ? 'hover:bg-alego-700' 
+                          ? 'hover:from-blue-700 hover:to-purple-700' 
                           : 'opacity-50 cursor-not-allowed'
                       }`}
                       title={!hasCourseAccess ? 'Você precisa ter acesso a um curso para comentar' : ''}
                     >
-                      Enviar
+                      <PaperAirplaneIcon className="h-4 w-4" />
                     </button>
                   </div>
                 </div>

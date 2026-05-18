@@ -244,22 +244,22 @@ const Reviews = () => {
                 {/* Primeiro conjunto de avaliações */}
                 {reviews.map((review, index) => (
                   <div key={`first-${review.id}`} className="w-1/3 flex-shrink-0 px-2">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-slate-200 dark:border-slate-700 h-full">
+                    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-6 shadow-xl border border-slate-200 dark:border-slate-700 h-full hover:shadow-2xl hover:scale-105 transition-all duration-300 group">
                       <div className="flex gap-1 mb-4">
                         {renderStars(review.rating)}
                       </div>
-                      <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed line-clamp-4 h-24">
+                      <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed line-clamp-4 h-24 italic">
                         "{review.comment}"
                       </p>
                       <div className="flex items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg">
+                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-blue-500 transition-all">
                           {(review.userName || 'A')[0].toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                          <p className="font-bold text-slate-900 dark:text-slate-100 truncate">
                             {review.userName || 'Aluno'}
                           </p>
-                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                             {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
                               day: 'numeric',
                               month: 'short',
@@ -275,22 +275,22 @@ const Reviews = () => {
                 {/* Segundo conjunto duplicado para loop infinito */}
                 {reviews.map((review, index) => (
                   <div key={`second-${review.id}`} className="w-1/3 flex-shrink-0 px-2">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-slate-200 dark:border-slate-700 h-full">
+                    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-6 shadow-xl border border-slate-200 dark:border-slate-700 h-full hover:shadow-2xl hover:scale-105 transition-all duration-300 group">
                       <div className="flex gap-1 mb-4">
                         {renderStars(review.rating)}
                       </div>
-                      <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed line-clamp-4 h-24">
+                      <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed line-clamp-4 h-24 italic">
                         "{review.comment}"
                       </p>
                       <div className="flex items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg">
+                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-blue-500 transition-all">
                           {(review.userName || 'A')[0].toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                          <p className="font-bold text-slate-900 dark:text-slate-100 truncate">
                             {review.userName || 'Aluno'}
                           </p>
-                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                             {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
                               day: 'numeric',
                               month: 'short',
@@ -318,23 +318,23 @@ const Reviews = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all hover:scale-105 border border-slate-200 dark:border-slate-700"
+                className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-5 shadow-xl hover:shadow-2xl transition-all hover:scale-105 border border-slate-200 dark:border-slate-700 group"
               >
                 <div className="flex gap-1 mb-3">
                   {renderStars(review.rating)}
                 </div>
-                <p className="text-slate-700 dark:text-slate-300 mb-3 leading-relaxed line-clamp-3 text-sm min-h-[3rem]">
+                <p className="text-slate-700 dark:text-slate-300 mb-3 leading-relaxed line-clamp-3 text-sm min-h-[3rem] italic">
                   "{review.comment}"
                 </p>
                 <div className="flex items-center gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
+                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-blue-500 transition-all">
                     {(review.userName || 'A')[0].toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm truncate">
+                    <p className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">
                       {review.userName || 'Aluno'}
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                       {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
                         month: 'short',
                         year: 'numeric'
@@ -354,23 +354,23 @@ const Reviews = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border border-slate-200 dark:border-slate-700"
+                className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-5 shadow-xl border border-slate-200 dark:border-slate-700 group"
               >
                 <div className="flex gap-1 mb-3">
                   {renderStars(review.rating)}
                 </div>
-                <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed text-sm">
+                <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed text-sm italic">
                   "{review.comment}"
                 </p>
                 <div className="flex items-center gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
+                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-blue-500 transition-all">
                     {(review.userName || 'A')[0].toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm truncate">
+                    <p className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">
                       {review.userName || 'Aluno'}
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                       {review.createdAt?.toDate?.().toLocaleDateString('pt-BR') || 'Recentemente'}
                     </p>
                   </div>
