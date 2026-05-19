@@ -17,6 +17,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import AudioReader from '../components/AudioReader'
 import { processIAContent, isHtmlContent } from '../utils/iaContentProcessor'
+import { formatTopicoAsModulo } from '../utils/editalVerticalizadoLoader'
 
 // Gera uma chave estável e mais específica para cada tópico do edital,
 // combinando numeração + nome. Isso evita colisões entre tópicos diferentes
@@ -760,13 +761,24 @@ REGRAS IMPORTANTES:
       // Adicionar novos flashcards
       flashcardsData.flashcards.forEach((flashcard, index) => {
         const docRef = doc(flashcardsRef)
+        const disciplinaNome = flashcard.disciplina || ''
+        const topicoNome = flashcard.topico || ''
+        const topicoNumero = flashcard.topicoNumero || ''
+        const topicKey = makeTopicKey({ numero: topicoNumero, nome: topicoNome })
+        const modulo = formatTopicoAsModulo({ numero: topicoNumero, nome: topicoNome })
         batch.set(docRef, {
           ...flashcard,
+          materia: disciplinaNome,
+          modulo,
+          topicKey,
+          pergunta: flashcard.frente || flashcard.pergunta || '',
+          resposta: flashcard.verso || flashcard.resposta || '',
+          shared: true,
           userId: user.uid,
           courseId: courseId,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-          order: index
+          order: index,
         })
       })
 
@@ -993,16 +1005,28 @@ REGRAS IMPORTANTES:
                                           </span>
                                         )
                                       }
+                                      const moduloLabel = formatTopicoAsModulo(topico)
                                       return (
-                                        <Link
-                                          to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
-                                          className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[9px] sm:text-xs font-semibold bg-alego-600 text-white hover:bg-alego-700 transition whitespace-nowrap flex-shrink-0 active:scale-95"
-                                          title="Estudar conteúdo deste tópico"
-                                        >
-                                          <BookOpenIcon className="h-3 w-3 sm:h-4 sm:w-4" />
-                                          <span className="hidden xs:inline sm:inline">Estudar</span>
-                                          <span className="xs:hidden sm:hidden">E</span>
-                                        </Link>
+                                        <>
+                                          <Link
+                                            to={`/flashcards/topico/${courseId || 'alego-default'}?disciplina=${encodeURIComponent(disciplina.nome || '')}&modulo=${encodeURIComponent(moduloLabel)}&topicKey=${encodeURIComponent(topicKey)}`}
+                                            className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[9px] sm:text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition whitespace-nowrap flex-shrink-0 active:scale-95"
+                                            title="Flashcards deste tópico (gerados uma vez e salvos para todos)"
+                                          >
+                                            <SparklesIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                            <span className="hidden xs:inline sm:inline">Flashcards</span>
+                                            <span className="xs:hidden sm:hidden">FC</span>
+                                          </Link>
+                                          <Link
+                                            to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
+                                            className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[9px] sm:text-xs font-semibold bg-alego-600 text-white hover:bg-alego-700 transition whitespace-nowrap flex-shrink-0 active:scale-95"
+                                            title="Estudar conteúdo deste tópico"
+                                          >
+                                            <BookOpenIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                            <span className="hidden xs:inline sm:inline">Estudar</span>
+                                            <span className="xs:hidden sm:hidden">E</span>
+                                          </Link>
+                                        </>
                                       )
                                     })()}
                                   </div>

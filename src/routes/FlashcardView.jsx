@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
+import { useEditalFlashcards } from '../hooks/useEditalFlashcards'
+import {
+  buildOrganizedCardsFromEdital,
+  cardMatchesModule,
+  countCardsInModule,
+} from '../utils/editalVerticalizadoLoader'
 import dayjs from 'dayjs'
 import FlashcardList from '../components/FlashcardList'
 import { userFlashcardsService } from '../services/userFlashcardsService'
@@ -78,10 +84,10 @@ const SRS_INTERVALS = {
 }
 
 const FlashcardView = () => {
+  const navigate = useNavigate()
   const { user, favorites, updateFavorites, profile } = useAuth()
   const { darkMode } = useDarkMode()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [cards, setCards] = useState([])
   const [userCards, setUserCards] = useState([]) // Flashcards individuais do usuário
   const [cardProgress, setCardProgress] = useState({})
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -102,8 +108,14 @@ const FlashcardView = () => {
   const [editalPrompt, setEditalPrompt] = useState('')
   const [selectedCourseId, setSelectedCourseId] = useState(null) // Curso selecionado (null = ALEGO padrão)
   const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
-  const [cardsLoading, setCardsLoading] = useState(true) // Estado para evitar flash de cards
   const [timerActive, setTimerActive] = useState(false) // Timer só inicia quando usuário clicar no relógio
+
+  const {
+    cards,
+    edital,
+    loading: cardsLoading,
+    hasEdital,
+  } = useEditalFlashcards(selectedCourseId, user, profile)
   const [generatingFlashcards, setGeneratingFlashcards] = useState(false) // Estado para loading de geração
   const [selectedDifficulty, setSelectedDifficulty] = useState('') // Dificuldade selecionada para geração
   
@@ -166,145 +178,6 @@ const FlashcardView = () => {
     return () => unsub()
   }, [profile])
   
-  // Carregar flashcards do Firestore - filtrar por curso selecionado
-  useEffect(() => {
-    if (!user || !profile) {
-      // Limpar cards se não tiver usuário/perfil
-      setCards([])
-      setCardsLoading(false)
-      return
-    }
-    
-    // Limpar cards e marcar como loading imediatamente quando mudar de curso
-    setCards([])
-    setCardsLoading(true)
-    
-    // Tentar carregar do cache primeiro (funciona offline)
-    const cacheKey = `flashcards_${selectedCourseId || 'alego'}_${user.uid}`
-    let cachedDataLoaded = false
-    
-    try {
-      const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
-      if (cached) {
-        const { data: cachedData, timestamp } = JSON.parse(cached)
-        const now = Date.now()
-        // Usar cache se tiver menos de 24 horas (para funcionar offline por mais tempo)
-        if (now - timestamp < 24 * 60 * 60 * 1000 && cachedData && cachedData.length > 0) {
-          // Log removido para limpar console
-          setCards(cachedData)
-          setCardsLoading(false)
-          cachedDataLoaded = true
-        }
-      }
-    } catch (err) {
-      // Log removido para limpar console
-    }
-    
-    // Se estiver offline e já carregou do cache, não tenta buscar do Firebase
-    if (!navigator.onLine && cachedDataLoaded) {
-      return () => {} // Cleanup vazio se estiver offline e usando cache
-    }
-    
-    const cardsRef = collection(db, 'flashcards')
-    const unsub = onSnapshot(cardsRef, (snapshot) => {
-      const purchasedCourses = profile.purchasedCourses || []
-      const isAdmin = profile.role === 'admin'
-      
-      let data = snapshot.docs.map((docSnapshot) => ({
-        id: docSnapshot.id,
-        ...docSnapshot.data(),
-      }))
-      
-      // Filtrar por curso selecionado ANTES de setar
-      // Normalizar: null ou undefined = ALEGO padrão (flashcards sem courseId)
-      const selectedCourse = selectedCourseId && selectedCourseId !== 'alego-default' 
-        ? String(selectedCourseId).trim() 
-        : null
-      
-      // Logs removidos para limpar console
-      
-      if (selectedCourse) {
-        // Mostrar apenas flashcards do curso selecionado
-        // Comparar de forma mais robusta: string, null, undefined
-        data = data.filter(card => {
-          const cardCourseId = card.courseId
-          // Normalizar cardCourseId: null, undefined, string vazia ou 'alego-default' = null
-          const normalizedCardCourseId = (!cardCourseId || cardCourseId === '' || cardCourseId === 'alego-default')
-            ? null
-            : String(cardCourseId).trim()
-          
-          // Comparar o curso normalizado
-          return normalizedCardCourseId === selectedCourse
-        })
-      } else {
-        // Mostrar apenas flashcards sem courseId (ALEGO padrão)
-        // Incluir null, undefined, string vazia e 'alego-default'
-        data = data.filter(card => {
-          const cardCourseId = card.courseId
-          return !cardCourseId || cardCourseId === '' || cardCourseId === null || cardCourseId === undefined || cardCourseId === 'alego-default'
-        })
-        // Logs removidos para limpar console
-      }
-      
-      // Admin vê todos, mas ainda filtra por curso selecionado
-      if (!isAdmin && selectedCourseId) {
-        // Verificar se o usuário comprou o curso selecionado
-        if (!purchasedCourses.includes(selectedCourseId)) {
-          data = []
-        }
-      }
-      
-      data.sort((a, b) => {
-        if (a.materia !== b.materia) {
-          const indexA = MATERIAS.indexOf(a.materia || '')
-          const indexB = MATERIAS.indexOf(b.materia || '')
-          return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB)
-        }
-        if (a.modulo !== b.modulo) {
-          return (a.modulo || '').localeCompare(b.modulo || '')
-        }
-        return 0
-      })
-      
-      // Só atualizar após filtrar completamente e marcar como não loading
-      setCards(data)
-      setCardsLoading(false)
-      
-      // Salvar no cache para uso offline (válido por 24 horas)
-      try {
-        localStorage.setItem(
-          `firebase_cache_${cacheKey}`,
-          JSON.stringify({
-            data: data,
-            timestamp: Date.now(),
-          })
-        )
-      } catch (err) {
-        // Log removido para limpar console
-      }
-    }, (error) => {
-      console.error('Erro ao carregar flashcards:', error)
-      // Se der erro e tiver cache, usar o cache
-      if (cachedDataLoaded) {
-        try {
-          const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
-          if (cached) {
-            const { data: cachedData } = JSON.parse(cached)
-            if (cachedData && cachedData.length > 0) {
-              setCards(cachedData)
-              setCardsLoading(false)
-            }
-          }
-        } catch (err) {
-          console.warn('Erro ao ler cache após erro:', err)
-        }
-      } else {
-        setCardsLoading(false)
-      }
-    })
-    return () => unsub()
-  }, [user, profile, selectedCourseId])
-
   // Carregar flashcards do usuário quando mudar o usuário ou curso
   useEffect(() => {
     if (user && profile) {
@@ -404,44 +277,13 @@ const FlashcardView = () => {
     return () => unsub()
   }, [user, selectedCourseId, cards])
 
-  // Organizar cards por matéria e módulo (incluindo cards do usuário)
+  // Organizar por edital verticalizado (disciplinas/tópicos) + cards do usuário
   const organizedCards = useMemo(() => {
-    const organized = {}
-    
-    // Combinar cards do sistema com cards do usuário, evitando duplicatas
-    const allCards = [...cards, ...userCards]
-    console.log('🔍 Cards do sistema:', cards.length)
-    console.log('🔍 Cards do usuário:', userCards.length)
-    console.log('🔍 Total de cards combinados:', allCards.length)
-    
-    // Usar Set para evitar duplicatas baseado no ID do card
-    const uniqueCards = allCards.filter((card, index, self) => 
-      index === self.findIndex((c) => c.id === card.id)
+    const allCards = [...cards, ...userCards].filter(
+      (card, index, self) => index === self.findIndex((c) => c.id === card.id)
     )
-    
-    console.log('🔍 Cards únicos após remoção de duplicatas:', uniqueCards.length)
-    
-    uniqueCards.forEach((card) => {
-      const materia = card.materia || 'Sem matéria'
-      const modulo = card.modulo || 'Sem módulo'
-      if (!organized[materia]) {
-        organized[materia] = {}
-      }
-      if (!organized[materia][modulo]) {
-        organized[materia][modulo] = []
-      }
-      organized[materia][modulo].push(card)
-    })
-    
-    // Log para debug de quantidades
-    Object.keys(organized).forEach(materia => {
-      Object.keys(organized[materia]).forEach(modulo => {
-        console.log(`📊 ${materia} -> ${modulo}: ${organized[materia][modulo].length} cards`)
-      })
-    })
-    
-    return organized
-  }, [cards, userCards])
+    return buildOrganizedCardsFromEdital(edital, allCards)
+  }, [cards, userCards, edital])
 
   // Carregar ordens de módulos para todas as matérias quando necessário
   useEffect(() => {
@@ -803,11 +645,10 @@ const FlashcardView = () => {
       }
     }
     
-    setStudyMode('module')
-    setMiniSimCards([])
-    setSelectedMateria(materia)
-    setSelectedModulo(modulo)
-    setCurrentIndex(0)
+    const cid = selectedCourseId || 'alego-default'
+    navigate(
+      `/flashcards/topico/${cid}?disciplina=${encodeURIComponent(materia)}&modulo=${encodeURIComponent(modulo)}`
+    )
   }
 
   const startMiniSim = (materia) => {
@@ -1408,8 +1249,19 @@ IMPORTANTE:
           generationDifficulty: difficulty,
         }
 
-        const cardRef = doc(collection(db, 'flashcards'))
-        batch.push(setDoc(cardRef, cardData))
+        const flashcardsColl = selectedCourseId
+          ? collection(db, 'courses', selectedCourseId, 'flashcards')
+          : collection(db, 'flashcards')
+        const cardRef = doc(flashcardsColl)
+        batch.push(
+          setDoc(cardRef, {
+            ...cardData,
+            disciplina: cardData.materia,
+            topico: cardData.modulo,
+            frente: cardData.pergunta,
+            verso: cardData.resposta,
+          })
+        )
       }
 
       if (batch.length === 0) {
@@ -1453,6 +1305,23 @@ IMPORTANTE:
           </div>
         </div>
       )}
+
+      {!cardsLoading && !hasEdital && (
+        <div className="rounded-xl p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+          <p className="font-semibold text-amber-800 dark:text-amber-200 mb-2">
+            Edital verticalizado não configurado
+          </p>
+          <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+            Os flashcards seguem a estrutura do edital. Gere o edital e os cards com IA no Edital Verticalizado.
+          </p>
+          <Link
+            to="/edital-verticalizado"
+            className="inline-flex px-4 py-2 rounded-lg bg-alego-600 text-white text-sm font-semibold hover:bg-alego-700"
+          >
+            Ir para Edital Verticalizado
+          </Link>
+        </div>
+      )}
       
       {/* Header Tecnológico */}
       <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
@@ -1487,7 +1356,7 @@ IMPORTANTE:
                       Estudando: <span className="font-black text-blue-600 dark:text-blue-400">{selectedMateria}</span> • <span className="font-black text-purple-600 dark:text-purple-400">{selectedModulo}</span>
                     </span>
                   )
-                  : 'Selecione uma matéria e módulo para começar a estudar'}
+                  : 'Clique em um tópico do edital para abrir os flashcards'}
               </p>
             </div>
             {isStudying && (
@@ -1541,7 +1410,7 @@ IMPORTANTE:
             <div className="flex items-center gap-3 mb-5">
               <FolderIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               <p className="text-sm font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
-                Estrutura de Estudo
+                Edital Verticalizado
               </p>
             </div>
           <div className="space-y-2">
@@ -1560,7 +1429,7 @@ IMPORTANTE:
               const isExpanded = expandedMaterias[materia]
               const isSelected = selectedMateria === materia
               
-              if (modulos.length === 0) return null
+              if (modulos.length === 0 && !hasEdital) return null
               
               return (
                 <div key={materia} className="space-y-2">

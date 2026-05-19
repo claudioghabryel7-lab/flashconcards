@@ -241,6 +241,54 @@ REGRAS ESPECÍFICAS:
 }
 
 /**
+ * Constrói o prompt para gerar redação modelo (esqueleto nota 1000)
+ * @param {string} courseId - ID do curso
+ * @param {string} tema - Tema da redação
+ * @param {string} editalText - Texto do edital (opcional)
+ * @returns {Promise<string>}
+ */
+export async function buildRedacaoModeloPrompt(courseId, tema, editalText = '') {
+  const unified = await getUnifiedPrompt(courseId)
+  const banca = unified?.banca || 'CESPE'
+  const concurso = unified?.concursoName || 'concurso público'
+
+  const baseRules = `TEMA OBRIGATÓRIO (desenvolva EXCLUSIVAMENTE este tema): "${tema}"
+CONCURSO: ${concurso}
+BANCA: ${banca}
+CURSO_ID: ${courseId}
+
+⚠️ REGRAS CRÍTICAS:
+- Escreva uma redação NOVA e ORIGINAL — não reutilize textos de outros concursos ou cargos
+- O conteúdo deve ser específico para ${concurso} e o cargo do concurso
+- Siga o estilo e critérios da banca ${banca}
+- Linguagem formal, dissertação argumentativa
+- Introdução com tese clara; 2-3 parágrafos de desenvolvimento; conclusão com propostas
+- 20-30 linhas; parágrafos com 4 espaços no início da linha
+- Retorne APENAS o texto da redação, sem título, sem markdown, sem explicações`
+
+  if (!unified?.prompt) {
+    return `Você é um especialista em redações de concursos públicos.
+
+${baseRules}
+
+${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 15000)}\n\n` : ''}
+
+TAREFA: Criar uma redação EXEMPLAR (nota 1000) sobre o tema acima, no estilo da banca ${banca}, para ${concurso}.`
+  }
+
+  return `${unified.prompt}
+
+═══════════════════════════════════════════════════════════════════════════════
+REDAÇÃO MODELO — NOTA 1000
+═══════════════════════════════════════════════════════════════════════════════
+${baseRules}
+
+${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 15000)}\n\n` : ''}
+
+TAREFA: Criar uma redação EXEMPLAR que serviria como esqueleto ideal para nota máxima na banca ${banca}, concurso ${concurso}, sobre o tema indicado.`
+}
+
+/**
  * Busca o prompt global do sistema (para todos os cursos)
  * @returns {Promise<string>}
  */

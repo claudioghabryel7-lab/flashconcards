@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
+import { useEditalFlashcards } from '../hooks/useEditalFlashcards'
+import {
+  cardMatchesModule,
+  getTopicoContextFromEdital,
+  buildEditalStructurePrompt,
+} from '../utils/editalVerticalizadoLoader'
 import { canAccessMateria, isTrialMode } from '../utils/trialLimits'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -37,7 +43,6 @@ const FlashQuestoes = () => {
   const [searchParams] = useSearchParams()
   const { user, profile } = useAuth()
   const { darkMode } = useDarkMode()
-  const [cards, setCards] = useState([])
   const [selectedMateria, setSelectedMateria] = useState(null)
   const [selectedModulo, setSelectedModulo] = useState(null)
   const [expandedMaterias, setExpandedMaterias] = useState({})
@@ -56,6 +61,15 @@ const FlashQuestoes = () => {
   const [selectedCourseId, setSelectedCourseId] = useState(null) // Curso selecionado (null = ALEGO padrão)
   const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
   const [selectedCourse, setSelectedCourse] = useState(null) // Dados completos do curso selecionado
+
+  const {
+    cards,
+    edital,
+    organizedModules,
+    loading: cardsLoading,
+    editalLoading,
+    hasEdital,
+  } = useEditalFlashcards(selectedCourseId, user, profile)
   
   // Estados para configuração de questões
   const [showConfigModal, setShowConfigModal] = useState(false)
@@ -111,96 +125,6 @@ const FlashQuestoes = () => {
     setConfigValid(isValid)
   }, [questoesTipo, bancaExaminadora])
   
-  // Carregar flashcards para obter módulos (filtrado por curso)
-  useEffect(() => {
-    if (!user || !profile) return
-    
-    // Tentar carregar do cache primeiro (funciona offline)
-    const cacheKey = `flashcards_${selectedCourseId || 'alego'}_${user.uid}`
-    let cachedDataLoaded = false
-    
-    try {
-      const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
-      if (cached) {
-        const { data: cachedData, timestamp } = JSON.parse(cached)
-        const now = Date.now()
-        // Usar cache se tiver menos de 24 horas (para funcionar offline por mais tempo)
-        if (now - timestamp < 24 * 60 * 60 * 1000 && cachedData && cachedData.length > 0) {
-          console.log('📦 Carregando flashcards do cache (FlashQuestoes)')
-          setCards(cachedData)
-          cachedDataLoaded = true
-        }
-      }
-    } catch (err) {
-      console.warn('Erro ao ler cache de flashcards:', err)
-    }
-    
-    // Se estiver offline e já carregou do cache, não tenta buscar do Firebase
-    if (!navigator.onLine && cachedDataLoaded) {
-      return () => {} // Cleanup vazio se estiver offline e usando cache
-    }
-    
-    const cardsRef = collection(db, 'flashcards')
-    const unsub = onSnapshot(cardsRef, (snapshot) => {
-      const purchasedCourses = profile.purchasedCourses || []
-      const isAdmin = profile.role === 'admin'
-      
-      let data = snapshot.docs.map((docSnapshot) => ({
-        id: docSnapshot.id,
-        ...docSnapshot.data(),
-      }))
-      
-      // Filtrar por curso selecionado
-      if (selectedCourseId) {
-        // Mostrar apenas flashcards do curso selecionado
-        data = data.filter(card => card.courseId === selectedCourseId)
-      } else {
-        // Mostrar apenas flashcards sem courseId (ALEGO padrão)
-        data = data.filter(card => !card.courseId)
-      }
-      
-      // Admin vê todos, mas ainda filtra por curso selecionado
-      if (!isAdmin && selectedCourseId) {
-        // Verificar se o usuário comprou o curso selecionado
-        if (!purchasedCourses.includes(selectedCourseId)) {
-          data = []
-        }
-      }
-      
-      setCards(data)
-      
-      // Salvar no cache para uso offline (válido por 24 horas)
-      try {
-        localStorage.setItem(
-          `firebase_cache_${cacheKey}`,
-          JSON.stringify({
-            data: data,
-            timestamp: Date.now(),
-          })
-        )
-      } catch (err) {
-        console.warn('Erro ao salvar cache de flashcards:', err)
-      }
-    }, (error) => {
-      console.error('Erro ao carregar flashcards:', error)
-      // Se der erro e tiver cache, usar o cache
-      if (cachedDataLoaded) {
-        try {
-          const cached = localStorage.getItem(`firebase_cache_${cacheKey}`)
-          if (cached) {
-            const { data: cachedData } = JSON.parse(cached)
-            if (cachedData && cachedData.length > 0) {
-              setCards(cachedData)
-            }
-          }
-        } catch (err) {
-          console.warn('Erro ao ler cache após erro:', err)
-        }
-      }
-    })
-    return () => unsub()
-  }, [user, profile, selectedCourseId])
-
   // Carregar edital/PDF (por curso)
   useEffect(() => {
     const fetchPrompt = async () => {
@@ -318,39 +242,6 @@ const FlashQuestoes = () => {
     return () => unsub()
   }, [user, selectedCourseId])
 
-
-  // Organizar módulos por matéria
-  const organizedModules = useMemo(() => {
-    const modulesByMateria = {}
-    cards.forEach((card) => {
-      if (card.materia && card.modulo) {
-        if (!modulesByMateria[card.materia]) {
-          modulesByMateria[card.materia] = []
-        }
-        if (!modulesByMateria[card.materia].includes(card.modulo)) {
-          modulesByMateria[card.materia].push(card.modulo)
-        }
-      }
-    })
-
-    // Ordenar módulos numericamente
-    Object.keys(modulesByMateria).forEach((materia) => {
-      modulesByMateria[materia].sort((a, b) => {
-        const extractNumber = (str) => {
-          const match = str.match(/\d+/)
-          return match ? parseInt(match[0], 10) : 999
-        }
-        const numA = extractNumber(a)
-        const numB = extractNumber(b)
-        if (numA !== 999 && numB !== 999) return numA - numB
-        if (numA !== 999) return -1
-        if (numB !== 999) return 1
-        return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
-      })
-    })
-
-    return modulesByMateria
-  }, [cards])
 
   // Selecionar matéria e módulo baseado em query params
   useEffect(() => {
@@ -531,36 +422,38 @@ const FlashQuestoes = () => {
         throw new Error('Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
       }
 
-      // 🔥 BUSCAR FLASHCARDS DO MÓDULO SELECIONADO
-      const moduleFlashcards = cards.filter(
-        (card) => card.materia === selectedMateria && card.modulo === selectedModulo
+      const topicoContext = getTopicoContextFromEdital(edital, selectedMateria, selectedModulo)
+      const editalStructureText = buildEditalStructurePrompt(edital)
+
+      const moduleFlashcards = cards.filter((card) =>
+        cardMatchesModule(card, selectedMateria, selectedModulo)
       )
 
-      if (moduleFlashcards.length === 0) {
-        throw new Error(`Nenhum flashcard encontrado para "${selectedMateria}" - "${selectedModulo}". Crie flashcards primeiro no painel administrativo.`)
-      }
+      const flashcardsBonus =
+        moduleFlashcards.length > 0
+          ? `\nFLASHCARDS DO TÓPICO (complemento opcional):\n${moduleFlashcards
+              .slice(0, 10)
+              .map(
+                (card, idx) =>
+                  `${idx + 1}. Q: ${card.pergunta || ''}\n   R: ${card.resposta || ''}`
+              )
+              .join('\n\n')}\n`
+          : ''
 
-      // 🔥 OTIMIZAÇÃO: Limitar conteúdo para evitar prompts muito longos
-      const maxFlashcards = Math.min(moduleFlashcards.length, 15) // Limitar a 15 flashcards para não sobrecarregar
-      const selectedFlashcards = moduleFlashcards.slice(0, maxFlashcards)
-      
-      // Formatar conteúdo dos flashcards de forma mais concisa
-      const flashcardsContent = selectedFlashcards
-        .map((card, idx) => {
-          return `${idx + 1}. Q: ${card.pergunta || ''}\n   R: ${card.resposta || ''}${card.explicacao ? `\n   Exp: ${card.explicacao.substring(0, 200)}...` : ''}`
-        })
-        .join('\n\n')
-
-      // Usar prompt unificado
       const { buildQuestionPrompt } = await import('../utils/unifiedPrompt')
+      const topicoExtra = topicoContext
+        ? `\nTÓPICO DO EDITAL VERTICALIZADO:\n- Disciplina: ${topicoContext.disciplina}\n- Tópico: ${topicoContext.topicoNumero ? `${topicoContext.topicoNumero} - ` : ''}${topicoContext.topico}\n${topicoContext.descricao ? `- Descrição: ${topicoContext.descricao}\n` : ''}${topicoContext.conteudo ? `- Conteúdo: ${topicoContext.conteudo.substring(0, 2000)}\n` : ''}`
+        : `\nDISCIPLINA: ${selectedMateria}\nTÓPICO: ${selectedModulo}\n`
+
       const basePrompt = await buildQuestionPrompt(
         selectedCourseId || 'alego-default',
         selectedMateria,
         editalPrompt,
-        `CONTEÚDO BASE - Flashcards do módulo "${selectedModulo}" (${selectedFlashcards.length} de ${moduleFlashcards.length} flashcards):
-Use este conteúdo para criar questões:
-
-${flashcardsContent}`
+        `${editalStructureText ? `${editalStructureText}\n\n` : ''}${topicoExtra}
+BANCA CONFIGURADA PELO ALUNO: ${bancaExaminadora}
+${flashcardsBonus}
+Gere questões com base no EDITAL VERTICALIZADO, no CONCURSO/CURSO selecionado e no estilo da banca informada.
+NÃO é obrigatório haver flashcards — use o conhecimento do tópico e do edital.`
       )
 
       // 🔥 CONFIGURAÇÃO DINÂMICA BASEADA NO TIPO DE QUESTÃO
@@ -601,7 +494,8 @@ QUANTIDADE (EXATA - SEM VARIAÇÃO):
 - veja qual o curso do aluno e adapte as questões para ele de uma forma que seja oque pode cair com maior incidência
 
 CONTEÚDO:
-- Baseie-se no edital verticalizado em EditalVerticalizado.jsx
+- Baseie-se no edital verticalizado, no curso/concurso e na banca ${bancaExaminadora}
+- Flashcards são opcionais; priorize o que cai na prova deste concurso
 - Seja direto e objetivo
 - Evite questões muito longas
 - Adapte o estilo e linguagem à banca "${bancaExaminadora}"
@@ -1192,8 +1086,8 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
           </h1>
           <p className="stark-text-secondary text-sm sm:text-base">
             {selectedCourse 
-              ? `Pratique com questões fictícias geradas por IA para ${selectedCourse.name}`
-              : 'Pratique com questões fictícias geradas por IA no estilo FGV'}
+              ? `Questões por tópico do edital verticalizado — ${selectedCourse.name}`
+              : 'Questões fictícias por tópico do edital verticalizado'}
           </p>
         </div>
         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-full blur-3xl"></div>
@@ -1343,12 +1237,37 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
         </div>
       )}
 
-      {/* Seleção de Módulo STARK */}
+      {/* Seleção por Edital Verticalizado */}
       {questions.length === 0 && (
         <div className="stark-card stark-animate-fade-in p-4 sm:p-6 lg:p-8">
-          <h2 className="stark-text-gradient text-xl sm:text-2xl font-black mb-6 uppercase tracking-tight">
-            Selecione um Módulo
+          <h2 className="stark-text-gradient text-xl sm:text-2xl font-black mb-2 uppercase tracking-tight">
+            Selecione um Tópico do Edital
           </h2>
+          <p className="stark-text-secondary text-sm mb-4">
+            Disciplinas e tópicos do edital verticalizado do curso.
+            {!hasEdital && ' Configure o edital em Edital Verticalizado.'}
+          </p>
+
+          {(cardsLoading || editalLoading) && (
+            <div className="text-center py-6 mb-4">
+              <div className="inline-block animate-spin text-3xl mb-2">⚙️</div>
+              <p className="stark-text-secondary text-sm">Carregando edital e flashcards...</p>
+            </div>
+          )}
+
+          {!cardsLoading && !editalLoading && !hasEdital && (
+            <div className="mb-6 p-4 rounded-xl border-2 border-amber-500/40 bg-amber-500/10">
+              <p className="stark-text-primary font-semibold mb-2">Edital verticalizado não encontrado</p>
+              <Link
+                to="/edital-verticalizado"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-alego-600 text-white font-semibold text-sm hover:bg-alego-700"
+              >
+                <BookOpenIcon className="h-4 w-4" />
+                Ir para Edital Verticalizado
+              </Link>
+            </div>
+          )}
+
           <div className="space-y-3">
             {(() => {
               const orderedSubjects = applySubjectOrder(organizedModules, subjectOrderConfig)

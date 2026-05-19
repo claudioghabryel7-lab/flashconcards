@@ -36,6 +36,9 @@ const ConteudoCompletoView = lazy(() => import('./routes/ConteudoCompletoView'))
 const ConteudoCompletoTopicoView = lazy(() => import('./routes/ConteudoCompletoTopicoView'))
 const RankingSimulado = lazy(() => import('./routes/RankingSimulado'))
 const EditalVerticalizado = lazy(() => import('./routes/EditalVerticalizado'))
+const FlashcardView = lazy(() => import('./routes/FlashcardView'))
+const FlashcardsTopicoView = lazy(() => import('./routes/FlashcardsTopicoView'))
+const FlashQuestoes = lazy(() => import('./routes/FlashQuestoes'))
 // Importação direta para testar
 import CalendarioProgresso from './routes/CalendarioProgresso'
 const Tutorial = lazy(() => import('./routes/Tutorial'))
@@ -186,6 +189,30 @@ function App() {
             element={
               <ProtectedRoute requireCourseSelection>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/flashcards"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <FlashcardView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/flashcards/topico/:courseId"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <FlashcardsTopicoView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/flashquestoes"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <FlashQuestoes />
               </ProtectedRoute>
             }
           />

@@ -847,7 +847,7 @@ REGRAS FINAIS:
 
           {conteudo.content && (
             <div
-              className="mb-8 text-slate-700 dark:text-slate-300 leading-relaxed space-y-4 [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_u]:underline [&_ul]:list-disc [&_ul]:ml-6 [&_ol]:list-decimal [&_ol]:ml-6 [&_li]:mb-2 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-500 [&_blockquote]:pl-4 [&_blockquote]:italic [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:rounded [&_code]:text-sm [&_pre]:bg-slate-100 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h1]:font-bold [&_h1]:text-2xl [&_h1]:mb-4 [&_h2]:font-bold [&_h2]:text-xl [&_h2]:mb-3 [&_h3]:font-bold [&_h3]:text-lg [&_h3]:mb-2 [&_p]:mb-4 [&_a]:text-blue-600 [&_a]:underline [&_a:hover]:text-blue-800 dark:[&_b]:font-bold dark:[&_strong]:font-bold dark:[&_i]:italic dark:[&_em]:italic dark:[&_u]:underline dark:[&_ul]:list-disc dark:[&_ul]:ml-6 dark:[&_ol]:list-decimal dark:[&_ol]:ml-6 dark:[&_li]:mb-2 dark:[&_blockquote]:border-l-4 dark:[&_blockquote]:border-slate-400 dark:[&_blockquote]:pl-4 dark:[&_blockquote]:italic dark:[&_code]:bg-slate-800 dark:[&_code]:px-1 dark:[&_code]:rounded dark:[&_code]:text-sm dark:[&_pre]:bg-slate-800 dark:[&_pre]:p-4 dark:[&_pre]:rounded-lg dark:[&_pre]:overflow-x-auto dark:[&_h1]:font-bold dark:[&_h1]:text-2xl dark:[&_h1]:mb-4 dark:[&_h2]:font-bold dark:[&_h2]:text-xl dark:[&_h2]:mb-3 dark:[&_h3]:font-bold dark:[&_h3]:text-lg dark:[&_h3]:mb-2 dark:[&_p]:mb-4 dark:[&_a]:text-blue-400 dark:[&_a]:underline dark:[&_a:hover]:text-blue-300"
+              className="mb-8 ia-content-enhanced"
               dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(conteudo.content) }}
             />
           )}
@@ -869,7 +869,7 @@ REGRAS FINAIS:
                   </h3>
                   {secao.conteudo && (
                     <div
-                      className="text-slate-700 dark:text-slate-300 leading-relaxed space-y-4 [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_u]:underline [&_ul]:list-disc [&_ul]:ml-6 [&_ol]:list-decimal [&_ol]:ml-6 [&_li]:mb-2 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-500 [&_blockquote]:pl-4 [&_blockquote]:italic [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:rounded [&_code]:text-sm [&_pre]:bg-slate-100 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_h1]:font-bold [&_h1]:text-2xl [&_h1]:mb-4 [&_h2]:font-bold [&_h2]:text-xl [&_h2]:mb-3 [&_h3]:font-bold [&_h3]:text-lg [&_h3]:mb-2 [&_p]:mb-4 [&_a]:text-blue-600 [&_a]:underline [&_a:hover]:text-blue-800 dark:[&_b]:font-bold dark:[&_strong]:font-bold dark:[&_i]:italic dark:[&_em]:italic dark:[&_u]:underline dark:[&_ul]:list-disc dark:[&_ul]:ml-6 dark:[&_ol]:list-decimal dark:[&_ol]:ml-6 dark:[&_li]:mb-2 dark:[&_blockquote]:border-l-4 dark:[&_blockquote]:border-slate-400 dark:[&_blockquote]:pl-4 dark:[&_blockquote]:italic dark:[&_code]:bg-slate-800 dark:[&_code]:px-1 dark:[&_code]:rounded dark:[&_code]:text-sm dark:[&_pre]:bg-slate-800 dark:[&_pre]:p-4 dark:[&_pre]:rounded-lg dark:[&_pre]:overflow-x-auto dark:[&_h1]:font-bold dark:[&_h1]:text-2xl dark:[&_h1]:mb-4 dark:[&_h2]:font-bold dark:[&_h2]:text-xl dark:[&_h2]:mb-3 dark:[&_h3]:font-bold dark:[&_h3]:text-lg dark:[&_h3]:mb-2 dark:[&_p]:mb-4 dark:[&_a]:text-blue-400 dark:[&_a]:underline dark:[&_a:hover]:text-blue-300"
+                      className="ia-content-enhanced"
                       dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(secao.conteudo) }}
                     />
                   )}

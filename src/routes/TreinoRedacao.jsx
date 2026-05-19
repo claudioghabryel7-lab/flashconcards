@@ -30,7 +30,51 @@ const TreinoRedacao = () => {
   const [selectedCourseId, setSelectedCourseId] = useState(null)
   const [courseName, setCourseName] = useState('')
   const [courseCompetition, setCourseCompetition] = useState('')
+  const [courseBanca, setCourseBanca] = useState('CESPE')
   const textareaRef = useRef(null)
+
+  const getCourseId = () => selectedCourseId || 'alego-default'
+
+  const loadEditalText = async (courseId) => {
+    const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+    const editalDoc = await getDoc(editalRef)
+    if (!editalDoc.exists()) return ''
+    const data = editalDoc.data()
+    return (data.prompt || '') + '\n\n' + (data.pdfText || '')
+  }
+
+  const generateRedacaoModelo = async (tema) => {
+    const courseId = getCourseId()
+    const editalText = await loadEditalText(courseId)
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+    if (!apiKey) {
+      throw new Error('VITE_GEMINI_API_KEY não configurada')
+    }
+
+    const { buildRedacaoModeloPrompt, getUnifiedPrompt } = await import('../utils/unifiedPrompt')
+    const unified = await getUnifiedPrompt(courseId)
+    if (unified?.banca) {
+      setCourseBanca(unified.banca)
+    }
+
+    const prompt = await buildRedacaoModeloPrompt(
+      courseId,
+      tema,
+      editalText ? editalText.substring(0, 30000) : ''
+    )
+
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: {
+        maxOutputTokens: 4096,
+        temperature: 0.85,
+      },
+    })
+
+    const result = await model.generateContent(prompt)
+    return result.response.text().trim()
+  }
 
   // Carregar curso do perfil
   useEffect(() => {
@@ -39,16 +83,23 @@ const TreinoRedacao = () => {
     const courseFromProfile = profile.selectedCourseId !== undefined ? profile.selectedCourseId : null
     setSelectedCourseId(courseFromProfile)
     
-    if (courseFromProfile) {
-      const courseRef = doc(db, 'courses', courseFromProfile)
-      getDoc(courseRef).then((docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data()
-          setCourseName(data.name || '')
-          setCourseCompetition(data.competition || '')
-        }
-      })
+    const loadCourse = async () => {
+      const courseId = courseFromProfile || 'alego-default'
+      const courseRef = doc(db, 'courses', courseId)
+      const docSnap = await getDoc(courseRef)
+      if (docSnap.exists()) {
+        const data = docSnap.data()
+        setCourseName(data.name || '')
+        setCourseCompetition(data.competition || '')
+        if (data.banca) setCourseBanca(data.banca)
+      }
+
+      const { getUnifiedPrompt } = await import('../utils/unifiedPrompt')
+      const unified = await getUnifiedPrompt(courseId)
+      if (unified?.banca) setCourseBanca(unified.banca)
     }
+
+    loadCourse()
   }, [profile])
 
   // Gerar tema de redação ao carregar
@@ -97,15 +148,8 @@ const TreinoRedacao = () => {
   const generateTheme = async () => {
     setLoading(true)
     try {
-      const courseId = selectedCourseId || 'alego-default'
-      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
-      const editalDoc = await getDoc(editalRef)
-
-      let editalText = ''
-      if (editalDoc.exists()) {
-        const data = editalDoc.data()
-        editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
-      }
+      const courseId = getCourseId()
+      const editalText = await loadEditalText(courseId)
 
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
       if (!apiKey) {
@@ -113,16 +157,14 @@ const TreinoRedacao = () => {
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      // 🔥 OTIMIZAÇÃO: Usar modelo mais rápido para gerar tema
       const model = genAI.getGenerativeModel({ 
         model: 'gemini-2.5-flash',
         generationConfig: {
-          maxOutputTokens: 1024, // Reduzido para tema simples
+          maxOutputTokens: 1024,
           temperature: 0.8,
         }
       })
 
-      // Usar prompt unificado
       const { buildRedacaoPrompt } = await import('../utils/unifiedPrompt')
       const baseThemePrompt = await buildRedacaoPrompt(
         courseId,
@@ -235,47 +277,14 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
         paragraphCount: detectParagraphs(redacaoTexto),
         lines: redacaoTexto.split('\n').length,
         wordCount: wordCount,
-        // GERAR REDAÇÃO MODELO PERSONALIZADA COM GEMINI 2.5
-        redacaoModelo: await (async () => {
-          try {
-            const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
-            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-            
-            const promptModelo = `Crie uma redação NOTA 1000 PERFEITA sobre o tema específico: "${redacaoTema}".
-            
-            CONTEXTO: Este é um tema para concurso da Polícia Militar de Alagoas (PMAL), banca CESPE.
-            
-            REQUISITOS OBRIGATÓRIOS:
-            - Introdução: apresentação específica do tema com tese clara (1 parágrafo)
-            - Desenvolvimento: 2 parágrafos com argumentos específicos sobre PMAL, direitos humanos e combate à criminalidade
-            - Conclusão: retomada da tese com propostas específicas para PMAL (1 parágrafo)
-            
-            CONTEÚDO ESPECÍFICO QUE DEVE CONTER:
-            - Atuação da Polícia Militar de Alagoas
-            - Proteção dos direitos humanos no contexto policial
-            - Combate à criminalidade em Alagoas
-            - Desafios contemporâneos da segurança pública
-            - Exemplos práticos e dados relevantes de Alagoas
-            - Soluções realistas para PMAL
-            
-            ESTRUTURA:
-            - 20-30 linhas totais
-            - Linguagem formal e técnica (estilo CESPE)
-            - Argumentos fundamentados na realidade de Alagoas
-            - Coesão e coerência perfeitas
-            
-            Retorne APENAS a redação, sem explicações ou markdown.`
-            
-            const result = await model.generateContent(promptModelo)
-            return result.response.text().trim()
-          } catch (error) {
-            console.error('Erro ao gerar redação modelo personalizada:', error)
-            return `Redação modelo sobre "${redacaoTema}" - Em desenvolvimento...`
-          }
-        })()
+        redacaoModelo: await generateRedacaoModelo(redacaoTema).catch((error) => {
+          console.error('Erro ao gerar redação modelo:', error)
+          return `Não foi possível gerar a redação modelo. Tema: "${redacaoTema}". Tente novamente.`
+        }),
+        tema: redacaoTema,
+        courseId: getCourseId(),
       }
       
-      console.log('🚨 GERANDO RESULTADO COM REDAÇÃO MODELO NO TEXTO CURTO')
       setResultado(resultadoComModelo)
       setIsRunning(false)
       setAnalizing(false)
@@ -286,15 +295,8 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
     setAnalizing(true)
 
     try {
-      const courseId = selectedCourseId || 'alego-default'
-      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
-      const editalDoc = await getDoc(editalRef)
-
-      let editalText = ''
-      if (editalDoc.exists()) {
-        const data = editalDoc.data()
-        editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
-      }
+      const courseId = getCourseId()
+      const editalText = await loadEditalText(courseId)
 
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
       if (!apiKey) {
@@ -302,7 +304,6 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      // 🔥 OTIMIZAÇÃO: Usar modelo mais rápido para análise
       const model = genAI.getGenerativeModel({ 
         model: 'gemini-2.5-flash',
         generationConfig: {
@@ -433,14 +434,13 @@ Retorne APENAS um objeto JSON válido no seguinte formato:
     "Dica específica 1 baseada nos erros reais desta redação",
     "Dica específica 2 baseada nos erros reais desta redação",
     "Dica específica 3 para melhorar esta redação específica"
-  ],
-  "redacaoModelo": "ESCREVA UMA REDAÇÃO NOTA 1000 PERFEITA sobre '${redacaoTema}' no estilo da banca ${banca || 'CESPE'}. Esta deve ser uma redação EXEMPLAR que serviria como esqueleto ideal para tirar nota máxima. REQUISITOS OBRIGATÓRIOS: 1) Introdução perfeita com tese clara; 2) 2-3 parágrafos de desenvolvimento com argumentos sólidos, dados específicos e exemplos concretos; 3) Conclusão que retoma a tese e propõe soluções; 4) Linguagem formal impecável; 5) Cohesão e coerência perfeitas; 6) 20-30 linhas totais; 7) Estrutura clara com parágrafos bem definidos (4 espaços). Crie uma redação que seria considerada EXCELENTE pela banca ${banca || 'CESPE'}."
+  ]
 }
 
 CRÍTICO: 
 - Retorne APENAS o JSON, sem markdown, sem explicações
 - A nota DEVE ser realista baseada na qualidade REAL do texto
-- Inclua OBRIGATORIAMENTE a redaçãoModelo como referência
+- NÃO inclua redação modelo no JSON — será gerada separadamente
 - Analise o CONTEÚDO REAL e específico desta redação`
 
       // Garantir que estamos analisando o texto atual (não um cache)
@@ -513,97 +513,25 @@ CRÍTICO:
         }
       })
 
-      console.log('✅ Resultado da análise:', {
-        nota: parsed.nota,
-        criterios: parsed.criterios,
-        feedbackPreview: parsed.feedback?.substring(0, 80) + '...',
-        redacaoModeloExiste: !!parsed.redacaoModelo,
-        redacaoModeloPreview: parsed.redacaoModelo?.substring(0, 100) + '...',
-        todasChaves: Object.keys(parsed),
-        timestamp: new Date().toISOString()
-      })
-
-      // Garantir que redacaoModelo exista, gerando uma se necessário
-      let resultadoFinal = { ...parsed }
-      
-      console.log('🔍 FALLBACK DEBUG - resultadoFinal.redacaoModelo antes:', resultadoFinal.redacaoModelo)
-      console.log('🔍 FALLBACK DEBUG - !resultadoFinal.redacaoModelo:', !resultadoFinal.redacaoModelo)
-      
-      if (!resultadoFinal.redacaoModelo) {
-        console.warn('⚠️ Redação modelo não retornada pela IA, gerando fallback...')
-        console.log('🔍 FALLBACK DEBUG - redacaoTema:', redacaoTema)
-        
-        // Gerar redação modelo fallback
-        try {
-          console.log('🔍 FALLBACK DEBUG - Iniciando geração do fallback...')
-          const modelFallback = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-          const fallbackPrompt = `Gere UMA redação NOTA 1000 PERFEITA sobre o tema "${redacaoTema}" no estilo da banca CESPE. 
-          
-          REQUISITOS OBRIGATÓRIOS:
-          - Introdução perfeita com tese clara
-          - 2-3 parágrafos de desenvolvimento com argumentos sólidos
-          - Conclusão que retoma a tese
-          - Linguagem formal impecável
-          - 20-30 linhas totais
-          - Estrutura clara com parágrafos bem definidos
-          
-          Retorne APENAS a redação, sem explicações ou markdown.`
-          
-          console.log('🔍 FALLBACK DEBUG - Enviando prompt para IA...')
-          const fallbackResult = await modelFallback.generateContent(fallbackPrompt)
-          resultadoFinal.redacaoModelo = fallbackResult.response.text().trim()
-          console.log('✅ Redação modelo fallback gerada com sucesso:', resultadoFinal.redacaoModelo?.substring(0, 100) + '...')
-        } catch (fallbackError) {
-          console.error('❌ Erro ao gerar redação modelo fallback:', fallbackError)
-          resultadoFinal.redacaoModelo = `Redação modelo não disponível no momento. Tente novamente para gerar uma redação exemplar sobre "${redacaoTema}".`
-        }
-      } else {
-        console.log('🔍 FALLBACK DEBUG - redacaoModelo já existe, não precisa gerar fallback')
+      // Sempre gerar redação modelo nova para o curso e tema atuais
+      let redacaoModelo = ''
+      try {
+        redacaoModelo = await generateRedacaoModelo(redacaoTema)
+      } catch (modeloError) {
+        console.error('Erro ao gerar redação modelo:', modeloError)
+        redacaoModelo = `Não foi possível gerar a redação modelo para o tema "${redacaoTema}". Tente novamente.`
       }
-
-      // GARANTIR REDAÇÃO MODELO COM GEMINI 2.5 - TENTATIVA FINAL
-      if (!resultadoFinal.redacaoModelo) {
-        console.warn('⚠️ AINDA SEM REDAÇÃO MODELO - TENTATIVA FINAL COM GEMINI 2.5')
-        
-        try {
-          const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-          
-          const promptFinal = `Crie uma redação NOTA 1000 PERFEITA sobre o tema: "${redacaoTema}".
-          
-          ESTRUTURA OBRIGATÓRIA:
-          - Introdução: apresentação do tema com tese clara (1 parágrafo)
-          - Desenvolvimento: 2 parágrafos com argumentos sólidos e exemplos
-          - Conclusão: retomada da tese e proposta de soluções (1 parágrafo)
-          
-          REQUISITOS:
-          - Linguagem formal e acadêmica
-          - 20-30 linhas totais
-          - Argumentos coerentes e bem fundamentados
-          - Coesão e coerência perfeitas
-          - Parágrafos bem definidos
-          
-          Retorne APENAS a redação, sem explicações.`
-          
-          const result = await model.generateContent(promptFinal)
-          resultadoFinal.redacaoModelo = result.response.text().trim()
-          console.log('✅ Redação modelo gerada com Gemini 2.5:', resultadoFinal.redacaoModelo?.substring(0, 50) + '...')
-        } catch (finalError) {
-          console.error('❌ Erro na tentativa final:', finalError)
-          // Apenas como último recurso
-          resultadoFinal.redacaoModelo = `Redação modelo sobre "${redacaoTema}" - Em desenvolvimento...`
-        }
-      }
-
-      console.log('🔍 FINAL DEBUG - resultadoFinal.redacaoModelo antes de setResultado:', resultadoFinal.redacaoModelo?.substring(0, 50) + '...')
 
       setResultado({
-        ...resultadoFinal,
+        ...parsed,
+        redacaoModelo,
         paragraphCount,
         lines,
         wordCount,
-        analyzedAt: new Date().toISOString(), // Timestamp para garantir unicidade
-        contentHash: contentHash.substring(0, 30) // Hash para debug
+        analyzedAt: new Date().toISOString(),
+        contentHash: contentHash.substring(0, 30),
+        tema: redacaoTema,
+        courseId: getCourseId(),
       })
     } catch (err) {
       console.error('Erro ao analisar redação:', err)
@@ -713,20 +641,22 @@ CRÍTICO:
               </div>
             )}
 
-            {/* Redação Modelo (Esqueleto) - DEBUG */}
-            {console.log('🔍 RENDER DEBUG - resultado:', resultado, 'redacaoModelo:', resultado?.redacaoModelo, 'tipo:', typeof resultado?.redacaoModelo)}
-            {console.log('🔍 RENDER DEBUG - resultado.redacaoModelo truthy:', !!resultado?.redacaoModelo)}
             <div className="mb-6 p-6 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
               <h3 className="text-xl font-bold mb-4 text-amber-700 dark:text-amber-300 flex items-center gap-2">
                 <DocumentTextIcon className="h-6 w-6" />
                 🏆 Redação Nota 1000 (Esqueleto Perfeito)
               </h3>
               <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
-                Esta é uma redação EXEMPLAR que tiraria nota máxima na banca CESPE. Use como referência ideal de estrutura, argumentação e qualidade.
+                Redação exemplar gerada para o tema atual{courseName ? ` — ${courseName}` : ''}{courseCompetition ? ` (${courseCompetition})` : ''}, no estilo da banca {courseBanca}.
               </p>
+              {resultado.tema && (
+                <p className="text-xs text-amber-700 dark:text-amber-300 mb-3 font-medium">
+                  Tema: {resultado.tema}
+                </p>
+              )}
               <div className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-amber-300 dark:border-amber-700">
                 <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap font-serif">
-                  {resultado?.redacaoModelo || '⚠️ Redação modelo não encontrada. Verifique o console para debug.'}
+                  {resultado?.redacaoModelo || 'Redação modelo não disponível. Tente analisar novamente.'}
                 </p>
               </div>
             </div>

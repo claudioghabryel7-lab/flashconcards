@@ -478,6 +478,144 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Estilos para conteúdo IA gerado */
+.ia-content-enhanced {
+  line-height: 1.8;
+}
+
+.ia-content-enhanced p {
+  margin-bottom: 1rem;
+  color: #374151;
+}
+
+.ia-content-enhanced h1,
+.ia-content-enhanced h2,
+.ia-content-enhanced h3,
+.ia-content-enhanced h4,
+.ia-content-enhanced h5,
+.ia-content-enhanced h6 {
+  font-weight: 700;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  color: #1f2937;
+}
+
+.ia-content-enhanced h1 {
+  font-size: 2rem;
+}
+
+.ia-content-enhanced h2 {
+  font-size: 1.5rem;
+}
+
+.ia-content-enhanced h3 {
+  font-size: 1.25rem;
+}
+
+.ia-content-enhanced strong,
+.ia-content-enhanced b {
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.ia-content-enhanced em,
+.ia-content-enhanced i {
+  font-style: italic;
+}
+
+.ia-content-enhanced ul,
+.ia-content-enhanced ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.ia-content-enhanced li {
+  margin-bottom: 0.5rem;
+}
+
+.ia-content-enhanced ul {
+  list-style-type: disc;
+}
+
+.ia-content-enhanced ol {
+  list-style-type: decimal;
+}
+
+.ia-content-enhanced blockquote {
+  border-left: 4px solid #3b82f6;
+  padding-left: 1rem;
+  margin: 1rem 0;
+  font-style: italic;
+  color: #6b7280;
+}
+
+.ia-content-enhanced code {
+  background-color: #f3f4f6;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-family: monospace;
+  font-size: 0.875rem;
+}
+
+.ia-content-enhanced pre {
+  background-color: #f3f4f6;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.ia-content-enhanced a {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+.ia-content-enhanced a:hover {
+  color: #2563eb;
+}
+
+/* Dark mode para conteúdo IA */
+@media (prefers-color-scheme: dark) {
+  .ia-content-enhanced p {
+    color: #d1d5db;
+  }
+
+  .ia-content-enhanced h1,
+  .ia-content-enhanced h2,
+  .ia-content-enhanced h3,
+  .ia-content-enhanced h4,
+  .ia-content-enhanced h5,
+  .ia-content-enhanced h6 {
+    color: #f9fafb;
+  }
+
+  .ia-content-enhanced strong,
+  .ia-content-enhanced b {
+    color: #f9fafb;
+  }
+
+  .ia-content-enhanced blockquote {
+    border-left-color: #60a5fa;
+    color: #9ca3af;
+  }
+
+  .ia-content-enhanced code {
+    background-color: #374151;
+  }
+
+  .ia-content-enhanced pre {
+    background-color: #374151;
+  }
+
+  .ia-content-enhanced a {
+    color: #60a5fa;
+  }
+
+  .ia-content-enhanced a:hover {
+    color: #3b82f6;
+  }
+}
+
 /* Indicadores de carrossel */
 .carousel-indicators {
   display: flex;
