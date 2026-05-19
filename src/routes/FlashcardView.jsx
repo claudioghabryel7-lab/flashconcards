@@ -1117,7 +1117,7 @@ ESTRATÉGIAS PARA CRIAR CONTEÚDO NOVO:
 8. Implicações práticas e teóricas
 
 TAREFA:
-Crie exatamente 10 flashcards educacionais de nível ${difficulty} para o módulo "${selectedModulo}" da matéria "${selectedMateria}". 
+Crie exatamente 30 flashcards educacionais de nível ${difficulty} para o módulo "${selectedModulo}" da matéria "${selectedMateria}". 
 
 IMPORTANTE: Cada flashcard deve ser único, original e explorar aspectos diferentes do conteúdo. Evite repetir perguntas ou respostas que já existam.
 
@@ -1136,7 +1136,7 @@ FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON VÁLIDO):
 }
 
 VALIDAÇÃO FINAL:
-- ✅ 10 flashcards criados
+- ✅ 30 flashcards criados
 - ✅ Todos do nível ${difficulty}
 - ✅ Conteúdo 100% original e não repetido
 - ✅ Linguagem apropriada para o nível
