@@ -225,6 +225,7 @@ const AdminPanel = () => {
     active: true,
     featured: false, // Curso em destaque (aparece no topo)
     referenceLink: '', // Link de referência para a IA analisar o concurso
+    banca: '', // Banca examinadora (ex: INSTITUTO AOCP, FGV, CESPE, FCC)
   })
   const [uploadingCourse, setUploadingCourse] = useState(false)
   const [editingCourseImage, setEditingCourseImage] = useState(null) // ID do curso sendo editado
@@ -2766,6 +2767,7 @@ REGRAS CRÍTICAS:
         active: courseForm.active !== false,
         featured: courseForm.featured === true, // Curso em destaque
         referenceLink: courseForm.referenceLink?.trim() || '', // Link de referência
+        banca: courseForm.banca?.trim() || '', // Banca examinadora
         createdAt: serverTimestamp(),
       })
 
@@ -2782,6 +2784,7 @@ REGRAS CRÍTICAS:
         active: true,
         featured: false,
         referenceLink: '',
+        banca: '',
       })
     } catch (err) {
       console.error('Erro ao adicionar curso:', err)
@@ -2817,6 +2820,7 @@ REGRAS CRÍTICAS:
       active: course.active !== false,
       featured: course.featured === true, // Curso em destaque
       referenceLink: course.referenceLink || '', // Link de referência
+      banca: course.banca || '', // Banca examinadora
     })
   }
 
@@ -2848,6 +2852,7 @@ REGRAS CRÍTICAS:
         active: editingCourseData.active,
         featured: editingCourseData.featured === true,
         referenceLink: editingCourseData.referenceLink?.trim() || '',
+        banca: editingCourseData.banca?.trim() || '', // Banca examinadora
       })
       cancelEditingCourse()
     } catch (err) {
@@ -9369,6 +9374,22 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                           </p>
                         </div>
 
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-2">
+                            📝 Banca Examinadora
+                          </label>
+                          <input
+                            type="text"
+                            value={courseForm.banca}
+                            onChange={(e) => setCourseForm(prev => ({ ...prev, banca: e.target.value }))}
+                            placeholder="Ex: INSTITUTO AOCP, FGV, CESPE, FCC, VUNESP, etc."
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          />
+                          <p className="text-xs text-slate-500 mt-1">
+                            Informe a banca examinadora do concurso. A IA adaptará o conteúdo ao estilo desta banca (ex: PMGO e PCGO usam INSTITUTO AOCP).
+                          </p>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-xs font-semibold text-slate-600 mb-2">
@@ -9596,6 +9617,22 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                           />
                                           <p className="text-xs text-slate-500 mt-1">
                                             A IA usará este link como base para gerar questões, redações e responder perguntas.
+                                          </p>
+                                        </div>
+
+                                        <div>
+                                          <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                            📝 Banca Examinadora
+                                          </label>
+                                          <input
+                                            type="text"
+                                            value={editingCourseData?.banca || ''}
+                                            onChange={(e) => setEditingCourseData(prev => ({ ...prev, banca: e.target.value }))}
+                                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                                            placeholder="Ex: INSTITUTO AOCP, FGV, CESPE, FCC, VUNESP, etc."
+                                          />
+                                          <p className="text-xs text-slate-500 mt-1">
+                                            A IA adaptará o conteúdo ao estilo desta banca (ex: PMGO e PCGO usam INSTITUTO AOCP).
                                           </p>
                                         </div>
                                         

@@ -500,6 +500,12 @@ ONDE:
       const editalData = editalDoc.exists() ? editalDoc.data() : {}
       const editalText = (editalData.pdfText || editalData.prompt || '').toString()
 
+      // Carregar dados do curso para obter a banca examinadora
+      const courseRef = doc(db, 'courses', resolvedCourseId)
+      const courseDoc = await getDoc(courseRef)
+      const courseData = courseDoc.exists() ? courseDoc.data() : {}
+      const banca = courseData.banca || ''
+
       // Carregar edital verticalizado para extrair contexto da disciplina
       let editalVerticalizado = null
       try {
@@ -507,12 +513,12 @@ ONDE:
         const editalVerticalDoc = await getDoc(editalVerticalRef)
         if (editalVerticalDoc.exists()) {
           const data = editalVerticalDoc.data()
-          
+
           // Verificar se o edital está dividido em partes
           if (data.temPartes && data.totalPartes > 1) {
             const partesRef = collection(db, 'courses', resolvedCourseId, 'editalVerticalizado', 'principal', 'partes')
             const partesSnapshot = await getDocs(query(partesRef, orderBy('parte')))
-            
+
             const todasDisciplinas = [...(data.disciplinas || [])]
             partesSnapshot.forEach((doc) => {
               const parteData = doc.data()
@@ -520,7 +526,7 @@ ONDE:
                 todasDisciplinas.push(...parteData.disciplinas)
               }
             })
-            
+
             editalVerticalizado = {
               ...data,
               disciplinas: todasDisciplinas,
@@ -540,7 +546,6 @@ ONDE:
       const unifiedRef = doc(db, 'courses', resolvedCourseId, 'prompts', 'unified')
       const unifiedDoc = await getDoc(unifiedRef)
       const unifiedData = unifiedDoc.exists() ? unifiedDoc.data() : {}
-      const banca = unifiedData.banca || ''
       const concursoName = unifiedData.concursoName || ''
       setProgress(25)
 
@@ -579,6 +584,16 @@ ${editalText.substring(0, 8000)}${editalText.length > 8000 ? '\n\n[texto truncad
 5. CONTEÚDO TÉCNICO: Use linguagem formal, citations, artigos de lei
 6. PROFUNDIDADE ADEQUADA: Nível técnico para concurso público, não básico
 7. EXEMPLOS PRÁTICOS: Inclua exemplos concretos e aplicáveis
+
+🚨🚨🚨 BANCA EXAMINADORA - OBRIGATÓRIO 🚨🚨🚨
+BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
+- ADAPTE TODO O CONTEÚDO ao estilo da banca "${banca || 'NÃO DEFINIDA'}"
+- Se a banca for INSTITUTO AOCP: foco em artigos de lei na íntegra, questões de múltipla escolha diretas, interpretação literal
+- Se a banca for FGV: foco em interpretação de texto, questões contextualizadas, análise crítica
+- Se a banca for CESPE/CEBRASPE: foco em assertivas C/E, interpretação constitucional
+- Se a banca for FCC: foco em legislação atualizada, questões de múltipla escolha, interpretação direta
+- Se a banca for VUNESP: foco em interpretação de texto, questões contextualizadas, análise crítica
+- SEJA FIEL À BANCA DEFINIDA ACIMA
 
 EXEMPLOS DO QUE EVITAR (ERRADO):
 ❌ Se tópico é "Conceitos" em "Direito Constitucional": 
@@ -628,17 +643,22 @@ TRAVAS DE SEGURANÇA PARA GERAÇÃO DE CONTEÚDO:
 REGRAS FINAIS:
 - Não trunque
 - Cuidado para não misturar direito(sumulas etc) em matérias que não são de direito
-- o último concurso da Polícia Civil de Goiás e Polícia Militar de goiás foi instituto aocp então a banca é o instituto AOCP
+- 🚨 BANCA EXAMINADORA: Use EXCLUSIVAMENTE o estilo da banca "${banca || 'NÃO DEFINIDA'}"
+- 🚨 Se a banca for INSTITUTO AOCP: foco em legislação literal, artigos na íntegra, questões objetivas diretas
+- 🚨 Se a banca for FGV: foco em interpretação de texto, questões contextualizadas, análise crítica
+- 🚨 Se a banca for CESPE/CEBRASPE: foco em assertivas C/E, interpretação constitucional
+- 🚨 Se a banca for FCC: foco em legislação atualizada, questões de múltipla escolha, interpretação direta
+- 🚨 Se a banca for VUNESP: foco em interpretação de texto, questões contextualizadas, análise crítica
 - Fale Didaticamente com o aluno falando "aqui seu professor Flash o seu amigo que vai ver você aprovado (cite o concurso)"
 - Use bordões(mas sem exagerar)
 - Não Economize nas palavras e no material, o material tem que ser completo sem faltar nada
-- Seja específico no conteúdo de acordo com  a banca do concurso com oque é maior incidencia
+- Seja específico no conteúdo de acordo com a banca do concurso "${banca || 'NÃO DEFINIDA'}" com o que é maior incidência
 - Seja Extensivo no Conteúdo mas não redundante
 - Não deixe nada para trás do tópico que está sendo gerado, gere todos os detalhes
 - Cuidado pra não repetir o conteudo no mesmo material
 - Faça frases motivacionais referente ao cargo(concurso) do tópico ex: você vai ser o futuro (Curso)
-- No final coloque umas questões referente ao tópico
-- Faça piadas 
+- No final coloque umas questões referente ao tópico no estilo da banca "${banca || 'NÃO DEFINIDA'}"
+- Faça piadas
 - Diga coisas assim no estilo de (tem cursinhos que não falam isso),(essa dica é só aqui)
 - O conteúdo DEVE ser 100% específico para o tópico "${effectiveTopicNome || resolvedTopicKey}"
 - NÃO inclua informações genéricas sobre toda a matéria
