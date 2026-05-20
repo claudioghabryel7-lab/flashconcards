@@ -1079,7 +1079,7 @@ GERAÇÃO DE FLASHCARDS - NÍVEL ${difficulty.toUpperCase()} - CONTEÚDO NOVO
 
 MÓDULO ESPECÍFICO: ${selectedModulo}
 NÍVEL DE DIFICULDADE: ${difficulty}
-QUANTIDADE: 10 flashcards
+QUANTIDADE: 30 flashcards
 
 ⚠️ INSTRUÇÃO CRÍTICA - CRIE CONTEÚDO 100% NOVO:
 - NÃO repita flashcards existentes
