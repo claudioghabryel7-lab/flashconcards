@@ -47,6 +47,13 @@ export async function generateAndSaveFlashcardsForTopico({
     throw new Error('VITE_GEMINI_API_KEY não configurada')
   }
 
+  // Carregar dados do curso para obter a banca examinadora
+  const resolvedId = courseId || 'alego-default'
+  const courseRef = doc(db, 'courses', resolvedId)
+  const courseDoc = await getDoc(courseRef)
+  const courseData = courseDoc.exists() ? courseDoc.data() : {}
+  const banca = courseData.banca || ''
+
   const modulo = moduloLabel || formatTopicoAsModulo({ numero: topicoNumero, nome: topicoNome })
 
   const prompt = `Gere flashcards educacionais para ESTE tópico específico de concurso público.
@@ -55,13 +62,25 @@ CURSO/CONCURSO: ${courseName || 'Concurso público'}
 DISCIPLINA: ${disciplina}
 TÓPICO: ${topicoNumero ? `${topicoNumero} - ` : ''}${topicoNome}
 
+🚨🚨🚨 BANCA EXAMINADORA - OBRIGATÓRIO 🚨🚨🚨
+BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
+- ADAPTE TODO O CONTEÚDO ao estilo da banca "${banca || 'NÃO DEFINIDA'}"
+- Se a banca for INSTITUTO AOCP: foco em artigos de lei na íntegra, questões de múltipla escolha diretas, interpretação literal
+- Se a banca for FGV: foco em interpretação de texto, questões contextualizadas, análise crítica
+- Se a banca for CESPE/CEBRASPE: foco em assertivas C/E, interpretação constitucional
+- Se a banca for FCC: foco em legislação atualizada, questões de múltipla escolha, interpretação direta
+- Se a banca for VUNESP: foco em interpretação de texto, questões contextualizadas, análise crítica
+- SEJA FIEL À BANCA DEFINIDA ACIMA
+
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 12000)}\n\n` : ''}
 
 INSTRUÇÕES:
-- Gere entre 5 e 8 flashcards de alta qualidade APENAS sobre este tópico
+- Gere EXATAMENTE 10-15 flashcards de alta qualidade APENAS sobre este tópico (MÍNIMO OBRIGATÓRIO DE 30 FLASHCARDS NO TOTAL)
+- NÃO gere menos de 30 flashcards no total. Se necessário, gere mais flashcards para atingir o mínimo.
 - Perguntas objetivas; respostas claras e completas
 - Conteúdo específico para o concurso — nada genérico
 - Linguagem formal, nível concurso público
+- 🚨 BANCA EXAMINADORA: Use EXCLUSIVAMENTE o estilo da banca "${banca || 'NÃO DEFINIDA'}"
 
 FORMATO JSON (apenas JSON válido):
 {
@@ -81,7 +100,7 @@ FORMATO JSON (apenas JSON válido):
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
       }),
     }
   )

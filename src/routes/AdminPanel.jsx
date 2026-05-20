@@ -1783,10 +1783,11 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
       })
 
       prompt += `\nINSTRUÇÕES:\n`
-      prompt += `1. Gere 10-15 flashcards por tópico (MÍNIMO DE 30 FLASHCARDS NO TOTAL)\n`
-      prompt += `2. Formato: PERGUNTA || RESPOSTA\n`
-      prompt += `3. Seja objetivo e educacional\n`
-      prompt += `4. Retorne apenas JSON válido:\n`
+      prompt += `1. Gere EXATAMENTE 10-15 flashcards por tópico (MÍNIMO OBRIGATÓRIO DE 30 FLASHCARDS NO TOTAL)\n`
+      prompt += `2. NÃO gere menos de 30 flashcards no total. Se houver poucos tópicos, gere mais flashcards por tópico para atingir o mínimo.\n`
+      prompt += `3. Formato: PERGUNTA || RESPOSTA\n`
+      prompt += `4. Seja objetivo e educacional\n`
+      prompt += `5. Retorne apenas JSON válido:\n`
       prompt += `{"flashcards": [{"frente": "pergunta", "verso": "resposta"}]}\n`
 
       setFlashcardGenProgress('Enviando para IA...')
@@ -1799,7 +1800,7 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 8000
+            maxOutputTokens: 32000
           }
         })
       })
@@ -1813,7 +1814,17 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
       setFlashcardGenProgress('Processando resposta...')
 
       const generatedText = data.candidates[0]?.content?.parts[0]?.text
-      
+
+      if (!generatedText) {
+        throw new Error('A IA não retornou nenhum texto')
+      }
+
+      if (typeof generatedText !== 'string') {
+        throw new Error('A IA retornou um texto inválido')
+      }
+
+      console.log('Texto gerado pela IA (primeiros 500 caracteres):', generatedText.substring(0, 500))
+
       // Extrair JSON de forma simples
       let flashcardsData = null
       try {
@@ -1825,17 +1836,21 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
           // Tentar extrair apenas o array
           const arrayMatch = generatedText.match(/\[[\s\S]*\]/)
           if (arrayMatch) {
-            flashcardsData = { flashcards: JSON.parse('[' + arrayMatch[0] + ']') }
+            flashcardsData = { flashcards: JSON.parse(arrayMatch[0]) }
           }
         }
       } catch (err) {
         console.error('Erro ao processar JSON:', err)
-        throw new Error('Não foi possível processar a resposta da IA')
+        console.error('Texto gerado:', generatedText)
+        throw new Error(`Não foi possível processar a resposta da IA: ${err.message}`)
       }
 
-      if (!flashcardsData || !flashcardsData.flashcards) {
+      if (!flashcardsData || !flashcardsData.flashcards || !Array.isArray(flashcardsData.flashcards)) {
+        console.error('Estrutura recebida:', flashcardsData)
         throw new Error('Nenhum flashcard válido gerado')
       }
+
+      console.log(`Flashcards gerados: ${flashcardsData.flashcards.length}`)
 
       setFlashcardGenProgress(`Salvando ${flashcardsData.flashcards.length} flashcards...`)
 
