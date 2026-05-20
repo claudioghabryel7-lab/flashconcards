@@ -130,7 +130,6 @@ FORMATO JSON (apenas JSON válido):
     throw new Error('Nenhum flashcard gerado pela IA')
   }
 
-  const resolvedId = courseId || 'alego-default'
   const batch = writeBatch(db)
   const flashcardsRef = collection(db, 'courses', resolvedId, 'flashcards')
   const saved = []
