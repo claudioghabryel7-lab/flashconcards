@@ -630,7 +630,7 @@ ${JSON.stringify(editalStructure, null, 2)}
 
 INSTRUÇÕES:
 1. Gere EXATAMENTE os flashcards seguindo a estrutura acima - disciplina por disciplina, tópico por tópico
-2. Para CADA tópico, gere 3-5 flashcards de qualidade
+2. Para CADA tópico, gere 10-15 flashcards de qualidade (MÍNIMO DE 30 FLASHCARDS NO TOTAL)
 3. Os flashcards devem ser educacionais, didáticos e focados no aprendizado
 4. Formato JSON:
 {

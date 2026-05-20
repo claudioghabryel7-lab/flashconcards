@@ -1783,7 +1783,7 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
       })
 
       prompt += `\nINSTRUÇÕES:\n`
-      prompt += `1. Gere 3-5 flashcards por tópico\n`
+      prompt += `1. Gere 10-15 flashcards por tópico (MÍNIMO DE 30 FLASHCARDS NO TOTAL)\n`
       prompt += `2. Formato: PERGUNTA || RESPOSTA\n`
       prompt += `3. Seja objetivo e educacional\n`
       prompt += `4. Retorne apenas JSON válido:\n`
