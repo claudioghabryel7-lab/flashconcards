@@ -596,7 +596,7 @@ BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
 - Se a banca for CESPE/CEBRASPE: foco em assertivas C/E, interpretação constitucional
 - Se a banca for FCC: foco em legislação atualizada, questões de múltipla escolha, interpretação direta
 - Se a banca for VUNESP: foco em interpretação de texto, questões contextualizadas, análise crítica
-- SEJA FIEL À BANCA DEFINIDA ACIMA
+- SEJA FIEL À BANCA DEFINIDA ACIMA.
 
 EXEMPLOS DO QUE EVITAR (ERRADO):
 ❌ Se tópico é "Conceitos" em "Direito Constitucional": 
