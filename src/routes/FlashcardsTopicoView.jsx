@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { doc, getDoc, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
-import { ChevronLeftIcon } from '@heroicons/react/24/outline'
+import { ChevronLeftIcon, PhotoIcon } from '@heroicons/react/24/outline'
 import FlashcardList from '../components/FlashcardList'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -189,6 +189,16 @@ const FlashcardsTopicoView = () => {
     }
   }
 
+  const openPIPMode = () => {
+    const params = new URLSearchParams()
+    params.set('disciplina', disciplina)
+    params.set('modulo', modulo)
+    params.set('topicKey', topicKey)
+    
+    const pipUrl = `/flashcards/pip/${courseId}?${params.toString()}`
+    window.open(pipUrl, 'flashcard-pip', 'width=800,height=600,scrollbars=yes,resizable=yes')
+  }
+
   if (!disciplina || !modulo) {
     return (
       <div className="min-h-screen p-6 text-center">
@@ -203,20 +213,35 @@ const FlashcardsTopicoView = () => {
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
       <div className="sticky top-0 z-20 border-b border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-3">
-        <Link
-          to="/edital-verticalizado"
-          className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-alego-600 mb-2"
-        >
-          <ChevronLeftIcon className="h-4 w-4" />
-          Voltar ao edital
-        </Link>
-        <h1 className="text-lg font-bold text-slate-900 dark:text-white">{disciplina}</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-400">{modulo}</p>
-        {fromCache && cards.length > 0 && (
-          <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-            Flashcards carregados do banco (compartilhados com todos os alunos)
-          </p>
-        )}
+        <div className="flex items-center justify-between">
+          <div>
+            <Link
+              to="/edital-verticalizado"
+              className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-alego-600 mb-2"
+            >
+              <ChevronLeftIcon className="h-4 w-4" />
+              Voltar ao edital
+            </Link>
+            <h1 className="text-lg font-bold text-slate-900 dark:text-white">{disciplina}</h1>
+            <p className="text-sm text-slate-600 dark:text-slate-400">{modulo}</p>
+            {fromCache && cards.length > 0 && (
+              <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                Flashcards carregados do banco (compartilhados com todos os alunos)
+              </p>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openPIPMode}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg font-bold hover:opacity-80 transition"
+            >
+              <PhotoIcon className="h-5 w-5" />
+              <span className="hidden sm:inline">Modo PIP</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {(loading || generating) && (

@@ -65,7 +65,7 @@ const FlashcardItem = ({
         transition={{ duration: 0.2 }}
       >
         <motion.div
-          className='absolute inset-0 flex flex-col justify-between rounded-3xl bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-slate-800 dark:via-blue-900/20 dark:to-purple-900/20 p-3 sm:p-4 md:p-6 shadow-2xl border-2 sm:border-4 border-blue-500/50 dark:border-blue-400/50 backdrop-blur-sm overflow-hidden'
+          className='absolute inset-0 flex flex-col justify-between rounded-lg bg-white dark:bg-slate-900 p-4 sm:p-6 md:p-8 shadow-2xl border-2 border-slate-900 dark:border-white overflow-hidden'
           animate={{ rotateY: flipped ? 180 : 0 }}
           transition={{ duration: 0.6, ease: 'easeInOut' }}
           style={{ backfaceVisibility: 'hidden', transformStyle: 'preserve-3d' }}
@@ -80,10 +80,10 @@ const FlashcardItem = ({
                   event.stopPropagation()
                   onToggleFavorite(card.id)
                 }}
-                className={'group/fav flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl transition-all touch-manipulation ' +
+                className={'group/fav flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg transition-all touch-manipulation border border-slate-300 dark:border-slate-600 ' +
                   (isFavorite 
-                    ? 'text-red-500 hover:text-red-600 bg-red-50 dark:bg-red-900/20' 
-                    : 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20')
+                    ? 'text-red-500 bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-600' 
+                    : 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-300 dark:hover:border-red-600')
                 }
               >
                 <HeartIcon className='h-5 w-5 sm:h-6 sm:w-6' />
@@ -97,7 +97,7 @@ const FlashcardItem = ({
                     event.stopPropagation()
                     handleEdit()
                   }}
-                  className='group/edit flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl transition-all touch-manipulation text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                  className='group/edit flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg transition-all touch-manipulation text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-900 dark:hover:border-white'
                 >
                   <PencilIcon className='h-5 w-5 sm:h-6 sm:w-6' />
                 </button>
@@ -111,7 +111,7 @@ const FlashcardItem = ({
                     event.stopPropagation()
                     handleDelete()
                   }}
-                  className='group/delete flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl transition-all touch-manipulation text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
+                  className='group/delete flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg transition-all touch-manipulation text-slate-400 hover:text-red-500 border border-slate-300 dark:border-slate-600 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-300 dark:hover:border-red-600'
                 >
                   <TrashIcon className='h-5 w-5 sm:h-6 sm:w-6' />
                 </button>
@@ -124,7 +124,7 @@ const FlashcardItem = ({
                   <textarea
                     value={editPergunta}
                     onChange={(e) => setEditPergunta(e.target.value)}
-                    className='w-full p-3 rounded-lg border-2 border-blue-300 dark:border-blue-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-lg font-bold resize-none'
+                    className='w-full p-3 rounded-lg border-2 border-slate-900 dark:border-white bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-lg font-bold resize-none'
                     rows={3}
                     placeholder='Pergunta'
                   />
@@ -132,14 +132,14 @@ const FlashcardItem = ({
                     <button
                       type='button'
                       onClick={handleSaveEdit}
-                      className='px-4 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition'
+                      className='px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg font-bold hover:opacity-80 transition'
                     >
                       Salvar
                     </button>
                     <button
                       type='button'
                       onClick={() => setEditing(false)}
-                      className='px-4 py-2 bg-slate-500 text-white rounded-lg font-bold hover:bg-slate-600 transition'
+                      className='px-4 py-2 border-2 border-slate-900 dark:border-white text-slate-900 dark:text-white rounded-lg font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition'
                     >
                       Cancelar
                     </button>
@@ -147,11 +147,11 @@ const FlashcardItem = ({
                 </div>
               ) : (
                 <>
-                  <h3 className='text-lg sm:text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4 sm:mb-6 leading-relaxed'>
+                  <h3 className='text-lg sm:text-xl md:text-2xl font-bold text-slate-900 dark:text-white mb-4 sm:mb-6 leading-relaxed'>
                     {card.pergunta}
                   </h3>
                   
-                  <div className='text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium'>
+                  <div className='text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-medium'>
                     Clique para ver resposta 
                   </div>
                 </>
@@ -160,20 +160,20 @@ const FlashcardItem = ({
 
             <div className='flex flex-wrap gap-1 sm:gap-2 justify-center'>
               {card.materia && (
-                <span className='px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs rounded-full'>
+                <span className='px-2 py-1 border border-slate-900 dark:border-white text-slate-900 dark:text-white text-xs rounded'>
                   {card.materia}
                 </span>
               )}
               {card.modulo && (
-                <span className='px-2 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs rounded-full'>
+                <span className='px-2 py-1 border border-slate-900 dark:border-white text-slate-900 dark:text-white text-xs rounded'>
                   {card.modulo}
                 </span>
               )}
               {cardProgress?.lastDifficulty && (
-                <span className={`px-2 py-1 text-xs rounded-full ${
+                <span className={`px-2 py-1 text-xs rounded border ${
                   cardProgress.lastDifficulty === 'easy' 
-                    ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300' 
-                    : 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
+                    ? 'border-emerald-600 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400' 
+                    : 'border-orange-600 text-orange-600 dark:border-orange-400 dark:text-orange-400'
                 }`}>
                   Última: {cardProgress.lastDifficulty === 'easy' ? 'Fácil' : 'Difícil'}
                 </span>
@@ -183,7 +183,7 @@ const FlashcardItem = ({
         </motion.div>
 
         <motion.div
-          className='absolute inset-0 rounded-3xl bg-gradient-to-br from-emerald-50 via-green-50/50 to-teal-50/30 dark:from-emerald-900/20 dark:via-green-900/20 dark:to-teal-900/20 p-3 sm:p-4 md:p-6 shadow-2xl border-2 sm:border-4 border-emerald-500/50 dark:border-emerald-400/50 backdrop-blur-sm overflow-hidden'
+          className='absolute inset-0 rounded-lg bg-slate-900 dark:bg-white p-4 sm:p-6 md:p-8 shadow-2xl border-2 border-slate-900 dark:border-white overflow-hidden'
           animate={{ rotateY: flipped ? 0 : 180 }}
           transition={{ duration: 0.6, ease: 'easeInOut' }}
           style={{ backfaceVisibility: 'hidden', transformStyle: 'preserve-3d' }}
@@ -191,7 +191,7 @@ const FlashcardItem = ({
           <div className='relative z-10 h-full flex flex-col'>
             <div className='flex-1 flex flex-col justify-center items-center text-center px-2 sm:px-4 py-4 sm:py-6 min-h-0'>
               <div className='mb-4 sm:mb-6'>
-                <div className='inline-flex px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300'>
+                <div className='inline-flex px-3 py-1 rounded text-xs font-bold border border-white dark:border-slate-900 text-white dark:text-slate-900'>
                   Resposta
                 </div>
               </div>
@@ -201,7 +201,7 @@ const FlashcardItem = ({
                   <textarea
                     value={editResposta}
                     onChange={(e) => setEditResposta(e.target.value)}
-                    className='w-full p-3 rounded-lg border-2 border-emerald-300 dark:border-emerald-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-base resize-none'
+                    className='w-full p-3 rounded-lg border-2 border-white dark:border-slate-900 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-base resize-none'
                     rows={6}
                     placeholder='Resposta'
                   />
@@ -209,21 +209,21 @@ const FlashcardItem = ({
                     <button
                       type='button'
                       onClick={handleSaveEdit}
-                      className='px-4 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition'
+                      className='px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg font-bold hover:opacity-80 transition'
                     >
                       Salvar
                     </button>
                     <button
                       type='button'
                       onClick={() => setEditing(false)}
-                      className='px-4 py-2 bg-slate-500 text-white rounded-lg font-bold hover:bg-slate-600 transition'
+                      className='px-4 py-2 border-2 border-white dark:border-slate-900 text-white dark:text-slate-900 rounded-lg font-bold hover:bg-slate-800 dark:hover:bg-slate-200 transition'
                     >
                       Cancelar
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className='text-base sm:text-lg md:text-xl font-medium text-slate-800 dark:text-slate-100 leading-relaxed overflow-y-auto max-h-[200px] sm:max-h-[300px] md:max-h-[400px] px-1'>
+                <div className='text-base sm:text-lg md:text-xl font-medium text-white dark:text-slate-900 leading-relaxed overflow-y-auto max-h-[200px] sm:max-h-[300px] md:max-h-[400px] px-1'>
                   {card.resposta}
                 </div>
               )}
@@ -239,17 +239,17 @@ const FlashcardItem = ({
               >
                 {cardProgress?.lastDifficulty && (
                   <div className='flex justify-center mb-2'>
-                    <span className={`px-3 py-1 text-xs rounded-full font-medium ${
+                    <span className={`px-3 py-1 text-xs rounded font-medium border ${
                       cardProgress.lastDifficulty === 'easy' 
-                        ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300' 
-                        : 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
+                        ? 'border-white dark:border-slate-900 text-white dark:text-slate-900' 
+                        : 'border-white dark:border-slate-900 text-white dark:text-slate-900'
                     }`}>
                       Última revisão: {cardProgress.lastDifficulty === 'easy' ? 'Fácil' : 'Difícil'}
                     </span>
                   </div>
                 )}
                 
-                <p className='text-center text-xs sm:text-sm md:text-base font-bold text-slate-600 dark:text-slate-300 mb-3 sm:mb-4'>
+                <p className='text-center text-xs sm:text-sm md:text-base font-bold text-white dark:text-slate-900 mb-3 sm:mb-4'>
                   Como foi essa revisão?
                 </p>
                 <div className='flex gap-2 sm:gap-3'>
@@ -261,10 +261,9 @@ const FlashcardItem = ({
                       e.stopPropagation()
                       handleRate('hard')
                     }}
-                    className='group/btn relative flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 px-3 sm:px-4 md:px-5 py-3 sm:py-3.5 md:py-4 text-xs sm:text-sm md:text-base font-black text-white shadow-xl hover:shadow-2xl hover:shadow-orange-500/50 border-2 border-white/20 min-h-[48px] sm:min-h-[52px] md:min-h-[56px] overflow-hidden touch-manipulation'
+                    className='group/btn relative flex-1 rounded-lg bg-white dark:bg-slate-900 px-3 sm:px-4 md:px-5 py-3 sm:py-3.5 md:py-4 text-xs sm:text-sm md:text-base font-black text-slate-900 dark:text-white border-2 border-white dark:border-slate-900 min-h-[48px] sm:min-h-[52px] md:min-h-[56px] overflow-hidden touch-manipulation hover:opacity-80 transition'
                   >
                     <span className='relative z-10 flex items-center justify-center gap-2 sm:gap-2.5 md:gap-3'>
-                      <span className='text-sm sm:text-base md:text-lg'></span>
                       <span className='whitespace-nowrap'>Difícil</span>
                       <span className='text-xs sm:text-sm opacity-75'>(1 min)</span>
                     </span>
@@ -277,10 +276,9 @@ const FlashcardItem = ({
                       e.stopPropagation()
                       handleRate('easy')
                     }}
-                    className='group/btn relative flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-3 sm:px-4 md:px-5 py-3 sm:py-3.5 md:py-4 text-xs sm:text-sm md:text-base font-black text-white shadow-xl hover:shadow-2xl hover:shadow-emerald-500/50 border-2 border-white/20 min-h-[48px] sm:min-h-[52px] md:min-h-[56px] overflow-hidden touch-manipulation'
+                    className='group/btn relative flex-1 rounded-lg bg-white dark:bg-slate-900 px-3 sm:px-4 md:px-5 py-3 sm:py-3.5 md:py-4 text-xs sm:text-sm md:text-base font-black text-slate-900 dark:text-white border-2 border-white dark:border-slate-900 min-h-[48px] sm:min-h-[52px] md:min-h-[56px] overflow-hidden touch-manipulation hover:opacity-80 transition'
                   >
                     <span className='relative z-10 flex items-center justify-center gap-2 sm:gap-2.5 md:gap-3'>
-                      <span className='text-sm sm:text-base md:text-lg'></span>
                       <span className='whitespace-nowrap'>Fácil</span>
                       <span className='text-xs sm:text-sm opacity-75'>(15 min)</span>
                     </span>

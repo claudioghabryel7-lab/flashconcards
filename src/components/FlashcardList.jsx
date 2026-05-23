@@ -45,14 +45,13 @@ const FlashcardList = ({
             <button
               type="button"
               onClick={onPrev}
-              className="group/btn relative inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border-2 border-blue-500/30 dark:border-blue-400/30 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400 shadow-lg hover:shadow-xl hover:border-blue-500 dark:hover:border-blue-400 hover:scale-105 transition-all overflow-hidden min-w-[80px] sm:min-w-[100px]"
+              className="group/btn relative inline-flex items-center justify-center gap-1 sm:gap-2 rounded-lg bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-white px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-slate-900 dark:text-white shadow-lg hover:scale-105 transition-all overflow-hidden min-w-[80px] sm:min-w-[100px]"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
               <span className="relative z-10">←</span>
               <span className="relative z-10 hidden sm:inline">Anterior</span>
             </button>
             
-            <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-400 px-2">
+            <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-bold text-slate-900 dark:text-white px-2">
               <span>{currentIndex + 1}</span>
               <span>/</span>
               <span>{cards.length}</span>
@@ -61,9 +60,8 @@ const FlashcardList = ({
             <button
               type="button"
               onClick={onNext}
-              className="group/btn relative inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border-2 border-blue-500/30 dark:border-blue-400/30 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400 shadow-lg hover:shadow-xl hover:border-blue-500 dark:hover:border-blue-400 hover:scale-105 transition-all overflow-hidden min-w-[80px] sm:min-w-[100px]"
+              className="group/btn relative inline-flex items-center justify-center gap-1 sm:gap-2 rounded-lg bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-white px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-bold text-slate-900 dark:text-white shadow-lg hover:scale-105 transition-all overflow-hidden min-w-[80px] sm:min-w-[100px]"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
               <span className="relative z-10 hidden sm:inline">Próximo</span>
               <span className="relative z-10">→</span>
             </button>
@@ -85,22 +83,12 @@ const FlashcardList = ({
               key={card.id}
               type="button"
               onClick={() => onSelect(index)}
-              className={`group relative rounded-xl border-2 px-2 py-2.5 text-xs font-bold transition-all overflow-hidden ${
+              className={`group relative rounded border-2 px-2 py-2.5 text-xs font-bold transition-all overflow-hidden ${
                 isCurrent
-                  ? 'border-blue-500 dark:border-blue-400 bg-gradient-to-br from-blue-500/20 to-purple-500/20 dark:from-blue-500/30 dark:to-purple-500/30 text-blue-700 dark:text-blue-300 shadow-lg scale-110 z-10'
-                  : 'border-slate-200/50 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 hover:border-blue-500/50 dark:hover:border-blue-400/50 hover:bg-blue-50/50 dark:hover:bg-blue-900/20'
+                  ? 'border-slate-900 dark:border-white bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg scale-110 z-10'
+                  : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white hover:border-slate-900 dark:hover:border-white'
               } ${isVisited ? 'opacity-100' : 'opacity-60'}`}
             >
-              {/* Background hover */}
-              {!isCurrent && (
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              )}
-              
-              {/* Glow para card atual */}
-              {isCurrent && (
-                <div className="absolute inset-0 bg-blue-500/30 rounded-xl blur-md"></div>
-              )}
-              
               <div className="relative z-10 flex flex-col items-center gap-1">
                 <span className="font-black">#{index + 1}</span>
                 {isReviewed && (

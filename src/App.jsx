@@ -38,6 +38,7 @@ const RankingSimulado = lazy(() => import('./routes/RankingSimulado'))
 const EditalVerticalizado = lazy(() => import('./routes/EditalVerticalizado'))
 const FlashcardView = lazy(() => import('./routes/FlashcardView'))
 const FlashcardsTopicoView = lazy(() => import('./routes/FlashcardsTopicoView'))
+const FlashcardPIP = lazy(() => import('./routes/FlashcardPIP'))
 const FlashQuestoes = lazy(() => import('./routes/FlashQuestoes'))
 // Importação direta para testar
 import CalendarioProgresso from './routes/CalendarioProgresso'
@@ -161,7 +162,7 @@ function App() {
           minHeight: '100vh'
         }}
       >
-      <Header />
+      {!location.pathname.startsWith('/flashcards/pip') && <Header />}
       <main className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 py-4 sm:py-6 md:py-8 overflow-x-hidden relative z-10">
         <Suspense fallback={<LoadingFallback />}>
         <Routes>
@@ -205,6 +206,14 @@ function App() {
             element={
               <ProtectedRoute requireCourseSelection>
                 <FlashcardsTopicoView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/flashcards/pip/:courseId"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <FlashcardPIP />
               </ProtectedRoute>
             }
           />
@@ -356,15 +365,17 @@ function App() {
         </Routes>
         </Suspense>
       </main>
-      <footer className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[60px] flex items-center justify-center">
-        <p>
-          © {new Date().getFullYear()} FlashConCards. Todos os direitos reservados.
-          É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.
-        </p>
-      </footer>
-      <SupportButton />
-      <PopupBanner />
-      <OfflineIndicator />
+      {!location.pathname.startsWith('/flashcards/pip') && (
+        <footer className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[60px] flex items-center justify-center">
+          <p>
+            © {new Date().getFullYear()} FlashConCards. Todos os direitos reservados.
+            É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.
+          </p>
+        </footer>
+      )}
+      {!location.pathname.startsWith('/flashcards/pip') && <SupportButton />}
+      {!location.pathname.startsWith('/flashcards/pip') && <PopupBanner />}
+      {!location.pathname.startsWith('/flashcards/pip') && <OfflineIndicator />}
     </div>
     )
   } catch (error) {
