@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy } from 'firebase/firestore'
-import { ArrowLeftIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
@@ -166,6 +166,8 @@ const ConteudoCompletoTopicoView = () => {
   const [progress, setProgress] = useState(0)
   const [validating, setValidating] = useState(false)
   const [validationMessage, setValidationMessage] = useState('')
+  const [editingContent, setEditingContent] = useState(false)
+  const [editedContent, setEditedContent] = useState('')
 
   // Função para registrar matéria estudada no calendário
   const registrarMateriaEstudada = async (materia) => {
@@ -216,6 +218,7 @@ const ConteudoCompletoTopicoView = () => {
   )
 
   const effectiveTopicNome = topicNomeFromQuery || topicNomeFromKey
+  const isAdmin = profile?.role === 'admin'
 
   // Carregar nome do curso
   useEffect(() => {
@@ -606,6 +609,9 @@ EXEMPLOS DO QUE CRIAR (CORRETO):
    "Conceito de Constituição: Segundo José Afonso da Silva, constituição é..."
 ✅ Se tópico é "Conceitos" em "Direito Administrativo":
    "Conceito de ato administrativo: Segundo Hely Lopes Meirelles, ato administrativo é..."
+   antes de gerar um conteudo verifique a veracidade e não tente presumr algo da sua cabeça, afinal eu preciso de dados reais.
+   não é pra inventar informações.
+   quando gerar verifique se é real sempre!
 
 TAREFA:
 Crie um conteúdo COMPLETO, DETALHADO e 100% ESPECÍFICO para o tópico acima, com linguagem técnica e formal.
@@ -724,6 +730,48 @@ REGRAS FINAIS:
     }
   }
 
+  const handleEditContent = () => {
+    // Editar todo o objeto JSON do conteúdo
+    const contentToEdit = {
+      ...conteudo,
+      updatedAt: undefined,
+      generatedAt: undefined,
+    }
+    setEditedContent(JSON.stringify(contentToEdit, null, 2))
+    setEditingContent(true)
+  }
+
+  const handleSaveContent = async () => {
+    try {
+      const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
+      const contentRef = doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', sanitizedKey)
+      
+      let parsedContent
+      try {
+        parsedContent = JSON.parse(editedContent)
+      } catch (e) {
+        alert('Erro: JSON inválido. Verifique a formatação.')
+        return
+      }
+      
+      await setDoc(contentRef, {
+        ...parsedContent,
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+      
+      setConteudo(parsedContent)
+      setEditingContent(false)
+    } catch (error) {
+      console.error('Erro ao salvar conteúdo:', error)
+      alert('Erro ao salvar conteúdo. Tente novamente.')
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingContent(false)
+    setEditedContent('')
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -836,16 +884,29 @@ REGRAS FINAIS:
             </div>
 
             <div className="flex flex-col items-start gap-2 lg:items-end">
-              <button
-                type="button"
-                onClick={handleValidateTopic}
-                disabled={validating || generating}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition"
-              >
-                {validating
-                  ? 'Analisando matéria…'
-                  : 'Reportar Matéria'}
-              </button>
+              <div className="flex gap-2 flex-wrap">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleEditContent}
+                    disabled={editingContent}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition"
+                  >
+                    <PencilIcon className="w-4 h-4" />
+                    {editingContent ? 'Editando...' : 'Editar Conteúdo'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleValidateTopic}
+                  disabled={validating || generating || editingContent}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition"
+                >
+                  {validating
+                    ? 'Analisando matéria…'
+                    : 'Reportar Matéria'}
+                </button>
+              </div>
               {validationMessage && (
                 <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-md text-left lg:text-right">
                   {validationMessage}
@@ -864,37 +925,71 @@ REGRAS FINAIS:
             </div>
           )}
 
-          {conteudo.content && (
-            <div
-              className="mb-8 ia-content-enhanced"
-              dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(conteudo.content) }}
-            />
-          )}
-
-          {conteudo.secoes && Array.isArray(conteudo.secoes) && conteudo.secoes.length > 0 && (
-            <div className="space-y-8 mt-8">
-              {conteudo.secoes.map((secao, index) => (
-                <div
-                  key={index}
-                  className="border-l-4 border-alego-500 pl-6 py-3 bg-slate-50 dark:bg-slate-900/50 rounded-r-lg"
+          {editingContent && isAdmin ? (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                Editando todo o conteúdo em formato JSON. Você pode modificar qualquer campo: content, secoes, titulo, subtitulo, etc.
+              </p>
+              <textarea
+                value={editedContent}
+                onChange={(e) => setEditedContent(e.target.value)}
+                className="w-full p-4 rounded-lg border-2 border-blue-300 dark:border-blue-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 min-h-[600px] resize-y font-mono text-sm"
+                placeholder="Conteúdo JSON completo"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveContent}
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition"
                 >
-                  <h3 className="text-xl sm:text-2xl font-semibold text-alego-600 dark:text-alego-400 mb-3">
-                    {secao.titulo || `Seção ${index + 1}`}
-                    {secao.tipo && (
-                      <span className="ml-3 text-sm bg-alego-100 dark:bg-alego-900 text-alego-700 dark:text-alego-300 px-3 py-1 rounded-full">
-                        {secao.tipo}
-                      </span>
-                    )}
-                  </h3>
-                  {secao.conteudo && (
-                    <div
-                      className="ia-content-enhanced"
-                      dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(secao.conteudo) }}
-                    />
-                  )}
-                </div>
-              ))}
+                  Salvar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="px-4 py-2 bg-slate-500 text-white rounded-lg font-bold hover:bg-slate-600 transition"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
+          ) : (
+            <>
+              {conteudo.content && (
+                <div className="mb-8">
+                  <div
+                    className="ia-content-enhanced"
+                    dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(conteudo.content) }}
+                  />
+                </div>
+              )}
+
+              {conteudo.secoes && Array.isArray(conteudo.secoes) && conteudo.secoes.length > 0 && (
+                <div className="space-y-8 mt-8">
+                  {conteudo.secoes.map((secao, index) => (
+                    <div
+                      key={index}
+                      className="border-l-4 border-alego-500 pl-6 py-3 bg-slate-50 dark:bg-slate-900/50 rounded-r-lg"
+                    >
+                      <h3 className="text-xl sm:text-2xl font-semibold text-alego-600 dark:text-alego-400 mb-3">
+                        {secao.titulo || `Seção ${index + 1}`}
+                        {secao.tipo && (
+                          <span className="ml-3 text-sm bg-alego-100 dark:bg-alego-900 text-alego-700 dark:text-alego-300 px-3 py-1 rounded-full">
+                            {secao.tipo}
+                          </span>
+                        )}
+                      </h3>
+                      {secao.conteudo && (
+                        <div
+                          className="ia-content-enhanced"
+                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(secao.conteudo) }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

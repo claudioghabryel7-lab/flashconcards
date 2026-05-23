@@ -1,7 +1,8 @@
 ﻿import { useState } from 'react'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { HeartIcon } from '@heroicons/react/24/solid'
+import { HeartIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/solid'
+import { useAuth } from '../hooks/useAuth'
 
 const FlashcardItem = ({ 
   card, 
@@ -11,9 +12,15 @@ const FlashcardItem = ({
   showRating = false,
   cardProgress = null,
   onExplainCard = null,
-  onDeleteFlashcard = null
+  onDeleteFlashcard = null,
+  onEditFlashcard = null
 }) => {
   const [flipped, setFlipped] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editPergunta, setEditPergunta] = useState(card.pergunta)
+  const [editResposta, setEditResposta] = useState(card.resposta)
+  const { profile } = useAuth()
+  const isAdmin = profile?.role === 'admin'
 
   const toggle = () => {
     setFlipped(!flipped)
@@ -25,6 +32,26 @@ const FlashcardItem = ({
       setTimeout(() => {
         setFlipped(false)
       }, 300)
+    }
+  }
+
+  const handleEdit = () => {
+    setEditPergunta(card.pergunta)
+    setEditResposta(card.resposta)
+    setEditing(true)
+    setFlipped(false)
+  }
+
+  const handleSaveEdit = () => {
+    if (onEditFlashcard) {
+      onEditFlashcard(card.id, editPergunta, editResposta)
+    }
+    setEditing(false)
+  }
+
+  const handleDelete = () => {
+    if (onDeleteFlashcard && window.confirm('Tem certeza que deseja excluir este flashcard?')) {
+      onDeleteFlashcard(card.id)
     }
   }
 
@@ -61,16 +88,74 @@ const FlashcardItem = ({
               >
                 <HeartIcon className='h-5 w-5 sm:h-6 sm:w-6' />
               </button>
+              
+              {/* Botão de editar (apenas admin) */}
+              {isAdmin && !editing && (
+                <button
+                  type='button'
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    handleEdit()
+                  }}
+                  className='group/edit flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl transition-all touch-manipulation text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                >
+                  <PencilIcon className='h-5 w-5 sm:h-6 sm:w-6' />
+                </button>
+              )}
+              
+              {/* Botão de excluir (apenas admin) */}
+              {isAdmin && !editing && (
+                <button
+                  type='button'
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    handleDelete()
+                  }}
+                  className='group/delete flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl transition-all touch-manipulation text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
+                >
+                  <TrashIcon className='h-5 w-5 sm:h-6 sm:w-6' />
+                </button>
+              )}
             </div>
 
             <div className='flex-1 flex flex-col justify-center items-center text-center px-2 sm:px-4 py-4 sm:py-6'>
-              <h3 className='text-lg sm:text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4 sm:mb-6 leading-relaxed'>
-                {card.pergunta}
-              </h3>
-              
-              <div className='text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium'>
-                Clique para ver resposta 
-              </div>
+              {editing ? (
+                <div className='w-full space-y-4' onClick={(e) => e.stopPropagation()}>
+                  <textarea
+                    value={editPergunta}
+                    onChange={(e) => setEditPergunta(e.target.value)}
+                    className='w-full p-3 rounded-lg border-2 border-blue-300 dark:border-blue-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-lg font-bold resize-none'
+                    rows={3}
+                    placeholder='Pergunta'
+                  />
+                  <div className='flex gap-2 justify-center'>
+                    <button
+                      type='button'
+                      onClick={handleSaveEdit}
+                      className='px-4 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition'
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      type='button'
+                      onClick={() => setEditing(false)}
+                      className='px-4 py-2 bg-slate-500 text-white rounded-lg font-bold hover:bg-slate-600 transition'
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <h3 className='text-lg sm:text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4 sm:mb-6 leading-relaxed'>
+                    {card.pergunta}
+                  </h3>
+                  
+                  <div className='text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium'>
+                    Clique para ver resposta 
+                  </div>
+                </>
+              )}
             </div>
 
             <div className='flex flex-wrap gap-1 sm:gap-2 justify-center'>
@@ -111,9 +196,37 @@ const FlashcardItem = ({
                 </div>
               </div>
               
-              <div className='text-base sm:text-lg md:text-xl font-medium text-slate-800 dark:text-slate-100 leading-relaxed overflow-y-auto max-h-[200px] sm:max-h-[300px] md:max-h-[400px] px-1'>
-                {card.resposta}
-              </div>
+              {editing ? (
+                <div className='w-full space-y-4' onClick={(e) => e.stopPropagation()}>
+                  <textarea
+                    value={editResposta}
+                    onChange={(e) => setEditResposta(e.target.value)}
+                    className='w-full p-3 rounded-lg border-2 border-emerald-300 dark:border-emerald-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-base resize-none'
+                    rows={6}
+                    placeholder='Resposta'
+                  />
+                  <div className='flex gap-2 justify-center'>
+                    <button
+                      type='button'
+                      onClick={handleSaveEdit}
+                      className='px-4 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition'
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      type='button'
+                      onClick={() => setEditing(false)}
+                      className='px-4 py-2 bg-slate-500 text-white rounded-lg font-bold hover:bg-slate-600 transition'
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className='text-base sm:text-lg md:text-xl font-medium text-slate-800 dark:text-slate-100 leading-relaxed overflow-y-auto max-h-[200px] sm:max-h-[300px] md:max-h-[400px] px-1'>
+                  {card.resposta}
+                </div>
+              )}
             </div>
             
             {showRating && (

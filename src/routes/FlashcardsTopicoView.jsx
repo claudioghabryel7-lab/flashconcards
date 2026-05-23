@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
+import { doc, getDoc, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
 import FlashcardList from '../components/FlashcardList'
 import { db } from '../firebase/config'
@@ -152,6 +152,43 @@ const FlashcardsTopicoView = () => {
     await updateFavorites(next)
   }
 
+  const handleEditFlashcard = async (cardId, newPergunta, newResposta) => {
+    try {
+      const cardRef = doc(db, 'courses', courseId, 'flashcards', cardId)
+      await setDoc(cardRef, {
+        pergunta: newPergunta,
+        resposta: newResposta,
+        frente: newPergunta,
+        verso: newResposta,
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+      
+      // Update local state
+      setCards(prev => prev.map(card => 
+        card.id === cardId 
+          ? { ...card, pergunta: newPergunta, resposta: newResposta, frente: newPergunta, verso: newResposta }
+          : card
+      ))
+    } catch (error) {
+      console.error('Erro ao editar flashcard:', error)
+      alert('Erro ao editar flashcard. Tente novamente.')
+    }
+  }
+
+  const handleDeleteFlashcard = async (cardId) => {
+    try {
+      const cardRef = doc(db, 'courses', courseId, 'flashcards', cardId)
+      await deleteDoc(cardRef)
+      
+      // Update local state
+      setCards(prev => prev.filter(card => card.id !== cardId))
+      setCurrentIndex(0)
+    } catch (error) {
+      console.error('Erro ao excluir flashcard:', error)
+      alert('Erro ao excluir flashcard. Tente novamente.')
+    }
+  }
+
   if (!disciplina || !modulo) {
     return (
       <div className="min-h-screen p-6 text-center">
@@ -214,6 +251,8 @@ const FlashcardsTopicoView = () => {
           onShuffle={() => setCards((prev) => [...prev].sort(() => Math.random() - 0.5))}
           viewedIds={viewedIds}
           showRating
+          onEditFlashcard={handleEditFlashcard}
+          onDeleteFlashcard={handleDeleteFlashcard}
         />
       )}
     </div>

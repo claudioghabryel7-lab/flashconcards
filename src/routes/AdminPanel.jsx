@@ -182,6 +182,11 @@ const AdminPanel = () => {
   // Estado para curso selecionado no gerenciamento de flashcards
   const [selectedCourseForFlashcards, setSelectedCourseForFlashcards] = useState('alego-default') // 'alego-default' = ALEGO padrão, 'courseId' = curso específico
   
+  // Estado para gerenciar visualização e deleção de flashcards
+  const [showAllFlashcards, setShowAllFlashcards] = useState(false)
+  const [deletingAllFlashcards, setDeletingAllFlashcards] = useState(false)
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false)
+  
   // Estado para curso selecionado nos prompts
   const [selectedCourseForPrompts, setSelectedCourseForPrompts] = useState('alego-default') // Curso para salvar prompts
   
