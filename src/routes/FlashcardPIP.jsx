@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { doc, getDoc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import {
@@ -31,6 +32,7 @@ const FlashcardPIP = () => {
   const [textColor, setTextColor] = useState('text-slate-900')
   const [borderColor, setBorderColor] = useState('border-white')
   const [showColorPicker, setShowColorPicker] = useState(false)
+  const [correctingWithAI, setCorrectingWithAI] = useState(false)
 
   const colorOptions = [
     { name: 'Branho Padrão', bg: 'bg-white', text: 'text-slate-900', border: 'border-white' },
@@ -137,6 +139,76 @@ const FlashcardPIP = () => {
     }
   }
 
+  const handleAICorrection = async () => {
+    setCorrectingWithAI(true)
+    try {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        alert('API Key do Gemini não configurada')
+        setCorrectingWithAI(false)
+        return
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+
+      const prompt = `Analise o seguinte flashcard e determine se está correto. Se estiver incorreto, forneça a versão corrigida.
+
+Pergunta: ${currentCard.pergunta}
+Resposta: ${currentCard.resposta}
+
+Responda APENAS em formato JSON, sem nenhum texto adicional:
+{
+  "isCorrect": true/false,
+  "correctedPergunta": "pergunta corrigida (se necessário)",
+  "correctedResposta": "resposta corrigida (se necessário)",
+  "reason": "motivo da correção (se houver erro)"
+}
+
+Se estiver correto, retorne isCorrect: true e deixe os outros campos vazios.`
+
+      const result = await model.generateContent(prompt)
+      const responseText = result.response.text()
+      
+      // Extrair JSON da resposta
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        throw new Error('Não foi possível extrair JSON da resposta')
+      }
+
+      const aiResponse = JSON.parse(jsonMatch[0])
+
+      if (aiResponse.isCorrect) {
+        alert('O flashcard está correto!')
+      } else {
+        // Aplicar correções
+        const correctedPergunta = aiResponse.correctedPergunta || currentCard.pergunta
+        const correctedResposta = aiResponse.correctedResposta || currentCard.resposta
+
+        const cardRef = doc(db, 'courses', courseId, 'flashcards', currentCard.id)
+        await setDoc(cardRef, {
+          pergunta: correctedPergunta,
+          resposta: correctedResposta,
+          updatedAt: new Date().toISOString()
+        }, { merge: true })
+        
+        // Update local state
+        setCards(prev => prev.map(card => 
+          card.id === currentCard.id 
+            ? { ...card, pergunta: correctedPergunta, resposta: correctedResposta }
+            : card
+        ))
+
+        alert(`Flashcard corrigido!\n\nMotivo: ${aiResponse.reason}`)
+      }
+    } catch (error) {
+      console.error('Erro ao corrigir com IA:', error)
+      alert('Erro ao corrigir com IA. Tente novamente.')
+    } finally {
+      setCorrectingWithAI(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
@@ -186,6 +258,22 @@ const FlashcardPIP = () => {
 
       {/* Color picker button */}
       <div className="fixed top-4 right-4 z-50 flex gap-2">
+        <button
+          type="button"
+          onClick={handleAICorrection}
+          disabled={correctingWithAI}
+          className="p-3 rounded-lg bg-white text-slate-900 hover:opacity-80 transition disabled:opacity-50"
+          title="Corrigir com IA"
+        >
+          {correctingWithAI ? (
+            <div className="animate-spin rounded-full h-6 w-6 border-2 border-slate-900 border-t-transparent" />
+          ) : (
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          )}
+        </button>
+        
         <button
           type="button"
           onClick={() => {
