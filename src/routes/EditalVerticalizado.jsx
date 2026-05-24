@@ -629,11 +629,12 @@ ESTRUTURA DO EDITAL:
 ${JSON.stringify(editalStructure, null, 2)}
 
 INSTRUÇÕES:
-1. Gere EXATAMENTE os flashcards seguindo a estrutura acima - disciplina por disciplina, tópico por tópico
-2. Para CADA tópico, gere 10-15 flashcards de qualidade (MÍNIMO OBRIGATÓRIO DE 30 FLASHCARDS NO TOTAL)
-3. NÃO gere menos de 30 flashcards no total. Se houver poucos tópicos, gere mais flashcards por tópico para atingir o mínimo.
-4. Os flashcards devem ser educacionais, didáticos e focados no aprendizado
-4. Formato JSON:
+1. Gere os flashcards seguindo a estrutura acima - disciplina por disciplina, tópico por tópico
+2. Para CADA tópico, gere a quantidade NECESSÁRIA de flashcards para cobrir completamente o conteúdo específico
+3. NÃO há número mínimo ou máximo - crie quantos flashcards forem necessários para cobrir todo o conteúdo de cada tópico
+4. Se o tópico for extenso, gere mais flashcards. Se for conciso, gere menos. Foque na qualidade e cobertura completa.
+5. Os flashcards devem ser educacionais, didáticos e focados no aprendizado
+6. Formato JSON:
 {
   "flashcards": [
     {

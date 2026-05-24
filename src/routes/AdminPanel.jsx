@@ -1788,11 +1788,12 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
       })
 
       prompt += `\nINSTRUÇÕES:\n`
-      prompt += `1. Gere EXATAMENTE 10-15 flashcards por tópico (MÍNIMO OBRIGATÓRIO DE 30 FLASHCARDS NO TOTAL)\n`
-      prompt += `2. NÃO gere menos de 30 flashcards no total. Se houver poucos tópicos, gere mais flashcards por tópico para atingir o mínimo.\n`
-      prompt += `3. Formato: PERGUNTA || RESPOSTA\n`
-      prompt += `4. Seja objetivo e educacional\n`
-      prompt += `5. Retorne apenas JSON válido:\n`
+      prompt += `1. Gere a quantidade NECESSÁRIA de flashcards por tópico para cobrir completamente o conteúdo específico\n`
+      prompt += `2. NÃO há número mínimo ou máximo - crie quantos flashcards forem necessários para cobrir todo o conteúdo de cada tópico\n`
+      prompt += `3. Se o tópico for extenso, gere mais flashcards. Se for conciso, gere menos. Foque na qualidade e cobertura completa.\n`
+      prompt += `4. Formato: PERGUNTA || RESPOSTA\n`
+      prompt += `5. Seja objetivo e educacional\n`
+      prompt += `6. Retorne apenas JSON válido:\n`
       prompt += `{"flashcards": [{"frente": "pergunta", "verso": "resposta"}]}\n`
 
       setFlashcardGenProgress('Enviando para IA...')

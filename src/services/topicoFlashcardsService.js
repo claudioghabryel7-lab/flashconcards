@@ -75,8 +75,9 @@ BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 12000)}\n\n` : ''}
 
 INSTRUÇÕES:
-- Gere EXATAMENTE 30-40 flashcards de alta qualidade APENAS sobre este tópico (MÍNIMO OBRIGATÓRIO DE 30 FLASHCARDS NO TOTAL)
-- NÃO gere menos de 30 flashcards no total. Se necessário, gere mais flashcards para atingir o mínimo.
+- Gere a quantidade NECESSÁRIA de flashcards de alta qualidade para cobrir completamente este tópico específico
+- NÃO há número mínimo ou máximo - crie quantos flashcards forem necessários para cobrir todo o conteúdo do tópico
+- Se o tópico for extenso, gere mais flashcards. Se for conciso, gere menos. Foque na qualidade e cobertura completa.
 - Perguntas objetivas; respostas claras e completas
 - Conteúdo específico para o concurso — nada genérico
 - Linguagem formal, nível concurso público
@@ -130,43 +131,7 @@ FORMATO JSON (apenas JSON válido):
     throw new Error('Nenhum flashcard gerado pela IA')
   }
 
-  // Verificar se gerou menos de 30 flashcards e regerar se necessário
-  if (items.length < 30) {
-    console.log(`⚠️ Apenas ${items.length} flashcards gerados. Mínimo necessário: 30. Regenerando...`)
-    
-    // Fazer uma segunda chamada para completar até 30
-    const additionalPrompt = `${prompt}\n\nJá foram gerados ${items.length} flashcards. Gere mais ${30 - items.length} flashcards adicionais sobre o mesmo tópico, com perguntas diferentes das anteriores.`
-    
-    const additionalResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: additionalPrompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
-        }),
-      }
-    )
-
-    const additionalData = await additionalResponse.json()
-    if (additionalResponse.ok) {
-      const additionalText = additionalData.candidates?.[0]?.content?.parts?.[0]?.text || ''
-      const additionalStart = additionalText.indexOf('{')
-      const additionalEnd = additionalText.lastIndexOf('}')
-      
-      if (additionalStart !== -1 && additionalEnd !== -1) {
-        let additionalParsed
-        try {
-          additionalParsed = JSON.parse(additionalText.substring(additionalStart, additionalEnd + 1))
-        } catch {
-          const { default: jsonrepair } = await import('jsonrepair')
-          additionalParsed = JSON.parse(jsonrepair(additionalText.substring(additionalStart, additionalEnd + 1)))
-        }
-        
-        const additionalItems = additionalParsed.flashcards || []
-        items.push(...additionalItems)
-        console.log(`✅ Total de flashcards após regeração: ${items.length}`)
+  console.log(`✅ ${items.length} flashcards gerados para o tópico "${topicKey}"`)
       }
     }
   }

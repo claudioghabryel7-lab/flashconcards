@@ -1079,7 +1079,7 @@ GERAÇÃO DE FLASHCARDS - NÍVEL ${difficulty.toUpperCase()} - CONTEÚDO NOVO
 
 MÓDULO ESPECÍFICO: ${selectedModulo}
 NÍVEL DE DIFICULDADE: ${difficulty}
-QUANTIDADE: 30 flashcards
+QUANTIDADE: A quantidade necessária para cobrir completamente o conteúdo do módulo
 
 ⚠️ INSTRUÇÃO CRÍTICA - CRIE CONTEÚDO 100% NOVO:
 - NÃO repita flashcards existentes
@@ -1117,9 +1117,10 @@ ESTRATÉGIAS PARA CRIAR CONTEÚDO NOVO:
 8. Implicações práticas e teóricas
 
 TAREFA:
-Crie exatamente 30 flashcards educacionais de nível ${difficulty} para o módulo "${selectedModulo}" da matéria "${selectedMateria}". 
+Crie a quantidade NECESSÁRIA de flashcards educacionais de nível ${difficulty} para o módulo "${selectedModulo}" da matéria "${selectedMateria}". 
 
 IMPORTANTE: Cada flashcard deve ser único, original e explorar aspectos diferentes do conteúdo. Evite repetir perguntas ou respostas que já existam.
+NÃO há número mínimo ou máximo - crie quantos flashcards forem necessários para cobrir completamente o conteúdo do módulo.
 
 FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON VÁLIDO):
 {
@@ -1136,7 +1137,7 @@ FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON VÁLIDO):
 }
 
 VALIDAÇÃO FINAL:
-- ✅ 30 flashcards criados
+- ✅ Flashcards criados em quantidade suficiente para cobrir o conteúdo
 - ✅ Todos do nível ${difficulty}
 - ✅ Conteúdo 100% original e não repetido
 - ✅ Linguagem apropriada para o nível
