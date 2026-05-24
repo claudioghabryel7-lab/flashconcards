@@ -182,7 +182,7 @@ INSTRUÇÕES:
 - Deve estar relacionado com questões sociais, políticas ou administrativas pertinentes ao cargo
 - Seja específico: não use temas genéricos
 - O tema deve permitir uma dissertação argumentativa de 25-30 linhas
-- Se você tiver conhecimento sobre este concurso específico, use temas típicos dessa área
+- Se você tiver conhecimento sobre este concurso específico, use temas típicos dessa área.
 
 Retorne APENAS o tema da redação, sem explicações, sem aspas, sem formatação especial.
 O tema deve ser claro e direto.
