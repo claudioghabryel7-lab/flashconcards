@@ -124,19 +124,19 @@ const Reviews = () => {
   if (loading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg animate-pulse">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-xl animate-pulse">
             <div className="flex gap-1 mb-4">
               {[1, 2, 3, 4, 5].map((star) => (
-                <div key={star} className="h-5 w-5 bg-gray-300 rounded-full"></div>
+                <div key={star} className="h-5 w-5 bg-slate-200 dark:bg-slate-700 rounded-full"></div>
               ))}
             </div>
-            <div className="h-20 bg-gray-300 rounded-lg mb-4"></div>
+            <div className="h-24 bg-slate-200 dark:bg-slate-700 rounded-xl mb-4"></div>
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 bg-gray-300 rounded-full"></div>
+              <div className="h-12 w-12 bg-slate-200 dark:bg-slate-700 rounded-full"></div>
               <div className="flex-1">
-                <div className="h-4 bg-gray-300 rounded w-24 mb-2"></div>
-                <div className="h-3 bg-gray-300 rounded w-16"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-24 mb-2"></div>
+                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16"></div>
               </div>
             </div>
           </div>
@@ -147,25 +147,24 @@ const Reviews = () => {
 
   return (
     <div className="space-y-8">
-      {/* Botão para adicionar avaliação - visível para todos */}
+      {/* Botão para adicionar avaliação */}
       <div className="text-center">
         <button
           onClick={() => {
             if (!user) {
-              // Redirecionar para login/cadastro se não estiver logado
               navigate('/login')
               return
             }
             setShowForm(!showForm)
           }}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl hover:scale-105"
+          className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-xl font-bold shadow-xl hover:shadow-2xl transition-all hover:scale-105"
         >
           <StarIcon className="h-5 w-5" />
           {user ? 'Deixar sua avaliação' : 'Avaliar como aluno'}
         </button>
         {!user && (
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-            🎓 Crie sua conta gratuita e compartilhe sua experiência com nossa comunidade
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-3">
+            Crie sua conta gratuita e compartilhe sua experiência
           </p>
         )}
       </div>
@@ -177,44 +176,44 @@ const Reviews = () => {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl border border-slate-200 dark:border-slate-700"
+            className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-2xl border border-slate-200 dark:border-slate-700"
           >
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
                   Sua avaliação
                 </label>
-                <div className="flex gap-1">
+                <div className="flex gap-2 justify-center">
                   {renderStars(formData.rating, true, (rating) => 
                     setFormData(prev => ({ ...prev, rating }))
                   )}
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
                   Seu comentário
                 </label>
                 <textarea
                   value={formData.comment}
                   onChange={(e) => setFormData(prev => ({ ...prev, comment: e.target.value }))}
                   placeholder="Compartilhe sua experiência com a plataforma..."
-                  rows={3}
-                  className="w-full rounded-xl border border-slate-300 dark:border-slate-600 p-3 text-sm focus:border-blue-500 focus:outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 transition-all resize-none"
+                  rows={4}
+                  className="w-full rounded-2xl border-2 border-slate-300 dark:border-slate-600 p-4 text-base focus:border-purple-500 focus:outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 transition-all resize-none"
                   disabled={submitting}
                 />
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-4">
                 <button
                   type="submit"
                   disabled={submitting || formData.rating === 0 || !formData.comment.trim()}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl px-6 py-3 font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-2xl px-8 py-4 font-bold hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? 'Enviando...' : 'Enviar avaliação'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition-all"
+                  className="px-8 py-4 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-all"
                 >
                   Cancelar
                 </button>
@@ -224,11 +223,11 @@ const Reviews = () => {
         )}
       </AnimatePresence>
 
-      {/* Carrossel de 3 comentários em loop - Responsivo */}
+      {/* Lista de avaliações */}
       {reviews.length === 0 ? (
-        <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
-          <div className="text-6xl mb-4">💬</div>
-          <h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300 mb-2">
+        <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-3xl border-2 border-dashed border-slate-300 dark:border-slate-700">
+          <StarIcon className="h-16 w-16 mx-auto mb-4 text-slate-400" />
+          <h3 className="text-xl font-bold text-slate-700 dark:text-slate-300 mb-2">
             Nenhuma avaliação ainda
           </h3>
           <p className="text-slate-500 dark:text-slate-400">
@@ -236,148 +235,40 @@ const Reviews = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* Desktop: Carrossel de 3 colunas */}
-          <div className="hidden lg:block relative overflow-hidden rounded-2xl">
-            <div className="relative">
-              <div className="flex animate-scroll-horizontal">
-                {/* Primeiro conjunto de avaliações */}
-                {reviews.map((review, index) => (
-                  <div key={`first-${review.id}`} className="w-1/3 flex-shrink-0 px-2">
-                    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-6 shadow-xl border border-slate-200 dark:border-slate-700 h-full hover:shadow-2xl hover:scale-105 transition-all duration-300 group">
-                      <div className="flex gap-1 mb-4">
-                        {renderStars(review.rating)}
-                      </div>
-                      <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed line-clamp-4 h-24 italic">
-                        "{review.comment}"
-                      </p>
-                      <div className="flex items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-blue-500 transition-all">
-                          {(review.userName || 'A')[0].toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-slate-900 dark:text-slate-100 truncate">
-                            {review.userName || 'Aluno'}
-                          </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                            {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric'
-                            }) || 'Recentemente'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                
-                {/* Segundo conjunto duplicado para loop infinito */}
-                {reviews.map((review, index) => (
-                  <div key={`second-${review.id}`} className="w-1/3 flex-shrink-0 px-2">
-                    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-6 shadow-xl border border-slate-200 dark:border-slate-700 h-full hover:shadow-2xl hover:scale-105 transition-all duration-300 group">
-                      <div className="flex gap-1 mb-4">
-                        {renderStars(review.rating)}
-                      </div>
-                      <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed line-clamp-4 h-24 italic">
-                        "{review.comment}"
-                      </p>
-                      <div className="flex items-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-blue-500 transition-all">
-                          {(review.userName || 'A')[0].toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-slate-900 dark:text-slate-100 truncate">
-                            {review.userName || 'Aluno'}
-                          </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                            {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric'
-                            }) || 'Recentemente'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {reviews.map((review, index) => (
+            <motion.div
+              key={review.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: index * 0.1 }}
+              className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 border border-slate-200 dark:border-slate-700 group"
+            >
+              <div className="flex gap-1 mb-4">
+                {renderStars(review.rating)}
               </div>
-            </div>
-
-            {/* Gradientes nas laterais para efeito visual */}
-            <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-white via-white/80 to-transparent dark:from-slate-50 dark:via-slate-800/80 dark:to-transparent pointer-events-none z-10"></div>
-            <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-white via-white/80 to-transparent dark:from-slate-50 dark:via-slate-800/80 dark:to-transparent pointer-events-none z-10"></div>
-          </div>
-
-          {/* Tablet: Grid de 2 colunas */}
-          <div className="hidden md:block lg:hidden grid grid-cols-2 gap-4">
-            {reviews.slice(0, 4).map((review, index) => (
-              <motion.div
-                key={review.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-5 shadow-xl hover:shadow-2xl transition-all hover:scale-105 border border-slate-200 dark:border-slate-700 group"
-              >
-                <div className="flex gap-1 mb-3">
-                  {renderStars(review.rating)}
+              <p className="text-slate-700 dark:text-slate-300 mb-6 leading-relaxed line-clamp-4 min-h-[5rem] italic">
+                "{review.comment}"
+              </p>
+              <div className="flex items-center gap-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <div className="h-14 w-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-lg shadow-lg ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-purple-500 transition-all">
+                  {(review.userName || 'A')[0].toUpperCase()}
                 </div>
-                <p className="text-slate-700 dark:text-slate-300 mb-3 leading-relaxed line-clamp-3 text-sm min-h-[3rem] italic">
-                  "{review.comment}"
-                </p>
-                <div className="flex items-center gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-blue-500 transition-all">
-                    {(review.userName || 'A')[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">
-                      {review.userName || 'Aluno'}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                      {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
-                        month: 'short',
-                        year: 'numeric'
-                      }) || 'Recentemente'}
-                    </p>
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                    {review.userName || 'Aluno'}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    {review.createdAt?.toDate?.().toLocaleDateString('pt-BR', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
+                    }) || 'Recentemente'}
+                  </p>
                 </div>
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Mobile: 1 coluna com carrossel vertical */}
-          <div className="md:hidden space-y-4">
-            {reviews.slice(0, 3).map((review, index) => (
-              <motion.div
-                key={review.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-5 shadow-xl border border-slate-200 dark:border-slate-700 group"
-              >
-                <div className="flex gap-1 mb-3">
-                  {renderStars(review.rating)}
-                </div>
-                <p className="text-slate-700 dark:text-slate-300 mb-4 leading-relaxed text-sm italic">
-                  "{review.comment}"
-                </p>
-                <div className="flex items-center gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-blue-500 transition-all">
-                    {(review.userName || 'A')[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">
-                      {review.userName || 'Aluno'}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                      {review.createdAt?.toDate?.().toLocaleDateString('pt-BR') || 'Recentemente'}
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+              </div>
+            </motion.div>
+          ))}
         </div>
       )}
     </div>

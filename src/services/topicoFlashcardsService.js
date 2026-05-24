@@ -132,9 +132,6 @@ FORMATO JSON (apenas JSON válido):
   }
 
   console.log(`✅ ${items.length} flashcards gerados para o tópico "${topicKey}"`)
-      }
-    }
-  }
 
   const batch = writeBatch(db)
   const flashcardsRef = collection(db, 'courses', resolvedId, 'flashcards')
