@@ -75,9 +75,9 @@ BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 12000)}\n\n` : ''}
 
 INSTRUÇÕES:
-- Gere a quantidade NECESSÁRIA de flashcards de alta qualidade para cobrir completamente este tópico específico
-- NÃO há número mínimo ou máximo - crie quantos flashcards forem necessários para cobrir todo o conteúdo do tópico
-- Se o tópico for extenso, gere mais flashcards. Se for conciso, gere menos. Foque na qualidade e cobertura completa.
+- Gere NO MÍNIMO 50 flashcards e ATÉ 100 flashcards para cobrir completamente este tópico específico
+- O MÍNIMO OBRIGATÓRIO é 50 flashcards - não gere menos que isso
+- Se o tópico for extenso, gere até 100 flashcards para cobertura completa
 - Perguntas objetivas; respostas claras e completas
 - Conteúdo específico para o concurso — nada genérico
 - Linguagem formal, nível concurso público

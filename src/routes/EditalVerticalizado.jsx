@@ -630,9 +630,9 @@ ${JSON.stringify(editalStructure, null, 2)}
 
 INSTRUÇÕES:
 1. Gere os flashcards seguindo a estrutura acima - disciplina por disciplina, tópico por tópico
-2. Para CADA tópico, gere a quantidade NECESSÁRIA de flashcards para cobrir completamente o conteúdo específico
-3. NÃO há número mínimo ou máximo - crie quantos flashcards forem necessários para cobrir todo o conteúdo de cada tópico
-4. Se o tópico for extenso, gere mais flashcards. Se for conciso, gere menos. Foque na qualidade e cobertura completa.
+2. Para CADA tópico, gere NO MÍNIMO 50 flashcards e ATÉ 100 flashcards para cobrir completamente o conteúdo específico
+3. O MÍNIMO OBRIGATÓRIO é 50 flashcards por tópico - não gere menos que isso
+4. Se o tópico for extenso, gere até 100 flashcards para cobertura completa
 5. Os flashcards devem ser educacionais, didáticos e focados no aprendizado
 6. Formato JSON:
 {

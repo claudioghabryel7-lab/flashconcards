@@ -1117,10 +1117,11 @@ ESTRATÉGIAS PARA CRIAR CONTEÚDO NOVO:
 8. Implicações práticas e teóricas
 
 TAREFA:
-Crie a quantidade NECESSÁRIA de flashcards educacionais de nível ${difficulty} para o módulo "${selectedModulo}" da matéria "${selectedMateria}". 
+Crie NO MÍNIMO 50 flashcards e ATÉ 100 flashcards educacionais de nível ${difficulty} para o módulo "${selectedModulo}" da matéria "${selectedMateria}". 
 
 IMPORTANTE: Cada flashcard deve ser único, original e explorar aspectos diferentes do conteúdo. Evite repetir perguntas ou respostas que já existam.
-NÃO há número mínimo ou máximo - crie quantos flashcards forem necessários para cobrir completamente o conteúdo do módulo.
+O MÍNIMO OBRIGATÓRIO é 50 flashcards - não gere menos que isso.
+Se o módulo for extenso, gere até 100 flashcards para cobertura completa.
 
 FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON VÁLIDO):
 {

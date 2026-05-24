@@ -1788,9 +1788,9 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
       })
 
       prompt += `\nINSTRUÇÕES:\n`
-      prompt += `1. Gere a quantidade NECESSÁRIA de flashcards por tópico para cobrir completamente o conteúdo específico\n`
-      prompt += `2. NÃO há número mínimo ou máximo - crie quantos flashcards forem necessários para cobrir todo o conteúdo de cada tópico\n`
-      prompt += `3. Se o tópico for extenso, gere mais flashcards. Se for conciso, gere menos. Foque na qualidade e cobertura completa.\n`
+      prompt += `1. Gere NO MÍNIMO 50 flashcards e ATÉ 100 flashcards por tópico para cobrir completamente o conteúdo específico\n`
+      prompt += `2. O MÍNIMO OBRIGATÓRIO é 50 flashcards por tópico - não gere menos que isso\n`
+      prompt += `3. Se o tópico for extenso, gere até 100 flashcards para cobertura completa\n`
       prompt += `4. Formato: PERGUNTA || RESPOSTA\n`
       prompt += `5. Seja objetivo e educacional\n`
       prompt += `6. Retorne apenas JSON válido:\n`
