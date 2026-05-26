@@ -47,6 +47,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import { jsonrepair } from 'jsonrepair'
 import LawDetector from '../utils/lawDetector'
 import LawDownloader from '../utils/lawDownloader'
+import { generateShareToken } from '../utils/shareToken'
 
 const MATERIAS = [
   'Português',
@@ -268,6 +269,15 @@ const AdminPanel = () => {
   const [tempModuleOrder, setTempModuleOrder] = useState({}) // Ordem temporária de módulos
   const [expandedMateriaForModules, setExpandedMateriaForModules] = useState(null) // Matéria expandida para editar módulos
   const [activeId, setActiveId] = useState(null) // ID do item sendo arrastado
+  
+  // Estados para compartilhamento temporário de flashcards
+  const [shareForm, setShareForm] = useState({
+    disciplina: '',
+    modulo: '',
+    topicKey: '',
+  })
+  const [generatedShareLink, setGeneratedShareLink] = useState('')
+  const [generatingShareLink, setGeneratingShareLink] = useState(false)
   
   // Sensores para drag and drop
   const sensors = useSensors(
@@ -5094,6 +5104,37 @@ CRÍTICO:
       setAllMateriasProgress(`❌ Erro: ${err.message}`)
     } finally {
       setGeneratingAllMaterias(false)
+    }
+  }
+
+  // Gerar link de compartilhamento temporário de flashcards
+  const handleGenerateShareLink = async () => {
+    if (!shareForm.disciplina || !shareForm.modulo) {
+      setMessage('❌ Preencha a disciplina e o módulo')
+      return
+    }
+
+    setGeneratingShareLink(true)
+    try {
+      const token = generateShareToken({
+        courseId: selectedCourseForFlashcards || 'alego-default',
+        disciplina: shareForm.disciplina,
+        modulo: shareForm.modulo,
+        topicKey: shareForm.topicKey || '',
+      })
+
+      const baseUrl = window.location.origin
+      const shareLink = `${baseUrl}/share-flashcards/${token}`
+      setGeneratedShareLink(shareLink)
+      
+      // Copiar para clipboard automaticamente
+      await navigator.clipboard.writeText(shareLink)
+      setMessage('✅ Link gerado e copiado para o clipboard! O link expira em 1 hora após o primeiro acesso.')
+    } catch (error) {
+      console.error('Erro ao gerar link:', error)
+      setMessage('❌ Erro ao gerar link de compartilhamento')
+    } finally {
+      setGeneratingShareLink(false)
     }
   }
 
@@ -10625,6 +10666,101 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                     </div>
                   )
                 })()}
+
+                {/* Compartilhar Flashcards Temporariamente */}
+                {selectedCourseForFlashcards && (
+                  <div className="relative overflow-hidden bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-2xl shadow-xl border border-orange-200 dark:border-orange-700 p-6">
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-orange-500/5 to-amber-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                    <div className="relative">
+                      <p className="flex items-center gap-2 text-lg font-bold text-orange-700 dark:text-orange-300">
+                        <ShareIcon className="h-6 w-6" />
+                        Compartilhar Flashcards Temporariamente
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        Gere um link temporário para compartilhar flashcards de um tópico. O link expira em 1 hora após o primeiro acesso e não requer login.
+                      </p>
+
+                      <div className="mt-6 space-y-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            Disciplina *
+                          </label>
+                          <input
+                            type="text"
+                            value={shareForm.disciplina}
+                            onChange={(e) => setShareForm(prev => ({ ...prev, disciplina: e.target.value }))}
+                            placeholder="Ex: Português, Direito Constitucional..."
+                            className="w-full rounded-xl border-2 border-orange-200 dark:border-orange-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:border-orange-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            Módulo/Tópico *
+                          </label>
+                          <input
+                            type="text"
+                            value={shareForm.modulo}
+                            onChange={(e) => setShareForm(prev => ({ ...prev, modulo: e.target.value }))}
+                            placeholder="Ex: 1.1 - Interpretação de Texto"
+                            className="w-full rounded-xl border-2 border-orange-200 dark:border-orange-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:border-orange-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            Topic Key (opcional)
+                          </label>
+                          <input
+                            type="text"
+                            value={shareForm.topicKey}
+                            onChange={(e) => setShareForm(prev => ({ ...prev, topicKey: e.target.value }))}
+                            placeholder="Ex: portugues-interpretacao"
+                            className="w-full rounded-xl border-2 border-orange-200 dark:border-orange-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:border-orange-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleGenerateShareLink}
+                          disabled={generatingShareLink || !shareForm.disciplina || !shareForm.modulo}
+                          className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white px-6 py-3 font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {generatingShareLink ? 'Gerando link...' : '🔗 Gerar Link de Compartilhamento'}
+                        </button>
+
+                        {generatedShareLink && (
+                          <div className="mt-4 rounded-lg bg-white dark:bg-slate-800 p-4 border border-orange-200 dark:border-orange-700">
+                            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                              Link gerado:
+                            </p>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                readOnly
+                                value={generatedShareLink}
+                                className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-sm text-slate-600 dark:text-slate-400"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(generatedShareLink)
+                                  setMessage('✅ Link copiado para o clipboard!')
+                                }}
+                                className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-semibold hover:opacity-80 transition"
+                              >
+                                Copiar
+                              </button>
+                            </div>
+                            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                              ⏰ Este link expira em 1 hora após o primeiro acesso.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Gerenciar Matérias do Curso (apenas para cursos personalizados) */}
                 {selectedCourseForFlashcards && (

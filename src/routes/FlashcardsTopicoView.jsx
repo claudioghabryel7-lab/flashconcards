@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { doc, getDoc, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
-import { ChevronLeftIcon, PhotoIcon } from '@heroicons/react/24/outline'
+import { ChevronLeftIcon, PhotoIcon, ShareIcon } from '@heroicons/react/24/outline'
 import FlashcardList from '../components/FlashcardList'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -10,12 +10,14 @@ import {
   fetchFlashcardsForTopico,
   generateAndSaveFlashcardsForTopico,
 } from '../services/topicoFlashcardsService'
+import { generateShareToken } from '../utils/shareToken'
 import dayjs from 'dayjs'
+import toast from 'react-hot-toast'
 
 const FlashcardsTopicoView = () => {
   const { courseId: courseIdParam } = useParams()
   const [searchParams] = useSearchParams()
-  const { user, favorites, updateFavorites, profile } = useAuth()
+  const { user, favorites, updateFavorites, profile, isAdmin } = useAuth()
   const { darkMode } = useDarkMode()
 
   const disciplina = decodeURIComponent(searchParams.get('disciplina') || '')
@@ -199,6 +201,26 @@ const FlashcardsTopicoView = () => {
     window.open(pipUrl, 'flashcard-pip', 'width=800,height=600,scrollbars=yes,resizable=yes')
   }
 
+  const handleShareFlashcards = async () => {
+    try {
+      const token = generateShareToken({
+        courseId,
+        disciplina,
+        modulo,
+        topicKey,
+      })
+
+      const baseUrl = window.location.origin
+      const shareLink = `${baseUrl}/share-flashcards/${token}`
+      
+      await navigator.clipboard.writeText(shareLink)
+      toast.success('Link copiado para o clipboard! Expira em 1 hora após o primeiro acesso.')
+    } catch (error) {
+      console.error('Erro ao gerar link:', error)
+      toast.error('Erro ao gerar link de compartilhamento')
+    }
+  }
+
   if (!disciplina || !modulo) {
     return (
       <div className="min-h-screen p-6 text-center">
@@ -232,6 +254,17 @@ const FlashcardsTopicoView = () => {
           </div>
           
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleShareFlashcards}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-bold hover:opacity-80 transition"
+                title="Gerar link temporário de compartilhamento"
+              >
+                <ShareIcon className="h-5 w-5" />
+                <span className="hidden sm:inline">Compartilhar</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={openPIPMode}
