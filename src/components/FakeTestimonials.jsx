@@ -5,7 +5,7 @@ import { CheckCircleIcon, XMarkIcon } from '@heroicons/react/24/solid'
 // Lista de nomes brasileiros aleatórios
 const names = [
   'Ana Silva', 'Carlos Santos', 'Maria Oliveira', 'João Pereira', 'Fernanda Costa',
-  'Ricardo Alves', 'Juliana Lima', 'Pedro Souza', 'Camila Rodrigues', 'Lucas Ferreira',
+  'Ricardo Alves', 'Juliana Lima', 'Pedro Sousa', 'Camila Rodrigues', 'Lucas Ferreira',
   'Beatriz Martins', 'Rafael Gomes', 'Amanda Ribeiro', 'Bruno Carvalho', 'Larissa Araújo',
   'Thiago Barbosa', 'Gabriela Rocha', 'Felipe Dias', 'Isabella Monteiro', 'Gustavo Nunes',
   'Mariana Castro', 'Diego Moura', 'Patrícia Freitas', 'Rodrigo Teixeira', 'Vanessa Lopes'
