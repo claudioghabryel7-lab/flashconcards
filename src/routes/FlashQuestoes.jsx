@@ -547,7 +547,7 @@ EXEMPLO DO FORMATO EXATO (COM 10 QUESTÕES):
       if (apiKey) {
         const genAI = new GoogleGenerativeAI(apiKey)
         // 🔥 OTIMIZAÇÃO: Usar modelos mais rápidos primeiro
-        const modelNames = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro-latest', 'gemini-pro']
+        const modelNames = ['gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-2.5-pro-latest', 'gemini-2.5-pro']
         let lastError = null
         
         for (const modelName of modelNames) {

@@ -3295,9 +3295,7 @@ REGRAS CRÍTICAS:
       // gemini-2.5-flash: Mais recente, rápido e eficiente (recomendado)
       const modelNames = [
         'gemini-2.5-flash',           // Modelo mais recente e recomendado
-        'gemini-1.5-pro-latest',      // Fallback para análises complexas
-        'gemini-1.5-pro',             // Fallback Pro
-        'gemini-pro'                  // Fallback mais antigo
+        'gemini-2.5-pro'              // Fallback para análises complexas
       ]
       let model = null
       let lastError = null
@@ -3716,9 +3714,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       // Modelos disponíveis na API paga do Gemini (ordem de prioridade: melhor primeiro)
       const modelNames = [
         'gemini-2.5-flash',           // Modelo mais recente e recomendado
-        'gemini-1.5-pro-latest',      // Fallback para análises complexas
-        'gemini-1.5-pro',             // Fallback Pro
-        'gemini-pro'                  // Fallback mais antigo
+        'gemini-2.5-pro'              // Fallback para análises complexas
       ]
       let model = null
       let lastError = null
@@ -4583,7 +4579,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const modelNames = ['gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
+      const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
       let lastError = null
       let aiResponse = ''
 
@@ -4827,7 +4823,7 @@ CRÍTICO:
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const modelNames = ['gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
+      const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
       let lastError = null
       let materiasList = []
 
@@ -5153,7 +5149,7 @@ CRÍTICO:
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const modelNames = ['gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
+    const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
     let lastError = null
     let materiasList = []
 
@@ -5248,7 +5244,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const modelNames = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-pro']
+    const modelNames = ['gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-2.5-pro']
     let materiasList = []
 
     // Identificar matérias (mesma lógica)
@@ -5346,7 +5342,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
       }
 
       const genAI = new GoogleGenerativeAI(apiKey)
-      const modelNames = ['gemini-2.5-flash', 'gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-pro']
+      const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
       let lastError = null
       let materiasList = []
 
@@ -6972,9 +6968,9 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                           // Tentar modelos válidos em ordem de prioridade
                           const modelNames = [
                             'gemini-2.5-flash',           // Mais recente e rápido
-                            'gemini-1.5-pro-latest',      // Fallback para análises complexas
-                            'gemini-1.5-pro',             // Fallback Pro
-                            'gemini-pro'                  // Fallback mais antigo
+                            'gemini-2.5-pro',      // Fallback para análises complexas
+                            'gemini-2.5-pro',             // Fallback Pro
+                            'gemini-2.5-pro'                  // Fallback mais antigo
                           ]
                           
                           let model = null
@@ -7003,7 +6999,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                           
                           // Processar edital verticalizado em partes para evitar truncamento
                           // Dividir o edital em chunks menores e processar cada um separadamente
-                          const preferredModel = 'gemini-1.5-pro-latest'
+                          const preferredModel = 'gemini-2.5-pro'
                           
                           let modelForProcessing = null
                           try {
@@ -8693,9 +8689,9 @@ ESTRUTURA SUGERIDA:
                           // Tentar modelos válidos em ordem de prioridade
                           const modelNames = [
                             'gemini-2.5-flash',           // Mais recente e rápido
-                            'gemini-1.5-pro-latest',      // Fallback para análises complexas
-                            'gemini-1.5-pro',             // Fallback Pro
-                            'gemini-pro'                  // Fallback mais antigo
+                            'gemini-2.5-pro',      // Fallback para análises complexas
+                            'gemini-2.5-pro',             // Fallback Pro
+                            'gemini-2.5-pro'                  // Fallback mais antigo
                           ]
                           
                           let model = null
@@ -8723,7 +8719,7 @@ ESTRUTURA SUGERIDA:
                           }
                 
                           // Usar modelo com maior context window para editais grandes
-                          const preferredModel = 'gemini-1.5-pro-latest'
+                          const preferredModel = 'gemini-2.5-pro'
                           let modelForProcessing = null
                           try {
                             modelForProcessing = genAI.getGenerativeModel({ 
