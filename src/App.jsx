@@ -171,8 +171,6 @@ function App() {
         <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/" element={<PublicHome />} />
-          {/* Rota de teste */}
-          <Route path="/test-share" element={<div className="min-h-screen bg-slate-900 flex items-center justify-center text-white text-2xl">🚀 TESTE DE ROTA</div>} />
           {/* Página de Compartilhamento de Flashcards - Acessível sem login */}
           <Route path="/share-flashcards/:token" element={<SharedFlashcardPIP />} />
           <Route path="/guia-estudos" element={<GuiaEstudos />} />

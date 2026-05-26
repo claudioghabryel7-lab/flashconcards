@@ -1,57 +1,25 @@
-import CryptoJS from 'crypto-js'
-
-const SECRET_KEY = import.meta.env.VITE_SHARE_SECRET_KEY || 'flashconcards-share-secret-2024'
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { db } from '../firebase/config'
 
 /**
- * Gera um token temporário para compartilhamento de flashcards
+ * Gera um token temporário para compartilhamento de flashcards e salva no Firestore
  * @param {Object} data - { courseId, disciplina, modulo, topicKey }
- * @returns {string} Token criptografado em base64
+ * @returns {string} Token gerado
  */
-export function generateShareToken(data) {
+export async function generateShareToken(data) {
+  // Gerar um token único
+  const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+  
   const payload = {
     ...data,
-    createdAt: Date.now(),
-    expiresAt: Date.now() + (60 * 60 * 1000), // 1 hora
+    active: true,
+    createdAt: serverTimestamp(),
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hora
+    accessCount: 0,
   }
   
-  const jsonString = JSON.stringify(payload)
-  const encrypted = CryptoJS.AES.encrypt(jsonString, SECRET_KEY).toString()
-  return encrypted
-}
-
-/**
- * Verifica e decodifica um token de compartilhamento
- * @param {string} token - Token criptografado
- * @returns {Object|null} Dados decodificados ou null se inválido/expirado
- */
-export function verifyShareToken(token) {
-  try {
-    const decrypted = CryptoJS.AES.decrypt(token, SECRET_KEY)
-    const jsonString = decrypted.toString(CryptoJS.enc.Utf8)
-    
-    if (!jsonString) {
-      return null
-    }
-    
-    const payload = JSON.parse(jsonString)
-    
-    // Verifica se expirou
-    if (Date.now() > payload.expiresAt) {
-      return null
-    }
-    
-    return payload
-  } catch (error) {
-    console.error('Erro ao verificar token:', error)
-    return null
-  }
-}
-
-/**
- * Verifica se o token é válido (não expirado)
- * @param {string} token - Token criptografado
- * @returns {boolean}
- */
-export function isTokenValid(token) {
-  return verifyShareToken(token) !== null
+  // Salvar no Firestore
+  await setDoc(doc(db, 'sharedFlashcards', token), payload)
+  
+  return token
 }

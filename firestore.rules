@@ -177,7 +177,7 @@ service cloud.firestore {
       }
       
       match /flashcards/{flashcardId} {
-        allow read: if isAuthenticated();
+        allow read: if true;
         allow create: if isAuthenticated() && 
                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
@@ -262,6 +262,17 @@ service cloud.firestore {
       allow update: if isAdmin() || 
                     (isAuthenticated() && 
                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredUsers', 'accessCount', 'lastAccessedAt']));
+    }
+    
+    match /sharedFlashcards/{tokenId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin() || 
+                    (isAuthenticated() && 
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accessCount', 'lastAccessedAt'])) ||
+                    (!isAuthenticated() &&
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accessCount', 'lastAccessedAt']));
+      allow delete: if isAdmin();
     }
     
     match /passwordResetTokens/{tokenId} {

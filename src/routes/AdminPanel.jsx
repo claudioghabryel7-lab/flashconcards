@@ -5116,7 +5116,7 @@ CRÍTICO:
 
     setGeneratingShareLink(true)
     try {
-      const token = generateShareToken({
+      const token = await generateShareToken({
         courseId: selectedCourseForFlashcards || 'alego-default',
         disciplina: shareForm.disciplina,
         modulo: shareForm.modulo,

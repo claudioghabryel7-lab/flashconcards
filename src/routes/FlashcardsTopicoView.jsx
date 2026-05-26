@@ -203,7 +203,7 @@ const FlashcardsTopicoView = () => {
 
   const handleShareFlashcards = async () => {
     try {
-      const token = generateShareToken({
+      const token = await generateShareToken({
         courseId,
         disciplina,
         modulo,
