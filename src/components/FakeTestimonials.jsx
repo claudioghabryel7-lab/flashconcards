@@ -8,7 +8,7 @@ const names = [
   'Ricardo Alves', 'Juliana Lima', 'Pedro Souza', 'Camila Rodrigues', 'Lucas Ferreira',
   'Beatriz Martins', 'Rafael Gomes', 'Amanda Ribeiro', 'Bruno Carvalho', 'Larissa Araújo',
   'Thiago Barbosa', 'Gabriela Rocha', 'Felipe Dias', 'Isabela Monteiro', 'Gustavo Nunes',
-  'Mariana Castro', 'Diego Moura', 'Patrícia Freitas', 'Rodrigo Teixeira', 'Vanessa Lopes'
+  'Mariana Castro', 'Diego Moura', 'Patrícia Freitas', 'Rodrigo Teixeira', 'Vanesa Lopes'
 ]
 
 // Função para gerar tempo aleatório
