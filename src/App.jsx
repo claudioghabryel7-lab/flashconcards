@@ -9,6 +9,8 @@ import PopupBanner from './components/PopupBanner'
 import OfflineIndicator from './components/OfflineIndicator'
 // PublicHome importado diretamente (sem lazy loading) para melhor performance na página inicial
 import PublicHome from './routes/PublicHome'
+// SharedFlashcardPIP importado diretamente (sem lazy loading) para funcionar imediatamente
+import SharedFlashcardPIP from './components/SharedFlashcardPIP'
 
 // Lazy load de rotas pesadas
 const AdminPanel = lazy(() => import('./routes/AdminPanel'))
@@ -110,6 +112,8 @@ function App() {
     
     // Verificar se é a página em branco (sem Header/Footer do site principal)
     const isBlankPage = location.pathname.startsWith('/blank')
+    // Verificar se é página PIP (sem Header/Footer)
+    const isPIPPage = location.pathname.startsWith('/flashcards/pip') || location.pathname.startsWith('/share-flashcards')
     
     // Loading component otimizado
     const LoadingFallback = () => (
@@ -162,11 +166,15 @@ function App() {
           minHeight: '100vh'
         }}
       >
-      {!location.pathname.startsWith('/flashcards/pip') && <Header />}
+      {!isPIPPage && <Header />}
       <main className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 py-4 sm:py-6 md:py-8 overflow-x-hidden relative z-10">
         <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/" element={<PublicHome />} />
+          {/* Rota de teste */}
+          <Route path="/test-share" element={<div className="min-h-screen bg-slate-900 flex items-center justify-center text-white text-2xl">🚀 TESTE DE ROTA</div>} />
+          {/* Página de Compartilhamento de Flashcards - Acessível sem login */}
+          <Route path="/share-flashcards/:token" element={<SharedFlashcardPIP />} />
           <Route path="/guia-estudos" element={<GuiaEstudos />} />
           <Route path="/setup" element={<SetupUser />} />
           <Route
@@ -365,7 +373,7 @@ function App() {
         </Routes>
         </Suspense>
       </main>
-      {!location.pathname.startsWith('/flashcards/pip') && (
+      {!isPIPPage && (
         <footer className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[60px] flex items-center justify-center">
           <p>
             © {new Date().getFullYear()} FlashConCards. Todos os direitos reservados.
@@ -373,9 +381,9 @@ function App() {
           </p>
         </footer>
       )}
-      {!location.pathname.startsWith('/flashcards/pip') && <SupportButton />}
-      {!location.pathname.startsWith('/flashcards/pip') && <PopupBanner />}
-      {!location.pathname.startsWith('/flashcards/pip') && <OfflineIndicator />}
+      {!isPIPPage && <SupportButton />}
+      {!isPIPPage && <PopupBanner />}
+      {!isPIPPage && <OfflineIndicator />}
     </div>
     )
   } catch (error) {
