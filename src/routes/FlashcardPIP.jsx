@@ -190,7 +190,7 @@ const FlashcardPIP = () => {
         <button
           type="button"
           onClick={() => {
-            const searchQuery = encodeURIComponent(`${disciplina}/${modulo}/${currentCard.pergunta}/${currentCard.resposta}`)
+            const searchQuery = encodeURIComponent(`${disciplina}/${modulo}/${currentCard.pergunta}/${currentCard.resposta} esse flashcard está correto e atualizado?`)
             window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank')
           }}
           className="p-3 rounded-lg bg-white text-slate-900 hover:opacity-80 transition"

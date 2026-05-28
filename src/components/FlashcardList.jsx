@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { ArrowPathRoundedSquareIcon } from '@heroicons/react/24/outline'
 import FlashcardItem from './FlashcardItem'
+import { useSearchParams } from 'react-router-dom'
 
 const FlashcardList = ({
   cards,
@@ -18,11 +20,87 @@ const FlashcardList = ({
   onDeleteFlashcard = null,
   onEditFlashcard = null,
 }) => {
+  const [searchParams] = useSearchParams()
   const visited = viewedIds || []
   const currentCard = cards[currentIndex]
+  
+  const [cardColor, setCardColor] = useState('bg-white')
+  const [textColor, setTextColor] = useState('text-slate-900')
+  const [borderColor, setBorderColor] = useState('border-white')
+  const [showColorPicker, setShowColorPicker] = useState(false)
+
+  const disciplina = decodeURIComponent(searchParams.get('disciplina') || '')
+  const modulo = decodeURIComponent(searchParams.get('modulo') || '')
+
+  const colorOptions = [
+    { name: 'Branco Padrão', bg: 'bg-white', text: 'text-slate-900', border: 'border-white' },
+    { name: 'Cinza Claro', bg: 'bg-slate-100', text: 'text-slate-900', border: 'border-slate-200' },
+    { name: 'Cinza Médio', bg: 'bg-slate-200', text: 'text-slate-900', border: 'border-slate-300' },
+    { name: 'Cinza Escuro', bg: 'bg-slate-700', text: 'text-white', border: 'border-slate-600' },
+    { name: 'Preto', bg: 'bg-slate-900', text: 'text-white', border: 'border-slate-800' },
+    { name: 'Azul Claro', bg: 'bg-blue-50', text: 'text-slate-900', border: 'border-blue-100' },
+    { name: 'Azul Escuro', bg: 'bg-blue-900', text: 'text-white', border: 'border-blue-800' },
+    { name: 'Verde Claro', bg: 'bg-green-50', text: 'text-slate-900', border: 'border-green-100' },
+    { name: 'Verde Escuro', bg: 'bg-green-900', text: 'text-white', border: 'border-green-800' },
+    { name: 'Roxo Claro', bg: 'bg-purple-50', text: 'text-slate-900', border: 'border-purple-100' },
+    { name: 'Roxo Escuro', bg: 'bg-purple-900', text: 'text-white', border: 'border-purple-800' },
+  ]
+
+  const handleColorChange = (option) => {
+    setCardColor(option.bg)
+    setTextColor(option.text)
+    setBorderColor(option.border)
+    setShowColorPicker(false)
+  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen w-full space-y-4 sm:space-y-6 px-4 sm:px-0">
+      {/* Botões de ação no topo */}
+      <div className="fixed top-4 right-4 z-50 flex gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            const searchQuery = encodeURIComponent(`${disciplina}/${modulo}/${currentCard.pergunta}/${currentCard.resposta} esse flashcard está correto e atualizado?`)
+            window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank')
+          }}
+          className="p-3 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white hover:opacity-80 transition shadow-lg"
+          title="Pesquisar no Google"
+        >
+          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowColorPicker(!showColorPicker)}
+          className="p-3 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white hover:opacity-80 transition shadow-lg"
+        >
+          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+          </svg>
+        </button>
+        
+        {showColorPicker && (
+          <div className="absolute top-14 right-0 bg-white dark:bg-slate-800 rounded-lg shadow-2xl p-3 z-[100] w-64">
+            <div className="grid grid-cols-2 gap-2">
+              {colorOptions.map((option) => (
+                <button
+                  key={option.name}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleColorChange(option)
+                  }}
+                  className={`p-3 rounded-lg ${option.bg} ${option.text} text-xs font-medium hover:opacity-80 transition border border-slate-200 dark:border-slate-600`}
+                >
+                  {option.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Card Principal */}
       {currentCard && (
         <div className="w-full h-full flex flex-col justify-center items-center space-y-4 sm:space-y-6 max-w-7xl mx-auto">
@@ -37,6 +115,9 @@ const FlashcardList = ({
               onExplainCard={onExplainCard}
               onDeleteFlashcard={onDeleteFlashcard}
               onEditFlashcard={onEditFlashcard}
+              cardColor={cardColor}
+              textColor={textColor}
+              borderColor={borderColor}
             />
           </div>
           

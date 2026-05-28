@@ -13,7 +13,10 @@ const FlashcardItem = ({
   cardProgress = null,
   onExplainCard = null,
   onDeleteFlashcard = null,
-  onEditFlashcard = null
+  onEditFlashcard = null,
+  cardColor = 'bg-white',
+  textColor = 'text-slate-900',
+  borderColor = 'border-white'
 }) => {
   const [flipped, setFlipped] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -65,7 +68,7 @@ const FlashcardItem = ({
         transition={{ duration: 0.2 }}
       >
         <motion.div
-          className='absolute inset-0 flex flex-col justify-between rounded-lg bg-white dark:bg-slate-900 p-4 sm:p-6 md:p-8 shadow-2xl border-2 border-slate-900 dark:border-white overflow-hidden'
+          className={`absolute inset-0 flex flex-col justify-between rounded-lg ${cardColor} p-4 sm:p-6 md:p-8 shadow-2xl border-2 ${borderColor} overflow-hidden`}
           animate={{ rotateY: flipped ? 180 : 0 }}
           transition={{ duration: 0.6, ease: 'easeInOut' }}
           style={{ backfaceVisibility: 'hidden', transformStyle: 'preserve-3d' }}
@@ -147,11 +150,11 @@ const FlashcardItem = ({
                 </div>
               ) : (
                 <>
-                  <h3 className='text-lg sm:text-xl md:text-2xl font-bold text-slate-900 dark:text-white mb-4 sm:mb-6 leading-relaxed'>
+                  <h3 className={`text-lg sm:text-xl md:text-2xl font-bold ${textColor} mb-4 sm:mb-6 leading-relaxed`}>
                     {card.pergunta}
                   </h3>
                   
-                  <div className='text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-medium'>
+                  <div className={`text-xs sm:text-sm ${textColor === 'text-white' ? 'text-slate-300' : 'text-slate-600 dark:text-slate-400'} font-medium`}>
                     Clique para ver resposta 
                   </div>
                 </>
@@ -160,12 +163,12 @@ const FlashcardItem = ({
 
             <div className='flex flex-wrap gap-1 sm:gap-2 justify-center'>
               {card.materia && (
-                <span className='px-2 py-1 border border-slate-900 dark:border-white text-slate-900 dark:text-white text-xs rounded'>
+                <span className={`px-2 py-1 border ${borderColor} ${textColor} text-xs rounded`}>
                   {card.materia}
                 </span>
               )}
               {card.modulo && (
-                <span className='px-2 py-1 border border-slate-900 dark:border-white text-slate-900 dark:text-white text-xs rounded'>
+                <span className={`px-2 py-1 border ${borderColor} ${textColor} text-xs rounded`}>
                   {card.modulo}
                 </span>
               )}
@@ -183,7 +186,7 @@ const FlashcardItem = ({
         </motion.div>
 
         <motion.div
-          className='absolute inset-0 rounded-lg bg-slate-900 dark:bg-white p-4 sm:p-6 md:p-8 shadow-2xl border-2 border-slate-900 dark:border-white overflow-hidden'
+          className={`absolute inset-0 rounded-lg ${cardColor === 'bg-white' ? 'bg-slate-900 dark:bg-white' : 'bg-slate-900'} p-4 sm:p-6 md:p-8 shadow-2xl border-2 ${borderColor} overflow-hidden`}
           animate={{ rotateY: flipped ? 0 : 180 }}
           transition={{ duration: 0.6, ease: 'easeInOut' }}
           style={{ backfaceVisibility: 'hidden', transformStyle: 'preserve-3d' }}
@@ -191,7 +194,7 @@ const FlashcardItem = ({
           <div className='relative z-10 h-full flex flex-col'>
             <div className='flex-1 flex flex-col justify-center items-center text-center px-2 sm:px-4 py-4 sm:py-6 min-h-0'>
               <div className='mb-4 sm:mb-6'>
-                <div className='inline-flex px-3 py-1 rounded text-xs font-bold border border-white dark:border-slate-900 text-white dark:text-slate-900'>
+                <div className={`inline-flex px-3 py-1 rounded text-xs font-bold border ${borderColor} ${textColor === 'text-white' ? 'text-white dark:text-slate-900' : 'text-slate-900 dark:text-white'}`}>
                   Resposta
                 </div>
               </div>
@@ -223,7 +226,7 @@ const FlashcardItem = ({
                   </div>
                 </div>
               ) : (
-                <div className='text-base sm:text-lg md:text-xl font-medium text-white dark:text-slate-900 leading-relaxed overflow-y-auto max-h-[200px] sm:max-h-[300px] md:max-h-[400px] px-1'>
+                <div className={`text-base sm:text-lg md:text-xl font-medium ${textColor === 'text-white' ? 'text-white dark:text-slate-900' : 'text-slate-900 dark:text-white'} leading-relaxed overflow-y-auto max-h-[200px] sm:max-h-[300px] md:max-h-[400px] px-1`}>
                   {card.resposta}
                 </div>
               )}
@@ -239,17 +242,17 @@ const FlashcardItem = ({
               >
                 {cardProgress?.lastDifficulty && (
                   <div className='flex justify-center mb-2'>
-                    <span className={`px-3 py-1 text-xs rounded font-medium border ${
-                      cardProgress.lastDifficulty === 'easy' 
-                        ? 'border-white dark:border-slate-900 text-white dark:text-slate-900' 
-                        : 'border-white dark:border-slate-900 text-white dark:text-slate-900'
+                    <span className={`px-3 py-1 text-xs rounded font-medium border ${borderColor} ${
+                      textColor === 'text-white' 
+                        ? 'text-white dark:text-slate-900' 
+                        : 'text-slate-900 dark:text-white'
                     }`}>
                       Última revisão: {cardProgress.lastDifficulty === 'easy' ? 'Fácil' : 'Difícil'}
                     </span>
                   </div>
                 )}
                 
-                <p className='text-center text-xs sm:text-sm md:text-base font-bold text-white dark:text-slate-900 mb-3 sm:mb-4'>
+                <p className={`text-center text-xs sm:text-sm md:text-base font-bold ${textColor === 'text-white' ? 'text-white dark:text-slate-900' : 'text-slate-900 dark:text-white'} mb-3 sm:mb-4`}>
                   Como foi essa revisão?
                 </p>
                 <div className='flex gap-2 sm:gap-3'>
@@ -261,7 +264,7 @@ const FlashcardItem = ({
                       e.stopPropagation()
                       handleRate('hard')
                     }}
-                    className='group/btn relative flex-1 rounded-lg bg-white dark:bg-slate-900 px-3 sm:px-4 md:px-5 py-3 sm:py-3.5 md:py-4 text-xs sm:text-sm md:text-base font-black text-slate-900 dark:text-white border-2 border-white dark:border-slate-900 min-h-[48px] sm:min-h-[52px] md:min-h-[56px] overflow-hidden touch-manipulation hover:opacity-80 transition'
+                    className={`group/btn relative flex-1 rounded-lg ${cardColor === 'bg-white' ? 'bg-white dark:bg-slate-900' : 'bg-white'} px-3 sm:px-4 md:px-5 py-3 sm:py-3.5 md:py-4 text-xs sm:text-sm md:text-base font-black ${textColor === 'text-white' ? 'text-slate-900 dark:text-white' : 'text-slate-900 dark:text-white'} border-2 ${borderColor} min-h-[48px] sm:min-h-[52px] md:min-h-[56px] overflow-hidden touch-manipulation hover:opacity-80 transition`}
                   >
                     <span className='relative z-10 flex items-center justify-center gap-2 sm:gap-2.5 md:gap-3'>
                       <span className='whitespace-nowrap'>Difícil</span>
@@ -276,7 +279,7 @@ const FlashcardItem = ({
                       e.stopPropagation()
                       handleRate('easy')
                     }}
-                    className='group/btn relative flex-1 rounded-lg bg-white dark:bg-slate-900 px-3 sm:px-4 md:px-5 py-3 sm:py-3.5 md:py-4 text-xs sm:text-sm md:text-base font-black text-slate-900 dark:text-white border-2 border-white dark:border-slate-900 min-h-[48px] sm:min-h-[52px] md:min-h-[56px] overflow-hidden touch-manipulation hover:opacity-80 transition'
+                    className={`group/btn relative flex-1 rounded-lg ${cardColor === 'bg-white' ? 'bg-white dark:bg-slate-900' : 'bg-white'} px-3 sm:px-4 md:px-5 py-3 sm:py-3.5 md:py-4 text-xs sm:text-sm md:text-base font-black ${textColor === 'text-white' ? 'text-slate-900 dark:text-white' : 'text-slate-900 dark:text-white'} border-2 ${borderColor} min-h-[48px] sm:min-h-[52px] md:min-h-[56px] overflow-hidden touch-manipulation hover:opacity-80 transition`}
                   >
                     <span className='relative z-10 flex items-center justify-center gap-2 sm:gap-2.5 md:gap-3'>
                       <span className='whitespace-nowrap'>Fácil</span>
