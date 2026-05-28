@@ -263,7 +263,7 @@ const SharedFlashcardPIP = () => {
           onClick={() => {
             const query = currentCard.pergunta || currentCard.frente
             const answer = currentCard.resposta || currentCard.verso
-            const searchQuery = encodeURIComponent(`${topicInfo.disciplina}/${topicInfo.modulo}/${query}/${answer} esse flashcard está correto e atualizado?`)
+            const searchQuery = encodeURIComponent(`${topicInfo.disciplina}/${query}/${answer} esse flashcard está correto e atualizado?`)
             window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank')
           }}
           className="p-3 rounded-lg bg-white text-slate-900 hover:opacity-80 transition"

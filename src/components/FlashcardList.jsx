@@ -60,7 +60,7 @@ const FlashcardList = ({
         <button
           type="button"
           onClick={() => {
-            const searchQuery = encodeURIComponent(`${disciplina}/${modulo}/${currentCard.pergunta}/${currentCard.resposta} esse flashcard está correto e atualizado?`)
+            const searchQuery = encodeURIComponent(`${disciplina}/${currentCard.pergunta}/${currentCard.resposta} esse flashcard está correto e atualizado?`)
             window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank')
           }}
           className="p-3 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white hover:opacity-80 transition shadow-lg"
