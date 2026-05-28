@@ -262,7 +262,9 @@ const SharedFlashcardPIP = () => {
           type="button"
           onClick={() => {
             const query = currentCard.pergunta || currentCard.frente
-            window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank')
+            const answer = currentCard.resposta || currentCard.verso
+            const searchQuery = encodeURIComponent(`${topicInfo.disciplina}/${topicInfo.modulo}/${query}/${answer}`)
+            window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank')
           }}
           className="p-3 rounded-lg bg-white text-slate-900 hover:opacity-80 transition"
           title="Pesquisar no Google"

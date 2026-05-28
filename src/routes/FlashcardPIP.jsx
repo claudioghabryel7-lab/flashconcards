@@ -277,7 +277,7 @@ Se estiver correto, retorne isCorrect: true e deixe os outros campos vazios.`
         <button
           type="button"
           onClick={() => {
-            const searchQuery = encodeURIComponent(currentCard.pergunta)
+            const searchQuery = encodeURIComponent(`${disciplina}/${modulo}/${currentCard.pergunta}/${currentCard.resposta}`)
             window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank')
           }}
           className="p-3 rounded-lg bg-white text-slate-900 hover:opacity-80 transition"
