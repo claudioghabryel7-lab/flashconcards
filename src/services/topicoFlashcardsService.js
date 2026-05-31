@@ -75,11 +75,16 @@ BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 12000)}\n\n` : ''}
 
 INSTRUÇÕES:
-- Gere NO MÍNIMO 50 flashcards e ATÉ 100 flashcards para cobrir completamente este tópico específico
+- Gere NO MÍNIMO 50 flashcards e ATÉ 150 flashcards para cobrir completamente este tópico específico
 - O MÍNIMO OBRIGATÓRIO é 50 flashcards - não gere menos que isso
-- Se o tópico for extenso, gere até 100 flashcards para cobertura completa
+- Se o tópico for extenso, gere o necessário flashcards para cobertura completa
 - Perguntas objetivas; respostas claras e completas
 - Conteúdo específico para o concurso — nada genérico
+- Não invente nada, seja literal e fiel a matéria com fontes firmes
+- Mantenha sempre atualizado o conteúdo estamos em 2026
+- Não delire nem presuma, crie as coisas e o material da forma correta de acordo com fontes e materiais confiáveis
+- Se for direito gere os flashcards de acordo com a lei sem inventar nada, seja fiel a lei 
+- Não invente nada, seja direto nos flashcards e com conteúdo fiel
 - Linguagem formal, nível concurso público
 - 🚨 BANCA EXAMINADORA: Use EXCLUSIVAMENTE o estilo da banca "${banca || 'NÃO DEFINIDA'}"
 
