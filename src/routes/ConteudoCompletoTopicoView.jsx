@@ -6,6 +6,7 @@ import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -552,11 +553,6 @@ ONDE:
       const concursoName = unifiedData.concursoName || ''
       setProgress(25)
 
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro-latest', 'gemini-2.5-pro', 'gemini-2.5-pro']
-      let aiText = ''
-      let lastError = null
-
       // Extrair contexto hierárquico do edital
       let contextoDisciplina = null
       if (editalVerticalizado) {
@@ -672,22 +668,15 @@ REGRAS FINAIS:
 - Comece diretamente com { e termine com } (JSON parseável)
 - Inclua artigos de lei, números e referências específicas`
 
-      for (const modelName of modelNames) {
-        try {
-          setProgress((prev) => Math.min(prev + 15, 70))
-          const model = genAI.getGenerativeModel({ model: modelName })
-          const result = await model.generateContent(prompt)
-          aiText = result.response.text().trim()
-          if (aiText) break
-        } catch (err) {
-          lastError = err
-          continue
-        }
-      }
+      setProgress((prev) => Math.min(prev + 15, 70))
+      const response = await callGeminiWithRetry(prompt, {
+        maxRetries: 3,
+        baseDelay: 2000,
+        models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
+      })
 
-      if (!aiText) {
-        throw lastError || new Error('Falha ao gerar conteúdo com a IA.')
-      }
+      const aiText = extractGeneratedText(response)
       setProgress(75)
 
       let jsonText = aiText

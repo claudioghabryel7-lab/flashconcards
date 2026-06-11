@@ -12,6 +12,7 @@ import {
   cardMatchesModule,
   formatTopicoAsModulo,
 } from '../utils/editalVerticalizadoLoader'
+import { callGeminiWithRetry, extractJsonFromResponse } from '../utils/geminiApi'
 
 /**
  * Busca flashcards já salvos para um tópico (compartilhados entre usuários do curso).
@@ -99,37 +100,14 @@ FORMATO JSON (apenas JSON válido):
   ]
 }`
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
-      }),
-    }
-  )
+  const response = await callGeminiWithRetry(prompt, {
+    maxRetries: 3,
+    baseDelay: 2000,
+    models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+    generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
+  })
 
-  const data = await response.json()
-  if (!response.ok) {
-    throw new Error(data.error?.message || 'Erro na API da IA')
-  }
-
-  const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  const start = generatedText.indexOf('{')
-  const end = generatedText.lastIndexOf('}')
-  if (start === -1 || end === -1) {
-    throw new Error('Resposta da IA sem JSON válido')
-  }
-
-  let parsed
-  try {
-    parsed = JSON.parse(generatedText.substring(start, end + 1))
-  } catch {
-    const { default: jsonrepair } = await import('jsonrepair')
-    parsed = JSON.parse(jsonrepair(generatedText.substring(start, end + 1)))
-  }
+  const parsed = await extractJsonFromResponse(response)
 
   const items = parsed.flashcards || []
   if (!items.length) {
