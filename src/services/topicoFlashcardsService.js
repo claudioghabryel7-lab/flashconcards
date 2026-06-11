@@ -80,7 +80,7 @@ INSTRUÇÕES:
 - O MÍNIMO OBRIGATÓRIO é 50 flashcards - não gere menos que isso
 - Se o tópico for extenso, gere o necessário flashcards para cobertura completa
 - Perguntas objetivas; respostas claras e completas
-- Conteúdo específico para o concurso — nada genérico
+- Conteúdo específico para o concurso — nada genérico, LETRA de lei
 - Não invente nada, seja literal e fiel a matéria com fontes firmes
 - Mantenha sempre atualizado o conteúdo estamos em 2026
 - Não delire nem presuma, crie as coisas e o material da forma correta de acordo com fontes e materiais confiáveis
