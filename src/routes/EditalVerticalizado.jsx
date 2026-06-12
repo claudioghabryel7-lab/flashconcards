@@ -11,6 +11,8 @@ import {
   CheckIcon,
   SparklesIcon,
   ArrowPathIcon,
+  TrashIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -113,6 +115,13 @@ const EditalVerticalizado = () => {
   const [flashcardsModalOpen, setFlashcardsModalOpen] = useState(false)
   const [generationStatus, setGenerationStatus] = useState('')
   const [existingFlashcards, setExistingFlashcards] = useState(null)
+
+  // Estados para adicionar/apagar disciplinas e tópicos
+  const [addingDisciplina, setAddingDisciplina] = useState(false)
+  const [addingTopico, setAddingTopico] = useState(null) // { disciplinaIdx }
+  const [newDisciplinaNome, setNewDisciplinaNome] = useState('')
+  const [newTopicoNome, setNewTopicoNome] = useState('')
+  const [newTopicoNumero, setNewTopicoNumero] = useState('')
 
   // Determinar courseId e destacar disciplina/tópico se vier dos links
   useEffect(() => {
@@ -813,6 +822,123 @@ REGRAS IMPORTANTES:
     setGenerationStatus('')
   }
 
+  // Função para apagar disciplina
+  const handleDeleteDisciplina = async (disciplinaIdx) => {
+    if (!courseId || !editalVerticalizadoBase?.disciplinas) return
+
+    if (!window.confirm('Tem certeza que deseja apagar esta disciplina e todos os seus tópicos?')) {
+      return
+    }
+
+    try {
+      const disciplinasBase = [...editalVerticalizadoBase.disciplinas]
+      disciplinasBase.splice(disciplinaIdx, 1)
+
+      const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+      await updateDoc(editalRef, {
+        disciplinas: disciplinasBase
+      })
+
+      const novoEditalBase = {
+        ...editalVerticalizadoBase,
+        disciplinas: disciplinasBase
+      }
+      setEditalVerticalizadoBase(novoEditalBase)
+      await loadUserProgress(novoEditalBase)
+    } catch (error) {
+      console.error('Erro ao apagar disciplina:', error)
+    }
+  }
+
+  // Função para apagar tópico
+  const handleDeleteTopico = async (disciplinaIdx, topicoIdx) => {
+    if (!courseId || !editalVerticalizadoBase?.disciplinas) return
+
+    if (!window.confirm('Tem certeza que deseja apagar este tópico?')) {
+      return
+    }
+
+    try {
+      const disciplinasBase = [...editalVerticalizadoBase.disciplinas]
+      disciplinasBase[disciplinaIdx].topicos.splice(topicoIdx, 1)
+
+      const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+      await updateDoc(editalRef, {
+        disciplinas: disciplinasBase
+      })
+
+      const novoEditalBase = {
+        ...editalVerticalizadoBase,
+        disciplinas: disciplinasBase
+      }
+      setEditalVerticalizadoBase(novoEditalBase)
+      await loadUserProgress(novoEditalBase)
+    } catch (error) {
+      console.error('Erro ao apagar tópico:', error)
+    }
+  }
+
+  // Função para adicionar nova disciplina
+  const handleAddDisciplina = async () => {
+    if (!courseId || !editalVerticalizadoBase || !newDisciplinaNome.trim()) return
+
+    try {
+      const disciplinasBase = [...editalVerticalizadoBase.disciplinas]
+      disciplinasBase.push({
+        nome: newDisciplinaNome.trim(),
+        topicos: []
+      })
+
+      const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+      await updateDoc(editalRef, {
+        disciplinas: disciplinasBase
+      })
+
+      const novoEditalBase = {
+        ...editalVerticalizadoBase,
+        disciplinas: disciplinasBase
+      }
+      setEditalVerticalizadoBase(novoEditalBase)
+      await loadUserProgress(novoEditalBase)
+
+      setNewDisciplinaNome('')
+      setAddingDisciplina(false)
+    } catch (error) {
+      console.error('Erro ao adicionar disciplina:', error)
+    }
+  }
+
+  // Função para adicionar novo tópico
+  const handleAddTopico = async (disciplinaIdx) => {
+    if (!courseId || !editalVerticalizadoBase || !newTopicoNome.trim()) return
+
+    try {
+      const disciplinasBase = [...editalVerticalizadoBase.disciplinas]
+      disciplinasBase[disciplinaIdx].topicos.push({
+        nome: newTopicoNome.trim(),
+        numero: newTopicoNumero.trim()
+      })
+
+      const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+      await updateDoc(editalRef, {
+        disciplinas: disciplinasBase
+      })
+
+      const novoEditalBase = {
+        ...editalVerticalizadoBase,
+        disciplinas: disciplinasBase
+      }
+      setEditalVerticalizadoBase(novoEditalBase)
+      await loadUserProgress(novoEditalBase)
+
+      setNewTopicoNome('')
+      setNewTopicoNumero('')
+      setAddingTopico(null)
+    } catch (error) {
+      console.error('Erro ao adicionar tópico:', error)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -917,10 +1043,16 @@ REGRAS IMPORTANTES:
                         <span className="sm:hidden">Est.</span>
                       </th>
                       {profile?.role === 'admin' && (
-                        <th className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
-                          <span className="hidden sm:inline">Editar</span>
-                          <span className="sm:hidden">Ed</span>
-                        </th>
+                        <>
+                          <th className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
+                            <span className="hidden sm:inline">Editar</span>
+                            <span className="sm:hidden">Ed</span>
+                          </th>
+                          <th className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
+                            <span className="hidden sm:inline">Ações</span>
+                            <span className="sm:hidden">Aç</span>
+                          </th>
+                        </>
                       )}
                     </tr>
                   </thead>
@@ -948,7 +1080,20 @@ REGRAS IMPORTANTES:
                         </td>
                         <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
                         {profile?.role === 'admin' && (
-                          <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                          <>
+                            <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                            <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={() => handleDeleteDisciplina(idx)}
+                                  className="inline-flex items-center justify-center p-1 sm:p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20 rounded transition-colors"
+                                  title="Apagar disciplina"
+                                >
+                                  <TrashIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </>
                         )}
                       </tr>
                       
@@ -1044,22 +1189,158 @@ REGRAS IMPORTANTES:
                                 />
                               </td>
                               {profile?.role === 'admin' && (
-                                <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
-                                  <button
-                                    onClick={() => handleEditTopico(idx, topicoIdx)}
-                                    className="inline-flex items-center justify-center p-1 sm:p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 rounded transition-colors"
-                                    title="Editar tópico"
-                                  >
-                                    <PencilIcon className="h-3 w-3 sm:h-4 sm:w-4" />
-                                  </button>
-                                </td>
+                                <>
+                                  <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
+                                    <button
+                                      onClick={() => handleEditTopico(idx, topicoIdx)}
+                                      className="inline-flex items-center justify-center p-1 sm:p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 rounded transition-colors"
+                                      title="Editar tópico"
+                                    >
+                                      <PencilIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                    </button>
+                                  </td>
+                                  <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
+                                    <div className="flex items-center justify-center gap-1">
+                                      <button
+                                        onClick={() => handleDeleteTopico(idx, topicoIdx)}
+                                        className="inline-flex items-center justify-center p-1 sm:p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20 rounded transition-colors"
+                                        title="Apagar tópico"
+                                      >
+                                        <TrashIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </>
                               )}
                             </tr>
                           )
                         })}
+
+                        {/* Linha para adicionar novo tópico (apenas admin) */}
+                        {profile?.role === 'admin' && (
+                          <tr className="bg-slate-50 dark:bg-slate-700/50">
+                            <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm" style={{ paddingLeft: '16px' }}>
+                              {addingTopico?.disciplinaIdx === idx ? (
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={newTopicoNumero}
+                                    onChange={(e) => setNewTopicoNumero(e.target.value)}
+                                    placeholder="Número (opcional)"
+                                    className="w-20 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={newTopicoNome}
+                                    onChange={(e) => setNewTopicoNome(e.target.value)}
+                                    placeholder="Nome do tópico"
+                                    className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                                    autoFocus
+                                    onKeyPress={(e) => {
+                                      if (e.key === 'Enter') handleAddTopico(idx)
+                                      if (e.key === 'Escape') {
+                                        setAddingTopico(null)
+                                        setNewTopicoNome('')
+                                        setNewTopicoNumero('')
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => handleAddTopico(idx)}
+                                    className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                                  >
+                                    <CheckIcon className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setAddingTopico(null)
+                                      setNewTopicoNome('')
+                                      setNewTopicoNumero('')
+                                    }}
+                                    className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                                  >
+                                    <XMarkIcon className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setAddingTopico({ disciplinaIdx: idx })}
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition"
+                                >
+                                  <PlusIcon className="h-3 w-3" />
+                                  Adicionar tópico
+                                </button>
+                              )}
+                            </td>
+                            <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                            {profile?.role === 'admin' && (
+                              <>
+                                <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                                <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                              </>
+                            )}
+                          </tr>
+                        )}
                     </React.Fragment>
                       )
                     })}
+
+                  {/* Linha para adicionar nova disciplina (apenas admin) */}
+                  {profile?.role === 'admin' && (
+                    <tr className="bg-slate-50 dark:bg-slate-700/50">
+                      <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm">
+                        {addingDisciplina ? (
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={newDisciplinaNome}
+                              onChange={(e) => setNewDisciplinaNome(e.target.value)}
+                              placeholder="Nome da disciplina"
+                              className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                              autoFocus
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter') handleAddDisciplina()
+                                if (e.key === 'Escape') {
+                                  setAddingDisciplina(false)
+                                  setNewDisciplinaNome('')
+                                }
+                              }}
+                            />
+                            <button
+                              onClick={handleAddDisciplina}
+                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                            >
+                              <CheckIcon className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setAddingDisciplina(false)
+                                setNewDisciplinaNome('')
+                              }}
+                              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                            >
+                              <XMarkIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setAddingDisciplina(true)}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition"
+                          >
+                            <PlusIcon className="h-3 w-3" />
+                            Adicionar disciplina
+                          </button>
+                        )}
+                      </td>
+                      <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                      {profile?.role === 'admin' && (
+                        <>
+                          <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                          <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                        </>
+                      )}
+                    </tr>
+                  )}
                 </tbody>
               </table>
                 </div>
