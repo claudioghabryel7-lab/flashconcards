@@ -31,6 +31,7 @@ const SimuladoShare = lazy(() => import('./routes/SimuladoShare'))
 const TreinoRedacao = lazy(() => import('./routes/TreinoRedacao'))
 const GuiaEstudos = lazy(() => import('./routes/GuiaEstudos'))
 const TestTrial = lazy(() => import('./routes/TestTrial'))
+const Mentoria = lazy(() => import('./routes/Mentoria'))
 const MateriaRevisada = lazy(() => import('./routes/MateriaRevisada'))
 const MateriaRevisadaView = lazy(() => import('./routes/MateriaRevisadaView'))
 const ConteudoCompleto = lazy(() => import('./routes/ConteudoCompleto'))
@@ -252,6 +253,14 @@ function App() {
             element={
               <ProtectedRoute requireCourseSelection>
                 <TreinoRedacao />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/mentoria"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <Mentoria />
               </ProtectedRoute>
             }
           />

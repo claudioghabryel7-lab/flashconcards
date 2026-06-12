@@ -69,6 +69,7 @@ const Header = () => {
         icon: BookOpenIcon,
         items: [
           { to: '/dashboard', label: 'Dashboard', auth: true },
+          { to: '/mentoria', label: 'Mentoria', auth: true },
           { to: '/flashcards', label: 'Flashcards com IA', auth: true },
           { to: '/flashquestoes', label: 'FlashQuestões com IA', auth: true },
           { to: '/edital-verticalizado', label: 'Edital Verticalizado', auth: true },
