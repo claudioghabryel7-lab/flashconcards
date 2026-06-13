@@ -135,21 +135,35 @@ const VesperaDeProvaConfig = () => {
       console.log('🚀 [VesperaDeProvaConfig] Banca:', bancaExaminadora)
       console.log('🚀 [VesperaDeProvaConfig] Total disciplinas:', editalVerticalizado.disciplinas.length)
       
-      // Preparar estrutura simplificada para a IA
-      const estrutura = {
-        curso: courseName,
-        concurso: concurso,
-        banca: bancaExaminadora,
-        disciplinas: editalVerticalizado.disciplinas.map((disciplina, idx) => ({
-          nome: disciplina.nome,
-          questoes: questoesPorMateria[idx] || 5, // Usar quantidade configurada pelo usuário
-          topicos: disciplina.topicos?.map(t => t.nome).join(', ') || ''
-        }))
-      }
+      // Dividir disciplinas em partes (máximo 4 disciplinas por parte)
+      const disciplinasPorParte = 4
+      const totalPartes = Math.ceil(editalVerticalizado.disciplinas.length / disciplinasPorParte)
       
-      setGenerationStatus('Enviando solicitação para a IA...')
+      console.log(`📦 [VesperaDeProvaConfig] Dividindo em ${totalPartes} partes (máximo ${disciplinasPorParte} disciplinas por parte)`)
       
-      const prompt = `Você é um Analista de Concursos de Elite focado em aprovação policial.
+      const todasDisciplinas = []
+      
+      for (let parte = 0; parte < totalPartes; parte++) {
+        const inicio = parte * disciplinasPorParte
+        const fim = Math.min(inicio + disciplinasPorParte, editalVerticalizado.disciplinas.length)
+        const disciplinasParte = editalVerticalizado.disciplinas.slice(inicio, fim)
+        
+        console.log(`📋 [VesperaDeProvaConfig] Gerando parte ${parte + 1}/${totalPartes}: disciplinas ${inicio + 1} a ${fim}`)
+        setGenerationStatus(`Gerando parte ${parte + 1}/${totalPartes} (${disciplinasParte.length} disciplinas)...`)
+        
+        // Preparar estrutura simplificada para a IA (apenas esta parte)
+        const estrutura = {
+          curso: courseName,
+          concurso: concurso,
+          banca: bancaExaminadora,
+          disciplinas: disciplinasParte.map((disciplina, idx) => ({
+            nome: disciplina.nome,
+            questoes: questoesPorMateria[inicio + idx] || 5, // Usar quantidade configurada pelo usuário
+            topicos: disciplina.topicos?.map(t => t.nome).join(', ') || ''
+          }))
+        }
+        
+        const prompt = `Você é um Analista de Concursos de Elite focado em aprovação policial.
 
 CONTEXTO:
 - Curso: ${estrutura.curso}
@@ -168,7 +182,7 @@ Gere um material de revisão de "Véspera de Prova" para CADA disciplina na orde
 
 2. **REVISÃO TURBO**:
    - 5-7 resumos detalhados e explicativos (não apenas frases curtas). Cada resumo deve:
-     * Explicar o conceito de forma clara e didática
+     * Explicar o conceito de forma clara e didática(NADA SUPERFICIAL, QUERO BEM COMPLETO)
      * Citar exemplos práticos do concurso ${estrutura.concurso}
      * Ser específico para o cargo de ${estrutura.curso}
      * Incluir dicas de memorização(nada gernérico e vazio/vago)
@@ -218,6 +232,8 @@ REGRAS:
       
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
       console.log('🔑 [VesperaDeProvaConfig] API Key encontrada:', !!apiKey)
+      
+      setGenerationStatus('Enviando solicitação para a IA...')
       
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey, {
         method: 'POST',
@@ -314,6 +330,91 @@ REGRAS:
           }
         }
         
+        // Correção 5: Se ainda falhar, tentar remover o último objeto incompleto
+        if (errorPosition > 0) {
+          // Encontrar o último objeto COMPLETO (com todos os campos obrigatórios)
+          // Regex atualizado para permitir arrays vazios em alternativas
+          const questoesPattern = /"enunciado":\s*"[^"]*",\s*"alternativas":\s*\[[^\]]*\],\s*"gabarito":\s*"[^"]*",\s*"comentario":\s*"[^"]*"/g
+          const matches = fixedJson.match(questoesPattern)
+          
+          if (matches && matches.length > 0) {
+            console.log(`🔧 [VesperaDeProvaConfig] Encontradas ${matches.length} questões completas`)
+            
+            // Encontrar a posição da última questão completa
+            const lastCompleteMatch = matches[matches.length - 1]
+            const lastCompleteIndex = fixedJson.lastIndexOf(lastCompleteMatch)
+            
+            if (lastCompleteIndex !== -1) {
+              // Encontrar o fechamento do objeto após a última questão completa
+              const afterLastComplete = fixedJson.substring(lastCompleteIndex)
+              const closingBrace = afterLastComplete.indexOf('}')
+              
+              if (closingBrace !== -1) {
+                const completeEnd = lastCompleteIndex + closingBrace
+                fixedJson = fixedJson.substring(0, completeEnd + 1)
+                
+                // Adicionar o fechamento do array e do objeto principal
+                if (fixedJson.includes('"material":[')) {
+                  fixedJson = fixedJson + ']}'
+                }
+                
+                console.log(`🔧 [VesperaDeProvaConfig] JSON corrigido removendo última questão incompleta`)
+              }
+            }
+          } else {
+            // Se não encontrar questões completas, tentar remover o último objeto
+            const lastObjectEnd = fixedJson.lastIndexOf('},')
+            if (lastObjectEnd !== -1) {
+              console.log(`🔧 [VesperaDeProvaConfig] Removendo último objeto incompleto...`)
+              fixedJson = fixedJson.substring(0, lastObjectEnd + 1)
+              
+              if (fixedJson.includes('"material":[')) {
+                fixedJson = fixedJson + ']}'
+              }
+            }
+          }
+        }
+        
+        // Correção 6: Se ainda falhar, tentar uma abordagem mais agressiva
+        if (errorPosition > 0) {
+          // Encontrar o último "questoes": [ e remover tudo após o último objeto completo
+          const questoesStart = fixedJson.lastIndexOf('"questoes":')
+          if (questoesStart !== -1) {
+            const afterQuestoes = fixedJson.substring(questoesStart)
+            const arrayStart = afterQuestoes.indexOf('[')
+            
+            if (arrayStart !== -1) {
+              // Encontrar todos os objetos completos no array
+              const questoesArray = afterQuestoes.substring(arrayStart + 1)
+              
+              // Contar o número de objetos completos
+              let braceCount = 0
+              let lastCompletePos = -1
+              
+              for (let i = 0; i < questoesArray.length; i++) {
+                if (questoesArray[i] === '{') braceCount++
+                if (questoesArray[i] === '}') braceCount--
+                
+                if (braceCount === 0 && questoesArray[i] === '}') {
+                  lastCompletePos = i
+                }
+              }
+              
+              if (lastCompletePos !== -1) {
+                const completeEnd = questoesStart + arrayStart + 1 + lastCompletePos
+                fixedJson = fixedJson.substring(0, completeEnd + 1)
+                
+                // Adicionar o fechamento do array e do objeto principal
+                if (fixedJson.includes('"material":[')) {
+                  fixedJson = fixedJson + ']}'
+                }
+                
+                console.log(`🔧 [VesperaDeProvaConfig] JSON corrigido usando abordagem agressiva`)
+              }
+            }
+          }
+        }
+        
         console.log(`🔧 [VesperaDeProvaConfig] JSON corrigido, tamanho: ${fixedJson.length}`)
         
         try {
@@ -334,6 +435,18 @@ REGRAS:
       
       console.log('✅ [VesperaDeProvaConfig] Material validado, total disciplinas:', materialData.material.length)
       
+      // Adicionar disciplinas desta parte ao array total
+      todasDisciplinas.push(...materialData.material)
+      console.log(`📦 [VesperaDeProvaConfig] Parte ${parte + 1} concluída, total disciplinas acumuladas: ${todasDisciplinas.length}`)
+      }
+      
+      // Combinar todas as partes em um único material
+      const materialCompleto = {
+        material: todasDisciplinas
+      }
+      
+      console.log('✅ [VesperaDeProvaConfig] Todas as partes geradas, total disciplinas:', materialCompleto.material.length)
+      
       setGenerationStatus('Salvando material...')
       
       console.log('🔐 [VesperaDeProvaConfig] Verificando permissões antes de salvar...')
@@ -350,7 +463,7 @@ REGRAS:
       
       try {
         await setDoc(materialRef, {
-          ...materialData,
+          ...materialCompleto,
           banca: bancaExaminadora,
           concurso: concurso,
           generatedAt: serverTimestamp(),
@@ -366,7 +479,7 @@ REGRAS:
         
         try {
           await setDoc(altRef, {
-            ...materialData,
+            ...materialCompleto,
             banca: bancaExaminadora,
             concurso: concurso,
             courseId: courseId,
