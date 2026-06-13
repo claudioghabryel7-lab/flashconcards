@@ -260,11 +260,7 @@ function App() {
           />
           <Route
             path="/vespera-de-prova"
-            element={
-              <ProtectedRoute requireCourseSelection>
-                <VesperaDeProva />
-              </ProtectedRoute>
-            }
+            element={<VesperaDeProva />}
           />
           <Route
             path="/vespera-de-prova/configurar/:courseId"
