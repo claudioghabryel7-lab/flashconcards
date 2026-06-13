@@ -186,6 +186,43 @@ service cloud.firestore {
                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       }
+      
+      match /vesperaDeProva/{docId} {
+        allow read: if true; // Leitura pública para links compartilhados
+        allow create: if isAuthenticated() && 
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow update: if isAuthenticated() && 
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow delete: if isAuthenticated() && 
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+    }
+    
+    // Links compartilhados de Véspera de Prova
+    match /vesperaShares/{tokenId} {
+      allow read: if true; // Leitura pública para acessar links compartilhados
+      allow create: if isAuthenticated() && 
+                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow delete: if isAuthenticated() && 
+                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Progresso do usuário em Véspera de Prova
+    match /userVesperaProgress/{userId} {
+      allow read: if isAuthenticated() && (userId == request.auth.uid || isAdmin());
+      allow create, update: if isAuthenticated() && userId == request.auth.uid;
+      allow delete: if isAdmin();
+      
+      match /courses/{courseId} {
+        allow read: if isAuthenticated() && (userId == request.auth.uid || isAdmin());
+        allow create, update: if isAuthenticated() && userId == request.auth.uid;
+        allow delete: if isAdmin();
+      }
     }
     
     match /reviews/{reviewId} {

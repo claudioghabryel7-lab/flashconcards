@@ -1,0 +1,545 @@
+import React, { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { doc, getDoc, setDoc, serverTimestamp, writeBatch, collection } from 'firebase/firestore'
+import { db } from '../firebase/config'
+import { useAuth } from '../hooks/useAuth'
+import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import {
+  SparklesIcon,
+  ArrowLeftIcon,
+  ArrowPathIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline'
+
+const VesperaDeProvaConfig = () => {
+  const { user, isAdmin } = useAuth()
+  const { darkMode } = useDarkMode()
+  const navigate = useNavigate()
+  const { courseId } = useParams()
+  
+  const [courseName, setCourseName] = useState('')
+  const [editalVerticalizado, setEditalVerticalizado] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [generationStatus, setGenerationStatus] = useState('')
+  
+  // Configurações
+  const [bancaExaminadora, setBancaExaminadora] = useState('')
+  const [concurso, setConcurso] = useState('')
+  const [questoesPorMateria, setQuestoesPorMateria] = useState({})
+  
+  // Carregar dados do curso
+  useEffect(() => {
+    if (!courseId) return
+    
+    const loadCourseData = async () => {
+      try {
+        setLoading(true)
+        
+        console.log('🔍 [VesperaDeProvaConfig] Carregando dados do curso:', courseId)
+        console.log('🔍 [VesperaDeProvaConfig] Usuário autenticado:', !!user)
+        console.log('🔍 [VesperaDeProvaConfig] É admin:', isAdmin)
+        
+        // Carregar nome do curso
+        const courseDoc = await getDoc(doc(db, 'courses', courseId))
+        if (courseDoc.exists()) {
+          const data = courseDoc.data()
+          setCourseName(data.name || data.competition || '')
+          setConcurso(data.competition || '')
+          console.log('✅ [VesperaDeProvaConfig] Curso carregado:', data.name)
+        } else {
+          console.error('❌ [VesperaDeProvaConfig] Curso não encontrado:', courseId)
+        }
+        
+        // Carregar edital verticalizado
+        const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
+        const editalSnapshot = await getDoc(editalRef)
+        
+        if (editalSnapshot.exists()) {
+          const editalData = editalSnapshot.data()
+          console.log('✅ [VesperaDeProvaConfig] Edital verticalizado carregado')
+          
+          // Verificar se está dividido em partes
+          if (editalData.temPartes && editalData.totalPartes > 1) {
+            const { collection, getDocs, query, orderBy } = await import('firebase/firestore')
+            const partesRef = collection(db, 'courses', courseId, 'editalVerticalizado', 'principal', 'partes')
+            const partesSnapshot = await getDocs(query(partesRef, orderBy('parte')))
+            
+            const todasDisciplinas = [...(editalData.disciplinas || [])]
+            partesSnapshot.forEach((doc) => {
+              const parteData = doc.data()
+              if (parteData.disciplinas && Array.isArray(parteData.disciplinas)) {
+                todasDisciplinas.push(...parteData.disciplinas)
+              }
+            })
+            
+            setEditalVerticalizado({ ...editalData, disciplinas: todasDisciplinas })
+            console.log('✅ [VesperaDeProvaConfig] Edital com partes carregado, total disciplinas:', todasDisciplinas.length)
+          } else {
+            setEditalVerticalizado(editalData)
+            console.log('✅ [VesperaDeProvaConfig] Edital sem partes carregado, total disciplinas:', editalData.disciplinas?.length)
+          }
+          
+          // Inicializar questões por matéria com valor padrão de 5
+          const initialQuestoes = {}
+          editalData.disciplinas?.forEach((disciplina, idx) => {
+            initialQuestoes[idx] = 5
+          })
+          setQuestoesPorMateria(initialQuestoes)
+        } else {
+          console.error('❌ [VesperaDeProvaConfig] Edital verticalizado não encontrado')
+        }
+        
+      } catch (error) {
+        console.error('❌ [VesperaDeProvaConfig] Erro ao carregar dados:', error)
+        console.error('❌ [VesperaDeProvaConfig] Código do erro:', error.code)
+        console.error('❌ [VesperaDeProvaConfig] Mensagem:', error.message)
+        alert(`Erro ao carregar dados: ${error.message}`)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    loadCourseData()
+  }, [courseId, user, isAdmin])
+  
+  // Gerar material com IA (mesma abordagem do EditalVerticalizado)
+  const generateMaterial = async () => {
+    if (!isAdmin) {
+      alert('Apenas administradores podem gerar material de Véspera de Prova.')
+      return
+    }
+    
+    if (!user) {
+      alert('Você precisa estar autenticado para gerar material.')
+      return
+    }
+    
+    if (!bancaExaminadora || !concurso) {
+      alert('Preencha a banca examinadora e o concurso.')
+      return
+    }
+    
+    if (!editalVerticalizado?.disciplinas) {
+      alert('Edital verticalizado não encontrado.')
+      return
+    }
+    
+    setGenerating(true)
+    setGenerationStatus('Preparando estrutura do edital...')
+    
+    try {
+      console.log('🚀 [VesperaDeProvaConfig] Iniciando geração de material')
+      console.log('🚀 [VesperaDeProvaConfig] Curso:', courseName)
+      console.log('🚀 [VesperaDeProvaConfig] Concurso:', concurso)
+      console.log('🚀 [VesperaDeProvaConfig] Banca:', bancaExaminadora)
+      console.log('🚀 [VesperaDeProvaConfig] Total disciplinas:', editalVerticalizado.disciplinas.length)
+      
+      // Preparar estrutura simplificada para a IA
+      const estrutura = {
+        curso: courseName,
+        concurso: concurso,
+        banca: bancaExaminadora,
+        disciplinas: editalVerticalizado.disciplinas.map((disciplina, idx) => ({
+          nome: disciplina.nome,
+          questoes: questoesPorMateria[idx] || 5, // Usar quantidade configurada pelo usuário
+          topicos: disciplina.topicos?.map(t => t.nome).join(', ') || ''
+        }))
+      }
+      
+      setGenerationStatus('Enviando solicitação para a IA...')
+      
+      const prompt = `Você é um Analista de Concursos de Elite focado em aprovação policial.
+
+CONTEXTO:
+- Curso: ${estrutura.curso}
+- Concurso: ${estrutura.concurso}
+- Banca Examinadora: ${estrutura.banca}
+
+ESTRUTURA DO EDITAL:
+${JSON.stringify(estrutura.disciplinas, null, 2)}
+
+INSTRUÇÕES:
+Gere um material de revisão de "Véspera de Prova" para CADA disciplina na ordem exata acima. Para cada disciplina, inclua:
+
+1. **RAIO-X DE PROBABILIDADE**:
+   - Top 3 Assuntos Quentes: Os três tópicos com maior probabilidade de cair
+   - O Padrão da Banca: Como a banca costuma cobrar esta disciplina
+
+2. **REVISÃO TURBO**:
+   - 3-5 resumos em bullet points (frases curtas e diretas)
+   - 2-3 pegadinhas ("Cuidado, Caçapa!")
+
+3. **QUESTÕES PREDITIVAS**:
+   - Gere EXATAMENTE ${estrutura.disciplinas.map(d => d.questoes).join(', ')} questões para cada disciplina
+   - No estilo da banca (A, B, C, D, E ou Certo/Errado)
+   - Gabarito Comentado: explique o porquê das outras estarem erradas
+
+FORMATO JSON:
+{
+  "material": [
+    {
+      "disciplina": "nome da disciplina",
+      "raioX": {
+        "topAssuntos": ["assunto 1", "assunto 2", "assunto 3"],
+        "padraoBanca": "descrição do padrão"
+      },
+      "revisaoTurbo": {
+        "resumos": ["resumo 1", "resumo 2"],
+        "pegadinhas": ["pegadinha 1"]
+      },
+      "questoes": [
+        {
+          "enunciado": "texto da questão",
+          "alternativas": ["A", "B", "C", "D", "E"],
+          "gabarito": "A",
+          "comentario": "explicação detalhada"
+        }
+      ]
+    }
+  ]
+}
+
+REGRAS:
+- Mantenha a ordem EXATA das disciplinas
+- Use tom focado e direto
+- Retorne APENAS o JSON válido, sem texto adicional`
+      
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      console.log('🔑 [VesperaDeProvaConfig] API Key encontrada:', !!apiKey)
+      
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 32000,
+          }
+        })
+      })
+      
+      setGenerationStatus('Processando resposta da IA...')
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        console.error('❌ [VesperaDeProvaConfig] Erro na API Gemini:', data)
+        throw new Error(data.error?.message || 'Erro na API da IA')
+      }
+      
+      setGenerationStatus('Analisando conteúdo gerado...')
+      
+      const generatedText = data.candidates[0]?.content?.parts[0]?.text
+      
+      if (!generatedText) {
+        throw new Error('A IA não retornou nenhum conteúdo')
+      }
+      
+      console.log('📝 [VesperaDeProvaConfig] Texto gerado, tamanho:', generatedText.length)
+      
+      // Extrair JSON (mesma abordagem do EditalVerticalizado)
+      const materialStart = generatedText.indexOf('"material"')
+      const arrayStart = generatedText.indexOf('[', materialStart)
+      const arrayEnd = generatedText.lastIndexOf(']')
+      
+      if (materialStart === -1 || arrayStart === -1 || arrayEnd === -1) {
+        console.error('❌ [VesperaDeProvaConfig] Não foi possível encontrar o array de material')
+        console.error('❌ [VesperaDeProvaConfig] Texto gerado (primeiros 500 chars):', generatedText.substring(0, 500))
+        throw new Error('Não foi possível encontrar o array de material na resposta')
+      }
+      
+      const materialJson = '{"material":' + generatedText.substring(arrayStart, arrayEnd + 1) + '}'
+      
+      setGenerationStatus('Validando estrutura...')
+      
+      let materialData = null
+      
+      try {
+        materialData = JSON.parse(materialJson)
+        console.log('✅ [VesperaDeProvaConfig] JSON parseado com sucesso')
+      } catch (parseError) {
+        console.error('❌ [VesperaDeProvaConfig] Erro ao fazer parse do JSON:', parseError.message)
+        
+        // Tentar corrigir com múltiplas estratégias
+        let fixedJson = materialJson
+        
+        // Correção 1: Remover caracteres de controle (bad control characters)
+        fixedJson = fixedJson.replace(/[\x00-\x1F\x7F-\x9F]/g, '')
+        
+        // Correção 2: Remover vírgulas extras antes de } e ]
+        fixedJson = fixedJson.replace(/,\s*}/g, '}')
+        fixedJson = fixedJson.replace(/,\s*]/g, ']')
+        
+        // Correção 3: Remover quebras de linha extras
+        fixedJson = fixedJson.replace(/\n\s*\}/g, '}')
+        fixedJson = fixedJson.replace(/\n\s*\]/g, ']')
+        
+        // Correção 4: Tentar encontrar onde o JSON está incompleto e cortar
+        const errorPosition = parseInt(parseError.message.match(/position (\d+)/)?.[1] || '0')
+        if (errorPosition > 0) {
+          console.log(`🔧 [VesperaDeProvaConfig] Erro na posição ${errorPosition}, tentando cortar...`)
+          
+          // Encontrar o último objeto completo antes do erro
+          const beforeError = fixedJson.substring(0, errorPosition)
+          
+          // Tentar encontrar o último "}" que fecha um objeto
+          const lastCompleteObject = beforeError.lastIndexOf('}')
+          if (lastCompleteObject !== -1) {
+            // Cortar até o último objeto completo
+            fixedJson = fixedJson.substring(0, lastCompleteObject + 1)
+            
+            // Adicionar o fechamento do array e do objeto principal
+            if (fixedJson.includes('"material":[')) {
+              fixedJson = fixedJson + ']}'
+            }
+          }
+        }
+        
+        console.log(`🔧 [VesperaDeProvaConfig] JSON corrigido, tamanho: ${fixedJson.length}`)
+        
+        try {
+          materialData = JSON.parse(fixedJson)
+          console.log('✅ [VesperaDeProvaConfig] JSON corrigido e parseado')
+          console.log(`✅ [VesperaDeProvaConfig] Disciplinas salvas: ${materialData.material?.length || 0}`)
+        } catch (fixError) {
+          console.error('❌ [VesperaDeProvaConfig] Falha ao corrigir JSON:', fixError.message)
+          console.error('❌ [VesperaDeProvaConfig] Últimos 500 caracteres do JSON:', materialJson.slice(-500))
+          throw new Error(`JSON inválido mesmo após correção: ${fixError.message}`)
+        }
+      }
+      
+      if (!materialData.material || !Array.isArray(materialData.material)) {
+        console.error('❌ [VesperaDeProvaConfig] Estrutura recebida:', materialData)
+        throw new Error('Formato inválido - esperado array em material')
+      }
+      
+      console.log('✅ [VesperaDeProvaConfig] Material validado, total disciplinas:', materialData.material.length)
+      
+      setGenerationStatus('Salvando material...')
+      
+      console.log('🔐 [VesperaDeProvaConfig] Verificando permissões antes de salvar...')
+      console.log('🔐 [VesperaDeProvaConfig] Usuário autenticado:', !!user)
+      console.log('🔐 [VesperaDeProvaConfig] Usuário UID:', user?.uid)
+      console.log('🔐 [VesperaDeProvaConfig] É admin:', isAdmin)
+      console.log('🔐 [VesperaDeProvaConfig] Course ID:', courseId)
+      
+      // Tentar salvar usando setDoc direto (mais simples)
+      const materialRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'material')
+      
+      console.log('📝 [VesperaDeProvaConfig] Caminho do documento:', `courses/${courseId}/vesperaDeProva/material`)
+      console.log('📝 [VesperaDeProvaConfig] Tentando salvar com setDoc...')
+      
+      try {
+        await setDoc(materialRef, {
+          ...materialData,
+          banca: bancaExaminadora,
+          concurso: concurso,
+          generatedAt: serverTimestamp(),
+          generatedBy: user.uid,
+        })
+        console.log('✅ [VesperaDeProvaConfig] Material salvo no Firestore com setDoc')
+      } catch (setDocError) {
+        console.error('❌ [VesperaDeProvaConfig] Erro ao salvar com setDoc:', setDocError)
+        
+        // Se falhar, tentar salvar em um caminho diferente
+        console.log('🔄 [VesperaDeProvaConfig] Tentando salvar em caminho alternativo...')
+        const altRef = doc(db, 'vesperaDeProvaMaterials', courseId)
+        
+        try {
+          await setDoc(altRef, {
+            ...materialData,
+            banca: bancaExaminadora,
+            concurso: concurso,
+            courseId: courseId,
+            generatedAt: serverTimestamp(),
+            generatedBy: user.uid,
+          })
+          console.log('✅ [VesperaDeProvaConfig] Material salvo no Firestore em caminho alternativo')
+        } catch (altError) {
+          console.error('❌ [VesperaDeProvaConfig] Erro ao salvar em caminho alternativo:', altError)
+          throw new Error(`Não foi possível salvar o material: ${altError.message}`)
+        }
+      }
+      
+      setGenerationStatus('✅ Material gerado com sucesso!')
+      
+      setTimeout(() => {
+        navigate(`/vespera-de-prova?course=${courseId}`)
+      }, 2000)
+      
+    } catch (error) {
+      console.error('❌ [VesperaDeProvaConfig] Erro ao gerar material:', error)
+      console.error('❌ [VesperaDeProvaConfig] Código:', error.code)
+      console.error('❌ [VesperaDeProvaConfig] Mensagem:', error.message)
+      setGenerationStatus(`❌ Erro: ${error.message}`)
+    } finally {
+      setGenerating(false)
+    }
+  }
+  
+  if (!isAdmin) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">
+            Acesso Restrito
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400 mb-6">
+            Apenas administradores podem acessar esta página.
+          </p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="px-4 py-2 bg-alego-600 text-white rounded-lg hover:bg-alego-700 transition"
+          >
+            Voltar ao Dashboard
+          </button>
+        </div>
+      </div>
+    )
+  }
+  
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-alego-600 border-t-transparent"></div>
+          <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Carregando...</p>
+        </div>
+      </div>
+    )
+  }
+  
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 py-8 px-4">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <button
+            onClick={() => navigate(`/vespera-de-prova?course=${courseId}`)}
+            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 mb-4 transition-colors"
+          >
+            <ArrowLeftIcon className="h-5 w-5" />
+            Voltar
+          </button>
+          
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-3">
+            <SparklesIcon className="h-8 w-8 text-alego-600" />
+            Configurar Véspera de Prova
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400 mt-2">
+            {courseName} - {concurso || 'Concurso não definido'}
+          </p>
+        </div>
+        
+        {/* Formulário de Configuração */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8">
+          <div className="space-y-8">
+            {/* Banca Examinadora */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                📝 Banca Examinadora
+              </label>
+              <input
+                type="text"
+                value={bancaExaminadora}
+                onChange={(e) => setBancaExaminadora(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 p-3 text-sm dark:bg-slate-700 dark:text-slate-100 focus:ring-2 focus:ring-alego-500 focus:border-transparent"
+                placeholder="Ex: Cebraspe, FCC, Vunesp"
+              />
+            </div>
+            
+            {/* Concurso */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Concurso *
+              </label>
+              <input
+                type="text"
+                value={concurso}
+                onChange={(e) => setConcurso(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 p-3 text-sm dark:bg-slate-700 dark:text-slate-100 focus:ring-2 focus:ring-alego-500 focus:border-transparent"
+                placeholder="Ex: PM AL 2024"
+              />
+            </div>
+            
+            {/* Questões por matéria */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
+                Questões por Matéria
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {editalVerticalizado?.disciplinas?.map((disciplina, idx) => (
+                  <div key={idx} className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
+                    <span className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      {disciplina.nome}
+                    </span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={questoesPorMateria[idx] || 5}
+                      onChange={(e) => setQuestoesPorMateria({
+                        ...questoesPorMateria,
+                        [idx]: parseInt(e.target.value) || 5
+                      })}
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-600 p-2 text-sm text-center dark:bg-slate-600 dark:text-slate-100 focus:ring-2 focus:ring-alego-500 focus:border-transparent"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Status de geração */}
+            {generating && (
+              <div className="bg-slate-100 dark:bg-slate-700 rounded-lg p-6">
+                <div className="flex items-center gap-3">
+                  <ArrowPathIcon className="h-6 w-6 text-alego-600 animate-spin" />
+                  <span className="text-base text-slate-700 dark:text-slate-300">
+                    {generationStatus}
+                  </span>
+                </div>
+              </div>
+            )}
+            
+            {/* Botões */}
+            <div className="flex gap-4 pt-4">
+              <button
+                onClick={() => navigate(`/vespera-de-prova?course=${courseId}`)}
+                className="flex-1 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={generateMaterial}
+                disabled={generating}
+                className="flex-1 px-6 py-3 bg-alego-600 text-white rounded-lg font-medium hover:bg-alego-700 disabled:opacity-50 transition flex items-center justify-center gap-2"
+              >
+                {generating ? (
+                  <>
+                    <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <SparklesIcon className="h-5 w-5" />
+                    Gerar Material
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default VesperaDeProvaConfig

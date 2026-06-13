@@ -29,6 +29,8 @@ const BlogNewsView = lazy(() => import('./routes/BlogNewsView'))
 const Simulado = lazy(() => import('./routes/Simulado'))
 const SimuladoShare = lazy(() => import('./routes/SimuladoShare'))
 const TreinoRedacao = lazy(() => import('./routes/TreinoRedacao'))
+const VesperaDeProva = lazy(() => import('./routes/VesperaDeProva'))
+const VesperaDeProvaConfig = lazy(() => import('./routes/VesperaDeProvaConfig'))
 const GuiaEstudos = lazy(() => import('./routes/GuiaEstudos'))
 const TestTrial = lazy(() => import('./routes/TestTrial'))
 const Mentoria = lazy(() => import('./routes/Mentoria'))
@@ -253,6 +255,22 @@ function App() {
             element={
               <ProtectedRoute requireCourseSelection>
                 <TreinoRedacao />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/vespera-de-prova"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <VesperaDeProva />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/vespera-de-prova/configurar/:courseId"
+            element={
+              <ProtectedRoute requireCourseSelection={false}>
+                <VesperaDeProvaConfig />
               </ProtectedRoute>
             }
           />
