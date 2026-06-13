@@ -37,6 +37,20 @@ const VesperaDeProva = () => {
   const [progresso, setProgresso] = useState({})
   const [materiaExpandida, setMateriaExpandida] = useState(null)
   
+  // Função para limpar markdown do texto
+  const cleanMarkdown = (text) => {
+    if (!text) return ''
+    return text
+      .replace(/\*\*/g, '') // Remove negrito
+      .replace(/\*/g, '') // Remove itálico
+      .replace(/•/g, '') // Remove bullet points
+      .replace(/__/g, '') // Remove underline
+      .replace(/~~/g, '') // Remove tachado
+      .replace(/`/g, '') // Remove código inline
+      .replace(/\n/g, ' ') // Remove quebras de linha
+      .trim()
+  }
+  
   // Carregar courseId
   useEffect(() => {
     const courseFromUrl = searchParams.get('course')
@@ -424,7 +438,7 @@ const VesperaDeProva = () => {
                             <ul className="space-y-2">
                               {disciplina.revisaoTurbo.resumos.map((resumo, rIdx) => (
                                 <li key={rIdx} className="text-sm text-slate-600 dark:text-slate-400">
-                                  • {resumo}
+                                  {cleanMarkdown(resumo)}
                                 </li>
                               ))}
                             </ul>
@@ -440,7 +454,7 @@ const VesperaDeProva = () => {
                             <ul className="space-y-1">
                               {disciplina.revisaoTurbo.pegadinhas.map((pegadinha, pIdx) => (
                                 <li key={pIdx} className="text-sm text-red-600 dark:text-red-400">
-                                  • {pegadinha}
+                                  {cleanMarkdown(pegadinha)}
                                 </li>
                               ))}
                             </ul>

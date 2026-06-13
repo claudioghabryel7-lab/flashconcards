@@ -163,16 +163,24 @@ INSTRUÇÕES:
 Gere um material de revisão de "Véspera de Prova" para CADA disciplina na ordem exata acima. Para cada disciplina, inclua:
 
 1. **RAIO-X DE PROBABILIDADE**:
-   - Top 3 Assuntos Quentes: Os três tópicos com maior probabilidade de cair
-   - O Padrão da Banca: Como a banca costuma cobrar esta disciplina
+   - Top 10 Assuntos Quentes: Os três tópicos com maior probabilidade de cair NO CONCURSO ${estrutura.concurso}
+   - O Padrão da Banca: Como a banca ${estrutura.banca} costuma cobrar esta disciplina especificamente no concurso.
 
 2. **REVISÃO TURBO**:
-   - 3-5 resumos em bullet points (frases curtas e diretas)
-   - 2-3 pegadinhas ("Cuidado, Caçapa!")
+   - 5-7 resumos detalhados e explicativos (não apenas frases curtas). Cada resumo deve:
+     * Explicar o conceito de forma clara e didática
+     * Citar exemplos práticos do concurso ${estrutura.concurso}
+     * Ser específico para o cargo de ${estrutura.curso}
+     * Incluir dicas de memorização(nada gernérico e vazio/vago)
+   - 3-4 pegadinhas ("Cuidado meu querido aluno!"):
+     * Erros comuns que a banca ${estrutura.banca} costuma cobrar
+     * Detalhes que passam despercebidos
+     * Armadilhas específicas do concurso ${estrutura.concurso}
 
 3. **QUESTÕES PREDITIVAS**:
    - Gere EXATAMENTE ${estrutura.disciplinas.map(d => d.questoes).join(', ')} questões para cada disciplina
-   - No estilo da banca (A, B, C, D, E ou Certo/Errado)
+   - No estilo da banca ${estrutura.banca} (A, B, C, D, E ou Certo/Errado)
+   - Contextualizadas com o concurso ${estrutura.concurso} e cargo ${estrutura.curso}
    - Gabarito Comentado: explique o porquê das outras estarem erradas
 
 FORMATO JSON:
@@ -185,7 +193,7 @@ FORMATO JSON:
         "padraoBanca": "descrição do padrão"
       },
       "revisaoTurbo": {
-        "resumos": ["resumo 1", "resumo 2"],
+        "resumos": ["resumo detalhado 1", "resumo detalhado 2"],
         "pegadinhas": ["pegadinha 1"]
       },
       "questoes": [
@@ -203,7 +211,10 @@ FORMATO JSON:
 REGRAS:
 - Mantenha a ordem EXATA das disciplinas
 - Use tom focado e direto
-- Retorne APENAS o JSON válido, sem texto adicional`
+- Seja ESPECÍFICO do concurso ${estrutura.concurso} e cargo ${estrutura.curso}
+- Cite o nome do concurso e cargo nos resumos e questões
+- Retorne APENAS o JSON válido, sem texto adicional
+- NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
       
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY
       console.log('🔑 [VesperaDeProvaConfig] API Key encontrada:', !!apiKey)
