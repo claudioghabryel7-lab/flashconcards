@@ -23,6 +23,10 @@ const VesperaDeProvaConfig = () => {
   const [generating, setGenerating] = useState(false)
   const [generationStatus, setGenerationStatus] = useState('')
   
+  // Progresso da geração
+  const [generationProgress, setGenerationProgress] = useState(0)
+  const [existingProgress, setExistingProgress] = useState(null)
+  
   // Configurações
   const [bancaExaminadora, setBancaExaminadora] = useState('')
   const [concurso, setConcurso] = useState('')
@@ -101,6 +105,24 @@ const VesperaDeProvaConfig = () => {
     }
     
     loadCourseData()
+    
+    // Carregar progresso existente da geração
+    const loadExistingProgress = async () => {
+      try {
+        const progressRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'progress')
+        const progressDoc = await getDoc(progressRef)
+        
+        if (progressDoc.exists()) {
+          const progressData = progressDoc.data()
+          console.log('📊 [VesperaDeProvaConfig] Progresso existente encontrado:', progressData)
+          setExistingProgress(progressData)
+        }
+      } catch (error) {
+        console.log('ℹ️ [VesperaDeProvaConfig] Nenhum progresso existente encontrado')
+      }
+    }
+    
+    loadExistingProgress()
   }, [courseId, user, isAdmin])
   
   // Gerar material com IA (mesma abordagem do EditalVerticalizado)
@@ -127,6 +149,7 @@ const VesperaDeProvaConfig = () => {
     
     setGenerating(true)
     setGenerationStatus('Preparando estrutura do edital...')
+    setGenerationProgress(0)
     
     try {
       console.log('🚀 [VesperaDeProvaConfig] Iniciando geração de material')
@@ -135,15 +158,55 @@ const VesperaDeProvaConfig = () => {
       console.log('🚀 [VesperaDeProvaConfig] Banca:', bancaExaminadora)
       console.log('🚀 [VesperaDeProvaConfig] Total disciplinas:', editalVerticalizado.disciplinas.length)
       
+      // Verificar se existe progresso anterior com as mesmas configurações
+      let startFromPart = 0
+      let existingMaterial = []
+      
+      if (existingProgress && existingProgress.config) {
+        const configMatch = 
+          existingProgress.config.banca === bancaExaminadora &&
+          existingProgress.config.concurso === concurso &&
+          JSON.stringify(existingProgress.config.questoesPorMateria) === JSON.stringify(questoesPorMateria)
+        
+        if (configMatch && existingProgress.status === 'in_progress') {
+          console.log('📊 [VesperaDeProvaConfig] Progresso compatível encontrado, retomando de onde parou')
+          console.log('📊 [VesperaDeProvaConfig] Partes concluídas:', existingProgress.completedParts)
+          startFromPart = existingProgress.completedParts.length
+          existingMaterial = existingProgress.material || []
+          
+          // Carregar material parcial do Firestore
+          try {
+            const materialRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'material')
+            const materialDoc = await getDoc(materialRef)
+            if (materialDoc.exists()) {
+              const materialData = materialDoc.data()
+              existingMaterial = materialData.material || []
+              console.log('📊 [VesperaDeProvaConfig] Material parcial carregado:', existingMaterial.length, 'disciplinas')
+            }
+          } catch (error) {
+            console.log('ℹ️ [VesperaDeProvaConfig] Não foi possível carregar material parcial')
+          }
+          
+          setGenerationStatus(`Retomando geração... (${existingProgress.completedParts.length}/${existingProgress.totalParts} partes concluídas)`)
+        } else {
+          console.log('📊 [VesperaDeProvaConfig] Progresso existente não compatível, iniciando nova geração')
+          // Limpar progresso antigo
+          const progressRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'progress')
+          await setDoc(progressRef, {}, { merge: true })
+        }
+      }
+      
       // Dividir disciplinas em partes (máximo 2 disciplinas por parte para evitar corte do JSON)
       const disciplinasPorParte = 2
       const totalPartes = Math.ceil(editalVerticalizado.disciplinas.length / disciplinasPorParte)
       
       console.log(`📦 [VesperaDeProvaConfig] Dividindo em ${totalPartes} partes (máximo ${disciplinasPorParte} disciplinas por parte)`)
+      console.log(`📦 [VesperaDeProvaConfig] Iniciando da parte ${startFromPart + 1}/${totalPartes}`)
       
-      const todasDisciplinas = []
+      const todasDisciplinas = [...existingMaterial]
+      const completedParts = existingProgress?.completedParts || []
       
-      for (let parte = 0; parte < totalPartes; parte++) {
+      for (let parte = startFromPart; parte < totalPartes; parte++) {
         // Adicionar delay entre partes para evitar rate limit (mínimo 30 segundos)
         if (parte > 0) {
           console.log(`⏳ [VesperaDeProvaConfig] Aguardando 30 segundos para evitar rate limit...`)
@@ -473,7 +536,43 @@ REGRAS:
       
       // Adicionar disciplinas desta parte ao array total
       todasDisciplinas.push(...materialData.material)
+      completedParts.push(parte)
+      
+      // Atualizar progresso visual
+      const progressPercent = Math.round((completedParts.length / totalPartes) * 100)
+      setGenerationProgress(progressPercent)
+      
       console.log(`📦 [VesperaDeProvaConfig] Parte ${parte + 1} concluída, total disciplinas acumuladas: ${todasDisciplinas.length}`)
+      console.log(`📊 [VesperaDeProvaConfig] Progresso: ${progressPercent}% (${completedParts.length}/${totalPartes} partes)`)
+      
+      // Salvar progresso e material parcial no Firestore
+      const progressRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'progress')
+      await setDoc(progressRef, {
+        config: {
+          banca: bancaExaminadora,
+          concurso: concurso,
+          questoesPorMateria: questoesPorMateria
+        },
+        completedParts: completedParts,
+        totalParts: totalPartes,
+        status: 'in_progress',
+        material: todasDisciplinas,
+        updatedAt: serverTimestamp()
+      })
+      
+      // Salvar material parcial
+      const materialRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'material')
+      await setDoc(materialRef, {
+        material: todasDisciplinas,
+        banca: bancaExaminadora,
+        concurso: concurso,
+        generatedAt: serverTimestamp(),
+        generatedBy: user.uid,
+        isPartial: true
+      })
+      
+      console.log(`💾 [VesperaDeProvaConfig] Progresso e material parcial salvos`)
+      setGenerationStatus(`Parte ${parte + 1}/${totalPartes} concluída (${progressPercent}%)`)
       }
       
       // Combinar todas as partes em um único material
@@ -504,8 +603,27 @@ REGRAS:
           concurso: concurso,
           generatedAt: serverTimestamp(),
           generatedBy: user.uid,
+          isPartial: false
         })
         console.log('✅ [VesperaDeProvaConfig] Material salvo no Firestore com setDoc')
+        
+        // Marcar progresso como completo
+        const progressRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'progress')
+        await setDoc(progressRef, {
+          config: {
+            banca: bancaExaminadora,
+            concurso: concurso,
+            questoesPorMateria: questoesPorMateria
+          },
+          completedParts: completedParts,
+          totalParts: totalPartes,
+          status: 'completed',
+          material: todasDisciplinas,
+          updatedAt: serverTimestamp()
+        })
+        
+        console.log('✅ [VesperaDeProvaConfig] Progresso marcado como completo')
+        setGenerationProgress(100)
       } catch (setDocError) {
         console.error('❌ [VesperaDeProvaConfig] Erro ao salvar com setDoc:', setDocError)
         
@@ -660,11 +778,70 @@ REGRAS:
             {/* Status de geração */}
             {generating && (
               <div className="bg-slate-100 dark:bg-slate-700 rounded-lg p-6">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 mb-4">
                   <ArrowPathIcon className="h-6 w-6 text-alego-600 animate-spin" />
                   <span className="text-base text-slate-700 dark:text-slate-300">
                     {generationStatus}
                   </span>
+                </div>
+                
+                {/* Barra de progresso */}
+                {generationProgress > 0 && (
+                  <div className="mt-4">
+                    <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400 mb-2">
+                      <span>Progresso</span>
+                      <span>{generationProgress}%</span>
+                    </div>
+                    <div className="w-full bg-slate-300 dark:bg-slate-600 rounded-full h-3">
+                      <div
+                        className="bg-alego-600 h-3 rounded-full transition-all duration-300"
+                        style={{ width: `${generationProgress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Progresso existente */}
+            {existingProgress && existingProgress.status === 'in_progress' && !generating && (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
+                <div className="flex items-start gap-3">
+                  <SparklesIcon className="h-6 w-6 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                      Geração em andamento detectada
+                    </h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                      Foi encontrada uma geração anterior com as mesmas configurações que não foi concluída. 
+                      {existingProgress.completedParts?.length || 0} de {existingProgress.totalParts || 0} partes foram geradas.
+                    </p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={generateMaterial}
+                        className="px-4 py-2 bg-alego-600 text-white rounded-lg text-sm font-medium hover:bg-alego-700 transition"
+                      >
+                        Continuar Geração
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (confirm('Tem certeza que deseja limpar o progresso e iniciar uma nova geração?')) {
+                            try {
+                              const progressRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'progress')
+                              await setDoc(progressRef, {})
+                              setExistingProgress(null)
+                              alert('Progresso limpo com sucesso.')
+                            } catch (error) {
+                              alert('Erro ao limpar progresso: ' + error.message)
+                            }
+                          }
+                        }}
+                        className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                      >
+                        Limpar Progresso
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
