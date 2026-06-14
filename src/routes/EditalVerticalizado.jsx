@@ -542,7 +542,7 @@ const EditalVerticalizado = () => {
         decoded = topicKey
       }
       
-      const sanitizedKey = decoded
+      let sanitizedKey = decoded
         .replace(/::/g, '_DOUBLECOLON_')
         .replace(/\//g, '_SLASH_')
         .replace(/\\/g, '_BACKSLASH_')
