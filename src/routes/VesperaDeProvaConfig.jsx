@@ -144,6 +144,13 @@ const VesperaDeProvaConfig = () => {
       const todasDisciplinas = []
       
       for (let parte = 0; parte < totalPartes; parte++) {
+        // Adicionar delay entre partes para evitar rate limit (mínimo 30 segundos)
+        if (parte > 0) {
+          console.log(`⏳ [VesperaDeProvaConfig] Aguardando 30 segundos para evitar rate limit...`)
+          setGenerationStatus(`Aguardando 30 segundos para evitar rate limit...`)
+          await new Promise(resolve => setTimeout(resolve, 30000))
+        }
+        
         const inicio = parte * disciplinasPorParte
         const fim = Math.min(inicio + disciplinasPorParte, editalVerticalizado.disciplinas.length)
         const disciplinasParte = editalVerticalizado.disciplinas.slice(inicio, fim)
