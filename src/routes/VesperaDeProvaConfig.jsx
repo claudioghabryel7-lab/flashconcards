@@ -310,46 +310,63 @@ REGRAS:
 - Retorne APENAS o JSON válido, sem texto adicional
 - NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
       
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      console.log('🔑 [VesperaDeProvaConfig] API Key encontrada:', !!apiKey)
-      
-      setGenerationStatus('Enviando solicitação para a IA...')
-      
-      // Função para fazer requisição com retry automático para erro 429
-      const fetchWithRetry = async (url, options, maxRetries = 3) => {
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-          const response = await fetch(url, options)
-          const data = await response.json()
-          
-          if (response.ok) {
-            return data
-          }
-          
-          // Se for erro 429 (Too Many Requests), extrair tempo de espera e retentar
-          if (response.status === 429) {
-            const errorMessage = data.error?.message || ''
-            const match = errorMessage.match(/Please retry in ([\d.]+)s/)
-            const waitTime = match ? parseFloat(match[1]) * 1000 : 30000 // Padrão 30 segundos
-            
-            console.log(`⏳ [VesperaDeProvaConfig] Rate limit atingido (tentativa ${attempt}/${maxRetries}). Aguardando ${waitTime / 1000} segundos...`)
-            setGenerationStatus(`Rate limit atingido. Aguardando ${Math.round(waitTime / 1000)} segundos... (tentativa ${attempt}/${maxRetries})`)
-            
-            await new Promise(resolve => setTimeout(resolve, waitTime))
-            
-            // Se não for a última tentativa, continuar o loop
-            if (attempt < maxRetries) {
-              continue
-            }
-          }
-          
-          // Se não for erro 429 ou esgotou as tentativas, lançar erro
-          console.error('❌ [VesperaDeProvaConfig] Erro na API Gemini:', data)
-          throw new Error(data.error?.message || 'Erro na API da IA')
+      // Carregar múltiplas API keys do Gemini
+      const apiKeys = []
+      for (let i = 1; i <= 10; i++) {
+        const key = import.meta.env[`VITE_GEMINI_API_KEY_${i}`] || import.meta.env[`VITE_GEMINI_API_KEY`]
+        if (key && !apiKeys.includes(key)) {
+          apiKeys.push(key)
         }
       }
       
-      const data = await fetchWithRetry(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,
+      console.log('🔑 [VesperaDeProvaConfig] API Keys carregadas:', apiKeys.length)
+      
+      if (apiKeys.length === 0) {
+        throw new Error('Nenhuma API key do Gemini encontrada')
+      }
+      
+      setGenerationStatus('Enviando solicitação para a IA...')
+      
+      // Função para fazer requisição com rotação de API keys
+      const fetchWithKeyRotation = async (url, options) => {
+        for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex++) {
+          const apiKey = apiKeys[keyIndex]
+          console.log(`🔑 [VesperaDeProvaConfig] Tentando API key ${keyIndex + 1}/${apiKeys.length}`)
+          
+          const urlWithKey = `${url}&key=${apiKey}`
+          
+          try {
+            const response = await fetch(urlWithKey, options)
+            const data = await response.json()
+            
+            if (response.ok) {
+              console.log(`✅ [VesperaDeProvaConfig] API key ${keyIndex + 1} funcionou`)
+              return data
+            }
+            
+            // Se for erro 429 (Too Many Requests), tentar próxima key
+            if (response.status === 429) {
+              console.log(`⚠️ [VesperaDeProvaConfig] API key ${keyIndex + 1} atingiu quota, tentando próxima...`)
+              continue
+            }
+            
+            // Se for outro erro, lançar imediatamente
+            console.error('❌ [VesperaDeProvaConfig] Erro na API Gemini:', data)
+            throw new Error(data.error?.message || 'Erro na API da IA')
+          } catch (error) {
+            if (keyIndex < apiKeys.length - 1) {
+              console.log(`⚠️ [VesperaDeProvaConfig] API key ${keyIndex + 1} falhou, tentando próxima...`)
+              continue
+            }
+            throw error
+          }
+        }
+        
+        throw new Error('Todas as API keys atingiram quota ou falharam')
+      }
+      
+      const data = await fetchWithKeyRotation(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
         {
           method: 'POST',
           headers: {
