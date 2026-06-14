@@ -333,7 +333,7 @@ REGRAS:
           const apiKey = apiKeys[keyIndex]
           console.log(`🔑 [VesperaDeProvaConfig] Tentando API key ${keyIndex + 1}/${apiKeys.length}`)
           
-          const urlWithKey = `${url}&key=${apiKey}`
+          const urlWithKey = `${url}?key=${apiKey}`
           
           try {
             const response = await fetch(urlWithKey, options)
