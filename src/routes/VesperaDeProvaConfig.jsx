@@ -250,6 +250,9 @@ ${JSON.stringify(estrutura.disciplinas, null, 2)}
 INSTRUÇÕES:
 Gere um material de revisão de "Véspera de Prova" para CADA disciplina na ordem exata acima. Para cada disciplina, inclua:
 
+DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se há leis, decretos ou regulamentos recentes que possam afetar o conteúdo.
+
 **MODO HACKER DOS CONCURSOS**
 
 1. **RAIO-X DE PROBABILIDADE**:

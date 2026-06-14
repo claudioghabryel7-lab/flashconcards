@@ -597,17 +597,11 @@ BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
 EXEMPLOS DO QUE EVITAR (ERRADO):
 ❌ Se tópico é "Conceitos" em "Direito Constitucional": 
    "O Direito Constitucional é o ramo do direito que estuda as constituições..."
-❌ Se tópico é "Conceitos" em "Direito Administrativo":
-   "A administração pública no Brasil é regida por princípios..."
+INSTRUÇÕES:
+Gere um material de revisão de "Véspera de Prova" para o tópico "${effectiveTopicNome || resolvedTopicKey}" da disciplina "${disciplinaNome || 'mencionada'}".
 
-EXEMPLOS DO QUE CRIAR (CORRETO):
-✅ Se tópico é "Conceitos" em "Direito Constitucional":
-   "Conceito de Constituição: Segundo José Afonso da Silva, constituição é..."
-✅ Se tópico é "Conceitos" em "Direito Administrativo":
-   "Conceito de ato administrativo: Segundo Hely Lopes Meirelles, ato administrativo é..."
-   antes de gerar um conteudo verifique a veracidade e não tente presumr algo da sua cabeça, afinal eu preciso de dados reais.
-   não é pra inventar informações.
-   quando gerar verifique se é real sempre!
+DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se há leis, decretos ou regulamentos recentes que possam afetar o conteúdo.
 
 **MODO HACKER DOS CONCURSOS**
 
@@ -636,35 +630,31 @@ EXEMPLOS DO QUE CRIAR (CORRETO):
    - **USE FORMATAÇÃO RICA no gabarito**: Use **negrito** para resposta correta, *itálico* para explicações, e formatação visual para destacar pontos importantes
    - **NÃO ECONOMIZE TEXTO**: Seja detalhado e completo nas explicações, mas não excessivamente extenso
 
-TAREFA:
-Crie um conteúdo COMPLETO, DETALHADO e 100% ESPECÍFICO para o tópico acima, seguindo o formato MODO HACKER DOS CONCURSOS.
-
-FORMATO DE RESPOSTA (APENAS JSON VÁLIDO):
+FORMATO JSON:
 {
   "titulo": "Título específico do conteúdo",
   "materia": "${effectiveTopicNome || resolvedTopicKey}",
   "subtitulo": "Subtítulo específico opcional",
   "numero": "${resolvedTopicKey}",
-  "content": "Conteúdo HTML específico e detalhado APENAS deste tópico",
   "raioXProbabilidade": {
-    "topicosQuentes": ["Tópico 1", "Tópico 2", "..."],
-    "padraoBanca": "Descrição do padrão da banca"
+    "topicosQuentes": ["assunto 1", "assunto 2", "assunto 3"],
+    "padraoBanca": "descrição do padrão"
   },
   "revisaoTurbo": [
     {
       "titulo": "Título do resumo",
-      "conteudo": "Conteúdo HTML detalhado e didático"
+      "conteudo": "resumo detalhado 1"
     }
   ],
   "pegadinhas": [
     {
       "titulo": "Cuidado meu querido aluno!",
-      "conteudo": "Conteúdo HTML sobre armadilhas comuns"
+      "conteudo": "pegadinha 1"
     }
   ],
   "questoesPreditivas": [
     {
-      "enunciado": "Enunciado da questão",
+      "enunciado": "texto da questão",
       "alternativas": {
         "A": "Alternativa A",
         "B": "Alternativa B",
@@ -673,39 +663,17 @@ FORMATO DE RESPOSTA (APENAS JSON VÁLIDO):
         "E": "Alternativa E"
       },
       "correta": "A",
-      "gabaritoComentado": "Explicação detalhada em HTML"
+      "gabaritoComentado": "explicação detalhada"
     }
-  ],
-  "tags": ["${effectiveTopicNome || resolvedTopicKey}", "específico"]
+  ]
 }
-TRAVAS DE SEGURANÇA PARA GERAÇÃO DE CONTEÚDO:
--Aja como um Auditor de Conteúdo para Concursos. Estamos em 2026 e muitas coisas mudaram e foram atualizadas…cuidado com coisas desatualizadas.Antes de gerar, execute o Protocolo de Segurança: 1. Verifique conflitos constitucionais; 2. Valide a competência de julgamento vs. classificação do crime; 3. Use apenas legislação vigente pós-reformas recentes; 4. Isole regras estaduais de federais. Se houver dúvida jurídica, apresente a interpretação mais segura e conservadora dos Tribunais Superiores.
--Cuidado para não gerar conteúdo errado... Qualquer coisa consulte o gemini antes de gerar o conteúdo para não gerar erros, pois as vezes mando o material para o gemini e ele diz que está errado(lembrando que estou usando a própria api do gemini)
 
-REGRAS FINAIS:
-- Não trunque
-- Cuidado para não misturar direito(sumulas etc) em matérias que não são de direito
-- 🚨 BANCA EXAMINADORA: Use EXCLUSIVAMENTE o estilo da banca "${banca || 'NÃO DEFINIDA'}"
-- 🚨 Se a banca for INSTITUTO AOCP: foco em legislação literal, artigos na íntegra, questões objetivas diretas
-- 🚨 Se a banca for FGV: foco em interpretação de texto, questões contextualizadas, análise crítica
-- 🚨 Se a banca for CESPE/CEBRASPE: foco em assertivas C/E, interpretação constitucional
-- 🚨 Se a banca for FCC: foco em legislação atualizada, questões de múltipla escolha, interpretação direta
-- 🚨 Se a banca for VUNESP: foco em interpretação de texto, questões contextualizadas, análise crítica
-- Fale Didaticamente com o aluno falando "aqui seu professor Flash o seu amigo que vai ver você aprovado (cite o concurso)"
-- Use bordões(mas sem exagerar)
-- Não Economize nas palavras e no material, o material tem que ser completo sem faltar nada
-- Seja específico no conteúdo de acordo com a banca do concurso "${banca || 'NÃO DEFINIDA'}" com o que é maior incidência
-- Seja Extensivo no Conteúdo mas não redundante
-- Não deixe nada para trás do tópico que está sendo gerado, gere todos os detalhes
-- Cuidado pra não repetir o conteudo no mesmo material
-- Faça frases motivacionais referente ao cargo(concurso) do tópico ex: você vai ser o futuro (Curso)
-- Faça piadas
-- Diga coisas assim no estilo de (tem cursinhos que não falam isso),(essa dica é só aqui)
-- O conteúdo DEVE ser 100% específico para o tópico "${effectiveTopicNome || resolvedTopicKey}"
-- NÃO inclua informações genéricas sobre toda a matéria
-- Use HTML sem markdown
-- Comece diretamente com { e termine com } (JSON parseável)
-- Inclua artigos de lei, números e referências específicas`
+REGRAS:
+- Use tom focado e direto
+- Seja ESPECÍFICO do concurso ${concursoName || 'mencionado'} e cargo ${courseName || 'mencionado'}
+- Cite o nome do concurso e cargo nos resumos e questões
+- Retorne APENAS o JSON válido, sem texto adicional
+- NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
 
       setProgress((prev) => Math.min(prev + 15, 70))
       const response = await callGeminiWithRetry(prompt, {
