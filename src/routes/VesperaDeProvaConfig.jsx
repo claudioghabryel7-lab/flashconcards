@@ -190,21 +190,25 @@ const VesperaDeProvaConfig = () => {
           setGenerationStatus(`Retomando geração... (${existingProgress.completedParts.length}/${existingProgress.totalParts} partes concluídas)`)
         } else {
           console.log('📊 [VesperaDeProvaConfig] Progresso existente não compatível, iniciando nova geração')
-          // Limpar progresso antigo
+          console.log('📊 [VesperaDeProvaConfig] Config anterior:', existingProgress.config)
+          console.log('📊 [VesperaDeProvaConfig] Config atual:', { banca: bancaExaminadora, concurso: concurso, questoesPorMateria })
+          // Limpar progresso antigo completamente
+          const { deleteDoc } = await import('firebase/firestore')
           const progressRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'progress')
-          await setDoc(progressRef, {}, { merge: true })
+          await deleteDoc(progressRef)
+          console.log('🗑️ [VesperaDeProvaConfig] Progresso antigo removido')
         }
       }
       
-      // Dividir disciplinas em partes (máximo 2 disciplinas por parte para evitar corte do JSON)
-      const disciplinasPorParte = 2
+      // Dividir disciplinas em partes (1 disciplina por parte para evitar corte do JSON devido ao conteúdo detalhado)
+      const disciplinasPorParte = 1
       const totalPartes = Math.ceil(editalVerticalizado.disciplinas.length / disciplinasPorParte)
       
-      console.log(`📦 [VesperaDeProvaConfig] Dividindo em ${totalPartes} partes (máximo ${disciplinasPorParte} disciplinas por parte)`)
+      console.log(`📦 [VesperaDeProvaConfig] Dividindo em ${totalPartes} partes (1 disciplina por parte para evitar truncamento)`)
       console.log(`📦 [VesperaDeProvaConfig] Iniciando da parte ${startFromPart + 1}/${totalPartes}`)
       
       const todasDisciplinas = [...existingMaterial]
-      const completedParts = existingProgress?.completedParts || []
+      const completedParts = new Set(existingProgress?.completedParts || [])
       
       for (let parte = startFromPart; parte < totalPartes; parte++) {
         // Adicionar delay entre partes para evitar rate limit (mínimo 30 segundos)
@@ -542,14 +546,14 @@ REGRAS:
       
       // Adicionar disciplinas desta parte ao array total
       todasDisciplinas.push(...materialData.material)
-      completedParts.push(parte)
+      completedParts.add(parte)
       
       // Atualizar progresso visual
-      const progressPercent = Math.round((completedParts.length / totalPartes) * 100)
+      const progressPercent = Math.round((completedParts.size / totalPartes) * 100)
       setGenerationProgress(progressPercent)
       
       console.log(`📦 [VesperaDeProvaConfig] Parte ${parte + 1} concluída, total disciplinas acumuladas: ${todasDisciplinas.length}`)
-      console.log(`📊 [VesperaDeProvaConfig] Progresso: ${progressPercent}% (${completedParts.length}/${totalPartes} partes)`)
+      console.log(`📊 [VesperaDeProvaConfig] Progresso: ${progressPercent}% (${completedParts.size}/${totalPartes} partes)`)
       
       // Salvar progresso e material parcial no Firestore
       const progressRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'progress')
@@ -559,7 +563,7 @@ REGRAS:
           concurso: concurso,
           questoesPorMateria: questoesPorMateria
         },
-        completedParts: completedParts,
+        completedParts: Array.from(completedParts),
         totalParts: totalPartes,
         status: 'in_progress',
         material: todasDisciplinas,
@@ -621,7 +625,7 @@ REGRAS:
             concurso: concurso,
             questoesPorMateria: questoesPorMateria
           },
-          completedParts: completedParts,
+          completedParts: Array.from(completedParts),
           totalParts: totalPartes,
           status: 'completed',
           material: todasDisciplinas,
