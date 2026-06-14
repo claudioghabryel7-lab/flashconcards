@@ -598,7 +598,7 @@ EXEMPLOS DO QUE EVITAR (ERRADO):
 ❌ Se tópico é "Conceitos" em "Direito Constitucional": 
    "O Direito Constitucional é o ramo do direito que estuda as constituições..."
 INSTRUÇÕES:
-Gere um material de revisão de "Véspera de Prova" para o tópico "${effectiveTopicNome || resolvedTopicKey}" da disciplina "${disciplinaNome || 'mencionada'}".
+Gere um material de revisão de "Véspera de Prova" para o tópico "${effectiveTopicNome || resolvedTopicKey}"${contextoDisciplina ? ` da disciplina "${contextoDisciplina.disciplina}"` : ''}.
 
 DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
 IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se há leis, decretos ou regulamentos recentes que possam afetar o conteúdo.
