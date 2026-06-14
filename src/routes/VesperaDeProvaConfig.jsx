@@ -453,10 +453,22 @@ REGRAS:
         // Tentar corrigir com múltiplas estratégias
         let fixedJson = materialJson
         
-        // Correção 1: Remover caracteres de controle (bad control characters)
+        // Correção 1: Remover caracteres de controle (bad control characters) - mais agressivo
+        // Isso inclui caracteres que o Google Search pode introduzir
         fixedJson = fixedJson.replace(/[\x00-\x1F\x7F-\x9F]/g, '')
         
-        // Correção 2: Remover vírgulas extras antes de } e ]
+        // Correção 2: Remover caracteres Unicode problemáticos que podem vir do Google Search
+        fixedJson = fixedJson.replace(/[\u2028\u2029\u200B\u200C\u200D\uFEFF]/g, '')
+        
+        // Correção 3: Normalizar quebras de linha
+        fixedJson = fixedJson.replace(/\r\n/g, '\n')
+        fixedJson = fixedJson.replace(/\r/g, '\n')
+        
+        // Correção 4: Escapar aspas em strings que não foram escapadas corretamente
+        // Isso pode acontecer quando o Google Search retorna conteúdo com aspas
+        fixedJson = fixedJson.replace(/(?<!\\)"(?!\s*[:}\]])/g, '\\"')
+        
+        // Correção 5: Remover vírgulas extras antes de } e ]
         fixedJson = fixedJson.replace(/,\s*}/g, '}')
         fixedJson = fixedJson.replace(/,\s*]/g, ']')
         
