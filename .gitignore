@@ -24,6 +24,8 @@ build/
 .env.production
 .env.example
 .env.example.template
+.env.vercel
+ENV_KEYS_TEMP.txt
 
 # Editor directories and files
 .vscode/*
