@@ -553,12 +553,21 @@ const EditalVerticalizado = () => {
         sanitizedKey = sanitizedKey.substring(0, 400)
       }
 
+      console.log('🗑️ Tentando apagar conteúdo:', {
+        courseId,
+        topicKey,
+        decoded,
+        sanitizedKey,
+        path: `courses/${courseId}/conteudosCompletos/${sanitizedKey}`
+      })
+
       const contentRef = doc(db, 'courses', courseId, 'conteudosCompletos', sanitizedKey)
       await deleteDoc(contentRef)
       
+      console.log('✅ Conteúdo apagado com sucesso!')
       alert('✅ Conteúdo apagado com sucesso!')
     } catch (error) {
-      console.error('Erro ao apagar conteúdo:', error)
+      console.error('❌ Erro ao apagar conteúdo:', error)
       alert('❌ Erro ao apagar conteúdo: ' + (error.message || 'Erro desconhecido'))
     }
   }
