@@ -246,8 +246,10 @@ ${JSON.stringify(estrutura.disciplinas, null, 2)}
 INSTRUÇÕES:
 Gere um material de revisão de "Véspera de Prova" para CADA disciplina na ordem exata acima. Para cada disciplina, inclua:
 
+**MODO HACKER DOS CONCURSOS**
+
 1. **RAIO-X DE PROBABILIDADE**:
-   - Top 10 Assuntos Quentes: Os três tópicos com maior probabilidade de cair NO CONCURSO ${estrutura.concurso}
+   - Top Assuntos Quentes: Gere entre 5 a 15 tópicos com maior probabilidade de cair NO CONCURSO ${estrutura.concurso} (quantidade depende da extensão do conteúdo da disciplina)
    - O Padrão da Banca: Como a banca ${estrutura.banca} costuma cobrar esta disciplina especificamente no concurso.
 
 2. **REVISÃO TURBO**:
@@ -256,16 +258,20 @@ Gere um material de revisão de "Véspera de Prova" para CADA disciplina na orde
      * Citar exemplos práticos do concurso ${estrutura.concurso}
      * Ser específico para o cargo de ${estrutura.curso}
      * Incluir dicas de memorização(nada gernérico e vazio/vago)
+     * **USE FORMATAÇÃO RICA**: Use **negrito** para termos importantes, *itálico* para ênfase, e formatação visual para destacar pontos-chave
    - 3-4 pegadinhas ("Cuidado meu querido aluno!"):
      * Erros comuns que a banca ${estrutura.banca} costuma cobrar
      * Detalhes que passam despercebidos
      * Armadilhas específicas do concurso ${estrutura.concurso}
+     * **USE FORMATAÇÃO RICA**: Use **negrito**, *itálico*, e destaque visual para armadilhas
 
 3. **QUESTÕES PREDITIVAS**:
    - Gere EXATAMENTE ${estrutura.disciplinas.map(d => d.questoes).join(', ')} questões para cada disciplina
    - No estilo da banca ${estrutura.banca} (A, B, C, D, E ou Certo/Errado)
    - Contextualizadas com o concurso ${estrutura.concurso} e cargo ${estrutura.curso}
    - Gabarito Comentado: explique o porquê das outras estarem erradas
+   - **USE FORMATAÇÃO RICA no gabarito**: Use **negrito** para resposta correta, *itálico* para explicações, e formatação visual para destacar pontos importantes
+   - **NÃO ECONOMIZE TEXTO**: Seja detalhado e completo nas explicações, mas não excessivamente extenso
 
 FORMATO JSON:
 {
