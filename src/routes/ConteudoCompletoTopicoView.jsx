@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy } from 'firebase/firestore'
-import { ArrowLeftIcon, PencilIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, PencilIcon, FireIcon, LightBulbIcon, ExclamationTriangleIcon, BookOpenIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
@@ -609,8 +609,35 @@ EXEMPLOS DO QUE CRIAR (CORRETO):
    não é pra inventar informações.
    quando gerar verifique se é real sempre!
 
+**MODO HACKER DOS CONCURSOS**
+
+1. **RAIO-X DE PROBABILIDADE**:
+   - Top Assuntos Quentes: Gere entre 5 a 15 tópicos com maior probabilidade de cair NO CONCURSO ${concursoName || 'mencionado'} (quantidade depende da extensão do conteúdo da disciplina)
+   - O Padrão da Banca: Como a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar esta disciplina especificamente no concurso.
+
+2. **REVISÃO TURBO**:
+   - 5-7 resumos detalhados e explicativos (não apenas frases curtas). Cada resumo deve:
+     * Explicar o conceito de forma clara e didática(NADA SUPERFICIAL, QUERO BEM COMPLETO)
+     * Citar exemplos práticos do concurso ${concursoName || 'mencionado'}
+     * Ser específico para o cargo de ${courseName || 'mencionado'}
+     * Incluir dicas de memorização(nada gernérico e vazio/vago)
+     * **USE FORMATAÇÃO RICA**: Use **negrito** para termos importantes, *itálico* para ênfase, e formatação visual para destacar pontos-chave
+   - 3-4 pegadinhas ("Cuidado meu querido aluno!"):
+     * Erros comuns que a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar
+     * Detalhes que passam despercebidos
+     * Armadilhas específicas do concurso ${concursoName || 'mencionado'}
+     * **USE FORMATAÇÃO RICA**: Use **negrito**, *itálico*, e destaque visual para armadilhas
+
+3. **QUESTÕES PREDITIVAS**:
+   - Gere EXATAMENTE 5 questões para este tópico
+   - No estilo da banca ${banca || 'NÃO DEFINIDA'} (A, B, C, D, E ou Certo/Errado)
+   - Contextualizadas com o concurso ${concursoName || 'mencionado'} e cargo ${courseName || 'mencionado'}
+   - Gabarito Comentado: explique o porquê das outras estarem erradas
+   - **USE FORMATAÇÃO RICA no gabarito**: Use **negrito** para resposta correta, *itálico* para explicações, e formatação visual para destacar pontos importantes
+   - **NÃO ECONOMIZE TEXTO**: Seja detalhado e completo nas explicações, mas não excessivamente extenso
+
 TAREFA:
-Crie um conteúdo COMPLETO, DETALHADO e 100% ESPECÍFICO para o tópico acima, com linguagem técnica e formal.
+Crie um conteúdo COMPLETO, DETALHADO e 100% ESPECÍFICO para o tópico acima, seguindo o formato MODO HACKER DOS CONCURSOS.
 
 FORMATO DE RESPOSTA (APENAS JSON VÁLIDO):
 {
@@ -619,21 +646,34 @@ FORMATO DE RESPOSTA (APENAS JSON VÁLIDO):
   "subtitulo": "Subtítulo específico opcional",
   "numero": "${resolvedTopicKey}",
   "content": "Conteúdo HTML específico e detalhado APENAS deste tópico",
-  "secoes": [
+  "raioXProbabilidade": {
+    "topicosQuentes": ["Tópico 1", "Tópico 2", "..."],
+    "padraoBanca": "Descrição do padrão da banca"
+  },
+  "revisaoTurbo": [
     {
-      "titulo": "Conceito e Definição",
-      "tipo": "conceito",
-      "conteudo": "Conteúdo HTML específico sobre o conceito"
-    },
+      "titulo": "Título do resumo",
+      "conteudo": "Conteúdo HTML detalhado e didático"
+    }
+  ],
+  "pegadinhas": [
     {
-      "titulo": "Legislação Aplicável",
-      "tipo": "lei",
-      "conteudo": "Conteúdo HTML com artigos, leis e numeração"
-    },
+      "titulo": "Cuidado meu querido aluno!",
+      "conteudo": "Conteúdo HTML sobre armadilhas comuns"
+    }
+  ],
+  "questoesPreditivas": [
     {
-      "titulo": "Jurisprudência",
-      "tipo": "sumula",
-      "conteudo": "Conteúdo HTML com súmulas e entendimentos"
+      "enunciado": "Enunciado da questão",
+      "alternativas": {
+        "A": "Alternativa A",
+        "B": "Alternativa B",
+        "C": "Alternativa C",
+        "D": "Alternativa D",
+        "E": "Alternativa E"
+      },
+      "correta": "A",
+      "gabaritoComentado": "Explicação detalhada em HTML"
     }
   ],
   "tags": ["${effectiveTopicNome || resolvedTopicKey}", "específico"]
@@ -659,7 +699,6 @@ REGRAS FINAIS:
 - Não deixe nada para trás do tópico que está sendo gerado, gere todos os detalhes
 - Cuidado pra não repetir o conteudo no mesmo material
 - Faça frases motivacionais referente ao cargo(concurso) do tópico ex: você vai ser o futuro (Curso)
-- No final coloque umas questões referente ao tópico no estilo da banca "${banca || 'NÃO DEFINIDA'}"
 - Faça piadas
 - Diga coisas assim no estilo de (tem cursinhos que não falam isso),(essa dica é só aqui)
 - O conteúdo DEVE ser 100% específico para o tópico "${effectiveTopicNome || resolvedTopicKey}"
@@ -854,7 +893,7 @@ REGRAS FINAIS:
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 sm:p-8 lg:p-10">
         <div className="mb-8 pb-6 border-b border-slate-200 dark:border-slate-700">
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Tópico</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Material de Apoio</p>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
               <h1 className="text-3xl sm:text-4xl font-bold text-alego-600 dark:text-alego-400 mb-2 break-words">
@@ -944,6 +983,159 @@ REGRAS FINAIS:
             </div>
           ) : (
             <>
+              {/* Raio-X de Probabilidade */}
+              {conteudo.raioXProbabilidade && (
+                <div className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-xl p-6 mb-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FireIcon className="h-6 w-6 text-orange-600" />
+                    <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                      Raio-X de Probabilidade
+                    </h4>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {conteudo.raioXProbabilidade.topicosQuentes && (
+                      <div>
+                        <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                          🔥 Top Assuntos Quentes:
+                        </h5>
+                        <ul className="space-y-1">
+                          {conteudo.raioXProbabilidade.topicosQuentes.map((assunto, aIdx) => (
+                            <li key={aIdx} className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                              <span className="text-orange-600 font-bold">{aIdx + 1}.</span>
+                              {assunto}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {conteudo.raioXProbabilidade.padraoBanca && (
+                      <div>
+                        <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                          📊 O Padrão da Banca:
+                        </h5>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                          {conteudo.raioXProbabilidade.padraoBanca}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Revisão Turbo */}
+              {conteudo.revisaoTurbo && Array.isArray(conteudo.revisaoTurbo) && conteudo.revisaoTurbo.length > 0 && (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6 mb-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <LightBulbIcon className="h-6 w-6 text-blue-600" />
+                    <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                      Revisão Turbo
+                    </h4>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {conteudo.revisaoTurbo.map((resumo, rIdx) => (
+                      <div key={rIdx} className="text-sm text-slate-600 dark:text-slate-400">
+                        <h5 className="font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                          {resumo.titulo}
+                        </h5>
+                        <div
+                          className="ia-content-enhanced"
+                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(resumo.conteudo) }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Pegadinhas */}
+              {conteudo.pegadinhas && Array.isArray(conteudo.pegadinhas) && conteudo.pegadinhas.length > 0 && (
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-6 mb-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+                    <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                      Cuidado, Caçapa!
+                    </h4>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {conteudo.pegadinhas.map((pegadinha, pIdx) => (
+                      <div key={pIdx} className="text-sm text-red-600 dark:text-red-400">
+                        <h5 className="font-semibold mb-2">
+                          {pegadinha.titulo}
+                        </h5>
+                        <div
+                          className="ia-content-enhanced"
+                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(pegadinha.conteudo) }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Questões Preditivas */}
+              {conteudo.questoesPreditivas && Array.isArray(conteudo.questoesPreditivas) && conteudo.questoesPreditivas.length > 0 && (
+                <div className="mb-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <BookOpenIcon className="h-6 w-6 text-alego-600" />
+                    <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                      Questões Preditivas
+                    </h4>
+                  </div>
+                  
+                  <div className="space-y-6">
+                    {conteudo.questoesPreditivas.map((questao, qIdx) => (
+                      <div
+                        key={qIdx}
+                        className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-6"
+                      >
+                        <div className="mb-4">
+                          <span className="text-xs font-semibold text-alego-600 mb-2 block">
+                            Aposta {qIdx + 1} de {conteudo.questoesPreditivas.length}
+                          </span>
+                          <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">
+                            {questao.enunciado}
+                          </p>
+                        </div>
+                        
+                        {questao.alternativas && (
+                          <div className="space-y-2 mb-4">
+                            {Object.entries(questao.alternativas).map(([letra, alt]) => (
+                              <div
+                                key={letra}
+                                className={`p-3 rounded-lg text-sm ${
+                                  letra === questao.correta
+                                    ? 'bg-green-100 dark:bg-green-900/30 border-2 border-green-500 text-green-800 dark:text-green-300'
+                                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300'
+                                }`}
+                              >
+                                {letra}) {alt}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {questao.gabaritoComentado && (
+                          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                            <h5 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2">
+                              💡 Gabarito Comentado:
+                            </h5>
+                            <div
+                              className="text-sm text-blue-600 dark:text-blue-300 ia-content-enhanced"
+                              dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(questao.gabaritoComentado) }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Conteúdo original (para compatibilidade) */}
               {conteudo.content && (
                 <div className="mb-8">
                   <div
