@@ -57,11 +57,14 @@ export async function generateAndSaveFlashcardsForTopico({
 
   const modulo = moduloLabel || formatTopicoAsModulo({ numero: topicoNumero, nome: topicoNome })
 
-  const prompt = `Gere flashcards educacionais para ESTE tópico específico de concurso público.
+  const prompt = `Gere flashcards educacionais de "Véspera de Prova" para ESTE tópico específico de concurso público.
 
 CURSO/CONCURSO: ${courseName || 'Concurso público'}
 DISCIPLINA: ${disciplina}
 TÓPICO: ${topicoNumero ? `${topicoNumero} - ` : ''}${topicoNome}
+
+DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se há leis, decretos ou regulamentos recentes que possam afetar o conteúdo.
 
 🚨🚨🚨 BANCA EXAMINADORA - OBRIGATÓRIO 🚨🚨🚨
 BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
@@ -75,19 +78,34 @@ BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
 
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 12000)}\n\n` : ''}
 
-INSTRUÇÕES:
-- Gere NO MÍNIMO 50 flashcards e ATÉ 150 flashcards para cobrir completamente este tópico específico
-- O MÍNIMO OBRIGATÓRIO é 50 flashcards - não gere menos que isso
-- Se o tópico for extenso, gere o necessário flashcards para cobertura completa
-- Perguntas objetivas; respostas claras e completas
-- Conteúdo específico para o concurso — nada genérico, LETRA de lei
-- Não invente nada, seja literal e fiel a matéria com fontes firmes
-- Mantenha sempre atualizado o conteúdo estamos em 2026
-- Não delire nem presuma, crie as coisas e o material da forma correta de acordo com fontes e materiais confiáveis
-- Se for direito gere os flashcards de acordo com a lei sem inventar nada, seja fiel a lei 
-- Não invente nada, seja direto nos flashcards e com conteúdo fiel
-- Linguagem formal, nível concurso público
-- 🚨 BANCA EXAMINADORA: Use EXCLUSIVAMENTE o estilo da banca "${banca || 'NÃO DEFINIDA'}"
+**MODO HACKER DOS CONCURSOS**
+
+1. **RAIO-X DE PROBABILIDADE**:
+   - Top Assuntos Quentes: Gere flashcards focados nos tópicos com maior probabilidade de cair NO CONCURSO ${courseName || 'Concurso público'}
+   - O Padrão da Banca: Como a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar este tópico especificamente no concurso
+
+2. **REVISÃO TURBO EM FLASHCARDS**:
+   - Gere NO MÍNIMO 50 flashcards e ATÉ 150 flashcards para cobrir completamente este tópico específico
+   - O MÍNIMO OBRIGATÓRIO é 50 flashcards - não gere menos que isso
+   - Se o tópico for extenso, gere até 150 flashcards para cobertura completa
+   - Cada flashcard deve ser:
+     * Pergunta: Objetiva, direta, focada em um conceito específico
+     * Resposta: Clara, completa, explicativa (NADA SUPERFICIAL, QUERO BEM COMPLETO)
+     * Citar exemplos práticos do concurso ${courseName || 'Concurso público'}
+     * Ser específico para o cargo
+     * Incluir dicas de memorização (nada genérico e vago/vago)
+   - 3-4 flashcards de "Pegadinhas":
+     * Erros comuns que a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar
+     * Detalhes que passam despercebidos
+     * Armadilhas específicas do concurso ${courseName || 'Concurso público'}
+
+3. **CONTEÚDO ESPECÍFICO**:
+   - Conteúdo específico para o concurso — nada genérico, LETRA de lei
+   - Não invente nada, seja literal e fiel a matéria com fontes firmes
+   - Se for direito gere os flashcards de acordo com a lei sem inventar nada, seja fiel a lei
+   - Não invente nada, seja direto nos flashcards e com conteúdo fiel
+   - Linguagem formal, nível concurso público
+   - 🚨 BANCA EXAMINADORA: Use EXCLUSIVAMENTE o estilo da banca "${banca || 'NÃO DEFINIDA'}"
 
 FORMATO JSON (apenas JSON válido):
 {
@@ -98,13 +116,20 @@ FORMATO JSON (apenas JSON válido):
       "dificuldade": "médio"
     }
   ]
-}`
+}
+
+REGRAS:
+- Seja ESPECÍFICO do concurso ${courseName || 'Concurso público'}
+- Cite o nome do concurso nos flashcards
+- Retorne APENAS o JSON válido, sem texto adicional
+- NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
 
   const response = await callGeminiWithRetry(prompt, {
     maxRetries: 3,
     baseDelay: 2000,
     models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
     generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
+    useGoogleSearch: true,
   })
 
   const parsed = await extractJsonFromResponse(response)
