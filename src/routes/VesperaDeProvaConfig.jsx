@@ -407,7 +407,17 @@ REGRAS:
             generationConfig: {
               temperature: 0.7,
               maxOutputTokens: 32000,
-            }
+            },
+            tools: [
+              {
+                googleSearchRetrieval: {
+                  dynamicRetrievalConfig: {
+                    mode: "MODE_DYNAMIC",
+                    dynamicThreshold: 0.7
+                  }
+                }
+              }
+            ]
           })
         }
       )

@@ -65,6 +65,7 @@ const TreinoRedacao = () => {
         maxOutputTokens: 4096,
         temperature: 0.85,
       },
+      useGoogleSearch: true,
     })
     return extractGeneratedText(response).trim()
   }
@@ -173,6 +174,7 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
           maxOutputTokens: 1024,
           temperature: 0.8,
         },
+        useGoogleSearch: true,
       })
       let theme = extractGeneratedText(response).trim()
       
@@ -430,7 +432,8 @@ CRÍTICO:
           temperature: 0.9, // Alta temperatura para mais variabilidade nas avaliações
           maxOutputTokens: 4000, // Aumentado para caber a redação modelo
           topP: 0.95,
-        }
+        },
+        useGoogleSearch: true,
       })
       
       let responseText = extractGeneratedText(response).trim()

@@ -35,6 +35,7 @@ function loadApiKeys() {
  * @param {number} options.baseDelay - Delay base em ms (padrão: 2000)
  * @param {Array<string>} options.models - Lista de modelos para tentar (padrão: gemini-2.5-flash, gemini-1.5-flash, gemini-1.5-pro)
  * @param {Object} options.generationConfig - Configuração de geração (temperature, maxOutputTokens, etc.)
+ * @param {boolean} options.useGoogleSearch - Se deve usar Google Search Grounding (padrão: false)
  * @returns {Promise<Object>} - Resposta da API
  */
 export async function callGeminiWithRetry(prompt, options = {}) {
@@ -43,6 +44,7 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     baseDelay = BASE_DELAY,
     models = MODELS,
     generationConfig = { temperature: 0.7, maxOutputTokens: 32000 },
+    useGoogleSearch = false,
   } = options
 
   const apiKeys = loadApiKeys()
@@ -51,6 +53,9 @@ export async function callGeminiWithRetry(prompt, options = {}) {
   }
 
   console.log(`🔑 API Keys carregadas: ${apiKeys.length}`)
+  if (useGoogleSearch) {
+    console.log(`🔍 Google Search Grounding ativado`)
+  }
 
   let lastError = null
 
@@ -66,15 +71,31 @@ export async function callGeminiWithRetry(prompt, options = {}) {
       // Tentar com retry para o mesmo modelo e key
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
+          const requestBody = {
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig,
+          }
+
+          // Adicionar Google Search Grounding se solicitado
+          if (useGoogleSearch) {
+            requestBody.tools = [
+              {
+                googleSearchRetrieval: {
+                  dynamicRetrievalConfig: {
+                    mode: "MODE_DYNAMIC",
+                    dynamicThreshold: 0.7
+                  }
+                }
+              }
+            ]
+          }
+
           const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig,
-              }),
+              body: JSON.stringify(requestBody),
             }
           )
 

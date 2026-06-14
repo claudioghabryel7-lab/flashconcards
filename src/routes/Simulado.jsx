@@ -301,6 +301,7 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
           maxOutputTokens: 1024,
           temperature: 0.8,
         },
+        useGoogleSearch: true,
       })
       let theme = extractGeneratedText(response).trim()
       
@@ -438,6 +439,7 @@ CRÍTICO:
           maxOutputTokens: 4096,
           temperature: 0.3,
         },
+        useGoogleSearch: true,
       })
       let responseText = extractGeneratedText(response).trim()
 
@@ -771,6 +773,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
           maxOutputTokens: 32000,
           temperature: 0.7,
         },
+        useGoogleSearch: true,
       })
       updateProgress(50)
       const responseText = extractGeneratedText(response).trim()
@@ -1057,6 +1060,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
               maxOutputTokens: 32000,
               temperature: 0.7,
             },
+            useGoogleSearch: true,
           })
           const responseText = extractGeneratedText(response).trim()
 
@@ -1315,6 +1319,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
           maxOutputTokens: 32000,
           temperature: 0.7,
         },
+        useGoogleSearch: true,
       })
       const responseText = extractGeneratedText(response).trim()
 

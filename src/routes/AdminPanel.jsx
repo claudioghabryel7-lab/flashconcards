@@ -1160,6 +1160,7 @@ IMPORTANTE:
           maxOutputTokens: 32000,
           temperature: 0.7,
         },
+        useGoogleSearch: true,
       })
       const text = extractGeneratedText(response)
 
@@ -2034,6 +2035,7 @@ REGRAS CRÍTICAS:
           maxOutputTokens: 32000,
           temperature: 0.7,
         },
+        useGoogleSearch: true,
       })
           responseText = extractGeneratedText(response)
         } catch (geminiError) {
@@ -4668,6 +4670,7 @@ CRÍTICO:
           maxOutputTokens: 32000,
           temperature: 0.7,
         },
+        useGoogleSearch: true,
       })
           aiResponse = extractGeneratedText(response)
           setMateriaRevisadaProgress(`✅ Conteúdo gerado com sucesso usando ${modelName}!`)
@@ -5017,6 +5020,7 @@ CRÍTICO:
           maxOutputTokens: 32000,
           temperature: 0.7,
         },
+        useGoogleSearch: true,
       })
               aiResponse = extractGeneratedText(response)
               break
@@ -5526,6 +5530,7 @@ CRÍTICO:
           maxOutputTokens: 32000,
           temperature: 0.7,
         },
+        useGoogleSearch: true,
       })
               aiResponse = extractGeneratedText(response)
               break
@@ -9423,6 +9428,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
           maxOutputTokens: 32000,
           temperature: 0.7,
         },
+        useGoogleSearch: true,
       })
                                       description = extractGeneratedText(response).trim()
                                     } catch (geminiErr) {

@@ -681,6 +681,7 @@ REGRAS:
         baseDelay: 2000,
         models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
         generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
+        useGoogleSearch: true,
       })
 
       const aiText = extractGeneratedText(response)
