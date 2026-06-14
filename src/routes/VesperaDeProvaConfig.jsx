@@ -135,8 +135,8 @@ const VesperaDeProvaConfig = () => {
       console.log('🚀 [VesperaDeProvaConfig] Banca:', bancaExaminadora)
       console.log('🚀 [VesperaDeProvaConfig] Total disciplinas:', editalVerticalizado.disciplinas.length)
       
-      // Dividir disciplinas em partes (máximo 4 disciplinas por parte)
-      const disciplinasPorParte = 4
+      // Dividir disciplinas em partes (máximo 2 disciplinas por parte para evitar corte do JSON)
+      const disciplinasPorParte = 2
       const totalPartes = Math.ceil(editalVerticalizado.disciplinas.length / disciplinasPorParte)
       
       console.log(`📦 [VesperaDeProvaConfig] Dividindo em ${totalPartes} partes (máximo ${disciplinasPorParte} disciplinas por parte)`)
