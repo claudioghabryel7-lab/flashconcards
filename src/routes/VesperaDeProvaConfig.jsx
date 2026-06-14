@@ -242,32 +242,61 @@ REGRAS:
       
       setGenerationStatus('Enviando solicitação para a IA...')
       
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 32000,
+      // Função para fazer requisição com retry automático para erro 429
+      const fetchWithRetry = async (url, options, maxRetries = 3) => {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          const response = await fetch(url, options)
+          const data = await response.json()
+          
+          if (response.ok) {
+            return data
           }
-        })
-      })
+          
+          // Se for erro 429 (Too Many Requests), extrair tempo de espera e retentar
+          if (response.status === 429) {
+            const errorMessage = data.error?.message || ''
+            const match = errorMessage.match(/Please retry in ([\d.]+)s/)
+            const waitTime = match ? parseFloat(match[1]) * 1000 : 30000 // Padrão 30 segundos
+            
+            console.log(`⏳ [VesperaDeProvaConfig] Rate limit atingido (tentativa ${attempt}/${maxRetries}). Aguardando ${waitTime / 1000} segundos...`)
+            setGenerationStatus(`Rate limit atingido. Aguardando ${Math.round(waitTime / 1000)} segundos... (tentativa ${attempt}/${maxRetries})`)
+            
+            await new Promise(resolve => setTimeout(resolve, waitTime))
+            
+            // Se não for a última tentativa, continuar o loop
+            if (attempt < maxRetries) {
+              continue
+            }
+          }
+          
+          // Se não for erro 429 ou esgotou as tentativas, lançar erro
+          console.error('❌ [VesperaDeProvaConfig] Erro na API Gemini:', data)
+          throw new Error(data.error?.message || 'Erro na API da IA')
+        }
+      }
+      
+      const data = await fetchWithRetry(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: prompt
+              }]
+            }],
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 32000,
+            }
+          })
+        }
+      )
       
       setGenerationStatus('Processando resposta da IA...')
-      
-      const data = await response.json()
-      
-      if (!response.ok) {
-        console.error('❌ [VesperaDeProvaConfig] Erro na API Gemini:', data)
-        throw new Error(data.error?.message || 'Erro na API da IA')
-      }
       
       setGenerationStatus('Analisando conteúdo gerado...')
       
