@@ -534,12 +534,24 @@ const EditalVerticalizado = () => {
     }
 
     try {
-      // Sanitizar o topicKey para usar como ID de documento no Firestore
-      const sanitizedKey = topicKey
+      // Sanitizar o topicKey para usar como ID de documento no Firestore (mesma lógica do ConteudoCompletoTopicoView)
+      let decoded = topicKey
+      try {
+        decoded = decodeURIComponent(topicKey)
+      } catch (e) {
+        decoded = topicKey
+      }
+      
+      const sanitizedKey = decoded
         .replace(/::/g, '_DOUBLECOLON_')
         .replace(/\//g, '_SLASH_')
         .replace(/\\/g, '_BACKSLASH_')
         .trim()
+      
+      // Limitar tamanho
+      if (sanitizedKey.length > 400) {
+        sanitizedKey = sanitizedKey.substring(0, 400)
+      }
 
       const contentRef = doc(db, 'courses', courseId, 'conteudosCompletos', sanitizedKey)
       await deleteDoc(contentRef)
