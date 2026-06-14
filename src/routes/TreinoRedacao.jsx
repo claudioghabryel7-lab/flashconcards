@@ -6,6 +6,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import {
   ClockIcon,
   PlayIcon,
@@ -46,10 +47,6 @@ const TreinoRedacao = () => {
   const generateRedacaoModelo = async (tema) => {
     const courseId = getCourseId()
     const editalText = await loadEditalText(courseId)
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-    if (!apiKey) {
-      throw new Error('VITE_GEMINI_API_KEY não configurada')
-    }
 
     const { buildRedacaoModeloPrompt, getUnifiedPrompt } = await import('../utils/unifiedPrompt')
     const unified = await getUnifiedPrompt(courseId)
@@ -63,17 +60,13 @@ const TreinoRedacao = () => {
       editalText ? editalText.substring(0, 30000) : ''
     )
 
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+    const response = await callGeminiWithRetry(prompt, {
       generationConfig: {
         maxOutputTokens: 4096,
         temperature: 0.85,
       },
     })
-
-    const result = await model.generateContent(prompt)
-    return result.response.text().trim()
+    return extractGeneratedText(response).trim()
   }
 
   // Carregar curso do perfil
@@ -151,20 +144,6 @@ const TreinoRedacao = () => {
       const courseId = getCourseId()
       const editalText = await loadEditalText(courseId)
 
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ 
-        model: 'gemini-2.5-flash',
-        generationConfig: {
-          maxOutputTokens: 1024,
-          temperature: 0.8,
-        }
-      })
-
       const { buildRedacaoPrompt } = await import('../utils/unifiedPrompt')
       const baseThemePrompt = await buildRedacaoPrompt(
         courseId,
@@ -189,8 +168,13 @@ O tema deve ser claro e direto.
 
 CRÍTICO: Retorne APENAS o tema, nada mais.`
 
-      const result = await model.generateContent(themePrompt)
-      let theme = result.response.text().trim()
+      const response = await callGeminiWithRetry(themePrompt, {
+        generationConfig: {
+          maxOutputTokens: 1024,
+          temperature: 0.8,
+        },
+      })
+      let theme = extractGeneratedText(response).trim()
       
       // Limpar formatação
       theme = theme.replace(/TEMA:/gi, '').trim()
@@ -297,20 +281,6 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
     try {
       const courseId = getCourseId()
       const editalText = await loadEditalText(courseId)
-
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ 
-        model: 'gemini-2.5-flash',
-        generationConfig: {
-          maxOutputTokens: 4096, // Reduzido para análise mais rápida
-          temperature: 0.3, // Menos temperatura para mais consistência
-        }
-      })
 
       // Contar parágrafos (linhas que começam com 4 espaços)
       const paragraphCount = detectParagraphs(redacaoTexto)
@@ -455,8 +425,7 @@ CRÍTICO:
       })
 
       // Usar configuração com temperatura mais alta para variabilidade
-      const result = await model.generateContent({
-        contents: [{ parts: [{ text: analysisPrompt }] }],
+      const response = await callGeminiWithRetry(analysisPrompt, {
         generationConfig: {
           temperature: 0.9, // Alta temperatura para mais variabilidade nas avaliações
           maxOutputTokens: 4000, // Aumentado para caber a redação modelo
@@ -464,7 +433,7 @@ CRÍTICO:
         }
       })
       
-      let responseText = result.response.text().trim()
+      let responseText = extractGeneratedText(response).trim()
       
       console.log('🤖 Resposta da IA recebida (primeiros 300 chars):', responseText.substring(0, 300))
 

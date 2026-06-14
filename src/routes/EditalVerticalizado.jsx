@@ -17,6 +17,7 @@ import {
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import AudioReader from '../components/AudioReader'
 import { processIAContent, isHtmlContent } from '../utils/iaContentProcessor'
 import { formatTopicoAsModulo } from '../utils/editalVerticalizadoLoader'
@@ -677,36 +678,17 @@ REGRAS IMPORTANTES:
 
       setGenerationStatus('Enviando solicitação para a IA...')
 
-      // Chamar API da IA
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + import.meta.env.VITE_GEMINI_API_KEY, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      // Chamar API da IA com rotação de keys
+      const response = await callGeminiWithRetry(prompt, {
+        generationConfig: {
+          maxOutputTokens: 32000,
+          temperature: 0.7,
         },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 32000,
-          }
-        })
       })
 
       setGenerationStatus('Processando resposta da IA...')
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(data.error?.message || 'Erro na API da IA')
-      }
-
-      setGenerationStatus('Analisando conteúdo gerado...')
-      
-      const generatedText = data.candidates[0]?.content?.parts[0]?.text
+      const generatedText = extractGeneratedText(data)
       
       // Encontrar o início e fim do array flashcards
       const flashcardsStart = generatedText.indexOf('"flashcards"')

@@ -14,6 +14,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder, applyModuleOrder } from '../utils/subjectOrder'
+import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { FolderIcon, ChevronRightIcon, ChevronDownIcon, LightBulbIcon, CheckCircleIcon, XCircleIcon, HandThumbUpIcon, HandThumbDownIcon, ChartBarIcon, BookOpenIcon, XMarkIcon, CheckIcon } from '@heroicons/react/24/outline'
 import { 
   getOrCreateQuestionsCache, 
@@ -415,13 +416,6 @@ const FlashQuestoes = () => {
 
       console.log('📝 Cache não encontrado. Gerando novas questões com IA...')
       
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
-
-      if (!apiKey && !groqApiKey) {
-        throw new Error('Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
-      }
-
       const topicoContext = getTopicoContextFromEdital(edital, selectedMateria, selectedModulo)
       const editalStructureText = buildEditalStructurePrompt(edital)
 
@@ -543,60 +537,23 @@ EXEMPLO DO FORMATO EXATO (COM 10 QUESTÕES):
 
       let aiResponse = ''
 
-      // Tentar Gemini primeiro com modelos otimizados para velocidade
-      if (apiKey) {
-        const genAI = new GoogleGenerativeAI(apiKey)
-        // 🔥 OTIMIZAÇÃO: Usar modelos mais rápidos primeiro
-        const modelNames = ['gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-2.5-pro-latest', 'gemini-2.5-pro']
-        let lastError = null
-        
-        for (const modelName of modelNames) {
-          try {
-            console.log(`🔄 Tentando modelo: ${modelName}...`)
-            const model = genAI.getGenerativeModel({ 
-              model: modelName,
-              generationConfig: {
-                maxOutputTokens: 8192, // Reduzido para mais velocidade
-                temperature: 0.7,
-              }
-            })
-            const result = await model.generateContent(prompt)
-            aiResponse = result.response.text()
-            console.log(`✅ Sucesso com modelo: ${modelName}`)
-            break
-          } catch (modelErr) {
-            console.warn(`⚠️ Modelo ${modelName} falhou:`, modelErr.message)
-            lastError = modelErr
-            const errorMessage = modelErr.message || String(modelErr) || ''
-            const isQuotaError = errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('Quota exceeded')
-            
-            // Se for erro de quota e tiver Groq, usar Groq
-            if (isQuotaError && groqApiKey) {
-              console.warn('⚠️ Erro de quota no Gemini. Usando Groq como fallback...')
-              try {
-                aiResponse = await callGroqAPI(prompt)
-                break
-              } catch (groqErr) {
-                console.error('Erro no Groq:', groqErr)
-                throw groqErr
-              }
-            }
-            
-            // Se não for o último modelo, tentar próximo
-            if (modelName !== modelNames[modelNames.length - 1]) {
-              continue
-            }
-          }
+      // Tentar Gemini primeiro com rotação de API keys
+      try {
+        const response = await callGeminiWithRetry(prompt, {
+          generationConfig: {
+            maxOutputTokens: 8192,
+            temperature: 0.7,
+          },
+        })
+        aiResponse = extractGeneratedText(response)
+        console.log('✅ Sucesso com rotação de API keys')
+      } catch (geminiErr) {
+        console.warn('⚠️ Gemini falhou, tentando Groq...', geminiErr)
+        if (groqApiKey) {
+          aiResponse = await callGroqAPI(prompt)
+        } else {
+          throw geminiErr
         }
-        
-        // Se nenhum modelo funcionou e não usou Groq, lançar erro
-        if (!aiResponse && lastError) {
-          throw lastError
-        }
-      } else if (groqApiKey) {
-        aiResponse = await callGroqAPI(prompt)
-      } else {
-        throw new Error('Nenhuma API key configurada. Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY')
       }
 
       // Validar que temos uma resposta
@@ -935,9 +892,6 @@ ${completeQuestions.join(',\n')}
 
       console.log('📝 BIZU não encontrado no cache. Gerando com IA...')
 
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
-
       // Usar prompt configurado pelo admin ou prompt padrão
       const baseBizuPrompt = bizuConfigPrompt.trim() || `Você é um professor especialista em concursos públicos.
 
@@ -968,24 +922,23 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
 
       let explanation = ''
 
-      if (apiKey) {
-        try {
-          const genAI = new GoogleGenerativeAI(apiKey)
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-          const result = await model.generateContent(prompt)
-          explanation = result.response.text()
-        } catch (geminiErr) {
-          const errorMessage = geminiErr.message || String(geminiErr) || ''
-          const isQuotaError = errorMessage.includes('429') || errorMessage.includes('quota')
-          
-          if (isQuotaError && groqApiKey) {
-            explanation = await callGroqAPI(prompt)
-          } else {
-            throw geminiErr
-          }
+      try {
+        const response = await callGeminiWithRetry(prompt, {
+          generationConfig: {
+            maxOutputTokens: 4096,
+            temperature: 0.7,
+          },
+        })
+        explanation = extractGeneratedText(response)
+      } catch (geminiErr) {
+        const errorMessage = geminiErr.message || String(geminiErr) || ''
+        const isQuotaError = errorMessage.includes('429') || errorMessage.includes('quota')
+        
+        if (isQuotaError && groqApiKey) {
+          explanation = await callGroqAPI(prompt)
+        } else {
+          throw geminiErr
         }
-      } else if (groqApiKey) {
-        explanation = await callGroqAPI(prompt)
       }
 
       // 🔥 NOVO: SALVAR NO CACHE

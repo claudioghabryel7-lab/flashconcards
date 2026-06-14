@@ -1,6 +1,6 @@
 /**
- * Função utilitária para chamadas à API Gemini com retry e fallback
- * Resolve erros de alta demanda implementando exponential backoff e modelos alternativos
+ * Função utilitária para chamadas à API Gemini com retry, fallback e rotação de API keys
+ * Resolve erros de alta demanda implementando exponential backoff, modelos alternativos e rotação de múltiplas keys
  */
 
 const MODELS = [
@@ -13,7 +13,22 @@ const MAX_RETRIES = 3
 const BASE_DELAY = 2000 // 2 segundos
 
 /**
- * Faz uma chamada à API Gemini com retry automático e fallback de modelo
+ * Carrega múltiplas API keys do Gemini
+ * @returns {Array<string>} - Lista de API keys disponíveis
+ */
+function loadApiKeys() {
+  const apiKeys = []
+  for (let i = 1; i <= 10; i++) {
+    const key = import.meta.env[`VITE_GEMINI_API_KEY_${i}`] || import.meta.env[`VITE_GEMINI_API_KEY`]
+    if (key && !apiKeys.includes(key)) {
+      apiKeys.push(key)
+    }
+  }
+  return apiKeys
+}
+
+/**
+ * Faz uma chamada à API Gemini com retry automático, fallback de modelo e rotação de API keys
  * @param {string} prompt - O prompt para enviar à IA
  * @param {Object} options - Opções adicionais
  * @param {number} options.maxRetries - Número máximo de tentativas (padrão: 3)
@@ -30,10 +45,12 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     generationConfig = { temperature: 0.7, maxOutputTokens: 32000 },
   } = options
 
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-  if (!apiKey) {
-    throw new Error('VITE_GEMINI_API_KEY não configurada')
+  const apiKeys = loadApiKeys()
+  if (apiKeys.length === 0) {
+    throw new Error('Nenhuma API key do Gemini encontrada')
   }
+
+  console.log(`🔑 API Keys carregadas: ${apiKeys.length}`)
 
   let lastError = null
 
@@ -41,62 +58,74 @@ export async function callGeminiWithRetry(prompt, options = {}) {
   for (const model of models) {
     console.log(`🔄 Tentando modelo: ${model}`)
 
-    // Tentar com retry para o mesmo modelo
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig,
-            }),
-          }
-        )
+    // Tentar cada API key
+    for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex++) {
+      const apiKey = apiKeys[keyIndex]
+      console.log(`🔑 Tentando API key ${keyIndex + 1}/${apiKeys.length}`)
 
-        const data = await response.json()
-
-        if (!response.ok) {
-          const errorMessage = data.error?.message || 'Erro na API da IA'
-          
-          // Se for erro de alta demanda, fazer retry com delay
-          if (errorMessage.includes('high demand') || errorMessage.includes('temporarily')) {
-            console.warn(`⚠️ Tentativa ${attempt}/${maxRetries} para ${model}: ${errorMessage}`)
-            
-            if (attempt < maxRetries) {
-              const delay = baseDelay * Math.pow(2, attempt - 1) // Exponential backoff
-              console.log(`⏳ Aguardando ${delay}ms antes de tentar novamente...`)
-              await new Promise(resolve => setTimeout(resolve, delay))
-              continue
-            } else {
-              throw new Error(`Modelo ${model} com alta demanda após ${maxRetries} tentativas`)
+      // Tentar com retry para o mesmo modelo e key
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig,
+              }),
             }
+          )
+
+          const data = await response.json()
+
+          if (!response.ok) {
+            const errorMessage = data.error?.message || 'Erro na API da IA'
+            
+            // Se for erro 429 (quota), tentar próxima key
+            if (response.status === 429) {
+              console.log(`⚠️ API key ${keyIndex + 1} atingiu quota, tentando próxima...`)
+              break
+            }
+            
+            // Se for erro 503 (alta demanda), fazer retry com delay
+            if (response.status === 503 || errorMessage.includes('high demand') || errorMessage.includes('temporarily')) {
+              console.warn(`⚠️ Tentativa ${attempt}/${maxRetries} para ${model} com key ${keyIndex + 1}: ${errorMessage}`)
+              
+              if (attempt < maxRetries) {
+                const delay = baseDelay * Math.pow(2, attempt - 1) // Exponential backoff
+                console.log(`⏳ Aguardando ${delay}ms antes de tentar novamente...`)
+                await new Promise(resolve => setTimeout(resolve, delay))
+                continue
+              } else {
+                throw new Error(`Modelo ${model} com alta demanda após ${maxRetries} tentativas`)
+              }
+            }
+            
+            throw new Error(errorMessage)
           }
+
+          // Sucesso!
+          console.log(`✅ Sucesso com modelo ${model} e API key ${keyIndex + 1} na tentativa ${attempt}`)
+          return data
+
+        } catch (error) {
+          lastError = error
+          console.error(`❌ Erro na tentativa ${attempt} com modelo ${model} e key ${keyIndex + 1}:`, error.message)
           
-          throw new Error(errorMessage)
-        }
-
-        // Sucesso!
-        console.log(`✅ Sucesso com modelo ${model} na tentativa ${attempt}`)
-        return data
-
-      } catch (error) {
-        lastError = error
-        console.error(`❌ Erro na tentativa ${attempt} com modelo ${model}:`, error.message)
-        
-        // Se não for erro de alta demanda, não fazer retry no mesmo modelo
-        if (!error.message.includes('high demand') && !error.message.includes('temporarily')) {
-          break
+          // Se não for erro de alta demanda, não fazer retry no mesmo modelo
+          if (!error.message.includes('high demand') && !error.message.includes('temporarily')) {
+            break
+          }
         }
       }
     }
   }
 
-  // Se chegou aqui, todos os modelos falharam
+  // Se chegou aqui, todos os modelos e keys falharam
   throw new Error(
-    `Todos os modelos falharam após múltiplas tentativas. Último erro: ${lastError?.message || 'Erro desconhecido'}`
+    `Todos os modelos e API keys falharam após múltiplas tentativas. Último erro: ${lastError?.message || 'Erro desconhecido'}`
   )
 }
 

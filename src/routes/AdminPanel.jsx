@@ -41,6 +41,7 @@ import { auth, db, storage } from '../firebase/config'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { createSlug } from '../utils/slug'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -1122,12 +1123,6 @@ const AdminPanel = () => {
       setOrganizingProgress('Analisando edital com IA...')
 
       // 3. Chamar IA para organizar
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       const courseName = courses.find(c => c.id === courseId)?.name || 'o curso'
@@ -1160,9 +1155,13 @@ IMPORTANTE:
 - Inclua TODAS as matérias na ordem
 - Retorne APENAS o JSON, sem texto adicional`
 
-      const result = await model.generateContent(organizationPrompt)
-      const response = result.response
-      const text = response.text()
+      const response = await callGeminiWithRetry(organizationPrompt, {
+        generationConfig: {
+          maxOutputTokens: 32000,
+          temperature: 0.7,
+        },
+      })
+      const text = extractGeneratedText(response)
 
       // Extrair JSON da resposta
       let jsonText = text.trim()
@@ -2030,8 +2029,13 @@ REGRAS CRÍTICAS:
           setFlashcardGenProgress('Chamando Gemini API...')
           const genAI = new GoogleGenerativeAI(apiKey)
           const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-          const result = await model.generateContent(prompt)
-          responseText = result.response.text()
+          const response = await callGeminiWithRetry(prompt, {
+        generationConfig: {
+          maxOutputTokens: 32000,
+          temperature: 0.7,
+        },
+      })
+          responseText = extractGeneratedText(response)
         } catch (geminiError) {
           console.warn('Erro com Gemini, tentando Groq...', geminiError)
           if (groqApiKey) {
@@ -4573,12 +4577,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     const courseName = courseData.name || courseData.competition || courseId
 
       // 3. Chamar IA para gerar conteúdo técnico completo
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
       const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
       let lastError = null
       let aiResponse = ''
@@ -4665,8 +4663,13 @@ CRÍTICO:
 - Use tags HTML apropriadas: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>, etc.
 - O campo "referencias" é OBRIGATÓRIO - inclua pelo menos as fontes principais mencionadas no edital`
 
-          const result = await model.generateContent(prompt)
-          aiResponse = result.response.text()
+          const response = await callGeminiWithRetry(prompt, {
+        generationConfig: {
+          maxOutputTokens: 32000,
+          temperature: 0.7,
+        },
+      })
+          aiResponse = extractGeneratedText(response)
           setMateriaRevisadaProgress(`✅ Conteúdo gerado com sucesso usando ${modelName}!`)
           break
         } catch (modelErr) {
@@ -4817,12 +4820,6 @@ CRÍTICO:
       const courseName = courseData.name || courseData.competition || courseId
 
       // 3. Chamar IA para identificar todas as matérias do edital
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
       const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
       let lastError = null
       let materiasList = []
@@ -5015,8 +5012,13 @@ CRÍTICO:
 - O campo "content" deve conter o conteúdo principal em HTML
 - Use tags HTML apropriadas: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>, etc.`
 
-              const result = await model.generateContent(prompt)
-              aiResponse = result.response.text()
+              const response = await callGeminiWithRetry(prompt, {
+        generationConfig: {
+          maxOutputTokens: 32000,
+          temperature: 0.7,
+        },
+      })
+              aiResponse = extractGeneratedText(response)
               break
             } catch (modelErr) {
               if (modelName === modelNames[modelNames.length - 1]) {
@@ -5336,12 +5338,6 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
       const concursoName = unifiedData.concursoName || ''
 
       // 3. Chamar IA para identificar todas as matérias do edital
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
       const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
       let lastError = null
       let materiasList = []
@@ -5525,8 +5521,13 @@ CRÍTICO:
 - Use tags HTML apropriadas: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>, etc.
 - O campo "referencias" é OBRIGATÓRIO - inclua pelo menos as fontes principais mencionadas no edital`
 
-              const result = await model.generateContent(prompt)
-              aiResponse = result.response.text()
+              const response = await callGeminiWithRetry(prompt, {
+        generationConfig: {
+          maxOutputTokens: 32000,
+          temperature: 0.7,
+        },
+      })
+              aiResponse = extractGeneratedText(response)
               break
             } catch (modelErr) {
               console.warn(`⚠️ Modelo ${modelName} falhou para "${materia}":`, modelErr.message)
@@ -6340,12 +6341,6 @@ ${juridicoContent ? `FONTES JURÍDICAS CONFIÁVEIS:\n${juridicoContent.substring
     setTestFlashcardResult(null)
 
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       // SEMPRE detectar e baixar leis (independente do modo)
@@ -6426,8 +6421,13 @@ FORMATO JSON:
 
 Retorne APENAS o JSON, sem markdown, sem explicações.`
 
-      const result = await model.generateContent(prompt)
-      const responseText = result.response.text().trim()
+      const response = await callGeminiWithRetry(prompt, {
+        generationConfig: {
+          maxOutputTokens: 32000,
+          temperature: 0.7,
+        },
+      })
+      const responseText = extractGeneratedText(response).trim()
       
       // Tentar fazer parse do JSON
       let flashcardData
@@ -9346,8 +9346,13 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                     try {
                                       const genAI = new GoogleGenerativeAI(apiKey)
                                       const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-                                      const result = await model.generateContent(prompt)
-                                      description = result.response.text().trim()
+                                      const response = await callGeminiWithRetry(prompt, {
+        generationConfig: {
+          maxOutputTokens: 32000,
+          temperature: 0.7,
+        },
+      })
+                                      description = extractGeneratedText(response).trim()
                                     } catch (geminiErr) {
                                       if (groqApiKey) {
                                         description = await callGroqAPI(prompt)

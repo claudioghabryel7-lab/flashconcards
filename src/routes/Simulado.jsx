@@ -6,6 +6,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import CourseAdScreen from '../components/CourseAdScreen'
 import {
   ClockIcon,
@@ -272,14 +273,6 @@ const Simulado = () => {
         editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
       }
 
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-
       // Usar prompt unificado
       const { buildRedacaoPrompt } = await import('../utils/unifiedPrompt')
       const themePrompt = await buildRedacaoPrompt(
@@ -303,8 +296,13 @@ O tema deve ser claro e direto.
 
 CRÍTICO: Retorne APENAS o tema, nada mais.`
 
-      const result = await model.generateContent(themePrompt)
-      let theme = result.response.text().trim()
+      const response = await callGeminiWithRetry(themePrompt, {
+        generationConfig: {
+          maxOutputTokens: 1024,
+          temperature: 0.8,
+        },
+      })
+      let theme = extractGeneratedText(response).trim()
       
       // Limpar formatação
       theme = theme.replace(/TEMA:/gi, '').trim()
@@ -385,13 +383,6 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
         editalText = (data.prompt || '') + '\n\n' + (data.pdfText || '')
       }
 
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       // Usar prompt unificado
       const { buildRedacaoAnalysisPrompt } = await import('../utils/unifiedPrompt')
@@ -442,8 +433,13 @@ CRÍTICO:
 - Se a redação for muito curta ou não desenvolver o tema, dê nota ZERO
 - Retorne APENAS o JSON, sem markdown, sem explicações.`
 
-      const result = await model.generateContent(analysisPrompt)
-      let responseText = result.response.text().trim()
+      const response = await callGeminiWithRetry(analysisPrompt, {
+        generationConfig: {
+          maxOutputTokens: 4096,
+          temperature: 0.3,
+        },
+      })
+      let responseText = extractGeneratedText(response).trim()
 
       // Extrair JSON
       let jsonText = responseText
@@ -704,13 +700,6 @@ CRÍTICO:
         throw new Error('Edital não encontrado. Configure o edital verticalizado do curso primeiro no painel administrativo.')
       }
 
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
       
       updateProgress(20)
 
@@ -777,9 +766,14 @@ Retorne APENAS um objeto JSON válido no seguinte formato:
 CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
 
       updateProgress(30)
-      const result = await model.generateContent(analysisPrompt)
+      const response = await callGeminiWithRetry(analysisPrompt, {
+        generationConfig: {
+          maxOutputTokens: 32000,
+          temperature: 0.7,
+        },
+      })
       updateProgress(50)
-      const responseText = result.response.text().trim()
+      const responseText = extractGeneratedText(response).trim()
 
       // Extrair JSON
       let jsonText = responseText
@@ -1058,8 +1052,13 @@ ${questionType === 'certo_errado' ? `{
 CRÍTICO: Retorne APENAS o JSON, sem markdown.`
 
         try {
-          const result = await model.generateContent(materiaPrompt)
-          const responseText = result.response.text().trim()
+          const response = await callGeminiWithRetry(materiaPrompt, {
+            generationConfig: {
+              maxOutputTokens: 32000,
+              temperature: 0.7,
+            },
+          })
+          const responseText = extractGeneratedText(response).trim()
 
           let jsonText = responseText
           if (jsonText.includes('```json')) {
@@ -1250,13 +1249,6 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
             ? `\n\n📚 FLASHCARDS DO CURSO (USE COMO BASE):\n${window.formatFlashcardsForContext ? window.formatFlashcardsForContext(window.courseFlashcards.slice(0, 30), 30) : ''}\n\n`
             : '')
 
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       // Usar prompt unificado
       const { buildQuestionPrompt } = await import('../utils/unifiedPrompt')
@@ -1318,8 +1310,13 @@ FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
 
 CRÍTICO: Retorne APENAS o JSON, sem markdown.`
 
-      const result = await model.generateContent(regeneratePrompt)
-      const responseText = result.response.text().trim()
+      const response = await callGeminiWithRetry(regeneratePrompt, {
+        generationConfig: {
+          maxOutputTokens: 32000,
+          temperature: 0.7,
+        },
+      })
+      const responseText = extractGeneratedText(response).trim()
 
       let jsonText = responseText
       if (jsonText.includes('```json')) {
