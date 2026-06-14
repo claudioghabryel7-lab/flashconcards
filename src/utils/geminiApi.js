@@ -80,12 +80,7 @@ export async function callGeminiWithRetry(prompt, options = {}) {
           if (useGoogleSearch) {
             requestBody.tools = [
               {
-                googleSearchRetrieval: {
-                  dynamicRetrievalConfig: {
-                    mode: "MODE_DYNAMIC",
-                    dynamicThreshold: 0.7
-                  }
-                }
+                googleSearch: {}
               }
             ]
           }
