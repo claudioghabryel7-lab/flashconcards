@@ -327,38 +327,61 @@ REGRAS:
       
       setGenerationStatus('Enviando solicitação para a IA...')
       
-      // Função para fazer requisição com rotação de API keys
+      // Função para fazer requisição com rotação de API keys e retry para 503
       const fetchWithKeyRotation = async (url, options) => {
+        const maxRetries = 3
+        const baseDelay = 2000 // 2 segundos
+        
         for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex++) {
           const apiKey = apiKeys[keyIndex]
           console.log(`🔑 [VesperaDeProvaConfig] Tentando API key ${keyIndex + 1}/${apiKeys.length}`)
           
           const urlWithKey = `${url}?key=${apiKey}`
           
-          try {
-            const response = await fetch(urlWithKey, options)
-            const data = await response.json()
-            
-            if (response.ok) {
-              console.log(`✅ [VesperaDeProvaConfig] API key ${keyIndex + 1} funcionou`)
-              return data
+          for (let retry = 0; retry < maxRetries; retry++) {
+            try {
+              const response = await fetch(urlWithKey, options)
+              const data = await response.json()
+              
+              if (response.ok) {
+                console.log(`✅ [VesperaDeProvaConfig] API key ${keyIndex + 1} funcionou`)
+                return data
+              }
+              
+              // Se for erro 429 (Too Many Requests), tentar próxima key
+              if (response.status === 429) {
+                console.log(`⚠️ [VesperaDeProvaConfig] API key ${keyIndex + 1} atingiu quota, tentando próxima...`)
+                break
+              }
+              
+              // Se for erro 503 (Service Unavailable), fazer retry com exponential backoff
+              if (response.status === 503) {
+                const delay = baseDelay * Math.pow(2, retry)
+                console.log(`⚠️ [VesperaDeProvaConfig] API key ${keyIndex + 1} com alta demanda (503), retry ${retry + 1}/${maxRetries} em ${delay/1000}s...`)
+                
+                if (retry < maxRetries - 1) {
+                  await new Promise(resolve => setTimeout(resolve, delay))
+                  continue
+                }
+              }
+              
+              // Se for outro erro, lançar imediatamente
+              console.error('❌ [VesperaDeProvaConfig] Erro na API Gemini:', data)
+              throw new Error(data.error?.message || 'Erro na API da IA')
+            } catch (error) {
+              if (retry < maxRetries - 1 && error.message?.includes('high demand')) {
+                const delay = baseDelay * Math.pow(2, retry)
+                console.log(`⚠️ [VesperaDeProvaConfig] Retry ${retry + 1}/${maxRetries} em ${delay/1000}s...`)
+                await new Promise(resolve => setTimeout(resolve, delay))
+                continue
+              }
+              
+              if (keyIndex < apiKeys.length - 1) {
+                console.log(`⚠️ [VesperaDeProvaConfig] API key ${keyIndex + 1} falhou, tentando próxima...`)
+                break
+              }
+              throw error
             }
-            
-            // Se for erro 429 (Too Many Requests), tentar próxima key
-            if (response.status === 429) {
-              console.log(`⚠️ [VesperaDeProvaConfig] API key ${keyIndex + 1} atingiu quota, tentando próxima...`)
-              continue
-            }
-            
-            // Se for outro erro, lançar imediatamente
-            console.error('❌ [VesperaDeProvaConfig] Erro na API Gemini:', data)
-            throw new Error(data.error?.message || 'Erro na API da IA')
-          } catch (error) {
-            if (keyIndex < apiKeys.length - 1) {
-              console.log(`⚠️ [VesperaDeProvaConfig] API key ${keyIndex + 1} falhou, tentando próxima...`)
-              continue
-            }
-            throw error
           }
         }
         
