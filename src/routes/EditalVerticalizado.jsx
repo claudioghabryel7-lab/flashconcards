@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
-import { doc, onSnapshot, getDoc, updateDoc, collection, getDocs, query, orderBy, setDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
+import { doc, onSnapshot, getDoc, updateDoc, collection, getDocs, query, orderBy, setDoc, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore'
 import dayjs from 'dayjs'
 import {
   DocumentTextIcon,
@@ -523,6 +523,31 @@ const EditalVerticalizado = () => {
         }
     } catch (error) {
       console.error('Erro ao atualizar checkbox:', error)
+    }
+  }
+
+  // Função para apagar conteúdo específico de um tópico
+  const handleDeleteTopicContent = async (topicKey) => {
+    if (!courseId || !topicKey) return
+    if (!window.confirm(`⚠️ ATENÇÃO: Isso vai apagar o conteúdo gerado para este tópico.\n\nEsta ação não pode ser desfeita. Deseja continuar?`)) {
+      return
+    }
+
+    try {
+      // Sanitizar o topicKey para usar como ID de documento no Firestore
+      const sanitizedKey = topicKey
+        .replace(/::/g, '_DOUBLECOLON_')
+        .replace(/\//g, '_SLASH_')
+        .replace(/\\/g, '_BACKSLASH_')
+        .trim()
+
+      const contentRef = doc(db, 'courses', courseId, 'conteudosCompletos', sanitizedKey)
+      await deleteDoc(contentRef)
+      
+      alert('✅ Conteúdo apagado com sucesso!')
+    } catch (error) {
+      console.error('Erro ao apagar conteúdo:', error)
+      alert('❌ Erro ao apagar conteúdo: ' + (error.message || 'Erro desconhecido'))
     }
   }
 
@@ -1155,6 +1180,21 @@ REGRAS IMPORTANTES:
                                             <span className="hidden xs:inline sm:inline">Estudar</span>
                                             <span className="xs:hidden sm:hidden">E</span>
                                           </Link>
+                                          {profile?.role === 'admin' && (
+                                            <button
+                                              onClick={(e) => {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                handleDeleteTopicContent(topicKey)
+                                              }}
+                                              className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[9px] sm:text-xs font-semibold bg-red-600 text-white hover:bg-red-700 transition whitespace-nowrap flex-shrink-0 active:scale-95"
+                                              title="Apagar conteúdo deste tópico (apenas admin)"
+                                            >
+                                              <TrashIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                              <span className="hidden xs:inline sm:inline">Apagar</span>
+                                              <span className="xs:hidden sm:hidden">X</span>
+                                            </button>
+                                          )}
                                         </>
                                       )
                                     })()}

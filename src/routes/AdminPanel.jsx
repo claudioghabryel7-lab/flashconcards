@@ -5711,6 +5711,58 @@ CRÍTICO:
     }
   }
 
+  // Apagar Todos os Conteúdos Completos do Curso
+  const handleDeleteAllConteudosCompletos = async () => {
+    const courseId = materiaRevisadaForm.courseId || 'alego-default'
+
+    if (!window.confirm(`⚠️ ATENÇÃO: Isso vai apagar TODOS os conteúdos completos gerados para este curso.\n\nEsta ação não pode ser desfeita. Deseja continuar?`)) {
+      return
+    }
+
+    setGeneratingAllConteudosCompletos(true)
+    setAllConteudosCompletosProgress('')
+    setMessage('')
+
+    try {
+      setAllConteudosCompletosProgress('🗑️ Buscando conteúdos completos...')
+
+      const conteudosCompletosRef = collection(db, 'courses', courseId, 'conteudosCompletos')
+      const conteudosCompletosSnapshot = await getDocs(conteudosCompletosRef)
+      const conteudosCompletosToDelete = conteudosCompletosSnapshot.docs
+
+      if (conteudosCompletosToDelete.length === 0) {
+        setAllConteudosCompletosProgress('✅ Nenhum conteúdo completo encontrado para apagar.')
+        setMessage('✅ Nenhum conteúdo completo encontrado para apagar.')
+        return
+      }
+
+      setAllConteudosCompletosProgress(`🗑️ Encontrados ${conteudosCompletosToDelete.length} conteúdo(s) completo(s). Apagando...`)
+
+      // Apagar em lotes
+      const batchSize = 50
+      for (let i = 0; i < conteudosCompletosToDelete.length; i += batchSize) {
+        const batch = conteudosCompletosToDelete.slice(i, i + batchSize)
+        const deletePromises = batch.map(doc => deleteDoc(doc.ref))
+        await Promise.all(deletePromises)
+        
+        const progress = Math.min(i + batchSize, conteudosCompletosToDelete.length)
+        setAllConteudosCompletosProgress(`🗑️ Apagando... ${progress}/${conteudosCompletosToDelete.length} conteúdo(s)`)
+      }
+
+      setAllConteudosCompletosProgress(`\n✅ Processo concluído!\n\n✅ ${conteudosCompletosToDelete.length} conteúdo(s) completo(s) apagado(s) com sucesso!`)
+      setMessage(`✅ ${conteudosCompletosToDelete.length} conteúdo(s) completo(s) apagado(s) com sucesso!`)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      if (import.meta.env.DEV) {
+        console.error('Erro ao apagar todos os conteúdos completos:', errorMessage)
+      }
+      setMessage(`❌ Erro ao apagar todos os conteúdos completos: ${errorMessage}`)
+      setAllConteudosCompletosProgress(`❌ Erro: ${errorMessage}`)
+    } finally {
+      setGeneratingAllConteudosCompletos(false)
+    }
+  }
+
   // Carregar matérias revisadas existentes
   useEffect(() => {
     if (!materiaRevisadaForm.courseId) return
@@ -7964,23 +8016,43 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem 
                     <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                       Gere conteúdos completos para todas as matérias do curso. Cada matéria terá uma página dedicada.
                     </p>
-                    <button
-                      onClick={handleGenerateAllConteudosCompletos}
-                      disabled={generatingAllConteudosCompletos || generatingMateriaRevisada}
-                      className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      {generatingAllConteudosCompletos ? (
-                        <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                          <span>Gerando Conteúdos Completos...</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>📚</span>
-                          <span>Gerar Conteúdos Completos de Todas as Matérias</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleGenerateAllConteudosCompletos}
+                        disabled={generatingAllConteudosCompletos || generatingMateriaRevisada}
+                        className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {generatingAllConteudosCompletos ? (
+                          <>
+                            <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                            <span>Gerando Conteúdos Completos...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>📚</span>
+                            <span>Gerar Conteúdos Completos de Todas as Matérias</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={handleDeleteAllConteudosCompletos}
+                        disabled={generatingAllConteudosCompletos || generatingMateriaRevisada}
+                        className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        title="Apagar todos os conteúdos completos do curso"
+                      >
+                        {generatingAllConteudosCompletos ? (
+                          <>
+                            <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                            <span>Apagando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>🗑️</span>
+                            <span>Apagar Todos</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                     {allConteudosCompletosProgress && (
                       <div className="mt-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-blue-200 dark:border-blue-700">
                         <p className="text-sm text-blue-700 dark:text-blue-300 whitespace-pre-line">
