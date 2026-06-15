@@ -610,11 +610,16 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
    - O Padrão da Banca: Como a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar esta disciplina especificamente no concurso.
 
 2. **REVISÃO TURBO**:
-   - 5-7 resumos detalhados e explicativos (não apenas frases curtas). Cada resumo deve:
-     * Explicar o conceito de forma clara e didática(NADA SUPERFICIAL, QUERO BEM COMPLETO)
+   - 🚨 OBRIGATÓRIO: Gere UM RESUMO para CADA UM dos "Top Assuntos Quentes" listados no Raio-X de Probabilidade
+   - Se houver 5 top assuntos quentes, gere 5 resumos (um para cada)
+   - Se houver 10 top assuntos quentes, gere 10 resumos (um para cada)
+   - Cada resumo deve corresponder EXATAMENTE a um dos top assuntos quentes listados
+   - NÃO PULE nenhum top assunto quente - todos devem ter seu resumo
+   - Cada resumo deve:
+     * Explicar o conceito de forma clara e didática (NADA SUPERFICIAL, QUERO BEM COMPLETO)
      * Citar exemplos práticos do concurso ${concursoName || 'mencionado'}
      * Ser específico para o cargo de ${courseName || 'mencionado'}
-     * Incluir dicas de memorização(nada gernérico e vazio/vago)
+     * Incluir dicas de memorização (nada genérico e vazio/vago)
      * **USE FORMATAÇÃO RICA**: Use **negrito** para termos importantes, *itálico* para ênfase, e formatação visual para destacar pontos-chave
    - 3-4 pegadinhas ("Cuidado meu querido aluno!"):
      * Erros comuns que a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar
