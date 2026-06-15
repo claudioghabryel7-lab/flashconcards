@@ -7,6 +7,7 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import ReactMarkdown from 'react-markdown'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -1014,10 +1015,9 @@ REGRAS:
                         <h5 className="font-semibold text-slate-700 dark:text-slate-300 mb-2">
                           {resumo.titulo}
                         </h5>
-                        <div
-                          className="ia-content-enhanced"
-                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(resumo.conteudo) }}
-                        />
+                        <div className="ia-content-enhanced text-sm text-slate-600 dark:text-slate-400">
+                          <ReactMarkdown>{replaceConcursoWithCourse(resumo.conteudo)}</ReactMarkdown>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1040,10 +1040,9 @@ REGRAS:
                         <h5 className="font-semibold mb-2">
                           {pegadinha.titulo}
                         </h5>
-                        <div
-                          className="ia-content-enhanced"
-                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(pegadinha.conteudo) }}
-                        />
+                        <div className="ia-content-enhanced text-sm text-red-600 dark:text-red-400">
+                          <ReactMarkdown>{replaceConcursoWithCourse(pegadinha.conteudo)}</ReactMarkdown>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1097,10 +1096,9 @@ REGRAS:
                             <h5 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2">
                               💡 Gabarito Comentado:
                             </h5>
-                            <div
-                              className="text-sm text-blue-600 dark:text-blue-300 ia-content-enhanced"
-                              dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(questao.gabaritoComentado) }}
-                            />
+                            <div className="text-sm text-blue-600 dark:text-blue-300 ia-content-enhanced">
+                              <ReactMarkdown>{replaceConcursoWithCourse(questao.gabaritoComentado)}</ReactMarkdown>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1112,10 +1110,9 @@ REGRAS:
               {/* Conteúdo original (para compatibilidade) */}
               {conteudo.content && (
                 <div className="mb-8">
-                  <div
-                    className="ia-content-enhanced"
-                    dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(conteudo.content) }}
-                  />
+                  <div className="ia-content-enhanced">
+                    <ReactMarkdown>{replaceConcursoWithCourse(conteudo.content)}</ReactMarkdown>
+                  </div>
                 </div>
               )}
 
@@ -1135,10 +1132,9 @@ REGRAS:
                         )}
                       </h3>
                       {secao.conteudo && (
-                        <div
-                          className="ia-content-enhanced"
-                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(secao.conteudo) }}
-                        />
+                        <div className="ia-content-enhanced">
+                          <ReactMarkdown>{replaceConcursoWithCourse(secao.conteudo)}</ReactMarkdown>
+                        </div>
                       )}
                     </div>
                   ))}
