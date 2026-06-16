@@ -401,12 +401,13 @@ FORMATO JSON:
         "E": "Alternativa E"
       },
       "correta": "A",
-      "gabaritoComentado": "explicação detalhada"
+      "gabaritoComentado": "explicação"
     }
   ]
 }
 
 REGRAS:
+- DIRETRIZ ANTI-ERRO DE PARSING (CRÍTICA): Para evitar cortes ou erros de string inacabada (Unterminated string), o JSON deve ser gerado sem quebras de linha reais dentro dos campos; se precisar separar parágrafos, use o caractere literal \n. Além disso, para citações ou termos literais da lei dentro dos enunciados e comentários, use estritamente aspas simples ('), guardando as aspas duplas (") exclusivamente para a marcação das chaves e valores estruturais do próprio JSON. Seja conciso nos comentários para não estourar o limite de tokens da API.
 - Use tom focado e direto
 - Seja ESPECÍFICO do concurso ${concursoName || 'mencionado'}
 - Cite o nome do concurso nas questões
