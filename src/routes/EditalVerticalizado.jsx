@@ -13,6 +13,8 @@ import {
   ArrowPathIcon,
   TrashIcon,
   PlusIcon,
+  QuestionMarkCircleIcon,
+  DocumentDuplicateIcon,
 } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -1054,6 +1056,17 @@ REGRAS IMPORTANTES:
                       {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)} {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0) === 1 ? 'tópico' : 'tópicos'}
                     </span>
                   </div>
+                  {profile?.role === 'admin' && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={openFlashcardsModal}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white text-xs font-medium rounded-lg hover:bg-purple-700 transition-colors"
+                      >
+                        <SparklesIcon className="h-4 w-4" />
+                        <span className="hidden sm:inline">Flashcards</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -1200,6 +1213,15 @@ REGRAS IMPORTANTES:
                                             <BookOpenIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                                             <span className="hidden xs:inline sm:inline">Estudar</span>
                                             <span className="xs:hidden sm:hidden">E</span>
+                                          </Link>
+                                          <Link
+                                            to={`/questoes-topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
+                                            className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[9px] sm:text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition whitespace-nowrap flex-shrink-0 active:scale-95"
+                                            title="Questões preditivas deste tópico (BOOK QUESTÕES)"
+                                          >
+                                            <QuestionMarkCircleIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                            <span className="hidden xs:inline sm:inline">Questões</span>
+                                            <span className="xs:hidden sm:hidden">Q</span>
                                           </Link>
                                           {profile?.role === 'admin' && (
                                             <button

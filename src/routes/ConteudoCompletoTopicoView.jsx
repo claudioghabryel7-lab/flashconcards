@@ -990,9 +990,10 @@ REGRAS:
                         <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                           📊 O Padrão da Banca:
                         </h5>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          {conteudo.raioXProbabilidade.padraoBanca}
-                        </p>
+                        <div 
+                          className="text-sm text-slate-600 dark:text-slate-400"
+                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(conteudo.raioXProbabilidade.padraoBanca) }}
+                        />
                       </div>
                     )}
                   </div>
@@ -1015,9 +1016,10 @@ REGRAS:
                         <h5 className="font-semibold text-slate-700 dark:text-slate-300 mb-2">
                           {resumo.titulo}
                         </h5>
-                        <div className="ia-content-enhanced text-sm text-slate-600 dark:text-slate-400">
-                          <ReactMarkdown>{replaceConcursoWithCourse(resumo.conteudo)}</ReactMarkdown>
-                        </div>
+                        <div 
+                          className="ia-content-enhanced text-sm text-slate-600 dark:text-slate-400"
+                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(resumo.conteudo) }}
+                        />
                       </div>
                     ))}
                   </div>
@@ -1040,9 +1042,10 @@ REGRAS:
                         <h5 className="font-semibold mb-2">
                           {pegadinha.titulo}
                         </h5>
-                        <div className="ia-content-enhanced text-sm text-red-600 dark:text-red-400">
-                          <ReactMarkdown>{replaceConcursoWithCourse(pegadinha.conteudo)}</ReactMarkdown>
-                        </div>
+                        <div 
+                          className="ia-content-enhanced text-sm text-red-600 dark:text-red-400"
+                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(pegadinha.conteudo) }}
+                        />
                       </div>
                     ))}
                   </div>
@@ -1096,9 +1099,10 @@ REGRAS:
                             <h5 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2">
                               💡 Gabarito Comentado:
                             </h5>
-                            <div className="text-sm text-blue-600 dark:text-blue-300 ia-content-enhanced">
-                              <ReactMarkdown>{replaceConcursoWithCourse(questao.gabaritoComentado)}</ReactMarkdown>
-                            </div>
+                            <div 
+                              className="text-sm text-blue-600 dark:text-blue-300 ia-content-enhanced"
+                              dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(questao.gabaritoComentado) }}
+                            />
                           </div>
                         )}
                       </div>
@@ -1110,9 +1114,10 @@ REGRAS:
               {/* Conteúdo original (para compatibilidade) */}
               {conteudo.content && (
                 <div className="mb-8">
-                  <div className="ia-content-enhanced">
-                    <ReactMarkdown>{replaceConcursoWithCourse(conteudo.content)}</ReactMarkdown>
-                  </div>
+                  <div 
+                    className="ia-content-enhanced"
+                    dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(conteudo.content) }}
+                  />
                 </div>
               )}
 
@@ -1132,9 +1137,10 @@ REGRAS:
                         )}
                       </h3>
                       {secao.conteudo && (
-                        <div className="ia-content-enhanced">
-                          <ReactMarkdown>{replaceConcursoWithCourse(secao.conteudo)}</ReactMarkdown>
-                        </div>
+                        <div 
+                          className="ia-content-enhanced"
+                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(secao.conteudo) }}
+                        />
                       )}
                     </div>
                   ))}
