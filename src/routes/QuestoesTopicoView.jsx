@@ -567,25 +567,23 @@ REGRAS:
             <p className="text-slate-600 dark:text-slate-400 mb-6">
               {error}
             </p>
-            {isAdmin && (
-              <button
-                onClick={handleGenerateQuestoes}
-                disabled={generating}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-alego-600 text-white rounded-xl font-semibold hover:bg-alego-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {generating ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                    Gerando Questões... ({progress}%)
-                  </>
-                ) : (
-                  <>
-                    <QuestionMarkCircleIcon className="h-5 w-5" />
-                    Gerar Questões Preditivas
-                  </>
-                )}
-              </button>
-            )}
+            <button
+              onClick={handleGenerateQuestoes}
+              disabled={generating}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-alego-600 text-white rounded-xl font-semibold hover:bg-alego-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {generating ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                  Gerando Questões... ({progress}%)
+                </>
+              ) : (
+                <>
+                  <QuestionMarkCircleIcon className="h-5 w-5" />
+                  Gerar Questões Preditivas
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -594,6 +592,30 @@ REGRAS:
 
   return (
     <div className="min-h-screen py-6">
+      {/* Modal de Loading durante geração */}
+      {generating && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-8 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-alego-600 border-t-transparent mx-auto mb-4"></div>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+              Gerando Questões Preditivas
+            </h3>
+            <p className="text-slate-600 dark:text-slate-400 mb-4">
+              A IA está criando 40-50 questões preditivas para este tópico...
+            </p>
+            <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-2">
+              <div 
+                className="h-full bg-alego-600 transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {progress}% concluído
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-6">
