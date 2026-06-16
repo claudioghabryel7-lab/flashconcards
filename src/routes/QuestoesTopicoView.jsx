@@ -426,7 +426,30 @@ REGRAS:
       const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
       if (jsonMatch) jsonText = jsonMatch[0]
 
-      const parsed = JSON.parse(jsonText)
+      let parsed = null
+      try {
+        // Tentar fazer o parse direto
+        parsed = JSON.parse(jsonText)
+      } catch (parseError) {
+        console.error('Erro ao fazer parse do JSON:', parseError.message)
+        console.error('JSON extraído:', jsonText)
+        
+        // Tentar corrigir problemas comuns de formatação
+        let fixedJson = jsonText
+          .replace(/,\s*}/g, '}')  // Vírgula antes de fechar objeto
+          .replace(/,\s*]/g, ']')  // Vírgula antes de fechar array
+          .replace(/\n\s*\}/g, '}')  // Nova linha antes de fechar objeto
+          .replace(/\n\s*\]/g, ']')  // Nova linha antes de fechar array
+          .replace(/\\n/g, '\\n')  // Corrigir quebras de linha em strings
+          .replace(/\\t/g, '\\t')  // Corrigir tabulações em strings
+        
+        try {
+          parsed = JSON.parse(fixedJson)
+          console.log('JSON corrigido com sucesso')
+        } catch (fixError) {
+          throw new Error(`JSON inválido mesmo após correção: ${fixError.message}`)
+        }
+      }
       const payload = {
         ...parsed,
         materia: parsed.materia || parsed.titulo || resolvedTopicKey,
@@ -550,8 +573,17 @@ REGRAS:
                 disabled={generating}
                 className="inline-flex items-center gap-2 px-6 py-3 bg-alego-600 text-white rounded-xl font-semibold hover:bg-alego-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <QuestionMarkCircleIcon className="h-5 w-5" />
-                {generating ? 'Gerando Questões...' : 'Gerar Questões Preditivas'}
+                {generating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                    Gerando Questões... ({progress}%)
+                  </>
+                ) : (
+                  <>
+                    <QuestionMarkCircleIcon className="h-5 w-5" />
+                    Gerar Questões Preditivas
+                  </>
+                )}
               </button>
             )}
           </div>
