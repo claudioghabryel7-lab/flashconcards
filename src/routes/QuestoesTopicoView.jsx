@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy } from 'firebase/firestore'
-import { ArrowLeftIcon, PencilIcon, FireIcon, LightBulbIcon, ExclamationTriangleIcon, BookOpenIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, PencilIcon, FireIcon, LightBulbIcon, ExclamationTriangleIcon, BookOpenIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon, QuestionMarkCircleIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
@@ -159,6 +159,7 @@ const QuestoesTopicoView = () => {
   const [validationMessage, setValidationMessage] = useState('')
   const [editingContent, setEditingContent] = useState(false)
   const [editedContent, setEditedContent] = useState('')
+  const [visibleGabaritos, setVisibleGabaritos] = useState({})
 
   const resolvedCourseId = useMemo(() => courseId || 'alego-default', [courseId])
   const resolvedTopicKey = useMemo(() => normalizeKey(topicKey), [topicKey])
@@ -173,6 +174,13 @@ const QuestoesTopicoView = () => {
 
   const effectiveTopicNome = topicNomeFromQuery || topicNomeFromKey
   const isAdmin = profile?.role === 'admin'
+
+  const toggleGabarito = (idx) => {
+    setVisibleGabaritos(prev => ({
+      ...prev,
+      [idx]: !prev[idx]
+    }))
+  }
 
   // Carregar nome do curso
   useEffect(() => {
@@ -711,39 +719,63 @@ REGRAS:
                     </h3>
                   </div>
                   
-                  {questoes.questoesPreditivas.map((questao, idx) => (
-                    <div key={idx} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
-                      <div className="mb-4">
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">Questão {idx + 1}</p>
-                        <p className="text-slate-900 dark:text-white font-medium">{questao.enunciado}</p>
-                      </div>
-                      
-                      <div className="space-y-2 mb-4">
-                        {Object.entries(questao.alternativas || {}).map(([letra, texto]) => (
-                          <div 
-                            key={letra}
-                            className={`p-3 rounded-lg border ${
-                              letra === questao.correta
-                                ? 'bg-green-50 dark:bg-green-900/20 border-green-500 dark:border-green-500'
-                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
-                            }`}
-                          >
-                            <span className="font-semibold text-slate-700 dark:text-slate-300 mr-2">{letra})</span>
-                            <span className="text-slate-900 dark:text-white">{texto}</span>
-                          </div>
-                        ))}
-                      </div>
-                      
-                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                        <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                          Gabarito: {questao.correta}
-                        </p>
-                        <div className="text-blue-800 dark:text-blue-200 text-sm">
-                          <ReactMarkdown>{questao.gabaritoComentado}</ReactMarkdown>
+                  {questoes.questoesPreditivas.map((questao, idx) => {
+                    const isGabaritoVisible = visibleGabaritos[idx]
+                    return (
+                      <div key={idx} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
+                        <div className="mb-4">
+                          <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">Questão {idx + 1}</p>
+                          <p className="text-slate-900 dark:text-white font-medium">{questao.enunciado}</p>
                         </div>
+                        
+                        <div className="space-y-2 mb-4">
+                          {Object.entries(questao.alternativas || {}).map(([letra, texto]) => (
+                            <div 
+                              key={letra}
+                              className={`p-3 rounded-lg border ${
+                                isGabaritoVisible && letra === questao.correta
+                                  ? 'bg-green-50 dark:bg-green-900/20 border-green-500 dark:border-green-500'
+                                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                              }`}
+                            >
+                              <span className="font-semibold text-slate-700 dark:text-slate-300 mr-2">{letra})</span>
+                              <span className="text-slate-900 dark:text-white">{texto}</span>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div className="flex items-center gap-2 mb-2">
+                          <button
+                            onClick={() => toggleGabarito(idx)}
+                            className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                          >
+                            {isGabaritoVisible ? (
+                              <>
+                                <EyeSlashIcon className="h-4 w-4" />
+                                Ocultar Gabarito
+                              </>
+                            ) : (
+                              <>
+                                <EyeIcon className="h-4 w-4" />
+                                Ver Gabarito
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        
+                        {isGabaritoVisible && (
+                          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                              Gabarito: {questao.correta}
+                            </p>
+                            <div className="text-blue-800 dark:text-blue-200 text-sm">
+                              <ReactMarkdown>{questao.gabaritoComentado}</ReactMarkdown>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
