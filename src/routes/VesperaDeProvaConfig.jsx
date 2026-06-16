@@ -264,7 +264,7 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
    - Se houver 5 top assuntos quentes, gere 5 resumos (um para cada)
    - Se houver 10 top assuntos quentes, gere 10 resumos (um para cada)
    - Cada resumo deve corresponder EXATAMENTE a um dos top assuntos quentes listados
-   - NÃO PULE nenhum top assunto quente - todos devem ter seu resumo
+   - NÃO PULE nenhum top assunto quente - todos devem ter seu resumo.
    - Cada resumo deve:
      * Explicar o conceito de forma clara e didática (NADA SUPERFICIAL, QUERO BEM COMPLETO)
      * Citar exemplos práticos do concurso ${estrutura.concurso}
