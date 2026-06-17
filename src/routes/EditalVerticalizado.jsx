@@ -531,7 +531,7 @@ const EditalVerticalizado = () => {
   // Função para apagar conteúdo específico de um tópico
   const handleDeleteTopicContent = async (topicKey) => {
     if (!courseId || !topicKey) return
-    if (!window.confirm(`⚠️ ATENÇÃO: Isso vai apagar o conteúdo gerado para este tópico.\n\nEsta ação não pode ser desfeita. Deseja continuar?`)) {
+    if (!window.confirm(`⚠️ ATENÇÃO: Isso vai apagar o CONTEÚDO e as QUESTÕES gerados para este tópico.\n\nEsta ação não pode ser desfeita. Deseja continuar?`)) {
       return
     }
 
@@ -555,7 +555,7 @@ const EditalVerticalizado = () => {
         sanitizedKey = sanitizedKey.substring(0, 400)
       }
 
-      console.log('🗑️ Tentando apagar conteúdo:', {
+      console.log('🗑️ Tentando apagar conteúdo e questões:', {
         courseId,
         topicKey,
         decoded,
@@ -563,14 +563,34 @@ const EditalVerticalizado = () => {
         path: `courses/${courseId}/conteudosCompletos/${sanitizedKey}`
       })
 
+      // Apagar conteúdo completo
       const contentRef = doc(db, 'courses', courseId, 'conteudosCompletos', sanitizedKey)
       await deleteDoc(contentRef)
-      
       console.log('✅ Conteúdo apagado com sucesso!')
-      alert('✅ Conteúdo apagado com sucesso!')
+
+      // Apagar questões do tópico (questoesTopico)
+      const questoesTopicoRef = doc(db, 'courses', courseId, 'questoesTopico', sanitizedKey)
+      await deleteDoc(questoesTopicoRef)
+      console.log('✅ Questões do tópico apagadas com sucesso!')
+
+      // Apagar questões na coleção questoes que correspondem ao topicKey
+      const questoesRef = collection(db, 'courses', courseId, 'questoes')
+      const questoesQuery = query(questoesRef, where('topicKey', '==', topicKey))
+      const questoesSnapshot = await getDocs(questoesQuery)
+      
+      if (!questoesSnapshot.empty) {
+        const batch = writeBatch(db)
+        questoesSnapshot.forEach((doc) => {
+          batch.delete(doc.ref)
+        })
+        await batch.commit()
+        console.log(`✅ ${questoesSnapshot.size} questões apagadas da coleção questoes`)
+      }
+      
+      alert('✅ Conteúdo e questões apagados com sucesso!')
     } catch (error) {
-      console.error('❌ Erro ao apagar conteúdo:', error)
-      alert('❌ Erro ao apagar conteúdo: ' + (error.message || 'Erro desconhecido'))
+      console.error('❌ Erro ao apagar conteúdo/questões:', error)
+      alert('❌ Erro ao apagar: ' + (error.message || 'Erro desconhecido'))
     }
   }
 
