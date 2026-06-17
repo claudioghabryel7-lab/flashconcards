@@ -326,8 +326,8 @@ REGRAS:
 - Cite o nome do concurso e cargo nos resumos e questões
 - Preencha "validacaoArtigo" e "analiseJuridicaPrevia" PRIMEIRO com o artigo/lei/jurisprudência literal antes de escrever o conteúdo
 - Retorne APENAS o JSON válido, sem texto adicional
-- Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
-      
+- Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
+
       // Carregar múltiplas API keys do Gemini
       const apiKeys = []
       for (let i = 1; i <= 10; i++) {
