@@ -398,6 +398,7 @@ FORMATO JSON:
   },
   "questoesPreditivas": [
     {
+      "analiseJuridicaPrevia": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
       "enunciado": "texto da questão",
       "alternativas": {
         "A": "Alternativa A",
@@ -416,8 +417,9 @@ REGRAS:
 - Use tom focado e direto
 - Seja ESPECÍFICO do concurso ${concursoName || 'mencionado'}
 - Cite o nome do concurso nas questões
+- Preencha "analiseJuridicaPrevia" PRIMEIRO com o artigo/lei/jurisprudência literal antes de escrever o enunciado
 - Retorne APENAS o JSON válido, sem texto adicional
-- NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
+- Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
 
       setProgress((prev) => Math.min(prev + 15, 70))
       const response = await callGeminiWithRetry(prompt, {

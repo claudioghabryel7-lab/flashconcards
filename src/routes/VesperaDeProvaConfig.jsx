@@ -277,25 +277,26 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
      * Citar exemplos práticos do concurso ${estrutura.concurso}
      * Ser específico para o cargo de ${estrutura.curso}
      * Incluir dicas de memorização (nada genérico e vazio/vago)
-     * **USE FORMATAÇÃO RICA**: Use **negrito** para termos importantes, *itálico* para ênfase, e formatação visual para destacar pontos-chave
+     * Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
    - 3-4 pegadinhas ("Cuidado meu querido aluno!"):
      * Erros comuns que a banca ${estrutura.banca} costuma cobrar
      * Detalhes que passam despercebidos
      * Armadilhas específicas do concurso ${estrutura.concurso}
-     * **USE FORMATAÇÃO RICA**: Use **negrito**, *itálico*, e destaque visual para armadilhas
+     * Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
 
 3. **QUESTÕES PREDITIVAS**:
    - Gere EXATAMENTE ${estrutura.disciplinas.map(d => d.questoes).join(', ')} questões para cada disciplina
    - No estilo da banca ${estrutura.banca} (A, B, C, D, E ou Certo/Errado)
    - Contextualizadas com o concurso ${estrutura.concurso} e cargo ${estrutura.curso}
    - Gabarito Comentado: explique o porquê das outras estarem erradas
-   - **USE FORMATAÇÃO RICA no gabarito**: Use **negrito** para resposta correta, *itálico* para explicações, e formatação visual para destacar pontos importantes
-   - **NÃO ECONOMIZE TEXTO**: Seja detalhado e completo nas explicações, mas não excessivamente extenso
+   - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
+   - Seja detalhado e completo nas explicações
 
 FORMATO JSON:
 {
   "material": [
     {
+      "validacaoArtigo": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
       "disciplina": "nome da disciplina",
       "raioX": {
         "topAssuntos": ["assunto 1", "assunto 2", "assunto 3"],
@@ -307,6 +308,7 @@ FORMATO JSON:
       },
       "questoes": [
         {
+          "analiseJuridicaPrevia": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
           "enunciado": "texto da questão",
           "alternativas": ["A", "B", "C", "D", "E"],
           "gabarito": "A",
@@ -322,8 +324,9 @@ REGRAS:
 - Use tom focado e direto
 - Seja ESPECÍFICO do concurso ${estrutura.concurso} e cargo ${estrutura.curso}
 - Cite o nome do concurso e cargo nos resumos e questões
+- Preencha "validacaoArtigo" e "analiseJuridicaPrevia" PRIMEIRO com o artigo/lei/jurisprudência literal antes de escrever o conteúdo
 - Retorne APENAS o JSON válido, sem texto adicional
-- NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
+- Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
       
       // Carregar múltiplas API keys do Gemini
       const apiKeys = []

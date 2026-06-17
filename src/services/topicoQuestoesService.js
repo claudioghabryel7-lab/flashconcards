@@ -57,22 +57,24 @@ export async function generateAndSaveQuestoesForTopico({
 
   const modulo = moduloLabel || formatTopicoAsModulo({ numero: topicoNumero, nome: topicoNome })
 
-  const prompt = `Gere questões preditivas de "Véspera de Prova" para ESTE tópico específico de concurso público.
+  // Função para gerar um lote de questões
+  const generateBatch = async (batchNumber, totalBatches) => {
+    const prompt = `Gere questões preditivas de "Véspera de Prova" para ESTE tópico específico de concurso público.
 
 CURSO/CONCURSO: ${courseName || 'Concurso público'}
 DISCIPLINA: ${disciplina}
 TÓPICO: ${topicoNumero ? `${topicoNumero} - ` : ''}${topicoNome}
+LOTE: ${batchNumber} de ${totalBatches} (gere 5 questões diferentes para este lote)
 
 DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
 IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se há leis, decretos ou regulamentos recentes que possam afetar o conteúdo.
 
-� VERIFICAÇÃO DE FONTES - OBRIGATÓRIO:
-- Para CADA lei, decreto ou norma jurídica mencionada nas questões, VERIFIQUE a atualidade usando as ferramentas disponíveis
+🔍 VERIFICAÇÃO DE FONTES - OBRIGATÓRIO:
+- Para CADA lei, decreto ou norma jurídica mencionada nas questões, VERIFIQUE a atualidade usando Google Search
 - Para CADA jurisprudência citada, VERIFIQUE se está vigente e atualizada
-- Use as ferramentas de Function Calling para buscar em APIs oficiais (Senado, Datajud/CNJ)
 - Sempre busque de fontes confiáveis: TJ,STF,LEI(E SUAS ATUALIZAÇÕES, NÃO PEGUE NADA ANTIGO OU DESATUALIZADO), GRAN CURSOS, QCONCURSOS, CONTEÚDOS JURÍDICOS, SITES DO PLANALTO, ENTENDIMENTOS ETC EM MATÉRIAS DE DIREITO... O FOCO É SEMPRE SER ATUALIZADO!
 
-��🚨🚨 BANCA EXAMINADORA - OBRIGATÓRIO 🚨🚨🚨
+🚨🚨🚨 BANCA EXAMINADORA - OBRIGATÓRIO 🚨🚨🚨
 BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
 - ADAPTE TODAS AS QUESTÕES ao estilo da banca "${banca || 'NÃO DEFINIDA'}"
 - Se a banca for INSTITUTO AOCP: questões de múltipla escolha diretas (A, B, C, D, E), interpretação literal
@@ -91,12 +93,12 @@ ${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 12000)}\n\n` : ''
    - O Padrão da Banca: Como a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar este tópico especificamente no concurso
 
 2. **QUESTÕES PREDITIVAS**:
-   - Gere EXATAMENTE 50 questões para este tópico
+   - Gere EXATAMENTE 5 questões para este lote
    - No estilo da banca ${banca || 'NÃO DEFINIDA'} (A, B, C, D, E ou Certo/Errado)
    - Contextualizadas com o concurso ${courseName || 'Concurso público'}
    - Gabarito Comentado: explique o porquê das outras estarem erradas
-   - **USE FORMATAÇÃO RICA no gabarito**: Use **negrito** para resposta correta, *itálico* para explicações, e formatação visual para destacar pontos importantes
-   - **NÃO ECONOMIZE TEXTO**: Seja detalhado e completo nas explicações, mas não excessivamente extenso
+   - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
+   - Seja detalhado e completo nas explicações
 
 3. **CONTEÚDO ESPECÍFICO**:
    - Conteúdo específico para o concurso — nada genérico, LETRA de lei
@@ -110,6 +112,7 @@ FORMATO JSON (apenas JSON válido):
 {
   "questoes": [
     {
+      "analiseJuridicaPrevia": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
       "enunciado": "texto da questão",
       "alternativas": ["A", "B", "C", "D", "E"],
       "gabarito": "A",
@@ -121,31 +124,49 @@ FORMATO JSON (apenas JSON válido):
 REGRAS:
 - Seja ESPECÍFICO do concurso ${courseName || 'Concurso público'}
 - Cite o nome do concurso nas questões
+- Preencha "analiseJuridicaPrevia" PRIMEIRO com o artigo/lei/jurisprudência literal antes de escrever o enunciado
 - Retorne APENAS o JSON válido, sem texto adicional
-- NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
+- Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
 
-  const response = await callGeminiWithRetry(prompt, {
-    maxRetries: 3,
-    baseDelay: 2000,
-    models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
-    useGoogleSearch: true,
-  })
+    const response = await callGeminiWithRetry(prompt, {
+      maxRetries: 3,
+      baseDelay: 2000,
+      models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+      generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
+      useGoogleSearch: true,
+    })
 
-  const parsed = await extractJsonFromResponse(response)
+    const parsed = await extractJsonFromResponse(response)
+    const items = parsed.questoes || []
+    
+    if (!items.length) {
+      throw new Error('Nenhuma questão gerada pela IA no lote ' + batchNumber)
+    }
 
-  const items = parsed.questoes || []
-  if (!items.length) {
-    throw new Error('Nenhuma questão gerada pela IA')
+    console.log(`✅ Lote ${batchNumber}: ${items.length} questões geradas`)
+    return items
   }
 
-  console.log(`✅ ${items.length} questões geradas para o tópico "${topicKey}"`)
+  // Gerar 10 lotes paralelos de 5 questões cada (total 50 questões)
+  const totalBatches = 10
+  const batchPromises = []
+  
+  for (let i = 1; i <= totalBatches; i++) {
+    batchPromises.push(generateBatch(i, totalBatches))
+  }
+
+  console.log(`🚀 Gerando ${totalBatches} lotes paralelos de questões...`)
+  const allBatches = await Promise.all(batchPromises)
+  
+  // Combinar todos os lotes em um único array
+  const allQuestoes = allBatches.flat()
+  console.log(`✅ Total de ${allQuestoes.length} questões geradas para o tópico "${topicKey}"`)
 
   const batch = writeBatch(db)
   const questoesRef = collection(db, 'courses', resolvedId, 'questoes')
   const saved = []
 
-  items.forEach((item, index) => {
+  allQuestoes.forEach((item, index) => {
     const docRef = doc(questoesRef)
     const payload = {
       disciplina: disciplina || '',
@@ -157,6 +178,7 @@ REGRAS:
       alternativas: item.alternativas || [],
       gabarito: item.gabarito || '',
       comentario: item.comentario || '',
+      analiseJuridicaPrevia: item.analiseJuridicaPrevia || '',
       courseId: resolvedId,
       shared: true,
       createdAt: serverTimestamp(),

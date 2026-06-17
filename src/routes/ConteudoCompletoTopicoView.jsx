@@ -628,23 +628,24 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
      * Citar exemplos práticos do concurso ${concursoName || 'mencionado'}
      * Ser específico para o cargo de ${courseName || 'mencionado'}
      * Incluir dicas de memorização (nada genérico e vazio/vago)
-     * **USE FORMATAÇÃO RICA**: Use **negrito** para termos importantes, *itálico* para ênfase, e formatação visual para destacar pontos-chave
+     * Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
    - 3-4 pegadinhas ("Cuidado meu querido aluno!"):
      * Erros comuns que a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar
      * Detalhes que passam despercebidos
      * Armadilhas específicas do concurso ${concursoName || 'mencionado'}
-     * **USE FORMATAÇÃO RICA**: Use **negrito**, *itálico*, e destaque visual para armadilhas
+     * Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
 
 3. **QUESTÕES PREDITIVAS**:
    - Gere EXATAMENTE 5 questões para este tópico
    - No estilo da banca ${banca || 'NÃO DEFINIDA'} (A, B, C, D, E ou Certo/Errado)
    - Contextualizadas com o concurso ${concursoName || 'mencionado'} e cargo ${courseName || 'mencionado'}
    - Gabarito Comentado: explique o porquê das outras estarem erradas
-   - **USE FORMATAÇÃO RICA no gabarito**: Use **negrito** para resposta correta, *itálico* para explicações, e formatação visual para destacar pontos importantes
-   - **NÃO ECONOMIZE TEXTO**: Seja detalhado e completo nas explicações, mas não excessivamente extenso
+   - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
+   - Seja detalhado e completo nas explicações
 
 FORMATO JSON:
 {
+  "validacaoArtigo": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
   "titulo": "Título específico do conteúdo",
   "materia": "${effectiveTopicNome || resolvedTopicKey}",
   "subtitulo": "Subtítulo específico opcional",
@@ -685,8 +686,9 @@ REGRAS:
 - Use tom focado e direto
 - Seja ESPECÍFICO do concurso ${concursoName || 'mencionado'} e cargo ${courseName || 'mencionado'}
 - Cite o nome do concurso e cargo nos resumos e questões
+- Preencha "validacaoArtigo" PRIMEIRO com o artigo/lei/jurisprudência literal antes de escrever o conteúdo
 - Retorne APENAS o JSON válido, sem texto adicional
-- NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
+- Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
 
       setProgress((prev) => Math.min(prev + 15, 70))
       const response = await callGeminiWithRetry(prompt, {
