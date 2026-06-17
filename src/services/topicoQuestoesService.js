@@ -9,6 +9,7 @@ import {
 import { db } from '../firebase/config'
 import { formatTopicoAsModulo } from '../utils/editalVerticalizadoLoader'
 import { callGeminiWithRetry, extractJsonFromResponse } from '../utils/geminiApi'
+import { prepareGeminiTools } from './geminiFunctionCalling.js'
 
 /**
  * Busca questões já salvas para um tópico (compartilhadas entre usuários do curso).
@@ -66,7 +67,13 @@ TÓPICO: ${topicoNumero ? `${topicoNumero} - ` : ''}${topicoNome}
 DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
 IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se há leis, decretos ou regulamentos recentes que possam afetar o conteúdo.
 
-🚨🚨🚨 BANCA EXAMINADORA - OBRIGATÓRIO 🚨🚨🚨
+� VERIFICAÇÃO DE FONTES - OBRIGATÓRIO:
+- Para CADA lei, decreto ou norma jurídica mencionada nas questões, VERIFIQUE a atualidade usando as ferramentas disponíveis
+- Para CADA jurisprudência citada, VERIFIQUE se está vigente e atualizada
+- Use as ferramentas de Function Calling para buscar em APIs oficiais (Senado, Datajud/CNJ)
+- Sempre busque de fontes confiáveis: TJ,STF,LEI(E SUAS ATUALIZAÇÕES, NÃO PEGUE NADA ANTIGO OU DESATUALIZADO), GRAN CURSOS, QCONCURSOS, CONTEÚDOS JURÍDICOS, SITES DO PLANALTO, ENTENDIMENTOS ETC EM MATÉRIAS DE DIREITO... O FOCO É SEMPRE SER ATUALIZADO!
+
+��🚨🚨 BANCA EXAMINADORA - OBRIGATÓRIO 🚨🚨🚨
 BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
 - ADAPTE TODAS AS QUESTÕES ao estilo da banca "${banca || 'NÃO DEFINIDA'}"
 - Se a banca for INSTITUTO AOCP: questões de múltipla escolha diretas (A, B, C, D, E), interpretação literal
@@ -118,12 +125,15 @@ REGRAS:
 - Retorne APENAS o JSON válido, sem texto adicional
 - NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
 
+  const tools = prepareGeminiTools()
   const response = await callGeminiWithRetry(prompt, {
     maxRetries: 3,
     baseDelay: 2000,
     models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
     generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
     useGoogleSearch: true,
+    useFunctionCalling: true,
+    tools: tools,
   })
 
   const parsed = await extractJsonFromResponse(response)

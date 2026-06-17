@@ -7,6 +7,7 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { prepareGeminiTools } from '../services/geminiFunctionCalling.js'
 import ReactMarkdown from 'react-markdown'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
@@ -600,7 +601,12 @@ EXEMPLOS DO QUE EVITAR (ERRADO):
    "O Direito Constitucional é o ramo do direito que estuda as constituições..."
 INSTRUÇÕES:
 Gere um material de revisão de "Véspera de Prova" para o tópico "${effectiveTopicNome || resolvedTopicKey}"${contextoDisciplina ? ` da disciplina "${contextoDisciplina.disciplina}"` : ''}.
-Sempre busque de fontes confiáveis: TJ,STF,LEI(E SUAS ATUALIZAÇÕES, NÃO PEGUE NADA ANTIGO OU DESATUALIZADO), GRAN CURSOS, QCONCURSOS, CONTEÚDOS JURÍDICOS, SITES DO PLANALTO, ENTENDIMENTOS ETC EM MATÉRIAS DE DIREITO... O FOCO É SEMPRE SER ATUALIZADO!
+
+🔍 VERIFICAÇÃO DE FONTES - OBRIGATÓRIO:
+- Para CADA lei, decreto ou norma jurídica mencionada, VERIFIQUE a atualidade usando as ferramentas disponíveis
+- Para CADA jurisprudência citada, VERIFIQUE se está vigente e atualizada
+- Use as ferramentas de Function Calling para buscar em APIs oficiais (Senado, Datajud/CNJ)
+- Sempre busque de fontes confiáveis: TJ,STF,LEI(E SUAS ATUALIZAÇÕES, NÃO PEGUE NADA ANTIGO OU DESATUALIZADO), GRAN CURSOS, QCONCURSOS, CONTEÚDOS JURÍDICOS, SITES DO PLANALTO, ENTENDIMENTOS ETC EM MATÉRIAS DE DIREITO... O FOCO É SEMPRE SER ATUALIZADO!
  Atualizações até o ano de agora ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} até o exato momento
 Sempre verifique atualizações de acordo com a data hora em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} , nunca dê conteúdo desatualizado... sempre atualizado. Verifique a veracidade da fonte em useGoogleSearch.
 DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
@@ -684,12 +690,15 @@ REGRAS:
 - NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
 
       setProgress((prev) => Math.min(prev + 15, 70))
+      const tools = prepareGeminiTools()
       const response = await callGeminiWithRetry(prompt, {
         maxRetries: 3,
         baseDelay: 2000,
         models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
         generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
         useGoogleSearch: true,
+        useFunctionCalling: true,
+        tools: tools,
       })
 
       const aiText = extractGeneratedText(response)

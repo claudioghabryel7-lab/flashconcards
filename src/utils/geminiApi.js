@@ -1,6 +1,7 @@
 /**
  * Função utilitária para chamadas à API Gemini com retry, fallback e rotação de API keys
  * Resolve erros de alta demanda implementando exponential backoff, modelos alternativos e rotação de múltiplas keys
+ * Integra verificação de fontes oficiais para garantir veracidade do conteúdo
  */
 
 const MODELS = [
@@ -36,6 +37,8 @@ function loadApiKeys() {
  * @param {Array<string>} options.models - Lista de modelos para tentar (padrão: gemini-2.5-flash, gemini-1.5-flash, gemini-1.5-pro)
  * @param {Object} options.generationConfig - Configuração de geração (temperature, maxOutputTokens, etc.)
  * @param {boolean} options.useGoogleSearch - Se deve usar Google Search Grounding (padrão: false)
+ * @param {boolean} options.useFunctionCalling - Se deve usar Function Calling para buscar em APIs oficiais (padrão: false)
+ * @param {Array} options.tools - Ferramentas customizadas para Function Calling (padrão: [])
  * @returns {Promise<Object>} - Resposta da API
  */
 export async function callGeminiWithRetry(prompt, options = {}) {
@@ -45,6 +48,8 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     models = MODELS,
     generationConfig = { temperature: 0.7, maxOutputTokens: 32000 },
     useGoogleSearch = false,
+    useFunctionCalling = false,
+    tools = [],
   } = options
 
   const apiKeys = loadApiKeys()
@@ -55,6 +60,9 @@ export async function callGeminiWithRetry(prompt, options = {}) {
   console.log(`🔑 API Keys carregadas: ${apiKeys.length}`)
   if (useGoogleSearch) {
     console.log(`🔍 Google Search Grounding ativado`)
+  }
+  if (useFunctionCalling) {
+    console.log(`🔧 Function Calling ativado com ${tools.length} ferramentas`)
   }
 
   let lastError = null
@@ -83,6 +91,12 @@ export async function callGeminiWithRetry(prompt, options = {}) {
                 googleSearch: {}
               }
             ]
+          }
+
+          // Adicionar Function Calling se solicitado
+          if (useFunctionCalling && tools.length > 0) {
+            requestBody.tools = requestBody.tools || []
+            requestBody.tools.push(...tools)
           }
 
           const response = await fetch(

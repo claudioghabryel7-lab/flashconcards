@@ -7,6 +7,7 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { prepareGeminiTools } from '../services/geminiFunctionCalling.js'
 import ReactMarkdown from 'react-markdown'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
@@ -351,7 +352,13 @@ BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
 - SEJA FIEL À BANCA DEFINIDA ACIMA.
 
 INSTRUÇÕES:
-Gere questões preditivas de "Véspera de Prova" para o tópico "${effectiveTopicNome || resolvedTopicKey}"${contextoDisciplina ? ` da disciplina "${contextoDisciplina.disciplina}"` : ''}. Sempre verifique atualizações de acordo com a data hora em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} , nunca dê conteúdo desatualizado... sempre atualizado. Verifique a veracidade da fonte em useGoogleSearch. Atualizações até o ano de agora ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} até o exato momento
+Gere questões preditivas de "Véspera de Prova" para o tópico "${effectiveTopicNome || resolvedTopicKey}"${contextoDisciplina ? ` da disciplina "${contextoDisciplina.disciplina}"` : ''}.
+
+🔍 VERIFICAÇÃO DE FONTES - OBRIGATÓRIO:
+- Para CADA lei, decreto ou norma jurídica mencionada nas questões, VERIFIQUE a atualidade usando as ferramentas disponíveis
+- Para CADA jurisprudência citada, VERIFIQUE se está vigente e atualizada
+- Use as ferramentas de Function Calling para buscar em APIs oficiais (Senado, Datajud/CNJ)
+- Sempre verifique atualizações de acordo com a data hora em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} , nunca dê conteúdo desatualizado... sempre atualizado. Verifique a veracidade da fonte em useGoogleSearch. Atualizações até o ano de agora ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} até o exato momento
 
 DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
 IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se há leis, decretos ou regulamentos recentes que possam afetar o conteúdo.
@@ -414,12 +421,15 @@ REGRAS:
 - NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
 
       setProgress((prev) => Math.min(prev + 15, 70))
+      const tools = prepareGeminiTools()
       const response = await callGeminiWithRetry(prompt, {
         maxRetries: 3,
         baseDelay: 2000,
         models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
         generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
         useGoogleSearch: true,
+        useFunctionCalling: true,
+        tools: tools,
       })
 
       const aiText = extractGeneratedText(response)

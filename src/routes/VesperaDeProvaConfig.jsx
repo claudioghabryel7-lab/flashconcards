@@ -249,7 +249,12 @@ ${JSON.stringify(estrutura.disciplinas, null, 2)}
 
 INSTRUÇÕES:
 Gere um material de revisão de "Véspera de Prova" para CADA disciplina na ordem exata acima. Para cada disciplina, inclua:
-Sempre busque de fontes confiáveis: TJ,STF,LEI(E SUAS ATUALIZAÇÕES, NÃO PEGUE NADA ANTIGO OU DESATUALIZADO), GRAN CURSOS, QCONCURSOS, CONTEÚDOS JURÍDICOS, SITES DO PLANALTO, ENTENDIMENTOS ETC EM MATÉRIAS DE DIREITO... O FOCO É SEMPRE SER ATUALIZADO!
+
+🔍 VERIFICAÇÃO DE FONTES - OBRIGATÓRIO:
+- Para CADA lei, decreto ou norma jurídica mencionada, VERIFIQUE a atualidade usando as ferramentas disponíveis
+- Para CADA jurisprudência citada, VERIFIQUE se está vigente e atualizada
+- Use as ferramentas de Function Calling para buscar em APIs oficiais (Senado, Datajud/CNJ)
+- Sempre busque de fontes confiáveis: TJ,STF,LEI(E SUAS ATUALIZAÇÕES, NÃO PEGUE NADA ANTIGO OU DESATUALIZADO), GRAN CURSOS, QCONCURSOS, CONTEÚDOS JURÍDICOS, SITES DO PLANALTO, ENTENDIMENTOS ETC EM MATÉRIAS DE DIREITO... O FOCO É SEMPRE SER ATUALIZADO!
  Atualizações até o ano de agora ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} até o exato momento
 Sempre verifique atualizações de acordo com a data hora em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} , nunca dê conteúdo desatualizado... sempre atualizado. Verifique a veracidade da fonte em useGoogleSearch.
 DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
@@ -415,9 +420,47 @@ REGRAS:
               temperature: 0.7,
               maxOutputTokens: 32000,
             },
-            tools: [{
-              googleSearch: {}
-            }]
+            tools: [
+              {
+                googleSearch: {}
+              },
+              {
+                functionDeclarations: [
+                  {
+                    name: 'buscarLegislacao',
+                    description: 'Busca legislação federal brasileira por termo (leis, decretos, medidas provisórias, etc.)',
+                    parameters: {
+                      type: 'object',
+                      properties: {
+                        termo: {
+                          type: 'string',
+                          description: 'Termo de pesquisa para buscar legislação'
+                        }
+                      },
+                      required: ['termo']
+                    }
+                  },
+                  {
+                    name: 'buscarJurisprudencia',
+                    description: 'Busca jurisprudência brasileira por termo (decisões de tribunais, STF, STJ, etc.)',
+                    parameters: {
+                      type: 'object',
+                      properties: {
+                        termo: {
+                          type: 'string',
+                          description: 'Termo de pesquisa para buscar jurisprudência'
+                        },
+                        tribunal: {
+                          type: 'string',
+                          description: 'Tribunal específico (opcional: STF, STJ, etc.)'
+                        }
+                      },
+                      required: ['termo']
+                    }
+                  }
+                ]
+              }
+            ]
           })
         }
       )
