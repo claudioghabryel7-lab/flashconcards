@@ -351,7 +351,7 @@ BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
 - SEJA FIEL À BANCA DEFINIDA ACIMA.
 
 INSTRUÇÕES:
-Gere questões preditivas de "Véspera de Prova" para o tópico "${effectiveTopicNome || resolvedTopicKey}"${contextoDisciplina ? ` da disciplina "${contextoDisciplina.disciplina}"` : ''}.
+Gere questões preditivas de "Véspera de Prova" para o tópico "${effectiveTopicNome || resolvedTopicKey}"${contextoDisciplina ? ` da disciplina "${contextoDisciplina.disciplina}"` : ''}. Sempre verifique atualizações de acordo com a data hora em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} , nunca dê conteúdo desatualizado... sempre atualizado. Verifique a veracidade da fonte em useGoogleSearch.
 
 DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
 IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se há leis, decretos ou regulamentos recentes que possam afetar o conteúdo.
@@ -361,7 +361,7 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
 1. **RAIO-X DE PROBABILIDADE**:
    - Top Assuntos Quentes: Identifique os assuntos com maior probabilidade de cair NO CONCURSO ${concursoName || 'mencionado'}
    - O Padrão da Banca: Como a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar este tópico especificamente no concurso
-
+   - Sempre busque de fontes confiáveis: TJ,STF,LEI(E SUAS ATUALIZAÇÕES, NÃO PEGUE NADA ANTIGO OU DESATUALIZADO), GRAN CURSOS, QCONCURSOS, CONTEÚDOS JURÍDICOS, SITES DO PLANALTO, ENTENDIMENTOS ETC EM MATÉRIAS DE DIREITO... O FOCO É SEMPRE SER ATUALIZADO!
 2. **QUESTÕES PREDITIVAS**:
    - Gere EXATAMENTE 40 a 50 questões preditivas para este tópico
    - O MÍNIMO OBRIGATÓRIO é 40 questões - não gere menos que isso
@@ -401,7 +401,7 @@ FORMATO JSON:
         "E": "Alternativa E"
       },
       "correta": "A",
-      "gabaritoComentado": "explicação detalhada"
+      "gabaritoComentado da alternativa correta."
     }
   ]
 }
