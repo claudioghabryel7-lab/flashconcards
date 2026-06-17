@@ -9,7 +9,6 @@ import {
 import { db } from '../firebase/config'
 import { formatTopicoAsModulo } from '../utils/editalVerticalizadoLoader'
 import { callGeminiWithRetry, extractJsonFromResponse } from '../utils/geminiApi'
-import { prepareGeminiTools } from './geminiFunctionCalling.js'
 
 /**
  * Busca questões já salvas para um tópico (compartilhadas entre usuários do curso).
@@ -125,15 +124,12 @@ REGRAS:
 - Retorne APENAS o JSON válido, sem texto adicional
 - NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
 
-  const tools = prepareGeminiTools()
   const response = await callGeminiWithRetry(prompt, {
     maxRetries: 3,
     baseDelay: 2000,
     models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
     generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
     useGoogleSearch: true,
-    useFunctionCalling: true,
-    tools: tools,
   })
 
   const parsed = await extractJsonFromResponse(response)

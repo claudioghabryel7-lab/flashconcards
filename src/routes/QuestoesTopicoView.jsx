@@ -7,7 +7,6 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
-import { prepareGeminiTools } from '../services/geminiFunctionCalling.js'
 import ReactMarkdown from 'react-markdown'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
@@ -421,15 +420,12 @@ REGRAS:
 - NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
 
       setProgress((prev) => Math.min(prev + 15, 70))
-      const tools = prepareGeminiTools()
       const response = await callGeminiWithRetry(prompt, {
         maxRetries: 3,
         baseDelay: 2000,
         models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
         generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
         useGoogleSearch: true,
-        useFunctionCalling: true,
-        tools: tools,
       })
 
       const aiText = extractGeneratedText(response)

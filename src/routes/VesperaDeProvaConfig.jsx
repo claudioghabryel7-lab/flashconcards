@@ -420,47 +420,9 @@ REGRAS:
               temperature: 0.7,
               maxOutputTokens: 32000,
             },
-            tools: [
-              {
-                googleSearch: {}
-              },
-              {
-                functionDeclarations: [
-                  {
-                    name: 'buscarLegislacao',
-                    description: 'Busca legislação federal brasileira por termo (leis, decretos, medidas provisórias, etc.)',
-                    parameters: {
-                      type: 'object',
-                      properties: {
-                        termo: {
-                          type: 'string',
-                          description: 'Termo de pesquisa para buscar legislação'
-                        }
-                      },
-                      required: ['termo']
-                    }
-                  },
-                  {
-                    name: 'buscarJurisprudencia',
-                    description: 'Busca jurisprudência brasileira por termo (decisões de tribunais, STF, STJ, etc.)',
-                    parameters: {
-                      type: 'object',
-                      properties: {
-                        termo: {
-                          type: 'string',
-                          description: 'Termo de pesquisa para buscar jurisprudência'
-                        },
-                        tribunal: {
-                          type: 'string',
-                          description: 'Tribunal específico (opcional: STF, STJ, etc.)'
-                        }
-                      },
-                      required: ['termo']
-                    }
-                  }
-                ]
-              }
-            ]
+            tools: [{
+              googleSearch: {}
+            }]
           })
         }
       )
