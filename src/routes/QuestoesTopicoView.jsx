@@ -401,7 +401,7 @@ FORMATO JSON:
         "E": "Alternativa E"
       },
       "correta": "A",
-      "gabaritoComentado da alternativa correta."
+      "gabarito Comentado da alternativa correta com a explicação"
     }
   ]
 }
