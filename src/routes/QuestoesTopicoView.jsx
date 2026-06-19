@@ -380,7 +380,7 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
    - **USE FORMATAÇÃO RICA no gabarito**: Use **negrito** para resposta correta, *itálico* para explicações, e formatação visual para destacar pontos importantes
    - **NÃO ECONOMIZE TEXTO**: Seja detalhado e completo nas explicações, mas não excessivamente extenso
 
-3. **CONTEÚDO ESPECÍFICO**:
+3. **CONTEÚDO ESPECÍFICO**;
    - Conteúdo específico para o concurso — nada genérico, LETRA de lei
    - Não invente nada, seja literal e fiel a matéria com fontes firmes
    - Se for direito gere as questões de acordo com a lei sem inventar nada, seja fiel a lei
