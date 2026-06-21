@@ -269,6 +269,12 @@ REGRAS IMPORTANTES:
 - Use apenas informações atualizadas até esta data
 - GERE EXATAMENTE 50 QUESTÕES
 
+⚠️ REGRAS CRÍTICAS PARA JSON VÁLIDO:
+- NÃO use aspas duplas (") dentro das strings de alternativas ou enunciados. Use aspas simples (')
+- NÃO use quebras de linha (\n) dentro das strings. Use espaço normal
+- NÃO use caracteres especiais que possam quebrar o JSON (como \, /, etc)
+- O JSON deve ser 100% válido e parseável
+
 Retorne APENAS o JSON válido, sem texto adicional.`
 
       setProgress(50)

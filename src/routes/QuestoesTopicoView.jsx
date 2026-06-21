@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy } from 'firebase/firestore'
-import { ArrowLeftIcon, PencilIcon, FireIcon, LightBulbIcon, ExclamationTriangleIcon, BookOpenIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon, QuestionMarkCircleIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
+import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy, deleteDoc } from 'firebase/firestore'
+import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, TrashIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
-import ReactMarkdown from 'react-markdown'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -155,11 +153,12 @@ const QuestoesTopicoView = () => {
   const [courseName, setCourseName] = useState('')
   const [generating, setGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [validating, setValidating] = useState(false)
-  const [validationMessage, setValidationMessage] = useState('')
-  const [editingContent, setEditingContent] = useState(false)
-  const [editedContent, setEditedContent] = useState('')
-  const [visibleGabaritos, setVisibleGabaritos] = useState({})
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [selectedAnswer, setSelectedAnswer] = useState(null)
+  const [showResult, setShowResult] = useState(false)
+  const [answers, setAnswers] = useState([])
+  const [desempenho, setDesempenho] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   const resolvedCourseId = useMemo(() => courseId || 'alego-default', [courseId])
   const resolvedTopicKey = useMemo(() => normalizeKey(topicKey), [topicKey])
@@ -332,102 +331,108 @@ const QuestoesTopicoView = () => {
         }
       }
 
-      const prompt = `Você é um especialista em criar questões preditivas de "Véspera de Prova" para cursos preparatórios de concursos públicos.
+      // Determinar tipo de prova baseado na banca
+      const bancasCertoErrado = ['CESPE', 'CEBRASPE', 'FCC', 'VUNESP', 'FGV', 'IBFC', 'AOCP', 'CONSULPAM', 'FUNRIO', 'NUCEPE', 'QUADRIX', 'IDECAN']
+      const tipoProva = bancasCertoErrado.some(b => banca.toUpperCase().includes(b)) ? 'Certo/Errado' : 'Múltipla Escolha'
 
-CONTEXTO (não cite estes nomes no texto final):
-${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n` : ''}CURSO: ${
-        courseName || 'Curso Preparatório'
-      }
-      
-${contextoDisciplina ? `DISCIPLINA ESPECÍFICA: ${contextoDisciplina.disciplina}\n` : ''}TÓPICO ESPECÍFICO DO EDITAL (USE APENAS ESTE TÓPICO, NÃO MISTURE COM OUTROS): ${resolvedTopicKey}
-NOME DO TÓPICO: ${effectiveTopicNome || resolvedTopicKey}
+      const prompt = `Você é um especialista em criar questões de concurso público baseadas em análise de incidência para um tópico específico.
+
+CONTEXTO:
+- CURSO: ${courseName || 'Curso Preparatório'}
+- CARGO: ${courseData.cargo || courseData.competition || 'NÃO DEFINIDO'}
+- BANCA EXAMINADORA: ${banca || 'NÃO DEFINIDA'}
+- TIPO DE PROVA: ${tipoProva}
+- DISCIPLINA: ${contextoDisciplina?.disciplina || effectiveTopicNome || resolvedTopicKey}
+- TÓPICO: ${effectiveTopicNome || resolvedTopicKey}
 
 EDITAL BASE (trecho relevante para este tópico):
 ${editalText.substring(0, 8000)}${editalText.length > 8000 ? '\n\n[texto truncado...]' : ''}
 
-⚠️⚠️⚠️ BANCA EXAMINADORA - OBRIGATÓRIO 🚨🚨🚨
-BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
-- ADAPTE TODAS AS QUESTÕES ao estilo da banca "${banca || 'NÃO DEFINIDA'}"
-- Se a banca for INSTITUTO AOCP: questões de múltipla escolha diretas (A, B, C, D, E), interpretação literal
-- Se a banca for FGV: questões contextualizadas, análise crítica, interpretação de texto
-- Se a banca for CESPE/CEBRASPE: assertivas C/E (Certo/Errado), interpretação constitucional
-- Se a banca for FCC: questões de múltipla escolha (A, B, C, D, E), legislação atualizada
-- Se a banca for VUNESP: questões contextualizadas, análise crítica, interpretação de texto
-- SEJA FIEL À BANCA DEFINIDA ACIMA.
+TAREFA:
+Gere EXATAMENTE 50 questões de ${tipoProva} para o tópico "${effectiveTopicNome || resolvedTopicKey}".
 
-INSTRUÇÕES:
-Gere questões preditivas de "Véspera de Prova" para o tópico "${effectiveTopicNome || resolvedTopicKey}"${contextoDisciplina ? ` da disciplina "${contextoDisciplina.disciplina}"` : ''}.
+INSTRUÇÕES CRÍTICAS - DISTRIBUIÇÃO DE QUESTÕES:
+- Identifique os principais assuntos dentro deste tópico
+- Distribua as questões entre os assuntos identificados
+- Gere questões variadas cobrindo diferentes aspectos do tópico
+- Gere EXATAMENTE 50 questões (nem mais, nem menos)
 
-🔍 VERIFICAÇÃO DE FONTES - OBRIGATÓRIO:
-- Para CADA lei, decreto ou norma jurídica mencionada nas questões, VERIFIQUE a atualidade usando as ferramentas disponíveis
-- Para CADA jurisprudência citada, VERIFIQUE se está vigente e atualizada
-- Use as ferramentas de Function Calling para buscar em APIs oficiais (Senado, Datajud/CNJ)
-- Sempre verifique atualizações de acordo com a data hora em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} , nunca dê conteúdo desatualizado... sempre atualizado. Verifique a veracidade da fonte em useGoogleSearch. Atualizações até o ano de agora ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} até o exato momento
+INSTRUÇÕES SOBRE TIPO DE PROVA:
+${tipoProva === 'Certo/Errado' ? `
+- Use formato Certo/Errado (C ou E)
+- Cada questão deve ter um enunciado que pode ser Certo ou Errado
+- Resposta deve ser "C" (Certo) ou "E" (Errado)
+- Explicação deve detalhar POR QUE é certo ou errado
+` : `
+- Use formato Múltipla Escolha (A, B, C, D, E)
+- Cada questão deve ter 5 alternativas
+- Resposta deve ser uma das letras (A, B, C, D, E)
+- Explicação deve detalhar a resposta correta
+`}
 
-🚨 PROIBIÇÃO ABSOLUTA DE ALUCINAÇÃO DE LEIS: É expressamente proibido inventar, supor ou criar números de leis, decretos ou emendas (especialmente com o ano corrente de 2026). Toda e qualquer lei citada deve ser um fato histórico real e amplamente consolidado. Na dúvida sobre o número exato da alteração, cite apenas o artigo principal da lei base (ex: 'conforme o Artigo 19 da Lei nº 11.340/2006') em vez de inventar uma lei modificadora.
+INSTRUÇÕES GERAIS:
+1. Use o estilo da banca ${banca || 'NÃO DEFINIDA'}
+2. Cada questão deve ter:
+   - Enunciado claro e direto
+   ${tipoProva === 'Certo/Errado' ? `
+   - Alternativa correta: "C" (Certo) ou "E" (Errado)
+   ` : `
+   - 5 alternativas (A, B, C, D, E)
+   - Alternativa correta indicada
+   `}
+   - Explicação detalhada da resposta
+3. Adapte o nível de dificuldade ao cargo ${courseData.cargo || courseData.competition || 'NÃO DEFINIDO'}
+4. Gere EXATAMENTE 50 questões (nem mais, nem menos)
+5. Para cada questão, identifique o assunto específico dentro do tópico
+6. Atribua uma probabilidade de incidência (80-100% para assuntos centrais, 50-70% para assuntos importantes, 10-40% para assuntos secundários)
 
-DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se há leis, decretos ou regulamentos recentes que possam afetar o conteúdo.
-
-**MODO HACKER DOS CONCURSOS**
-
-1. **RAIO-X DE PROBABILIDADE**:
-   - Top Assuntos Quentes: Identifique os assuntos com maior probabilidade de cair NO CONCURSO ${concursoName || 'mencionado'}
-   - O Padrão da Banca: Como a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar este tópico especificamente no concurso
-   - Sempre busque de fontes confiáveis: TJ,STF,LEI(E SUAS ATUALIZAÇÕES, NÃO PEGUE NADA ANTIGO OU DESATUALIZADO), GRAN CURSOS, QCONCURSOS, CONTEÚDOS JURÍDICOS, SITES DO PLANALTO, ENTENDIMENTOS ETC EM MATÉRIAS DE DIREITO... O FOCO É SEMPRE SER ATUALIZADO!
-2. **QUESTÕES PREDITIVAS**:
-   - Gere EXATAMENTE 45 questões preditivas para este tópico
-   - NÃO gere menos que 45 questões
-   - NÃO gere mais que 45 questões
-   - O número EXATO é 45 questões - conte e verifique
-   - No estilo da banca ${banca || 'NÃO DEFINIDA'} (A, B, C, D, E ou Certo/Errado)
-   - Contextualizadas com o concurso ${concursoName || 'mencionado'}
-   - Gabarito Comentado: explique o porquê das outras estarem erradas
-   - **USE FORMATAÇÃO RICA no gabarito**: Use **negrito** para resposta correta, *itálico* para explicações, e formatação visual para destacar pontos importantes
-   - **NÃO ECONOMIZE TEXTO**: Seja detalhado e completo nas explicações, mas não excessivamente extenso
-
-3. **CONTEÚDO ESPECÍFICO**;
-   - Conteúdo específico para o concurso — nada genérico, LETRA de lei
-   - Não invente nada, seja literal e fiel a matéria com fontes firmes
-   - Se for direito gere as questões de acordo com a lei sem inventar nada, seja fiel a lei
-   - Não invente nada, seja direto nas questões e com conteúdo fiel
-   - Linguagem formal, nível concurso público
-   - 🚨 BANCA EXAMINADORA: Use EXCLUSIVAMENTE o estilo da banca "${banca || 'NÃO DEFINIDA'}"
-
-FORMATO JSON:
+ESTRUTURA DO JSON:
 {
-  "titulo": "Título específico do conteúdo",
-  "materia": "${effectiveTopicNome || resolvedTopicKey}",
-  "subtitulo": "Subtítulo específico opcional",
-  "numero": "${resolvedTopicKey}",
-  "raioXProbabilidade": {
-    "topicosQuentes": ["assunto 1", "assunto 2", "assunto 3"],
-    "padraoBanca": "descrição do padrão"
-  },
-  "questoesPreditivas": [
+  "disciplina": "${contextoDisciplina?.disciplina || effectiveTopicNome || resolvedTopicKey}",
+  "banca": "${banca || 'NÃO DEFINIDA'}",
+  "cargo": "${courseData.cargo || courseData.competition || 'NÃO DEFINIDO'}",
+  "curso": "${courseName || 'Curso Preparatório'}",
+  "topico": "${effectiveTopicNome || resolvedTopicKey}",
+  "tipoProva": "${tipoProva}",
+  "questoes": [
     {
-      "analiseJuridicaPrevia": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
+      "numero": 1,
+      "assunto": "nome do assunto específico dentro do tópico",
+      "probabilidade": 95,
       "enunciado": "texto da questão",
+      ${tipoProva === 'Certo/Errado' ? `
+      "respostaCorreta": "C",
+      ` : `
       "alternativas": {
-        "A": "Alternativa A",
-        "B": "Alternativa B",
-        "C": "Alternativa C",
-        "D": "Alternativa D",
-        "E": "Alternativa E"
+        "A": "texto da alternativa A",
+        "B": "texto da alternativa B",
+        "C": "texto da alternativa C",
+        "D": "texto da alternativa D",
+        "E": "texto da alternativa E"
       },
-      "correta": "A",
-      "gabaritoComentado": "explicação detalhada"
+      "respostaCorreta": "A",
+      `}
+      "explicacao": "explicação detalhada da resposta correta"
     }
   ]
 }
 
-REGRAS:
-- Use tom focado e direto
-- Seja ESPECÍFICO do concurso ${concursoName || 'mencionado'}
-- Cite o nome do concurso nas questões
-- Preencha "analiseJuridicaPrevia" PRIMEIRO com o artigo/lei/jurisprudência literal antes de escrever o enunciado
-- Retorne APENAS o JSON válido, sem texto adicional
-- Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
+REGRAS IMPORTANTES:
+- Adapte o estilo ao da banca ${banca || 'NÃO DEFINIDA'}
+- Seja específico e técnico nas questões
+- Para disciplinas jurídicas: cite leis, artigos e jurisprudência
+- Para disciplinas não jurídicas: foque em conceitos e aplicações práticas
+- DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+- Use apenas informações atualizadas até esta data
+- GERE EXATAMENTE 50 QUESTÕES
+
+⚠️ REGRAS CRÍTICAS PARA JSON VÁLIDO:
+- NÃO use aspas duplas (") dentro das strings de alternativas ou enunciados. Use aspas simples (')
+- NÃO use quebras de linha (\n) dentro das strings. Use espaço normal
+- NÃO use caracteres especiais que possam quebrar o JSON (como \, /, etc)
+- O JSON deve ser 100% válido e parseável
+
+Retorne APENAS o JSON válido, sem texto adicional.`
 
       setProgress((prev) => Math.min(prev + 15, 70))
       console.log('🤖 [Véspera de Prova] Iniciando geração com IA...')
@@ -440,7 +445,7 @@ REGRAS:
       })
 
       const aiText = extractGeneratedText(response)
-      console.log('📝 [Véspera de Prova] Tamanho da resposta da IA:', aiText.length)
+      console.log('📝 [Questões Tópico] Tamanho da resposta da IA:', aiText.length)
       setProgress(75)
 
       let jsonText = aiText
@@ -454,22 +459,18 @@ REGRAS:
 
       let parsed = null
       try {
-        // Tentar fazer o parse direto
         parsed = JSON.parse(jsonText)
-        console.log('✅ [Véspera de Prova] JSON parseado com sucesso')
-        console.log('📊 [Véspera de Prova] Número de questões geradas:', parsed.questoesPreditivas?.length || 0)
+        console.log('✅ [Questões Tópico] JSON parseado com sucesso')
+        console.log('📊 [Questões Tópico] Número de questões geradas:', parsed.questoes?.length || 0)
       } catch (parseError) {
         console.error('Erro ao fazer parse do JSON:', parseError.message)
         console.error('JSON extraído:', jsonText)
         
-        // Tentar corrigir problemas comuns de formatação
         let fixedJson = jsonText
-          .replace(/,\s*}/g, '}')  // Vírgula antes de fechar objeto
-          .replace(/,\s*]/g, ']')  // Vírgula antes de fechar array
-          .replace(/\n\s*\}/g, '}')  // Nova linha antes de fechar objeto
-          .replace(/\n\s*\]/g, ']')  // Nova linha antes de fechar array
-          .replace(/\\n/g, '\\n')  // Corrigir quebras de linha em strings
-          .replace(/\\t/g, '\\t')  // Corrigir tabulações em strings
+          .replace(/,\s*}/g, '}')
+          .replace(/,\s*]/g, ']')
+          .replace(/\n\s*\}/g, '}')
+          .replace(/\n\s*\]/g, ']')
         
         try {
           parsed = JSON.parse(fixedJson)
@@ -478,15 +479,14 @@ REGRAS:
           throw new Error(`JSON inválido mesmo após correção: ${fixError.message}`)
         }
       }
+
       const payload = {
         ...parsed,
-        materia: parsed.materia || parsed.titulo || resolvedTopicKey,
-        numero: parsed.numero || resolvedTopicKey,
+        topico: parsed.topico || effectiveTopicNome || resolvedTopicKey,
         updatedAt: serverTimestamp(),
         generatedAt: serverTimestamp(),
       }
 
-      // Sanitizar o topicKey para usar como ID de documento no Firestore
       const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
       
       await setDoc(doc(db, 'courses', resolvedCourseId, 'questoesTopico', sanitizedKey), payload, {
@@ -549,261 +549,98 @@ REGRAS:
     setEditedContent('')
   }
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="text-center space-y-4 w-full max-w-md px-6">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-alego-600 border-t-transparent"></div>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Carregando questões preditivas...
-          </p>
-          {generating && (
-            <>
-              <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-alego-600 transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                ></div>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {progress}% concluído
-              </p>
-            </>
-          )}
-        </div>
-      </div>
-    )
+  const handleAnswer = (answer) => {
+    if (showResult) return
+    
+    setSelectedAnswer(answer)
+    setShowResult(true)
+    
+    const currentQuestion = questoes?.questoes[currentQuestionIndex]
+    const isCorrect = answer === currentQuestion?.respostaCorreta
+    
+    setAnswers([...answers, {
+      questionIndex: currentQuestionIndex,
+      selectedAnswer: answer,
+      correctAnswer: currentQuestion?.respostaCorreta,
+      isCorrect,
+      assunto: currentQuestion?.assunto,
+      probabilidade: currentQuestion?.probabilidade
+    }])
   }
 
-  if (!questoes && error) {
-    return (
-      <div className="min-h-screen py-6">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Link
-            to="/edital-verticalizado"
-            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 mb-6"
-          >
-            <ArrowLeftIcon className="h-5 w-5" />
-            Voltar ao Edital Verticalizado
-          </Link>
-          
-          <div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-12 text-center`}>
-            <QuestionMarkCircleIcon className="h-16 w-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-              Questões Preditivas não disponíveis
-            </h1>
-            <p className="text-slate-600 dark:text-slate-400 mb-6">
-              {error}
-            </p>
-            <button
-              onClick={handleGenerateQuestoes}
-              disabled={generating}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-alego-600 text-white rounded-xl font-semibold hover:bg-alego-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {generating ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                  Gerando Questões... ({progress}%)
-                </>
-              ) : (
-                <>
-                  <QuestionMarkCircleIcon className="h-5 w-5" />
-                  Gerar Questões Preditivas
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    )
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex < (questoes?.questoes?.length - 1)) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1)
+      setSelectedAnswer(null)
+      setShowResult(false)
+    } else {
+      calcularDesempenho()
+    }
   }
 
-  return (
-    <div className="min-h-screen py-6">
-      {/* Modal de Loading durante geração */}
-      {generating && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-alego-600 border-t-transparent mx-auto mb-4"></div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-              Gerando Questões Preditivas
-            </h3>
-            <p className="text-slate-600 dark:text-slate-400 mb-4">
-              A IA está criando 40-50 questões preditivas para este tópico...
-            </p>
-            <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-2">
-              <div 
-                className="h-full bg-alego-600 transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              ></div>
-            </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              {progress}% concluído
-            </p>
-          </div>
-        </div>
-      )}
+  const calcularDesempenho = () => {
+    const totalQuestoes = answers.length
+    const acertos = answers.filter(a => a.isCorrect).length
+    const aproveitamento = Math.round((acertos / totalQuestoes) * 100)
+    
+    const precisaRevisar = answers
+      .filter(a => !a.isCorrect && a.probabilidade >= 70)
+      .map(a => a.assunto)
+    
+    const desempenhoData = {
+      totalQuestoes,
+      acertos,
+      erros: totalQuestoes - acertos,
+      aproveitamento,
+      precisaRevisar,
+      respostas: answers,
+      topicKey: resolvedTopicKey,
+      updatedAt: serverTimestamp()
+    }
+    
+    setDesempenho(desempenhoData)
+    
+    if (user) {
+      const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoTopico', sanitizeTopicKeyForFirestore(resolvedTopicKey))
+      setDoc(desempenhoRef, desempenhoData, { merge: true })
+    }
+  }
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-6">
-          <Link
-            to="/edital-verticalizado"
-            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 mb-4"
-          >
-            <ArrowLeftIcon className="h-5 w-5" />
-            Voltar ao Edital Verticalizado
-          </Link>
-          
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">
-                📚 BOOK QUESTÕES
-              </h1>
-              <p className="text-slate-600 dark:text-slate-400">
-                {questoes?.materia || effectiveTopicNome}
-              </p>
-            </div>
-            {isAdmin && !editingContent && (
-              <button
-                onClick={handleEditContent}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
-              >
-                <PencilIcon className="h-4 w-4" />
-                Editar
-              </button>
-            )}
-          </div>
-        </div>
+  const handleRestart = () => {
+    setCurrentQuestionIndex(0)
+    setSelectedAnswer(null)
+    setShowResult(false)
+    setAnswers([])
+    setDesempenho(null)
+  }
 
-        {/* Conteúdo Principal */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-6">
-          {editingContent ? (
-            <div className="space-y-4">
-              <textarea
-                value={editedContent}
-                onChange={(e) => setEditedContent(e.target.value)}
-                className="w-full h-96 p-4 font-mono text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100"
-                spellCheck={false}
-              />
-              <div className="flex gap-3">
-                <button
-                  onClick={handleSaveContent}
-                  className="px-4 py-2 bg-alego-600 text-white rounded-lg hover:bg-alego-700 transition-colors"
-                >
-                  Salvar
-                </button>
-                <button
-                  onClick={handleCancelEdit}
-                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Raio-X de Probabilidade */}
-              {questoes?.raioXProbabilidade && (
-                <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <FireIcon className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-                    <h3 className="text-lg font-bold text-orange-900 dark:text-orange-100">
-                      Raio-X de Probabilidade
-                    </h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <h4 className="font-semibold text-orange-800 dark:text-orange-200 mb-2">Top Assuntos Quentes:</h4>
-                      <ul className="list-disc list-inside text-orange-700 dark:text-orange-300 space-y-1">
-                        {questoes.raioXProbabilidade.topicosQuentes?.map((assunto, idx) => (
-                          <li key={idx}>{assunto}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-orange-800 dark:text-orange-200 mb-2">Padrão da Banca:</h4>
-                      <p className="text-orange-700 dark:text-orange-300">{questoes.raioXProbabilidade.padraoBanca}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
+  const handleDeleteQuestoes = async () => {
+    if (!resolvedCourseId || !resolvedTopicKey) return
 
-              {/* Questões Preditivas */}
-              {questoes?.questoesPreditivas && questoes.questoesPreditivas.length > 0 && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <QuestionMarkCircleIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
-                    <h3 className="text-lg font-bold text-green-900 dark:text-green-100">
-                      Questões Preditivas ({questoes.questoesPreditivas.length})
-                    </h3>
-                  </div>
-                  
-                  {questoes.questoesPreditivas.map((questao, idx) => {
-                    const isGabaritoVisible = visibleGabaritos[idx]
-                    return (
-                      <div key={idx} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
-                        <div className="mb-4">
-                          <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">Questão {idx + 1}</p>
-                          <p className="text-slate-900 dark:text-white font-medium">{questao.enunciado}</p>
-                        </div>
-                        
-                        <div className="space-y-2 mb-4">
-                          {Object.entries(questao.alternativas || {}).map(([letra, texto]) => (
-                            <div 
-                              key={letra}
-                              className={`p-3 rounded-lg border ${
-                                isGabaritoVisible && letra === questao.correta
-                                  ? 'bg-green-50 dark:bg-green-900/20 border-green-500 dark:border-green-500'
-                                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
-                              }`}
-                            >
-                              <span className="font-semibold text-slate-700 dark:text-slate-300 mr-2">{letra})</span>
-                              <span className="text-slate-900 dark:text-white">{texto}</span>
-                            </div>
-                          ))}
-                        </div>
-                        
-                        <div className="flex items-center gap-2 mb-2">
-                          <button
-                            onClick={() => toggleGabarito(idx)}
-                            className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                          >
-                            {isGabaritoVisible ? (
-                              <>
-                                <EyeSlashIcon className="h-4 w-4" />
-                                Ocultar Gabarito
-                              </>
-                            ) : (
-                              <>
-                                <EyeIcon className="h-4 w-4" />
-                                Ver Gabarito
-                              </>
-                            )}
-                          </button>
-                        </div>
-                        
-                        {isGabaritoVisible && (
-                          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                              Gabarito: {questao.correta}
-                            </p>
-                            <div className="text-blue-800 dark:text-blue-200 text-sm">
-                              <ReactMarkdown>{questao.gabaritoComentado}</ReactMarkdown>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
+    if (!window.confirm('Tem certeza que deseja apagar as questões geradas deste tópico?')) {
+      return
+    }
+
+    try {
+      setDeleting(true)
+      
+      const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
+      const questoesRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', sanitizedKey)
+      await deleteDoc(questoesRef)
+
+      setQuestoes(null)
+      setCurrentQuestionIndex(0)
+      setSelectedAnswer(null)
+      setShowResult(false)
+      setAnswers([])
+      setDesempenho(null)
+    } catch (error) {
+      console.error('Erro ao apagar questões:', error)
+      setError(`Erro ao apagar: ${error.message || 'Erro desconhecido'}`)
+    } finally {
+      setDeleting(false)
+    }
+  }
 }
 
 export default QuestoesTopicoView

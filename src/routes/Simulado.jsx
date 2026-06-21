@@ -765,7 +765,12 @@ Retorne APENAS um objeto JSON válido no seguinte formato:
   "descricao": "Prova objetiva com 50 questões, tempo de 4 horas"
 }
 
-CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.`
+CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.
+⚠️ REGRAS CRÍTICAS PARA JSON VÁLIDO:
+- NÃO use aspas duplas (") dentro das strings de alternativas ou enunciados. Use aspas simples (')
+- NÃO use quebras de linha (\n) dentro das strings. Use espaço normal
+- NÃO use caracteres especiais que possam quebrar o JSON (como \, /, etc)
+- O JSON deve ser 100% válido e parseável`
 
       updateProgress(30)
       const response = await callGeminiWithRetry(analysisPrompt, {
@@ -1052,7 +1057,12 @@ ${questionType === 'certo_errado' ? `{
   ]
 }`}
 
-CRÍTICO: Retorne APENAS o JSON, sem markdown.`
+CRÍTICO: Retorne APENAS o JSON, sem markdown.
+⚠️ REGRAS CRÍTICAS PARA JSON VÁLIDO:
+- NÃO use aspas duplas (") dentro das strings de alternativas ou enunciados. Use aspas simples (')
+- NÃO use quebras de linha (\n) dentro das strings. Use espaço normal
+- NÃO use caracteres especiais que possam quebrar o JSON (como \, /, etc)
+- O JSON deve ser 100% válido e parseável`
 
         try {
           const response = await callGeminiWithRetry(materiaPrompt, {
@@ -1312,7 +1322,12 @@ FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
   ]
 }
 
-CRÍTICO: Retorne APENAS o JSON, sem markdown.`
+CRÍTICO: Retorne APENAS o JSON, sem markdown.
+⚠️ REGRAS CRÍTICAS PARA JSON VÁLIDO:
+- NÃO use aspas duplas (") dentro das strings de alternativas ou enunciados. Use aspas simples (')
+- NÃO use quebras de linha (\n) dentro das strings. Use espaço normal
+- NÃO use caracteres especiais que possam quebrar o JSON (como \, /, etc)
+- O JSON deve ser 100% válido e parseável`
 
       const response = await callGeminiWithRetry(regeneratePrompt, {
         generationConfig: {
