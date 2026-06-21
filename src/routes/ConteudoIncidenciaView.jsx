@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
-import { ArrowLeftIcon, FireIcon, XMarkIcon, CheckIcon } from '@heroicons/react/24/outline'
+import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import { ArrowLeftIcon, FireIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
@@ -21,6 +21,7 @@ const ConteudoIncidenciaView = () => {
   const [status, setStatus] = useState('')
   const [conteudoGerado, setConteudoGerado] = useState(null)
   const [error, setError] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   const disciplinaIndex = parseInt(disciplinaIdx)
 
@@ -114,6 +115,7 @@ const ConteudoIncidenciaView = () => {
       const courseDoc = await getDoc(courseRef)
       const courseData = courseDoc.exists() ? courseDoc.data() : {}
       const banca = courseData.banca || ''
+      const cargo = courseData.cargo || courseData.competition || ''
 
       // Carregar edital verticalizado para contexto
       const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
@@ -134,10 +136,11 @@ const ConteudoIncidenciaView = () => {
       setStatus('Enviando solicitação para a IA...')
 
       // Prompt para a IA gerar conteúdo de maior incidência
-      const prompt = `Você é um especialista em análise de concursos públicos e previsão de temas para provas.
+      const prompt = `Você é um especialista em análise de concursos públicos e previsão de temas para provas. ATUE COMO UMA "VIDENTE" - você sabe exatamente o que vai cair na prova.
 
 CONTEXTO:
 - CURSO: ${courseName || 'Curso Preparatório'}
+- CARGO: ${cargo || 'NÃO DEFINIDO'}
 - BANCA EXAMINADORA: ${banca || 'NÃO DEFINIDA'}
 - DISCIPLINA: ${disciplina.nome}
 
@@ -148,22 +151,25 @@ EDITAL BASE (trecho relevante):
 ${editalText.substring(0, 10000)}${editalText.length > 10000 ? '\n\n[texto truncado...]' : ''}
 
 TAREFA:
-Analise TODOS os tópicos desta disciplina e gere um conteúdo condensado com probabilidade de incidência de cada assunto.
+Analise TODOS os tópicos desta disciplina e gere um conteúdo de revisão focado no que REALMENTE vai cair na prova.
 
-INSTRUÇÕES:
-1. Para CADA tópico da disciplina, identifique os principais assuntos que podem ser cobrados
-2. Atribua uma probabilidade de incidência (0-100%) para cada assunto baseado:
-   - No histórico da banca ${banca || 'NÃO DEFINIDA'}
-   - Na relevância do assunto para o concurso ${courseName || 'mencionado'}
+INSTRUÇÕES CRÍTICAS:
+1. Para CADA tópico da disciplina, identifique os assuntos que serão cobrados
+2. Atribua uma probabilidade de incidência (10-100%) para cada assunto baseado:
+   - No histórico específico da banca ${banca || 'NÃO DEFINIDA'}
+   - No cargo específico: ${cargo || 'NÃO DEFINIDO'}
+   - Na relevância do assunto para este concurso
    - Na atualidade e importância do tema
-3. Gere um conteúdo completo e explicativo para os assuntos com MAIOR probabilidade (acima de 70%)
-4. Para assuntos com menor probabilidade (30-70%), gere um resumo mais conciso
-5. Para assuntos com baixa probabilidade (abaixo de 30%), apenas mencione brevemente
+3. ORDENE sempre da MAIOR probabilidade para a MENOR (100% → 10%)
+4. Para CADA assunto, gere uma REVISÃO COMPLETA do que o candidato precisa estudar
+5. Seja direto e prático: "estude isso porque isso vai cair"
+6. Não faça rodeios - o conteúdo deve ser focado no que será cobrado
 
 ESTRUTURA DO JSON:
 {
   "disciplina": "${disciplina.nome}",
   "banca": "${banca || 'NÃO DEFINIDA'}",
+  "cargo": "${cargo || 'NÃO DEFINIDO'}",
   "curso": "${courseName || 'Curso Preparatório'}",
   "analisePorTopico": [
     {
@@ -173,9 +179,7 @@ ESTRUTURA DO JSON:
         {
           "assunto": "nome do assunto",
           "probabilidade": 95,
-          "conteudo": "explicação completa e detalhada do assunto (se probabilidade >= 70%)",
-          "resumo": "resumo conciso (se probabilidade entre 30-70%)",
-          "mencao": "menção breve (se probabilidade < 30%)"
+          "revisao": "revisão completa do que estudar - seja direto: 'estude X, Y, Z porque isso vai cair'"
         }
       ]
     }
@@ -184,8 +188,7 @@ ESTRUTURA DO JSON:
     {
       "assunto": "assunto que mais cairá em toda a disciplina",
       "probabilidade": 95,
-      "justificativa": "por que este assunto tem alta probabilidade",
-      "conteudo": "explicação completa"
+      "revisao": "revisão completa do que estudar"
     }
   ],
   "dicasEstudo": [
@@ -195,14 +198,13 @@ ESTRUTURA DO JSON:
 }
 
 REGRAS IMPORTANTES:
-- Use probabilidades realistas baseadas no histórico da banca
-- Seja específico e técnico no conteúdo
-- Adapte o estilo ao da banca ${banca || 'NÃO DEFINIDA'}
-- Use linguagem formal e educacional
-- Cite leis, artigos e jurisprudência quando aplicável
-- Seja didático e claro nas explicações
-- Para disciplinas jurídicas, cite legislação atualizada
-- Para disciplinas não jurídicas, foque em conceitos e aplicações práticas
+- Use probabilidades realistas baseadas no histórico da banca ${banca || 'NÃO DEFINIDA'}
+- ADAPTE o conteúdo ao cargo específico: ${cargo || 'NÃO DEFINIDO'}
+- ORDENE sempre da maior probabilidade para a menor
+- Seja uma "vidente": diga exatamente o que estudar
+- Use linguagem direta e prática
+- Para disciplinas jurídicas: cite leis, artigos e jurisprudência atualizadas
+- Para disciplinas não jurídicas: foque em conceitos e aplicações práticas
 - DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
 - Use apenas informações atualizadas até esta data
 
@@ -262,6 +264,35 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     } finally {
       setGenerating(false)
       setTimeout(() => setProgress(0), 800)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!courseId || !disciplina) return
+
+    if (!window.confirm('Tem certeza que deseja apagar o conteúdo de incidência desta disciplina?')) {
+      return
+    }
+
+    try {
+      setDeleting(true)
+      setStatus('Apagando conteúdo...')
+
+      const sanitizedDisciplinaNome = disciplina.nome
+        .replace(/[^a-zA-Z0-9]/g, '_')
+        .substring(0, 100)
+
+      const incidenciaRef = doc(db, 'courses', courseId, 'conteudosIncidencia', sanitizedDisciplinaNome)
+      await deleteDoc(incidenciaRef)
+
+      setConteudoGerado(null)
+      setStatus('')
+      setProgress(0)
+    } catch (error) {
+      console.error('Erro ao apagar conteúdo:', error)
+      setStatus(`❌ Erro ao apagar: ${error.message || 'Erro desconhecido'}`)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -390,10 +421,12 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                 {conteudoGerado.topAssuntosGerais && (
                   <div className="mb-6">
                     <h4 className="font-semibold text-green-900 dark:text-green-100 mb-3">
-                      🔥 Top Assuntos Gerais:
+                      🔥 Top Assuntos Gerais (Ordenados por Probabilidade):
                     </h4>
                     <div className="space-y-3">
-                      {conteudoGerado.topAssuntosGerais.map((assunto, idx) => (
+                      {conteudoGerado.topAssuntosGerais
+                        .sort((a, b) => b.probabilidade - a.probabilidade)
+                        .map((assunto, idx) => (
                         <div key={idx} className="bg-white dark:bg-slate-800 rounded-lg p-4">
                           <div className="flex items-center justify-between mb-2">
                             <span className="font-semibold text-slate-900 dark:text-white">{assunto.assunto}</span>
@@ -401,15 +434,10 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                               {assunto.probabilidade}% de chance
                             </span>
                           </div>
-                          {assunto.justificativa && (
-                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
-                              <strong>Justificativa:</strong> {assunto.justificativa}
-                            </p>
-                          )}
-                          {assunto.conteudo && (
+                          {assunto.revisao && (
                             <div className="text-sm text-slate-700 dark:text-slate-300 mt-2">
-                              <strong>Conteúdo:</strong>
-                              <p className="mt-1">{assunto.conteudo}</p>
+                              <strong>📚 O que estudar:</strong>
+                              <p className="mt-1 whitespace-pre-wrap">{assunto.revisao}</p>
                             </div>
                           )}
                         </div>
@@ -434,7 +462,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                 {conteudoGerado.analisePorTopico && (
                   <div>
                     <h4 className="font-semibold text-green-900 dark:text-green-100 mb-3">
-                      📋 Análise por Tópico:
+                      📋 Análise por Tópico (Ordenados por Probabilidade):
                     </h4>
                     <div className="space-y-4">
                       {conteudoGerado.analisePorTopico.map((topico, idx) => (
@@ -444,7 +472,9 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                           </h5>
                           {topico.assuntos && topico.assuntos.length > 0 && (
                             <div className="space-y-3">
-                              {topico.assuntos.map((assunto, aIdx) => (
+                              {topico.assuntos
+                                .sort((a, b) => b.probabilidade - a.probabilidade)
+                                .map((assunto, aIdx) => (
                                 <div key={aIdx} className="border-l-4 border-orange-500 pl-3">
                                   <div className="flex items-center justify-between mb-1">
                                     <span className="font-medium text-slate-900 dark:text-white">{assunto.assunto}</span>
@@ -452,14 +482,11 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                                       {assunto.probabilidade}%
                                     </span>
                                   </div>
-                                  {assunto.conteudo && (
-                                    <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">{assunto.conteudo}</p>
-                                  )}
-                                  {assunto.resumo && (
-                                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{assunto.resumo}</p>
-                                  )}
-                                  {assunto.mencao && (
-                                    <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">{assunto.mencao}</p>
+                                  {assunto.revisao && (
+                                    <div className="text-sm text-slate-700 dark:text-slate-300 mt-1">
+                                      <strong>📚 O que estudar:</strong>
+                                      <p className="mt-1 whitespace-pre-wrap">{assunto.revisao}</p>
+                                    </div>
                                   )}
                                 </div>
                               ))}
@@ -472,8 +499,8 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                 )}
               </div>
 
-              {/* Botão para gerar novamente */}
-              <div className="pt-4">
+              {/* Botões de ação */}
+              <div className="pt-4 space-y-3">
                 <button
                   onClick={() => {
                     setConteudoGerado(null)
@@ -485,6 +512,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   <ArrowLeftIcon className="h-5 w-5" />
                   Gerar Novamente
                 </button>
+                
+                {profile?.role === 'admin' && (
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <TrashIcon className="h-5 w-5" />
+                    {deleting ? 'Apagando...' : 'Apagar Conteúdo'}
+                  </button>
+                )}
               </div>
             </div>
           )}
