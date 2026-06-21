@@ -160,6 +160,25 @@ const QuestoesTopicoView = () => {
   const [desempenho, setDesempenho] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Verificar se as questões têm a estrutura nova ou antiga
+  const questoesArray = useMemo(() => {
+    if (!questoes) return []
+    // Estrutura nova: questoes.questoes
+    if (questoes.questoes && Array.isArray(questoes.questoes)) {
+      return questoes.questoes
+    }
+    // Estrutura antiga: questoes.questoesPreditivas
+    if (questoes.questoesPreditivas && Array.isArray(questoes.questoesPreditivas)) {
+      return questoes.questoesPreditivas
+    }
+    return []
+  }, [questoes])
+
+  const tipoProva = useMemo(() => {
+    if (!questoes) return 'Múltipla Escolha'
+    return questoes.tipoProva || 'Múltipla Escolha'
+  }, [questoes])
+
   const resolvedCourseId = useMemo(() => courseId || 'alego-default', [courseId])
   const resolvedTopicKey = useMemo(() => normalizeKey(topicKey), [topicKey])
   const { numero: topicNumeroFromKey, nome: topicNomeFromKey } = useMemo(
@@ -506,21 +525,21 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     setSelectedAnswer(answer)
     setShowResult(true)
     
-    const currentQuestion = questoes?.questoes[currentQuestionIndex]
-    const isCorrect = answer === currentQuestion?.respostaCorreta
+    const currentQuestion = questoesArray[currentQuestionIndex]
+    const isCorrect = answer === (currentQuestion?.respostaCorreta || currentQuestion?.correta)
     
     setAnswers([...answers, {
       questionIndex: currentQuestionIndex,
       selectedAnswer: answer,
-      correctAnswer: currentQuestion?.respostaCorreta,
+      correctAnswer: currentQuestion?.respostaCorreta || currentQuestion?.correta,
       isCorrect,
-      assunto: currentQuestion?.assunto,
-      probabilidade: currentQuestion?.probabilidade
+      assunto: currentQuestion?.assunto || '',
+      probabilidade: currentQuestion?.probabilidade || 0
     }])
   }
 
   const handleNextQuestion = () => {
-    if (currentQuestionIndex < (questoes?.questoes?.length - 1)) {
+    if (currentQuestionIndex < (questoesArray.length - 1)) {
       setCurrentQuestionIndex(currentQuestionIndex + 1)
       setSelectedAnswer(null)
       setShowResult(false)
@@ -732,35 +751,41 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   )}
 
                   {/* Barra de progresso */}
-                  <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-                    <div 
-                      className="bg-gradient-to-r from-green-600 to-emerald-600 h-full transition-all duration-300"
-                      style={{ width: `${((currentQuestionIndex + 1) / questoes.questoes.length) * 100}%` }}
-                    />
-                  </div>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
-                    Questão {currentQuestionIndex + 1} de {questoes.questoes.length}
-                  </p>
+                  {questoesArray.length > 0 && (
+                    <>
+                      <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-green-600 to-emerald-600 h-full transition-all duration-300"
+                          style={{ width: `${((currentQuestionIndex + 1) / questoesArray.length) * 100}%` }}
+                        />
+                      </div>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
+                        Questão {currentQuestionIndex + 1} de {questoesArray.length}
+                      </p>
+                    </>
+                  )}
 
                   {/* Questão atual */}
-                  {questoes.questoes[currentQuestionIndex] && (
+                  {questoesArray[currentQuestionIndex] && (
                     <div className="space-y-4">
                       <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-semibold text-orange-900 dark:text-orange-100">
-                            Assunto: {questoes.questoes[currentQuestionIndex].assunto}
+                            Assunto: {questoesArray[currentQuestionIndex].assunto || 'Assunto não identificado'}
                           </span>
-                          <span className="px-3 py-1 bg-orange-600 text-white text-xs font-bold rounded-full">
-                            {questoes.questoes[currentQuestionIndex].probabilidade}% de chance
-                          </span>
+                          {questoesArray[currentQuestionIndex].probabilidade && (
+                            <span className="px-3 py-1 bg-orange-600 text-white text-xs font-bold rounded-full">
+                              {questoesArray[currentQuestionIndex].probabilidade}% de chance
+                            </span>
+                          )}
                         </div>
                         <p className="text-slate-900 dark:text-white font-medium">
-                          {questoes.questoes[currentQuestionIndex].enunciado}
+                          {questoesArray[currentQuestionIndex].enunciado}
                         </p>
                       </div>
 
                       {/* Alternativas - Certo/Errado ou Múltipla */}
-                      {questoes.tipoProva === 'Certo/Errado' ? (
+                      {tipoProva === 'Certo/Errado' ? (
                         <div className="grid grid-cols-2 gap-4">
                           {['C', 'E'].map((key) => (
                             <button
@@ -769,7 +794,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                               disabled={showResult}
                               className={`text-center p-6 rounded-lg border-2 transition-all ${
                                 showResult
-                                  ? key === questoes.questoes[currentQuestionIndex].respostaCorreta
+                                  ? key === (questoesArray[currentQuestionIndex].respostaCorreta || questoesArray[currentQuestionIndex].correta)
                                     ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
                                     : key === selectedAnswer
                                       ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
@@ -780,10 +805,10 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                               <div className="flex flex-col items-center gap-2">
                                 <span className="text-2xl font-bold text-slate-900 dark:text-white">{key === 'C' ? 'C' : 'E'}</span>
                                 <span className="text-sm text-slate-700 dark:text-slate-300">{key === 'C' ? 'Certo' : 'Errado'}</span>
-                                {showResult && key === questoes.questoes[currentQuestionIndex].respostaCorreta && (
+                                {showResult && key === (questoesArray[currentQuestionIndex].respostaCorreta || questoesArray[currentQuestionIndex].correta) && (
                                   <CheckCircleIcon className="h-6 w-6 text-green-600" />
                                 )}
-                                {showResult && key === selectedAnswer && key !== questoes.questoes[currentQuestionIndex].respostaCorreta && (
+                                {showResult && key === selectedAnswer && key !== (questoesArray[currentQuestionIndex].respostaCorreta || questoesArray[currentQuestionIndex].correta) && (
                                   <XCircleIcon className="h-6 w-6 text-red-600" />
                                 )}
                               </div>
@@ -792,14 +817,14 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          {Object.entries(questoes.questoes[currentQuestionIndex].alternativas).map(([key, value]) => (
+                          {Object.entries(questoesArray[currentQuestionIndex].alternativas || {}).map(([key, value]) => (
                             <button
                               key={key}
                               onClick={() => handleAnswer(key)}
                               disabled={showResult}
                               className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                                 showResult
-                                  ? key === questoes.questoes[currentQuestionIndex].respostaCorreta
+                                  ? key === (questoesArray[currentQuestionIndex].respostaCorreta || questoesArray[currentQuestionIndex].correta)
                                     ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
                                     : key === selectedAnswer
                                       ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
@@ -810,10 +835,10 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                               <div className="flex items-center gap-3">
                                 <span className="font-bold text-slate-900 dark:text-white">{key})</span>
                                 <span className="text-slate-700 dark:text-slate-300">{value}</span>
-                                {showResult && key === questoes.questoes[currentQuestionIndex].respostaCorreta && (
+                                {showResult && key === (questoesArray[currentQuestionIndex].respostaCorreta || questoesArray[currentQuestionIndex].correta) && (
                                   <CheckCircleIcon className="h-5 w-5 text-green-600 ml-auto" />
                                 )}
-                                {showResult && key === selectedAnswer && key !== questoes.questoes[currentQuestionIndex].respostaCorreta && (
+                                {showResult && key === selectedAnswer && key !== (questoesArray[currentQuestionIndex].respostaCorreta || questoesArray[currentQuestionIndex].correta) && (
                                   <XCircleIcon className="h-5 w-5 text-red-600 ml-auto" />
                                 )}
                               </div>
@@ -829,7 +854,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                             💡 Explicação:
                           </h4>
                           <p className="text-sm text-blue-800 dark:text-blue-200">
-                            {questoes.questoes[currentQuestionIndex].explicacao}
+                            {questoesArray[currentQuestionIndex].explicacao || questoesArray[currentQuestionIndex].gabaritoComentado || 'Explicação não disponível'}
                           </p>
                         </div>
                       )}
@@ -840,7 +865,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                           onClick={handleNextQuestion}
                           className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
                         >
-                          {currentQuestionIndex < questoes.questoes.length - 1 ? 'Próxima Questão' : 'Ver Resultado'}
+                          {currentQuestionIndex < questoesArray.length - 1 ? 'Próxima Questão' : 'Ver Resultado'}
                         </button>
                       )}
                     </div>
