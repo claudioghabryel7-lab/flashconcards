@@ -266,9 +266,14 @@ const QuestoesTopicoView = () => {
 
       // Carregar edital e prompt unificado para contexto
       const editalRef = doc(db, 'courses', resolvedCourseId, 'prompts', 'edital')
+      console.log('🔍 Buscando edital em:', editalRef.path)
+      console.log('📋 courseId usado:', resolvedCourseId)
       const editalDoc = await getDoc(editalRef)
+      console.log('📄 Edital existe?', editalDoc.exists())
       const editalData = editalDoc.exists() ? editalDoc.data() : {}
+      console.log('📊 Dados do edital:', editalData)
       const editalText = (editalData.pdfText || editalData.prompt || '').toString()
+      console.log('📝 Tamanho do editalText:', editalText.length)
 
       // Carregar dados do curso para obter a banca examinadora
       const courseRef = doc(db, 'courses', resolvedCourseId)

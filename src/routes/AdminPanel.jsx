@@ -6450,8 +6450,6 @@ ${juridicoContent ? `FONTES JURÍDICAS CONFIÁVEIS:\n${juridicoContent.substring
     setTestFlashcardResult(null)
 
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-
       // SEMPRE detectar e baixar leis (independente do modo)
       setMessage('🔍 Detectando leis na matéria...')
       const lawDetector = new LawDetector()
@@ -7851,11 +7849,14 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem 
                           
                           // Salvar texto do PDF no edital
                           const editalPromptRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+                          console.log('💾 Salvando edital em:', editalPromptRef.path)
+                          console.log('📄 Tamanho do editalVerticalizadoText:', editalVerticalizadoText.length)
                           await setDoc(editalPromptRef, {
                             pdfText: editalVerticalizadoText,
                             prompt: `Edital processado automaticamente em ${new Date().toLocaleString('pt-BR')}`,
                             updatedAt: serverTimestamp(),
                           }, { merge: true })
+                          console.log('✅ Edital salvo com sucesso em:', editalPromptRef.path)
                           
                           setEditalVerticalizadoData(editalOrganizado)
                           
@@ -9395,8 +9396,6 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                   
                                   if (apiKey) {
                                     try {
-                                      const genAI = new GoogleGenerativeAI(apiKey)
-                                      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
                                       const response = await callGeminiWithRetry(prompt, {
         generationConfig: {
           maxOutputTokens: 32000,
