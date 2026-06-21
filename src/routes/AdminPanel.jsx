@@ -7020,58 +7020,10 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                             console.log('Nenhuma parte antiga encontrada para remover (isso é normal):', partesErr.message)
                           }
                           
-                          const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
-                          
-                          // Tentar modelos válidos em ordem de prioridade
-                          const modelNames = [
-                            'gemini-2.5-flash',           // Mais recente e rápido
-                            'gemini-2.5-pro',      // Fallback para análises complexas
-                            'gemini-2.5-pro',             // Fallback Pro
-                            'gemini-2.5-pro'                  // Fallback mais antigo
-                          ]
-                          
-                          let model = null
-                          for (const modelName of modelNames) {
-                            try {
-                              model = genAI.getGenerativeModel({ 
-                                model: modelName,
-                                generationConfig: {
-                                  maxOutputTokens: 32000, // Aumentar limite de tokens de saída
-                                  temperature: 0.3,
-                                }
-                              })
-                              // Testar se o modelo funciona
-                              await model.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
-                              console.log(`✅ Usando modelo: ${modelName}`)
-                              break
-                            } catch (err) {
-                              console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
-                              continue
-                            }
-                          }
-                          
-                          if (!model) {
-                            throw new Error('Nenhum modelo Gemini disponível. Verifique sua API key.')
-                          }
-                          
-                          // Processar edital verticalizado em partes para evitar truncamento
-                          // Dividir o edital em chunks menores e processar cada um separadamente
-                          const preferredModel = 'gemini-2.5-pro'
-                          
-                          let modelForProcessing = null
-                          try {
-                            modelForProcessing = genAI.getGenerativeModel({ 
-                              model: preferredModel,
-                              generationConfig: {
-                                maxOutputTokens: 32000,
-                                temperature: 0.3,
-                              }
-                            })
-                            await modelForProcessing.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
-                            console.log(`✅ Usando modelo ${preferredModel} para processar edital`)
-                          } catch (err) {
-                            console.warn(`⚠️ Modelo ${preferredModel} não disponível, usando modelo padrão`)
-                            modelForProcessing = model
+                          // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+                          const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+                          if (!apiKey) {
+                            throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
                           }
                           
                           // Dividir o edital em partes inteligentes baseado no tamanho
@@ -7325,9 +7277,14 @@ REGRAS CRÍTICAS E OBRIGATÓRIAS - LEIA COM ATENÇÃO:
 
 21. ⚠️ PRIORIDADE ABSOLUTA: É MELHOR extrair disciplinas duplicadas do que perder disciplinas importantes. Se tiver dúvida, INCLUA a disciplina.`
 
-                            const verticalizadoResult = await modelForProcessing.generateContent(verticalizadoPrompt)
-                          const verticalizadoResponse = await verticalizadoResult.response
-                          let verticalizadoText = verticalizadoResponse.text().trim()
+                            // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+                            const verticalizadoResponse = await callGeminiWithRetry(verticalizadoPrompt, {
+                              maxRetries: 3,
+                              baseDelay: 2000,
+                              models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                              generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+                            })
+                            let verticalizadoText = extractGeneratedText(verticalizadoResponse).trim()
                           
                           // Limpar markdown e texto extra
                           if (verticalizadoText.startsWith('```json')) {
@@ -8761,56 +8718,11 @@ ESTRUTURA SUGERIDA:
               
               try {
                           const courseId = selectedCourseForPrompts || 'alego-default'
-                          const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
                           
-                          // Tentar modelos válidos em ordem de prioridade
-                          const modelNames = [
-                            'gemini-2.5-flash',           // Mais recente e rápido
-                            'gemini-2.5-pro',      // Fallback para análises complexas
-                            'gemini-2.5-pro',             // Fallback Pro
-                            'gemini-2.5-pro'                  // Fallback mais antigo
-                          ]
-                          
-                          let model = null
-                          for (const modelName of modelNames) {
-                            try {
-                              model = genAI.getGenerativeModel({ 
-                                model: modelName,
-                                generationConfig: {
-                                  maxOutputTokens: 32000, // Aumentar limite de tokens de saída
-                                  temperature: 0.3,
-                                }
-                              })
-                              // Testar se o modelo funciona
-                              await model.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
-                              console.log(`✅ Usando modelo: ${modelName}`)
-                              break
-                            } catch (err) {
-                              console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
-                              continue
-                            }
-                          }
-                          
-                          if (!model) {
-                            throw new Error('Nenhum modelo Gemini disponível. Verifique sua API key.')
-                          }
-                
-                          // Usar modelo com maior context window para editais grandes
-                          const preferredModel = 'gemini-2.5-pro'
-                          let modelForProcessing = null
-                          try {
-                            modelForProcessing = genAI.getGenerativeModel({ 
-                              model: preferredModel,
-                              generationConfig: {
-                                maxOutputTokens: 32000,
-                                temperature: 0.3,
-                              }
-                            })
-                            await modelForProcessing.generateContent({ contents: [{ parts: [{ text: 'test' }] }] })
-                            console.log(`✅ Usando modelo ${preferredModel} para processar edital grande`)
-                          } catch (err) {
-                            console.warn(`⚠️ Modelo ${preferredModel} não disponível, usando modelo padrão`)
-                            modelForProcessing = model
+                          // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+                          const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+                          if (!apiKey) {
+                            throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
                           }
                           
                           // Aumentar limite para 1 milhão de caracteres
@@ -8854,9 +8766,14 @@ Organize o edital em um formato JSON com a seguinte estrutura:
 
 Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
 
-                const result = await modelForProcessing.generateContent(prompt)
-                const response = await result.response
-                const text = response.text()
+                // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+                const response = await callGeminiWithRetry(prompt, {
+                  maxRetries: 3,
+                  baseDelay: 2000,
+                  models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                  generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+                })
+                const text = extractGeneratedText(response)
                 
                 // Extrair JSON da resposta
                 let jsonText = text.trim()
