@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { doc, getDoc, setDoc, serverTimestamp, getDocs, collection, query, where } from 'firebase/firestore'
+import { doc, getDoc, setDoc, serverTimestamp, getDocs, collection, query, where, orderBy } from 'firebase/firestore'
 import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, ChartBarIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -89,8 +89,10 @@ const PraticaIncidenciaView = () => {
           : editalData.disciplinas
         
         const disciplina = disciplinas[disciplinaIndex]
+        let sanitizedDisciplinaNome = ''
+        
         if (disciplina?.nome) {
-          const sanitizedDisciplinaNome = disciplina.nome
+          sanitizedDisciplinaNome = disciplina.nome
             .replace(/[^a-zA-Z0-9]/g, '_')
             .substring(0, 100)
 
@@ -106,14 +108,16 @@ const PraticaIncidenciaView = () => {
         }
 
         // Carregar questões existentes
-        const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', sanitizedDisciplinaNome)
-        const questoesDoc = await getDoc(questoesRef)
-        if (questoesDoc.exists()) {
-          setQuestoes(questoesDoc.data())
+        if (sanitizedDisciplinaNome) {
+          const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', sanitizedDisciplinaNome)
+          const questoesDoc = await getDoc(questoesRef)
+          if (questoesDoc.exists()) {
+            setQuestoes(questoesDoc.data())
+          }
         }
 
         // Carregar desempenho do usuário
-        if (user) {
+        if (user && sanitizedDisciplinaNome) {
           const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoIncidencia', sanitizedDisciplinaNome)
           const desempenhoDoc = await getDoc(desempenhoRef)
           if (desempenhoDoc.exists()) {
