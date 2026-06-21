@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { doc, getDoc, setDoc, serverTimestamp, getDocs, collection, query, where, orderBy } from 'firebase/firestore'
-import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, ChartBarIcon } from '@heroicons/react/24/outline'
+import { doc, getDoc, setDoc, deleteDoc, serverTimestamp, getDocs, collection, query, where, orderBy } from 'firebase/firestore'
+import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, ChartBarIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
@@ -27,6 +27,7 @@ const PraticaIncidenciaView = () => {
   const [answers, setAnswers] = useState([])
   const [error, setError] = useState('')
   const [desempenho, setDesempenho] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   const disciplinaIndex = parseInt(disciplinaIdx)
 
@@ -160,6 +161,10 @@ const PraticaIncidenciaView = () => {
       setProgress(20)
       setStatus('Gerando questões com IA...')
 
+      // Determinar tipo de prova baseado na banca
+      const bancasCertoErrado = ['CESPE', 'CEBRASPE', 'FCC', 'VUNESP', 'FGV', 'IBFC', 'AOCP', 'CONSULPAM', 'FUNRIO', 'NUCEPE', 'QUADRIX', 'IDECAN']
+      const tipoProva = bancasCertoErrado.some(b => banca.toUpperCase().includes(b)) ? 'Certo/Errado' : 'Múltipla Escolha'
+
       // Preparar conteúdo de incidência para a IA
       const topAssuntos = conteudoIncidencia.topAssuntosGerais || []
       const analisePorTopico = conteudoIncidencia.analisePorTopico || []
@@ -171,6 +176,7 @@ CONTEXTO:
 - CURSO: ${courseName || 'Curso Preparatório'}
 - CARGO: ${cargo || 'NÃO DEFINIDO'}
 - BANCA EXAMINADORA: ${banca || 'NÃO DEFINIDA'}
+- TIPO DE PROVA: ${tipoProva}
 - DISCIPLINA: ${conteudoIncidencia.disciplina || 'Disciplina'}
 
 ASSUNTOS COM MAIOR INCIDÊNCIA (Top Gerais):
@@ -185,19 +191,42 @@ ${analisePorTopico.map(t =>
 ).join('\n\n')}
 
 TAREFA:
-Gere 10-15 questões de múltipla escolha (A, B, C, D, E) baseadas nos assuntos com maior probabilidade de incidência.
+Gere EXATAMENTE 50 questões de ${tipoProva} baseadas nos assuntos com maior probabilidade de incidência.
 
-INSTRUÇÕES:
-1. PRIORIZE assuntos com probabilidade ALTA (80-100%)
-2. Inclua alguns assuntos com probabilidade MÉDIA (50-70%)
-3. Use o estilo da banca ${banca || 'NÃO DEFINIDA'}
-4. Cada questão deve ter:
+INSTRUÇÕES CRÍTICAS - DISTRIBUIÇÃO DE QUESTÕES POR PROBABILIDADE:
+- Assuntos com probabilidade ALTA (80-100%): 20-25 questões (40-50% do total)
+- Assuntos com probabilidade MÉDIA (50-70%): 15-20 questões (30-40% do total)
+- Assuntos com probabilidade BAIXA (10-40%): 5-10 questões (10-20% do total)
+- QUANTO MAIOR A PROBABILIDADE, MAIS QUESTÕES
+- QUANTO MENOR A PROBABILIDADE, MENOS QUESTÕES
+
+INSTRUÇÕES SOBRE TIPO DE PROVA:
+${tipoProva === 'Certo/Errado' ? `
+- Use formato Certo/Errado (C ou E)
+- Cada questão deve ter um enunciado que pode ser Certo ou Errado
+- Resposta deve ser "C" (Certo) ou "E" (Errado)
+- Explicação deve detalhar POR QUE é certo ou errado
+` : `
+- Use formato Múltipla Escolha (A, B, C, D, E)
+- Cada questão deve ter 5 alternativas
+- Resposta deve ser uma das letras (A, B, C, D, E)
+- Explicação deve detalhar a resposta correta
+`}
+
+INSTRUÇÕES GERAIS:
+1. Use o estilo da banca ${banca || 'NÃO DEFINIDA'}
+2. Cada questão deve ter:
    - Enunciado claro e direto
+   ${tipoProva === 'Certo/Errado' ? `
+   - Alternativa correta: "C" (Certo) ou "E" (Errado)
+   ` : `
    - 5 alternativas (A, B, C, D, E)
    - Alternativa correta indicada
+   `}
    - Explicação detalhada da resposta
-5. Ordene as questões pela probabilidade do assunto (maior para menor)
-6. Adapte o nível de dificuldade ao cargo ${cargo || 'NÃO DEFINIDO'}
+3. Ordene as questões pela probabilidade do assunto (maior para menor)
+4. Adapte o nível de dificuldade ao cargo ${cargo || 'NÃO DEFINIDO'}
+5. Gere EXATAMENTE 50 questões (nem mais, nem menos)
 
 ESTRUTURA DO JSON:
 {
@@ -205,12 +234,16 @@ ESTRUTURA DO JSON:
   "banca": "${banca || 'NÃO DEFINIDA'}",
   "cargo": "${cargo || 'NÃO DEFINIDO'}",
   "curso": "${courseName || 'Curso Preparatório'}",
+  "tipoProva": "${tipoProva}",
   "questoes": [
     {
       "numero": 1,
       "assunto": "nome do assunto",
       "probabilidade": 95,
       "enunciado": "texto da questão",
+      ${tipoProva === 'Certo/Errado' ? `
+      "respostaCorreta": "C",
+      ` : `
       "alternativas": {
         "A": "texto da alternativa A",
         "B": "texto da alternativa B",
@@ -219,6 +252,7 @@ ESTRUTURA DO JSON:
         "E": "texto da alternativa E"
       },
       "respostaCorreta": "A",
+      `}
       "explicacao": "explicação detalhada da resposta correta"
     }
   ]
@@ -227,11 +261,13 @@ ESTRUTURA DO JSON:
 REGRAS IMPORTANTES:
 - Use probabilidades reais baseadas no conteúdo de incidência
 - Adapte o estilo ao da banca ${banca || 'NÃO DEFINIDA'}
+- Distribua as questões conforme a probabilidade (mais questões para alta incidência)
 - Seja específico e técnico nas questões
 - Para disciplinas jurídicas: cite leis, artigos e jurisprudência
 - Para disciplinas não jurídicas: foque em conceitos e aplicações práticas
 - DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
 - Use apenas informações atualizadas até esta data
+- GERE EXATAMENTE 50 QUESTÕES
 
 Retorne APENAS o JSON válido, sem texto adicional.`
 
@@ -366,6 +402,36 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     setDesempenho(null)
   }
 
+  const handleDeleteQuestoes = async () => {
+    if (!courseId || !editalVerticalizado?.disciplinas) return
+
+    if (!window.confirm('Tem certeza que deseja apagar as questões geradas desta disciplina?')) {
+      return
+    }
+
+    try {
+      setDeleting(true)
+      setStatus('Apagando questões...')
+
+      const disciplina = editalVerticalizado.disciplinas[disciplinaIndex]
+      const sanitizedDisciplinaNome = disciplina?.nome
+        .replace(/[^a-zA-Z0-9]/g, '_')
+        .substring(0, 100)
+
+      const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', sanitizedDisciplinaNome)
+      await deleteDoc(questoesRef)
+
+      setQuestoes(null)
+      setStatus('')
+      setProgress(0)
+    } catch (error) {
+      console.error('Erro ao apagar questões:', error)
+      setStatus(`❌ Erro ao apagar: ${error.message || 'Erro desconhecido'}`)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -439,9 +505,9 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                     </h3>
                     <div className="text-sm text-green-800 dark:text-green-200 space-y-2">
                       <p>• As questões serão geradas baseadas nos assuntos com maior probabilidade de incidência</p>
-                      <p>• Prioridade para assuntos com probabilidade ALTA (80-100%)</p>
+                      <p>• Distribuição por probabilidade: Alta (40-50%), Média (30-40%), Baixa (10-20%)</p>
                       <p>• Estilo adaptado à banca examinadora</p>
-                      <p>• 10-15 questões de múltipla escolha (A, B, C, D, E)</p>
+                      <p>• 50 questões (Certo/Errado ou Múltipla Escolha, conforme a banca)</p>
                     </div>
                   </div>
 
@@ -463,7 +529,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   )}
 
                   {/* Botão de ação */}
-                  <div className="pt-4">
+                  <div className="pt-4 space-y-3">
                     <button
                       onClick={handleGenerateQuestoes}
                       disabled={generating}
@@ -472,6 +538,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                       <FireIcon className="h-6 w-6" />
                       {generating ? 'Gerando Questões...' : 'Gerar Questões'}
                     </button>
+                    
+                    {profile?.role === 'admin' && questoes && (
+                      <button
+                        onClick={handleDeleteQuestoes}
+                        disabled={deleting}
+                        className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <TrashIcon className="h-5 w-5" />
+                        {deleting ? 'Apagando...' : 'Apagar Questões'}
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -504,36 +581,68 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         </p>
                       </div>
 
-                      {/* Alternativas */}
-                      <div className="space-y-3">
-                        {Object.entries(questoes.questoes[currentQuestionIndex].alternativas).map(([key, value]) => (
-                          <button
-                            key={key}
-                            onClick={() => handleAnswer(key)}
-                            disabled={showResult}
-                            className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                              showResult
-                                ? key === questoes.questoes[currentQuestionIndex].respostaCorreta
-                                  ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                                  : key === selectedAnswer
-                                    ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 opacity-50'
-                                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold text-slate-900 dark:text-white">{key})</span>
-                              <span className="text-slate-700 dark:text-slate-300">{value}</span>
-                              {showResult && key === questoes.questoes[currentQuestionIndex].respostaCorreta && (
-                                <CheckCircleIcon className="h-5 w-5 text-green-600 ml-auto" />
-                              )}
-                              {showResult && key === selectedAnswer && key !== questoes.questoes[currentQuestionIndex].respostaCorreta && (
-                                <XCircleIcon className="h-5 w-5 text-red-600 ml-auto" />
-                              )}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
+                      {/* Alternativas - Certo/Errado ou Múltipla */}
+                      {questoes.tipoProva === 'Certo/Errado' ? (
+                        <div className="grid grid-cols-2 gap-4">
+                          {['C', 'E'].map((key) => (
+                            <button
+                              key={key}
+                              onClick={() => handleAnswer(key)}
+                              disabled={showResult}
+                              className={`text-center p-6 rounded-lg border-2 transition-all ${
+                                showResult
+                                  ? key === questoes.questoes[currentQuestionIndex].respostaCorreta
+                                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                                    : key === selectedAnswer
+                                      ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 opacity-50'
+                                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
+                              }`}
+                            >
+                              <div className="flex flex-col items-center gap-2">
+                                <span className="text-2xl font-bold text-slate-900 dark:text-white">{key === 'C' ? 'C' : 'E'}</span>
+                                <span className="text-sm text-slate-700 dark:text-slate-300">{key === 'C' ? 'Certo' : 'Errado'}</span>
+                                {showResult && key === questoes.questoes[currentQuestionIndex].respostaCorreta && (
+                                  <CheckCircleIcon className="h-6 w-6 text-green-600" />
+                                )}
+                                {showResult && key === selectedAnswer && key !== questoes.questoes[currentQuestionIndex].respostaCorreta && (
+                                  <XCircleIcon className="h-6 w-6 text-red-600" />
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {Object.entries(questoes.questoes[currentQuestionIndex].alternativas).map(([key, value]) => (
+                            <button
+                              key={key}
+                              onClick={() => handleAnswer(key)}
+                              disabled={showResult}
+                              className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                                showResult
+                                  ? key === questoes.questoes[currentQuestionIndex].respostaCorreta
+                                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                                    : key === selectedAnswer
+                                      ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 opacity-50'
+                                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="font-bold text-slate-900 dark:text-white">{key})</span>
+                                <span className="text-slate-700 dark:text-slate-300">{value}</span>
+                                {showResult && key === questoes.questoes[currentQuestionIndex].respostaCorreta && (
+                                  <CheckCircleIcon className="h-5 w-5 text-green-600 ml-auto" />
+                                )}
+                                {showResult && key === selectedAnswer && key !== questoes.questoes[currentQuestionIndex].respostaCorreta && (
+                                  <XCircleIcon className="h-5 w-5 text-red-600 ml-auto" />
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Explicação */}
                       {showResult && (
