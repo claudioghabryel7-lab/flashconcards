@@ -1122,9 +1122,6 @@ const AdminPanel = () => {
 
       setOrganizingProgress('Analisando edital com IA...')
 
-      // 3. Chamar IA para organizar
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-
       const courseName = courses.find(c => c.id === courseId)?.name || 'o curso'
       
       const organizationPrompt = `Você é um especialista em organização de conteúdo educacional para concursos públicos.
@@ -1225,10 +1222,16 @@ Retorne APENAS um JSON válido:
 
 Use EXATAMENTE os nomes dos módulos fornecidos acima.`
 
-              const moduleResult = await model.generateContent(modulePrompt)
-              const moduleResponse = moduleResult.response.text()
+              // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+              const moduleResponse = await callGeminiWithRetry(modulePrompt, {
+                maxRetries: 3,
+                baseDelay: 2000,
+                models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+              })
+              const moduleResponseText = extractGeneratedText(moduleResponse)
               
-              let moduleJsonText = moduleResponse.trim()
+              let moduleJsonText = moduleResponseText.trim()
               if (moduleJsonText.includes('```json')) {
                 moduleJsonText = moduleJsonText.split('```json')[1].split('```')[0].trim()
               } else if (moduleJsonText.includes('```')) {
@@ -2028,8 +2031,6 @@ REGRAS CRÍTICAS:
       if (apiKey) {
         try {
           setFlashcardGenProgress('Chamando Gemini API...')
-          const genAI = new GoogleGenerativeAI(apiKey)
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
           const response = await callGeminiWithRetry(prompt, {
         generationConfig: {
           maxOutputTokens: 32000,
@@ -3538,17 +3539,19 @@ Retorne APENAS um JSON válido:
 Retorne APENAS o JSON, sem markdown, sem explicações.`
 
           try {
-            if (!model) {
-              throw new Error('Modelo de IA não disponível. Verifique as configurações.')
-            }
-            
             let flashcardsResult = null
             let flashcardsText = ''
             
             // Tentar gerar flashcards com tratamento de quota
             try {
-              flashcardsResult = await model.generateContent(flashcardsPrompt)
-              flashcardsText = flashcardsResult.response.text().trim()
+              // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+              flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
+                maxRetries: 3,
+                baseDelay: 2000,
+                models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+              })
+              flashcardsText = extractGeneratedText(flashcardsResult).trim()
             } catch (quotaErr) {
               // Se for erro de quota, aguardar e tentar novamente
               if (isQuotaError(quotaErr)) {
@@ -3559,8 +3562,13 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                 await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
                 
                 // Tentar novamente
-                flashcardsResult = await model.generateContent(flashcardsPrompt)
-                flashcardsText = flashcardsResult.response.text().trim()
+                flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
+                  maxRetries: 3,
+                  baseDelay: 2000,
+                  models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                  generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+                })
+                flashcardsText = extractGeneratedText(flashcardsResult).trim()
                 setFullCourseProgress(`📝 Retomando geração de flashcards para ${materia.nome} - ${modulo.nome}...`)
               } else {
                 throw quotaErr
@@ -3583,25 +3591,31 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
               
               // Tentar novamente uma vez
               try {
-                if (!model) {
-                  throw new Error('Modelo de IA não disponível.')
-                }
-                
                 let retryResult = null
                 try {
-                  retryResult = await model.generateContent(flashcardsPrompt)
+                  retryResult = await callGeminiWithRetry(flashcardsPrompt, {
+                    maxRetries: 3,
+                    baseDelay: 2000,
+                    models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                    generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+                  })
                 } catch (retryQuotaErr) {
                   if (isQuotaError(retryQuotaErr)) {
                     const waitTime = extractWaitTime(retryQuotaErr)
                     const waitSeconds = waitTime || 60
                     setFullCourseProgress(`⏳ Quota excedida no retry. Aguardando ${waitSeconds} segundos...`)
                     await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
-                    retryResult = await model.generateContent(flashcardsPrompt)
+                    retryResult = await callGeminiWithRetry(flashcardsPrompt, {
+                      maxRetries: 3,
+                      baseDelay: 2000,
+                      models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                      generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+                    })
                   } else {
                     throw retryQuotaErr
                   }
                 }
-                let retryText = retryResult.response.text().trim()
+                let retryText = extractGeneratedText(retryResult).trim()
                 if (retryText.startsWith('```json')) {
                   retryText = retryText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
                 } else if (retryText.startsWith('```')) {
@@ -3869,8 +3883,14 @@ Retorne APENAS um JSON válido:
 
 Retorne APENAS o JSON, sem markdown, sem explicações.`
 
-      const analysisResult = await model.generateContent(analysisPrompt)
-      let analysisText = analysisResult.response.text().trim()
+      // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+      const analysisResponse = await callGeminiWithRetry(analysisPrompt, {
+        maxRetries: 3,
+        baseDelay: 2000,
+        models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+      })
+      let analysisText = extractGeneratedText(analysisResponse).trim()
       
       // Limpar markdown se houver
       if (analysisText.startsWith('```json')) {
@@ -3993,8 +4013,14 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
             
             // Tentar gerar flashcards com tratamento de quota
             try {
-              flashcardsResult = await model.generateContent(flashcardsPrompt)
-              flashcardsText = flashcardsResult.response.text().trim()
+              // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+              flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
+                maxRetries: 3,
+                baseDelay: 2000,
+                models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+              })
+              flashcardsText = extractGeneratedText(flashcardsResult).trim()
             } catch (quotaErr) {
               // Se for erro de quota, aguardar e tentar novamente
               if (isQuotaError(quotaErr)) {
@@ -4005,8 +4031,13 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                 await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
                 
                 // Tentar novamente
-                flashcardsResult = await model.generateContent(flashcardsPrompt)
-                flashcardsText = flashcardsResult.response.text().trim()
+                flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
+                  maxRetries: 3,
+                  baseDelay: 2000,
+                  models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                  generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+                })
+                flashcardsText = extractGeneratedText(flashcardsResult).trim()
                 setFullCourseProgress(`📝 Retomando geração de flashcards para ${materia.nome} - ${modulo.nome}...`)
               } else {
                 throw quotaErr
@@ -4871,8 +4902,14 @@ CRÍTICO:
 - NÃO inclua explicações antes ou depois
 - Comece diretamente com { e termine com }`
 
-          const result = await model.generateContent(analysisPrompt)
-          let analysisText = result.response.text().trim()
+          // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+          const result = await callGeminiWithRetry(analysisPrompt, {
+            maxRetries: 3,
+            baseDelay: 2000,
+            models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+            generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+          })
+          let analysisText = extractGeneratedText(result).trim()
           
           // Limpar markdown
           if (analysisText.includes('```json')) {
@@ -5176,8 +5213,14 @@ FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
 {"materias": ["Nome da Matéria 1", "Nome da Matéria 2"]}
 CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
 
-        const result = await model.generateContent(analysisPrompt)
-        let analysisText = result.response.text().trim()
+        // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+        const result = await callGeminiWithRetry(analysisPrompt, {
+          maxRetries: 3,
+          baseDelay: 2000,
+          models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+        })
+        let analysisText = extractGeneratedText(result).trim()
         
         if (analysisText.includes('```json')) {
           analysisText = analysisText.split('```json')[1].split('```')[0].trim()
@@ -5270,8 +5313,14 @@ FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
 {"materias": ["Nome da Matéria 1", "Nome da Matéria 2"]}
 CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
 
-        const result = await model.generateContent(analysisPrompt)
-        let analysisText = result.response.text().trim()
+        // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+        const result = await callGeminiWithRetry(analysisPrompt, {
+          maxRetries: 3,
+          baseDelay: 2000,
+          models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+        })
+        let analysisText = extractGeneratedText(result).trim()
         
         if (analysisText.includes('```json')) {
           analysisText = analysisText.split('```json')[1].split('```')[0].trim()
@@ -5390,8 +5439,14 @@ CRÍTICO:
 - NÃO inclua explicações antes ou depois
 - Comece diretamente com { e termine com }`
 
-          const result = await model.generateContent(analysisPrompt)
-          let analysisText = result.response.text().trim()
+          // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+          const result = await callGeminiWithRetry(analysisPrompt, {
+            maxRetries: 3,
+            baseDelay: 2000,
+            models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+            generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+          })
+          let analysisText = extractGeneratedText(result).trim()
           
           // Remover markdown
           if (analysisText.includes('```json')) {
@@ -6091,18 +6146,15 @@ CRÍTICO:
       if (apiKey) {
         try {
           console.log('🤖 Tentando usar Gemini...')
-          const genAI = new GoogleGenerativeAI(apiKey)
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-          
-          const result = await model.generateContent({
-            contents: [{ parts: [{ text: systemPrompt }] }],
-            generationConfig: {
-              temperature: 0.8,
-              maxOutputTokens: 8000,
-            },
+          // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+          const result = await callGeminiWithRetry(systemPrompt, {
+            maxRetries: 3,
+            baseDelay: 2000,
+            models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+            generationConfig: { temperature: 0.8, maxOutputTokens: 8000 },
           })
           
-          aiResponse = result.response.text()
+          aiResponse = extractGeneratedText(result)
           console.log('✅ Gemini respondeu com sucesso')
         } catch (geminiErr) {
           const errorMsg = geminiErr.message || String(geminiErr) || ''
@@ -7630,9 +7682,14 @@ Retorne um JSON com esta estrutura:
 
 IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem texto antes ou depois. Comece diretamente com { e termine com }.`
 
-                          const unifiedResult = await model.generateContent(unifiedPrompt)
-                          const unifiedResponse = await unifiedResult.response
-                          let unifiedText = unifiedResponse.text().trim()
+                          // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
+                          const unifiedResponse = await callGeminiWithRetry(unifiedPrompt, {
+                            maxRetries: 3,
+                            baseDelay: 2000,
+                            models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                            generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+                          })
+                          let unifiedText = extractGeneratedText(unifiedResponse).trim()
                           
                           if (unifiedText.startsWith('```json')) {
                             unifiedText = unifiedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
