@@ -501,9 +501,14 @@ ONDE:
 
       // Carregar edital e prompt unificado para contexto
       const editalRef = doc(db, 'courses', resolvedCourseId, 'prompts', 'edital')
+      console.log('🔍 [ConteudoCompleto] Buscando edital em:', editalRef.path)
+      console.log('📋 [ConteudoCompleto] courseId usado:', resolvedCourseId)
       const editalDoc = await getDoc(editalRef)
+      console.log('📄 [ConteudoCompleto] Edital existe?', editalDoc.exists())
       const editalData = editalDoc.exists() ? editalDoc.data() : {}
+      console.log('📊 [ConteudoCompleto] Dados do edital:', editalData)
       const editalText = (editalData.pdfText || editalData.prompt || '').toString()
+      console.log('📝 [ConteudoCompleto] Tamanho do editalText:', editalText.length)
 
       // Carregar dados do curso para obter a banca examinadora
       const courseRef = doc(db, 'courses', resolvedCourseId)
