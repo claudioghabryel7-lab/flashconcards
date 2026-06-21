@@ -529,7 +529,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   )}
 
                   {/* Botão de ação */}
-                  <div className="pt-4 space-y-3">
+                  <div className="pt-4">
                     <button
                       onClick={handleGenerateQuestoes}
                       disabled={generating}
@@ -538,21 +538,24 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                       <FireIcon className="h-6 w-6" />
                       {generating ? 'Gerando Questões...' : 'Gerar Questões'}
                     </button>
-                    
-                    {profile?.role === 'admin' && questoes && (
-                      <button
-                        onClick={handleDeleteQuestoes}
-                        disabled={deleting}
-                        className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <TrashIcon className="h-5 w-5" />
-                        {deleting ? 'Apagando...' : 'Apagar Questões'}
-                      </button>
-                    )}
                   </div>
                 </div>
               ) : (
                 <div className="space-y-6">
+                  {/* Botão de excluir para admin */}
+                  {profile?.role === 'admin' && (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={handleDeleteQuestoes}
+                        disabled={deleting}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                        {deleting ? 'Apagando...' : 'Apagar Questões'}
+                      </button>
+                    </div>
+                  )}
+
                   {/* Barra de progresso */}
                   <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
                     <div 
@@ -716,6 +719,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   <FireIcon className="h-5 w-5" />
                   Praticar Novamente
                 </button>
+                
+                {profile?.role === 'admin' && (
+                  <button
+                    onClick={handleDeleteQuestoes}
+                    disabled={deleting}
+                    className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <TrashIcon className="h-5 w-5" />
+                    {deleting ? 'Apagando...' : 'Apagar Questões'}
+                  </button>
+                )}
                 
                 <Link
                   to={`/conteudo-incidencia/${courseId}/${disciplinaIdx}`}
