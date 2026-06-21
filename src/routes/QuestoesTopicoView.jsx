@@ -376,9 +376,10 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
    - O Padrão da Banca: Como a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar este tópico especificamente no concurso
    - Sempre busque de fontes confiáveis: TJ,STF,LEI(E SUAS ATUALIZAÇÕES, NÃO PEGUE NADA ANTIGO OU DESATUALIZADO), GRAN CURSOS, QCONCURSOS, CONTEÚDOS JURÍDICOS, SITES DO PLANALTO, ENTENDIMENTOS ETC EM MATÉRIAS DE DIREITO... O FOCO É SEMPRE SER ATUALIZADO!
 2. **QUESTÕES PREDITIVAS**:
-   - Gere EXATAMENTE 40 a 50 questões preditivas para este tópico
-   - O MÍNIMO OBRIGATÓRIO é 40 questões - não gere menos que isso
-   - Se o tópico for extenso, gere até 50 questões para cobertura completa
+   - Gere EXATAMENTE 45 questões preditivas para este tópico
+   - NÃO gere menos que 45 questões
+   - NÃO gere mais que 45 questões
+   - O número EXATO é 45 questões - conte e verifique
    - No estilo da banca ${banca || 'NÃO DEFINIDA'} (A, B, C, D, E ou Certo/Errado)
    - Contextualizadas com o concurso ${concursoName || 'mencionado'}
    - Gabarito Comentado: explique o porquê das outras estarem erradas
@@ -429,6 +430,7 @@ REGRAS:
 - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
 
       setProgress((prev) => Math.min(prev + 15, 70))
+      console.log('🤖 [Véspera de Prova] Iniciando geração com IA...')
       const response = await callGeminiWithRetry(prompt, {
         maxRetries: 3,
         baseDelay: 2000,
@@ -438,6 +440,7 @@ REGRAS:
       })
 
       const aiText = extractGeneratedText(response)
+      console.log('📝 [Véspera de Prova] Tamanho da resposta da IA:', aiText.length)
       setProgress(75)
 
       let jsonText = aiText
@@ -453,6 +456,8 @@ REGRAS:
       try {
         // Tentar fazer o parse direto
         parsed = JSON.parse(jsonText)
+        console.log('✅ [Véspera de Prova] JSON parseado com sucesso')
+        console.log('📊 [Véspera de Prova] Número de questões geradas:', parsed.questoesPreditivas?.length || 0)
       } catch (parseError) {
         console.error('Erro ao fazer parse do JSON:', parseError.message)
         console.error('JSON extraído:', jsonText)
