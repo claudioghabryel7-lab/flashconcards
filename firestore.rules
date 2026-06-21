@@ -28,6 +28,13 @@ service cloud.firestore {
         isAdmin()
       );
       allow delete: if isAdmin();
+      
+      match /desempenhoIncidencia/{docId} {
+        allow read: if request.auth.uid == userId;
+        allow create: if request.auth.uid == userId;
+        allow update: if request.auth.uid == userId;
+        allow delete: if request.auth.uid == userId;
+      }
     }
     
     match /flashcards/{cardId} {
@@ -205,6 +212,13 @@ service cloud.firestore {
         allow read: if isAuthenticated();
         allow create: if isAuthenticated();
         allow update: if isAuthenticated();
+        allow delete: if isAdmin();
+      }
+      
+      match /questoesIncidencia/{docId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isAdmin();
+        allow update: if isAuthenticated() && isAdmin();
         allow delete: if isAdmin();
       }
       

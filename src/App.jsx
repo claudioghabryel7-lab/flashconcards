@@ -40,6 +40,7 @@ const ConteudoCompleto = lazy(() => import('./routes/ConteudoCompleto'))
 const ConteudoCompletoView = lazy(() => import('./routes/ConteudoCompletoView'))
 const ConteudoCompletoTopicoView = lazy(() => import('./routes/ConteudoCompletoTopicoView'))
 const ConteudoIncidenciaView = lazy(() => import('./routes/ConteudoIncidenciaView'))
+const PraticaIncidenciaView = lazy(() => import('./routes/PraticaIncidenciaView'))
 const QuestoesTopicoView = lazy(() => import('./routes/QuestoesTopicoView'))
 const RankingSimulado = lazy(() => import('./routes/RankingSimulado'))
 const EditalVerticalizado = lazy(() => import('./routes/EditalVerticalizado'))
@@ -341,6 +342,14 @@ function App() {
             element={
               <ProtectedRoute requireCourseSelection>
                 <ConteudoIncidenciaView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pratica-incidencia/:courseId/:disciplinaIdx"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <PraticaIncidenciaView />
               </ProtectedRoute>
             }
           />

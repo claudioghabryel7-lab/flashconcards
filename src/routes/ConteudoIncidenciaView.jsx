@@ -532,6 +532,14 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
               {/* Botões de ação */}
               <div className="pt-4 space-y-3">
+                <Link
+                  to={`/pratica-incidencia/${courseId}/${disciplinaIdx}`}
+                  className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
+                >
+                  <FireIcon className="h-5 w-5" />
+                  Praticar com Questões
+                </Link>
+                
                 <button
                   onClick={() => {
                     setConteudoGerado(null)
