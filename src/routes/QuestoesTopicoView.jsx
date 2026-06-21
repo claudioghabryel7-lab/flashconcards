@@ -172,14 +172,6 @@ const QuestoesTopicoView = () => {
   )
 
   const effectiveTopicNome = topicNomeFromQuery || topicNomeFromKey
-  const isAdmin = profile?.role === 'admin'
-
-  const toggleGabarito = (idx) => {
-    setVisibleGabaritos(prev => ({
-      ...prev,
-      [idx]: !prev[idx]
-    }))
-  }
 
   // Carregar nome do curso
   useEffect(() => {
@@ -506,47 +498,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       setLoading(false)
       setTimeout(() => setProgress(0), 800)
     }
-  }
-
-  const handleEditContent = () => {
-    const contentToEdit = {
-      ...questoes,
-      updatedAt: undefined,
-      generatedAt: undefined,
-    }
-    setEditedContent(JSON.stringify(contentToEdit, null, 2))
-    setEditingContent(true)
-  }
-
-  const handleSaveContent = async () => {
-    try {
-      const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
-      const contentRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', sanitizedKey)
-      
-      let parsedContent
-      try {
-        parsedContent = JSON.parse(editedContent)
-      } catch (e) {
-        alert('Erro: JSON inválido. Verifique a formatação.')
-        return
-      }
-      
-      await setDoc(contentRef, {
-        ...parsedContent,
-        updatedAt: serverTimestamp(),
-      }, { merge: true })
-      
-      setQuestoes(parsedContent)
-      setEditingContent(false)
-    } catch (error) {
-      console.error('Erro ao salvar conteúdo:', error)
-      alert('Erro ao salvar conteúdo. Tente novamente.')
-    }
-  }
-
-  const handleCancelEdit = () => {
-    setEditingContent(false)
-    setEditedContent('')
   }
 
   const handleAnswer = (answer) => {
