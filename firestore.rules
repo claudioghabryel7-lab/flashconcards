@@ -201,6 +201,13 @@ service cloud.firestore {
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       }
       
+      match /conteudosIncidencia/{docId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated();
+        allow delete: if isAdmin();
+      }
+      
       match /vesperaDeProva/{docId} {
         allow read: if true; // Leitura pública para links compartilhados
         allow create: if isAuthenticated() && 

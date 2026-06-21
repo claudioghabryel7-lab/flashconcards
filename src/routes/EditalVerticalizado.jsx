@@ -127,14 +127,6 @@ const EditalVerticalizado = () => {
   const [newTopicoNome, setNewTopicoNome] = useState('')
   const [newTopicoNumero, setNewTopicoNumero] = useState('')
 
-  // Estados para Conteúdo de Maior Incidência
-  const [generatingIncidencia, setGeneratingIncidencia] = useState(false)
-  const [incidenciaModalOpen, setIncidenciaModalOpen] = useState(false)
-  const [selectedDisciplinaForIncidencia, setSelectedDisciplinaForIncidencia] = useState(null)
-  const [incidenciaStatus, setIncidenciaStatus] = useState('')
-  const [incidenciaProgress, setIncidenciaProgress] = useState(0)
-  const [conteudoIncidencia, setConteudoIncidencia] = useState(null)
-
   // Determinar courseId e destacar disciplina/tópico se vier dos links
   useEffect(() => {
     const courseFromUrl = searchParams.get('course')
@@ -881,198 +873,6 @@ REGRAS IMPORTANTES:
     setGenerationStatus('')
   }
 
-  // Função para abrir modal de Conteúdo de Maior Incidência
-  const openIncidenciaModal = (disciplinaIdx) => {
-    setSelectedDisciplinaForIncidencia(disciplinaIdx)
-    setIncidenciaModalOpen(true)
-    setIncidenciaStatus('')
-    setConteudoIncidencia(null)
-  }
-
-  // Função para gerar Conteúdo de Maior Incidência
-  const handleGenerateConteudoIncidencia = async () => {
-    if (!courseId || !editalVerticalizadoBase?.disciplinas || selectedDisciplinaForIncidencia === null) return
-
-    const disciplina = editalVerticalizadoBase.disciplinas[selectedDisciplinaForIncidencia]
-    if (!disciplina?.topicos || disciplina.topicos.length === 0) {
-      setIncidenciaStatus('❌ Esta disciplina não possui tópicos.')
-      return
-    }
-
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-    if (!apiKey) {
-      setIncidenciaStatus('❌ API Key não configurada.')
-      return
-    }
-
-    try {
-      setGeneratingIncidencia(true)
-      setIncidenciaProgress(5)
-      setIncidenciaStatus('Carregando dados do edital...')
-
-      // Carregar dados do curso
-      const courseRef = doc(db, 'courses', courseId)
-      const courseDoc = await getDoc(courseRef)
-      const courseData = courseDoc.exists() ? courseDoc.data() : {}
-      const banca = courseData.banca || ''
-
-      // Carregar edital verticalizado para contexto
-      const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')
-      const editalDoc = await getDoc(editalRef)
-      const editalData = editalDoc.exists() ? editalDoc.data() : {}
-      const editalText = (editalData.pdfText || editalData.prompt || '').toString()
-
-      setIncidenciaProgress(20)
-      setIncidenciaStatus('Preparando estrutura da disciplina...')
-
-      // Preparar estrutura dos tópicos da disciplina
-      const topicosStructure = disciplina.topicos.map(topico => ({
-        numero: topico.numero || '',
-        nome: topico.nome || ''
-      }))
-
-      setIncidenciaProgress(35)
-      setIncidenciaStatus('Enviando solicitação para a IA...')
-
-      // Prompt para a IA gerar conteúdo de maior incidência
-      const prompt = `Você é um especialista em análise de concursos públicos e previsão de temas para provas.
-
-CONTEXTO:
-- CURSO: ${courseName || 'Curso Preparatório'}
-- BANCA EXAMINADORA: ${banca || 'NÃO DEFINIDA'}
-- DISCIPLINA: ${disciplina.nome}
-
-TÓPICOS DA DISCIPLINA:
-${topicosStructure.map((t, i) => `${i + 1}. ${t.numero} - ${t.nome}`).join('\n')}
-
-EDITAL BASE (trecho relevante):
-${editalText.substring(0, 10000)}${editalText.length > 10000 ? '\n\n[texto truncado...]' : ''}
-
-TAREFA:
-Analise TODOS os tópicos desta disciplina e gere um conteúdo condensado com probabilidade de incidência de cada assunto.
-
-INSTRUÇÕES:
-1. Para CADA tópico da disciplina, identifique os principais assuntos que podem ser cobrados
-2. Atribua uma probabilidade de incidência (0-100%) para cada assunto baseado:
-   - No histórico da banca ${banca || 'NÃO DEFINIDA'}
-   - Na relevância do assunto para o concurso ${courseName || 'mencionado'}
-   - Na atualidade e importância do tema
-3. Gere um conteúdo completo e explicativo para os assuntos com MAIOR probabilidade (acima de 70%)
-4. Para assuntos com menor probabilidade (30-70%), gere um resumo mais conciso
-5. Para assuntos com baixa probabilidade (abaixo de 30%), apenas mencione brevemente
-
-ESTRUTURA DO JSON:
-{
-  "disciplina": "${disciplina.nome}",
-  "banca": "${banca || 'NÃO DEFINIDA'}",
-  "curso": "${courseName || 'Curso Preparatório'}",
-  "analisePorTopico": [
-    {
-      "topicoNumero": "número do tópico",
-      "topicoNome": "nome do tópico",
-      "assuntos": [
-        {
-          "assunto": "nome do assunto",
-          "probabilidade": 95,
-          "conteudo": "explicação completa e detalhada do assunto (se probabilidade >= 70%)",
-          "resumo": "resumo conciso (se probabilidade entre 30-70%)",
-          "mencao": "menção breve (se probabilidade < 30%)"
-        }
-      ]
-    }
-  ],
-  "topAssuntosGerais": [
-    {
-      "assunto": "assunto que mais cairá em toda a disciplina",
-      "probabilidade": 95,
-      "justificativa": "por que este assunto tem alta probabilidade",
-      "conteudo": "explicação completa"
-    }
-  ],
-  "dicasEstudo": [
-    "dica 1 de estudo focado",
-    "dica 2 de estudo focado"
-  ]
-}
-
-REGRAS IMPORTANTES:
-- Use probabilidades realistas baseadas no histórico da banca
-- Seja específico e técnico no conteúdo
-- Adapte o estilo ao da banca ${banca || 'NÃO DEFINIDA'}
-- Use linguagem formal e educacional
-- Cite leis, artigos e jurisprudência quando aplicável
-- Seja didático e claro nas explicações
-- Para disciplinas jurídicas, cite legislação atualizada
-- Para disciplinas não jurídicas, foque em conceitos e aplicações práticas
-- DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-- Use apenas informações atualizadas até esta data
-
-Retorne APENAS o JSON válido, sem texto adicional.`
-
-      setIncidenciaProgress(50)
-      setIncidenciaStatus('A IA está analisando os tópicos...')
-
-      // Chamar API da IA
-      const response = await callGeminiWithRetry(prompt, {
-        maxRetries: 3,
-        baseDelay: 2000,
-        models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
-        useGoogleSearch: true,
-      })
-
-      setIncidenciaProgress(75)
-      setIncidenciaStatus('Processando resposta da IA...')
-
-      const aiText = extractGeneratedText(response)
-
-      let jsonText = aiText
-      if (jsonText.startsWith('```json')) {
-        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      } else if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/```\n?/g, '').trim()
-      }
-      const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
-      if (jsonMatch) jsonText = jsonMatch[0]
-
-      const parsed = JSON.parse(jsonText)
-
-      setIncidenciaProgress(90)
-      setIncidenciaStatus('Salvando conteúdo...')
-
-      // Salvar no Firestore
-      const sanitizedDisciplinaNome = disciplina.nome
-        .replace(/[^a-zA-Z0-9]/g, '_')
-        .substring(0, 100)
-
-      const incidenciaRef = doc(db, 'courses', courseId, 'conteudosIncidencia', sanitizedDisciplinaNome)
-      await setDoc(incidenciaRef, {
-        ...parsed,
-        disciplinaIdx: selectedDisciplinaForIncidencia,
-        updatedAt: serverTimestamp(),
-        generatedAt: serverTimestamp(),
-      }, { merge: true })
-
-      setConteudoIncidencia(parsed)
-      setIncidenciaProgress(100)
-      setIncidenciaStatus('✅ Conteúdo gerado com sucesso!')
-
-      // Fechar modal após 2 segundos
-      setTimeout(() => {
-        setIncidenciaModalOpen(false)
-        setIncidenciaStatus('')
-        setConteudoIncidencia(null)
-      }, 2000)
-
-    } catch (error) {
-      console.error('Erro ao gerar conteúdo de incidência:', error)
-      setIncidenciaStatus(`❌ Erro: ${error.message || 'Erro desconhecido'}`)
-    } finally {
-      setGeneratingIncidencia(false)
-      setTimeout(() => setIncidenciaProgress(0), 800)
-    }
-  }
-
   // Função para apagar disciplina
   const handleDeleteDisciplina = async (disciplinaIdx) => {
     if (!courseId || !editalVerticalizadoBase?.disciplinas) return
@@ -1338,15 +1138,15 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                                 ({disciplina.totalQuestoes} Q)
                               </span>
                             )}
-                            <button
-                              onClick={() => openIncidenciaModal(idx)}
+                            <Link
+                              to={`/conteudo-incidencia/${courseId || 'alego-default'}/${idx}`}
                               className="inline-flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-[9px] sm:text-xs font-semibold rounded hover:bg-red-700 transition whitespace-nowrap active:scale-95"
                               title="Gerar Conteúdo de Maior Incidência"
                             >
                               <FireIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                               <span className="hidden xs:inline sm:inline">Incidência</span>
                               <span className="xs:hidden sm:hidden">🔥</span>
-                            </button>
+                            </Link>
                           </div>
                         </td>
                         <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
@@ -1905,117 +1705,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                 <p>• A IA seguirá exatamente a estrutura do edital (disciplinas e tópicos)</p>
                 <p>• Serão gerados 3-5 flashcards por tópico</p>
                 <p>• O processo é irreversível - faça backup se necessário</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Conteúdo de Maior Incidência */}
-      {incidenciaModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                🔥 Conteúdo de Maior Incidência
-              </h3>
-              <button
-                onClick={() => setIncidenciaModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
-            </div>
-
-            {selectedDisciplinaForIncidencia !== null && editalVerticalizadoBase?.disciplinas && (
-              <div className="mb-4">
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Disciplina: <span className="font-semibold text-slate-900 dark:text-white">{editalVerticalizadoBase.disciplinas[selectedDisciplinaForIncidencia].nome}</span>
-                </p>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              {/* Informações sobre a geração */}
-              <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-                <h4 className="font-semibold text-orange-900 dark:text-orange-100 mb-2">
-                  📊 Análise de Probabilidade
-                </h4>
-                <div className="text-sm text-orange-800 dark:text-orange-200 space-y-1">
-                  <p>• A IA analisará TODOS os tópicos desta disciplina</p>
-                  <p>• Identificará assuntos com maior probabilidade de cair</p>
-                  <p>• Gerará conteúdo completo para os assuntos mais relevantes</p>
-                  <p>• Baseado no histórico da banca e no edital</p>
-                </div>
-              </div>
-
-              {/* Status da geração */}
-              {incidenciaStatus && (
-                <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
-                  <p className="text-sm text-gray-800 dark:text-gray-200">
-                    {incidenciaStatus}
-                  </p>
-                  {incidenciaProgress > 0 && (
-                    <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mt-2">
-                      <div
-                        className="h-2 bg-orange-600 dark:bg-orange-400 transition-all duration-300"
-                        style={{ width: `${incidenciaProgress}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Conteúdo gerado */}
-              {conteudoIncidencia && (
-                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 max-h-96 overflow-y-auto">
-                  <h4 className="font-semibold text-green-900 dark:text-green-100 mb-2">
-                    ✅ Conteúdo Gerado
-                  </h4>
-                  <div className="text-sm text-green-800 dark:text-green-200 space-y-2">
-                    {conteudoIncidencia.topAssuntosGerais && (
-                      <div>
-                        <h5 className="font-semibold mb-1">Top Assuntos Gerais:</h5>
-                        <ul className="list-disc list-inside space-y-1">
-                          {conteudoIncidencia.topAssuntosGerais.map((assunto, idx) => (
-                            <li key={idx}>
-                              <span className="font-semibold">{assunto.assunto}</span> - {assunto.probabilidade}% de chance
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {conteudoIncidencia.dicasEstudo && (
-                      <div>
-                        <h5 className="font-semibold mb-1">Dicas de Estudo:</h5>
-                        <ul className="list-disc list-inside space-y-1">
-                          {conteudoIncidencia.dicasEstudo.map((dica, idx) => (
-                            <li key={idx}>{dica}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Botão de ação */}
-              <div className="pt-2">
-                <button
-                  onClick={handleGenerateConteudoIncidencia}
-                  disabled={generatingIncidencia}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 text-white font-medium rounded-lg hover:from-orange-700 hover:to-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <FireIcon className="h-5 w-5" />
-                  {generatingIncidencia ? 'Gerando Análise...' : 'Gerar Conteúdo de Incidência'}
-                </button>
-              </div>
-
-              {/* Informações importantes */}
-              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
-                <p>• A análise levará em consideração o histórico da banca</p>
-                <p>• Conteúdo será salvo no Firestore para consulta futura</p>
-                <p>• O processo pode levar alguns minutos dependendo da quantidade de tópicos</p>
               </div>
             </div>
           </div>
