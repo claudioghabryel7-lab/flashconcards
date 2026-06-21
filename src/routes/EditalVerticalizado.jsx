@@ -1246,11 +1246,11 @@ REGRAS IMPORTANTES:
                                           </Link>
                                           <Link
                                             to={`/questoes-topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
-                                            className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[9px] sm:text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition whitespace-nowrap flex-shrink-0 active:scale-95"
+                                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
                                             title="Questões preditivas deste tópico (BOOK QUESTÕES)"
                                           >
-                                            <QuestionMarkCircleIcon className="h-3 w-3 sm:h-4 sm:w-4" />
-                                            <span className="hidden xs:inline sm:inline">Questões</span>
+                                            <FireIcon className="h-4 w-4" />
+                                            <span className="hidden xs:inline sm:inline">Praticar</span>
                                             <span className="xs:hidden sm:hidden">Q</span>
                                           </Link>
                                           {profile?.role === 'admin' && (
