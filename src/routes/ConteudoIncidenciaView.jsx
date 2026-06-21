@@ -79,6 +79,27 @@ const ConteudoIncidenciaView = () => {
           setEditalVerticalizado(editalData)
         }
 
+        // Carregar conteúdo de incidência existente
+        const disciplinaIndex = parseInt(disciplinaIdx)
+        if (editalVerticalizado?.disciplinas || editalData?.disciplinas) {
+          const disciplinas = editalData.temPartes && editalData.totalPartes > 1 
+            ? [...(editalData.disciplinas || []), ...todasDisciplinas.slice(editalData.disciplinas?.length || 0)]
+            : editalData.disciplinas
+          
+          const disciplina = disciplinas[disciplinaIndex]
+          if (disciplina?.nome) {
+            const sanitizedDisciplinaNome = disciplina.nome
+              .replace(/[^a-zA-Z0-9]/g, '_')
+              .substring(0, 100)
+
+            const incidenciaRef = doc(db, 'courses', courseId, 'conteudosIncidencia', sanitizedDisciplinaNome)
+            const incidenciaDoc = await getDoc(incidenciaRef)
+            if (incidenciaDoc.exists()) {
+              setConteudoGerado(incidenciaDoc.data())
+            }
+          }
+        }
+
         setLoading(false)
       } catch (err) {
         console.error('Erro ao carregar dados:', err)
@@ -164,6 +185,16 @@ INSTRUÇÕES CRÍTICAS:
 4. Para CADA assunto, gere uma REVISÃO COMPLETA do que o candidato precisa estudar
 5. Seja direto e prático: "estude isso porque isso vai cair"
 6. Não faça rodeios - o conteúdo deve ser focado no que será cobrado
+
+IMPORTANTE - DISTRIBUIÇÃO DE PROBABILIDADES:
+- NÃO coloque tudo com probabilidade alta (80-100%)
+- Tenha uma distribuição REALISTA:
+  * 20-30% dos assuntos com probabilidade ALTA (80-100%)
+  * 40-50% dos assuntos com probabilidade MÉDIA (50-70%)
+  * 20-30% dos assuntos com probabilidade BAIXA (10-40%)
+- Assuntos muito específicos ou raros devem ter probabilidade baixa (10-30%)
+- Assuntos fundamentais e recorrentes devem ter probabilidade alta (80-100%)
+- Assuntos importantes mas não tão frequentes devem ter probabilidade média (50-70%)
 
 ESTRUTURA DO JSON:
 {
