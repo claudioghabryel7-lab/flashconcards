@@ -5,7 +5,7 @@ import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, TrashIcon, Quest
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -455,16 +455,27 @@ REGRAS IMPORTANTES:
 Retorne APENAS o JSON válido, sem texto adicional.`
 
       setProgress((prev) => Math.min(prev + 15, 70))
-      console.log('🤖 [Véspera de Prova] Iniciando geração com IA...')
-      const response = await callGeminiWithRetry(prompt, {
-        maxRetries: 3,
-        baseDelay: 2000,
-        models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
-        useGoogleSearch: true,
+      console.log('🤖 [Questões Tópico] Iniciando geração com IA...')
+      
+      // Usar API key diretamente como ConteudoCompletoTopicoView
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) {
+        throw new Error('API Key não configurada')
+      }
+      
+      const genAI = new GoogleGenerativeAI(apiKey)
+      const model = genAI.getGenerativeModel({ 
+        model: 'gemini-2.5-flash',
+        generationConfig: { temperature: 0.7, maxOutputTokens: 32000 }
       })
-
-      const aiText = extractGeneratedText(response)
+      
+      const result = await model.generateContent({
+        contents: [{ parts: [{ text: prompt }] }],
+        tools: [{ googleSearch: {} }]
+      })
+      
+      const response = await result.response
+      const aiText = response.text()
       console.log('📝 [Questões Tópico] Tamanho da resposta da IA:', aiText.length)
       setProgress(75)
 
