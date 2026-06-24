@@ -1,3 +1,4 @@
+import { checkGeminiApiKeysStatus } from '../utils/geminiApi'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import {
   DndContext,
@@ -34,7 +35,7 @@ import {
   where,
 } from 'firebase/firestore'
 import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager'
-import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon } from '@heroicons/react/24/outline'
+import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
 import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { auth, db, storage } from '../firebase/config'
@@ -279,6 +280,12 @@ const AdminPanel = () => {
   })
   const [generatedShareLink, setGeneratedShareLink] = useState('')
   const [generatingShareLink, setGeneratingShareLink] = useState(false)
+  
+  // Estados para verificação de status da IA
+  const [showAiStatusModal, setShowAiStatusModal] = useState(false)
+  const [checkingAiStatus, setCheckingAiStatus] = useState(false)
+  const [aiKeysStatus, setAiKeysStatus] = useState([])
+  const [aiStatusError, setAiStatusError] = useState('')
   
   // Sensores para drag and drop
   const sensors = useSensors(
@@ -5177,6 +5184,24 @@ CRÍTICO:
     }
   }
 
+  // Verificar status das API keys do Gemini
+  const handleCheckAiStatus = async () => {
+    setCheckingAiStatus(true)
+    setAiStatusError('')
+    setAiKeysStatus([])
+    
+    try {
+      const results = await checkGeminiApiKeysStatus()
+      setAiKeysStatus(results)
+      setShowAiStatusModal(true)
+    } catch (error) {
+      console.error('Erro ao verificar status da IA:', error)
+      setAiStatusError(error.message || 'Erro ao verificar status das API keys')
+    } finally {
+      setCheckingAiStatus(false)
+    }
+  }
+
   // Função interna para gerar conteúdos completos (sem confirmação, para uso no processamento automático)
   const handleGenerateAllConteudosCompletosInternal = async (courseId, editalText, unifiedData, updateMessage) => {
     if (!editalText || editalText.trim().length === 0) {
@@ -6796,18 +6821,37 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
               <div className="space-y-6">
                 {/* Header */}
                 <div className="rounded-2xl bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 p-6 shadow-lg border-2 border-blue-200 dark:border-blue-800">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl">
-                      <span className="text-2xl">⚙️</span>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl">
+                        <span className="text-2xl">⚙️</span>
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-black text-blue-700 dark:text-blue-300">
+                          Configurações do Curso
+                        </h2>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                          Configure tudo de forma simples: faça upload do edital em PDF e a IA processa automaticamente
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-2xl font-black text-blue-700 dark:text-blue-300">
-                        Configurações do Curso
-                      </h2>
-                      <p className="text-sm text-slate-600 dark:text-slate-400">
-                        Configure tudo de forma simples: faça upload do edital em PDF e a IA processa automaticamente
-                      </p>
-                    </div>
+                    <button
+                      onClick={handleCheckAiStatus}
+                      disabled={checkingAiStatus}
+                      className="px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg flex items-center gap-2"
+                    >
+                      {checkingAiStatus ? (
+                        <>
+                          <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                          Verificando...
+                        </>
+                      ) : (
+                        <>
+                          <SparklesIcon className="h-5 w-5" />
+                          Verificar Status da I.A.
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
 
@@ -12667,6 +12711,156 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
           </div>
         </div>
       </div>
+
+      {/* Modal de Status da IA */}
+      {showAiStatusModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl">
+                  <SparklesIcon className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                    Status das API Keys do Gemini
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Verificação em tempo real das chaves disponíveis
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAiStatusModal(false)}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
+              >
+                <XMarkIcon className="h-6 w-6 text-slate-600 dark:text-slate-400" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+              {aiStatusError ? (
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <p className="text-red-700 dark:text-red-300 font-semibold">
+                    ❌ {aiStatusError}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {aiKeysStatus.map((keyStatus, index) => {
+                    const statusColors = {
+                      active: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
+                      rate_limited: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800',
+                      quota_exceeded: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800',
+                      forbidden: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
+                      invalid: 'bg-black dark:bg-black/50 border-black dark:border-black',
+                      error: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
+                    }
+
+                    const statusIcons = {
+                      active: '✅',
+                      rate_limited: '⏳',
+                      quota_exceeded: '🚫',
+                      forbidden: '🔒',
+                      invalid: '❌',
+                      error: '⚠️',
+                    }
+
+                    return (
+                      <div
+                        key={index}
+                        className={`p-4 rounded-lg border-2 ${statusColors[keyStatus.status] || 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600'}`}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">{statusIcons[keyStatus.status] || '❓'}</span>
+                            <div>
+                              <p className="font-bold text-slate-900 dark:text-white">
+                                {keyStatus.name}
+                              </p>
+                              <p className="text-xs text-slate-600 dark:text-slate-400 font-mono">
+                                {keyStatus.keyPreview}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                            keyStatus.status === 'active' ? 'bg-green-500 text-white' :
+                            keyStatus.status === 'rate_limited' ? 'bg-yellow-500 text-white' :
+                            keyStatus.status === 'quota_exceeded' ? 'bg-orange-500 text-white' :
+                            'bg-red-500 text-white'
+                          }`}>
+                            {keyStatus.status === 'active' ? 'ATIVA' :
+                             keyStatus.status === 'rate_limited' ? 'BLOQUEADA TEMPORARIAMENTE' :
+                             keyStatus.status === 'quota_exceeded' ? 'COTA ESGOTADA' :
+                             keyStatus.status === 'forbidden' ? 'BLOQUEADA' :
+                             keyStatus.status === 'invalid' ? 'INVÁLIDA' :
+                             'ERRO'}
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                            {keyStatus.message}
+                          </p>
+
+                          {keyStatus.waitTimeFormatted && (
+                            <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                              ⏱️ Tempo restante para liberar: {keyStatus.waitTimeFormatted}
+                            </p>
+                          )}
+
+                          {keyStatus.resetTime && (
+                            <p className="text-sm text-orange-700 dark:text-orange-300">
+                              🕐 {keyStatus.resetTime}
+                            </p>
+                          )}
+
+                          {keyStatus.error && (
+                            <p className="text-xs text-red-700 dark:text-red-300 mt-2">
+                              Erro: {keyStatus.error}
+                            </p>
+                          )}
+
+                          {keyStatus.remainingQuota && keyStatus.status === 'active' && (
+                            <p className="text-sm text-green-700 dark:text-green-300">
+                              ✨ {keyStatus.remainingQuota}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {aiKeysStatus.length === 0 && !checkingAiStatus && (
+                    <div className="text-center py-12">
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                        <span className="text-2xl">🔑</span>
+                      </div>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        Nenhuma API key configurada
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Total de keys verificadas: {aiKeysStatus.length}
+                </p>
+                <button
+                  onClick={() => setShowAiStatusModal(false)}
+                  className="px-6 py-2 bg-slate-600 hover:bg-slate-700 text-white font-semibold rounded-lg transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

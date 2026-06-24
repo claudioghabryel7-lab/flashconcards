@@ -212,3 +212,132 @@ export async function extractJsonFromResponse(response) {
 
   return parsed
 }
+
+/**
+ * Testa o status de uma API key do Gemini
+ * @param {string} apiKey - A API key para testar
+ * @returns {Promise<Object>} - Status da key
+ */
+async function testApiKey(apiKey) {
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: 'test' }] }],
+          generationConfig: { maxOutputTokens: 10 }
+        })
+      }
+    )
+
+    const data = await response.json()
+
+    if (response.ok) {
+      return {
+        status: 'active',
+        message: 'Ativa e funcionando',
+        remainingQuota: 'Desconhecido'
+      }
+    }
+
+    // Interpretar erros
+    if (response.status === 429) {
+      const errorInfo = data.error?.details?.[0]
+      const waitTime = errorInfo?.metadata?.retryDelay || errorInfo?.metadata?.waitTime
+      
+      if (waitTime) {
+        const seconds = parseInt(waitTime)
+        return {
+          status: 'rate_limited',
+          message: 'Bloqueada por excesso de requisições',
+          waitTime: seconds,
+          waitTimeFormatted: formatWaitTime(seconds)
+        }
+      }
+      
+      return {
+        status: 'quota_exceeded',
+        message: 'Cota diária esgotada',
+        resetTime: 'Zera na madrugada (UTC)'
+      }
+    }
+
+    if (response.status === 403) {
+      return {
+        status: 'forbidden',
+        message: 'Projeto bloqueado ou sem permissão',
+        error: data.error?.message || 'Acesso negado'
+      }
+    }
+
+    if (response.status === 400) {
+      return {
+        status: 'invalid',
+        message: 'Chave inválida ou não encontrada',
+        error: data.error?.message || 'API Key not found'
+      }
+    }
+
+    return {
+      status: 'error',
+      message: `Erro ${response.status}`,
+      error: data.error?.message || 'Erro desconhecido'
+    }
+  } catch (error) {
+    return {
+      status: 'error',
+      message: 'Erro ao conectar',
+      error: error.message
+    }
+  }
+}
+
+/**
+ * Formata tempo de espera para exibição
+ * @param {number} seconds - Tempo em segundos
+ * @returns {string} - Tempo formatado
+ */
+function formatWaitTime(seconds) {
+  if (seconds < 60) {
+    return `${seconds} segundos`
+  }
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  if (minutes < 60) {
+    return remainingSeconds > 0 
+      ? `${minutes} minutos e ${remainingSeconds} segundos`
+      : `${minutes} minutos`
+  }
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  return remainingMinutes > 0
+    ? `${hours} horas e ${remainingMinutes} minutos`
+    : `${hours} horas`
+}
+
+/**
+ * Verifica o status de todas as API keys do Gemini
+ * @returns {Promise<Array<Object>>} - Lista de status das keys
+ */
+export async function checkGeminiApiKeysStatus() {
+  const apiKeys = loadApiKeys()
+  const results = []
+
+  for (let i = 0; i < apiKeys.length; i++) {
+    const key = apiKeys[i]
+    const keyName = i === 0 ? 'VITE_GEMINI_API_KEY (Principal)' : `VITE_GEMINI_API_KEY_${i}`
+    
+    console.log(`🔍 Testando ${keyName}...`)
+    const status = await testApiKey(key)
+    
+    results.push({
+      name: keyName,
+      keyPreview: key.substring(0, 10) + '...',
+      ...status
+    })
+  }
+
+  return results
+}
