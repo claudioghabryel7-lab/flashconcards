@@ -14,16 +14,26 @@ const BASE_DELAY = 2000 // 2 segundos
 
 /**
  * Carrega múltiplas API keys do Gemini
+ * Prioriza VITE_GEMINI_API_KEY, depois tenta numbered keys
  * @returns {Array<string>} - Lista de API keys disponíveis
  */
 function loadApiKeys() {
   const apiKeys = []
+  
+  // Primeiro tenta a key principal
+  const mainKey = import.meta.env.VITE_GEMINI_API_KEY
+  if (mainKey) {
+    apiKeys.push(mainKey)
+  }
+  
+  // Depois tenta numbered keys (apenas se a principal não existir ou para backup)
   for (let i = 1; i <= 10; i++) {
-    const key = import.meta.env[`VITE_GEMINI_API_KEY_${i}`] || import.meta.env[`VITE_GEMINI_API_KEY`]
+    const key = import.meta.env[`VITE_GEMINI_API_KEY_${i}`]
     if (key && !apiKeys.includes(key)) {
       apiKeys.push(key)
     }
   }
+  
   return apiKeys
 }
 
