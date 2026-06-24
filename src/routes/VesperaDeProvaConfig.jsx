@@ -23,13 +23,14 @@ const VesperaDeProvaConfig = () => {
   const [generating, setGenerating] = useState(false)
   const [generationStatus, setGenerationStatus] = useState('')
   
-  // Progresso da geração
-  const [generationProgress, setGenerationProgress] = useState(0)
-  const [existingProgress, setExistingProgress] = useState(null)
-  
-  // Configurações
+  // Banca do curso (já configurada)
   const [bancaExaminadora, setBancaExaminadora] = useState('')
   const [concurso, setConcurso] = useState('')
+  
+  // Status de cada matéria (gerado/não gerado)
+  const [materiasStatus, setMateriasStatus] = useState({})
+  
+  // Configurações de questões por matéria
   const [questoesPorMateria, setQuestoesPorMateria] = useState({})
   
   // Carregar dados do curso
@@ -44,13 +45,15 @@ const VesperaDeProvaConfig = () => {
         console.log('🔍 [VesperaDeProvaConfig] Usuário autenticado:', !!user)
         console.log('🔍 [VesperaDeProvaConfig] É admin:', isAdmin)
         
-        // Carregar nome do curso
+        // Carregar nome do curso e banca
         const courseDoc = await getDoc(doc(db, 'courses', courseId))
         if (courseDoc.exists()) {
           const data = courseDoc.data()
           setCourseName(data.name || data.competition || '')
           setConcurso(data.competition || '')
+          setBancaExaminadora(data.banca || '') // Usar banca configurada no curso
           console.log('✅ [VesperaDeProvaConfig] Curso carregado:', data.name)
+          console.log('✅ [VesperaDeProvaConfig] Banca:', data.banca)
         } else {
           console.error('❌ [VesperaDeProvaConfig] Curso não encontrado:', courseId)
         }
@@ -86,10 +89,36 @@ const VesperaDeProvaConfig = () => {
           
           // Inicializar questões por matéria com valor padrão de 5
           const initialQuestoes = {}
+          const initialStatus = {}
           editalData.disciplinas?.forEach((disciplina, idx) => {
             initialQuestoes[idx] = 5
+            initialStatus[idx] = 'pending' // pending, generating, completed, error
           })
           setQuestoesPorMateria(initialQuestoes)
+          setMateriasStatus(initialStatus)
+          
+          // Carregar status das matérias já geradas
+          try {
+            const materialRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'material')
+            const materialDoc = await getDoc(materialRef)
+            if (materialDoc.exists()) {
+              const materialData = materialDoc.data()
+              if (materialData.material && Array.isArray(materialData.material)) {
+                const updatedStatus = { ...initialStatus }
+                materialData.material.forEach((item) => {
+                  // Encontrar o índice da disciplina pelo nome
+                  const idx = editalData.disciplinas?.findIndex(d => d.nome === item.disciplina)
+                  if (idx !== -1) {
+                    updatedStatus[idx] = 'completed'
+                  }
+                })
+                setMateriasStatus(updatedStatus)
+                console.log('✅ [VesperaDeProvaConfig] Status das matérias carregado')
+              }
+            }
+          } catch (error) {
+            console.log('ℹ️ [VesperaDeProvaConfig] Nenhum material existente encontrado')
+          }
         } else {
           console.error('❌ [VesperaDeProvaConfig] Edital verticalizado não encontrado')
         }
@@ -105,28 +134,10 @@ const VesperaDeProvaConfig = () => {
     }
     
     loadCourseData()
-    
-    // Carregar progresso existente da geração
-    const loadExistingProgress = async () => {
-      try {
-        const progressRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'progress')
-        const progressDoc = await getDoc(progressRef)
-        
-        if (progressDoc.exists()) {
-          const progressData = progressDoc.data()
-          console.log('📊 [VesperaDeProvaConfig] Progresso existente encontrado:', progressData)
-          setExistingProgress(progressData)
-        }
-      } catch (error) {
-        console.log('ℹ️ [VesperaDeProvaConfig] Nenhum progresso existente encontrado')
-      }
-    }
-    
-    loadExistingProgress()
   }, [courseId, user, isAdmin])
   
-  // Gerar material com IA (mesma abordagem do EditalVerticalizado)
-  const generateMaterial = async () => {
+  // Gerar material de uma única matéria
+  const generateSingleMaterial = async (disciplinaIdx) => {
     if (!isAdmin) {
       alert('Apenas administradores podem gerar material de Véspera de Prova.')
       return
@@ -137,118 +148,51 @@ const VesperaDeProvaConfig = () => {
       return
     }
     
-    if (!bancaExaminadora || !concurso) {
-      alert('Preencha a banca examinadora e o concurso.')
-      return
-    }
-    
     if (!editalVerticalizado?.disciplinas) {
       alert('Edital verticalizado não encontrado.')
       return
     }
     
+    const disciplina = editalVerticalizado.disciplinas[disciplinaIdx]
+    if (!disciplina) {
+      alert('Disciplina não encontrada.')
+      return
+    }
+    
     setGenerating(true)
-    setGenerationStatus('Preparando estrutura do edital...')
-    setGenerationProgress(0)
+    setMateriasStatus(prev => ({ ...prev, [disciplinaIdx]: 'generating' }))
+    setGenerationStatus(`Gerando conteúdo para ${disciplina.nome}...`)
     
     try {
-      console.log('🚀 [VesperaDeProvaConfig] Iniciando geração de material')
-      console.log('🚀 [VesperaDeProvaConfig] Curso:', courseName)
-      console.log('🚀 [VesperaDeProvaConfig] Concurso:', concurso)
-      console.log('🚀 [VesperaDeProvaConfig] Banca:', bancaExaminadora)
-      console.log('🚀 [VesperaDeProvaConfig] Total disciplinas:', editalVerticalizado.disciplinas.length)
+      console.log('� [VesperaDeProvaConfig] Iniciando geração de matéria:', disciplina.nome)
+      console.log('� [VesperaDeProvaConfig] Curso:', courseName)
+      console.log('� [VesperaDeProvaConfig] Concurso:', concurso)
+      console.log('� [VesperaDeProvaConfig] Banca:', bancaExaminadora)
+      console.log('🚀 [VesperaDeProvaConfig] Questões:', questoesPorMateria[disciplinaIdx] || 5)
       
-      // Verificar se existe progresso anterior com as mesmas configurações
-      let startFromPart = 0
-      let existingMaterial = []
-      
-      if (existingProgress && existingProgress.config) {
-        const configMatch = 
-          existingProgress.config.banca === bancaExaminadora &&
-          existingProgress.config.concurso === concurso &&
-          JSON.stringify(existingProgress.config.questoesPorMateria) === JSON.stringify(questoesPorMateria)
-        
-        if (configMatch && existingProgress.status === 'in_progress') {
-          console.log('📊 [VesperaDeProvaConfig] Progresso compatível encontrado, retomando de onde parou')
-          console.log('📊 [VesperaDeProvaConfig] Partes concluídas:', existingProgress.completedParts)
-          startFromPart = existingProgress.completedParts.length
-          existingMaterial = existingProgress.material || []
-          
-          // Carregar material parcial do Firestore
-          try {
-            const materialRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'material')
-            const materialDoc = await getDoc(materialRef)
-            if (materialDoc.exists()) {
-              const materialData = materialDoc.data()
-              existingMaterial = materialData.material || []
-              console.log('📊 [VesperaDeProvaConfig] Material parcial carregado:', existingMaterial.length, 'disciplinas')
-            }
-          } catch (error) {
-            console.log('ℹ️ [VesperaDeProvaConfig] Não foi possível carregar material parcial')
-          }
-          
-          setGenerationStatus(`Retomando geração... (${existingProgress.completedParts.length}/${existingProgress.totalParts} partes concluídas)`)
-        } else {
-          console.log('📊 [VesperaDeProvaConfig] Progresso existente não compatível, iniciando nova geração')
-          console.log('📊 [VesperaDeProvaConfig] Config anterior:', existingProgress.config)
-          console.log('📊 [VesperaDeProvaConfig] Config atual:', { banca: bancaExaminadora, concurso: concurso, questoesPorMateria })
-          // Limpar progresso antigo completamente
-          const { deleteDoc } = await import('firebase/firestore')
-          const progressRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'progress')
-          await deleteDoc(progressRef)
-          console.log('🗑️ [VesperaDeProvaConfig] Progresso antigo removido')
+      const estrutura = {
+        curso: courseName,
+        concurso: concurso,
+        banca: bancaExaminadora,
+        disciplina: {
+          nome: disciplina.nome,
+          questoes: questoesPorMateria[disciplinaIdx] || 5,
+          topicos: disciplina.topicos?.map(t => t.nome).join(', ') || ''
         }
       }
       
-      // Dividir disciplinas em partes (1 disciplina por parte para evitar corte do JSON devido ao conteúdo detalhado)
-      const disciplinasPorParte = 1
-      const totalPartes = Math.ceil(editalVerticalizado.disciplinas.length / disciplinasPorParte)
-      
-      console.log(`📦 [VesperaDeProvaConfig] Dividindo em ${totalPartes} partes (1 disciplina por parte para evitar truncamento)`)
-      console.log(`📦 [VesperaDeProvaConfig] Iniciando da parte ${startFromPart + 1}/${totalPartes}`)
-      
-      const todasDisciplinas = [...existingMaterial]
-      const completedParts = new Set(existingProgress?.completedParts || [])
-      
-      for (let parte = startFromPart; parte < totalPartes; parte++) {
-        // Adicionar delay entre partes para evitar rate limit (mínimo 30 segundos)
-        if (parte > 0) {
-          console.log(`⏳ [VesperaDeProvaConfig] Aguardando 30 segundos para evitar rate limit...`)
-          setGenerationStatus(`Aguardando 30 segundos para evitar rate limit...`)
-          await new Promise(resolve => setTimeout(resolve, 30000))
-        }
-        
-        const inicio = parte * disciplinasPorParte
-        const fim = Math.min(inicio + disciplinasPorParte, editalVerticalizado.disciplinas.length)
-        const disciplinasParte = editalVerticalizado.disciplinas.slice(inicio, fim)
-        
-        console.log(`📋 [VesperaDeProvaConfig] Gerando parte ${parte + 1}/${totalPartes}: disciplinas ${inicio + 1} a ${fim}`)
-        setGenerationStatus(`Gerando parte ${parte + 1}/${totalPartes} (${disciplinasParte.length} disciplinas)...`)
-        
-        // Preparar estrutura simplificada para a IA (apenas esta parte)
-        const estrutura = {
-          curso: courseName,
-          concurso: concurso,
-          banca: bancaExaminadora,
-          disciplinas: disciplinasParte.map((disciplina, idx) => ({
-            nome: disciplina.nome,
-            questoes: questoesPorMateria[inicio + idx] || 5, // Usar quantidade configurada pelo usuário
-            topicos: disciplina.topicos?.map(t => t.nome).join(', ') || ''
-          }))
-        }
-        
-        const prompt = `Você é um Analista de Concursos de Elite focado em aprovação policial.
+      const prompt = `Você é um Analista de Concursos de Elite focado em aprovação policial.
 
 CONTEXTO:
 - Curso: ${estrutura.curso}
 - Concurso: ${estrutura.concurso}
 - Banca Examinadora: ${estrutura.banca}
-
-ESTRUTURA DO EDITAL:
-${JSON.stringify(estrutura.disciplinas, null, 2)}
+- Disciplina: ${estrutura.disciplina.nome}
+- Quantidade de Questões: ${estrutura.disciplina.questoes}
+- Tópicos: ${estrutura.disciplina.topicos}
 
 INSTRUÇÕES:
-Gere um material de revisão de "Véspera de Prova" para CADA disciplina na ordem exata acima. Para cada disciplina, inclua:
+Gere um material de revisão de "Véspera de Prova" para a disciplina ${estrutura.disciplina.nome}. Inclua:
 
 🔍 VERIFICAÇÃO DE FONTES - OBRIGATÓRIO:
 - Para CADA lei, decreto ou norma jurídica mencionada, VERIFIQUE a atualidade usando as ferramentas disponíveis
@@ -287,7 +231,7 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
      * Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
 
 3. **QUESTÕES PREDITIVAS**:
-   - Gere EXATAMENTE ${estrutura.disciplinas.map(d => d.questoes).join(', ')} questões para cada disciplina
+   - Gere EXATAMENTE ${estrutura.disciplina.questoes} questões
    - No estilo da banca ${estrutura.banca} (A, B, C, D, E ou Certo/Errado)
    - Contextualizadas com o concurso ${estrutura.concurso} e cargo ${estrutura.curso}
    - Gabarito Comentado: explique o porquê das outras estarem erradas
@@ -296,33 +240,28 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
 
 FORMATO JSON:
 {
-  "material": [
+  "validacaoArtigo": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
+  "disciplina": "${estrutura.disciplina.nome}",
+  "raioX": {
+    "topAssuntos": ["assunto 1", "assunto 2", "assunto 3"],
+    "padraoBanca": "descrição do padrão"
+  },
+  "revisaoTurbo": {
+    "resumos": ["resumo detalhado 1", "resumo detalhado 2"],
+    "pegadinhas": ["pegadinha 1"]
+  },
+  "questoes": [
     {
-      "validacaoArtigo": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
-      "disciplina": "nome da disciplina",
-      "raioX": {
-        "topAssuntos": ["assunto 1", "assunto 2", "assunto 3"],
-        "padraoBanca": "descrição do padrão"
-      },
-      "revisaoTurbo": {
-        "resumos": ["resumo detalhado 1", "resumo detalhado 2"],
-        "pegadinhas": ["pegadinha 1"]
-      },
-      "questoes": [
-        {
-          "analiseJuridicaPrevia": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
-          "enunciado": "texto da questão",
-          "alternativas": ["A", "B", "C", "D", "E"],
-          "gabarito": "A",
-          "comentario": "explicação detalhada"
-        }
-      ]
+      "analiseJuridicaPrevia": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
+      "enunciado": "texto da questão",
+      "alternativas": ["A", "B", "C", "D", "E"],
+      "gabarito": "A",
+      "comentario": "explicação detalhada"
     }
   ]
 }
 
 REGRAS:
-- Mantenha a ordem EXATA das disciplinas
 - Use tom focado e direto
 - Seja ESPECÍFICO do concurso ${estrutura.concurso} e cargo ${estrutura.curso}
 - Cite o nome do concurso e cargo nos resumos e questões
@@ -347,94 +286,94 @@ REGRAS:
       
       setGenerationStatus('Enviando solicitação para a IA...')
       
-      // Função para fazer requisição com rotação de API keys e retry para 503
-      const fetchWithKeyRotation = async (url, options) => {
+      // Modelos Gemini 2.5 para fallback
+      const models = ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro']
+      
+      // Função para fazer requisição com rotação de API keys, retry e fallback de modelos
+      const fetchWithFallback = async (prompt) => {
         const maxRetries = 3
         const baseDelay = 2000 // 2 segundos
         
-        for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex++) {
-          const apiKey = apiKeys[keyIndex]
-          console.log(`🔑 [VesperaDeProvaConfig] Tentando API key ${keyIndex + 1}/${apiKeys.length}`)
+        for (const model of models) {
+          console.log(`🔄 [VesperaDeProvaConfig] Tentando modelo: ${model}`)
           
-          const urlWithKey = `${url}?key=${apiKey}`
-          
-          for (let retry = 0; retry < maxRetries; retry++) {
-            try {
-              const response = await fetch(urlWithKey, options)
-              const data = await response.json()
-              
-              if (response.ok) {
-                console.log(`✅ [VesperaDeProvaConfig] API key ${keyIndex + 1} funcionou`)
-                return data
-              }
-              
-              // Se for erro 429 (Too Many Requests), tentar próxima key
-              if (response.status === 429) {
-                console.log(`⚠️ [VesperaDeProvaConfig] API key ${keyIndex + 1} atingiu quota, tentando próxima...`)
-                break
-              }
-              
-              // Se for erro 503 (Service Unavailable), fazer retry com exponential backoff
-              if (response.status === 503) {
-                const delay = baseDelay * Math.pow(2, retry)
-                console.log(`⚠️ [VesperaDeProvaConfig] API key ${keyIndex + 1} com alta demanda (503), retry ${retry + 1}/${maxRetries} em ${delay/1000}s...`)
+          for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex++) {
+            const apiKey = apiKeys[keyIndex]
+            console.log(`🔑 [VesperaDeProvaConfig] Tentando API key ${keyIndex + 1}/${apiKeys.length} com modelo ${model}`)
+            
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+            
+            for (let retry = 0; retry < maxRetries; retry++) {
+              try {
+                const response = await fetch(url, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    contents: [{
+                      parts: [{
+                        text: prompt
+                      }]
+                    }],
+                    generationConfig: {
+                      temperature: 0.7,
+                      maxOutputTokens: 32000,
+                    },
+                    tools: [{
+                      googleSearch: {}
+                    }]
+                  })
+                })
                 
-                if (retry < maxRetries - 1) {
+                const data = await response.json()
+                
+                if (response.ok) {
+                  console.log(`✅ [VesperaDeProvaConfig] Sucesso com modelo ${model} e API key ${keyIndex + 1}`)
+                  return data
+                }
+                
+                // Se for erro 429 (Too Many Requests), tentar próxima key
+                if (response.status === 429) {
+                  console.log(`⚠️ [VesperaDeProvaConfig] API key ${keyIndex + 1} atingiu quota, tentando próxima...`)
+                  break
+                }
+                
+                // Se for erro 503 (Service Unavailable), fazer retry com exponential backoff
+                if (response.status === 503) {
+                  const delay = baseDelay * Math.pow(2, retry)
+                  console.log(`⚠️ [VesperaDeProvaConfig] Modelo ${model} com API key ${keyIndex + 1} com alta demanda (503), retry ${retry + 1}/${maxRetries} em ${delay/1000}s...`)
+                  
+                  if (retry < maxRetries - 1) {
+                    await new Promise(resolve => setTimeout(resolve, delay))
+                    continue
+                  }
+                }
+                
+                // Se for outro erro, tentar próximo modelo
+                console.error('❌ [VesperaDeProvaConfig] Erro na API Gemini:', data)
+                break
+              } catch (error) {
+                if (retry < maxRetries - 1 && error.message?.includes('high demand')) {
+                  const delay = baseDelay * Math.pow(2, retry)
+                  console.log(`⚠️ [VesperaDeProvaConfig] Retry ${retry + 1}/${maxRetries} em ${delay/1000}s...`)
                   await new Promise(resolve => setTimeout(resolve, delay))
                   continue
                 }
-              }
-              
-              // Se for outro erro, lançar imediatamente
-              console.error('❌ [VesperaDeProvaConfig] Erro na API Gemini:', data)
-              throw new Error(data.error?.message || 'Erro na API da IA')
-            } catch (error) {
-              if (retry < maxRetries - 1 && error.message?.includes('high demand')) {
-                const delay = baseDelay * Math.pow(2, retry)
-                console.log(`⚠️ [VesperaDeProvaConfig] Retry ${retry + 1}/${maxRetries} em ${delay/1000}s...`)
-                await new Promise(resolve => setTimeout(resolve, delay))
-                continue
-              }
-              
-              if (keyIndex < apiKeys.length - 1) {
+                
                 console.log(`⚠️ [VesperaDeProvaConfig] API key ${keyIndex + 1} falhou, tentando próxima...`)
                 break
               }
-              throw error
             }
           }
         }
         
-        throw new Error('Todas as API keys atingiram quota ou falharam')
+        throw new Error('Todos os modelos e API keys falharam')
       }
       
-      const data = await fetchWithKeyRotation(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: prompt
-              }]
-            }],
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 32000,
-            },
-            tools: [{
-              googleSearch: {}
-            }]
-          })
-        }
-      )
+      const data = await fetchWithFallback(prompt)
       
       setGenerationStatus('Processando resposta da IA...')
-      
-      setGenerationStatus('Analisando conteúdo gerado...')
       
       const generatedText = data.candidates[0]?.content?.parts[0]?.text
       
@@ -444,304 +383,73 @@ REGRAS:
       
       console.log('📝 [VesperaDeProvaConfig] Texto gerado, tamanho:', generatedText.length)
       
-      // Extrair JSON (mesma abordagem do EditalVerticalizado)
-      const materialStart = generatedText.indexOf('"material"')
-      const arrayStart = generatedText.indexOf('[', materialStart)
-      const arrayEnd = generatedText.lastIndexOf(']')
-      
-      if (materialStart === -1 || arrayStart === -1 || arrayEnd === -1) {
-        console.error('❌ [VesperaDeProvaConfig] Não foi possível encontrar o array de material')
-        console.error('❌ [VesperaDeProvaConfig] Texto gerado (primeiros 500 chars):', generatedText.substring(0, 500))
-        throw new Error('Não foi possível encontrar o array de material na resposta')
-      }
-      
-      const materialJson = '{"material":' + generatedText.substring(arrayStart, arrayEnd + 1) + '}'
-      
-      setGenerationStatus('Validando estrutura...')
-      
+      // Parsear JSON
       let materialData = null
-      
       try {
-        materialData = JSON.parse(materialJson)
+        materialData = JSON.parse(generatedText)
         console.log('✅ [VesperaDeProvaConfig] JSON parseado com sucesso')
       } catch (parseError) {
         console.error('❌ [VesperaDeProvaConfig] Erro ao fazer parse do JSON:', parseError.message)
         
-        // Tentar corrigir com múltiplas estratégias
-        let fixedJson = materialJson
-        
-        // Correção 1: Remover caracteres de controle (bad control characters) - mais agressivo
-        // Isso inclui caracteres que o Google Search pode introduzir
+        // Tentar corrigir JSON
+        let fixedJson = generatedText
         fixedJson = fixedJson.replace(/[\x00-\x1F\x7F-\x9F]/g, '')
-        
-        // Correção 2: Remover caracteres Unicode problemáticos que podem vir do Google Search
         fixedJson = fixedJson.replace(/[\u2028\u2029\u200B\u200C\u200D\uFEFF]/g, '')
-        
-        // Correção 3: Normalizar quebras de linha
         fixedJson = fixedJson.replace(/\r\n/g, '\n')
         fixedJson = fixedJson.replace(/\r/g, '\n')
-        
-        // Correção 4: Escapar aspas em strings que não foram escapadas corretamente
-        // Isso pode acontecer quando o Google Search retorna conteúdo com aspas
-        fixedJson = fixedJson.replace(/(?<!\\)"(?!\s*[:}\]])/g, '\\"')
-        
-        // Correção 5: Remover vírgulas extras antes de } e ]
         fixedJson = fixedJson.replace(/,\s*}/g, '}')
         fixedJson = fixedJson.replace(/,\s*]/g, ']')
-        
-        // Correção 3: Remover quebras de linha extras
-        fixedJson = fixedJson.replace(/\n\s*\}/g, '}')
-        fixedJson = fixedJson.replace(/\n\s*\]/g, ']')
-        
-        // Correção 4: Tentar encontrar onde o JSON está incompleto e cortar
-        const errorPosition = parseInt(parseError.message.match(/position (\d+)/)?.[1] || '0')
-        if (errorPosition > 0) {
-          console.log(`🔧 [VesperaDeProvaConfig] Erro na posição ${errorPosition}, tentando cortar...`)
-          
-          // Encontrar o último objeto completo antes do erro
-          const beforeError = fixedJson.substring(0, errorPosition)
-          
-          // Tentar encontrar o último "}" que fecha um objeto
-          const lastCompleteObject = beforeError.lastIndexOf('}')
-          if (lastCompleteObject !== -1) {
-            // Cortar até o último objeto completo
-            fixedJson = fixedJson.substring(0, lastCompleteObject + 1)
-            
-            // Adicionar o fechamento do array e do objeto principal
-            if (fixedJson.includes('"material":[')) {
-              fixedJson = fixedJson + ']}'
-            }
-          }
-        }
-        
-        // Correção 5: Se ainda falhar, tentar remover o último objeto incompleto
-        if (errorPosition > 0) {
-          // Encontrar o último objeto COMPLETO (com todos os campos obrigatórios)
-          // Regex atualizado para permitir arrays vazios em alternativas
-          const questoesPattern = /"enunciado":\s*"[^"]*",\s*"alternativas":\s*\[[^\]]*\],\s*"gabarito":\s*"[^"]*",\s*"comentario":\s*"[^"]*"/g
-          const matches = fixedJson.match(questoesPattern)
-          
-          if (matches && matches.length > 0) {
-            console.log(`🔧 [VesperaDeProvaConfig] Encontradas ${matches.length} questões completas`)
-            
-            // Encontrar a posição da última questão completa
-            const lastCompleteMatch = matches[matches.length - 1]
-            const lastCompleteIndex = fixedJson.lastIndexOf(lastCompleteMatch)
-            
-            if (lastCompleteIndex !== -1) {
-              // Encontrar o fechamento do objeto após a última questão completa
-              const afterLastComplete = fixedJson.substring(lastCompleteIndex)
-              const closingBrace = afterLastComplete.indexOf('}')
-              
-              if (closingBrace !== -1) {
-                const completeEnd = lastCompleteIndex + closingBrace
-                fixedJson = fixedJson.substring(0, completeEnd + 1)
-                
-                // Adicionar o fechamento do array e do objeto principal
-                if (fixedJson.includes('"material":[')) {
-                  fixedJson = fixedJson + ']}'
-                }
-                
-                console.log(`🔧 [VesperaDeProvaConfig] JSON corrigido removendo última questão incompleta`)
-              }
-            }
-          } else {
-            // Se não encontrar questões completas, tentar remover o último objeto
-            const lastObjectEnd = fixedJson.lastIndexOf('},')
-            if (lastObjectEnd !== -1) {
-              console.log(`🔧 [VesperaDeProvaConfig] Removendo último objeto incompleto...`)
-              fixedJson = fixedJson.substring(0, lastObjectEnd + 1)
-              
-              if (fixedJson.includes('"material":[')) {
-                fixedJson = fixedJson + ']}'
-              }
-            }
-          }
-        }
-        
-        // Correção 6: Se ainda falhar, tentar uma abordagem mais agressiva
-        if (errorPosition > 0) {
-          // Encontrar o último "questoes": [ e remover tudo após o último objeto completo
-          const questoesStart = fixedJson.lastIndexOf('"questoes":')
-          if (questoesStart !== -1) {
-            const afterQuestoes = fixedJson.substring(questoesStart)
-            const arrayStart = afterQuestoes.indexOf('[')
-            
-            if (arrayStart !== -1) {
-              // Encontrar todos os objetos completos no array
-              const questoesArray = afterQuestoes.substring(arrayStart + 1)
-              
-              // Contar o número de objetos completos
-              let braceCount = 0
-              let lastCompletePos = -1
-              
-              for (let i = 0; i < questoesArray.length; i++) {
-                if (questoesArray[i] === '{') braceCount++
-                if (questoesArray[i] === '}') braceCount--
-                
-                if (braceCount === 0 && questoesArray[i] === '}') {
-                  lastCompletePos = i
-                }
-              }
-              
-              if (lastCompletePos !== -1) {
-                const completeEnd = questoesStart + arrayStart + 1 + lastCompletePos
-                fixedJson = fixedJson.substring(0, completeEnd + 1)
-                
-                // Adicionar o fechamento do array e do objeto principal
-                if (fixedJson.includes('"material":[')) {
-                  fixedJson = fixedJson + ']}'
-                }
-                
-                console.log(`🔧 [VesperaDeProvaConfig] JSON corrigido usando abordagem agressiva`)
-              }
-            }
-          }
-        }
-        
-        console.log(`🔧 [VesperaDeProvaConfig] JSON corrigido, tamanho: ${fixedJson.length}`)
         
         try {
           materialData = JSON.parse(fixedJson)
           console.log('✅ [VesperaDeProvaConfig] JSON corrigido e parseado')
-          console.log(`✅ [VesperaDeProvaConfig] Disciplinas salvas: ${materialData.material?.length || 0}`)
         } catch (fixError) {
           console.error('❌ [VesperaDeProvaConfig] Falha ao corrigir JSON:', fixError.message)
-          console.error('❌ [VesperaDeProvaConfig] Últimos 500 caracteres do JSON:', materialJson.slice(-500))
-          throw new Error(`JSON inválido mesmo após correção: ${fixError.message}`)
+          throw new Error(`JSON inválido: ${fixError.message}`)
         }
       }
       
-      if (!materialData.material || !Array.isArray(materialData.material)) {
-        console.error('❌ [VesperaDeProvaConfig] Estrutura recebida:', materialData)
-        throw new Error('Formato inválido - esperado array em material')
+      // Salvar no Firestore (adicionar ao material existente ou criar novo)
+      setGenerationStatus('Salvando material...')
+      
+      const materialRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'material')
+      const materialDoc = await getDoc(materialRef)
+      
+      let existingMaterial = []
+      if (materialDoc.exists()) {
+        const materialData = materialDoc.data()
+        existingMaterial = materialData.material || []
       }
       
-      console.log('✅ [VesperaDeProvaConfig] Material validado, total disciplinas:', materialData.material.length)
+      // Verificar se a disciplina já existe e atualizar, ou adicionar nova
+      const existingIndex = existingMaterial.findIndex(m => m.disciplina === materialData.disciplina)
+      if (existingIndex !== -1) {
+        existingMaterial[existingIndex] = materialData
+      } else {
+        existingMaterial.push(materialData)
+      }
       
-      // Adicionar disciplinas desta parte ao array total
-      todasDisciplinas.push(...materialData.material)
-      completedParts.add(parte)
-      
-      // Atualizar progresso visual
-      const progressPercent = Math.round((completedParts.size / totalPartes) * 100)
-      setGenerationProgress(progressPercent)
-      
-      console.log(`📦 [VesperaDeProvaConfig] Parte ${parte + 1} concluída, total disciplinas acumuladas: ${todasDisciplinas.length}`)
-      console.log(`📊 [VesperaDeProvaConfig] Progresso: ${progressPercent}% (${completedParts.size}/${totalPartes} partes)`)
-      
-      // Salvar progresso e material parcial no Firestore
-      const progressRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'progress')
-      await setDoc(progressRef, {
-        config: {
-          banca: bancaExaminadora,
-          concurso: concurso,
-          questoesPorMateria: questoesPorMateria
-        },
-        completedParts: Array.from(completedParts),
-        totalParts: totalPartes,
-        status: 'in_progress',
-        material: todasDisciplinas,
-        updatedAt: serverTimestamp()
-      })
-      
-      // Salvar material parcial
-      const materialRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'material')
       await setDoc(materialRef, {
-        material: todasDisciplinas,
+        material: existingMaterial,
         banca: bancaExaminadora,
         concurso: concurso,
         generatedAt: serverTimestamp(),
         generatedBy: user.uid,
-        isPartial: true
       })
       
-      console.log(`💾 [VesperaDeProvaConfig] Progresso e material parcial salvos`)
-      setGenerationStatus(`Parte ${parte + 1}/${totalPartes} concluída (${progressPercent}%)`)
-      }
+      console.log('✅ [VesperaDeProvaConfig] Material salvo com sucesso')
       
-      // Combinar todas as partes em um único material
-      const materialCompleto = {
-        material: todasDisciplinas
-      }
-      
-      console.log('✅ [VesperaDeProvaConfig] Todas as partes geradas, total disciplinas:', materialCompleto.material.length)
-      
-      setGenerationStatus('Salvando material...')
-      
-      console.log('🔐 [VesperaDeProvaConfig] Verificando permissões antes de salvar...')
-      console.log('🔐 [VesperaDeProvaConfig] Usuário autenticado:', !!user)
-      console.log('🔐 [VesperaDeProvaConfig] Usuário UID:', user?.uid)
-      console.log('🔐 [VesperaDeProvaConfig] É admin:', isAdmin)
-      console.log('🔐 [VesperaDeProvaConfig] Course ID:', courseId)
-      
-      // Tentar salvar usando setDoc direto (mais simples)
-      const materialRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'material')
-      
-      console.log('📝 [VesperaDeProvaConfig] Caminho do documento:', `courses/${courseId}/vesperaDeProva/material`)
-      console.log('📝 [VesperaDeProvaConfig] Tentando salvar com setDoc...')
-      
-      try {
-        await setDoc(materialRef, {
-          ...materialCompleto,
-          banca: bancaExaminadora,
-          concurso: concurso,
-          generatedAt: serverTimestamp(),
-          generatedBy: user.uid,
-          isPartial: false
-        })
-        console.log('✅ [VesperaDeProvaConfig] Material salvo no Firestore com setDoc')
-        
-        // Marcar progresso como completo
-        const progressRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'progress')
-        await setDoc(progressRef, {
-          config: {
-            banca: bancaExaminadora,
-            concurso: concurso,
-            questoesPorMateria: questoesPorMateria
-          },
-          completedParts: Array.from(completedParts),
-          totalParts: totalPartes,
-          status: 'completed',
-          material: todasDisciplinas,
-          updatedAt: serverTimestamp()
-        })
-        
-        console.log('✅ [VesperaDeProvaConfig] Progresso marcado como completo')
-        setGenerationProgress(100)
-      } catch (setDocError) {
-        console.error('❌ [VesperaDeProvaConfig] Erro ao salvar com setDoc:', setDocError)
-        
-        // Se falhar, tentar salvar em um caminho diferente
-        console.log('🔄 [VesperaDeProvaConfig] Tentando salvar em caminho alternativo...')
-        const altRef = doc(db, 'vesperaDeProvaMaterials', courseId)
-        
-        try {
-          await setDoc(altRef, {
-            ...materialCompleto,
-            banca: bancaExaminadora,
-            concurso: concurso,
-            courseId: courseId,
-            generatedAt: serverTimestamp(),
-            generatedBy: user.uid,
-          })
-          console.log('✅ [VesperaDeProvaConfig] Material salvo no Firestore em caminho alternativo')
-        } catch (altError) {
-          console.error('❌ [VesperaDeProvaConfig] Erro ao salvar em caminho alternativo:', altError)
-          throw new Error(`Não foi possível salvar o material: ${altError.message}`)
-        }
-      }
-      
-      setGenerationStatus('✅ Material gerado com sucesso!')
+      // Atualizar status
+      setMateriasStatus(prev => ({ ...prev, [disciplinaIdx]: 'completed' }))
+      setGenerationStatus(`✅ ${disciplina.nome} gerado com sucesso!`)
       
       setTimeout(() => {
-        navigate(`/vespera-de-prova?course=${courseId}`)
+        setGenerationStatus('')
       }, 2000)
       
     } catch (error) {
       console.error('❌ [VesperaDeProvaConfig] Erro ao gerar material:', error)
-      console.error('❌ [VesperaDeProvaConfig] Código:', error.code)
-      console.error('❌ [VesperaDeProvaConfig] Mensagem:', error.message)
+      setMateriasStatus(prev => ({ ...prev, [disciplinaIdx]: 'error' }))
       setGenerationStatus(`❌ Erro: ${error.message}`)
     } finally {
       setGenerating(false)
@@ -805,156 +513,125 @@ REGRAS:
         {/* Formulário de Configuração */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8">
           <div className="space-y-8">
-            {/* Banca Examinadora */}
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                📝 Banca Examinadora
-              </label>
-              <input
-                type="text"
-                value={bancaExaminadora}
-                onChange={(e) => setBancaExaminadora(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 p-3 text-sm dark:bg-slate-700 dark:text-slate-100 focus:ring-2 focus:ring-alego-500 focus:border-transparent"
-                placeholder="Ex: Cebraspe, FCC, Vunesp"
-              />
+            {/* Informações do curso */}
+            <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Informações do Curso
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-600 dark:text-slate-400">Curso:</span>
+                  <span className="text-slate-900 dark:text-slate-100 font-medium">{courseName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600 dark:text-slate-400">Concurso:</span>
+                  <span className="text-slate-900 dark:text-slate-100 font-medium">{concurso || 'Não definido'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600 dark:text-slate-400">Banca:</span>
+                  <span className="text-slate-900 dark:text-slate-100 font-medium">{bancaExaminadora || 'Não definida'}</span>
+                </div>
+              </div>
             </div>
             
-            {/* Concurso */}
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                Concurso *
-              </label>
-              <input
-                type="text"
-                value={concurso}
-                onChange={(e) => setConcurso(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 p-3 text-sm dark:bg-slate-700 dark:text-slate-100 focus:ring-2 focus:ring-alego-500 focus:border-transparent"
-                placeholder="Ex: PM AL 2024"
-              />
-            </div>
-            
-            {/* Questões por matéria */}
+            {/* Lista de matérias */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-                Questões por Matéria
+                Matérias do Edital
               </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {editalVerticalizado?.disciplinas?.map((disciplina, idx) => (
-                  <div key={idx} className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
-                    <span className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      {disciplina.nome}
-                    </span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="20"
-                      value={questoesPorMateria[idx] || 5}
-                      onChange={(e) => setQuestoesPorMateria({
-                        ...questoesPorMateria,
-                        [idx]: parseInt(e.target.value) || 5
-                      })}
-                      className="w-full rounded-lg border border-slate-300 dark:border-slate-600 p-2 text-sm text-center dark:bg-slate-600 dark:text-slate-100 focus:ring-2 focus:ring-alego-500 focus:border-transparent"
-                    />
-                  </div>
-                ))}
+              <div className="space-y-3">
+                {editalVerticalizado?.disciplinas?.map((disciplina, idx) => {
+                  const status = materiasStatus[idx] || 'pending'
+                  const statusColors = {
+                    pending: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400',
+                    generating: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
+                    completed: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+                    error: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                  }
+                  const statusText = {
+                    pending: 'Pendente',
+                    generating: 'Gerando...',
+                    completed: 'Gerado',
+                    error: 'Erro'
+                  }
+                  
+                  return (
+                    <div key={idx} className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <span className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            {disciplina.nome}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs text-slate-600 dark:text-slate-400">Questões:</label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="20"
+                                value={questoesPorMateria[idx] || 5}
+                                onChange={(e) => setQuestoesPorMateria({
+                                  ...questoesPorMateria,
+                                  [idx]: parseInt(e.target.value) || 5
+                                })}
+                                disabled={status === 'generating'}
+                                className="w-16 rounded border border-slate-300 dark:border-slate-600 p-1 text-xs text-center dark:bg-slate-600 dark:text-slate-100 focus:ring-2 focus:ring-alego-500 focus:border-transparent disabled:opacity-50"
+                              />
+                            </div>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[status]}`}>
+                              {statusText[status]}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => generateSingleMaterial(idx)}
+                          disabled={status === 'generating' || status === 'completed'}
+                          className="px-4 py-2 bg-alego-600 text-white rounded-lg text-sm font-medium hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                        >
+                          {status === 'generating' ? (
+                            <>
+                              <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                              Gerando...
+                            </>
+                          ) : status === 'completed' ? (
+                            <>
+                              <CheckIcon className="h-4 w-4" />
+                              Gerado
+                            </>
+                          ) : (
+                            <>
+                              <SparklesIcon className="h-4 w-4" />
+                              Gerar
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
             
             {/* Status de geração */}
             {generating && (
               <div className="bg-slate-100 dark:bg-slate-700 rounded-lg p-6">
-                <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center gap-3">
                   <ArrowPathIcon className="h-6 w-6 text-alego-600 animate-spin" />
                   <span className="text-base text-slate-700 dark:text-slate-300">
                     {generationStatus}
                   </span>
                 </div>
-                
-                {/* Barra de progresso */}
-                {generationProgress > 0 && (
-                  <div className="mt-4">
-                    <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400 mb-2">
-                      <span>Progresso</span>
-                      <span>{generationProgress}%</span>
-                    </div>
-                    <div className="w-full bg-slate-300 dark:bg-slate-600 rounded-full h-3">
-                      <div
-                        className="bg-alego-600 h-3 rounded-full transition-all duration-300"
-                        style={{ width: `${generationProgress}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
             
-            {/* Progresso existente */}
-            {existingProgress && existingProgress.status === 'in_progress' && !generating && (
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
-                <div className="flex items-start gap-3">
-                  <SparklesIcon className="h-6 w-6 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">
-                      Geração em andamento detectada
-                    </h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
-                      Foi encontrada uma geração anterior com as mesmas configurações que não foi concluída. 
-                      {existingProgress.completedParts?.length || 0} de {existingProgress.totalParts || 0} partes foram geradas.
-                    </p>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={generateMaterial}
-                        className="px-4 py-2 bg-alego-600 text-white rounded-lg text-sm font-medium hover:bg-alego-700 transition"
-                      >
-                        Continuar Geração
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (confirm('Tem certeza que deseja limpar o progresso e iniciar uma nova geração?')) {
-                            try {
-                              const progressRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'progress')
-                              await setDoc(progressRef, {})
-                              setExistingProgress(null)
-                              alert('Progresso limpo com sucesso.')
-                            } catch (error) {
-                              alert('Erro ao limpar progresso: ' + error.message)
-                            }
-                          }
-                        }}
-                        className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
-                      >
-                        Limpar Progresso
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Botões */}
+            {/* Botão para ver resultado */}
             <div className="flex gap-4 pt-4">
               <button
                 onClick={() => navigate(`/vespera-de-prova?course=${courseId}`)}
-                className="flex-1 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition font-medium"
+                className="flex-1 px-6 py-3 bg-alego-600 text-white rounded-lg font-medium hover:bg-alego-700 transition flex items-center justify-center gap-2"
               >
-                Cancelar
-              </button>
-              <button
-                onClick={generateMaterial}
-                disabled={generating}
-                className="flex-1 px-6 py-3 bg-alego-600 text-white rounded-lg font-medium hover:bg-alego-700 disabled:opacity-50 transition flex items-center justify-center gap-2"
-              >
-                {generating ? (
-                  <>
-                    <ArrowPathIcon className="h-5 w-5 animate-spin" />
-                    Gerando...
-                  </>
-                ) : (
-                  <>
-                    <SparklesIcon className="h-5 w-5" />
-                    Gerar Material
-                  </>
-                )}
+                <ArrowLeftIcon className="h-5 w-5" />
+                Ver Véspera de Prova
               </button>
             </div>
           </div>
