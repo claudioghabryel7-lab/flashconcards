@@ -9,6 +9,7 @@ import {
   ArrowLeftIcon,
   ArrowPathIcon,
   XMarkIcon,
+  CheckIcon,
 } from '@heroicons/react/24/outline'
 
 const VesperaDeProvaConfig = () => {
