@@ -13,7 +13,6 @@ const genAI = new GoogleGenerativeAI(API_KEY);
 // Lista de modelos Gemini 2.5 para fallback
 const MODELS = [
   "gemini-2.5-flash",
-  "gemini-2.5-flash-8b",
   "gemini-2.5-pro",
 ];
 

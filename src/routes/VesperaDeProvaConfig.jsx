@@ -380,7 +380,7 @@ REGRAS:
       setGenerationStatus('Enviando solicitação para a IA...')
       
       // Modelos Gemini 2.5 para fallback
-      const models = ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro']
+      const models = ['gemini-2.5-flash', 'gemini-2.5-pro']
       
       // Função para fazer requisição com rotação de API keys, retry e fallback de modelos
       const fetchWithFallback = async (prompt) => {
