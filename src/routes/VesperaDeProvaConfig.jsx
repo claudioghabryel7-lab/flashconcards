@@ -10,6 +10,7 @@ import {
   ArrowPathIcon,
   XMarkIcon,
   CheckIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline'
 
 const VesperaDeProvaConfig = () => {
@@ -136,6 +137,97 @@ const VesperaDeProvaConfig = () => {
     
     loadCourseData()
   }, [courseId, user, isAdmin])
+  
+  // Apagar conteúdo de uma matéria
+  const deleteMaterial = async (disciplinaIdx) => {
+    if (!isAdmin) {
+      alert('Apenas administradores podem apagar material.')
+      return
+    }
+    
+    if (!user) {
+      alert('Você precisa estar autenticado para apagar material.')
+      return
+    }
+    
+    const disciplina = editalVerticalizado?.disciplinas[disciplinaIdx]
+    if (!disciplina) {
+      alert('Disciplina não encontrada.')
+      return
+    }
+    
+    if (!confirm(`Tem certeza que deseja apagar o conteúdo de "${disciplina.nome}"?`)) {
+      return
+    }
+    
+    try {
+      console.log('🗑️ [VesperaDeProvaConfig] Apagando material:', disciplina.nome)
+      
+      const materialRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'material')
+      const materialDoc = await getDoc(materialRef)
+      
+      if (materialDoc.exists()) {
+        const materialData = materialDoc.data()
+        const existingMaterial = materialData.material || []
+        
+        // Remover a disciplina do array
+        const updatedMaterial = existingMaterial.filter(m => m.disciplina !== disciplina.nome)
+        
+        if (updatedMaterial.length === 0) {
+          // Se não houver mais matérias, apagar o documento inteiro
+          const { deleteDoc } = await import('firebase/firestore')
+          await deleteDoc(materialRef)
+          console.log('✅ [VesperaDeProvaConfig] Documento apagado (sem mais matérias)')
+        } else {
+          // Atualizar com o array sem a disciplina removida
+          await setDoc(materialRef, {
+            material: updatedMaterial,
+            banca: bancaExaminadora,
+            concurso: concurso,
+            generatedAt: serverTimestamp(),
+            generatedBy: user.uid,
+          })
+          console.log('✅ [VesperaDeProvaConfig] Matéria removida do material')
+        }
+        
+        // Atualizar status
+        setMateriasStatus(prev => ({ ...prev, [disciplinaIdx]: 'pending' }))
+        alert(`Conteúdo de "${disciplina.nome}" apagado com sucesso!`)
+      }
+    } catch (error) {
+      console.error('❌ [VesperaDeProvaConfig] Erro ao apagar material:', error)
+      alert('Erro ao apagar material: ' + error.message)
+    }
+  }
+  
+  // Regenerar conteúdo de uma matéria (apaga anterior e gera novo)
+  const regenerateMaterial = async (disciplinaIdx) => {
+    if (!isAdmin) {
+      alert('Apenas administradores podem regenerar material.')
+      return
+    }
+    
+    if (!user) {
+      alert('Você precisa estar autenticado para regenerar material.')
+      return
+    }
+    
+    const disciplina = editalVerticalizado?.disciplinas[disciplinaIdx]
+    if (!disciplina) {
+      alert('Disciplina não encontrada.')
+      return
+    }
+    
+    if (!confirm(`Tem certeza que deseja regenerar o conteúdo de "${disciplina.nome}"? O conteúdo anterior será apagado.`)) {
+      return
+    }
+    
+    // Primeiro apagar o conteúdo anterior
+    await deleteMaterial(disciplinaIdx)
+    
+    // Depois gerar o novo
+    await generateSingleMaterial(disciplinaIdx)
+  }
   
   // Gerar material de uma única matéria
   const generateSingleMaterial = async (disciplinaIdx) => {
@@ -584,28 +676,49 @@ REGRAS:
                             </span>
                           </div>
                         </div>
-                        <button
-                          onClick={() => generateSingleMaterial(idx)}
-                          disabled={status === 'generating' || status === 'completed'}
-                          className="px-4 py-2 bg-alego-600 text-white rounded-lg text-sm font-medium hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
-                        >
-                          {status === 'generating' ? (
+                        <div className="flex items-center gap-2">
+                          {status === 'completed' && (
                             <>
-                              <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                              Gerando...
-                            </>
-                          ) : status === 'completed' ? (
-                            <>
-                              <CheckIcon className="h-4 w-4" />
-                              Gerado
-                            </>
-                          ) : (
-                            <>
-                              <SparklesIcon className="h-4 w-4" />
-                              Gerar
+                              <button
+                                onClick={() => regenerateMaterial(idx)}
+                                disabled={generating}
+                                className="px-3 py-2 bg-yellow-600 text-white rounded-lg text-sm font-medium hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                title="Regenerar (apaga anterior e gera novo)"
+                              >
+                                <ArrowPathIcon className="h-4 w-4" />
+                                Regenerar
+                              </button>
+                              <button
+                                onClick={() => deleteMaterial(idx)}
+                                disabled={generating}
+                                className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                title="Apagar conteúdo"
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                                Apagar
+                              </button>
                             </>
                           )}
-                        </button>
+                          {status !== 'completed' && (
+                            <button
+                              onClick={() => generateSingleMaterial(idx)}
+                              disabled={status === 'generating'}
+                              className="px-4 py-2 bg-alego-600 text-white rounded-lg text-sm font-medium hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                            >
+                              {status === 'generating' ? (
+                                <>
+                                  <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                                  Gerando...
+                                </>
+                              ) : (
+                                <>
+                                  <SparklesIcon className="h-4 w-4" />
+                                  Gerar
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )
