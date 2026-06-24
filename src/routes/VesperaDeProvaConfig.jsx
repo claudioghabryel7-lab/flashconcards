@@ -362,10 +362,18 @@ REGRAS:
 - Retorne APENAS o JSON válido, sem texto adicional
 - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
 
-      // Carregar múltiplas API keys do Gemini
+      // Carregar múltiplas API keys do Gemini (priorizando VITE_GEMINI_API_KEY)
       const apiKeys = []
+      
+      // Primeiro tenta a key principal
+      const mainKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (mainKey) {
+        apiKeys.push(mainKey)
+      }
+      
+      // Depois tenta numbered keys (apenas se a principal não existir ou para backup)
       for (let i = 1; i <= 10; i++) {
-        const key = import.meta.env[`VITE_GEMINI_API_KEY_${i}`] || import.meta.env[`VITE_GEMINI_API_KEY`]
+        const key = import.meta.env[`VITE_GEMINI_API_KEY_${i}`]
         if (key && !apiKeys.includes(key)) {
           apiKeys.push(key)
         }
