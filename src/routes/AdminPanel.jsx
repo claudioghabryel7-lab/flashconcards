@@ -1226,7 +1226,7 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
               const moduleResponse = await callGeminiWithRetry(modulePrompt, {
                 maxRetries: 3,
                 baseDelay: 2000,
-                models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
                 generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
               })
               const moduleResponseText = extractGeneratedText(moduleResponse)
@@ -3548,7 +3548,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
               flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
                 maxRetries: 3,
                 baseDelay: 2000,
-                models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
                 generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
               })
               flashcardsText = extractGeneratedText(flashcardsResult).trim()
@@ -3565,7 +3565,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                 flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
                   maxRetries: 3,
                   baseDelay: 2000,
-                  models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                  models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
                   generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                 })
                 flashcardsText = extractGeneratedText(flashcardsResult).trim()
@@ -3596,7 +3596,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                   retryResult = await callGeminiWithRetry(flashcardsPrompt, {
                     maxRetries: 3,
                     baseDelay: 2000,
-                    models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                    models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
                     generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                   })
                 } catch (retryQuotaErr) {
@@ -3608,7 +3608,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                     retryResult = await callGeminiWithRetry(flashcardsPrompt, {
                       maxRetries: 3,
                       baseDelay: 2000,
-                      models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                      models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
                       generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                     })
                   } else {
@@ -3887,7 +3887,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       const analysisResponse = await callGeminiWithRetry(analysisPrompt, {
         maxRetries: 3,
         baseDelay: 2000,
-        models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+        models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
         generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
       })
       let analysisText = extractGeneratedText(analysisResponse).trim()
@@ -4017,7 +4017,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
               flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
                 maxRetries: 3,
                 baseDelay: 2000,
-                models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
                 generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
               })
               flashcardsText = extractGeneratedText(flashcardsResult).trim()
@@ -4034,7 +4034,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                 flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
                   maxRetries: 3,
                   baseDelay: 2000,
-                  models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                  models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
                   generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                 })
                 flashcardsText = extractGeneratedText(flashcardsResult).trim()
@@ -4610,7 +4610,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     const courseName = courseData.name || courseData.competition || courseId
 
       // 3. Chamar IA para gerar conteúdo técnico completo
-      const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
+      const modelNames = ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro']
       let lastError = null
       let aiResponse = ''
 
@@ -4854,7 +4854,7 @@ CRÍTICO:
       const courseName = courseData.name || courseData.competition || courseId
 
       // 3. Chamar IA para identificar todas as matérias do edital
-      const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
+      const modelNames = ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro']
       let lastError = null
       let materiasList = []
 
@@ -4906,7 +4906,7 @@ CRÍTICO:
           const result = await callGeminiWithRetry(analysisPrompt, {
             maxRetries: 3,
             baseDelay: 2000,
-            models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+            models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
             generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
           })
           let analysisText = extractGeneratedText(result).trim()
@@ -5217,7 +5217,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
         const result = await callGeminiWithRetry(analysisPrompt, {
           maxRetries: 3,
           baseDelay: 2000,
-          models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+          models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
           generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
         })
         let analysisText = extractGeneratedText(result).trim()
@@ -5293,7 +5293,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const modelNames = ['gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-2.5-pro']
+    const modelNames = ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro']
     let materiasList = []
 
     // Identificar matérias (mesma lógica)
@@ -5317,7 +5317,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
         const result = await callGeminiWithRetry(analysisPrompt, {
           maxRetries: 3,
           baseDelay: 2000,
-          models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+          models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
           generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
         })
         let analysisText = extractGeneratedText(result).trim()
@@ -5391,7 +5391,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
       const concursoName = unifiedData.concursoName || ''
 
       // 3. Chamar IA para identificar todas as matérias do edital
-      const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
+      const modelNames = ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro']
       let lastError = null
       let materiasList = []
 
@@ -5443,7 +5443,7 @@ CRÍTICO:
           const result = await callGeminiWithRetry(analysisPrompt, {
             maxRetries: 3,
             baseDelay: 2000,
-            models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+            models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
             generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
           })
           let analysisText = extractGeneratedText(result).trim()
@@ -6150,7 +6150,7 @@ CRÍTICO:
           const result = await callGeminiWithRetry(systemPrompt, {
             maxRetries: 3,
             baseDelay: 2000,
-            models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+            models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
             generationConfig: { temperature: 0.8, maxOutputTokens: 8000 },
           })
           
@@ -7331,7 +7331,7 @@ REGRAS CRÍTICAS E OBRIGATÓRIAS - LEIA COM ATENÇÃO:
                             const verticalizadoResponse = await callGeminiWithRetry(verticalizadoPrompt, {
                               maxRetries: 3,
                               baseDelay: 2000,
-                              models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                              models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
                               generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                             })
                             let verticalizadoText = extractGeneratedText(verticalizadoResponse).trim()
@@ -7684,7 +7684,7 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem 
                           const unifiedResponse = await callGeminiWithRetry(unifiedPrompt, {
                             maxRetries: 3,
                             baseDelay: 2000,
-                            models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                            models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
                             generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                           })
                           let unifiedText = extractGeneratedText(unifiedResponse).trim()
@@ -8828,7 +8828,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                 const response = await callGeminiWithRetry(prompt, {
                   maxRetries: 3,
                   baseDelay: 2000,
-                  models: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+                  models: ['gemini-2.5-flash', 'gemini-2.5-flash-8b', 'gemini-2.5-pro'],
                   generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                 })
                 const text = extractGeneratedText(response)

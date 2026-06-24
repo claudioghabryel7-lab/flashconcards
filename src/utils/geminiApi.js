@@ -6,8 +6,8 @@
 
 const MODELS = [
   'gemini-2.5-flash',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro',
+  'gemini-2.5-flash-8b',
+  'gemini-2.5-pro',
 ]
 
 const MAX_RETRIES = 3
@@ -34,7 +34,7 @@ function loadApiKeys() {
  * @param {Object} options - Opções adicionais
  * @param {number} options.maxRetries - Número máximo de tentativas (padrão: 3)
  * @param {number} options.baseDelay - Delay base em ms (padrão: 2000)
- * @param {Array<string>} options.models - Lista de modelos para tentar (padrão: gemini-2.5-flash, gemini-1.5-flash, gemini-1.5-pro)
+ * @param {Array<string>} options.models - Lista de modelos para tentar (padrão: gemini-2.5-flash, gemini-2.5-flash-8b, gemini-2.5-pro)
  * @param {Object} options.generationConfig - Configuração de geração (temperature, maxOutputTokens, etc.)
  * @param {boolean} options.useGoogleSearch - Se deve usar Google Search Grounding (padrão: false)
  * @param {boolean} options.useFunctionCalling - Se deve usar Function Calling para buscar em APIs oficiais (padrão: false)
