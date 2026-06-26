@@ -707,6 +707,36 @@ const EditalVerticalizado = () => {
 ESTRUTURA DO EDITAL:
 ${JSON.stringify(editalStructure, null, 2)}
 
+🚨 INSTRUÇÃO CRÍTICA - CONTEÚDO ATUALIZADO:
+VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+- PENSE: "Vou gerar agora de acordo com atualizações verídicas da data atual (${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })})"
+- USE APENAS INFORMAÇÕES ATUALIZADAS E VIGENTES ATÉ ESTA DATA
+- VERIFIQUE SE HOUVE ALTERAÇÕES RECENTES NAS LEIS, DECRETOS OU NORMAS
+- NÃO USE INFORMAÇÕES DESATUALIZADAS OU REVOGADAS
+- CITE SEMPRE A DATA DE ATUALIZAÇÃO QUANDO NECESSÁRIO
+
+📅 CRONOLOGIA TEMPORAL OBRIGATÓRIA:
+- Para CADA lei, decreto ou norma mencionada nos flashcards, você DEVE traçar uma cronologia desde sua criação até a data atual
+- Exemplo: "Lei X, criada em 01/01/2000, alterada em 15/03/2010 pela Lei Y, modificada em 20/06/2015 pelo Decreto Z, atualizada em 10/02/2020 pela Medida Provisória W, vigente até ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}"
+- Liste TODAS as alterações relevantes: leis, decretos, medidas provisórias, emendas constitucionais, súmulas, jurisprudências
+- Sempre indique a data de cada alteração e o instrumento que a causou
+- Se a lei foi revogada, indique a data de revogação e o instrumento que a revogou
+- Mantenha os flashcards atualizados considerando TODAS as alterações até a data atual
+
+🚨 TRAVAS DE SEGURANÇA E FIDELIDADE JURÍDICA ABSOLUTA:
+
+1. PROIBIÇÃO DE ALUCINAÇÃO LEGISLATIVA:
+- Você está terminantemente proibido de inventar, supor ou estimar números de leis, decretos ou datas. Se não houver registro histórico exato e pacificado no ordenamento jurídico brasileiro de uma alteração, você NÃO deve mencioná-la.
+- Nenhuma alteração futura hipotética deve ser criada. Toda e qualquer norma citada deve ter como lastro o portal do Planalto (Legislação Federal) ou os repositórios oficiais do STF/STJ.
+
+2. FILTRO DE CONSTITUCIONALIDADE E RECEPÇÃO (CF/88):
+- Para cada artigo ou código anterior a 1988 (como o CPP de 1941 ou o CP de 1940), você DEVE verificar se o dispositivo foi RECECIONADO ou NÃO pela Constituição Federal de 1988.
+- É terminantemente proibido indicar como aplicável ou vigente um dispositivo legal que os Tribunais Superiores (STF/STJ) já declararam como não-recepcionado ou inconstitucional (Ex: Incomunicabilidade do preso do Art. 21 do CPP, prisão por dívida de depositário infiel, etc.). Você deve apontar o dispositivo e declarar imediatamente a sua ineficácia jurídica atual por incompatibilidade constitucional.
+
+3. ALINHAMENTO OBRIGATÓRIO DE JURISPRUDÊNCIA PACIFICADA (STF/STJ):
+- Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
+- Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
+
 INSTRUÇÕES:
 1. Gere os flashcards seguindo a estrutura acima - disciplina por disciplina, tópico por tópico
 2. Para CADA tópico, gere NO MÍNIMO 50 flashcards e ATÉ 100 flashcards para cobrir completamente o conteúdo específico
