@@ -3540,6 +3540,14 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 - NÃO USE INFORMAÇÕES DESATUALIZADAS OU REVOGADAS
 - CITE SEMPRE A DATA DE ATUALIZAÇÃO QUANDO NECESSÁRIO
 
+📅 CRONOLOGIA TEMPORAL OBRIGATÓRIA:
+- Para CADA lei, decreto ou norma mencionada, você DEVE traçar uma cronologia desde sua criação até a data atual
+- Exemplo: "Lei X, criada em 01/01/2000, alterada em 15/03/2010 pela Lei Y, modificada em 20/06/2015 pelo Decreto Z, atualizada em 10/02/2020 pela Medida Provisória W, vigente até ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}"
+- Liste TODAS as alterações relevantes: leis, decretos, medidas provisórias, emendas constitucionais, súmulas, jurisprudências
+- Sempre indique a data de cada alteração e o instrumento que a causou
+- Se a lei foi revogada, indique a data de revogação e o instrumento que a revogou
+- Mantenha o conteúdo atualizado considerando TODAS as alterações até a data atual
+
 Retorne APENAS um JSON válido:
 {
   "flashcards": [
