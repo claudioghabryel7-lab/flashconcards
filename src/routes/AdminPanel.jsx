@@ -3562,6 +3562,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
 
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada flashcard que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO FLASHCARD.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere flashcards educacionais e didáticos com:
+- Perguntas específicas e técnicas
+- Respostas detalhadas e precisas
+- Conteúdo fundamentado estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
+
 Retorne APENAS um JSON válido:
 {
   "flashcards": [

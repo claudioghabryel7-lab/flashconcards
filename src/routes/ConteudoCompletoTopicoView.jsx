@@ -9,7 +9,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import ReactMarkdown from 'react-markdown'
 import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -814,6 +813,31 @@ BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
 EXEMPLOS DO QUE EVITAR (ERRADO):
 ❌ Se tópico é "Conceitos" em "Direito Constitucional": 
    "O Direito Constitucional é o ramo do direito que estuda as constituições..."
+
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para o tópico solicitado, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar qualquer conteúdo visível para o usuário:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes (como Pacote Anticrime, Lei Henry Borel, etc., se aplicável)
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO FINAL.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere o conteúdo estruturado com:
+- Raio-X de Probabilidade (Foco na banca ${banca || 'NÃO DEFINIDA'})
+- Revisão Turbo (Cronologia real e precisa, sem alucinações de numeração)
+- Cuidado, Caçapa! (Pegadinhas reais da banca)
+- 5 Questões Preditivas inéditas com gabarito comentado fundamentado estritamente na lei real vigente
+
+Seja cirúrgico, técnico e focado na literalidade e jurisprudência pacificada. Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto.
+
 INSTRUÇÕES:
 Gere um material de revisão de "Véspera de Prova" para o tópico "${effectiveTopicNome || resolvedTopicKey}"${contextoDisciplina ? ` da disciplina "${contextoDisciplina.disciplina}"` : ''}.
 
@@ -831,7 +855,7 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
 
 **MODO HACKER DOS CONCURSOS**
 
-1. **RAIO-X DE PROBABILIDADE**:
+1. ****RAIO-X DE PROBABILIDADE**:
    - Top Assuntos Quentes: Gere entre 5 a 15 tópicos com maior probabilidade de cair NO CONCURSO ${concursoName || 'mencionado'} (quantidade depende da extensão do conteúdo da disciplina)
    - O Padrão da Banca: Como a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar esta disciplina especificamente no concurso.
 

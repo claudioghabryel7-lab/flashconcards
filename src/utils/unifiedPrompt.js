@@ -88,6 +88,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
 
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere conteúdo com:
+- Informações específicas e técnicas
+- Conteúdo detalhado e preciso
+- Fundamentação estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
+
 REGRAS PARA AS QUESTÕES:
 - Questões objetivas, claras, com alternativas bem elaboradas
 - Cada questão deve ter 5 alternativas (A, B, C, D, E)
@@ -140,6 +162,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 3. ALINHAMENTO OBRIGATÓRIO DE JURISPRUDÊNCIA PACIFICADA (STF/STJ):
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
+
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere conteúdo com:
+- Informações específicas e técnicas
+- Conteúdo detalhado e preciso
+- Fundamentação estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
 
 ═══════════════════════════════════════════════════════════════════════════════
 INFORMAÇÕES DO CONCURSO
@@ -213,6 +257,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
 
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere conteúdo com:
+- Informações específicas e técnicas
+- Conteúdo detalhado e preciso
+- Fundamentação estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
+
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText}\n\n` : ''}
 
 ${flashcardsContent ? `FLASHCARDS DO CURSO (USE COMO BASE):\n${flashcardsContent}\n\n` : ''}
@@ -251,6 +317,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 3. ALINHAMENTO OBRIGATÓRIO DE JURISPRUDÊNCIA PACIFICADA (STF/STJ):
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
+
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere conteúdo com:
+- Informações específicas e técnicas
+- Conteúdo detalhado e preciso
+- Fundamentação estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
 
 ═══════════════════════════════════════════════════════════════════════════════
 INFORMAÇÕES DO CONCURSO
@@ -314,6 +402,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
 
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere conteúdo com:
+- Informações específicas e técnicas
+- Conteúdo detalhado e preciso
+- Fundamentação estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
+
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText}\n\n` : ''}
 
 TAREFA: Criar um tema de redação apropriado para o concurso.`
@@ -350,6 +460,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 3. ALINHAMENTO OBRIGATÓRIO DE JURISPRUDÊNCIA PACIFICADA (STF/STJ):
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
+
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere conteúdo com:
+- Informações específicas e técnicas
+- Conteúdo detalhado e preciso
+- Fundamentação estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
 
 ═══════════════════════════════════════════════════════════════════════════════
 INFORMAÇÕES DO CONCURSO
@@ -411,6 +543,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
 
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere conteúdo com:
+- Informações específicas e técnicas
+- Conteúdo detalhado e preciso
+- Fundamentação estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
+
 ⚠️ REGRA CRÍTICA: Cada redação é ÚNICA. Você DEVE analisar o CONTEÚDO REAL de cada texto e atribuir notas DIFERENTES baseadas na qualidade REAL.
 
 CONCURSO: Concurso
@@ -452,6 +606,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 3. ALINHAMENTO OBRIGATÓRIO DE JURISPRUDÊNCIA PACIFICADA (STF/STJ):
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
+
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere conteúdo com:
+- Informações específicas e técnicas
+- Conteúdo detalhado e preciso
+- Fundamentação estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
 
 ═══════════════════════════════════════════════════════════════════════════════
 INFORMAÇÕES DO CONCURSO
@@ -526,6 +702,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 3. ALINHAMENTO OBRIGATÓRIO DE JURISPRUDÊNCIA PACIFICADA (STF/STJ):
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
+
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere conteúdo com:
+- Informações específicas e técnicas
+- Conteúdo detalhado e preciso
+- Fundamentação estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
 
 ⚠️ REGRAS CRÍTICAS:
 - Escreva uma redação NOVA e ORIGINAL — não reutilize textos de outros concursos ou cargos
@@ -653,6 +851,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
 
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere conteúdo com:
+- Informações específicas e técnicas
+- Conteúdo detalhado e preciso
+- Fundamentação estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
+
 MATÉRIA: ${materia}
 
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText}\n\n` : ''}
@@ -718,6 +938,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 3. ALINHAMENTO OBRIGATÓRIO DE JURISPRUDÊNCIA PACIFICADA (STF/STJ):
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
+
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere conteúdo com:
+- Informações específicas e técnicas
+- Conteúdo detalhado e preciso
+- Fundamentação estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
 
 ═══════════════════════════════════════════════════════════════════════════════
 INFORMAÇÕES DO CONCURSO
@@ -814,6 +1056,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
 
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere conteúdo com:
+- Informações específicas e técnicas
+- Conteúdo detalhado e preciso
+- Fundamentação estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
+
 MATÉRIA: ${materia}
 
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText}\n\n` : ''}
@@ -852,6 +1116,28 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 3. ALINHAMENTO OBRIGATÓRIO DE JURISPRUDÊNCIA PACIFICADA (STF/STJ):
 - Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
 - Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
+
+🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+
+[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
+Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
+
+1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
+2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
+3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
+4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
+5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
+6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
+7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
+
+SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
+
+[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
+Gere conteúdo com:
+- Informações específicas e técnicas
+- Conteúdo detalhado e preciso
+- Fundamentação estritamente na lei real vigente
+- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
 
 ═══════════════════════════════════════════════════════════════════════════════
 INFORMAÇÕES DO CONCURSO
