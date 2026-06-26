@@ -350,8 +350,8 @@ IMPORTANTE:
 - Retorne APENAS o JSON válido, sem markdown, sem explicações
 - Comece diretamente com { e termine com }
 - DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-- Use apenas informações atualizadas até esta data
-      
+- Use apenas informações atualizadas até esta data`
+
       const result = await model.generateContent(prompt)
       const response = result.response.text()
       
