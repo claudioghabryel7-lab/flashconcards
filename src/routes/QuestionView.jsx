@@ -262,7 +262,13 @@ ${Object.entries(question.alternativas).map(([letra, texto]) => `${letra}) ${tex
 
 Alternativa correta: ${question.correta}
 
-Forneça uma explicação didática e completa (BIZU) sobre esta questão.`
+Forneça uma explicação didática e completa (BIZU) sobre esta questão.
+
+🚨 TRAVAS DE SEGURANÇA JURÍDICA:
+- Use apenas leis e jurisprudência atualizadas (incluindo inovações legislativas de 2025 e 2026)
+- Não cite dispositivos não-recepcionados pela CF/88
+- Verifique jurisprudência atualizada do STF/STJ
+- DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`
 
       let explanation = ''
       

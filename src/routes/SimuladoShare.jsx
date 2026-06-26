@@ -436,6 +436,12 @@ INSTRUÇÕES FINAIS:
 - NÃO invente informações que não estejam nos flashcards ou edital acima
 - Cada questão deve testar conhecimento presente nos flashcards deste curso
 
+🚨 TRAVAS DE SEGURANÇA JURÍDICA:
+- Use apenas leis e jurisprudência atualizadas (incluindo inovações legislativas de 2025 e 2026)
+- Não cite dispositivos não-recepcionados pela CF/88
+- Verifique jurisprudência atualizada do STF/STJ
+- DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+
 Crie ${materia.quantidadeQuestoes} questões FICTÍCIAS de múltipla escolha no estilo FGV para a matéria "${materia.nome}" do concurso ${simuladoData.courseName || courseId}.
 
 Lembre-se: Use APENAS o contexto fornecido acima. NÃO use conhecimento de outros cursos.

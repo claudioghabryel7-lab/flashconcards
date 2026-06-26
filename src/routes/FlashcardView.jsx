@@ -924,7 +924,13 @@ ${courseEditalPrompt ? `Contexto do concurso:\n${courseEditalPrompt}` : ''}
 Regras:
 - Seja didático, direto e motivador.
 - Traga exemplos simples quando fizer sentido.
-- Foque no entendimento do conceito, não apenas repetir a resposta.`.trim()
+- Foque no entendimento do conceito, não apenas repetir a resposta.
+
+🚨 TRAVAS DE SEGURANÇA JURÍDICA:
+- Use apenas leis e jurisprudência atualizadas (incluindo inovações legislativas de 2025 e 2026)
+- Não cite dispositivos não-recepcionados pela CF/88
+- Verifique jurisprudência atualizada do STF/STJ
+- DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`.trim()
 
     const genAI = new GoogleGenerativeAI(apiKey)
     let lastError = null
