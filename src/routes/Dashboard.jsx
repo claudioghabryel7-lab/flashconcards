@@ -29,6 +29,7 @@ import {
   CalendarIcon,
   SparklesIcon,
   ArrowPathIcon,
+  UsersIcon,
 } from '@heroicons/react/24/solid'
 import {
   ArrowRightIcon as ArrowRightOutline,
@@ -678,30 +679,82 @@ const Dashboard = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.8 }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
         >
           <Link
-            to="/simulado"
+            to="/flashcards"
             className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-orange to-accent-cyan p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
             <div className="relative z-10">
-              <TrophyIcon className="h-8 w-8 text-background-primary mb-3" />
-              <h3 className="text-lg font-bold text-background-primary mb-1">Simulado</h3>
-              <p className="text-background-primary/80 text-sm">Teste seus conhecimentos</p>
+              <SparklesIcon className="h-8 w-8 text-background-primary mb-3" />
+              <h3 className="text-lg font-bold text-background-primary mb-1">Flashcards com IA</h3>
+              <p className="text-background-primary/80 text-sm">Estude com flashcards inteligentes</p>
+              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+
+          <Link
+            to="/edital-verticalizado"
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-cyan to-accent-orange p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
+            <div className="relative z-10">
+              <DocumentTextIcon className="h-8 w-8 text-background-primary mb-3" />
+              <h3 className="text-lg font-bold text-background-primary mb-1">Edital Verticalizado</h3>
+              <p className="text-background-primary/80 text-sm">Conteúdo organizado do edital</p>
+              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+
+          <Link
+            to="/calendario"
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-orange to-accent-cyan p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
+            <div className="relative z-10">
+              <CalendarIcon className="h-8 w-8 text-background-primary mb-3" />
+              <h3 className="text-lg font-bold text-background-primary mb-1">Calendário de Progresso</h3>
+              <p className="text-background-primary/80 text-sm">Acompanhe seu estudo</p>
+              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+
+          <Link
+            to="/vespera-de-prova"
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-cyan to-accent-orange p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
+            <div className="relative z-10">
+              <ClockIcon className="h-8 w-8 text-background-primary mb-3" />
+              <h3 className="text-lg font-bold text-background-primary mb-1">Véspera de Prova</h3>
+              <p className="text-background-primary/80 text-sm">Revisão final antes da prova</p>
               <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>
 
           <Link
             to="/treino-redacao"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-cyan to-accent-orange p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-orange to-accent-cyan p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
             <div className="relative z-10">
               <DocumentTextIcon className="h-8 w-8 text-background-primary mb-3" />
               <h3 className="text-lg font-bold text-background-primary mb-1">Treino de Redação</h3>
               <p className="text-background-primary/80 text-sm">Pratique escrevendo redações</p>
+              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+
+          <Link
+            to="/feed"
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-cyan to-accent-orange p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
+            <div className="relative z-10">
+              <UsersIcon className="h-8 w-8 text-background-primary mb-3" />
+              <h3 className="text-lg font-bold text-background-primary mb-1">FlashSocial</h3>
+              <p className="text-background-primary/80 text-sm">Compartilhe com a comunidade</p>
               <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>

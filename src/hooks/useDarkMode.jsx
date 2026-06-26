@@ -50,8 +50,8 @@ export const DarkModeProvider = ({ children }) => {
       body.style.color = '#fafafa'
     } else {
       html.classList.remove('dark')
-      html.style.colorScheme = 'dark'
-      body.style.backgroundColor = '#09090b'
+      html.style.colorScheme = 'light'
+      body.style.backgroundColor = '#1e3a5a'
       body.style.color = '#fafafa'
     }
   }, [])

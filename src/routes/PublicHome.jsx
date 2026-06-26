@@ -293,8 +293,8 @@ const PublicHome = () => {
 
   return (
     <div className="min-h-screen">
-      <section className="space-y-12 sm:space-y-16 md:space-y-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-8 sm:py-12 md:py-16">
-        {/* Hero Section - Minimalist Dark */}
+      <section className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pt-8 sm:pt-12 md:pt-16 pb-16 sm:pb-20 md:pb-24">
+        {/* Hero Section - Minimalist */}
         <div 
           ref={heroRef}
           className={`relative text-center space-y-8 ${heroVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`}
@@ -320,329 +320,118 @@ const PublicHome = () => {
             
             {/* Subtitle */}
             <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto leading-relaxed">
-              Flashcards inteligentes com IA, repetição espaçada e simulados personalizados. 
-              A forma mais eficiente de estudar para PM, PC, GCM e muito mais.
+              Organização com edital verticalizado, flashcards, questões práticas, e conteúdo resumido com maior incidência para o seu Concurso.
             </p>
-            
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
-              <Link
-                to="/login"
-                className="group relative inline-flex items-center justify-center gap-2 bg-accent-orange text-background-primary px-8 py-4 rounded-lg font-bold text-base sm:text-lg transition-all hover:bg-accent-orange-dim hover:shadow-glow"
-              >
-                <RocketLaunchIcon className="h-5 w-5" />
-                Começar Agora
-              </Link>
-              <Link
-                to="/login"
-                className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-lg font-bold text-base sm:text-lg border border-border-primary text-text-primary hover:bg-background-card transition-all"
-              >
-                Já tenho conta
-              </Link>
-            </div>
-            
-            {/* Social Proof */}
-            <div className="flex items-center justify-center gap-6 pt-6">
-              <div className="flex -space-x-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="w-10 h-10 rounded-full bg-gradient-to-br from-accent-orange to-accent-cyan border-2 border-background-primary flex items-center justify-center text-xs font-bold text-background-primary">
-                    {i}
-                  </div>
-                ))}
-              </div>
-              <div className="text-sm text-text-secondary">
-                <span className="font-semibold text-text-primary">+500 alunos</span> aprovados
-              </div>
-            </div>
           </div>
         </div>
 
-        {/* Carrossel de Banners */}
-        <HomeBanner />
-        
-        {/* Cursos Disponíveis - Minimalist Dark */}
-        <div
-          id="cursos"
-          data-courses-section
-          ref={coursesRef}
-          className={`space-y-8 ${coursesVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`}
-        >
-          <div className="text-center space-y-4">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-border-primary bg-background-card text-xs font-semibold text-accent-orange">
-              <AcademicCapIcon className="h-4 w-4" />
-              Cursos Premium
+        {/* Demo Sections - Compactas */}
+        <div className="space-y-12 pt-8">
+          {/* Demo Edital Verticalizado */}
+          <div className={`glass rounded-2xl p-6 border border-border-primary ${heroVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`} style={{ animationDelay: '0.2s' }}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-orange to-accent-cyan flex items-center justify-center">
+                <DocumentTextIcon className="h-5 w-5 text-background-primary" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-text-primary">Edital Verticalizado</h3>
+                <p className="text-sm text-text-secondary">Organização completa do edital</p>
+              </div>
             </div>
-            <h2 className="text-4xl sm:text-5xl md:text-6xl font-black text-text-primary">
-              Escolha seu caminho para a
-              <span className="block gradient-text">
-                Aprovação
-              </span>
-            </h2>
-            <p className="text-lg text-text-secondary max-w-2xl mx-auto">
-              Cursos completos para Polícia Militar, Polícia Civil, GCM e muito mais. 
-              Conteúdo atualizado e focado na banca do seu concurso.
-            </p>
-          </div>
-          
-          {loadingCourses ? (
-            <div className="text-center py-16">
-              <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent"></div>
-              <p className="mt-6 text-lg text-slate-600 dark:text-slate-400">Carregando cursos...</p>
-            </div>
-          ) : courses.length > 0 ? (
-            <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
-              {courses.map((course, index) => (
-                <div
-                  key={course.id}
-                  className={`group relative bg-background-card border border-border-primary rounded-xl overflow-hidden hover:border-accent-orange/50 transition-all duration-300 hover:-translate-y-1 ${coursesVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`}
-                  style={{ animationDelay: `${index * 0.1}s` }}
-                >
-                  {/* Image Section */}
-                  <div className="relative h-56 overflow-hidden">
-                    {(course.imageUrl || course.imageBase64) ? (
-                      <>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent z-10"></div>
-                        <LazyImage
-                          src={course.imageUrl || course.imageBase64}
-                          alt={course.name}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                          priority={index < 6}
-                        />
-                      </>
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
-                        <BookOpenIcon className="h-16 w-16 text-slate-400" />
-                      </div>
-                    )}
-                    
-                    {course.featured && (
-                      <div className="absolute top-4 left-4 z-20">
-                        <span className="inline-flex items-center gap-1.5 bg-accent-orange text-background-primary px-3 py-1.5 rounded-full text-xs font-bold">
-                          <SparklesIcon className="h-3 w-3" />
-                          Mais Vendido
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Content Section */}
-                  <div className="p-6 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-3 py-1 rounded-full text-xs font-bold">
-                        {course.competition}
-                      </span>
-                    </div>
-                    
-                    <h3 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">
-                      {course.name}
-                    </h3>
-                    
-                    {course.description && (
-                      <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2">
-                        {course.description}
-                      </p>
-                    )}
-                    
-                    <div className="flex items-baseline gap-2 pt-2">
-                      {course.originalPrice && course.originalPrice > course.price && (
-                        <p className="text-sm text-slate-400 line-through">
-                          {formatCurrency(course.originalPrice)}
-                        </p>
-                      )}
-                      <p className="text-3xl font-black gradient-text">
-                        {formatCurrency(course.price || 99.90)}
-                      </p>
-                    </div>
-                    
-                    {course.courseDuration && (
-                      <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                        <ClockIcon className="h-3 w-3" />
-                        {course.courseDuration}
-                      </p>
-                    )}
-                    
-                    <div className="flex gap-3 pt-2">
-                      <Link
-                        to={`/pagamento?course=${course.id}`}
-                        onClick={trackButtonClick}
-                        className="flex-1 bg-gradient-primary text-white px-6 py-3 rounded-xl font-bold text-sm hover:shadow-lg transition-all hover:scale-105 text-center shadow-lg shadow-primary-500/25"
-                      >
-                        Comprar Agora
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={async (e) => {
-                          e.preventDefault()
-                          const shareUrl = `${window.location.origin}/curso/${course.id}`
-                          if (navigator.share) {
-                            try {
-                              await navigator.share({
-                                title: course.name,
-                                text: course.description || `Confira o curso ${course.name}`,
-                                url: shareUrl,
-                              })
-                            } catch (err) {
-                              if (err.name !== 'AbortError') {
-                                await navigator.clipboard.writeText(shareUrl)
-                                alert('Link copiado!')
-                              }
-                            }
-                          } else {
-                            await navigator.clipboard.writeText(shareUrl)
-                            alert('Link copiado!')
-                          }
-                        }}
-                        className="px-4 py-3 rounded-xl bg-slate-100/80 dark:bg-slate-700/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all"
-                      >
-                        <ShareIcon className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </div>
+            <div className="bg-background-card rounded-xl p-4 border border-border-primary">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between p-2 rounded bg-background-secondary">
+                  <span className="text-sm font-medium text-text-primary">📚 Português</span>
+                  <span className="text-xs text-accent-orange">85% incidência</span>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-16 rounded-3xl bg-white dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-700">
-              <BookOpenIcon className="h-16 w-16 mx-auto mb-4 text-slate-400" />
-              <p className="text-lg text-slate-600 dark:text-slate-400">Nenhum curso disponível no momento.</p>
-            </div>
-          )}
-        </div>
-
-        {/* Avaliações dos Alunos - Modern Design */}
-        <div className="space-y-8">
-          <div className="text-center space-y-4">
-            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2 rounded-full text-sm font-bold shadow-lg">
-              <SparklesIcon className="h-5 w-5" />
-              Avaliações dos Alunos
-            </div>
-            <h2 className="text-4xl sm:text-5xl md:text-6xl font-black text-slate-900 dark:text-white">
-              O que nossos alunos
-              <span className="block bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                dizem sobre nós
-              </span>
-            </h2>
-            <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-              Histórias reais de aprovação e sucesso de quem confiou na FlashConCards
-            </p>
-          </div>
-          <div className="rounded-3xl glass p-8 sm:p-12 shadow-2xl reviews-container">
-            <Suspense fallback={
-              <div className="text-center py-16">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-purple-600 border-t-transparent"></div>
-                <p className="mt-6 text-lg text-slate-600 dark:text-slate-400">Carregando avaliações...</p>
-              </div>
-            }>
-              <Reviews />
-            </Suspense>
-          </div>
-        </div>
-
-        {/* Seção SEO - Conteúdo Rico - Modern Design */}
-        <div className="relative rounded-3xl bg-gradient-to-br from-white to-primary-50 dark:from-slate-800 dark:to-slate-900 p-8 sm:p-12 md:p-16 shadow-xl border border-slate-200/50 dark:border-slate-700/50">
-          <div className="max-w-4xl mx-auto space-y-8">
-            <div className="text-center space-y-4">
-              <h2 className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white">
-                Por que escolher a
-                <span className="block gradient-text">
-                  ConCursos2.5?
-                </span>
-              </h2>
-              <p className="text-lg text-slate-600 dark:text-slate-400">
-                A plataforma completa para sua aprovação em concursos públicos
-              </p>
-            </div>
-            
-            <div className="grid gap-6 md:grid-cols-2">
-              {[
-                { icon: ShieldCheckIcon, title: 'Contúdo Atualizado', desc: 'Flashcards sempre atualizados com as últimas bancas e editais' },
-                { icon: RocketLaunchIcon, title: 'SRS Inteligente', desc: 'Sistema de repetição espaçada que otimiza seu tempo de estudo' },
-                { icon: AcademicCapIcon, title: 'IA Avançada', desc: 'Assistente de IA disponível 24/7 para tirar suas dúvidas' },
-                { icon: BookOpenIcon, title: 'Simulados Reais', desc: 'Questões no estilo das principais bancas do Brasil' },
-              ].map((item, index) => (
-                <div key={index} className="group glass rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 border border-slate-200/50 dark:border-slate-700/50">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-primary flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-primary-500/25">
-                      <item.icon className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{item.title}</h3>
-                      <p className="text-slate-600 dark:text-slate-400 text-sm">{item.desc}</p>
-                    </div>
-                  </div>
+                <div className="flex items-center justify-between p-2 rounded bg-background-secondary">
+                  <span className="text-sm font-medium text-text-primary">⚖️ Direito Constitucional</span>
+                  <span className="text-xs text-accent-cyan">92% incidência</span>
                 </div>
-              ))}
+                <div className="flex items-center justify-between p-2 rounded bg-background-secondary">
+                  <span className="text-sm font-medium text-text-primary">🔍 Raciocínio Lógico</span>
+                  <span className="text-xs text-accent-orange">78% incidência</span>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* CTA Final - Modern Design */}
-        <div 
-          ref={ctaRef}
-          className={`relative rounded-3xl overflow-hidden bg-gradient-accent p-10 sm:p-12 md:p-16 text-center text-white shadow-2xl ${ctaVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`}
-        >
-          {/* Animated Background */}
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute -top-40 -right-40 w-80 h-80 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
-            <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-primary-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-          </div>
-          
-          {/* Grid Pattern */}
-          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
-          
-          <div className="relative z-10 space-y-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-lg mb-4">
-              <AcademicCapIcon className="h-10 w-10 text-white" />
+          {/* Demo Calendário de Progresso */}
+          <div className={`glass rounded-2xl p-6 border border-border-primary ${heroVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`} style={{ animationDelay: '0.3s' }}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-cyan to-accent-orange flex items-center justify-center">
+                <CalendarIcon className="h-5 w-5 text-background-primary" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-text-primary">Calendário de Progresso</h3>
+                <p className="text-sm text-text-secondary">Acompanhe sua evolução</p>
+              </div>
             </div>
-            
-            <h2 className="text-4xl sm:text-5xl md:text-6xl font-black">
-              Pronto para começar sua
-              <span className="block mt-2 bg-gradient-to-r from-secondary-200 via-accent-200 to-primary-200 bg-clip-text text-transparent">
-                jornada de aprovação?
-              </span>
-            </h2>
-            
-            <p className="text-lg sm:text-xl text-white/90 max-w-2xl mx-auto leading-relaxed">
-              Junte-se a centenas de alunos que já estão se preparando para seus concursos com nossa plataforma completa.
-            </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
-              <Link
-                to="/login"
-                className="group relative inline-flex items-center justify-center gap-2 bg-white text-accent-600 px-10 py-4 rounded-xl font-bold text-base sm:text-lg shadow-xl hover:shadow-2xl transition-all hover:scale-105"
-              >
-                <RocketLaunchIcon className="h-5 w-5 group-hover:animate-bounce" />
-                Começar Agora
-              </Link>
-              <Link
-                to="/pagamento"
-                onClick={trackButtonClick}
-                className="inline-flex items-center justify-center gap-2 bg-white/20 backdrop-blur-sm text-white px-10 py-4 rounded-xl font-bold text-base sm:text-lg border-2 border-white/30 hover:bg-white/30 transition-all"
-              >
-                Garantir Promoção
-              </Link>
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 bg-green-500 text-white px-10 py-4 rounded-xl font-bold text-base sm:text-lg hover:bg-green-600 transition-all hover:scale-105"
-              >
-                Falar no WhatsApp
-              </a>
+            <div className="bg-background-card rounded-xl p-4 border border-border-primary">
+              <div className="flex gap-2">
+                <div className="flex-1 p-2 rounded bg-accent-orange/20 border border-accent-orange/50 text-center">
+                  <div className="text-lg font-bold text-accent-orange">15</div>
+                  <div className="text-xs text-text-secondary">dias seguidos</div>
+                </div>
+                <div className="flex-1 p-2 rounded bg-accent-cyan/20 border border-accent-cyan/50 text-center">
+                  <div className="text-lg font-bold text-accent-cyan">127</div>
+                  <div className="text-xs text-text-secondary">flashcards</div>
+                </div>
+                <div className="flex-1 p-2 rounded bg-background-secondary border border-border-primary text-center">
+                  <div className="text-lg font-bold text-text-primary">89%</div>
+                  <div className="text-xs text-text-secondary">acertos</div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Seção de Notícias - Lazy loaded */}
-        <div ref={newsRef} className={`animate-on-scroll fade-up ${newsVisible ? 'visible' : ''}`}>
-          <Suspense fallback={
-            <div className="text-center py-16">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
-              <p className="mt-6 text-lg text-slate-600 dark:text-slate-400">Carregando notícias...</p>
+          {/* Demo Flashcards */}
+          <div className={`glass rounded-2xl p-6 border border-border-primary ${heroVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`} style={{ animationDelay: '0.4s' }}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-orange to-accent-cyan flex items-center justify-center">
+                <SparklesIcon className="h-5 w-5 text-background-primary" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-text-primary">Flashcards com IA</h3>
+                <p className="text-sm text-text-secondary">Estudo inteligente e personalizado</p>
+              </div>
             </div>
-          }>
-            <NewsSection />
-          </Suspense>
+            <div className="bg-background-card rounded-xl p-4 border border-border-primary">
+              <div className="bg-gradient-to-br from-accent-orange/10 to-accent-cyan/10 rounded-lg p-4 border border-border-primary">
+                <p className="text-sm font-medium text-text-primary mb-2">O que é o princípio da legalidade?</p>
+                <p className="text-xs text-text-secondary">Administração só pode agir conforme a lei...</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Demo Treino de Redação */}
+          <div className={`glass rounded-2xl p-6 border border-border-primary ${heroVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`} style={{ animationDelay: '0.5s' }}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-cyan to-accent-orange flex items-center justify-center">
+                <DocumentTextIcon className="h-5 w-5 text-background-primary" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-text-primary">Treino de Redação</h3>
+                <p className="text-sm text-text-secondary">Prática com feedback da IA</p>
+              </div>
+            </div>
+            <div className="bg-background-card rounded-xl p-4 border border-border-primary">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-accent-orange"></div>
+                  <span className="text-xs text-text-secondary">Tema gerado pela IA</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-accent-cyan"></div>
+                  <span className="text-xs text-text-secondary">Análise detalhada</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-accent-orange"></div>
+                  <span className="text-xs text-text-secondary">Sugestões de melhoria</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </div>

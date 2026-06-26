@@ -168,7 +168,7 @@ function App() {
       <div 
         className="min-h-screen transition-colors"
         style={{
-          backgroundColor: '#09090b',
+          backgroundColor: darkMode ? '#09090b' : '#1e3a5a',
           color: '#fafafa',
           minHeight: '100vh'
         }}
