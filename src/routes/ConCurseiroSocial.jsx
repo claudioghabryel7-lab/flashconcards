@@ -408,7 +408,7 @@ const ConCurseiroSocial = () => {
   if (!user) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-lg font-semibold text-alego-600 dark:text-alego-400">
+        <p className="text-lg font-semibold text-accent-orange">
           Faça login para ver o feed social
         </p>
       </div>
@@ -416,7 +416,8 @@ const ConCurseiroSocial = () => {
   }
 
   return (
-    <div className="max-w-2xl mx-auto pb-20" style={{ backgroundColor: darkMode ? '#000000' : '#ffffff' }}>
+    <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+      <div className="max-w-2xl mx-auto pb-20">
       {/* Notificações */}
       {notifications.length > 0 && (
         <NotificationToast 
@@ -426,10 +427,10 @@ const ConCurseiroSocial = () => {
       )}
       
       {/* Header - Estilo Instagram */}
-      <div className="bg-white dark:bg-black border-b border-slate-300 dark:border-slate-800 sticky top-0 z-10 py-4 mb-4">
+      <div className="bg-background-card border-b border-border-primary sticky top-0 z-10 py-4 mb-4">
         <div className="flex items-center justify-between px-4">
-          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            FlashSocial
+          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-accent-orange to-accent-cyan bg-clip-text text-transparent">
+            ConCurseiroSocial
           </h1>
           {user && (
             <Link
@@ -443,7 +444,7 @@ const ConCurseiroSocial = () => {
                   className="h-8 w-8 rounded-full object-cover"
                 />
               ) : (
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-accent-orange to-accent-cyan flex items-center justify-center">
                   <span className="text-white font-bold text-xs">
                     {(profile?.displayName || user.email || 'U')[0].toUpperCase()}
                   </span>
@@ -458,9 +459,9 @@ const ConCurseiroSocial = () => {
       <StoriesBar />
 
       {/* Criar novo post - Estilo Instagram */}
-      <div className="bg-white dark:bg-black border-b border-slate-300 dark:border-slate-800 px-4 py-6 mb-4">
+      <div className="bg-background-card border-b border-border-primary px-4 py-6 mb-4">
         {error && (
-          <div className="mb-4 rounded-xl bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
+          <div className="mb-4 rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-700">
             {error}
           </div>
         )}
@@ -474,7 +475,7 @@ const ConCurseiroSocial = () => {
               className="h-10 w-10 rounded-full object-cover flex-shrink-0"
             />
           ) : (
-            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-alego-500 to-alego-700 flex items-center justify-center flex-shrink-0">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-accent-orange to-accent-cyan flex items-center justify-center flex-shrink-0">
               <span className="text-white font-bold text-sm">
                 {(profile?.displayName || user.email || 'U')[0].toUpperCase()}
               </span>
@@ -490,12 +491,12 @@ const ConCurseiroSocial = () => {
               }}
               placeholder="O que você está estudando hoje? Compartilhe sua motivação!"
               rows={3}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:border-alego-400 focus:outline-none resize-none"
+              className="w-full rounded-xl border border-border-primary bg-background-primary px-4 py-3 text-sm focus:border-accent-orange focus:outline-none resize-none"
             />
             
             {/* Preview da imagem */}
             {imagePreview && (
-              <div className="relative mt-3 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+              <div className="relative mt-3 rounded-xl overflow-hidden border border-border-primary">
                 <img
                   src={imagePreview}
                   alt="Preview"
@@ -815,6 +816,7 @@ const ConCurseiroSocial = () => {
           )
         })}
       </div>
+    </div>
     </div>
   )
 }

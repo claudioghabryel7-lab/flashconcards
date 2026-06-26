@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy } from 'firebase/firestore'
-import { ArrowLeftIcon, PencilIcon, FireIcon, LightBulbIcon, ExclamationTriangleIcon, BookOpenIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, PencilIcon, FireIcon, LightBulbIcon, ExclamationTriangleIcon, BookOpenIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import ReactMarkdown from 'react-markdown'
+import jsPDF from 'jspdf'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -486,6 +487,196 @@ ONDE:
     }
   }
 
+  const handleDownloadPDF = () => {
+    if (!conteudo) return
+
+    const pdf = new jsPDF()
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    const margin = 20
+    const contentWidth = pageWidth - (margin * 2)
+    let yPosition = margin
+
+    // Função para adicionar texto com quebra automática
+    const addWrappedText = (text, x, y, maxWidth, fontSize, fontStyle = 'normal', color = [0, 0, 0]) => {
+      pdf.setFontSize(fontSize)
+      pdf.setFont('helvetica', fontStyle)
+      pdf.setTextColor(color[0], color[1], color[2])
+      
+      const lines = pdf.splitTextToSize(text, maxWidth)
+      lines.forEach((line, index) => {
+        if (yPosition > pageHeight - margin) {
+          pdf.addPage()
+          yPosition = margin
+        }
+        pdf.text(line, x, yPosition)
+        yPosition += fontSize * 0.5
+      })
+      return yPosition
+    }
+
+    // Cabeçalho
+    pdf.setFillColor(255, 140, 0) // Laranja
+    pdf.rect(0, 0, pageWidth, 40, 'F')
+    
+    pdf.setTextColor(255, 255, 255)
+    pdf.setFontSize(24)
+    pdf.setFont('helvetica', 'bold')
+    pdf.text('ConCursos 2.5', margin, 25)
+    
+    pdf.setFontSize(12)
+    pdf.setFont('helvetica', 'normal')
+    pdf.text('Material de Apoio', pageWidth - margin - 50, 25, { align: 'right' })
+
+    yPosition = 55
+
+    // Título do material
+    if (conteudo.titulo) {
+      yPosition = addWrappedText(conteudo.titulo, margin, yPosition, contentWidth, 18, 'bold', [0, 0, 0])
+      yPosition += 10
+    }
+
+    // Subtítulo
+    if (conteudo.subtitulo) {
+      yPosition = addWrappedText(conteudo.subtitulo, margin, yPosition, contentWidth, 12, 'italic', [80, 80, 80])
+      yPosition += 10
+    }
+
+    // Matéria
+    if (conteudo.materia) {
+      pdf.setFillColor(240, 240, 240)
+      pdf.rect(margin, yPosition - 5, contentWidth, 8, 'F')
+      yPosition = addWrappedText(`Matéria: ${conteudo.materia}`, margin, yPosition, contentWidth, 11, 'bold', [0, 0, 0])
+      yPosition += 10
+    }
+
+    // Raio-X de Probabilidade
+    if (conteudo.raioXProbabilidade) {
+      yPosition += 5
+      pdf.setFillColor(255, 200, 100)
+      pdf.rect(margin, yPosition - 5, contentWidth, 8, 'F')
+      yPosition = addWrappedText('🔥 Raio-X de Probabilidade', margin, yPosition, contentWidth, 14, 'bold', [0, 0, 0])
+      yPosition += 10
+
+      if (conteudo.raioXProbabilidade.topicosQuentes) {
+        yPosition = addWrappedText('Top Assuntos Quentes:', margin, yPosition, contentWidth, 12, 'bold', [0, 0, 0])
+        yPosition += 5
+        conteudo.raioXProbabilidade.topicosQuentes.forEach((assunto, idx) => {
+          yPosition = addWrappedText(`${idx + 1}. ${assunto}`, margin + 5, yPosition, contentWidth - 10, 10, 'normal', [0, 0, 0])
+          yPosition += 3
+        })
+        yPosition += 5
+      }
+
+      if (conteudo.raioXProbabilidade.padraoBanca) {
+        yPosition = addWrappedText('Padrão da Banca:', margin, yPosition, contentWidth, 12, 'bold', [0, 0, 0])
+        yPosition += 5
+        yPosition = addWrappedText(conteudo.raioXProbabilidade.padraoBanca, margin + 5, yPosition, contentWidth - 10, 10, 'normal', [0, 0, 0])
+        yPosition += 10
+      }
+    }
+
+    // Revisão Turbo
+    if (conteudo.revisaoTurbo) {
+      yPosition += 5
+      pdf.setFillColor(100, 150, 255)
+      pdf.rect(margin, yPosition - 5, contentWidth, 8, 'F')
+      yPosition = addWrappedText('⚡ Revisão Turbo', margin, yPosition, contentWidth, 14, 'bold', [255, 255, 255])
+      yPosition += 10
+
+      if (conteudo.revisaoTurbo.resumos && Array.isArray(conteudo.revisaoTurbo.resumos)) {
+        yPosition = addWrappedText('Resumos:', margin, yPosition, contentWidth, 12, 'bold', [0, 0, 0])
+        yPosition += 5
+        conteudo.revisaoTurbo.resumos.forEach((resumo, idx) => {
+          yPosition = addWrappedText(`${idx + 1}. ${resumo}`, margin + 5, yPosition, contentWidth - 10, 10, 'normal', [0, 0, 0])
+          yPosition += 5
+        })
+        yPosition += 5
+      }
+
+      if (conteudo.revisaoTurbo.pegadinhas && Array.isArray(conteudo.revisaoTurbo.pegadinhas)) {
+        pdf.setFillColor(255, 200, 200)
+        pdf.rect(margin, yPosition - 5, contentWidth, 8, 'F')
+        yPosition = addWrappedText('⚠️ Cuidado, Caçapa!', margin, yPosition, contentWidth, 12, 'bold', [200, 0, 0])
+        yPosition += 10
+        conteudo.revisaoTurbo.pegadinhas.forEach((pegadinha, idx) => {
+          yPosition = addWrappedText(`${idx + 1}. ${pegadinha.titulo || pegadinha}`, margin + 5, yPosition, contentWidth - 10, 10, 'normal', [200, 0, 0])
+          yPosition += 5
+          if (pegadinha.conteudo) {
+            yPosition = addWrappedText(pegadinha.conteudo, margin + 10, yPosition, contentWidth - 15, 9, 'normal', [100, 0, 0])
+            yPosition += 5
+          }
+        })
+        yPosition += 5
+      }
+    }
+
+    // Questões Preditivas
+    if (conteudo.questoesPreditivas && Array.isArray(conteudo.questoesPreditivas)) {
+      yPosition += 5
+      pdf.setFillColor(100, 200, 100)
+      pdf.rect(margin, yPosition - 5, contentWidth, 8, 'F')
+      yPosition = addWrappedText('📚 Questões Preditivas', margin, yPosition, contentWidth, 14, 'bold', [255, 255, 255])
+      yPosition += 10
+
+      conteudo.questoesPreditivas.forEach((questao, idx) => {
+        yPosition = addWrappedText(`Questão ${idx + 1} de ${conteudo.questoesPreditivas.length}`, margin, yPosition, contentWidth, 11, 'bold', [0, 0, 0])
+        yPosition += 5
+        yPosition = addWrappedText(questao.enunciado, margin + 5, yPosition, contentWidth - 10, 10, 'normal', [0, 0, 0])
+        yPosition += 5
+
+        if (questao.alternativas) {
+          Object.entries(questao.alternativas).forEach(([letra, alt]) => {
+            const isCorrect = letra === questao.correta
+            yPosition = addWrappedText(`${letra}) ${alt}`, margin + 10, yPosition, contentWidth - 15, 9, isCorrect ? 'bold' : 'normal', isCorrect ? [0, 150, 0] : [0, 0, 0])
+            yPosition += 3
+          })
+          yPosition += 5
+        }
+
+        if (questao.gabaritoComentado) {
+          pdf.setFillColor(230, 240, 255)
+          pdf.rect(margin, yPosition - 3, contentWidth, 6, 'F')
+          yPosition = addWrappedText('💡 Gabarito Comentado:', margin, yPosition, contentWidth, 10, 'bold', [0, 0, 150])
+          yPosition += 5
+          yPosition = addWrappedText(questao.gabaritoComentado, margin + 5, yPosition, contentWidth - 10, 9, 'normal', [0, 0, 100])
+          yPosition += 10
+        }
+      })
+    }
+
+    // Conteúdo original
+    if (conteudo.content) {
+      yPosition += 5
+      pdf.setFillColor(200, 200, 200)
+      pdf.rect(margin, yPosition - 5, contentWidth, 8, 'F')
+      yPosition = addWrappedText('📖 Conteúdo Completo', margin, yPosition, contentWidth, 14, 'bold', [0, 0, 0])
+      yPosition += 10
+      
+      // Remover tags HTML do conteúdo
+      const plainContent = conteudo.content.replace(/<[^>]+>/g, '\n').replace(/\n\s*\n/g, '\n\n')
+      yPosition = addWrappedText(plainContent, margin, yPosition, contentWidth, 10, 'normal', [0, 0, 0])
+    }
+
+    // Rodapé
+    const totalPages = pdf.internal.getNumberOfPages()
+    for (let i = 1; i <= totalPages; i++) {
+      pdf.setPage(i)
+      pdf.setFontSize(9)
+      pdf.setTextColor(128, 128, 128)
+      pdf.text(
+        `Página ${i} de ${totalPages} | Gerado em ${new Date().toLocaleDateString('pt-BR')}`,
+        pageWidth / 2,
+        pageHeight - 10,
+        { align: 'center' }
+      )
+    }
+
+    // Salvar PDF
+    const fileName = `${conteudo.materia || 'material'}-${conteudo.titulo || 'topico'}.pdf`.replace(/[^a-zA-Z0-9\-_.]/g, '_')
+    pdf.save(fileName)
+  }
+
   const handleGenerateContent = async () => {
     if (!resolvedCourseId || !resolvedTopicKey) return false
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY
@@ -904,6 +1095,16 @@ REGRAS:
 
             <div className="flex flex-col items-start gap-2 lg:items-end">
               <div className="flex gap-2 flex-wrap">
+                {conteudo && (
+                  <button
+                    type="button"
+                    onClick={handleDownloadPDF}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-accent-orange to-accent-cyan hover:shadow-glow text-white text-sm font-semibold transition"
+                  >
+                    <DocumentArrowDownIcon className="w-4 h-4" />
+                    Baixar PDF
+                  </button>
+                )}
                 {isAdmin && (
                   <button
                     type="button"
