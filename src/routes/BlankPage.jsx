@@ -359,7 +359,7 @@ IMPORTANTE:
       let jsonText = response.trim()
       
       // Remover markdown code blocks
-      jsonText = jsonText.replace(/```json\n?/gi, '').replace(/```\n?/g, '')
+      jsonText = jsonText.replace(/```json\\n?/gi, '').replace(/```\\n?/g, '')
       
       // Encontrar o primeiro { e último } para extrair apenas o JSON válido
       const firstBrace = jsonText.indexOf('{')
