@@ -8,9 +8,6 @@ import {
   SparklesIcon,
   CheckIcon,
   ShareIcon,
-  DocumentArrowDownIcon,
-  MoonIcon,
-  SunIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   FireIcon,
@@ -200,11 +197,6 @@ const VesperaDeProva = () => {
     }
   }
   
-  // Gerar PDF
-  const generatePDF = () => {
-    alert('Funcionalidade de PDF será implementada em breve.')
-  }
-  
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -232,15 +224,6 @@ const VesperaDeProva = () => {
           </div>
           
           <div className="flex items-center gap-3">
-            {/* Modo noturno */}
-            <button
-              onClick={toggleDarkMode}
-              className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              title="Alternar modo escuro"
-            >
-              {darkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
-            </button>
-            
             {/* Botão de configurar (admin) */}
             {isAdmin && (
               <button
@@ -261,17 +244,6 @@ const VesperaDeProva = () => {
               >
                 <ShareIcon className="h-5 w-5" />
                 Compartilhar
-              </button>
-            )}
-            
-            {/* Botão PDF */}
-            {generatedMaterial && (
-              <button
-                onClick={generatePDF}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 dark:bg-slate-700 text-white rounded-lg font-medium hover:bg-slate-700 dark:hover:bg-slate-600 transition"
-              >
-                <DocumentArrowDownIcon className="h-5 w-5" />
-                PDF
               </button>
             )}
           </div>
@@ -437,9 +409,11 @@ const VesperaDeProva = () => {
                             </h5>
                             <ul className="space-y-2">
                               {disciplina.revisaoTurbo.resumos.map((resumo, rIdx) => (
-                                <li key={rIdx} className="text-sm text-slate-600 dark:text-slate-400">
-                                  {cleanMarkdown(resumo)}
-                                </li>
+                                <li 
+                                  key={rIdx} 
+                                  className="text-sm text-slate-600 dark:text-slate-400"
+                                  dangerouslySetInnerHTML={{ __html: resumo }}
+                                />
                               ))}
                             </ul>
                           </div>
@@ -453,9 +427,11 @@ const VesperaDeProva = () => {
                             </h5>
                             <ul className="space-y-1">
                               {disciplina.revisaoTurbo.pegadinhas.map((pegadinha, pIdx) => (
-                                <li key={pIdx} className="text-sm text-red-600 dark:text-red-400">
-                                  {cleanMarkdown(pegadinha)}
-                                </li>
+                                <li 
+                                  key={pIdx} 
+                                  className="text-sm text-red-600 dark:text-red-400"
+                                  dangerouslySetInnerHTML={{ __html: pegadinha }}
+                                />
                               ))}
                             </ul>
                           </div>
@@ -484,8 +460,8 @@ const VesperaDeProva = () => {
                               <span className="text-xs font-semibold text-alego-600 mb-2 block">
                                 Aposta {qIdx + 1} de {disciplina.questoes.length}
                               </span>
-                              <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">
-                                {questao.enunciado}
+                              <p className="text-sm text-slate-700 dark:text-slate-300">
+                                <span dangerouslySetInnerHTML={{ __html: questao.enunciado }} />
                               </p>
                             </div>
                             
@@ -511,8 +487,8 @@ const VesperaDeProva = () => {
                                 <h5 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2">
                                   💡 Gabarito Comentado:
                                 </h5>
-                                <p className="text-sm text-blue-600 dark:text-blue-300 whitespace-pre-line">
-                                  {questao.comentario}
+                                <p className="text-sm text-blue-600 dark:text-blue-300">
+                                  <span dangerouslySetInnerHTML={{ __html: questao.comentario }} />
                                 </p>
                               </div>
                             )}

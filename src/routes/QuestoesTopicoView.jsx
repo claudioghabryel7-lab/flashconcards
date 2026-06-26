@@ -405,6 +405,7 @@ ESTRUTURA DO JSON:
   "curso": "${courseName || 'Curso Preparatório'}",
   "topico": "${effectiveTopicNome || resolvedTopicKey}",
   "tipoProva": "${tipoProva}",
+  "dataGeracao": "${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}",
   "questoes": [
     {
       "numero": 1,

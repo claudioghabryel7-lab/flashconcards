@@ -3538,10 +3538,13 @@ Retorne APENAS um JSON válido:
       "pergunta": "Pergunta específica e técnica sobre o CONTEÚDO",
       "resposta": "Resposta detalhada e precisa explicando o CONTEÚDO",
       "materia": "${materia.nome}",
-      "modulo": "${modulo.nome}"
+      "modulo": "${modulo.nome}",
+      "dataGeracao": "${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}"
     }
   ]
 }
+
+⚠️ OBRIGATÓRIO: Inclua a data e hora atual no campo "dataGeracao" de cada flashcard no formato DD/MM/AAAA HH:MM. Isso força a IA a gerar conteúdo atualizado.
 
 Retorne APENAS o JSON, sem markdown, sem explicações.`
 
@@ -4007,10 +4010,13 @@ Retorne APENAS um JSON válido:
       "pergunta": "Pergunta específica e técnica sobre o CONTEÚDO",
       "resposta": "Resposta detalhada e precisa explicando o CONTEÚDO",
       "materia": "${materia.nome}",
-      "modulo": "${modulo.nome}"
+      "modulo": "${modulo.nome}",
+      "dataGeracao": "${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}"
     }
   ]
 }
+
+⚠️ OBRIGATÓRIO: Inclua a data e hora atual no campo "dataGeracao" de cada flashcard no formato DD/MM/AAAA HH:MM. Isso força a IA a gerar conteúdo atualizado.
 
 Retorne APENAS o JSON, sem markdown, sem explicações.`
 

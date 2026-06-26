@@ -335,6 +335,7 @@ FORMATO JSON:
 {
   "validacaoArtigo": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
   "disciplina": "${estrutura.disciplina.nome}",
+  "dataGeracao": "${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}",
   "raioX": {
     "topAssuntos": ["assunto 1", "assunto 2", "assunto 3"],
     "padraoBanca": "descrição do padrão"
@@ -353,6 +354,8 @@ FORMATO JSON:
     }
   ]
 }
+
+⚠️ OBRIGATÓRIO: Inclua a data e hora atual no campo "dataGeracao" no formato DD/MM/AAAA HH:MM. Isso força a IA a gerar conteúdo atualizado.
 
 REGRAS:
 - Use tom focado e direto

@@ -80,7 +80,7 @@ const Header = () => {
         label: 'Social',
         icon: UsersIcon,
         items: [
-          { to: '/feed', label: 'FlashSocial', auth: true },
+          { to: '/feed', label: 'ConCurseiroSocial', auth: true },
         ],
       },
       admin: {
@@ -305,8 +305,8 @@ const Header = () => {
                             {item.label}
                           </NavLink>
                           
-                          {/* Botão Sair embaixo de FlashSocial */}
-                          {item.label === 'FlashSocial' && (
+                          {/* Botão Sair embaixo de ConCurseiroSocial */}
+                          {item.label === 'ConCurseiroSocial' && (
                             <button
                               type="button"
                               onClick={() => {

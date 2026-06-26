@@ -23,7 +23,7 @@ const ResetPassword = lazy(() => import('./routes/ResetPassword'))
 const Payment = lazy(() => import('./routes/Payment'))
 const CourseSelector = lazy(() => import('./components/CourseSelector'))
 const CourseShare = lazy(() => import('./routes/CourseShare'))
-const SocialFeed = lazy(() => import('./routes/SocialFeed'))
+const ConCurseiroSocial = lazy(() => import('./routes/ConCurseiroSocial'))
 const UserProfile = lazy(() => import('./routes/UserProfile'))
 const NewsView = lazy(() => import('./routes/NewsView'))
 const BlogNewsView = lazy(() => import('./routes/BlogNewsView'))
@@ -386,7 +386,7 @@ function App() {
             path="/feed"
             element={
               <ProtectedRoute requireCourseSelection={false}>
-                <SocialFeed />
+                <ConCurseiroSocial />
               </ProtectedRoute>
             }
           />

@@ -653,7 +653,7 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
 FORMATO JSON:
 {
   "validacaoArtigo": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
-  "titulo": "Título específico do conteúdo",
+  "titulo": "Título específico do conteúdo - OBRIGATÓRIO: Inclua data e hora atual no formato (DD/MM/AAAA HH:MM) no final do título. Exemplo: 'Inquérito Policial (26/06/2026 14:30)'",
   "materia": "${effectiveTopicNome || resolvedTopicKey}",
   "subtitulo": "Subtítulo específico opcional",
   "numero": "${resolvedTopicKey}",

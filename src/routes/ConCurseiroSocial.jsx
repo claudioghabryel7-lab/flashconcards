@@ -29,7 +29,7 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import NotificationToast from '../components/NotificationToast'
 import StoriesBar from '../components/StoriesBar'
 
-const SocialFeed = () => {
+const ConCurseiroSocial = () => {
   const { user, profile, isAdmin } = useAuth()
   const { darkMode } = useDarkMode()
   const [posts, setPosts] = useState([])
@@ -512,11 +512,11 @@ const SocialFeed = () => {
             )}
             
             {/* Botões de ação */}
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-border-primary">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 transition"
+                className="flex items-center gap-2 text-text-secondary hover:text-accent-orange transition"
               >
                 <PhotoIcon className="h-5 w-5" />
                 <span className="text-sm font-medium">Foto</span>
@@ -556,8 +556,8 @@ const SocialFeed = () => {
       {/* Lista de posts - Estilo Instagram */}
       <div>
         {posts.length === 0 && (
-          <div className="bg-white dark:bg-black p-8 text-center border-b border-slate-300 dark:border-slate-800">
-            <p className="text-slate-500 dark:text-slate-400">
+          <div className="bg-background-card p-8 text-center border-b border-border-primary">
+            <p className="text-text-secondary">
               Nenhum post ainda. Seja o primeiro a compartilhar!
             </p>
           </div>
@@ -575,10 +575,10 @@ const SocialFeed = () => {
           return (
             <article
               key={post.id}
-              className="bg-white dark:bg-black border-b border-slate-300 dark:border-slate-800 mb-4"
+              className="bg-background-card border border-border-primary rounded-2xl mb-4 overflow-hidden shadow-lg"
             >
               {/* Header do post */}
-              <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary">
                 <Link
                   to={`/profile/${post.authorId}`}
                   className="flex items-center gap-3 hover:opacity-80 transition"
@@ -587,20 +587,20 @@ const SocialFeed = () => {
                     <img
                       src={post.authorAvatar}
                       alt={post.authorName}
-                      className="h-10 w-10 rounded-full object-cover"
+                      className="h-10 w-10 rounded-full object-cover ring-2 ring-accent-orange/30"
                     />
                   ) : (
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                      <span className="text-white font-bold text-sm">
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-accent-orange to-accent-cyan flex items-center justify-center ring-2 ring-accent-orange/30">
+                      <span className="text-background-primary font-bold text-sm">
                         {(post.authorName || 'U')[0].toUpperCase()}
                       </span>
                     </div>
                   )}
                   <div>
-                    <p className="font-semibold text-slate-900 dark:text-slate-100">
+                    <p className="font-semibold text-text-primary">
                       {post.authorName || post.authorEmail}
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-xs text-text-secondary">
                       {formatDate(post.createdAt)}
                     </p>
                   </div>
@@ -608,7 +608,7 @@ const SocialFeed = () => {
                 <div className="flex items-center gap-2">
                   {/* Badge de Notícia */}
                   {post.isNews && (
-                    <span className="px-2 py-1 text-xs font-semibold bg-blue-600 text-white rounded-full">
+                    <span className="px-2 py-1 text-xs font-semibold bg-accent-orange text-background-primary rounded-full">
                       📰 Notícia
                     </span>
                   )}
@@ -626,7 +626,7 @@ const SocialFeed = () => {
                           setError('Erro ao marcar como notícia')
                         }
                       }}
-                      className="px-2 py-1 text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition"
+                      className="px-2 py-1 text-xs font-semibold bg-accent-orange/20 text-accent-orange rounded hover:bg-accent-orange/30 transition"
                       title="Marcar como notícia"
                     >
                       📰 Notícia
@@ -647,7 +647,7 @@ const SocialFeed = () => {
 
               {/* Imagem do post (base64 ou URL) - Estilo Instagram */}
               {(post.imageBase64 || post.imageUrl) && (
-                <div className="w-full bg-black">
+                <div className="w-full bg-background-primary">
                   <img
                     src={post.imageBase64 || post.imageUrl}
                     alt="Post"
@@ -659,7 +659,7 @@ const SocialFeed = () => {
               {/* Conteúdo do post */}
               {post.text && (
                 <div className="px-4 pb-3">
-                  <p className="text-slate-900 dark:text-white whitespace-pre-wrap break-words">
+                  <p className="text-text-primary whitespace-pre-wrap break-words">
                     {post.text}
                   </p>
                 </div>
@@ -680,11 +680,11 @@ const SocialFeed = () => {
                     title={!hasCourseAccess ? 'Você precisa ter acesso a um curso para interagir' : ''}
                   >
                     {isLiked ? (
-                      <HeartIcon className="h-6 w-6 text-rose-500" />
+                      <HeartIcon className="h-6 w-6 text-accent-orange" />
                     ) : (
-                      <HeartOutlineIcon className="h-6 w-6 text-slate-600 dark:text-slate-400" />
+                      <HeartOutlineIcon className="h-6 w-6 text-text-secondary" />
                     )}
-                    <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                    <span className="text-sm font-semibold text-text-secondary">
                       {likesCount}
                     </span>
                   </button>
@@ -694,8 +694,8 @@ const SocialFeed = () => {
                     onClick={() => toggleComments(post.id)}
                     className="flex items-center gap-2 hover:opacity-70 transition"
                   >
-                    <ChatBubbleLeftIcon className="h-6 w-6 text-slate-600 dark:text-slate-400" />
-                    <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                    <ChatBubbleLeftIcon className="h-6 w-6 text-text-secondary" />
+                    <span className="text-sm font-semibold text-text-secondary">
                       {commentsCount}
                     </span>
                   </button>
@@ -705,8 +705,8 @@ const SocialFeed = () => {
                     onClick={() => sharePost(post.id, post.text)}
                     className="flex items-center gap-2 hover:opacity-70 transition"
                   >
-                    <ShareIcon className="h-6 w-6 text-slate-600 dark:text-slate-400" />
-                    <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                    <ShareIcon className="h-6 w-6 text-text-secondary" />
+                    <span className="text-sm font-semibold text-text-secondary">
                       {sharesCount}
                     </span>
                   </button>
@@ -715,7 +715,7 @@ const SocialFeed = () => {
 
               {/* Comentários */}
               {showComments && (
-                <div className="px-4 pb-4 border-t border-slate-200 dark:border-slate-700">
+                <div className="px-4 pb-4 border-t border-border-primary">
                   <div className="pt-4 space-y-4 max-h-96 overflow-y-auto">
                     {comments.map((comment) => (
                       <div key={comment.id} className="group">
@@ -724,26 +724,26 @@ const SocialFeed = () => {
                             <img
                               src={comment.authorAvatar}
                               alt={comment.authorName}
-                              className="h-10 w-10 rounded-full object-cover flex-shrink-0 ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-blue-500 transition-all"
+                              className="h-10 w-10 rounded-full object-cover flex-shrink-0 ring-2 ring-accent-cyan/30 group-hover:ring-accent-cyan transition-all"
                             />
                           ) : (
-                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-blue-500 transition-all shadow-md">
-                              <span className="text-white font-bold text-sm">
+                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-accent-orange to-accent-cyan flex items-center justify-center flex-shrink-0 ring-2 ring-accent-cyan/30 group-hover:ring-accent-cyan transition-all shadow-md">
+                              <span className="text-background-primary font-bold text-sm">
                                 {(comment.authorName || 'U')[0].toUpperCase()}
                               </span>
                             </div>
                           )}
                           <div className="flex-1">
-                            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-4 py-3 group-hover:bg-slate-100 dark:group-hover:bg-slate-800 transition-all">
+                            <div className="bg-background-primary rounded-2xl px-4 py-3 group-hover:bg-background-card-hover transition-all">
                               <div className="flex items-center gap-2 mb-1">
-                                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                                <p className="text-sm font-bold text-text-primary">
                                   {comment.authorName}
                                 </p>
-                                <span className="text-xs text-slate-400 dark:text-slate-500">
+                                <span className="text-xs text-text-secondary">
                                   • {formatDate(comment.createdAt)}
                                 </span>
                               </div>
-                              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed break-words">
+                              <p className="text-sm text-text-secondary leading-relaxed break-words">
                                 {comment.text}
                               </p>
                             </div>
@@ -754,10 +754,10 @@ const SocialFeed = () => {
                     {comments.length === 0 && (
                       <div className="text-center py-6">
                         <div className="text-4xl mb-2">💬</div>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                        <p className="text-sm font-medium text-text-secondary">
                           Nenhum comentário ainda
                         </p>
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                        <p className="text-xs text-text-secondary mt-1">
                           Seja o primeiro a comentar!
                         </p>
                       </div>
@@ -765,16 +765,16 @@ const SocialFeed = () => {
                   </div>
 
                   {/* Input de comentário */}
-                  <div className="flex gap-3 mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <div className="flex gap-3 mt-4 pt-4 border-t border-border-primary">
                     {user.photoURL ? (
                       <img
                         src={user.photoURL}
                         alt={user.displayName || 'Você'}
-                        className="h-10 w-10 rounded-full object-cover flex-shrink-0 ring-2 ring-slate-200 dark:ring-slate-700"
+                        className="h-10 w-10 rounded-full object-cover flex-shrink-0 ring-2 ring-accent-orange/30"
                       />
                     ) : (
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 ring-2 ring-slate-200 dark:ring-slate-700 shadow-md">
-                        <span className="text-white font-bold text-sm">
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-accent-orange to-accent-cyan flex items-center justify-center flex-shrink-0 ring-2 ring-accent-orange/30 shadow-md">
+                        <span className="text-background-primary font-bold text-sm">
                           {(profile?.displayName || user.email || 'U')[0].toUpperCase()}
                         </span>
                       </div>
@@ -790,7 +790,7 @@ const SocialFeed = () => {
                         onKeyPress={(e) => e.key === 'Enter' && hasCourseAccess && addComment(post.id)}
                         placeholder={hasCourseAccess ? "Escreva um comentário..." : "Você precisa ter acesso a um curso para comentar"}
                         disabled={!hasCourseAccess}
-                        className={`w-full rounded-full border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all ${
+                        className={`w-full rounded-full border-2 border-border-primary bg-background-card px-5 py-3 text-sm focus:border-accent-orange focus:ring-2 focus:ring-accent-orange/20 focus:outline-none transition-all ${
                           !hasCourseAccess ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                       />
@@ -799,9 +799,9 @@ const SocialFeed = () => {
                       type="button"
                       onClick={() => addComment(post.id)}
                       disabled={!hasCourseAccess}
-                      className={`rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all ${
+                      className={`rounded-full bg-gradient-to-r from-accent-orange to-accent-cyan px-5 py-3 text-sm font-semibold text-background-primary shadow-lg hover:shadow-xl hover:scale-105 transition-all ${
                         hasCourseAccess 
-                          ? 'hover:from-blue-700 hover:to-purple-700' 
+                          ? 'hover:shadow-glow' 
                           : 'opacity-50 cursor-not-allowed'
                       }`}
                       title={!hasCourseAccess ? 'Você precisa ter acesso a um curso para comentar' : ''}
@@ -819,4 +819,4 @@ const SocialFeed = () => {
   )
 }
 
-export default SocialFeed
+export default ConCurseiroSocial

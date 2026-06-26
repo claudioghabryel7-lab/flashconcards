@@ -1031,7 +1031,8 @@ ${questionType === 'certo_errado' ? `{
       "enunciado": "Texto completo da afirmação",
       "tipo": "certo_errado",
       "correta": "C",
-      "materia": "${materia.nome}"
+      "materia": "${materia.nome}",
+      "dataGeracao": "${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}"
     }
   ]
 }` : `{
@@ -1052,10 +1053,13 @@ ${questionType === 'certo_errado' ? `{
         }
       },
       "correta": "A",
-      "materia": "${materia.nome}"
+      "materia": "${materia.nome}",
+      "dataGeracao": "${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}"
     }
   ]
 }`}
+
+⚠️ OBRIGATÓRIO: Inclua a data e hora atual no campo "dataGeracao" de cada questão no formato DD/MM/AAAA HH:MM. Isso força a IA a gerar conteúdo atualizado.
 
 CRÍTICO: Retorne APENAS o JSON, sem markdown.
 ⚠️ REGRAS CRÍTICAS PARA JSON VÁLIDO:
