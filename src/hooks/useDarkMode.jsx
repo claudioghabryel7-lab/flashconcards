@@ -22,13 +22,13 @@ export const DarkModeProvider = ({ children }) => {
     if (darkMode) {
       html.classList.add('dark')
       html.style.colorScheme = 'dark'
-      body.style.backgroundColor = '#0f172a'
-      body.style.color = '#f1f5f9'
+      body.style.backgroundColor = '#09090b'
+      body.style.color = '#fafafa'
     } else {
       html.classList.remove('dark')
-      html.style.colorScheme = 'light'
-      body.style.backgroundColor = '#f8fafc'
-      body.style.color = '#1e293b'
+      html.style.colorScheme = 'dark'
+      body.style.backgroundColor = '#09090b'
+      body.style.color = '#fafafa'
     }
     
     try {
@@ -46,13 +46,13 @@ export const DarkModeProvider = ({ children }) => {
     if (darkMode) {
       html.classList.add('dark')
       html.style.colorScheme = 'dark'
-      body.style.backgroundColor = '#0f172a'
-      body.style.color = '#f1f5f9'
+      body.style.backgroundColor = '#09090b'
+      body.style.color = '#fafafa'
     } else {
       html.classList.remove('dark')
-      html.style.colorScheme = 'light'
-      body.style.backgroundColor = '#f8fafc'
-      body.style.color = '#1e293b'
+      html.style.colorScheme = 'dark'
+      body.style.backgroundColor = '#09090b'
+      body.style.color = '#fafafa'
     }
   }, [])
 

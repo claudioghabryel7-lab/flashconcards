@@ -14,6 +14,9 @@ import { SystemProvider } from './hooks/useSystem.jsx'
 import './index.css'
 import './styles/design-system.css'
 import './styles/stark-design-system.css'
+import './styles/premium-design-system.css'
+import '@fontsource/geist-sans'
+import '@fontsource/space-grotesk'
 import './debug-api-key.js' // Debug para verificar API key
 import { firebaseInitialized } from './firebase/config.js'
 

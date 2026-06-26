@@ -1007,18 +1007,18 @@ REGRAS IMPORTANTES:
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <Link
             to="/dashboard"
-            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 mb-6"
+            className="inline-flex items-center gap-2 text-text-secondary hover:text-alego-600 hover:text-accent-cyan-dim mb-6"
           >
             <ChevronLeftIcon className="h-5 w-5" />
             Voltar ao Dashboard
           </Link>
           
-          <div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-12 text-center`}>
-            <DocumentTextIcon className="h-16 w-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+          <div className={`bg-background-card rounded-2xl shadow-lg border border-slate-20late-70primpryxt-center`}>
+            <DocumentTextIcon className="h-16 w-16 text-text-muted mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-text-primary mb-2">
               Edital Verticalizado não disponível
             </h1>
-            <p className="text-slate-600 dark:text-slate-400 mb-6">
+            <p className="text-text-secondary mb-6">
               O edital verticalizado ainda não foi configurado para este curso.
             </p>
             <Link
@@ -1040,7 +1040,7 @@ REGRAS IMPORTANTES:
         <div className="mb-4 sm:mb-6 md:mb-8">
           <Link
             to="/dashboard"
-            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 mb-3 sm:mb-4 text-sm sm:text-base"
+            className="inline-flex items-center gap-2 text-text-secondary hover:text-alego-600 hover:text-accent-cyan-dim mb-3 sm:mb-4 text-sm sm:text-base"
           >
             <ChevronLeftIcon className="h-4 w-4 sm:h-5 sm:w-5" />
             <span className="hidden sm:inline">Voltar ao Dashboard</span>
@@ -1052,7 +1052,7 @@ REGRAS IMPORTANTES:
               <DocumentTextIcon className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white break-words">
+              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-text-primary break-words">
                 {courseName ? `EDITAL VERTICALIZADO ${courseName.toUpperCase()}` : (editalVerticalizado.titulo || 'EDITAL VERTICALIZADO')}
               </h1>
             </div>
@@ -1060,20 +1060,20 @@ REGRAS IMPORTANTES:
         </div>
 
         {/* Conteúdo Principal */}
-        <div className={`bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-2 sm:p-3 md:p-4 lg:p-6`}>
+        <div className={`bg-background-card rounded-xl sm:rounded-2xl shadow-lg border border-border-primary p-2 sm:p-3 md:p-4 lg:p-6`}>
           {/* Descrição removida conforme solicitado */}
 
           {/* Tabela de Edital Verticalizado */}
           {editalVerticalizado?.disciplinas && Array.isArray(editalVerticalizado.disciplinas) && editalVerticalizado.disciplinas.length > 0 ? (
             <>
               {/* Informações sobre o edital */}
-              <div className="mb-3 sm:mb-4 pb-2 sm:pb-3 border-b border-slate-200 dark:border-slate-700">
+              <div className="mb-3 sm:mb-4 pb-2 sm:pb-3 border-b border-border-primary">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-slate-600 dark:text-slate-400">
-                    <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs sm:text-sm">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-text-secondary">
+                    <span className="font-semibold text-text-primary text-xs sm:text-sm">
                       {editalVerticalizado.disciplinas.length} {editalVerticalizado.disciplinas.length === 1 ? 'disciplina' : 'disciplinas'}
                     </span>
-                    <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs sm:text-sm">
+                    <span className="font-semibold text-text-primary text-xs sm:text-sm">
                       {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)} {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0) === 1 ? 'tópico' : 'tópicos'}
                     </span>
                   </div>
@@ -1081,7 +1081,7 @@ REGRAS IMPORTANTES:
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         onClick={openFlashcardsModal}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white text-xs font-medium rounded-lg hover:bg-purple-700 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary text-xs font-semibold rounded-lg hover:from-accent-orange-dim hover:to-accent-cyan-dim transition-all shadow-lg shadow-accent-orange/20 border border-accent-orange/30 active:scale-95"
                       >
                         <SparklesIcon className="h-4 w-4" />
                         <span className="hidden sm:inline">Flashcards</span>
@@ -1091,26 +1091,26 @@ REGRAS IMPORTANTES:
                 </div>
               </div>
               
-              <div className="overflow-x-auto -mx-2 sm:-mx-3 md:-mx-4 lg:mx-0 scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-slate-200 dark:scrollbar-track-slate-700">
+              <div className="overflow-x-auto -mx-2 sm:-mx-3 md:-mx-4 lg:mx-0 scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-background-card">
               <div className="min-w-full inline-block">
-                <table className="w-full min-w-[400px] sm:min-w-[500px] md:min-w-[600px] lg:min-w-[640px] border-collapse border border-black dark:border-slate-600 bg-white dark:bg-slate-800 text-[10px] sm:text-xs md:text-sm">
+                <table className="w-full min-w-[400px] sm:min-w-[500px] md:min-w-[600px] lg:min-w-[640px] border-collapse border border-border-primary bg-background-card text-[10px] sm:text-xs md:text-sm">
                   <thead>
-                    <tr className="bg-blue-700 dark:bg-blue-800 text-white">
-                      <th className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-left font-bold text-[9px] sm:text-xs md:text-sm">
+                    <tr className="bg-accent-cyan text-white">
+                      <th className="border border-border-primary px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-left font-bold text-[9px] sm:text-xs md:text-sm">
                         <span className="sm:hidden">DISC.</span>
                         <span className="hidden sm:inline">DISCIPLINAS</span>
                       </th>
-                      <th className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
+                      <th className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
                         <span className="hidden sm:inline">Estudado</span>
                         <span className="sm:hidden">Est.</span>
                       </th>
                       {profile?.role === 'admin' && (
                         <>
-                          <th className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
+                          <th className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
                             <span className="hidden sm:inline">Editar</span>
                             <span className="sm:hidden">Ed</span>
                           </th>
-                          <th className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
+                          <th className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
                             <span className="hidden sm:inline">Ações</span>
                             <span className="sm:hidden">Aç</span>
                           </th>
@@ -1129,8 +1129,8 @@ REGRAS IMPORTANTES:
                       return (
                     <React.Fragment key={idx}>
                       {/* Linha principal da disciplina (destaque laranja) */}
-                      <tr className="bg-orange-500 dark:bg-orange-600 text-white font-bold">
-                        <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm lg:text-base">
+                      <tr className="bg-accent-orange text-white font-bold">
+                        <td className="border border-border-primary px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm lg:text-base">
                           <div className="flex items-center gap-2">
                             <span className="font-bold break-words">{disciplina.nome || 'Disciplina sem nome'}</span>
                             {disciplina.totalQuestoes && (
@@ -1149,15 +1149,15 @@ REGRAS IMPORTANTES:
                             </Link>
                           </div>
                         </td>
-                        <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                        <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
                         {profile?.role === 'admin' && (
                           <>
-                            <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
-                            <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center">
+                            <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                            <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center">
                               <div className="flex items-center justify-center gap-1">
                                 <button
                                   onClick={() => handleDeleteDisciplina(idx)}
-                                  className="inline-flex items-center justify-center p-1 sm:p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20 rounded transition-colors"
+                                  className="inline-flex items-center justify-center p-1 sm:p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
                                   title="Apagar disciplina"
                                 >
                                   <TrashIcon className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -1196,9 +1196,9 @@ REGRAS IMPORTANTES:
                           )
                           
                           return (
-                            <tr key={`${idx}-${topicoIdx}`} id={`topico-${idx}-${topicoIdx}`} className={`${isHighlighted ? 'ring-2 ring-yellow-400 dark:ring-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' : ''} hover:bg-slate-50 dark:hover:bg-slate-700/50 bg-white dark:bg-slate-800`}>
+                            <tr key={`${idx}-${topicoIdx}`} id={`topico-${idx}-${topicoIdx}`} className={`${isHighlighted ? 'ring-2 ring-accent-orange bg-accent-orange/10' : ''} hover:bg-background-card-hover bg-background-card`}>
                               <td 
-                                className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 text-slate-900 dark:text-white text-[9px] sm:text-xs md:text-sm break-words"
+                                className="border border-border-primary px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 text-text-primary text-[9px] sm:text-xs md:text-sm break-words"
                                 style={{ 
                                   paddingLeft: `${Math.max(paddingLeft - 4, 8)}px` // Reduzir padding em mobile
                                 }}
@@ -1216,8 +1216,8 @@ REGRAS IMPORTANTES:
                                       // Validar que o topicKey não está vazio antes de criar o link
                                       if (!topicKey || topicKey.trim() === '') {
                                         return (
-                                          <span className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[9px] sm:text-xs font-semibold bg-slate-400 text-white cursor-not-allowed whitespace-nowrap flex-shrink-0" title="Tópico sem identificação válida">
-                                            <BookOpenIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                          <span className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold bg-background-card-hover text-text-muted cursor-not-allowed whitespace-nowrap flex-shrink-0 border border-border-primary" title="Tópico sem identificação válida">
+                                            <BookOpenIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                             <span className="hidden xs:inline sm:inline">Estudar</span>
                                             <span className="xs:hidden sm:hidden">E</span>
                                           </span>
@@ -1228,28 +1228,28 @@ REGRAS IMPORTANTES:
                                         <>
                                           <Link
                                             to={`/flashcards/topico/${courseId || 'alego-default'}?disciplina=${encodeURIComponent(disciplina.nome || '')}&modulo=${encodeURIComponent(moduloLabel)}&topicKey=${encodeURIComponent(topicKey)}`}
-                                            className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[9px] sm:text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 transition whitespace-nowrap flex-shrink-0 active:scale-95"
+                                            className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary hover:from-accent-orange-dim hover:to-accent-cyan-dim transition-all whitespace-nowrap flex-shrink-0 active:scale-95 shadow-lg shadow-accent-orange/20 border border-accent-orange/30"
                                             title="Flashcards deste tópico (gerados uma vez e salvos para todos)"
                                           >
-                                            <SparklesIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                            <SparklesIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                             <span className="hidden xs:inline sm:inline">Flashcards</span>
                                             <span className="xs:hidden sm:hidden">FC</span>
                                           </Link>
                                           <Link
                                             to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
-                                            className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[9px] sm:text-xs font-semibold bg-alego-600 text-white hover:bg-alego-700 transition whitespace-nowrap flex-shrink-0 active:scale-95"
+                                            className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold bg-background-card-hover text-accent-cyan hover:bg-background-card-hover hover:text-accent-cyan-dim transition-all whitespace-nowrap flex-shrink-0 active:scale-95 border border-accent-cyan/30"
                                             title="Estudar conteúdo deste tópico"
                                           >
-                                            <BookOpenIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                            <BookOpenIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                             <span className="hidden xs:inline sm:inline">Estudar</span>
                                             <span className="xs:hidden sm:hidden">E</span>
                                           </Link>
                                           <Link
                                             to={`/questoes-topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
-                                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
+                                            className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold bg-gradient-to-r from-accent-cyan to-accent-orange text-background-primary hover:from-accent-cyan-dim hover:to-accent-orange-dim transition-all whitespace-nowrap flex-shrink-0 active:scale-95 shadow-lg shadow-accent-cyan/20 border border-accent-cyan/30"
                                             title="Questões preditivas deste tópico (BOOK QUESTÕES)"
                                           >
-                                            <FireIcon className="h-4 w-4" />
+                                            <FireIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                             <span className="hidden xs:inline sm:inline">Praticar</span>
                                             <span className="xs:hidden sm:hidden">Q</span>
                                           </Link>
@@ -1260,10 +1260,10 @@ REGRAS IMPORTANTES:
                                                 e.stopPropagation()
                                                 handleDeleteTopicContent(topicKey)
                                               }}
-                                              className="inline-flex items-center gap-1 px-1.5 py-1 rounded text-[9px] sm:text-xs font-semibold bg-red-600 text-white hover:bg-red-700 transition whitespace-nowrap flex-shrink-0 active:scale-95"
+                                              className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all whitespace-nowrap flex-shrink-0 active:scale-95 border border-red-500/30"
                                               title="Apagar conteúdo deste tópico (apenas admin)"
                                             >
-                                              <TrashIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                              <TrashIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                               <span className="hidden xs:inline sm:inline">Apagar</span>
                                               <span className="xs:hidden sm:hidden">X</span>
                                             </button>
@@ -1274,31 +1274,31 @@ REGRAS IMPORTANTES:
                                   </div>
                                 </div>
                               </td>
-                              <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
+                              <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
                                 <input
                                   type="checkbox"
                                   checked={!!topico.estudado}
                                   onChange={() => handleToggleCheckbox(idx, topicoIdx, 'estudado')}
-                                  className="w-4 h-4 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white dark:bg-slate-700 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-slate-800 focus:ring-2 dark:border-slate-600 cursor-pointer touch-manipulation"
+                                  className="w-4 h-4 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white bg-background-card border-gray-300 rounded focus:ring-blue-500 focus:ring-accent-cyan focus:ring-2 cursor-pointer touch-manipulation"
                                   style={{ touchAction: 'manipulation' }}
                                 />
                               </td>
                               {profile?.role === 'admin' && (
                                 <>
-                                  <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
+                                  <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
                                     <button
                                       onClick={() => handleEditTopico(idx, topicoIdx)}
-                                      className="inline-flex items-center justify-center p-1 sm:p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 rounded transition-colors"
+                                      className="inline-flex items-center justify-center p-1 sm:p-1.5 text-accent-cyan hover:text-accent-cyan-dim hover:bg-accent-cyan/10 rounded transition-colors"
                                       title="Editar tópico"
                                     >
                                       <PencilIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                                     </button>
                                   </td>
-                                  <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
+                                  <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
                                     <div className="flex items-center justify-center gap-1">
                                       <button
                                         onClick={() => handleDeleteTopico(idx, topicoIdx)}
-                                        className="inline-flex items-center justify-center p-1 sm:p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20 rounded transition-colors"
+                                        className="inline-flex items-center justify-center p-1 sm:p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
                                         title="Apagar tópico"
                                       >
                                         <TrashIcon className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -1313,8 +1313,8 @@ REGRAS IMPORTANTES:
 
                         {/* Linha para adicionar novo tópico (apenas admin) */}
                         {profile?.role === 'admin' && (
-                          <tr className="bg-slate-50 dark:bg-slate-700/50">
-                            <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm" style={{ paddingLeft: '16px' }}>
+                          <tr className="bg-background-card-hover">
+                            <td className="border border-border-primary px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm" style={{ paddingLeft: '16px' }}>
                               {addingTopico?.disciplinaIdx === idx ? (
                                 <div className="flex gap-2">
                                   <input
@@ -1322,14 +1322,14 @@ REGRAS IMPORTANTES:
                                     value={newTopicoNumero}
                                     onChange={(e) => setNewTopicoNumero(e.target.value)}
                                     placeholder="Número (opcional)"
-                                    className="w-20 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                                    className="w-20 px-2 py-1 text-xs border border-border-primary rounded bg-background-card text-text-primary"
                                   />
                                   <input
                                     type="text"
                                     value={newTopicoNome}
                                     onChange={(e) => setNewTopicoNome(e.target.value)}
                                     placeholder="Nome do tópico"
-                                    className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                                    className="flex-1 px-2 py-1 text-xs border border-border-primary rounded bg-background-card text-text-primary"
                                     autoFocus
                                     onKeyPress={(e) => {
                                       if (e.key === 'Enter') handleAddTopico(idx)
@@ -1342,7 +1342,7 @@ REGRAS IMPORTANTES:
                                   />
                                   <button
                                     onClick={() => handleAddTopico(idx)}
-                                    className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                                    className="px-2 py-1 bg-accent-orange text-background-primary text-xs rounded-lg hover:bg-accent-orange-dim transition-colors"
                                   >
                                     <CheckIcon className="h-4 w-4" />
                                   </button>
@@ -1352,7 +1352,7 @@ REGRAS IMPORTANTES:
                                       setNewTopicoNome('')
                                       setNewTopicoNumero('')
                                     }}
-                                    className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                                    className="px-2 py-1 bg-red-500/10 text-red-400 text-xs rounded-lg hover:bg-red-500/20 transition-colors"
                                   >
                                     <XMarkIcon className="h-4 w-4" />
                                   </button>
@@ -1360,18 +1360,18 @@ REGRAS IMPORTANTES:
                               ) : (
                                 <button
                                   onClick={() => setAddingTopico({ disciplinaIdx: idx })}
-                                  className="inline-flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition"
+                                  className="px-2 py-1 bg-accent-cyan text-background-primary text-xs rounded-lg hover:bg-accent-cyan-dim transition"
                                 >
                                   <PlusIcon className="h-3 w-3" />
                                   Adicionar tópico
                                 </button>
                               )}
                             </td>
-                            <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                            <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
                             {profile?.role === 'admin' && (
                               <>
-                                <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
-                                <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                                <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                                <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
                               </>
                             )}
                           </tr>
@@ -1382,8 +1382,8 @@ REGRAS IMPORTANTES:
 
                   {/* Linha para adicionar nova disciplina (apenas admin) */}
                   {profile?.role === 'admin' && (
-                    <tr className="bg-slate-50 dark:bg-slate-700/50">
-                      <td className="border border-black dark:border-slate-600 px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm">
+                    <tr className="bg-background-card-hover">
+                      <td className="border border-border-primary px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm">
                         {addingDisciplina ? (
                           <div className="flex gap-2">
                             <input
@@ -1391,7 +1391,7 @@ REGRAS IMPORTANTES:
                               value={newDisciplinaNome}
                               onChange={(e) => setNewDisciplinaNome(e.target.value)}
                               placeholder="Nome da disciplina"
-                              className="flex-1 px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                              className="flex-1 px-2 py-1 text-xs border border-border-primary rounded bg-background-card text-text-primary"
                               autoFocus
                               onKeyPress={(e) => {
                                 if (e.key === 'Enter') handleAddDisciplina()
@@ -1403,7 +1403,7 @@ REGRAS IMPORTANTES:
                             />
                             <button
                               onClick={handleAddDisciplina}
-                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                              className="px-2 py-1 bg-accent-orange text-background-primary text-xs rounded-lg hover:bg-accent-orange-dim transition-colors"
                             >
                               <CheckIcon className="h-4 w-4" />
                             </button>
@@ -1412,7 +1412,7 @@ REGRAS IMPORTANTES:
                                 setAddingDisciplina(false)
                                 setNewDisciplinaNome('')
                               }}
-                              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                              className="px-2 py-1 bg-red-500/10 text-red-400 text-xs rounded-lg hover:bg-red-500/20 transition-colors"
                             >
                               <XMarkIcon className="h-4 w-4" />
                             </button>
@@ -1420,18 +1420,18 @@ REGRAS IMPORTANTES:
                         ) : (
                           <button
                             onClick={() => setAddingDisciplina(true)}
-                            className="inline-flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition"
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-accent-cyan text-background-primary text-xs rounded-lg hover:bg-accent-cyan-dim transition"
                           >
                             <PlusIcon className="h-3 w-3" />
                             Adicionar disciplina
                           </button>
                         )}
                       </td>
-                      <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                      <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
                       {profile?.role === 'admin' && (
                         <>
-                          <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
-                          <td className="border border-black dark:border-slate-600 px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                          <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
+                          <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
                         </>
                       )}
                     </tr>
@@ -1446,13 +1446,13 @@ REGRAS IMPORTANTES:
               {editalVerticalizado.secoes.map((secao, idx) => (
 <div
                   key={idx}
-                  className="border-l-4 border-indigo-500 pl-3 sm:pl-4 md:pl-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-700/50 rounded-r-lg"
+                  className="border-l-4 border-indigo-500 pl-3 sm:pl-4 md:pl-6 py-3 sm:py-4 bg-background-card-hover rounded-r-lg"
                 >
-                  <h2 className="text-base sm:text-lg md:text-xl font-bold text-slate-900 dark:text-white mb-2 sm:mb-3 break-words">
+                  <h2 className="text-base sm:text-lg md:text-xl font-bold text-text-primary mb-2 sm:mb-3 break-words">
                     {secao.titulo}
                   </h2>
                   {secao.subtitulo && (
-                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-2 sm:mb-3 break-words">
+                    <p className="text-xs sm:text-sm text-text-secondary mb-2 sm:mb-3 break-words">
                       {secao.subtitulo}
                     </p>
                   )}
@@ -1474,7 +1474,7 @@ REGRAS IMPORTANTES:
                     </>
                   ) : secao.texto ? (
                     <>
-                      <div className="text-xs sm:text-sm md:text-base text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed break-words">
+                      <div className="text-xs sm:text-sm md:text-base text-text-primary whitespace-pre-wrap leading-relaxed break-words">
                         {secao.texto}
                       </div>
                       {/* Leitura de Áudio */}
@@ -1493,9 +1493,9 @@ REGRAS IMPORTANTES:
                       {secao.subsecoes.map((subsecao, subIdx) => (
                         <div
                           key={subIdx}
-                          className="border-l-2 border-slate-300 dark:border-slate-600 pl-2 sm:pl-4"
+                          className="border-l-2 border-border-primary pl-2 sm:pl-4"
                         >
-                          <h3 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white mb-1 sm:mb-2 break-words">
+                          <h3 className="text-sm sm:text-base font-semibold text-text-primary mb-1 sm:mb-2 break-words">
                             {subsecao.titulo}
                           </h3>
                           {subsecao.conteudo ? (
@@ -1516,7 +1516,7 @@ REGRAS IMPORTANTES:
                             </>
                           ) : subsecao.texto ? (
                             <>
-                              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words">
+                              <p className="text-xs sm:text-sm text-text-secondary whitespace-pre-wrap break-words">
                                 {subsecao.texto}
                               </p>
                               {/* Leitura de Áudio */}
@@ -1545,8 +1545,8 @@ REGRAS IMPORTANTES:
             </div>
           ) : (
             <div className="text-center py-12">
-              <BookOpenIcon className="h-12 w-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-500 dark:text-slate-400">
+              <BookOpenIcon className="h-12 w-12 text-text-muted mx-auto mb-3" />
+              <p className="text-text-secondary">
                 Conteúdo ainda não disponível.
               </p>
             </div>
@@ -1554,7 +1554,7 @@ REGRAS IMPORTANTES:
 
           {/* Footer */}
           {editalVerticalizado.updatedAt && (
-            <div className="mt-4 sm:mt-6 md:mt-8 pt-4 sm:pt-6 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
+            <div className="mt-4 sm:mt-6 md:mt-8 pt-4 sm:pt-6 border-t border-border-primary text-xs text-text-secondary">
               Última atualização: {editalVerticalizado.updatedAt.toDate?.().toLocaleDateString('pt-BR') || 'Data não disponível'}
             </div>
           )}
@@ -1564,14 +1564,14 @@ REGRAS IMPORTANTES:
       {/* Modal de Edição de Tópico */}
       {editModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
+          <div className="bg-background-card rounded-xl shadow-xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+              <h3 className="text-lg font-semibold text-text-primary">
                 Editar Tópico
               </h3>
               <button
                 onClick={handleCancelEdit}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                className="text-text-muted transition-colors"
               >
                 <XMarkIcon className="h-6 w-6" />
               </button>
@@ -1579,27 +1579,27 @@ REGRAS IMPORTANTES:
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-text-primary mb-1">
                   Numeração
                 </label>
                 <input
                   type="text"
                   value={editNumero}
                   onChange={(e) => setEditNumero(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-alego-500 focus:border-alego-500 dark:bg-slate-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-border-primary rounded-lg focus:ring-2 focus:ring-alego-500 focus:border-alego-500 bg-background-card text-text-primary"
                   placeholder="Ex: 1.1, 1.2.3, etc."
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block text-sm font-medium text-text-primary mb-1">
                   Nome do Tópico
                 </label>
                 <input
                   type="text"
                   value={editNome}
                   onChange={(e) => setEditNome(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-alego-500 focus:border-alego-500 dark:bg-slate-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-border-primary rounded-lg focus:ring-2 focus:ring-alego-500 focus:border-alego-500 bg-background-card text-text-primary"
                   placeholder="Nome do tópico"
                 />
               </div>
@@ -1608,7 +1608,7 @@ REGRAS IMPORTANTES:
             <div className="flex gap-3 mt-6">
               <button
                 onClick={handleCancelEdit}
-                className="flex-1 px-4 py-2 text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg font-medium transition-colors"
+                className="flex-1 px-4 py-2 text-text-primary bg-background-card-hover rounded-lg font-medium transition-colors"
               >
                 Cancelar
               </button>
@@ -1637,14 +1637,14 @@ REGRAS IMPORTANTES:
       {/* Modal de Geração de Flashcards */}
       {flashcardsModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-lg w-full p-6">
+          <div className="bg-background-card rounded-xl shadow-xl max-w-lg w-full p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+              <h3 className="text-lg font-semibold text-text-primary">
                 🎴 Gerar Flashcards com IA
               </h3>
               <button
                 onClick={() => setFlashcardsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                className="text-text-muted transition-colors"
               >
                 <XMarkIcon className="h-6 w-6" />
               </button>
@@ -1652,11 +1652,11 @@ REGRAS IMPORTANTES:
 
             <div className="space-y-4">
               {/* Informações sobre o edital */}
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+              <div className="bg-accent-cyan/10 border border-accent-cyan/30 rounded-lg p-4">
+                <h4 className="font-semibold text-text-primary mb-2">
                   📋 Estrutura do Edital
                 </h4>
-                <div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                <div className="text-sm text-text-secondary space-y-1">
                   <p><strong>Curso:</strong> {courseName}</p>
                   <p><strong>Disciplinas:</strong> {editalVerticalizadoBase?.disciplinas?.length || 0}</p>
                   <p><strong>Tópicos:</strong> {editalVerticalizadoBase?.disciplinas?.reduce((sum, d) => sum + (d.topicos?.length || 0), 0) || 0}</p>
@@ -1665,11 +1665,11 @@ REGRAS IMPORTANTES:
 
               {/* Status de flashcards existentes */}
               {existingFlashcards !== null && (
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                  <h4 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-2">
+                <div className="bg-accent-orange/10 border border-accent-orange/30 rounded-lg p-4">
+                  <h4 className="font-semibold text-text-primary mb-2">
                     📚 Flashcards Existentes
                   </h4>
-                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  <p className="text-sm text-text-secondary">
                     {existingFlashcards.length === 0 
                       ? 'Nenhum flashcard encontrado. Serão gerados novos flashcards.'
                       : `Encontrados ${existingFlashcards.length} flashcards. Eles serão APAGADOS e substituídos por novos.`
@@ -1680,8 +1680,8 @@ REGRAS IMPORTANTES:
 
               {/* Status da geração */}
               {generationStatus && (
-                <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
-                  <p className="text-sm text-gray-800 dark:text-gray-200">
+                <div className="bg-background-card-hover border border-border-primary rounded-lg p-4">
+                  <p className="text-sm text-text-secondary">
                     {generationStatus}
                   </p>
                 </div>
@@ -1700,7 +1700,7 @@ REGRAS IMPORTANTES:
               </div>
 
               {/* Informações importantes */}
-              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+              <div className="text-xs text-text-secondary space-y-1">
                 <p>• <strong>⚠️ ATENÇÃO:</strong> Todos os flashcards existentes serão APAGADOS</p>
                 <p>• A IA seguirá exatamente a estrutura do edital (disciplinas e tópicos)</p>
                 <p>• Serão gerados 3-5 flashcards por tópico</p>

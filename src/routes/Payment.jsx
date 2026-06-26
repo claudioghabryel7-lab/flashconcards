@@ -75,7 +75,7 @@ const Payment = () => {
     courseId: selectedCourse.id,
     competition: selectedCourse.competition
   } : {
-    name: 'Plano Premium FlashConCards',
+    name: 'Plano Premium ConCursos2.5',
     originalPrice: 149.99,
     price: 99.90,
     discount: 50.09,

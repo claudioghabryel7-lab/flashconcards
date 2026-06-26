@@ -521,8 +521,8 @@ const Dashboard = () => {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-alego-600 border-t-transparent"></div>
-          <p className="mt-4 text-lg font-semibold text-alego-600">Carregando dashboard...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-accent-orange border-t-transparent"></div>
+          <p className="mt-4 text-lg font-semibold text-text-secondary">Carregando dashboard...</p>
         </div>
       </div>
     )
@@ -540,17 +540,17 @@ const Dashboard = () => {
         >
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white mb-2">
+              <h1 className="text-3xl sm:text-4xl font-black text-text-primary mb-2">
                 Dashboard
               </h1>
-              <p className="text-slate-600 dark:text-slate-400">
+              <p className="text-text-secondary">
                 {courseName ? `Acompanhe seu progresso em ${courseName}` : 'Acompanhe seu progresso'}
               </p>
             </div>
             <div className="flex gap-3">
               <Link
                 to="/simulado"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-alego-600 to-alego-700 text-white rounded-xl font-semibold hover:from-alego-700 hover:to-alego-800 shadow-lg hover:shadow-xl transition-all"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary rounded-xl font-semibold hover:from-accent-orange-dim hover:to-accent-cyan-dim shadow-lg hover:shadow-xl transition-all"
               >
                 <TrophyIcon className="h-5 w-5" />
                 Fazer Simulado
@@ -571,7 +571,7 @@ const Dashboard = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.5 }}
-            className="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-4 sm:p-6 mb-6 sm:mb-8"
+            className="bg-background-card rounded-xl sm:rounded-2xl shadow-lg border border-border-primary p-4 sm:p-6 mb-6 sm:mb-8"
           >
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
               <div className="flex items-center gap-2 sm:gap-3">
@@ -595,29 +595,29 @@ const Dashboard = () => {
               </div>
             ) : !editalVerticalizado ? (
               <div className="text-center py-8">
-                <DocumentTextIcon className="h-12 w-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-600 dark:text-slate-400">
+                <DocumentTextIcon className="h-12 w-12 text-text-muted mx-auto mb-3" />
+                <p className="text-text-secondary">
                   Edital verticalizado ainda não disponível.
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
+                <p className="text-xs text-text-muted mt-1">
                   O administrador precisa fazer upload do edital.
                 </p>
               </div>
             ) : (
               <div className="space-y-3 sm:space-y-4">
-                <div className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-lg sm:rounded-xl p-4 sm:p-6 border border-indigo-200 dark:border-indigo-800">
+                <div className="bg-background-card-hover rounded-lg sm:rounded-xl p-4 sm:p-6 border border-border-primary">
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-0 mb-3 sm:mb-4">
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-2 break-words">
+                      <h4 className="text-base sm:text-lg font-bold text-text-primary mb-2 break-words">
                         {editalVerticalizado.titulo || 'Edital Verticalizado'}
                       </h4>
                       {editalVerticalizado.descricao && (
-                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mb-2 sm:mb-3 break-words">
+                        <p className="text-xs sm:text-sm text-text-secondary mb-2 sm:mb-3 break-words">
                           {editalVerticalizado.descricao}
                         </p>
                       )}
                       {editalVerticalizado.updatedAt && (
-                        <p className="text-xs text-slate-500 dark:text-slate-500">
+                        <p className="text-xs text-text-muted">
                           Atualizado em {editalVerticalizado.updatedAt.toDate?.().toLocaleDateString('pt-BR') || 'Data não disponível'}
                         </p>
                       )}
@@ -629,20 +629,20 @@ const Dashboard = () => {
                       {editalVerticalizado.secoes.slice(0, 5).map((secao, idx) => (
                         <div
                           key={idx}
-                          className="bg-white dark:bg-slate-700 rounded-lg p-3 sm:p-4 border border-slate-200 dark:border-slate-600"
+                          className="bg-background-card rounded-lg p-3 sm:p-4 border border-border-primary"
                         >
-                          <h5 className="font-semibold text-sm sm:text-base text-slate-900 dark:text-white mb-2 break-words">
+                          <h5 className="font-semibold text-sm sm:text-base text-text-primary mb-2 break-words">
                             {secao.titulo}
                           </h5>
                           {secao.conteudo && (
-                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 line-clamp-2 break-words">
+                            <p className="text-xs sm:text-sm text-text-secondary line-clamp-2 break-words">
                               {secao.conteudo.substring(0, 150)}...
                             </p>
                           )}
                         </div>
                       ))}
                       {editalVerticalizado.secoes.length > 5 && (
-                        <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                        <p className="text-xs text-text-muted text-center">
                           +{editalVerticalizado.secoes.length - 5} seções adicionais
                         </p>
                       )}
@@ -658,7 +658,7 @@ const Dashboard = () => {
 
                   <Link
                     to={`/edital-verticalizado?course=${selectedCourseId}`}
-                    className="mt-3 sm:mt-4 inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-all text-xs sm:text-sm w-full sm:w-auto justify-center"
+                    className="mt-3 sm:mt-4 inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-accent-orange text-background-primary rounded-lg font-semibold hover:bg-accent-orange-dim transition-all text-xs sm:text-sm w-full sm:w-auto justify-center"
                   >
                     Ver Edital Completo
                     <ChevronRightIcon className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -682,27 +682,27 @@ const Dashboard = () => {
         >
           <Link
             to="/simulado"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-green-500 to-green-600 p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-orange to-accent-cyan p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
           >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
             <div className="relative z-10">
-              <TrophyIcon className="h-8 w-8 text-white mb-3" />
-              <h3 className="text-lg font-bold text-white mb-1">Simulado</h3>
-              <p className="text-white/80 text-sm">Teste seus conhecimentos</p>
-              <ArrowRightOutline className="h-5 w-5 text-white mt-3 group-hover:translate-x-1 transition-transform" />
+              <TrophyIcon className="h-8 w-8 text-background-primary mb-3" />
+              <h3 className="text-lg font-bold text-background-primary mb-1">Simulado</h3>
+              <p className="text-background-primary/80 text-sm">Teste seus conhecimentos</p>
+              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>
 
           <Link
             to="/treino-redacao"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-cyan to-accent-orange p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
           >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
             <div className="relative z-10">
-              <DocumentTextIcon className="h-8 w-8 text-white mb-3" />
-              <h3 className="text-lg font-bold text-white mb-1">Treino de Redação</h3>
-              <p className="text-white/80 text-sm">Pratique escrevendo redações</p>
-              <ArrowRightOutline className="h-5 w-5 text-white mt-3 group-hover:translate-x-1 transition-transform" />
+              <DocumentTextIcon className="h-8 w-8 text-background-primary mb-3" />
+              <h3 className="text-lg font-bold text-background-primary mb-1">Treino de Redação</h3>
+              <p className="text-background-primary/80 text-sm">Pratique escrevendo redações</p>
+              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>
 

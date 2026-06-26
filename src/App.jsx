@@ -7,6 +7,7 @@ import Header from './components/Header'
 import SupportButton from './components/SupportButton'
 import PopupBanner from './components/PopupBanner'
 import OfflineIndicator from './components/OfflineIndicator'
+import Logo from './components/Logo.jsx'
 // PublicHome importado diretamente (sem lazy loading) para melhor performance na página inicial
 import PublicHome from './routes/PublicHome'
 // SharedFlashcardPIP importado diretamente (sem lazy loading) para funcionar imediatamente
@@ -167,8 +168,8 @@ function App() {
       <div 
         className="min-h-screen transition-colors"
         style={{
-          backgroundColor: darkMode ? '#0f172a' : '#f8fafc',
-          color: darkMode ? '#f1f5f9' : '#1e293b',
+          backgroundColor: '#09090b',
+          color: '#fafafa',
           minHeight: '100vh'
         }}
       >
@@ -422,11 +423,18 @@ function App() {
         </Suspense>
       </main>
       {!isPIPPage && (
-        <footer className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 pb-6 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 min-h-[60px] flex items-center justify-center">
-          <p>
-            © {new Date().getFullYear()} FlashConCards. Todos os direitos reservados.
-            É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.
-          </p>
+        <footer className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6 pb-6 pt-4">
+          <div className="glass rounded-xl p-6 text-center">
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <Logo size="sm" />
+            </div>
+            <p className="text-xs sm:text-sm text-text-secondary">
+              © {new Date().getFullYear()} ConCursos2.5. Todos os direitos reservados.
+            </p>
+            <p className="text-[10px] sm:text-xs text-text-muted mt-1">
+              É proibida a reprodução, distribuição ou uso do conteúdo deste site sem autorização expressa.
+            </p>
+          </div>
         </footer>
       )}
       {!isPIPPage && <SupportButton />}

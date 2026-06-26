@@ -48,7 +48,7 @@ const SupportButton = () => {
   }, [])
 
   const openWhatsApp = (customMessage = '') => {
-    const baseMessage = 'Olá! Preciso de ajuda com a plataforma FlashConCards.'
+    const baseMessage = 'Olá! Preciso de ajuda com a plataforma ConCursos2.5.'
     const message = customMessage || baseMessage
     const fullMessage = hasError 
       ? `${message}\n\nErro encontrado: ${errorMessage}`

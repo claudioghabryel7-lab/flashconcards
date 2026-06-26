@@ -1,7 +1,6 @@
 import { useMemo, useState, useRef, useEffect, memo } from 'react'
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
-  AcademicCapIcon,
   ArrowLeftOnRectangleIcon,
   ArrowRightOnRectangleIcon,
   UserCircleIcon,
@@ -16,6 +15,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import Logo from './Logo.jsx'
 
 const Header = () => {
   const { user, logout, isAdmin, profile } = useAuth()
@@ -70,12 +70,9 @@ const Header = () => {
         items: [
           { to: '/dashboard', label: 'Dashboard', auth: true },
           { to: '/vespera-de-prova', label: 'Véspera de Prova', auth: true },
-          { to: '/mentoria', label: 'Mentoria', auth: true },
           { to: '/flashcards', label: 'Flashcards com IA', auth: true },
-          { to: '/flashquestoes', label: 'FlashQuestões com IA', auth: true },
           { to: '/edital-verticalizado', label: 'Edital Verticalizado', auth: true },
           { to: '/calendario', label: 'Calendário de Progresso', auth: true },
-          { to: '/simulado', label: 'Simulado', auth: true },
           { to: '/treino-redacao', label: 'Treino Redação', auth: true },
         ],
       },
@@ -83,7 +80,6 @@ const Header = () => {
         label: 'Social',
         icon: UsersIcon,
         items: [
-          { to: '/ranking-simulado', label: 'Ranking de Simulados', auth: true },
           { to: '/feed', label: 'FlashSocial', auth: true },
         ],
       },
@@ -115,23 +111,12 @@ const Header = () => {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-700">
+      <header className="sticky top-0 z-50 w-full bg-background-primary/80 backdrop-blur-md border-b border-border-primary">
         <div className="mx-auto max-w-7xl px-3 sm:px-4 lg:px-6">
-          <div className="flex items-center justify-between h-14 sm:h-16">
+          <div className="flex items-center justify-between h-14">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 group">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-alego-600/20 to-alego-700/20 rounded-lg blur opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="relative bg-gradient-to-br from-alego-600 to-alego-700 dark:from-alego-500 dark:to-alego-600 rounded-lg p-1.5 shadow-md group-hover:shadow-lg transition-all">
-                  <AcademicCapIcon className="h-6 w-6 text-white" />
-                </div>
-              </div>
-              <div className="hidden sm:block">
-                <p className="text-lg font-black text-alego-700 dark:text-alego-300">FlashConCards</p>
-                <p className="text-[10px] uppercase tracking-wider text-alego-500 dark:text-alego-400 font-semibold">
-                  Flashcards & FlashQuestões
-                </p>
-              </div>
+              <Logo size="sm" className="relative" />
             </Link>
 
             {/* Navigation principal (agora apenas via menu lateral/hambúrguer) */}
@@ -145,8 +130,8 @@ const Header = () => {
                       className={({ isActive }) =>
                         `px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                           isActive
-                            ? 'bg-alego-100 dark:bg-alego-900/30 text-alego-700 dark:text-alego-300'
-                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            ? 'text-accent-orange'
+                            : 'text-text-secondary hover:text-text-primary'
                         }`
                       }
                     >
@@ -160,8 +145,8 @@ const Header = () => {
                   className={({ isActive }) =>
                     `px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       isActive
-                        ? 'bg-alego-100 dark:bg-alego-900/30 text-alego-700 dark:text-alego-300'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        ? 'text-accent-orange'
+                        : 'text-text-secondary hover:text-text-primary'
                     }`
                   }
                 >
@@ -176,10 +161,10 @@ const Header = () => {
               <button
                 type="button"
                 onClick={toggleDarkMode}
-                className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-background-card transition-all duration-200"
                 aria-label="Alternar modo escuro"
               >
-                {darkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
+                {darkMode ? <SunIcon className="h-4 w-4" /> : <MoonIcon className="h-4 w-4" />}
               </button>
 
               {user ? (
@@ -188,7 +173,7 @@ const Header = () => {
                   <button
                     type="button"
                     onClick={() => navigate('/select-course')}
-                    className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-accent-cyan hover:bg-background-card transition-colors"
                     title="Trocar curso"
                   >
                     <ArrowPathIcon className="h-4 w-4" />
@@ -196,13 +181,13 @@ const Header = () => {
                   </button>
 
                   {/* User Info - Desktop */}
-                  <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800">
-                    <UserCircleIcon className="h-5 w-5 text-alego-600 dark:text-alego-400" />
+                  <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg bg-background-card border border-border-primary">
+                    <UserCircleIcon className="h-4 w-4 text-accent-orange" />
                     <div className="text-left">
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[120px]">
+                      <p className="text-xs font-semibold text-text-primary truncate max-w-[100px]">
                         {user.displayName || user.email?.split('@')[0]}
                       </p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                      <p className="text-[10px] text-text-muted">
                         {isAdmin ? 'Admin' : 'Aluno'}
                         {profile?.selectedCourseId !== undefined && (
                           <span> • {profile.selectedCourseId ? 'Curso' : 'ALEGO'}</span>
@@ -215,7 +200,7 @@ const Header = () => {
                   <button
                     type="button"
                     onClick={logout}
-                    className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-background-card transition-all duration-200"
                   >
                     <ArrowLeftOnRectangleIcon className="h-4 w-4" />
                     <span className="hidden lg:inline">Sair</span>
@@ -226,20 +211,20 @@ const Header = () => {
                     ref={menuRef}
                     type="button"
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-background-card transition-all duration-200"
                 aria-label="Abrir menu lateral"
                   >
                     {isMenuOpen ? (
-                      <XMarkIcon className="h-6 w-6" />
+                      <XMarkIcon className="h-5 w-5" />
                     ) : (
-                      <Bars3Icon className="h-6 w-6" />
+                      <Bars3Icon className="h-5 w-5" />
                     )}
                   </button>
                 </>
               ) : (
                 <Link
                   to="/login"
-                  className="px-4 py-2 rounded-lg text-sm font-medium bg-alego-600 text-white hover:bg-alego-700 dark:bg-alego-500 dark:hover:bg-alego-600 transition-colors"
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-accent-orange text-background-primary hover:bg-accent-orange-dim transition-all duration-200"
                 >
                   Entrar
                 </Link>
@@ -261,17 +246,19 @@ const Header = () => {
           {/* Drawer */}
           <div
             ref={drawerRef}
-            className="fixed inset-y-0 left-0 w-72 sm:w-80 max-w-[85vw] bg-white dark:bg-slate-900 shadow-xl z-50 flex flex-col animate-slide-in-left"
+            className="fixed inset-y-0 left-0 w-72 sm:w-80 max-w-[85vw] bg-background-card backdrop-blur-xl shadow-2xl z-50 flex flex-col border-r border-border-primary"
           >
             {/* Drawer Header */}
-            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
-              <div className="flex items-center gap-2">
-                <UserCircleIcon className="h-8 w-8 text-alego-600 dark:text-alego-400" />
+            <div className="flex items-center justify-between p-4 border-b border-border-primary">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-accent-orange">
+                  <UserCircleIcon className="h-5 w-5 text-background-primary" />
+                </div>
                 <div>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  <p className="text-sm font-semibold text-text-primary">
                     {user.displayName || user.email?.split('@')[0]}
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-text-muted">
                     {isAdmin ? 'Admin' : 'Aluno'}
                     {profile?.selectedCourseId !== undefined && (
                       <span> • {profile.selectedCourseId ? 'Curso' : 'ALEGO'}</span>
@@ -282,10 +269,10 @@ const Header = () => {
               <button
                 type="button"
                 onClick={() => setIsMenuOpen(false)}
-                className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="p-2 rounded-lg hover:bg-background-card-hover transition-colors"
                 aria-label="Fechar menu"
               >
-                <XMarkIcon className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                <XMarkIcon className="h-5 w-5 text-text-secondary" />
               </button>
             </div>
 
@@ -296,8 +283,8 @@ const Header = () => {
                 return (
                   <div key={key} className="mb-6">
                     <div className="flex items-center gap-2 mb-3 px-2">
-                      <Icon className="h-5 w-5 text-alego-600 dark:text-alego-400" />
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-alego-600 dark:text-alego-400">
+                      <Icon className="h-4 w-4 text-accent-orange" />
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-accent-orange">
                         {category.label}
                       </h3>
                     </div>
@@ -308,10 +295,10 @@ const Header = () => {
                             to={item.to}
                             onClick={() => setIsMenuOpen(false)}
                             className={({ isActive }) =>
-                              `flex items-center px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                              `flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
                                 isActive
-                                  ? 'bg-alego-100 dark:bg-alego-900/30 text-alego-700 dark:text-alego-300'
-                                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                  ? 'bg-accent-orange/10 text-accent-orange border border-accent-orange/20'
+                                  : 'text-text-secondary hover:text-text-primary hover:bg-background-card-hover'
                               }`
                             }
                           >
@@ -326,9 +313,9 @@ const Header = () => {
                                 logout()
                                 setIsMenuOpen(false)
                               }}
-                              className="w-full mt-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-base font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              className="w-full mt-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-background-card-hover transition-all duration-200"
                             >
-                              <ArrowLeftOnRectangleIcon className="h-5 w-5" />
+                              <ArrowLeftOnRectangleIcon className="h-4 w-4" />
                               Sair
                             </button>
                           )}
@@ -341,14 +328,14 @@ const Header = () => {
             </div>
 
             {/* Drawer Footer */}
-            <div className="border-t border-slate-200 dark:border-slate-700 p-4 space-y-2">
+            <div className="border-t border-border-primary p-4 space-y-2">
               <button
                 type="button"
                 onClick={() => {
                   navigate('/select-course')
                   setIsMenuOpen(false)
                 }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-accent-cyan hover:bg-background-card-hover transition-all duration-200"
               >
                 <ArrowPathIcon className="h-4 w-4" />
                 Trocar Curso

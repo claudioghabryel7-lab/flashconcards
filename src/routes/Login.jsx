@@ -246,25 +246,25 @@ const Login = () => {
   }
 
   return (
-    <div className="mx-auto max-w-md rounded-2xl bg-white p-4 sm:p-6 md:p-8 shadow-sm mx-2 sm:mx-auto">
+    <div className="mx-auto max-w-md rounded-xl bg-background-card p-4 sm:p-6 md:p-8 shadow-sm mx-2 sm:mx-auto border border-border-primary">
       {trialToken && trialData && (
-        <div className="mb-6 rounded-xl bg-gradient-to-r from-alego-600 to-alego-700 p-4 text-white">
+        <div className="mb-6 rounded-xl bg-gradient-to-r from-accent-orange to-accent-cyan p-4 text-background-primary">
           <h3 className="text-lg font-bold mb-1">🎁 Teste Gratuito</h3>
           {courseInfo && (
-            <p className="text-sm text-alego-100">
+            <p className="text-sm text-background-primary/90">
               Acesso ao curso: <strong>{courseInfo.name}</strong>
             </p>
           )}
-          <p className="text-xs text-alego-100 mt-1">
+          <p className="text-xs text-background-primary/80 mt-1">
             {trialData.expiresInDays || 7} dias de acesso completo
           </p>
         </div>
       )}
       
-      <h2 className="text-2xl sm:text-3xl font-bold text-alego-700">
+      <h2 className="text-2xl sm:text-3xl font-bold text-text-primary">
         {isRegisterMode ? 'Criar Conta' : 'Bem-vindo de volta!'}
       </h2>
-      <p className="mt-2 text-xs sm:text-sm text-slate-500">
+      <p className="mt-2 text-xs sm:text-sm text-text-secondary">
         {isRegisterMode 
           ? 'Crie sua conta para começar a estudar'
           : 'Acesse sua conta para começar a estudar para concursos públicos.'
@@ -342,7 +342,7 @@ const Login = () => {
         <button
           type="submit"
           disabled={loading}
-          className="flex w-full items-center justify-center gap-2 rounded-full bg-alego-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-alego-700 disabled:opacity-50 min-h-[44px]"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent-orange px-4 py-3 text-sm font-semibold text-background-primary transition hover:bg-accent-orange-dim disabled:opacity-50 min-h-[44px]"
         >
           {isRegisterMode ? (
             <>
@@ -426,7 +426,7 @@ const Login = () => {
               <button
                 type="submit"
                 disabled={forgotPasswordLoading}
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-alego-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-alego-700 disabled:opacity-50 min-h-[44px]"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent-orange px-4 py-3 text-sm font-semibold text-background-primary transition hover:bg-accent-orange-dim disabled:opacity-50 min-h-[44px]"
               >
                 {forgotPasswordLoading ? (
                   <>

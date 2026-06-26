@@ -4,6 +4,7 @@ import { collection, doc, getDocs, query, setDoc, serverTimestamp, where, limit 
 import { db } from '../firebase/config'
 import LazyImage from '../components/LazyImage'
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver'
+import Logo from '../components/Logo.jsx'
 // Lazy load de ícones - carregar apenas quando necessário
 import { 
   ShieldCheckIcon, 
@@ -46,15 +47,15 @@ const PublicHome = () => {
     
     // Atualizar título se necessário
     const currentTitle = document.title
-    if (!currentTitle.includes('FlashConCards')) {
-      document.title = 'FlashConCards - Flashcards para Concursos Públicos | Polícia Militar, PMGO, PC'
+    if (!currentTitle.includes('ConCursos2.5')) {
+      document.title = 'ConCursos2.5 - Flashcards para Concursos Públicos | Polícia Militar, PMGO, PC'
     }
     
     // Adicionar Schema.org para Organization e WebSite
     const organizationSchema = {
       '@context': 'https://schema.org',
       '@type': 'Organization',
-      name: 'FlashConCards',
+      name: 'ConCursos2.5',
       url: 'https://www.flashconcards.com.br',
       logo: 'https://www.flashconcards.com.br/logo.svg',
       description: 'Plataforma de flashcards para concursos públicos. Estude para Polícia Militar, PMGO, PC, GCM e muito mais.',
@@ -71,7 +72,7 @@ const PublicHome = () => {
     const websiteSchema = {
       '@context': 'https://schema.org',
       '@type': 'WebSite',
-      name: 'FlashConCards',
+      name: 'ConCursos2.5',
       url: 'https://www.flashconcards.com.br',
       description: 'A melhor plataforma de flashcards para concursos públicos. Estude para Polícia Militar, PMGO, PC, GCM e muito mais.',
       potentialAction: {
@@ -291,85 +292,67 @@ const PublicHome = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-blue-900/20 dark:to-indigo-900/20">
+    <div className="min-h-screen">
       <section className="space-y-12 sm:space-y-16 md:space-y-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-8 sm:py-12 md:py-16">
-        {/* Hero Section - Modern Design */}
+        {/* Hero Section - Minimalist Dark */}
         <div 
           ref={heroRef}
-          className={`relative rounded-3xl overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-8 sm:p-12 md:p-16 text-white shadow-2xl ${heroVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`}
+          className={`relative text-center space-y-8 ${heroVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`}
         >
-          {/* Animated Background Elements */}
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute -top-40 -right-40 w-80 h-80 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
-            <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
+          {/* Subtle Glow Background */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent-orange/5 rounded-full blur-3xl"></div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-accent-cyan/5 rounded-full blur-3xl"></div>
           </div>
           
-          {/* Grid Pattern */}
-          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
-          
-          <div className="relative z-10 md:grid md:grid-cols-2 md:gap-12 items-center">
-            <div className="space-y-6 md:space-y-8">
-              <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 border border-white/30">
-                <SparklesIcon className="h-4 w-4" />
-                <span className="text-sm font-semibold">Plataforma #1 de Flashcards</span>
-              </div>
-              
-              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-tight">
-                Domine seu
-                <span className="block mt-2 bg-gradient-to-r from-yellow-200 via-pink-200 to-cyan-200 bg-clip-text text-transparent">
-                  Concurso Público
-                </span>
-              </h1>
-              
-              <p className="text-lg sm:text-xl text-white/90 leading-relaxed max-w-xl">
-                Flashcards inteligentes com IA, repetição espaçada e simulados personalizados. 
-                A forma mais eficiente de estudar para PM, PC, GCM e muito mais.
-              </p>
-              
-              <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                <Link
-                  to="/login"
-                  className="group relative inline-flex items-center justify-center gap-2 bg-white text-blue-600 px-8 py-4 rounded-xl font-bold text-base sm:text-lg shadow-xl hover:shadow-2xl transition-all hover:scale-105"
-                >
-                  <RocketLaunchIcon className="h-5 w-5 group-hover:animate-bounce" />
-                  Começar Agora
-                </Link>
-                <Link
-                  to="/login"
-                  className="inline-flex items-center justify-center gap-2 bg-white/10 backdrop-blur-sm text-white px-8 py-4 rounded-xl font-bold text-base sm:text-lg border-2 border-white/30 hover:bg-white/20 transition-all"
-                >
-                  Já tenho conta
-                </Link>
-              </div>
-              
-              <div className="flex items-center gap-6 pt-4">
-                <div className="flex -space-x-3">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 border-2 border-white flex items-center justify-center text-xs font-bold">
-                      {i}
-                    </div>
-                  ))}
-                </div>
-                <div className="text-sm">
-                  <span className="font-bold">+500 alunos</span> aprovados
-                </div>
-              </div>
+          <div className="relative z-10 space-y-6">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-border-primary bg-background-card text-xs font-semibold text-accent-orange">
+              <span className="w-2 h-2 rounded-full bg-accent-orange animate-pulse"></span>
+              Plataforma 2.5X de Aceleração
             </div>
             
-            <div className="hidden md:block space-y-4">
-              {benefits.slice(0, 5).map((benefit, index) => (
-                <div
-                  key={benefit}
-                  className="group bg-white/10 backdrop-blur-sm rounded-2xl p-5 flex items-center gap-4 hover:bg-white/20 transition-all cursor-pointer border border-white/20"
-                  style={{ animationDelay: `${index * 0.1}s` }}
-                >
-                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <ShieldCheckIcon className="h-6 w-6 text-white" />
+            {/* Main Title */}
+            <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black leading-tight tracking-tight">
+              <span className="block text-text-primary">Domine seu</span>
+              <span className="block mt-2 gradient-text">Concurso Público</span>
+            </h1>
+            
+            {/* Subtitle */}
+            <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto leading-relaxed">
+              Flashcards inteligentes com IA, repetição espaçada e simulados personalizados. 
+              A forma mais eficiente de estudar para PM, PC, GCM e muito mais.
+            </p>
+            
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
+              <Link
+                to="/login"
+                className="group relative inline-flex items-center justify-center gap-2 bg-accent-orange text-background-primary px-8 py-4 rounded-lg font-bold text-base sm:text-lg transition-all hover:bg-accent-orange-dim hover:shadow-glow"
+              >
+                <RocketLaunchIcon className="h-5 w-5" />
+                Começar Agora
+              </Link>
+              <Link
+                to="/login"
+                className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-lg font-bold text-base sm:text-lg border border-border-primary text-text-primary hover:bg-background-card transition-all"
+              >
+                Já tenho conta
+              </Link>
+            </div>
+            
+            {/* Social Proof */}
+            <div className="flex items-center justify-center gap-6 pt-6">
+              <div className="flex -space-x-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="w-10 h-10 rounded-full bg-gradient-to-br from-accent-orange to-accent-cyan border-2 border-background-primary flex items-center justify-center text-xs font-bold text-background-primary">
+                    {i}
                   </div>
-                  <span className="text-base font-semibold">{benefit}</span>
-                </div>
-              ))}
+                ))}
+              </div>
+              <div className="text-sm text-text-secondary">
+                <span className="font-semibold text-text-primary">+500 alunos</span> aprovados
+              </div>
             </div>
           </div>
         </div>
@@ -377,7 +360,7 @@ const PublicHome = () => {
         {/* Carrossel de Banners */}
         <HomeBanner />
         
-        {/* Cursos Disponíveis - Modern Design */}
+        {/* Cursos Disponíveis - Minimalist Dark */}
         <div
           id="cursos"
           data-courses-section
@@ -385,17 +368,17 @@ const PublicHome = () => {
           className={`space-y-8 ${coursesVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`}
         >
           <div className="text-center space-y-4">
-            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-2 rounded-full text-sm font-bold shadow-lg">
-              <AcademicCapIcon className="h-5 w-5" />
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-border-primary bg-background-card text-xs font-semibold text-accent-orange">
+              <AcademicCapIcon className="h-4 w-4" />
               Cursos Premium
             </div>
-            <h2 className="text-4xl sm:text-5xl md:text-6xl font-black text-slate-900 dark:text-white">
+            <h2 className="text-4xl sm:text-5xl md:text-6xl font-black text-text-primary">
               Escolha seu caminho para a
-              <span className="block bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+              <span className="block gradient-text">
                 Aprovação
               </span>
             </h2>
-            <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+            <p className="text-lg text-text-secondary max-w-2xl mx-auto">
               Cursos completos para Polícia Militar, Polícia Civil, GCM e muito mais. 
               Conteúdo atualizado e focado na banca do seu concurso.
             </p>
@@ -411,7 +394,7 @@ const PublicHome = () => {
               {courses.map((course, index) => (
                 <div
                   key={course.id}
-                  className={`group relative bg-white dark:bg-slate-800 rounded-3xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 ${coursesVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`}
+                  className={`group relative bg-background-card border border-border-primary rounded-xl overflow-hidden hover:border-accent-orange/50 transition-all duration-300 hover:-translate-y-1 ${coursesVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`}
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
                   {/* Image Section */}
@@ -434,7 +417,7 @@ const PublicHome = () => {
                     
                     {course.featured && (
                       <div className="absolute top-4 left-4 z-20">
-                        <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg">
+                        <span className="inline-flex items-center gap-1.5 bg-accent-orange text-background-primary px-3 py-1.5 rounded-full text-xs font-bold">
                           <SparklesIcon className="h-3 w-3" />
                           Mais Vendido
                         </span>
@@ -445,7 +428,7 @@ const PublicHome = () => {
                   {/* Content Section */}
                   <div className="p-6 space-y-4">
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full text-xs font-bold">
+                      <span className="inline-flex items-center gap-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 px-3 py-1 rounded-full text-xs font-bold">
                         {course.competition}
                       </span>
                     </div>
@@ -466,7 +449,7 @@ const PublicHome = () => {
                           {formatCurrency(course.originalPrice)}
                         </p>
                       )}
-                      <p className="text-3xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                      <p className="text-3xl font-black gradient-text">
                         {formatCurrency(course.price || 99.90)}
                       </p>
                     </div>
@@ -482,7 +465,7 @@ const PublicHome = () => {
                       <Link
                         to={`/pagamento?course=${course.id}`}
                         onClick={trackButtonClick}
-                        className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl font-bold text-sm hover:shadow-lg transition-all hover:scale-105 text-center"
+                        className="flex-1 bg-gradient-primary text-white px-6 py-3 rounded-xl font-bold text-sm hover:shadow-lg transition-all hover:scale-105 text-center shadow-lg shadow-primary-500/25"
                       >
                         Comprar Agora
                       </Link>
@@ -509,7 +492,7 @@ const PublicHome = () => {
                             alert('Link copiado!')
                           }
                         }}
-                        className="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all"
+                        className="px-4 py-3 rounded-xl bg-slate-100/80 dark:bg-slate-700/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all"
                       >
                         <ShareIcon className="h-5 w-5" />
                       </button>
@@ -543,7 +526,7 @@ const PublicHome = () => {
               Histórias reais de aprovação e sucesso de quem confiou na FlashConCards
             </p>
           </div>
-          <div className="rounded-3xl bg-white dark:bg-slate-800 p-8 sm:p-12 shadow-2xl reviews-container">
+          <div className="rounded-3xl glass p-8 sm:p-12 shadow-2xl reviews-container">
             <Suspense fallback={
               <div className="text-center py-16">
                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-purple-600 border-t-transparent"></div>
@@ -556,13 +539,13 @@ const PublicHome = () => {
         </div>
 
         {/* Seção SEO - Conteúdo Rico - Modern Design */}
-        <div className="relative rounded-3xl bg-gradient-to-br from-white to-blue-50 dark:from-slate-800 dark:to-slate-900 p-8 sm:p-12 md:p-16 shadow-xl border border-slate-200 dark:border-slate-700">
+        <div className="relative rounded-3xl bg-gradient-to-br from-white to-primary-50 dark:from-slate-800 dark:to-slate-900 p-8 sm:p-12 md:p-16 shadow-xl border border-slate-200/50 dark:border-slate-700/50">
           <div className="max-w-4xl mx-auto space-y-8">
             <div className="text-center space-y-4">
               <h2 className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white">
                 Por que escolher a
-                <span className="block bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  FlashConCards?
+                <span className="block gradient-text">
+                  ConCursos2.5?
                 </span>
               </h2>
               <p className="text-lg text-slate-600 dark:text-slate-400">
@@ -577,9 +560,9 @@ const PublicHome = () => {
                 { icon: AcademicCapIcon, title: 'IA Avançada', desc: 'Assistente de IA disponível 24/7 para tirar suas dúvidas' },
                 { icon: BookOpenIcon, title: 'Simulados Reais', desc: 'Questões no estilo das principais bancas do Brasil' },
               ].map((item, index) => (
-                <div key={index} className="group bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 border border-slate-200 dark:border-slate-700">
+                <div key={index} className="group glass rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 border border-slate-200/50 dark:border-slate-700/50">
                   <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-primary flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-primary-500/25">
                       <item.icon className="h-6 w-6 text-white" />
                     </div>
                     <div>
@@ -596,12 +579,12 @@ const PublicHome = () => {
         {/* CTA Final - Modern Design */}
         <div 
           ref={ctaRef}
-          className={`relative rounded-3xl overflow-hidden bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-10 sm:p-12 md:p-16 text-center text-white shadow-2xl ${ctaVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`}
+          className={`relative rounded-3xl overflow-hidden bg-gradient-accent p-10 sm:p-12 md:p-16 text-center text-white shadow-2xl ${ctaVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`}
         >
           {/* Animated Background */}
           <div className="absolute inset-0 overflow-hidden">
             <div className="absolute -top-40 -right-40 w-80 h-80 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
-            <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+            <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-primary-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
           </div>
           
           {/* Grid Pattern */}
@@ -614,7 +597,7 @@ const PublicHome = () => {
             
             <h2 className="text-4xl sm:text-5xl md:text-6xl font-black">
               Pronto para começar sua
-              <span className="block mt-2 bg-gradient-to-r from-yellow-200 via-pink-200 to-cyan-200 bg-clip-text text-transparent">
+              <span className="block mt-2 bg-gradient-to-r from-secondary-200 via-accent-200 to-primary-200 bg-clip-text text-transparent">
                 jornada de aprovação?
               </span>
             </h2>
@@ -626,7 +609,7 @@ const PublicHome = () => {
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
               <Link
                 to="/login"
-                className="group relative inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-10 py-4 rounded-xl font-bold text-base sm:text-lg shadow-xl hover:shadow-2xl transition-all hover:scale-105"
+                className="group relative inline-flex items-center justify-center gap-2 bg-white text-accent-600 px-10 py-4 rounded-xl font-bold text-base sm:text-lg shadow-xl hover:shadow-2xl transition-all hover:scale-105"
               >
                 <RocketLaunchIcon className="h-5 w-5 group-hover:animate-bounce" />
                 Começar Agora

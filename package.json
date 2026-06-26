@@ -1,5 +1,5 @@
 {
-  "name": "plegimentoria",
+  "name": "concursos-2.5",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,6 +13,8 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@fontsource/geist-sans": "^5.2.5",
+    "@fontsource/space-grotesk": "^5.2.10",
     "@google/generative-ai": "^0.24.1",
     "@heroicons/react": "^2.2.0",
     "@mercadopago/sdk-react": "^1.0.6",
@@ -30,6 +32,7 @@
     "html2canvas": "^1.4.1",
     "jsonrepair": "^3.13.1",
     "jszip": "^3.10.1",
+    "lucide-react": "^1.21.0",
     "next": "^16.1.6",
     "pdfjs-dist": "^5.4.394",
     "react": "^19.2.4",

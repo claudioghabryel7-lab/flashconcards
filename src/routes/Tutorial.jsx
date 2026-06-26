@@ -21,12 +21,12 @@ const Tutorial = () => {
   const sections = [
     {
       id: 'introducao',
-      title: 'Bem-vindo ao FlashConCards!',
+      title: 'Bem-vindo ao ConCursos2.5!',
       icon: SparklesIcon,
       content: (
         <div className="space-y-4">
           <p className="text-slate-700 dark:text-slate-300">
-            O FlashConCards é uma plataforma completa de estudos para concursos públicos, 
+            O ConCursos2.5 é uma plataforma completa de estudos para concursos públicos, 
             desenvolvida com inteligência artificial para otimizar seu aprendizado e 
             maximizar seus resultados.
           </p>

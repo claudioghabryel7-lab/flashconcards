@@ -94,26 +94,26 @@ const CourseSelector = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4">
         <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-          <p className="mt-4 text-slate-600 dark:text-slate-400">Carregando cursos...</p>
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-accent-orange border-r-transparent"></div>
+          <p className="mt-4 text-text-secondary">Carregando cursos...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 px-4 py-6 sm:py-10">
-      <div className="max-w-2xl w-full mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
+    <div className="min-h-screen px-4 py-6 sm:py-10">
+      <div className="max-w-2xl w-full mx-auto bg-background-card rounded-xl border border-border-primary p-6 sm:p-8">
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 mb-4">
-            <AcademicCapIcon className="h-8 w-8 text-white" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-accent-orange to-accent-cyan mb-4">
+            <AcademicCapIcon className="h-8 w-8 text-background-primary" />
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mb-2">
+          <h2 className="text-2xl sm:text-3xl font-black text-text-primary mb-2">
             Escolha seu Curso
           </h2>
-          <p className="text-slate-600 dark:text-slate-400">
+          <p className="text-text-secondary">
             Selecione o curso que deseja estudar agora
           </p>
         </div>
@@ -122,19 +122,19 @@ const CourseSelector = () => {
         <div className="mb-6">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <MagnifyingGlassIcon className="h-5 w-5 text-slate-400" />
+              <MagnifyingGlassIcon className="h-5 w-5 text-text-muted" />
             </div>
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Buscar curso por nome, concurso ou descrição..."
-              className="w-full pl-10 pr-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              className="w-full pl-10 pr-4 py-3 border border-border-primary rounded-lg bg-background-card-hover text-text-primary placeholder-text-muted focus:ring-2 focus:ring-accent-orange focus:border-transparent transition-all"
             />
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-text-muted hover:text-text-secondary"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -143,7 +143,7 @@ const CourseSelector = () => {
             )}
           </div>
           {searchTerm && (
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            <p className="mt-2 text-sm text-text-muted">
               {filteredCourses.length} curso{filteredCourses.length !== 1 ? 's' : ''} encontrado{filteredCourses.length !== 1 ? 's' : ''}
             </p>
           )}
@@ -156,38 +156,38 @@ const CourseSelector = () => {
                 key={course.id || 'default'}
                 type="button"
                 onClick={() => setSelectedCourseId(course.id)}
-                className={`w-full text-left p-4 rounded-xl border-2 transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                className={`w-full text-left p-4 rounded-lg border-2 transition-all hover:scale-[1.02] active:scale-[0.98] ${
                   selectedCourseId === course.id
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-lg'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 bg-white dark:bg-slate-700'
+                    ? 'border-accent-orange bg-background-card-hover'
+                    : 'border-border-primary hover:border-accent-orange/50 bg-background-card'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
                       selectedCourseId === course.id
-                        ? 'border-blue-500 bg-blue-500'
-                        : 'border-slate-300 dark:border-slate-600'
+                        ? 'border-accent-orange bg-accent-orange'
+                        : 'border-border-primary'
                     }`}>
                       {selectedCourseId === course.id && (
-                        <CheckCircleIcon className="h-4 w-4 text-white" />
+                        <CheckCircleIcon className="h-4 w-4 text-background-primary" />
                       )}
                     </div>
                     <div>
                       <p className={`font-bold text-lg ${
                         selectedCourseId === course.id
-                          ? 'text-blue-700 dark:text-blue-300'
-                          : 'text-slate-900 dark:text-white'
+                          ? 'text-accent-orange'
+                          : 'text-text-primary'
                       }`}>
                         {course.name || 'Curso Padrão'}
                       </p>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                      <p className="text-sm text-text-muted">
                         {course.competition || 'Curso Padrão'}
                       </p>
                     </div>
                   </div>
                   {course.isDefault && (
-                    <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-600 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    <span className="px-3 py-1 rounded-full bg-background-card-hover text-xs font-semibold text-text-muted">
                       Padrão
                     </span>
                   )}
@@ -196,11 +196,11 @@ const CourseSelector = () => {
             ))
           ) : (
             <div className="text-center py-12">
-              <MagnifyingGlassIcon className="h-12 w-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+              <MagnifyingGlassIcon className="h-12 w-12 text-text-muted mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-text-primary mb-2">
                 Nenhum curso encontrado
               </h3>
-              <p className="text-slate-600 dark:text-slate-400">
+              <p className="text-text-secondary">
                 Tente buscar com outros termos ou limpe a busca para ver todos os cursos.
               </p>
             </div>
@@ -210,12 +210,12 @@ const CourseSelector = () => {
         <button
           onClick={handleSelectCourse}
           disabled={selectedCourseId === undefined || saving}
-          className="w-full rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 text-white font-bold text-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
+          className="w-full rounded-lg bg-accent-orange px-6 py-4 text-background-primary font-bold text-lg hover:bg-accent-orange-dim disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           {saving ? 'Salvando...' : 'Continuar'}
         </button>
 
-        <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-4">
+        <p className="text-center text-xs text-text-muted mt-4">
           Você pode trocar de curso a qualquer momento nas configurações
         </p>
       </div>
