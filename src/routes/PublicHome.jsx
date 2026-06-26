@@ -294,19 +294,24 @@ const PublicHome = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <section className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-16 sm:py-20 md:py-24">
+      <section className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-8 sm:py-12 md:py-16">
         {/* Hero Section - Minimalist */}
         <div 
           ref={heroRef}
-          className={`relative text-center space-y-8 ${heroVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`}
+          className={`relative text-center space-y-6 ${heroVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`}
         >
           {/* Subtle Glow Background */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent-orange/5 rounded-full blur-3xl"></div>
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-accent-cyan/5 rounded-full blur-3xl"></div>
+            {/* Animated particles */}
+            <div className="absolute top-20 left-20 w-2 h-2 bg-accent-orange rounded-full animate-ping" style={{ animationDuration: '2s' }}></div>
+            <div className="absolute top-40 right-32 w-2 h-2 bg-accent-cyan rounded-full animate-ping" style={{ animationDuration: '3s' }}></div>
+            <div className="absolute bottom-32 left-40 w-2 h-2 bg-accent-orange rounded-full animate-ping" style={{ animationDuration: '2.5s' }}></div>
+            <div className="absolute bottom-20 right-20 w-2 h-2 bg-accent-cyan rounded-full animate-ping" style={{ animationDuration: '3.5s' }}></div>
           </div>
           
-          <div className="relative z-10 space-y-6">
+          <div className="relative z-10 space-y-5">
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-border-primary bg-background-card text-xs font-semibold text-accent-orange">
               <span className="w-2 h-2 rounded-full bg-accent-orange animate-pulse"></span>
@@ -325,20 +330,13 @@ const PublicHome = () => {
             </p>
 
             {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-6">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
               <Link
                 to="/cursos"
                 className="group relative inline-flex items-center justify-center gap-2 bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary px-8 py-4 rounded-lg font-bold text-base sm:text-lg transition-all hover:shadow-glow hover:scale-105"
               >
                 <AcademicCapIcon className="h-5 w-5" />
                 Cursos
-              </Link>
-              <Link
-                to="/demo"
-                className="group relative inline-flex items-center justify-center gap-2 bg-gradient-to-r from-accent-cyan to-blue-600 text-background-primary px-8 py-4 rounded-lg font-bold text-base sm:text-lg transition-all hover:shadow-glow hover:scale-105"
-              >
-                <RocketLaunchIcon className="h-5 w-5" />
-                Demo
               </Link>
               <a
                 href={whatsappUrl}
@@ -349,6 +347,22 @@ const PublicHome = () => {
                 <ChatBubbleLeftRightIcon className="h-5 w-5" />
                 Falar conosco
               </a>
+            </div>
+
+            {/* Stats */}
+            <div className="flex flex-wrap justify-center gap-8 pt-6">
+              <div className="text-center">
+                <div className="text-2xl sm:text-3xl font-black gradient-text">500+</div>
+                <div className="text-xs text-text-secondary">Alunos</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl sm:text-3xl font-black gradient-text">1.000</div>
+                <div className="text-xs text-text-secondary">Flashcards específicos com comentários</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl sm:text-3xl font-black gradient-text">100%</div>
+                <div className="text-xs text-text-secondary">Organização</div>
+              </div>
             </div>
           </div>
         </div>

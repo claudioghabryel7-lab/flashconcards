@@ -2,10 +2,10 @@ import React from 'react'
 
 const Logo = ({ size = 'md', className = '' }) => {
   const sizes = {
-    sm: { width: 300, height: 300 },
-    md: { width: 360, height: 360 },
-    lg: { width: 420, height: 420 },
-    xl: { width: 480, height: 480 }
+    sm: { width: 120, height: 120 },
+    md: { width: 140, height: 140 },
+    lg: { width: 160, height: 160 },
+    xl: { width: 180, height: 180 }
   }
 
   const { width, height } = sizes[size] || sizes.md
@@ -20,7 +20,9 @@ const Logo = ({ size = 'md', className = '' }) => {
         className="object-contain"
         style={{
           filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4)) brightness(1.1) contrast(1.1)',
-          opacity: '1'
+          opacity: '1',
+          maxWidth: '100%',
+          height: 'auto'
         }}
         onError={(e) => {
           e.target.src = '/course-icons/logosite.jpg';
