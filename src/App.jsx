@@ -49,6 +49,8 @@ const FlashcardView = lazy(() => import('./routes/FlashcardView'))
 const FlashcardsTopicoView = lazy(() => import('./routes/FlashcardsTopicoView'))
 const FlashcardPIP = lazy(() => import('./routes/FlashcardPIP'))
 const FlashQuestoes = lazy(() => import('./routes/FlashQuestoes'))
+const Cursos = lazy(() => import('./routes/Cursos'))
+const Demo = lazy(() => import('./routes/Demo'))
 // Importação direta para testar
 import CalendarioProgresso from './routes/CalendarioProgresso'
 const Tutorial = lazy(() => import('./routes/Tutorial'))
@@ -178,6 +180,8 @@ function App() {
         <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/" element={<PublicHome />} />
+          <Route path="/cursos" element={<Cursos />} />
+          <Route path="/demo" element={<Demo />} />
           {/* Página de Compartilhamento de Flashcards - Acessível sem login */}
           <Route path="/share-flashcards/:token" element={<SharedFlashcardPIP />} />
           <Route path="/guia-estudos" element={<GuiaEstudos />} />

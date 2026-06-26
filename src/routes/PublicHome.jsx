@@ -13,7 +13,8 @@ import {
   AcademicCapIcon,
   BookOpenIcon,
   RocketLaunchIcon,
-  ShareIcon
+  ShareIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/solid'
 import { trackButtonClick } from '../utils/googleAds'
 import HomeBanner from '../components/HomeBanner'
@@ -292,8 +293,8 @@ const PublicHome = () => {
   }
 
   return (
-    <div className="min-h-screen">
-      <section className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pt-8 sm:pt-12 md:pt-16 pb-16 sm:pb-20 md:pb-24">
+    <div className="min-h-screen flex items-center justify-center">
+      <section className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-16 sm:py-20 md:py-24">
         {/* Hero Section - Minimalist */}
         <div 
           ref={heroRef}
@@ -322,114 +323,32 @@ const PublicHome = () => {
             <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto leading-relaxed">
               Organização com edital verticalizado, flashcards, questões práticas, e conteúdo resumido com maior incidência para o seu Concurso.
             </p>
-          </div>
-        </div>
 
-        {/* Demo Sections - Compactas */}
-        <div className="space-y-12 pt-8">
-          {/* Demo Edital Verticalizado */}
-          <div className={`glass rounded-2xl p-6 border border-border-primary ${heroVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`} style={{ animationDelay: '0.2s' }}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-orange to-accent-cyan flex items-center justify-center">
-                <DocumentTextIcon className="h-5 w-5 text-background-primary" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-text-primary">Edital Verticalizado</h3>
-                <p className="text-sm text-text-secondary">Organização completa do edital</p>
-              </div>
-            </div>
-            <div className="bg-background-card rounded-xl p-4 border border-border-primary">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between p-2 rounded bg-background-secondary">
-                  <span className="text-sm font-medium text-text-primary">📚 Português</span>
-                  <span className="text-xs text-accent-orange">85% incidência</span>
-                </div>
-                <div className="flex items-center justify-between p-2 rounded bg-background-secondary">
-                  <span className="text-sm font-medium text-text-primary">⚖️ Direito Constitucional</span>
-                  <span className="text-xs text-accent-cyan">92% incidência</span>
-                </div>
-                <div className="flex items-center justify-between p-2 rounded bg-background-secondary">
-                  <span className="text-sm font-medium text-text-primary">🔍 Raciocínio Lógico</span>
-                  <span className="text-xs text-accent-orange">78% incidência</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Demo Calendário de Progresso */}
-          <div className={`glass rounded-2xl p-6 border border-border-primary ${heroVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`} style={{ animationDelay: '0.3s' }}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-cyan to-accent-orange flex items-center justify-center">
-                <CalendarIcon className="h-5 w-5 text-background-primary" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-text-primary">Calendário de Progresso</h3>
-                <p className="text-sm text-text-secondary">Acompanhe sua evolução</p>
-              </div>
-            </div>
-            <div className="bg-background-card rounded-xl p-4 border border-border-primary">
-              <div className="flex gap-2">
-                <div className="flex-1 p-2 rounded bg-accent-orange/20 border border-accent-orange/50 text-center">
-                  <div className="text-lg font-bold text-accent-orange">15</div>
-                  <div className="text-xs text-text-secondary">dias seguidos</div>
-                </div>
-                <div className="flex-1 p-2 rounded bg-accent-cyan/20 border border-accent-cyan/50 text-center">
-                  <div className="text-lg font-bold text-accent-cyan">127</div>
-                  <div className="text-xs text-text-secondary">flashcards</div>
-                </div>
-                <div className="flex-1 p-2 rounded bg-background-secondary border border-border-primary text-center">
-                  <div className="text-lg font-bold text-text-primary">89%</div>
-                  <div className="text-xs text-text-secondary">acertos</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Demo Flashcards */}
-          <div className={`glass rounded-2xl p-6 border border-border-primary ${heroVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`} style={{ animationDelay: '0.4s' }}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-orange to-accent-cyan flex items-center justify-center">
-                <SparklesIcon className="h-5 w-5 text-background-primary" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-text-primary">Flashcards com IA</h3>
-                <p className="text-sm text-text-secondary">Estudo inteligente e personalizado</p>
-              </div>
-            </div>
-            <div className="bg-background-card rounded-xl p-4 border border-border-primary">
-              <div className="bg-gradient-to-br from-accent-orange/10 to-accent-cyan/10 rounded-lg p-4 border border-border-primary">
-                <p className="text-sm font-medium text-text-primary mb-2">O que é o princípio da legalidade?</p>
-                <p className="text-xs text-text-secondary">Administração só pode agir conforme a lei...</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Demo Treino de Redação */}
-          <div className={`glass rounded-2xl p-6 border border-border-primary ${heroVisible ? 'animate-on-scroll fade-up visible' : 'animate-on-scroll fade-up'}`} style={{ animationDelay: '0.5s' }}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-cyan to-accent-orange flex items-center justify-center">
-                <DocumentTextIcon className="h-5 w-5 text-background-primary" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-text-primary">Treino de Redação</h3>
-                <p className="text-sm text-text-secondary">Prática com feedback da IA</p>
-              </div>
-            </div>
-            <div className="bg-background-card rounded-xl p-4 border border-border-primary">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-accent-orange"></div>
-                  <span className="text-xs text-text-secondary">Tema gerado pela IA</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-accent-cyan"></div>
-                  <span className="text-xs text-text-secondary">Análise detalhada</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-accent-orange"></div>
-                  <span className="text-xs text-text-secondary">Sugestões de melhoria</span>
-                </div>
-              </div>
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-6">
+              <Link
+                to="/cursos"
+                className="group relative inline-flex items-center justify-center gap-2 bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary px-8 py-4 rounded-lg font-bold text-base sm:text-lg transition-all hover:shadow-glow hover:scale-105"
+              >
+                <AcademicCapIcon className="h-5 w-5" />
+                Cursos
+              </Link>
+              <Link
+                to="/demo"
+                className="group relative inline-flex items-center justify-center gap-2 bg-gradient-to-r from-accent-cyan to-blue-600 text-background-primary px-8 py-4 rounded-lg font-bold text-base sm:text-lg transition-all hover:shadow-glow hover:scale-105"
+              >
+                <RocketLaunchIcon className="h-5 w-5" />
+                Demo
+              </Link>
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group relative inline-flex items-center justify-center gap-2 bg-green-500 text-background-primary px-8 py-4 rounded-lg font-bold text-base sm:text-lg transition-all hover:bg-green-600 hover:shadow-glow hover:scale-105"
+              >
+                <ChatBubbleLeftRightIcon className="h-5 w-5" />
+                Falar conosco
+              </a>
             </div>
           </div>
         </div>
