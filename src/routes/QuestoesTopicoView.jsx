@@ -428,6 +428,14 @@ ESTRUTURA DO JSON:
     }
   ]
 }
+
+🚨 INSTRUÇÃO CRÍTICA - CONTEÚDO ATUALIZADO:
+VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+- PENSE: "Vou gerar agora de acordo com atualizações verídicas da data atual (${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })})"
+- USE APENAS INFORMAÇÕES ATUALIZADAS E VIGENTES ATÉ ESTA DATA
+- VERIFIQUE SE HOUVE ALTERAÇÕES RECENTES NAS LEIS, DECRETOS OU NORMAS
+- NÃO USE INFORMAÇÕES DESATUALIZADAS OU REVOGADAS
+- CITE SEMPRE A DATA DE ATUALIZAÇÃO QUANDO NECESSÁRIO
 🔍 VERIFICAÇÃO DE FONTES - OBRIGATÓRIO:
 - Para CADA lei, decreto ou norma jurídica mencionada, VERIFIQUE a atualidade usando as ferramentas disponíveis
 - Para CADA jurisprudência citada, VERIFIQUE se está vigente e atualizada

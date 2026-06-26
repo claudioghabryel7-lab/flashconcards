@@ -1022,6 +1022,14 @@ ${questionType === 'certo_errado' ?
 - Foque no conteúdo específico do edital deste concurso
 - Se o edital mencionar tópicos específicos para "${materia.nome}", use APENAS esses tópicos
 
+🚨 INSTRUÇÃO CRÍTICA - CONTEÚDO ATUALIZADO:
+VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+- PENSE: "Vou gerar agora de acordo com atualizações verídicas da data atual (${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })})"
+- USE APENAS INFORMAÇÕES ATUALIZADAS E VIGENTES ATÉ ESTA DATA
+- VERIFIQUE SE HOUVE ALTERAÇÕES RECENTES NAS LEIS, DECRETOS OU NORMAS
+- NÃO USE INFORMAÇÕES DESATUALIZADAS OU REVOGADAS
+- CITE SEMPRE A DATA DE ATUALIZAÇÃO QUANDO NECESSÁRIO
+
 FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
 Retorne APENAS um objeto JSON válido:
 

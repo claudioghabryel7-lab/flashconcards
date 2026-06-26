@@ -9,6 +9,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import ReactMarkdown from 'react-markdown'
 import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -487,194 +488,233 @@ ONDE:
     }
   }
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!conteudo) return
 
-    const pdf = new jsPDF()
-    const pageWidth = pdf.internal.pageSize.getWidth()
-    const pageHeight = pdf.internal.pageSize.getHeight()
-    const margin = 20
-    const contentWidth = pageWidth - (margin * 2)
-    let yPosition = margin
+    try {
+      // Criar um container temporário para renderizar o conteúdo
+      const container = document.createElement('div')
+      container.style.position = 'absolute'
+      container.style.left = '-9999px'
+      container.style.top = '0'
+      container.style.width = '210mm' // Largura A4
+      container.style.padding = '20px'
+      container.style.backgroundColor = darkMode ? '#09090b' : '#ffffff'
+      container.style.color = darkMode ? '#fafafa' : '#09090b'
+      document.body.appendChild(container)
 
-    // Função para adicionar texto com quebra automática
-    const addWrappedText = (text, x, y, maxWidth, fontSize, fontStyle = 'normal', color = [0, 0, 0]) => {
-      pdf.setFontSize(fontSize)
-      pdf.setFont('helvetica', fontStyle)
-      pdf.setTextColor(color[0], color[1], color[2])
-      
-      const lines = pdf.splitTextToSize(text, maxWidth)
-      lines.forEach((line, index) => {
-        if (yPosition > pageHeight - margin) {
-          pdf.addPage()
-          yPosition = margin
-        }
-        pdf.text(line, x, yPosition)
-        yPosition += fontSize * 0.5
-      })
-      return yPosition
-    }
+      // Adicionar conteúdo ao container
+      let htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 100%;">
+          <div style="background: linear-gradient(135deg, rgb(255, 140, 0), rgb(6, 182, 212)); padding: 20px; margin-bottom: 20px; border-radius: 8px;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">ConCursos 2.5</h1>
+            <p style="color: white; margin: 5px 0 0 0; font-size: 14px;">Material de Apoio</p>
+          </div>
+      `
 
-    // Cabeçalho
-    pdf.setFillColor(255, 140, 0) // Laranja
-    pdf.rect(0, 0, pageWidth, 40, 'F')
-    
-    pdf.setTextColor(255, 255, 255)
-    pdf.setFontSize(24)
-    pdf.setFont('helvetica', 'bold')
-    pdf.text('ConCursos 2.5', margin, 25)
-    
-    pdf.setFontSize(12)
-    pdf.setFont('helvetica', 'normal')
-    pdf.text('Material de Apoio', pageWidth - margin - 50, 25, { align: 'right' })
-
-    yPosition = 55
-
-    // Título do material
-    if (conteudo.titulo) {
-      yPosition = addWrappedText(conteudo.titulo, margin, yPosition, contentWidth, 18, 'bold', [0, 0, 0])
-      yPosition += 10
-    }
-
-    // Subtítulo
-    if (conteudo.subtitulo) {
-      yPosition = addWrappedText(conteudo.subtitulo, margin, yPosition, contentWidth, 12, 'italic', [80, 80, 80])
-      yPosition += 10
-    }
-
-    // Matéria
-    if (conteudo.materia) {
-      pdf.setFillColor(240, 240, 240)
-      pdf.rect(margin, yPosition - 5, contentWidth, 8, 'F')
-      yPosition = addWrappedText(`Matéria: ${conteudo.materia}`, margin, yPosition, contentWidth, 11, 'bold', [0, 0, 0])
-      yPosition += 10
-    }
-
-    // Raio-X de Probabilidade
-    if (conteudo.raioXProbabilidade) {
-      yPosition += 5
-      pdf.setFillColor(255, 200, 100)
-      pdf.rect(margin, yPosition - 5, contentWidth, 8, 'F')
-      yPosition = addWrappedText('🔥 Raio-X de Probabilidade', margin, yPosition, contentWidth, 14, 'bold', [0, 0, 0])
-      yPosition += 10
-
-      if (conteudo.raioXProbabilidade.topicosQuentes) {
-        yPosition = addWrappedText('Top Assuntos Quentes:', margin, yPosition, contentWidth, 12, 'bold', [0, 0, 0])
-        yPosition += 5
-        conteudo.raioXProbabilidade.topicosQuentes.forEach((assunto, idx) => {
-          yPosition = addWrappedText(`${idx + 1}. ${assunto}`, margin + 5, yPosition, contentWidth - 10, 10, 'normal', [0, 0, 0])
-          yPosition += 3
-        })
-        yPosition += 5
+      // Título
+      if (conteudo.titulo) {
+        htmlContent += `<h2 style="color: ${darkMode ? '#fafafa' : '#09090b'}; font-size: 20px; margin-bottom: 10px;">${conteudo.titulo}</h2>`
       }
 
-      if (conteudo.raioXProbabilidade.padraoBanca) {
-        yPosition = addWrappedText('Padrão da Banca:', margin, yPosition, contentWidth, 12, 'bold', [0, 0, 0])
-        yPosition += 5
-        yPosition = addWrappedText(conteudo.raioXProbabilidade.padraoBanca, margin + 5, yPosition, contentWidth - 10, 10, 'normal', [0, 0, 0])
-        yPosition += 10
-      }
-    }
-
-    // Revisão Turbo
-    if (conteudo.revisaoTurbo) {
-      yPosition += 5
-      pdf.setFillColor(100, 150, 255)
-      pdf.rect(margin, yPosition - 5, contentWidth, 8, 'F')
-      yPosition = addWrappedText('⚡ Revisão Turbo', margin, yPosition, contentWidth, 14, 'bold', [255, 255, 255])
-      yPosition += 10
-
-      if (conteudo.revisaoTurbo.resumos && Array.isArray(conteudo.revisaoTurbo.resumos)) {
-        yPosition = addWrappedText('Resumos:', margin, yPosition, contentWidth, 12, 'bold', [0, 0, 0])
-        yPosition += 5
-        conteudo.revisaoTurbo.resumos.forEach((resumo, idx) => {
-          yPosition = addWrappedText(`${idx + 1}. ${resumo}`, margin + 5, yPosition, contentWidth - 10, 10, 'normal', [0, 0, 0])
-          yPosition += 5
-        })
-        yPosition += 5
+      // Subtítulo
+      if (conteudo.subtitulo) {
+        htmlContent += `<p style="color: ${darkMode ? '#a1a1aa' : '#71717a'}; font-style: italic; margin-bottom: 15px;">${conteudo.subtitulo}</p>`
       }
 
-      if (conteudo.revisaoTurbo.pegadinhas && Array.isArray(conteudo.revisaoTurbo.pegadinhas)) {
-        pdf.setFillColor(255, 200, 200)
-        pdf.rect(margin, yPosition - 5, contentWidth, 8, 'F')
-        yPosition = addWrappedText('⚠️ Cuidado, Caçapa!', margin, yPosition, contentWidth, 12, 'bold', [200, 0, 0])
-        yPosition += 10
-        conteudo.revisaoTurbo.pegadinhas.forEach((pegadinha, idx) => {
-          yPosition = addWrappedText(`${idx + 1}. ${pegadinha.titulo || pegadinha}`, margin + 5, yPosition, contentWidth - 10, 10, 'normal', [200, 0, 0])
-          yPosition += 5
-          if (pegadinha.conteudo) {
-            yPosition = addWrappedText(pegadinha.conteudo, margin + 10, yPosition, contentWidth - 15, 9, 'normal', [100, 0, 0])
-            yPosition += 5
-          }
-        })
-        yPosition += 5
+      // Matéria
+      if (conteudo.materia) {
+        htmlContent += `<div style="background: ${darkMode ? '#27272a' : '#f4f4f5'}; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+          <strong>Matéria:</strong> ${conteudo.materia}
+        </div>`
       }
-    }
 
-    // Questões Preditivas
-    if (conteudo.questoesPreditivas && Array.isArray(conteudo.questoesPreditivas)) {
-      yPosition += 5
-      pdf.setFillColor(100, 200, 100)
-      pdf.rect(margin, yPosition - 5, contentWidth, 8, 'F')
-      yPosition = addWrappedText('📚 Questões Preditivas', margin, yPosition, contentWidth, 14, 'bold', [255, 255, 255])
-      yPosition += 10
-
-      conteudo.questoesPreditivas.forEach((questao, idx) => {
-        yPosition = addWrappedText(`Questão ${idx + 1} de ${conteudo.questoesPreditivas.length}`, margin, yPosition, contentWidth, 11, 'bold', [0, 0, 0])
-        yPosition += 5
-        yPosition = addWrappedText(questao.enunciado, margin + 5, yPosition, contentWidth - 10, 10, 'normal', [0, 0, 0])
-        yPosition += 5
-
-        if (questao.alternativas) {
-          Object.entries(questao.alternativas).forEach(([letra, alt]) => {
-            const isCorrect = letra === questao.correta
-            yPosition = addWrappedText(`${letra}) ${alt}`, margin + 10, yPosition, contentWidth - 15, 9, isCorrect ? 'bold' : 'normal', isCorrect ? [0, 150, 0] : [0, 0, 0])
-            yPosition += 3
+      // Raio-X de Probabilidade
+      if (conteudo.raioXProbabilidade) {
+        htmlContent += `
+          <div style="background: linear-gradient(135deg, rgb(255, 200, 100), rgb(255, 165, 0)); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: #09090b; margin: 0 0 10px 0; font-size: 16px;">🔥 Raio-X de Probabilidade</h3>
+        `
+        
+        if (conteudo.raioXProbabilidade.topicosQuentes) {
+          htmlContent += `<p style="margin: 5px 0;"><strong>Top Assuntos Quentes:</strong></p><ul style="margin: 5px 0; padding-left: 20px;">`
+          conteudo.raioXProbabilidade.topicosQuentes.forEach((assunto, idx) => {
+            htmlContent += `<li>${assunto}</li>`
           })
-          yPosition += 5
+          htmlContent += `</ul>`
         }
 
-        if (questao.gabaritoComentado) {
-          pdf.setFillColor(230, 240, 255)
-          pdf.rect(margin, yPosition - 3, contentWidth, 6, 'F')
-          yPosition = addWrappedText('💡 Gabarito Comentado:', margin, yPosition, contentWidth, 10, 'bold', [0, 0, 150])
-          yPosition += 5
-          yPosition = addWrappedText(questao.gabaritoComentado, margin + 5, yPosition, contentWidth - 10, 9, 'normal', [0, 0, 100])
-          yPosition += 10
+        if (conteudo.raioXProbabilidade.padraoBanca) {
+          htmlContent += `<p style="margin: 5px 0;"><strong>Padrão da Banca:</strong> ${conteudo.raioXProbabilidade.padraoBanca}</p>`
         }
+
+        htmlContent += `</div>`
+      }
+
+      // Revisão Turbo
+      if (conteudo.revisaoTurbo) {
+        htmlContent += `
+          <div style="background: linear-gradient(135deg, rgb(100, 150, 255), rgb(6, 182, 212)); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: white; margin: 0 0 10px 0; font-size: 16px;">⚡ Revisão Turbo</h3>
+        `
+
+        if (conteudo.revisaoTurbo.resumos && Array.isArray(conteudo.revisaoTurbo.resumos)) {
+          htmlContent += `<p style="color: white; margin: 5px 0;"><strong>Resumos:</strong></p>`
+          conteudo.revisaoTurbo.resumos.forEach((resumo, idx) => {
+            htmlContent += `<p style="color: white; margin: 5px 0 5px 15px;">${idx + 1}. ${resumo}</p>`
+          })
+        }
+
+        if (conteudo.revisaoTurbo.pegadinhas && Array.isArray(conteudo.revisaoTurbo.pegadinhas)) {
+          htmlContent += `<div style="background: rgba(255, 200, 200, 0.3); padding: 10px; border-radius: 5px; margin-top: 10px;">
+            <p style="color: #dc2626; margin: 5px 0;"><strong>⚠️ Cuidado, Caçapa!</strong></p>`
+          conteudo.revisaoTurbo.pegadinhas.forEach((pegadinha, idx) => {
+            const titulo = typeof pegadinha === 'string' ? pegadinha : (pegadinha.titulo || pegadinha)
+            const conteudoPegadinha = typeof pegadinha === 'object' ? pegadinha.conteudo : ''
+            htmlContent += `<p style="color: #dc2626; margin: 5px 0 5px 15px;">${idx + 1}. ${titulo}</p>`
+            if (conteudoPegadinha) {
+              htmlContent += `<p style="color: #991b1b; margin: 5px 0 5px 25px; font-size: 12px;">${conteudoPegadinha}</p>`
+            }
+          })
+          htmlContent += `</div>`
+        }
+
+        htmlContent += `</div>`
+      }
+
+      // Questões Preditivas
+      if (conteudo.questoesPreditivas && Array.isArray(conteudo.questoesPreditivas)) {
+        htmlContent += `
+          <div style="background: linear-gradient(135deg, rgb(100, 200, 100), rgb(34, 197, 94)); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: white; margin: 0 0 10px 0; font-size: 16px;">📚 Questões Preditivas</h3>
+        `
+
+        conteudo.questoesPreditivas.forEach((questao, idx) => {
+          htmlContent += `
+            <div style="background: ${darkMode ? '#27272a' : '#f4f4f5'}; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+              <p style="margin: 0 0 10px 0; font-weight: bold;">Questão ${idx + 1} de ${conteudo.questoesPreditivas.length}</p>
+              <p style="margin: 0 0 10px 0;">${questao.enunciado}</p>
+          `
+
+          if (questao.alternativas) {
+            htmlContent += `<div style="margin-bottom: 10px;">`
+            Object.entries(questao.alternativas).forEach(([letra, alt]) => {
+              const isCorrect = letra === questao.correta
+              htmlContent += `<p style="margin: 5px 0; color: ${isCorrect ? '#16a34a' : (darkMode ? '#a1a1aa' : '#71717a')}; ${isCorrect ? 'font-weight: bold;' : ''}">${letra}) ${alt}</p>`
+            })
+            htmlContent += `</div>`
+          }
+
+          if (questao.gabaritoComentado) {
+            htmlContent += `
+              <div style="background: rgba(100, 150, 255, 0.2); padding: 10px; border-radius: 5px;">
+                <p style="margin: 0 0 5px 0; font-weight: bold; color: #2563eb;">💡 Gabarito Comentado:</p>
+                <p style="margin: 0; color: #1e40af;">${questao.gabaritoComentado}</p>
+              </div>
+            `
+          }
+
+          htmlContent += `</div>`
+        })
+
+        htmlContent += `</div>`
+      }
+
+      // Conteúdo original
+      if (conteudo.content) {
+        htmlContent += `
+          <div style="background: ${darkMode ? '#27272a' : '#e4e4e7'}; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="margin: 0 0 10px 0; font-size: 16px;">📖 Conteúdo Completo</h3>
+            <div style="line-height: 1.6;">${conteudo.content}</div>
+          </div>
+        `
+      }
+
+      // Seções
+      if (conteudo.secoes && Array.isArray(conteudo.secoes)) {
+        htmlContent += `
+          <div style="background: ${darkMode ? '#27272a' : '#e4e4e7'}; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="margin: 0 0 10px 0; font-size: 16px;">Seções do Conteúdo</h3>
+        `
+        conteudo.secoes.forEach((secao, idx) => {
+          htmlContent += `
+            <div style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid ${darkMode ? '#3f3f46' : '#d4d4d8'};">
+              <h4 style="margin: 0 0 10px 0; font-size: 14px;">${idx + 1}. ${secao.titulo || 'Seção ' + (idx + 1)}</h4>
+              ${secao.conteudo ? `<p style="margin: 0 0 10px 0;">${secao.conteudo}</p>` : ''}
+              ${secao.itens && Array.isArray(secao.itens) ? `
+                <ul style="margin: 0; padding-left: 20px;">
+                  ${secao.itens.map((item, itemIdx) => `<li style="margin: 5px 0;">${item}</li>`).join('')}
+                </ul>
+              ` : ''}
+            </div>
+          `
+        })
+        htmlContent += `</div>`
+      }
+
+      htmlContent += `
+        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid ${darkMode ? '#3f3f46' : '#d4d4d8'}; color: ${darkMode ? '#71717a' : '#a1a1aa'}; font-size: 12px;">
+          Gerado em ${new Date().toLocaleDateString('pt-BR')} | ConCursos 2.5
+        </div>
+      </div>
+      `
+
+      container.innerHTML = htmlContent
+
+      // Capturar o container como canvas
+      const canvas = await html2canvas(container, {
+        scale: 2, // Melhor qualidade
+        useCORS: true,
+        backgroundColor: darkMode ? '#09090b' : '#ffffff',
       })
-    }
 
-    // Conteúdo original
-    if (conteudo.content) {
-      yPosition += 5
-      pdf.setFillColor(200, 200, 200)
-      pdf.rect(margin, yPosition - 5, contentWidth, 8, 'F')
-      yPosition = addWrappedText('📖 Conteúdo Completo', margin, yPosition, contentWidth, 14, 'bold', [0, 0, 0])
-      yPosition += 10
+      // Criar PDF a partir do canvas
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const imgData = canvas.toDataURL('image/png')
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
       
-      // Remover tags HTML do conteúdo
-      const plainContent = conteudo.content.replace(/<[^>]+>/g, '\n').replace(/\n\s*\n/g, '\n\n')
-      yPosition = addWrappedText(plainContent, margin, yPosition, contentWidth, 10, 'normal', [0, 0, 0])
-    }
+      const imgWidth = canvas.width
+      const imgHeight = canvas.height
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight)
+      const imgX = (pdfWidth - imgWidth * ratio) / 2
+      const imgY = 10
 
-    // Rodapé
-    const totalPages = pdf.internal.getNumberOfPages()
-    for (let i = 1; i <= totalPages; i++) {
-      pdf.setPage(i)
-      pdf.setFontSize(9)
-      pdf.setTextColor(128, 128, 128)
-      pdf.text(
-        `Página ${i} de ${totalPages} | Gerado em ${new Date().toLocaleDateString('pt-BR')}`,
-        pageWidth / 2,
-        pageHeight - 10,
-        { align: 'center' }
-      )
-    }
+      // Se a imagem for muito alta, dividir em múltiplas páginas
+      if (imgHeight * ratio > pdfHeight - 20) {
+        const pageHeight = pdfHeight - 20
+        const totalPages = Math.ceil((imgHeight * ratio) / pageHeight)
+        
+        for (let i = 0; i < totalPages; i++) {
+          if (i > 0) pdf.addPage()
+          
+          const canvasPage = document.createElement('canvas')
+          canvasPage.width = canvas.width
+          canvasPage.height = Math.min(canvas.height - (i * (canvas.height / totalPages)), canvas.height / totalPages)
+          
+          const ctx = canvasPage.getContext('2d')
+          ctx.drawImage(canvas, 0, -i * (canvas.height / totalPages))
+          
+          const pageImgData = canvasPage.toDataURL('image/png')
+          const pageImgWidth = canvasPage.width * ratio
+          const pageImgHeight = canvasPage.height * ratio
+          
+          pdf.addImage(pageImgData, 'PNG', imgX, imgY, pageImgWidth, pageImgHeight)
+        }
+      } else {
+        pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio)
+      }
 
-    // Salvar PDF
-    const fileName = `${conteudo.materia || 'material'}-${conteudo.titulo || 'topico'}.pdf`.replace(/[^a-zA-Z0-9\-_.]/g, '_')
-    pdf.save(fileName)
+      // Salvar PDF
+      const fileName = `${conteudo.materia || 'material'}-${conteudo.titulo || 'topico'}.pdf`.replace(/[^a-zA-Z0-9\-_.]/g, '_')
+      pdf.save(fileName)
+
+      // Remover container temporário
+      document.body.removeChild(container)
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error)
+      alert('Erro ao gerar PDF. Tente novamente.')
+    }
   }
 
   const handleGenerateContent = async () => {
@@ -840,6 +880,14 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
    - Gabarito Comentado: explique o porquê das outras estarem erradas
    - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
    - Seja detalhado e completo nas explicações
+
+🚨 INSTRUÇÃO CRÍTICA - CONTEÚDO ATUALIZADO:
+VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+- PENSE: "Vou gerar agora de acordo com atualizações verídicas da data atual (${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })})"
+- USE APENAS INFORMAÇÕES ATUALIZADAS E VIGENTES ATÉ ESTA DATA
+- VERIFIQUE SE HOUVE ALTERAÇÕES RECENTES NAS LEIS, DECRETOS OU NORMAS
+- NÃO USE INFORMAÇÕES DESATUALIZADAS OU REVOGADAS
+- CITE SEMPRE A DATA DE ATUALIZAÇÃO QUANDO NECESSÁRIO
 
 FORMATO JSON:
 {

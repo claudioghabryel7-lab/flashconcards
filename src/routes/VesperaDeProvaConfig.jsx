@@ -331,6 +331,14 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
    - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
    - Seja detalhado e completo nas explicações
 
+🚨 INSTRUÇÃO CRÍTICA - CONTEÚDO ATUALIZADO:
+VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+- PENSE: "Vou gerar agora de acordo com atualizações verídicas da data atual (${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })})"
+- USE APENAS INFORMAÇÕES ATUALIZADAS E VIGENTES ATÉ ESTA DATA
+- VERIFIQUE SE HOUVE ALTERAÇÕES RECENTES NAS LEIS, DECRETOS OU NORMAS
+- NÃO USE INFORMAÇÕES DESATUALIZADAS OU REVOGADAS
+- CITE SEMPRE A DATA DE ATUALIZAÇÃO QUANDO NECESSÁRIO
+
 FORMATO JSON:
 {
   "validacaoArtigo": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
