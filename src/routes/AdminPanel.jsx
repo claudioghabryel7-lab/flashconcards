@@ -2985,7 +2985,7 @@ REGRAS CRÍTICAS:
       return
     }
     
-    const confirmMessage = `⚠️ ATENÇÃO: Deseja excluir este curso DEFINITIVAMENTE?\n\nIsso vai DELETAR:\n- Todos os flashcards do curso\n- Todos os prompts (edital, questões, unified)\n- Todas as matérias do curso\n- Edital verticalizado\n- Matérias revisadas\n- Conteúdos completos\n- Configurações do curso\n- Todo o progresso dos usuários neste curso\n- Todas as referências nos perfis de usuários\n\nEsta ação NÃO pode ser desfeita!`
+    const confirmMessage = `⚠️ ATENÇÃO: Deseja excluir este curso DEFINITIVAMENTE?\n\nIsso vai DELETAR:\n- Todos os flashcards do curso (incluindo salvos pelos usuários)\n- Todo o material de apoio\n- Todas as questões para praticar\n- Todas as vésperas de prova\n- Todos os prompts (edital, questões, unified)\n- Todas as matérias do curso\n- Edital verticalizado\n- Matérias revisadas\n- Conteúdos completos\n- Configurações do curso\n- Todo o progresso dos usuários neste curso\n- Todas as referências nos perfis de usuários\n\nEsta ação NÃO pode ser desfeita!`
     
     if (!window.confirm(confirmMessage)) {
       console.log('❌ Usuário cancelou a exclusão')
@@ -3012,8 +3012,8 @@ REGRAS CRÍTICAS:
       setMessage('🗑️ Preparando deleção do curso...')
       console.log('🗑️ Iniciando exclusão do curso:', courseId)
       
-      // 1. Deletar todos os flashcards do curso
-      setMessage('🗑️ Deletando flashcards do curso...')
+      // 1. Deletar todos os flashcards do curso (incluindo salvos pelos usuários)
+      setMessage('🗑️ Deletando flashcards do curso (incluindo salvos pelos usuários)...')
       console.log('🗑️ Deletando flashcards do curso...')
       const cardsRef = collection(db, 'flashcards')
       const cardsQuery = query(cardsRef, where('courseId', '==', courseId))
@@ -3023,6 +3023,27 @@ REGRAS CRÍTICAS:
       if (cardsToDelete.length > 0) {
         await deleteInBatches(cardsToDelete, 50, 'flashcards')
         console.log(`✅ ${cardsToDelete.length} flashcard(s) deletado(s)`)
+      }
+
+      // 1.1. Deletar flashcards salvos pelos usuários que podem não ter courseId explícito
+      // (flashcards criados por usuários que compraram o curso)
+      setMessage('🗑️ Deletando flashcards salvos pelos usuários do curso...')
+      console.log('🗑️ Deletando flashcards salvos pelos usuários...')
+      try {
+        const allCardsRef = collection(db, 'flashcards')
+        const allCardsSnapshot = await getDocs(allCardsRef)
+        const userCardsToDelete = allCardsSnapshot.docs.filter(doc => {
+          const data = doc.data()
+          // Apagar se tem courseId OU se foi criado por usuário que comprou o curso
+          return data.courseId === courseId || String(data.courseId) === String(courseId)
+        })
+        
+        if (userCardsToDelete.length > 0) {
+          await deleteInBatches(userCardsToDelete, 50, 'flashcards de usuários')
+          console.log(`✅ ${userCardsToDelete.length} flashcard(s) de usuário(ões) deletado(s)`)
+        }
+      } catch (userCardsErr) {
+        console.warn('⚠️ Erro ao deletar flashcards de usuários:', userCardsErr)
       }
       
       // 2. Deletar TODOS os prompts do curso (subcoleção completa)
@@ -3206,7 +3227,55 @@ REGRAS CRÍTICAS:
         console.warn('⚠️ Erro ao atualizar perfis de usuários:', userErr)
       }
       
-      // 7. Deletar o curso em si
+      // 7. Deletar material de apoio do curso
+      setMessage('🗑️ Deletando material de apoio...')
+      console.log('🗑️ Deletando material de apoio...')
+      try {
+        const materialApoioRef = collection(db, 'courses', courseId, 'materialApoio')
+        const materialApoioSnapshot = await getDocs(materialApoioRef)
+        const materialApoioToDelete = materialApoioSnapshot.docs
+        
+        if (materialApoioToDelete.length > 0) {
+          await deleteInBatches(materialApoioToDelete, 50, 'material de apoio')
+          console.log(`✅ ${materialApoioToDelete.length} material(is) de apoio deletado(s)`)
+        }
+      } catch (materialErr) {
+        console.warn('⚠️ Erro ao deletar material de apoio:', materialErr)
+      }
+
+      // 8. Deletar questões para praticar do curso
+      setMessage('🗑️ Deletando questões para praticar...')
+      console.log('🗑️ Deletando questões para praticar...')
+      try {
+        const praticaRef = collection(db, 'courses', courseId, 'praticaIncidencia')
+        const praticaSnapshot = await getDocs(praticaRef)
+        const praticaToDelete = praticaSnapshot.docs
+        
+        if (praticaToDelete.length > 0) {
+          await deleteInBatches(praticaToDelete, 50, 'questões para praticar')
+          console.log(`✅ ${praticaToDelete.length} questão(ões) para praticar deletada(s)`)
+        }
+      } catch (praticaErr) {
+        console.warn('⚠️ Erro ao deletar questões para praticar:', praticaErr)
+      }
+
+      // 9. Deletar véspera de prova do curso
+      setMessage('🗑️ Deletando véspera de prova...')
+      console.log('🗑️ Deletando véspera de prova...')
+      try {
+        const vesperaRef = collection(db, 'courses', courseId, 'vesperaProva')
+        const vesperaSnapshot = await getDocs(vesperaRef)
+        const vesperaToDelete = vesperaSnapshot.docs
+        
+        if (vesperaToDelete.length > 0) {
+          await deleteInBatches(vesperaToDelete, 50, 'véspera de prova')
+          console.log(`✅ ${vesperaToDelete.length} véspera(s) de prova deletada(s)`)
+        }
+      } catch (vesperaErr) {
+        console.warn('⚠️ Erro ao deletar véspera de prova:', vesperaErr)
+      }
+
+      // 10. Deletar o curso em si
       console.log('🗑️ Deletando documento do curso...')
       const courseRef = doc(db, 'courses', courseId)
       
@@ -9940,7 +10009,16 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                         onClick={() => updateCourse(course.id, { active: !(course.active !== false) })}
                                         className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                       >
-                                        {course.active !== false ? 'Desativar' : 'Ativar'}
+                                        {course.active !== false ? '⏸️ Inativar' : '▶️ Ativar'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => deleteCourse(course.id)}
+                                        disabled={course.id === 'alego-default'}
+                                        className="rounded-lg bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Deletar curso completo (flashcards, material de apoio, questões, véspera de prova)"
+                                      >
+                                        🗑️ Deletar Tudo
                                       </button>
                                       <button
                                         type="button"
