@@ -1135,10 +1135,11 @@ REGRAS IMPORTANTES:
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         onClick={openFlashcardsModal}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary text-xs font-semibold rounded-lg hover:from-accent-orange-dim hover:to-accent-cyan-dim transition-all shadow-lg shadow-accent-orange/20 border border-accent-orange/30 active:scale-95"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 sm:px-3 sm:py-1.5 bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary text-xs sm:text-xs font-semibold rounded-lg hover:from-accent-orange-dim hover:to-accent-cyan-dim transition-all shadow-lg shadow-accent-orange/20 border border-accent-orange/30 active:scale-95"
                       >
-                        <SparklesIcon className="h-4 w-4" />
+                        <SparklesIcon className="h-4 w-4 sm:h-4 sm:w-4" />
                         <span className="hidden sm:inline">Flashcards</span>
+                        <span className="sm:hidden">Flash</span>
                       </button>
                     </div>
                   )}
@@ -1211,10 +1212,10 @@ REGRAS IMPORTANTES:
                               <div className="flex items-center justify-center gap-1">
                                 <button
                                   onClick={() => handleDeleteDisciplina(idx)}
-                                  className="inline-flex items-center justify-center p-1 sm:p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                                  className="inline-flex items-center justify-center p-2 sm:p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
                                   title="Apagar disciplina"
                                 >
-                                  <TrashIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                  <TrashIcon className="h-4 w-4 sm:h-4 sm:w-4" />
                                 </button>
                               </div>
                             </td>
@@ -1342,20 +1343,20 @@ REGRAS IMPORTANTES:
                                   <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
                                     <button
                                       onClick={() => handleEditTopico(idx, topicoIdx)}
-                                      className="inline-flex items-center justify-center p-1 sm:p-1.5 text-accent-cyan hover:text-accent-cyan-dim hover:bg-accent-cyan/10 rounded transition-colors"
+                                      className="inline-flex items-center justify-center p-2 sm:p-1.5 text-accent-cyan hover:text-accent-cyan-dim hover:bg-accent-cyan/10 rounded transition-colors"
                                       title="Editar tópico"
                                     >
-                                      <PencilIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                      <PencilIcon className="h-4 w-4 sm:h-4 sm:w-4" />
                                     </button>
                                   </td>
                                   <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
                                     <div className="flex items-center justify-center gap-1">
                                       <button
                                         onClick={() => handleDeleteTopico(idx, topicoIdx)}
-                                        className="inline-flex items-center justify-center p-1 sm:p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                                        className="inline-flex items-center justify-center p-2 sm:p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
                                         title="Apagar tópico"
                                       >
-                                        <TrashIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                        <TrashIcon className="h-4 w-4 sm:h-4 sm:w-4" />
                                       </button>
                                     </div>
                                   </td>
@@ -1396,9 +1397,9 @@ REGRAS IMPORTANTES:
                                   />
                                   <button
                                     onClick={() => handleAddTopico(idx)}
-                                    className="px-2 py-1 bg-accent-orange text-background-primary text-xs rounded-lg hover:bg-accent-orange-dim transition-colors"
+                                    className="px-3 py-2 sm:px-2 sm:py-1 bg-accent-orange text-background-primary text-xs sm:text-xs rounded-lg hover:bg-accent-orange-dim transition-colors"
                                   >
-                                    <CheckIcon className="h-4 w-4" />
+                                    <CheckIcon className="h-4 w-4 sm:h-4 sm:w-4" />
                                   </button>
                                   <button
                                     onClick={() => {
@@ -1406,18 +1407,19 @@ REGRAS IMPORTANTES:
                                       setNewTopicoNome('')
                                       setNewTopicoNumero('')
                                     }}
-                                    className="px-2 py-1 bg-red-500/10 text-red-400 text-xs rounded-lg hover:bg-red-500/20 transition-colors"
+                                    className="px-3 py-2 sm:px-2 sm:py-1 bg-red-500/10 text-red-400 text-xs sm:text-xs rounded-lg hover:bg-red-500/20 transition-colors"
                                   >
-                                    <XMarkIcon className="h-4 w-4" />
+                                    <XMarkIcon className="h-4 w-4 sm:h-4 sm:w-4" />
                                   </button>
                                 </div>
                               ) : (
                                 <button
                                   onClick={() => setAddingTopico({ disciplinaIdx: idx })}
-                                  className="px-2 py-1 bg-accent-cyan text-background-primary text-xs rounded-lg hover:bg-accent-cyan-dim transition"
+                                  className="px-3 py-2 sm:px-2 sm:py-1 bg-accent-cyan text-background-primary text-xs sm:text-xs rounded-lg hover:bg-accent-cyan-dim transition"
                                 >
-                                  <PlusIcon className="h-3 w-3" />
-                                  Adicionar tópico
+                                  <PlusIcon className="h-4 w-4 sm:h-3 sm:w-3" />
+                                  <span className="hidden sm:inline">Adicionar tópico</span>
+                                  <span className="sm:hidden">Adicionar</span>
                                 </button>
                               )}
                             </td>
@@ -1457,27 +1459,28 @@ REGRAS IMPORTANTES:
                             />
                             <button
                               onClick={handleAddDisciplina}
-                              className="px-2 py-1 bg-accent-orange text-background-primary text-xs rounded-lg hover:bg-accent-orange-dim transition-colors"
+                              className="px-3 py-2 sm:px-2 sm:py-1 bg-accent-orange text-background-primary text-xs sm:text-xs rounded-lg hover:bg-accent-orange-dim transition-colors"
                             >
-                              <CheckIcon className="h-4 w-4" />
+                              <CheckIcon className="h-4 w-4 sm:h-4 sm:w-4" />
                             </button>
                             <button
                               onClick={() => {
                                 setAddingDisciplina(false)
                                 setNewDisciplinaNome('')
                               }}
-                              className="px-2 py-1 bg-red-500/10 text-red-400 text-xs rounded-lg hover:bg-red-500/20 transition-colors"
+                              className="px-3 py-2 sm:px-2 sm:py-1 bg-red-500/10 text-red-400 text-xs sm:text-xs rounded-lg hover:bg-red-500/20 transition-colors"
                             >
-                              <XMarkIcon className="h-4 w-4" />
+                              <XMarkIcon className="h-4 w-4 sm:h-4 sm:w-4" />
                             </button>
                           </div>
                         ) : (
                           <button
                             onClick={() => setAddingDisciplina(true)}
-                            className="inline-flex items-center gap-1 px-2 py-1 bg-accent-cyan text-background-primary text-xs rounded-lg hover:bg-accent-cyan-dim transition"
+                            className="inline-flex items-center gap-1 px-3 py-2 sm:px-2 sm:py-1 bg-accent-cyan text-background-primary text-xs sm:text-xs rounded-lg hover:bg-accent-cyan-dim transition"
                           >
-                            <PlusIcon className="h-3 w-3" />
-                            Adicionar disciplina
+                            <PlusIcon className="h-4 w-4 sm:h-3 sm:w-3" />
+                            <span className="hidden sm:inline">Adicionar disciplina</span>
+                            <span className="sm:hidden">Adicionar</span>
                           </button>
                         )}
                       </td>
@@ -1662,14 +1665,14 @@ REGRAS IMPORTANTES:
             <div className="flex gap-3 mt-6">
               <button
                 onClick={handleCancelEdit}
-                className="flex-1 px-4 py-2 text-text-primary bg-background-card-hover rounded-lg font-medium transition-colors"
+                className="flex-1 px-4 py-3 sm:px-4 sm:py-2 text-text-primary bg-background-card-hover rounded-lg font-medium transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSaveTopico}
                 disabled={editLoading || !editNome.trim()}
-                className="flex-1 px-4 py-2 bg-alego-600 text-white rounded-lg font-medium hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-3 sm:px-4 sm:py-2 bg-alego-600 text-white rounded-lg font-medium hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
               >
                 {editLoading ? (
                   <>
@@ -1746,9 +1749,9 @@ REGRAS IMPORTANTES:
                 <button
                   onClick={() => generateFlashcardsFromEdital()}
                   disabled={generatingFlashcards}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 sm:px-4 sm:py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <SparklesIcon className="h-5 w-5" />
+                  <SparklesIcon className="h-5 w-5 sm:h-5 sm:w-5" />
                   {generatingFlashcards ? 'Gerando Flashcards...' : 'Gerar Flashcards'}
                 </button>
               </div>
