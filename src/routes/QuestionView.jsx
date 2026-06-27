@@ -18,7 +18,7 @@ import {
   saveExplanationCache,
   rateExplanationCache
 } from '../utils/cache'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 
 const QuestionView = () => {
   const navigate = useNavigate()
@@ -307,10 +307,13 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.
       
       if (apiKey) {
         try {
-          const genAI = new GoogleGenerativeAI(apiKey)
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-          const result = await model.generateContent(prompt)
-          explanation = result.response.text()
+          const response = await callGeminiWithRetry(prompt, {
+            generationConfig: {
+              maxOutputTokens: 2000,
+              temperature: 0.7,
+            }
+          })
+          explanation = extractGeneratedText(response)
         } catch (geminiErr) {
           const errorMessage = geminiErr.message || String(geminiErr) || ''
           const isQuotaError = errorMessage.includes('429') || errorMessage.includes('quota')

@@ -19,7 +19,7 @@ import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder, applyModuleOrder, getModuleOrder } from '../utils/subjectOrder'
 import { FolderIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon, LockClosedIcon } from '@heroicons/react/24/outline'
 import { canAccessMateria, canAccessModulo, isTrialMode } from '../utils/trialLimits'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import {
   getOrCreateExplanationCache,
   saveExplanationCache,
@@ -932,87 +932,23 @@ Regras:
 - Verifique jurisprudência atualizada do STF/STJ
 - DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`.trim()
 
-    const genAI = new GoogleGenerativeAI(apiKey)
-    let lastError = null
-    let isQuotaError = false
-    let explanationText = ''
-
-    // 🔥 OTIMIZAÇÃO: Usar modelos mais rápidos primeiro
-    const optimizedCandidates = ['gemini-2.5-flash', 'gemini-2.5-pro']
-    
-    for (const modelName of optimizedCandidates) {
-      try {
-        const model = genAI.getGenerativeModel({ model: modelName })
-
-        const result = await model.generateContent({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 300, // Reduzido para mais velocidade
-          },
-        })
-
-        const text = result?.response?.text()
-        if (!text) {
-          throw new Error('Não foi possível gerar a explicação.')
+    try {
+      const response = await callGeminiWithRetry(prompt, {
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 300,
         }
-        explanationText = text
-        
-        // 🔥 NOVO: SALVAR NO CACHE
-        // Log removido para limpar console
-        await saveExplanationCache(card.id, explanationText)
-        
-        return explanationText
-      } catch (err) {
-        lastError = err
-        const errorMessage = err.message || String(err) || ''
-        const errorString = JSON.stringify(err) || ''
-        
-        // Verificar se é erro de quota
-        isQuotaError = 
-          errorMessage.includes('429') || 
-          errorMessage.includes('quota') ||
-          errorMessage.includes('Quota exceeded') ||
-          errorString.includes('429') ||
-          errorString.includes('quota') ||
-          errorString.includes('free_tier_requests')
-        
-        // Se for erro de quota, tentar Groq imediatamente
-        if (isQuotaError) {
-          console.warn('⚠️ Erro de quota detectado. Usando Groq como fallback para explicação...')
-          const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
-          if (groqApiKey) {
-            try {
-              const groqResponse = await callGroqAPI(prompt)
-              // Log removido para limpar console
-              
-              // 🔥 NOVO: SALVAR NO CACHE também quando usar Groq
-              // Log removido para limpar console
-              await saveExplanationCache(card.id, groqResponse)
-              
-              return groqResponse
-            } catch (groqErr) {
-              console.error('❌ Erro ao usar Groq como fallback:', groqErr)
-              throw new Error('Limite de quota atingido. Tente novamente mais tarde.')
-            }
-          } else {
-            throw new Error('Limite de quota atingido. Configure VITE_GROQ_API_KEY para usar fallback automático.')
-          }
-        }
-        
-        // tenta próximo modelo se for erro de modelo inválido/404
-        if (
-          err.message?.includes('404') ||
-          err.message?.includes('not found') ||
-          err.message?.includes('is not supported')
-        ) {
-          continue
-        }
-        throw err
-      }
+      })
+      const explanationText = extractGeneratedText(response)
+      
+      // 🔥 NOVO: SALVAR NO CACHE
+      await saveExplanationCache(card.id, explanationText)
+      
+      return explanationText
+    } catch (err) {
+      console.error('Erro ao gerar explicação:', err)
+      throw err
     }
-
-    throw lastError || new Error('Não foi possível gerar a explicação.')
   }
 
   const handleExplainCard = async (card) => {

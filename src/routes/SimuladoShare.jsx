@@ -355,9 +355,6 @@ const SimuladoShare = () => {
         throw new Error('VITE_GEMINI_API_KEY não configurada')
       }
 
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-
       const simuladoInfo = simuladoData.simuladoInfo
       const validMaterias = simuladoInfo.materias || []
 
@@ -475,8 +472,13 @@ FORMATO DE RESPOSTA (OBRIGATÓRIO - APENAS JSON):
 CRÍTICO: Retorne APENAS o JSON, sem markdown.`
 
         try {
-          const result = await model.generateContent(materiaPrompt)
-          const responseText = result.response.text().trim()
+          const response = await callGeminiWithRetry(materiaPrompt, {
+            generationConfig: {
+              maxOutputTokens: 32000,
+              temperature: 0.7,
+            }
+          })
+          const responseText = extractGeneratedText(response).trim()
 
           let jsonText = responseText
           if (jsonText.includes('```json')) {

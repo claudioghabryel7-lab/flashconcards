@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { collection, onSnapshot, query, where, orderBy, doc, getDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, limit, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { callGeminiWithRetry, extractGeneratedText, extractJsonFromResponse } from '../utils/geminiApi'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 
 const BlankPage = () => {
@@ -262,20 +262,6 @@ const BlankPage = () => {
     setAiGenerating(true)
     
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
-      }
-      
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ 
-        model: 'gemini-2.5-flash',
-        generationConfig: {
-          maxOutputTokens: 8000,
-          temperature: 0.7,
-        }
-      })
-      
       // URL de referência será passada para a IA processar
       // Não fazemos scraping no frontend para evitar CORS
       
@@ -352,8 +338,13 @@ IMPORTANTE:
 - DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
 - Use apenas informações atualizadas até esta data`
 
-      const result = await model.generateContent(prompt)
-      const response = result.response.text()
+      const response = await callGeminiWithRetry(prompt, {
+        generationConfig: {
+          maxOutputTokens: 8000,
+          temperature: 0.7,
+        }
+      })
+      const responseText = extractGeneratedText(response)
       
       // Limpar resposta de forma robusta
       let jsonText = response.trim()
