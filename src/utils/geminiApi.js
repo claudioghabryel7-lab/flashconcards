@@ -2,7 +2,10 @@
  * Função utilitária para chamadas à API Gemini com retry, fallback e rotação de API keys
  * Resolve erros de alta demanda implementando exponential backoff, modelos alternativos e rotação de múltiplas keys
  * Integra verificação de fontes oficiais para garantir veracidade do conteúdo
+ * Implementa RAG (Retrieval-Augmented Generation) com Google Search para evitar alucinações
  */
+
+import { performRAG, googleSearch } from './googleSearch.js'
 
 const MODELS = [
   'gemini-2.5-flash',
@@ -11,6 +14,49 @@ const MODELS = [
 
 const MAX_RETRIES = 3
 const BASE_DELAY = 2000 // 2 segundos
+
+/**
+ * Extrai um tópico de busca do prompt para RAG
+ * @param {string} prompt - O prompt original
+ * @returns {string} - Tópico de busca extraído
+ */
+function extractSearchTopic(prompt) {
+  // Extrair palavras-chave relevantes do prompt
+  // Buscar por termos como "lei", "artigo", "código", "crime", etc.
+  const legalKeywords = [
+    'lei', 'artigo', 'código', 'crime', 'pena', 'regime', 'hediondo',
+    'constitucional', 'stf', 'stj', 'jurisprudência', 'súmula',
+    'processual', 'civil', 'penal', 'trabalhista', 'tributário'
+  ]
+  
+  const lines = prompt.split('\n')
+  let topic = ''
+  
+  // Buscar nas primeiras linhas do prompt (geralmente contém o tópico principal)
+  for (let i = 0; i < Math.min(10, lines.length); i++) {
+    const line = lines[i].toLowerCase()
+    
+    // Se encontrar palavras-chave legais, usar essa linha
+    if (legalKeywords.some(keyword => line.includes(keyword))) {
+      topic = lines[i]
+      break
+    }
+  }
+  
+  // Se não encontrou, usar as primeiras 3 palavras do prompt
+  if (!topic) {
+    const words = prompt.split(' ').slice(0, 5).join(' ')
+    topic = words
+  }
+  
+  // Limpar e limitar o tópico
+  topic = topic
+    .replace(/[^\w\sáéíóúâêîôûãõàèìòùç]/gi, '')
+    .trim()
+    .substring(0, 200)
+  
+  return topic || 'legislação brasileira atualizada'
+}
 
 /**
  * Carrega múltiplas API keys do Gemini
@@ -46,6 +92,9 @@ function loadApiKeys() {
  * @param {Array<string>} options.models - Lista de modelos para tentar (padrão: gemini-2.5-flash, gemini-2.5-flash-8b, gemini-2.5-pro)
  * @param {Object} options.generationConfig - Configuração de geração (temperature, maxOutputTokens, etc.)
  * @param {boolean} options.useGoogleSearch - Se deve usar Google Search Grounding (padrão: false)
+ * @param {boolean} options.useRAG - Se deve usar RAG com Google Search API (padrão: true)
+ * @param {string} options.ragTopic - Tópico específico para busca RAG (opcional)
+ * @param {boolean} options.isLegalContent - Se o conteúdo é jurídico (usa busca em sites oficiais)
  * @param {boolean} options.useFunctionCalling - Se deve usar Function Calling para buscar em APIs oficiais (padrão: false)
  * @param {Array} options.tools - Ferramentas customizadas para Function Calling (padrão: [])
  * @returns {Promise<Object>} - Resposta da API
@@ -56,10 +105,31 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     baseDelay = BASE_DELAY,
     models = MODELS,
     generationConfig = { temperature: 0.7, maxOutputTokens: 32000 },
-    useGoogleSearch = false,
+    useGoogleSearch = true, // Ativado por padrão - usa Google Search nativo do Gemini
+    useRAG = false, // Desativado por padrão - usa Google Search nativo em vez disso
+    ragTopic = null,
+    isLegalContent = true,
     useFunctionCalling = false,
     tools = [],
   } = options
+
+  // RAG: Buscar contexto atualizado antes de enviar para IA
+  let enhancedPrompt = prompt
+  if (useRAG) {
+    try {
+      const searchTopic = ragTopic || extractSearchTopic(prompt)
+      console.log(`🔍 RAG: Buscando contexto atualizado para: "${searchTopic.substring(0, 100)}..."`)
+      
+      const ragContext = await performRAG(searchTopic, isLegalContent)
+      
+      if (ragContext) {
+        enhancedPrompt = ragContext + '\n\n' + prompt
+        console.log('✅ RAG: Contexto de busca adicionado ao prompt')
+      }
+    } catch (error) {
+      console.warn('⚠️ RAG: Erro ao buscar contexto, continuando sem RAG:', error.message)
+    }
+  }
 
   const apiKeys = loadApiKeys()
   if (apiKeys.length === 0) {
@@ -70,9 +140,15 @@ export async function callGeminiWithRetry(prompt, options = {}) {
   if (useGoogleSearch) {
     console.log(`🔍 Google Search Grounding ativado`)
   }
+  if (useRAG) {
+    console.log(`🔍 RAG ativado (conteúdo jurídico: ${isLegalContent})`)
+  }
   if (useFunctionCalling) {
     console.log(`🔧 Function Calling ativado com ${tools.length} ferramentas`)
   }
+
+  // Usar o prompt com contexto RAG
+  const finalPrompt = enhancedPrompt
 
   let lastError = null
 
@@ -89,7 +165,7 @@ export async function callGeminiWithRetry(prompt, options = {}) {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           const requestBody = {
-            contents: [{ parts: [{ text: prompt }] }],
+            contents: [{ parts: [{ text: finalPrompt }] }],
             generationConfig,
           }
 
