@@ -85,6 +85,7 @@ function loadApiKeys() {
 
 /**
  * Teste silencioso de API key para verificar se está disponível
+ * Usa a mesma lógica robusta de testApiKey
  * @param {string} apiKey - A API key para testar
  * @returns {Promise<boolean>} - True se a key está disponível
  */
@@ -101,7 +102,9 @@ async function silentTestApiKey(apiKey) {
         })
       }
     )
-    
+
+    const data = await response.json()
+
     // Se for 429 (quota), não está disponível
     if (response.status === 429) {
       return false
@@ -109,6 +112,16 @@ async function silentTestApiKey(apiKey) {
     
     // Se for 503 (alta demanda), não está disponível
     if (response.status === 503) {
+      return false
+    }
+    
+    // Se for 403 (forbidden), não está disponível
+    if (response.status === 403) {
+      return false
+    }
+    
+    // Se for 400 (invalid), não está disponível
+    if (response.status === 400) {
       return false
     }
     
