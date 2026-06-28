@@ -225,67 +225,39 @@ TEM TAF: ${config.hasTAF ? 'Sim' : 'Não'}
 TEM REDAÇÃO: ${config.hasRedacao ? 'Sim' : 'Não'}
 EXERCÍCIOS TAF: ${config.tafExercicios?.join(', ') || 'Nenhum'}
 
-EDITAL VERTICALIZADO COMPLETO:
+EDITAL VERTICALIZADO:
 ${JSON.stringify(editalSummary, null, 2)}
 
 INSTRUÇÕES:
-Você é um especialista em preparação para concursos públicos. Crie um CRONOGRAMA DE ESTUDO ESTRATÉGICO do dia atual até o dia da prova.
+Crie um cronograma de estudo do dia atual até o dia da prova.
 
-REGRAS OBRIGATÓRIAS:
-1. TODAS as matérias do edital verticalizado DEVEM ser contempladas - não pule nenhuma disciplina ou tópico
-2. Dias de TAF DEVEM ter estudo também (manhã: TAF, tarde/noite: estudo)
-3. Pode ter mais de uma matéria por dia se necessário para cobrir todo o edital
-4. NÃO existe dia de descanso - o dia de simulado é o descanso
-5. Reta final: últimos 7 dias antes da prova são dedicados apenas a revisão e simulados
+REGRAS:
+1. TODAS as matérias do edital devem ser contempladas
+2. Dias de TAF devem ter estudo também
+3. Pode ter múltiplas matérias por dia
+4. Sem dia de descanso (simulado serve como descanso)
+5. Reta final: últimos 7 dias apenas revisão/simulado
 
-FASES DE APRENDIZADO:
-1. FASE DE FUNDAMENTAÇÃO (30% do tempo): Conceitos básicos de cada disciplina
-2. FASE DE APROFUNDAMENTO (40% do tempo): Tópicos específicos e detalhados
-3. FASE DE CONSOLIDAÇÃO (20% do tempo): Revisão e fixação
-4. FASE FINAL (10% do tempo): Simulados e preparação mental
-
-DISTRIBUIÇÃO SEMANAL:
-- Segunda a Sexta: Estudo de matérias (pode ter mais de uma matéria por dia)
-- Sábado: Simulado completo (serve como descanso)
-- Domingo: Revisão da semana ou TAF + estudo leve
-
-CONSIDERAÇÕES ESTRATÉGICAS:
-- Disciplinas jurídicas (Direito Constitucional, Administrativo, Penal, Civil, Tributário, Trabalho) requerem mais tempo
-- Português e Raciocínio Lógico podem ter menos tempo
-- Intercale disciplinas diferentes para evitar fadiga
-- Se tiver TAF, incluir 2-3 dias por semana (manhã: TAF, tarde: estudo)
-- Se tiver Redação, incluir 1 dia por semana para prática
-- Reta final (7 dias antes da prova): apenas revisão e simulados
-
-RETORNE APENAS UM JSON válido com esta estrutura:
+RETORNE APENAS ESTE JSON (sem texto adicional):
 {
   "cronograma": [
     {
       "data": "YYYY-MM-DD",
-      "tipo": "estudo|revisao|taf|redacao|simulado|reta_final",
-      "fase": "fundamentacao|aprofundamento|consolidacao|final",
-      "materias": [
-        {
-          "disciplina": "nome da disciplina",
-          "topico": "nome do tópico"
-        }
-      ],
-      "taf_exercicio": "nome do exercício TAF (se aplicável)",
-      "descricao": "breve descrição do objetivo do dia"
+      "tipo": "estudo",
+      "fase": "fundamentacao",
+      "materias": [{"disciplina": "nome", "topico": "nome"}],
+      "taf_exercicio": "",
+      "descricao": ""
     }
   ]
 }
 
 IMPORTANTE:
-- Gere um dia por linha do cronograma
-- Comece sempre pela data atual: ${today.format('DD/MM/YYYY')}
-- Termine na data da prova: ${provaDate.format('DD/MM/YYYY')}
-- Não inclua dias passados
-- TODAS as matérias do edital devem ser contempladas
-- Se tiver TAF, o campo "materias" deve ter as matérias do dia e o campo "taf_exercicio" o exercício
-- Reta final: últimos 7 dias apenas revisão/simulado, sem novos tópicos
-- Seja específico nos tópicos do edital
-- Use array "materias" para múltiplas matérias no mesmo dia`
+- Comece em ${today.format('DD/MM/YYYY')}
+- Termine em ${provaDate.format('DD/MM/YYYY')}
+- JSON deve ser válido e completo
+- Use aspas duplas
+- Não adicione comentários no JSON`
 
       console.log('📝 Enviando prompt para IA...')
       
@@ -294,17 +266,55 @@ IMPORTANTE:
       
       console.log('📝 Resposta da IA:', generatedText)
       
-      // Extrair JSON da resposta
-      const jsonMatch = generatedText.match(/\{[\s\S]*\}/)
+      // Extrair JSON da resposta com tratamento de erro melhorado
+      let jsonMatch = generatedText.match(/\{[\s\S]*\}/)
       if (!jsonMatch) {
-        throw new Error('Não foi possível extrair JSON da resposta da IA')
+        // Tentar encontrar JSON entre blocos de código markdown
+        jsonMatch = generatedText.match(/```json\s*([\s\S]*?)\s*```/)
+        if (jsonMatch) {
+          jsonMatch = [jsonMatch[1]]
+        }
       }
       
-      const cronogramaIA = JSON.parse(jsonMatch[0])
+      if (!jsonMatch) {
+        throw new Error('Não foi possível extrair JSON da resposta da IA. A resposta não contém um JSON válido.')
+      }
+      
+      let cronogramaIA
+      try {
+        cronogramaIA = JSON.parse(jsonMatch[0])
+      } catch (parseError) {
+        console.error('Erro ao fazer parse do JSON:', parseError)
+        console.error('JSON que falhou:', jsonMatch[0].substring(0, 500))
+        
+        // Tentar limpar o JSON e fazer parse novamente
+        try {
+          const cleanedJson = jsonMatch[0]
+            .replace(/[\n\r]/g, '')
+            .replace(/\s+/g, ' ')
+            .replace(/,\s*}/g, '}')
+            .replace(/,\s*]/g, ']')
+          cronogramaIA = JSON.parse(cleanedJson)
+          console.log('JSON limpo com sucesso')
+        } catch (cleanError) {
+          console.error('Erro ao fazer parse do JSON limpo:', cleanError)
+          throw new Error('Erro ao fazer parse do JSON gerado pela IA. O JSON está malformado.')
+        }
+      }
       
       if (!cronogramaIA.cronograma || !Array.isArray(cronogramaIA.cronograma)) {
-        throw new Error('Estrutura de JSON inválida')
+        throw new Error('Estrutura de JSON inválida: não contém array "cronograma"')
       }
+      
+      // Validar estrutura de cada dia
+      cronogramaIA.cronograma.forEach((dia, idx) => {
+        if (!dia.data || !dia.tipo) {
+          throw new Error(`Dia ${idx} inválido: falta "data" ou "tipo"`)
+        }
+        if (!Array.isArray(dia.materias)) {
+          dia.materias = []
+        }
+      })
       
       setMessage('💾 Salvando cronograma...')
       
@@ -549,7 +559,8 @@ IMPORTANTE:
                     
                     {day.data && (
                       <div
-                        className={`flex-1 rounded-lg p-1 sm:p-2 text-xs ${
+                        onClick={() => day.data && navigate(`/guia-mentorado/${selectedCourseId}/${day.dayKey}`)}
+                        className={`flex-1 rounded-lg p-1 sm:p-2 text-xs cursor-pointer hover:opacity-80 transition-opacity ${
                           day.data.type === 'estudo'
                             ? 'bg-blue-500/10 border border-blue-500/30'
                             : day.data.type === 'taf'
