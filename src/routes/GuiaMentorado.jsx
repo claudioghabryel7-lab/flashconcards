@@ -225,28 +225,46 @@ TEM TAF: ${config.hasTAF ? 'Sim' : 'Não'}
 TEM REDAÇÃO: ${config.hasRedacao ? 'Sim' : 'Não'}
 EXERCÍCIOS TAF: ${config.tafExercicios?.join(', ') || 'Nenhum'}
 
-EDITAL VERTICALIZADO:
+EDITAL VERTICALIZADO COMPLETO:
 ${JSON.stringify(editalSummary, null, 2)}
+
+ANÁLISE OBRIGATÓRIA DO EDITAL:
+- Você DEVE ler TODAS as matérias listadas acima
+- Você DEVE ler TODOS os tópicos de cada matéria
+- Conte quantas matérias existem no total
+- Conte quantos tópicos existem no total
+- Calcule quantos tópicos precisa estudar por dia para cobrir TUDO até a prova
+- NÃO pule nenhuma matéria ou tópico
 
 INSTRUÇÕES:
 Você é um MENTOR DE ESTUDOS especialista em concursos. Crie um cronograma estratégico do dia atual até o dia da prova.
 
 REGRAS OBRIGATÓRIAS DO MENTOR:
 1. TODAS as matérias do edital devem ser contempladas - NÃO PULE NENHUMA MATÉRIA OU TÓPICO
-2. NÃO siga a ordem do edital - INTERCALE matérias diferentes (ex: Direito Penal, Português, Direito Constitucional, Raciocínio Lógico)
-3. Use múltiplas matérias por dia se necessário para cobrir todo o conteúdo
-4. Dias de TAF devem ter estudo também (manhã: TAF, tarde/noite: estudo)
-5. Sem dia de descanso (simulado serve como descanso)
-6. Reta final: últimos 7 dias apenas revisão/simulado
-7. Distribua as matérias de forma ESTRATÉGICA e equilibrada (não sequencial)
-8. Priorize matérias mais importantes com mais tempo de estudo
-9. Crie um ciclo de estudo que revisite matérias importantes periodicamente
-10. Garanta que cada tópico de cada matéria seja estudado pelo menos uma vez
+2. TODOS os tópicos de cada matéria devem ser estudados pelo menos uma vez
+3. AGRUPE matérias AFINS no mesmo dia (ex: Direito Constitucional + Administrativo + Penal juntos)
+4. NÃO misture matérias muito diferentes (ex: NÃO coloque Português + Biologia + Lei X no mesmo dia)
+5. Use 3-4 matérias por dia se necessário para acelerar e fechar o edital completo
+6. Dias de TAF devem ter estudo também (manhã: TAF, tarde/noite: estudo)
+7. Sem dia de descanso (simulado serve como descanso)
+8. Reta final: últimos 7 dias apenas revisão/simulado
+9. Distribua as matérias de forma ESTRATÉGICA e equilibrada (não sequencial)
+10. Priorize matérias mais importantes com mais tempo de estudo
+11. OBJETIVO: Fechar TODO o edital 7 dias antes da prova
+
+ESTRATÉGIA DE AGRUPAMENTO INTELIGENTE:
+- Agrupe matérias da mesma área: jurídicas (Constitucional, Administrativo, Penal, Civil, Trabalho)
+- Agrupe matérias de exatas: Raciocínio Lógico, Matemática, Informática
+- Agrupe matérias de humanas: Português, História, Geografia
+- Agrupe matérias específicas: Direito Penal Militar, Direito Processual Penal Militar, Estatuto do Policial
+- Exemplo de dia inteligente: Constitucional + Administrativo + Penal (todas jurídicas)
+- Exemplo de dia ruim: Português + Biologia + Lei X (muito diferentes)
 
 ESTRATÉGIA DE DISTRIBUIÇÃO:
-- Divida as matérias em grupos e intercale-os
-- Exemplo de ciclo: Matéria A → Matéria B → Matéria C → Matéria A (revisão) → Matéria D
-- Não faça blocos longos da mesma matéria
+- Divida as matérias em grupos por área de conhecimento
+- Intercale grupos diferentes em dias alternados
+- Use 3-4 matérias por dia para acelerar o progresso
+- Crie blocos de estudo focados em áreas específicas
 - Varie os tipos de estudo (teoria, prática, revisão)
 
 RETORNE APENAS ESTE JSON (sem texto adicional):
