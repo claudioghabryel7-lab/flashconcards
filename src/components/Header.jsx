@@ -10,7 +10,6 @@ import {
   Bars3Icon,
   XMarkIcon,
   BookOpenIcon,
-  UsersIcon,
   ShieldCheckIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
@@ -70,18 +69,11 @@ const Header = () => {
         items: [
           { to: '/dashboard', label: 'Dashboard', auth: true },
           { to: '/guia-mentorado', label: 'Guia Mentorado', auth: true },
-          { to: '/vespera-de-prova', label: 'Véspera de Prova', auth: true },
+          { to: '/vespera-de-prova', label: 'Revisão', auth: true },
           { to: '/flashcards', label: 'Flashcards com IA', auth: true },
           { to: '/edital-verticalizado', label: 'Edital Verticalizado', auth: true },
           { to: '/calendario', label: 'Calendário de Progresso', auth: true },
           { to: '/treino-redacao', label: 'Treino Redação', auth: true },
-        ],
-      },
-      social: {
-        label: 'Social',
-        icon: UsersIcon,
-        items: [
-          { to: '/feed', label: 'ConCurseiroSocial', auth: true },
         ],
       },
       admin: {

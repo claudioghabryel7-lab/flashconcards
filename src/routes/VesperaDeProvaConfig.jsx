@@ -13,7 +13,7 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline'
 
-const VesperaDeProvaConfig = () => {
+const RevisaoConfig = () => {
   const { user, isAdmin } = useAuth()
   const { darkMode } = useDarkMode()
   const navigate = useNavigate()
@@ -43,9 +43,9 @@ const VesperaDeProvaConfig = () => {
       try {
         setLoading(true)
         
-        console.log('🔍 [VesperaDeProvaConfig] Carregando dados do curso:', courseId)
-        console.log('🔍 [VesperaDeProvaConfig] Usuário autenticado:', !!user)
-        console.log('🔍 [VesperaDeProvaConfig] É admin:', isAdmin)
+        console.log('🔍 [RevisaoConfig] Carregando dados do curso:', courseId)
+        console.log('🔍 [RevisaoConfig] Usuário autenticado:', !!user)
+        console.log('🔍 [RevisaoConfig] É admin:', isAdmin)
         
         // Carregar nome do curso e banca
         const courseDoc = await getDoc(doc(db, 'courses', courseId))
@@ -54,10 +54,10 @@ const VesperaDeProvaConfig = () => {
           setCourseName(data.name || data.competition || '')
           setConcurso(data.competition || '')
           setBancaExaminadora(data.banca || '') // Usar banca configurada no curso
-          console.log('✅ [VesperaDeProvaConfig] Curso carregado:', data.name)
-          console.log('✅ [VesperaDeProvaConfig] Banca:', data.banca)
+          console.log('✅ [RevisaoConfig] Curso carregado:', data.name)
+          console.log('✅ [RevisaoConfig] Banca:', data.banca)
         } else {
-          console.error('❌ [VesperaDeProvaConfig] Curso não encontrado:', courseId)
+          console.error('❌ [RevisaoConfig] Curso não encontrado:', courseId)
         }
         
         // Carregar edital verticalizado
@@ -66,7 +66,7 @@ const VesperaDeProvaConfig = () => {
         
         if (editalSnapshot.exists()) {
           const editalData = editalSnapshot.data()
-          console.log('✅ [VesperaDeProvaConfig] Edital verticalizado carregado')
+          console.log('✅ [RevisaoConfig] Edital verticalizado carregado')
           
           // Verificar se está dividido em partes
           if (editalData.temPartes && editalData.totalPartes > 1) {
@@ -83,10 +83,10 @@ const VesperaDeProvaConfig = () => {
             })
             
             setEditalVerticalizado({ ...editalData, disciplinas: todasDisciplinas })
-            console.log('✅ [VesperaDeProvaConfig] Edital com partes carregado, total disciplinas:', todasDisciplinas.length)
+            console.log('✅ [RevisaoConfig] Edital com partes carregado, total disciplinas:', todasDisciplinas.length)
           } else {
             setEditalVerticalizado(editalData)
-            console.log('✅ [VesperaDeProvaConfig] Edital sem partes carregado, total disciplinas:', editalData.disciplinas?.length)
+            console.log('✅ [RevisaoConfig] Edital sem partes carregado, total disciplinas:', editalData.disciplinas?.length)
           }
           
           // Inicializar questões por matéria com valor padrão de 5
@@ -115,20 +115,20 @@ const VesperaDeProvaConfig = () => {
                   }
                 })
                 setMateriasStatus(updatedStatus)
-                console.log('✅ [VesperaDeProvaConfig] Status das matérias carregado')
+                console.log('✅ [RevisaoConfig] Status das matérias carregado')
               }
             }
           } catch (error) {
-            console.log('ℹ️ [VesperaDeProvaConfig] Nenhum material existente encontrado')
+            console.log('ℹ️ [RevisaoConfig] Nenhum material existente encontrado')
           }
         } else {
-          console.error('❌ [VesperaDeProvaConfig] Edital verticalizado não encontrado')
+          console.error('❌ [RevisaoConfig] Edital verticalizado não encontrado')
         }
         
       } catch (error) {
-        console.error('❌ [VesperaDeProvaConfig] Erro ao carregar dados:', error)
-        console.error('❌ [VesperaDeProvaConfig] Código do erro:', error.code)
-        console.error('❌ [VesperaDeProvaConfig] Mensagem:', error.message)
+        console.error('❌ [RevisaoConfig] Erro ao carregar dados:', error)
+        console.error('❌ [RevisaoConfig] Código do erro:', error.code)
+        console.error('❌ [RevisaoConfig] Mensagem:', error.message)
         alert(`Erro ao carregar dados: ${error.message}`)
       } finally {
         setLoading(false)
@@ -161,7 +161,7 @@ const VesperaDeProvaConfig = () => {
     }
     
     try {
-      console.log('🗑️ [VesperaDeProvaConfig] Apagando material:', disciplina.nome)
+      console.log('🗑️ [RevisaoConfig] Apagando material:', disciplina.nome)
       
       const materialRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'material')
       const materialDoc = await getDoc(materialRef)
@@ -177,7 +177,7 @@ const VesperaDeProvaConfig = () => {
           // Se não houver mais matérias, apagar o documento inteiro
           const { deleteDoc } = await import('firebase/firestore')
           await deleteDoc(materialRef)
-          console.log('✅ [VesperaDeProvaConfig] Documento apagado (sem mais matérias)')
+          console.log('✅ [RevisaoConfig] Documento apagado (sem mais matérias)')
         } else {
           // Atualizar com o array sem a disciplina removida
           await setDoc(materialRef, {
@@ -187,7 +187,7 @@ const VesperaDeProvaConfig = () => {
             generatedAt: serverTimestamp(),
             generatedBy: user.uid,
           })
-          console.log('✅ [VesperaDeProvaConfig] Matéria removida do material')
+          console.log('✅ [RevisaoConfig] Matéria removida do material')
         }
         
         // Atualizar status
@@ -195,7 +195,7 @@ const VesperaDeProvaConfig = () => {
         alert(`Conteúdo de "${disciplina.nome}" apagado com sucesso!`)
       }
     } catch (error) {
-      console.error('❌ [VesperaDeProvaConfig] Erro ao apagar material:', error)
+      console.error('❌ [RevisaoConfig] Erro ao apagar material:', error)
       alert('Erro ao apagar material: ' + error.message)
     }
   }
@@ -257,11 +257,11 @@ const VesperaDeProvaConfig = () => {
     setGenerationStatus(`Gerando conteúdo para ${disciplina.nome}...`)
     
     try {
-      console.log('� [VesperaDeProvaConfig] Iniciando geração de matéria:', disciplina.nome)
-      console.log('� [VesperaDeProvaConfig] Curso:', courseName)
-      console.log('� [VesperaDeProvaConfig] Concurso:', concurso)
-      console.log('� [VesperaDeProvaConfig] Banca:', bancaExaminadora)
-      console.log('🚀 [VesperaDeProvaConfig] Questões:', questoesPorMateria[disciplinaIdx] || 5)
+      console.log('� [RevisaoConfig] Iniciando geração de matéria:', disciplina.nome)
+      console.log('� [RevisaoConfig] Curso:', courseName)
+      console.log('� [RevisaoConfig] Concurso:', concurso)
+      console.log('� [RevisaoConfig] Banca:', bancaExaminadora)
+      console.log('🚀 [RevisaoConfig] Questões:', questoesPorMateria[disciplinaIdx] || 5)
       
       const estrutura = {
         curso: courseName,
@@ -285,7 +285,7 @@ CONTEXTO:
 - Tópicos: ${estrutura.disciplina.topicos}
 
 INSTRUÇÕES:
-Gere um material de revisão de "Véspera de Prova" para a disciplina ${estrutura.disciplina.nome}. Inclua:
+Gere um material de revisão para a disciplina ${estrutura.disciplina.nome}. Inclua:
 
 🔍 VERIFICAÇÃO DE FONTES - OBRIGATÓRIO:
 - Para CADA lei, decreto ou norma jurídica mencionada, VERIFIQUE a atualidade usando as ferramentas disponíveis
@@ -437,7 +437,7 @@ REGRAS:
         }
       }
       
-      console.log('🔑 [VesperaDeProvaConfig] API Keys carregadas:', apiKeys.length)
+      console.log('🔑 [RevisaoConfig] API Keys carregadas:', apiKeys.length)
       
       if (apiKeys.length === 0) {
         throw new Error('Nenhuma API key do Gemini encontrada')
@@ -454,11 +454,11 @@ REGRAS:
         const baseDelay = 2000 // 2 segundos
         
         for (const model of models) {
-          console.log(`🔄 [VesperaDeProvaConfig] Tentando modelo: ${model}`)
+          console.log(`🔄 [RevisaoConfig] Tentando modelo: ${model}`)
           
           for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex++) {
             const apiKey = apiKeys[keyIndex]
-            console.log(`🔑 [VesperaDeProvaConfig] Tentando API key ${keyIndex + 1}/${apiKeys.length} com modelo ${model}`)
+            console.log(`🔑 [RevisaoConfig] Tentando API key ${keyIndex + 1}/${apiKeys.length} com modelo ${model}`)
             
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
             
@@ -488,20 +488,20 @@ REGRAS:
                 const data = await response.json()
                 
                 if (response.ok) {
-                  console.log(`✅ [VesperaDeProvaConfig] Sucesso com modelo ${model} e API key ${keyIndex + 1}`)
+                  console.log(`✅ [RevisaoConfig] Sucesso com modelo ${model} e API key ${keyIndex + 1}`)
                   return data
                 }
                 
                 // Se for erro 429 (Too Many Requests), tentar próxima key
                 if (response.status === 429) {
-                  console.log(`⚠️ [VesperaDeProvaConfig] API key ${keyIndex + 1} atingiu quota, tentando próxima...`)
+                  console.log(`⚠️ [RevisaoConfig] API key ${keyIndex + 1} atingiu quota, tentando próxima...`)
                   break
                 }
                 
                 // Se for erro 503 (Service Unavailable), fazer retry com exponential backoff
                 if (response.status === 503) {
                   const delay = baseDelay * Math.pow(2, retry)
-                  console.log(`⚠️ [VesperaDeProvaConfig] Modelo ${model} com API key ${keyIndex + 1} com alta demanda (503), retry ${retry + 1}/${maxRetries} em ${delay/1000}s...`)
+                  console.log(`⚠️ [RevisaoConfig] Modelo ${model} com API key ${keyIndex + 1} com alta demanda (503), retry ${retry + 1}/${maxRetries} em ${delay/1000}s...`)
                   
                   if (retry < maxRetries - 1) {
                     await new Promise(resolve => setTimeout(resolve, delay))
@@ -510,17 +510,17 @@ REGRAS:
                 }
                 
                 // Se for outro erro, tentar próximo modelo
-                console.error('❌ [VesperaDeProvaConfig] Erro na API Gemini:', data)
+                console.error('❌ [RevisaoConfig] Erro na API Gemini:', data)
                 break
               } catch (error) {
                 if (retry < maxRetries - 1 && error.message?.includes('high demand')) {
                   const delay = baseDelay * Math.pow(2, retry)
-                  console.log(`⚠️ [VesperaDeProvaConfig] Retry ${retry + 1}/${maxRetries} em ${delay/1000}s...`)
+                  console.log(`⚠️ [RevisaoConfig] Retry ${retry + 1}/${maxRetries} em ${delay/1000}s...`)
                   await new Promise(resolve => setTimeout(resolve, delay))
                   continue
                 }
                 
-                console.log(`⚠️ [VesperaDeProvaConfig] API key ${keyIndex + 1} falhou, tentando próxima...`)
+                console.log(`⚠️ [RevisaoConfig] API key ${keyIndex + 1} falhou, tentando próxima...`)
                 break
               }
             }
@@ -540,15 +540,15 @@ REGRAS:
         throw new Error('A IA não retornou nenhum conteúdo')
       }
       
-      console.log('📝 [VesperaDeProvaConfig] Texto gerado, tamanho:', generatedText.length)
+      console.log('📝 [RevisaoConfig] Texto gerado, tamanho:', generatedText.length)
       
       // Parsear JSON
       let materialData = null
       try {
         materialData = JSON.parse(generatedText)
-        console.log('✅ [VesperaDeProvaConfig] JSON parseado com sucesso')
+        console.log('✅ [RevisaoConfig] JSON parseado com sucesso')
       } catch (parseError) {
-        console.error('❌ [VesperaDeProvaConfig] Erro ao fazer parse do JSON:', parseError.message)
+        console.error('❌ [RevisaoConfig] Erro ao fazer parse do JSON:', parseError.message)
         
         // Tentar corrigir JSON
         let fixedJson = generatedText
@@ -561,9 +561,9 @@ REGRAS:
         
         try {
           materialData = JSON.parse(fixedJson)
-          console.log('✅ [VesperaDeProvaConfig] JSON corrigido e parseado')
+          console.log('✅ [RevisaoConfig] JSON corrigido e parseado')
         } catch (fixError) {
-          console.error('❌ [VesperaDeProvaConfig] Falha ao corrigir JSON:', fixError.message)
+          console.error('❌ [RevisaoConfig] Falha ao corrigir JSON:', fixError.message)
           throw new Error(`JSON inválido: ${fixError.message}`)
         }
       }
@@ -596,7 +596,7 @@ REGRAS:
         generatedBy: user.uid,
       })
       
-      console.log('✅ [VesperaDeProvaConfig] Material salvo com sucesso')
+      console.log('✅ [RevisaoConfig] Material salvo com sucesso')
       
       // Atualizar status
       setMateriasStatus(prev => ({ ...prev, [disciplinaIdx]: 'completed' }))
@@ -607,7 +607,7 @@ REGRAS:
       }, 2000)
       
     } catch (error) {
-      console.error('❌ [VesperaDeProvaConfig] Erro ao gerar material:', error)
+      console.error('❌ [RevisaoConfig] Erro ao gerar material:', error)
       setMateriasStatus(prev => ({ ...prev, [disciplinaIdx]: 'error' }))
       setGenerationStatus(`❌ Erro: ${error.message}`)
     } finally {
@@ -821,4 +821,4 @@ REGRAS:
   )
 }
 
-export default VesperaDeProvaConfig
+export default RevisaoConfig

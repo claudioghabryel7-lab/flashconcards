@@ -277,7 +277,7 @@ const VesperaDeProva = () => {
         <div className="text-center py-16">
           <SparklesIcon className="h-16 w-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">
-            Material de Véspera de Prova
+            Material de Revisão
           </h2>
           <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-md mx-auto">
             {isAdmin 

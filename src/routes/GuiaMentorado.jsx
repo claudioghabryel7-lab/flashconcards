@@ -229,16 +229,25 @@ EDITAL VERTICALIZADO:
 ${JSON.stringify(editalSummary, null, 2)}
 
 INSTRUÇÕES:
-Crie um cronograma de estudo do dia atual até o dia da prova.
+Você é um MENTOR DE ESTUDOS especialista em concursos. Crie um cronograma estratégico do dia atual até o dia da prova.
 
-REGRAS OBRIGATÓRIAS:
+REGRAS OBRIGATÓRIAS DO MENTOR:
 1. TODAS as matérias do edital devem ser contempladas - NÃO PULE NENHUMA MATÉRIA OU TÓPICO
-2. Se necessário, use múltiplas matérias por dia para cobrir todo o conteúdo
-3. Dias de TAF devem ter estudo também (manhã: TAF, tarde/noite: estudo)
-4. Sem dia de descanso (simulado serve como descanso)
-5. Reta final: últimos 7 dias apenas revisão/simulado
-6. Distribua as matérias de forma equilibrada ao longo do período
-7. Priorize matérias mais importantes com mais tempo de estudo
+2. NÃO siga a ordem do edital - INTERCALE matérias diferentes (ex: Direito Penal, Português, Direito Constitucional, Raciocínio Lógico)
+3. Use múltiplas matérias por dia se necessário para cobrir todo o conteúdo
+4. Dias de TAF devem ter estudo também (manhã: TAF, tarde/noite: estudo)
+5. Sem dia de descanso (simulado serve como descanso)
+6. Reta final: últimos 7 dias apenas revisão/simulado
+7. Distribua as matérias de forma ESTRATÉGICA e equilibrada (não sequencial)
+8. Priorize matérias mais importantes com mais tempo de estudo
+9. Crie um ciclo de estudo que revisite matérias importantes periodicamente
+10. Garanta que cada tópico de cada matéria seja estudado pelo menos uma vez
+
+ESTRATÉGIA DE DISTRIBUIÇÃO:
+- Divida as matérias em grupos e intercale-os
+- Exemplo de ciclo: Matéria A → Matéria B → Matéria C → Matéria A (revisão) → Matéria D
+- Não faça blocos longos da mesma matéria
+- Varie os tipos de estudo (teoria, prática, revisão)
 
 RETORNE APENAS ESTE JSON (sem texto adicional):
 {
