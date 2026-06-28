@@ -12,7 +12,7 @@ const MODELS = [
   'gemini-2.5-pro',
 ]
 
-const MAX_RETRIES = 3
+const MAX_RETRIES = 1 // Apenas 1 tentativa para economizar quota
 const BASE_DELAY = 2000 // 2 segundos
 
 /**
@@ -84,6 +84,59 @@ function loadApiKeys() {
 }
 
 /**
+ * Teste silencioso de API key para verificar se está disponível
+ * @param {string} apiKey - A API key para testar
+ * @returns {Promise<boolean>} - True se a key está disponível
+ */
+async function silentTestApiKey(apiKey) {
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: 'test' }] }],
+          generationConfig: { maxOutputTokens: 10 }
+        })
+      }
+    )
+    
+    // Se for 429 (quota), não está disponível
+    if (response.status === 429) {
+      return false
+    }
+    
+    // Se for 503 (alta demanda), não está disponível
+    if (response.status === 503) {
+      return false
+    }
+    
+    return response.ok
+  } catch (error) {
+    return false
+  }
+}
+
+/**
+ * Filtra API keys disponíveis fazendo teste silencioso
+ * @returns {Promise<Array<string>>} - Lista de API keys disponíveis
+ */
+async function getAvailableApiKeys() {
+  const allApiKeys = loadApiKeys()
+  const availableKeys = []
+  
+  for (const apiKey of allApiKeys) {
+    const isAvailable = await silentTestApiKey(apiKey)
+    if (isAvailable) {
+      availableKeys.push(apiKey)
+    }
+  }
+  
+  return availableKeys
+}
+
+/**
  * Faz uma chamada à API Gemini com retry automático, fallback de modelo e rotação de API keys
  * @param {string} prompt - O prompt para enviar à IA
  * @param {Object} options - Opções adicionais
@@ -131,12 +184,13 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     }
   }
 
-  const apiKeys = loadApiKeys()
+  // Teste silencioso para filtrar apenas API keys disponíveis
+  const apiKeys = await getAvailableApiKeys()
   if (apiKeys.length === 0) {
-    throw new Error('Nenhuma API key do Gemini encontrada')
+    throw new Error('Nenhuma API key do Gemini disponível no momento (todas estão com quota ou alta demanda)')
   }
 
-  console.log(`🔑 API Keys carregadas: ${apiKeys.length}`)
+  console.log(`🔑 API Keys disponíveis: ${apiKeys.length} de ${loadApiKeys().length} totais`)
   if (useGoogleSearch) {
     console.log(`🔍 Google Search Grounding ativado`)
   }
@@ -152,95 +206,74 @@ export async function callGeminiWithRetry(prompt, options = {}) {
 
   let lastError = null
 
-  // Tentar cada modelo na lista
+  // Tentar cada modelo na lista (sem retry, apenas 1 tentativa por modelo/key)
   for (const model of models) {
     console.log(`🔄 Tentando modelo: ${model}`)
 
-    // Tentar cada API key
+    // Tentar cada API key disponível
     for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex++) {
       const apiKey = apiKeys[keyIndex]
       console.log(`🔑 Tentando API key ${keyIndex + 1}/${apiKeys.length}`)
 
-      // Tentar com retry para o mesmo modelo e key
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          const requestBody = {
-            contents: [{ parts: [{ text: finalPrompt }] }],
-            generationConfig,
-          }
-
-          // Adicionar Google Search Grounding se solicitado
-          if (useGoogleSearch) {
-            requestBody.tools = [
-              {
-                googleSearch: {}
-              }
-            ]
-          }
-
-          // Adicionar Function Calling se solicitado
-          if (useFunctionCalling && tools.length > 0) {
-            requestBody.tools = requestBody.tools || []
-            requestBody.tools.push(...tools)
-          }
-
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(requestBody),
-            }
-          )
-
-          const data = await response.json()
-
-          if (!response.ok) {
-            const errorMessage = data.error?.message || 'Erro na API da IA'
-            
-            // Se for erro 429 (quota), tentar próxima key
-            if (response.status === 429) {
-              console.log(`⚠️ API key ${keyIndex + 1} atingiu quota, tentando próxima...`)
-              break
-            }
-            
-            // Se for erro 503 (alta demanda), fazer retry com delay
-            if (response.status === 503 || errorMessage.includes('high demand') || errorMessage.includes('temporarily')) {
-              console.warn(`⚠️ Tentativa ${attempt}/${maxRetries} para ${model} com key ${keyIndex + 1}: ${errorMessage}`)
-              
-              if (attempt < maxRetries) {
-                const delay = baseDelay * Math.pow(2, attempt - 1) // Exponential backoff
-                console.log(`⏳ Aguardando ${delay}ms antes de tentar novamente...`)
-                await new Promise(resolve => setTimeout(resolve, delay))
-                continue
-              } else {
-                throw new Error(`Modelo ${model} com alta demanda após ${maxRetries} tentativas`)
-              }
-            }
-            
-            throw new Error(errorMessage)
-          }
-
-          // Sucesso!
-          console.log(`✅ Sucesso com modelo ${model} e API key ${keyIndex + 1} na tentativa ${attempt}`)
-          return data
-
-        } catch (error) {
-          lastError = error
-          console.error(`❌ Erro na tentativa ${attempt} com modelo ${model} e key ${keyIndex + 1}:`, error.message)
-          
-          // Se não for erro de alta demanda, não fazer retry no mesmo modelo
-          if (!error.message.includes('high demand') && !error.message.includes('temporarily')) {
-            break
-          }
+      try {
+        const requestBody = {
+          contents: [{ parts: [{ text: finalPrompt }] }],
+          generationConfig,
         }
+
+        // Adicionar Google Search Grounding se solicitado
+        if (useGoogleSearch) {
+          requestBody.tools = [
+            {
+              googleSearch: {}
+            }
+          ]
+        }
+
+        // Adicionar Function Calling se solicitado
+        if (useFunctionCalling && tools.length > 0) {
+          requestBody.tools = requestBody.tools || []
+          requestBody.tools.push(...tools)
+        }
+
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          }
+        )
+
+        const data = await response.json()
+
+        if (!response.ok) {
+          const errorMessage = data.error?.message || 'Erro na API da IA'
+          
+          // Se for erro 429 (quota) ou 503 (alta demanda), tentar próxima key
+          if (response.status === 429 || response.status === 503) {
+            console.log(`⚠️ API key ${keyIndex + 1} com erro (${response.status}), tentando próxima...`)
+            continue
+          }
+          
+          throw new Error(errorMessage)
+        }
+
+        // Sucesso!
+        console.log(`✅ Sucesso com modelo ${model} e API key ${keyIndex + 1}`)
+        return data
+
+      } catch (error) {
+        lastError = error
+        console.error(`❌ Erro com modelo ${model} e key ${keyIndex + 1}:`, error.message)
+        // Não fazer retry, tentar próxima key/modelo
       }
     }
   }
 
   // Se chegou aqui, todos os modelos e keys falharam
   throw new Error(
-    `Todos os modelos e API keys falharam após múltiplas tentativas. Último erro: ${lastError?.message || 'Erro desconhecido'}`
+    `Todos os modelos e API keys falharam. Último erro: ${lastError?.message || 'Erro desconhecido'}`
   )
 }
 

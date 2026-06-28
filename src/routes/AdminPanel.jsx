@@ -1231,8 +1231,6 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
 
               // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
               const moduleResponse = await callGeminiWithRetry(modulePrompt, {
-                maxRetries: 3,
-                baseDelay: 2000,
                 models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
                 generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
               })
@@ -3680,8 +3678,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
             try {
               // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
               flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
-                maxRetries: 3,
-                baseDelay: 2000,
                 models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
                 generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
               })
@@ -3697,8 +3693,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                 
                 // Tentar novamente
                 flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
-                  maxRetries: 3,
-                  baseDelay: 2000,
                   models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
                   generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                 })
@@ -3728,8 +3722,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                 let retryResult = null
                 try {
                   retryResult = await callGeminiWithRetry(flashcardsPrompt, {
-                    maxRetries: 3,
-                    baseDelay: 2000,
                     models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
                     generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                   })
@@ -3740,8 +3732,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                     setFullCourseProgress(`⏳ Quota excedida no retry. Aguardando ${waitSeconds} segundos...`)
                     await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000))
                     retryResult = await callGeminiWithRetry(flashcardsPrompt, {
-                      maxRetries: 3,
-                      baseDelay: 2000,
                       models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
                       generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                     })
@@ -4019,8 +4009,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
 
       // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
       const analysisResponse = await callGeminiWithRetry(analysisPrompt, {
-        maxRetries: 3,
-        baseDelay: 2000,
         models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
         generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
       })
@@ -4152,8 +4140,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
             try {
               // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
               flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
-                maxRetries: 3,
-                baseDelay: 2000,
                 models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
                 generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
               })
@@ -4169,8 +4155,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                 
                 // Tentar novamente
                 flashcardsResult = await callGeminiWithRetry(flashcardsPrompt, {
-                  maxRetries: 3,
-                  baseDelay: 2000,
                   models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
                   generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                 })
@@ -5041,8 +5025,6 @@ CRÍTICO:
 
           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
           const result = await callGeminiWithRetry(analysisPrompt, {
-            maxRetries: 3,
-            baseDelay: 2000,
             models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
             generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
           })
@@ -5370,8 +5352,6 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
 
         // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
         const result = await callGeminiWithRetry(analysisPrompt, {
-          maxRetries: 3,
-          baseDelay: 2000,
           models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
           generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
         })
@@ -5470,8 +5450,6 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
 
         // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
         const result = await callGeminiWithRetry(analysisPrompt, {
-          maxRetries: 3,
-          baseDelay: 2000,
           models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
           generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
         })
@@ -5596,8 +5574,6 @@ CRÍTICO:
 
           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
           const result = await callGeminiWithRetry(analysisPrompt, {
-            maxRetries: 3,
-            baseDelay: 2000,
             models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
             generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
           })
@@ -6303,8 +6279,6 @@ CRÍTICO:
           console.log('🤖 Tentando usar Gemini...')
           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
           const result = await callGeminiWithRetry(systemPrompt, {
-            maxRetries: 3,
-            baseDelay: 2000,
             models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
             generationConfig: { temperature: 0.8, maxOutputTokens: 8000 },
           })
@@ -7503,8 +7477,6 @@ REGRAS CRÍTICAS E OBRIGATÓRIAS - LEIA COM ATENÇÃO:
 
                             // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
                             const verticalizadoResponse = await callGeminiWithRetry(verticalizadoPrompt, {
-                              maxRetries: 3,
-                              baseDelay: 2000,
                               models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
                               generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                             })
@@ -7856,8 +7828,6 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem 
 
                           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
                           const unifiedResponse = await callGeminiWithRetry(unifiedPrompt, {
-                            maxRetries: 3,
-                            baseDelay: 2000,
                             models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
                             generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                           })
@@ -9000,8 +8970,6 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
 
                 // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
                 const response = await callGeminiWithRetry(prompt, {
-                  maxRetries: 3,
-                  baseDelay: 2000,
                   models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
                   generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                 })

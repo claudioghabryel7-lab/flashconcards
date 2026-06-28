@@ -300,7 +300,7 @@ IMPORTANTE:
       
       // Aumentar limite de tokens para cronogramas longos (até 65536 tokens)
       const response = await callGeminiWithRetry(prompt, {
-        model: 'gemini-2.5-flash',
+        models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
         generationConfig: {
           temperature: 0.7,
           maxOutputTokens: 65536 // Aumentado para evitar corte em cronogramas longos

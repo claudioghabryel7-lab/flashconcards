@@ -131,8 +131,6 @@ REGRAS:
 - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
 
     const response = await callGeminiWithRetry(prompt, {
-      maxRetries: 3,
-      baseDelay: 2000,
       models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
       generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
       useGoogleSearch: true,

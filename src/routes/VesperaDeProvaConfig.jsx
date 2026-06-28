@@ -429,117 +429,17 @@ REGRAS:
 - Retorne APENAS o JSON válido, sem texto adicional
 - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
 
-      // Carregar múltiplas API keys do Gemini (priorizando VITE_GEMINI_API_KEY)
-      const apiKeys = []
-      
-      // Primeiro tenta a key principal
-      const mainKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (mainKey) {
-        apiKeys.push(mainKey)
-      }
-      
-      // Depois tenta numbered keys (apenas se a principal não existir ou para backup)
-      for (let i = 1; i <= 10; i++) {
-        const key = import.meta.env[`VITE_GEMINI_API_KEY_${i}`]
-        if (key && !apiKeys.includes(key)) {
-          apiKeys.push(key)
-        }
-      }
-      
-      console.log('🔑 [RevisaoConfig] API Keys carregadas:', apiKeys.length)
-      
-      if (apiKeys.length === 0) {
-        throw new Error('Nenhuma API key do Gemini encontrada')
-      }
-      
       setGenerationStatus('Enviando solicitação para a IA...')
       
-      // Modelos Gemini 2.5 para fallback
-      const models = ['gemini-2.5-flash', 'gemini-2.5-pro']
-      
-      // Função para fazer requisição com rotação de API keys, retry e fallback de modelos
-      const fetchWithFallback = async (prompt) => {
-        const maxRetries = 3
-        const baseDelay = 2000 // 2 segundos
-        
-        for (const model of models) {
-          console.log(`🔄 [RevisaoConfig] Tentando modelo: ${model}`)
-          
-          for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex++) {
-            const apiKey = apiKeys[keyIndex]
-            console.log(`🔑 [RevisaoConfig] Tentando API key ${keyIndex + 1}/${apiKeys.length} com modelo ${model}`)
-            
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
-            
-            for (let retry = 0; retry < maxRetries; retry++) {
-              try {
-                const response = await fetch(url, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    contents: [{
-                      parts: [{
-                        text: prompt
-                      }]
-                    }],
-                    generationConfig: {
-                      temperature: 0.7,
-                      maxOutputTokens: 65536, // Aumentado para evitar corte em materiais longos
-                    },
-                    tools: [{
-                      googleSearch: {}
-                    }]
-                  })
-                })
-                
-                const data = await response.json()
-                
-                if (response.ok) {
-                  console.log(`✅ [RevisaoConfig] Sucesso com modelo ${model} e API key ${keyIndex + 1}`)
-                  return data
-                }
-                
-                // Se for erro 429 (Too Many Requests), tentar próxima key
-                if (response.status === 429) {
-                  console.log(`⚠️ [RevisaoConfig] API key ${keyIndex + 1} atingiu quota, tentando próxima...`)
-                  break
-                }
-                
-                // Se for erro 503 (Service Unavailable), fazer retry com exponential backoff
-                if (response.status === 503) {
-                  const delay = baseDelay * Math.pow(2, retry)
-                  console.log(`⚠️ [RevisaoConfig] Modelo ${model} com API key ${keyIndex + 1} com alta demanda (503), retry ${retry + 1}/${maxRetries} em ${delay/1000}s...`)
-                  
-                  if (retry < maxRetries - 1) {
-                    await new Promise(resolve => setTimeout(resolve, delay))
-                    continue
-                  }
-                }
-                
-                // Se for outro erro, tentar próximo modelo
-                console.error('❌ [RevisaoConfig] Erro na API Gemini:', data)
-                break
-              } catch (error) {
-                if (retry < maxRetries - 1 && error.message?.includes('high demand')) {
-                  const delay = baseDelay * Math.pow(2, retry)
-                  console.log(`⚠️ [RevisaoConfig] Retry ${retry + 1}/${maxRetries} em ${delay/1000}s...`)
-                  await new Promise(resolve => setTimeout(resolve, delay))
-                  continue
-                }
-                
-                console.log(`⚠️ [RevisaoConfig] API key ${keyIndex + 1} falhou, tentando próxima...`)
-                break
-              }
-            }
-          }
-        }
-        
-        throw new Error('Todos os modelos e API keys falharam')
-      }
-      
-      const data = await fetchWithFallback(prompt)
+      // Usar callGeminiWithRetry que já tem teste silencioso de API keys
+      const response = await callGeminiWithRetry(prompt, {
+        model: 'gemini-2.5-flash',
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 65536
+        },
+        useGoogleSearch: true
+      })
       
       setGenerationStatus('Processando resposta da IA...')
       
