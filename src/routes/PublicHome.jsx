@@ -293,7 +293,7 @@ const PublicHome = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="min-h-screen w-full bg-background-primary">
       <section className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto py-8 sm:py-12 md:py-16">
         {/* Hero Section - Minimalist */}
         <div 

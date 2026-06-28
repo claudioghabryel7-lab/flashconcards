@@ -209,43 +209,44 @@ const VesperaDeProva = () => {
   }
   
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-3">
-              <SparklesIcon className="h-8 w-8 text-alego-600" />
-              Véspera de Prova
-            </h1>
-            <p className="text-slate-600 dark:text-slate-400 mt-2">
-              {courseName}
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            {/* Botão de configurar (admin) */}
-            {isAdmin && (
-              <button
-                onClick={() => navigate(`/vespera-de-prova/configurar/${courseId}`)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-alego-600 text-white rounded-lg font-medium hover:bg-alego-700 transition"
-              >
-                <SparklesIcon className="h-5 w-5" />
-                Configurar
-              </button>
-            )}
+    <div className="min-h-screen bg-background-primary">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-text-primary flex items-center gap-3">
+                <SparklesIcon className="h-8 w-8 text-accent-orange" />
+                Revisão
+              </h1>
+              <p className="text-text-secondary mt-2">
+                {courseName}
+              </p>
+            </div>
             
-            {/* Botão de compartilhar (admin) */}
-            {isAdmin && generatedMaterial && (
-              <button
-                onClick={generateShareLink}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-bold hover:opacity-80 transition"
-                title="Gerar link temporário de compartilhamento"
-              >
-                <ShareIcon className="h-5 w-5" />
-                Compartilhar
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {/* Botão de configurar (admin) */}
+              {isAdmin && (
+                <button
+                  onClick={() => navigate(`/vespera-de-prova/configurar/${courseId}`)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-accent-orange to-accent-cyan text-white rounded-lg font-medium hover:from-accent-orange-dim hover:to-accent-cyan-dim transition"
+                >
+                  <SparklesIcon className="h-5 w-5" />
+                  Configurar
+                </button>
+              )}
+              
+              {/* Botão de compartilhar (admin) */}
+              {isAdmin && generatedMaterial && (
+                <button
+                  onClick={generateShareLink}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-bold hover:opacity-80 transition"
+                  title="Gerar link temporário de compartilhamento"
+                >
+                  <ShareIcon className="h-5 w-5" />
+                  Compartilhar
+                </button>
+              )}
           </div>
         </div>
         
@@ -253,16 +254,16 @@ const VesperaDeProva = () => {
         {generatedMaterial && user && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              <span className="text-sm font-medium text-text-primary">
                 Progresso de Leitura
               </span>
-              <span className="text-sm text-slate-600 dark:text-slate-400">
+              <span className="text-sm text-text-secondary">
                 {Object.values(progresso).filter(v => v).length} / {generatedMaterial.material.length}
               </span>
             </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+            <div className="w-full bg-background-card-hover rounded-full h-2">
               <div
-                className="bg-alego-600 h-2 rounded-full transition-all"
+                className="bg-accent-cyan h-2 rounded-full transition-all"
                 style={{
                   width: `${(Object.values(progresso).filter(v => v).length / generatedMaterial.material.length) * 100}%`
                 }}
@@ -275,11 +276,11 @@ const VesperaDeProva = () => {
       {/* Estado inicial - sem material gerado */}
       {!generatedMaterial && (
         <div className="text-center py-16">
-          <SparklesIcon className="h-16 w-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+          <SparklesIcon className="h-16 w-16 text-text-muted mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-text-primary mb-2">
             Material de Revisão
           </h2>
-          <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-md mx-auto">
+          <p className="text-text-secondary mb-6 max-w-md mx-auto">
             {isAdmin 
               ? 'Configure e gere o material de revisão personalizado para este concurso.'
               : 'O material de revisão ainda não foi gerado para este curso.'}
@@ -287,7 +288,7 @@ const VesperaDeProva = () => {
           {isAdmin && (
             <button
               onClick={() => navigate(`/vespera-de-prova/configurar/${courseId}`)}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-alego-600 text-white rounded-lg font-medium hover:bg-alego-700 transition"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-accent-orange to-accent-cyan text-white rounded-lg font-medium hover:from-accent-orange-dim hover:to-accent-cyan-dim transition"
             >
               <SparklesIcon className="h-5 w-5" />
               Configurar e Gerar
@@ -302,13 +303,11 @@ const VesperaDeProva = () => {
           {generatedMaterial.material.map((disciplina, idx) => (
             <div
               key={idx}
-              className={`bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden ${
-                darkMode ? 'border border-slate-700' : ''
-              }`}
+              className="bg-background-card rounded-2xl border border-border-primary overflow-hidden"
             >
               {/* Header da disciplina */}
               <div
-                className="p-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                className="p-6 cursor-pointer hover:bg-background-card-hover transition-colors"
                 onClick={() => setMateriaExpandida(materiaExpandida === idx ? null : idx)}
               >
                 <div className="flex items-center justify-between">
@@ -323,7 +322,7 @@ const VesperaDeProva = () => {
                         className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
                           progresso[idx]
                             ? 'bg-green-500 border-green-500 text-white'
-                            : 'border-slate-300 dark:border-slate-600 hover:border-alego-600'
+                            : 'border-border-primary hover:border-accent-cyan'
                         }`}
                       >
                         {progresso[idx] && <CheckIcon className="h-4 w-4" />}
@@ -331,21 +330,21 @@ const VesperaDeProva = () => {
                     )}
                     
                     <div>
-                      <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                        <span className="text-alego-600">0{idx + 1}.</span>
+                      <h3 className="text-xl font-bold text-text-primary flex items-center gap-2">
+                        <span className="text-accent-orange">0{idx + 1}.</span>
                         {disciplina.disciplina.toUpperCase()}
                       </h3>
-                      <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                      <p className="text-sm text-text-secondary mt-1">
                         {disciplina.questoes?.length || 0} questões preditivas
                       </p>
                     </div>
                   </div>
                   
-                  <button className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
+                  <button className="p-2 rounded-lg hover:bg-background-card-hover">
                     {materiaExpandida === idx ? (
-                      <ChevronUpIcon className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                      <ChevronUpIcon className="h-5 w-5 text-text-secondary" />
                     ) : (
-                      <ChevronDownIcon className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                      <ChevronDownIcon className="h-5 w-5 text-text-secondary" />
                     )}
                   </button>
                 </div>
@@ -353,26 +352,26 @@ const VesperaDeProva = () => {
               
               {/* Conteúdo da disciplina */}
               {materiaExpandida === idx && (
-                <div className="border-t border-slate-200 dark:border-slate-700 p-6 space-y-8">
+                <div className="border-t border-border-primary p-6 space-y-8">
                   {/* Raio-X de Probabilidade */}
                   {disciplina.raioX && (
-                    <div className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-xl p-6">
+                    <div className="bg-accent-orange/10 rounded-xl p-6">
                       <div className="flex items-center gap-2 mb-4">
-                        <FireIcon className="h-6 w-6 text-orange-600" />
-                        <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                        <FireIcon className="h-6 w-6 text-accent-orange" />
+                        <h4 className="text-lg font-bold text-text-primary">
                           Raio-X de Probabilidade
                         </h4>
                       </div>
                       
                       <div className="space-y-4">
                         <div>
-                          <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                          <h5 className="text-sm font-semibold text-text-primary mb-2">
                             🔥 Top 3 Assuntos Quentes:
                           </h5>
                           <ul className="space-y-1">
                             {disciplina.raioX.topAssuntos?.map((assunto, aIdx) => (
-                              <li key={aIdx} className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                                <span className="text-orange-600 font-bold">{aIdx + 1}.</span>
+                              <li key={aIdx} className="text-sm text-text-secondary flex items-center gap-2">
+                                <span className="text-accent-orange font-bold">{aIdx + 1}.</span>
                                 {assunto}
                               </li>
                             ))}
@@ -380,10 +379,10 @@ const VesperaDeProva = () => {
                         </div>
                         
                         <div>
-                          <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                          <h5 className="text-sm font-semibold text-text-primary mb-2">
                             📊 O Padrão da Banca:
                           </h5>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">
+                          <p className="text-sm text-text-secondary">
                             {disciplina.raioX.padraoBanca}
                           </p>
                         </div>
@@ -393,10 +392,10 @@ const VesperaDeProva = () => {
                   
                   {/* Revisão Turbo */}
                   {disciplina.revisaoTurbo && (
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6">
+                    <div className="bg-accent-cyan/10 rounded-xl p-6">
                       <div className="flex items-center gap-2 mb-4">
-                        <LightBulbIcon className="h-6 w-6 text-blue-600" />
-                        <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                        <LightBulbIcon className="h-6 w-6 text-accent-cyan" />
+                        <h4 className="text-lg font-bold text-text-primary">
                           Revisão Turbo
                         </h4>
                       </div>
@@ -404,14 +403,14 @@ const VesperaDeProva = () => {
                       <div className="space-y-4">
                         {disciplina.revisaoTurbo.resumos?.length > 0 && (
                           <div>
-                            <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <h5 className="text-sm font-semibold text-text-primary mb-2">
                               ⚡ Resumos:
                             </h5>
                             <ul className="space-y-2">
                               {disciplina.revisaoTurbo.resumos.map((resumo, rIdx) => (
                                 <li 
                                   key={rIdx} 
-                                  className="text-sm text-slate-600 dark:text-slate-400"
+                                  className="text-sm text-text-secondary"
                                   dangerouslySetInnerHTML={{ __html: resumo }}
                                 />
                               ))}
@@ -420,8 +419,8 @@ const VesperaDeProva = () => {
                         )}
                         
                         {disciplina.revisaoTurbo.pegadinhas?.length > 0 && (
-                          <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
-                            <h5 className="text-sm font-semibold text-red-700 dark:text-red-400 mb-2 flex items-center gap-2">
+                          <div className="bg-red-500/10 rounded-lg p-4">
+                            <h5 className="text-sm font-semibold text-red-500 mb-2 flex items-center gap-2">
                               <ExclamationTriangleIcon className="h-4 w-4" />
                               Cuidado, Caçapa!
                             </h5>
@@ -429,7 +428,7 @@ const VesperaDeProva = () => {
                               {disciplina.revisaoTurbo.pegadinhas.map((pegadinha, pIdx) => (
                                 <li 
                                   key={pIdx} 
-                                  className="text-sm text-red-600 dark:text-red-400"
+                                  className="text-sm text-red-400"
                                   dangerouslySetInnerHTML={{ __html: pegadinha }}
                                 />
                               ))}
@@ -444,8 +443,8 @@ const VesperaDeProva = () => {
                   {disciplina.questoes?.length > 0 && (
                     <div>
                       <div className="flex items-center gap-2 mb-4">
-                        <BookOpenIcon className="h-6 w-6 text-alego-600" />
-                        <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                        <BookOpenIcon className="h-6 w-6 text-accent-orange" />
+                        <h4 className="text-lg font-bold text-text-primary">
                           Questões Preditivas
                         </h4>
                       </div>
@@ -454,13 +453,13 @@ const VesperaDeProva = () => {
                         {disciplina.questoes.map((questao, qIdx) => (
                           <div
                             key={qIdx}
-                            className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-6"
+                            className="bg-background-card-hover rounded-xl p-6"
                           >
                             <div className="mb-4">
-                              <span className="text-xs font-semibold text-alego-600 mb-2 block">
+                              <span className="text-xs font-semibold text-accent-orange mb-2 block">
                                 Aposta {qIdx + 1} de {disciplina.questoes.length}
                               </span>
-                              <p className="text-sm text-slate-700 dark:text-slate-300">
+                              <p className="text-sm text-text-primary">
                                 <span dangerouslySetInnerHTML={{ __html: questao.enunciado }} />
                               </p>
                             </div>
@@ -472,8 +471,8 @@ const VesperaDeProva = () => {
                                     key={aIdx}
                                     className={`p-3 rounded-lg text-sm ${
                                       alt === questao.gabarito
-                                        ? 'bg-green-100 dark:bg-green-900/30 border-2 border-green-500 text-green-800 dark:text-green-300'
-                                        : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300'
+                                        ? 'bg-green-500/20 border-2 border-green-500 text-green-400'
+                                        : 'bg-background-card border border-border-primary text-text-primary'
                                     }`}
                                   >
                                     {alt}
@@ -483,11 +482,11 @@ const VesperaDeProva = () => {
                             )}
                             
                             {questao.comentario && (
-                              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                                <h5 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2">
+                              <div className="bg-accent-cyan/10 rounded-lg p-4">
+                                <h5 className="text-sm font-semibold text-accent-cyan mb-2">
                                   💡 Gabarito Comentado:
                                 </h5>
-                                <p className="text-sm text-blue-600 dark:text-blue-300">
+                                <p className="text-sm text-text-secondary">
                                   <span dangerouslySetInnerHTML={{ __html: questao.comentario }} />
                                 </p>
                               </div>
@@ -503,6 +502,7 @@ const VesperaDeProva = () => {
           ))}
         </div>
       )}
+      </div>
     </div>
   )
 }

@@ -651,64 +651,64 @@ REGRAS:
   }
   
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 py-8 px-4">
+    <div className="min-h-screen bg-background-primary py-8 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <button
             onClick={() => navigate(`/vespera-de-prova?course=${courseId}`)}
-            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 mb-4 transition-colors"
+            className="inline-flex items-center gap-2 text-text-muted hover:text-text-primary mb-4 transition-colors"
           >
             <ArrowLeftIcon className="h-5 w-5" />
             Voltar
           </button>
           
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-3">
-            <SparklesIcon className="h-8 w-8 text-alego-600" />
-            Configurar Véspera de Prova
+          <h1 className="text-3xl font-bold text-text-primary flex items-center gap-3">
+            <SparklesIcon className="h-8 w-8 text-accent-orange" />
+            Configurar Revisão
           </h1>
-          <p className="text-slate-600 dark:text-slate-400 mt-2">
+          <p className="text-text-secondary mt-2">
             {courseName} - {concurso || 'Concurso não definido'}
           </p>
         </div>
         
         {/* Formulário de Configuração */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8">
+        <div className="bg-background-card rounded-2xl border border-border-primary p-8">
           <div className="space-y-8">
             {/* Informações do curso */}
-            <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+            <div className="bg-background-card-hover rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-text-primary mb-2">
                 Informações do Curso
               </h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-600 dark:text-slate-400">Curso:</span>
-                  <span className="text-slate-900 dark:text-slate-100 font-medium">{courseName}</span>
+                  <span className="text-text-secondary">Curso:</span>
+                  <span className="text-text-primary font-medium">{courseName}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-600 dark:text-slate-400">Concurso:</span>
-                  <span className="text-slate-900 dark:text-slate-100 font-medium">{concurso || 'Não definido'}</span>
+                  <span className="text-text-secondary">Concurso:</span>
+                  <span className="text-text-primary font-medium">{concurso || 'Não definido'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-600 dark:text-slate-400">Banca:</span>
-                  <span className="text-slate-900 dark:text-slate-100 font-medium">{bancaExaminadora || 'Não definida'}</span>
+                  <span className="text-text-secondary">Banca:</span>
+                  <span className="text-text-primary font-medium">{bancaExaminadora || 'Não definida'}</span>
                 </div>
               </div>
             </div>
             
             {/* Lista de matérias */}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
+              <label className="block text-sm font-semibold text-text-primary mb-4">
                 Matérias do Edital
               </label>
               <div className="space-y-3">
                 {editalVerticalizado?.disciplinas?.map((disciplina, idx) => {
                   const status = materiasStatus[idx] || 'pending'
                   const statusColors = {
-                    pending: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400',
-                    generating: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
-                    completed: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
-                    error: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                    pending: 'bg-background-card-hover text-text-secondary',
+                    generating: 'bg-yellow-500/20 text-yellow-500',
+                    completed: 'bg-green-500/20 text-green-500',
+                    error: 'bg-red-500/20 text-red-500'
                   }
                   const statusText = {
                     pending: 'Pendente',
@@ -718,15 +718,15 @@ REGRAS:
                   }
                   
                   return (
-                    <div key={idx} className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
+                    <div key={idx} className="bg-background-card-hover rounded-lg p-4">
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex-1">
-                          <span className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                          <span className="block text-sm font-medium text-text-primary mb-2">
                             {disciplina.nome}
                           </span>
                           <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2">
-                              <label className="text-xs text-slate-600 dark:text-slate-400">Questões:</label>
+                              <label className="text-xs text-text-secondary">Questões:</label>
                               <input
                                 type="number"
                                 min="1"
@@ -737,7 +737,7 @@ REGRAS:
                                   [idx]: parseInt(e.target.value) || 5
                                 })}
                                 disabled={status === 'generating'}
-                                className="w-16 rounded border border-slate-300 dark:border-slate-600 p-1 text-xs text-center dark:bg-slate-600 dark:text-slate-100 focus:ring-2 focus:ring-alego-500 focus:border-transparent disabled:opacity-50"
+                                className="w-16 rounded border border-border-primary bg-background-card p-1 text-xs text-center text-text-primary focus:ring-2 focus:ring-accent-cyan focus:border-transparent disabled:opacity-50"
                               />
                             </div>
                             <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[status]}`}>
@@ -772,7 +772,7 @@ REGRAS:
                             <button
                               onClick={() => generateSingleMaterial(idx)}
                               disabled={status === 'generating'}
-                              className="px-4 py-2 bg-alego-600 text-white rounded-lg text-sm font-medium hover:bg-alego-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                              className="px-4 py-2 bg-gradient-to-r from-accent-orange to-accent-cyan text-white rounded-lg text-sm font-medium hover:from-accent-orange-dim hover:to-accent-cyan-dim disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                             >
                               {status === 'generating' ? (
                                 <>

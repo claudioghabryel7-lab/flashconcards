@@ -281,16 +281,31 @@ RETORNE APENAS ESTE JSON (sem texto adicional):
   ]
 }
 
+CRÍTICO - NÃO CORTAR O JSON:
+- O JSON deve ser COMPLETO e VÁLIDO
+- NÃO pare no meio do array cronograma
+- Certifique-se de fechar todas as chaves e colchetes
+- Se o JSON for muito longo, simplifique as descrições mas NÃO corte a estrutura
+- Verifique se o array cronograma está completo antes de finalizar
+
 IMPORTANTE:
 - Comece em ${today.format('DD/MM/YYYY')}
 - Termine em ${provaDate.format('DD/MM/YYYY')}
 - JSON deve ser válido e completo
 - Use aspas duplas
-- Não adicione comentários no JSON`
+- Não adicione comentários no JSON
+- NÃO corte o JSON no meio - verifique se está completo antes de enviar`
 
       console.log('📝 Enviando prompt para IA...')
       
-      const response = await callGeminiWithRetry(prompt, 'gemini-2.5-flash')
+      // Aumentar limite de tokens para cronogramas longos (até 65536 tokens)
+      const response = await callGeminiWithRetry(prompt, {
+        model: 'gemini-2.5-flash',
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 65536 // Aumentado para evitar corte em cronogramas longos
+        }
+      })
       const generatedText = extractGeneratedText(response)
       
       console.log('📝 Resposta da IA:', generatedText)
@@ -309,25 +324,56 @@ IMPORTANTE:
         throw new Error('Não foi possível extrair JSON da resposta da IA. A resposta não contém um JSON válido.')
       }
       
+      let jsonText = jsonMatch[0]
+      
+      // Tentar completar JSON se estiver cortado (problema comum com respostas longas)
       let cronogramaIA
       try {
-        cronogramaIA = JSON.parse(jsonMatch[0])
+        cronogramaIA = JSON.parse(jsonText)
       } catch (parseError) {
         console.error('Erro ao fazer parse do JSON:', parseError)
-        console.error('JSON que falhou:', jsonMatch[0].substring(0, 500))
+        console.error('JSON que falhou:', jsonText.substring(0, 500))
         
-        // Tentar limpar o JSON e fazer parse novamente
+        // Tentar completar JSON cortado
         try {
-          const cleanedJson = jsonMatch[0]
-            .replace(/[\n\r]/g, '')
-            .replace(/\s+/g, ' ')
-            .replace(/,\s*}/g, '}')
-            .replace(/,\s*]/g, ']')
-          cronogramaIA = JSON.parse(cleanedJson)
-          console.log('JSON limpo com sucesso')
-        } catch (cleanError) {
-          console.error('Erro ao fazer parse do JSON limpo:', cleanError)
-          throw new Error('Erro ao fazer parse do JSON gerado pela IA. O JSON está malformado.')
+          // Contar chaves para tentar fechar corretamente
+          const openBraces = (jsonText.match(/\{/g) || []).length
+          const closeBraces = (jsonText.match(/\}/g) || []).length
+          const openBrackets = (jsonText.match(/\[/g) || []).length
+          const closeBrackets = (jsonText.match(/\]/g) || []).length
+          
+          let completedJson = jsonText
+          
+          // Adicionar chaves/colchetes faltantes
+          for (let i = 0; i < openBraces - closeBraces; i++) {
+            completedJson += '}'
+          }
+          for (let i = 0; i < openBrackets - closeBrackets; i++) {
+            completedJson += ']'
+          }
+          
+          // Remover vírgula no final se houver
+          completedJson = completedJson.replace(/,\s*}/g, '}')
+          completedJson = completedJson.replace(/,\s*]/g, ']')
+          
+          cronogramaIA = JSON.parse(completedJson)
+          console.log('JSON completado com sucesso')
+        } catch (completeError) {
+          console.error('Erro ao completar JSON:', completeError)
+          
+          // Tentar limpar o JSON e fazer parse novamente
+          try {
+            const cleanedJson = jsonText
+              .replace(/[\n\r]/g, '')
+              .replace(/\s+/g, ' ')
+              .replace(/,\s*}/g, '}')
+              .replace(/,\s*]/g, ']')
+            cronogramaIA = JSON.parse(cleanedJson)
+            console.log('JSON limpo com sucesso')
+          } catch (cleanError) {
+            console.error('Erro ao fazer parse do JSON limpo:', cleanError)
+            throw new Error('Erro ao fazer parse do JSON gerado pela IA. O JSON está malformado ou incompleto. Tente gerar novamente.')
+          }
         }
       }
       
