@@ -551,23 +551,33 @@ REGRAS:
       
       console.log('📝 [RevisaoConfig] Texto gerado, tamanho:', generatedText.length)
       
+      // Extrair JSON removendo blocos de código markdown
+      let jsonText = generatedText.trim()
+      if (jsonText.includes('```json')) {
+        jsonText = jsonText.split('```json')[1].split('```')[0].trim()
+      } else if (jsonText.includes('```')) {
+        jsonText = jsonText.split('```')[1].split('```')[0].trim()
+      }
+      
+      console.log('📝 [RevisaoConfig] JSON extraído, tamanho:', jsonText.length)
+      
       // Parsear JSON
       let materialData = null
       try {
-        materialData = JSON.parse(generatedText)
+        materialData = JSON.parse(jsonText)
         console.log('✅ [RevisaoConfig] JSON parseado com sucesso')
       } catch (parseError) {
         console.error('❌ [RevisaoConfig] Erro ao fazer parse do JSON:', parseError.message)
-        console.error('❌ [RevisaoConfig] JSON que falhou:', generatedText.substring(0, 500))
+        console.error('❌ [RevisaoConfig] JSON que falhou:', jsonText.substring(0, 500))
         
         // Tentar completar JSON cortado
         try {
-          const openBraces = (generatedText.match(/\{/g) || []).length
-          const closeBraces = (generatedText.match(/\}/g) || []).length
-          const openBrackets = (generatedText.match(/\[/g) || []).length
-          const closeBrackets = (generatedText.match(/\]/g) || []).length
+          const openBraces = (jsonText.match(/\{/g) || []).length
+          const closeBraces = (jsonText.match(/\}/g) || []).length
+          const openBrackets = (jsonText.match(/\[/g) || []).length
+          const closeBrackets = (jsonText.match(/\]/g) || []).length
           
-          let completedJson = generatedText
+          let completedJson = jsonText
           
           // Adicionar chaves/colchetes faltantes
           for (let i = 0; i < openBraces - closeBraces; i++) {
@@ -587,7 +597,7 @@ REGRAS:
           console.error('❌ [RevisaoConfig] Erro ao completar JSON:', completeError.message)
           
           // Tentar corrigir JSON
-          let fixedJson = generatedText
+          let fixedJson = jsonText
           fixedJson = fixedJson.replace(/[\x00-\x1F\x7F-\x9F]/g, '')
           fixedJson = fixedJson.replace(/[\u2028\u2029\u200B\u200C\u200D\uFEFF]/g, '')
           fixedJson = fixedJson.replace(/\r\n/g, '\n')
