@@ -287,7 +287,7 @@ CONTEXTO:
 INSTRUÇÕES:
 Gere um material de revisão para a disciplina ${estrutura.disciplina.nome}. Inclua:
 
-🔍 VERIFICAÇÃO DE FONTES - OBRIGATÓRIO:
+🔍 VERIFICAÇÃO DE FONTES-OBRIGATÓRIO:
 - Para CADA lei, decreto ou norma jurídica mencionada, VERIFIQUE a atualidade usando as ferramentas disponíveis
 - Para CADA jurisprudência citada, VERIFIQUE se está vigente e atualizada
 - Use as ferramentas de Function Calling para buscar em APIs oficiais (Senado, Datajud/CNJ)
