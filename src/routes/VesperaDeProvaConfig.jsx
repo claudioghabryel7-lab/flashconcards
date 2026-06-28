@@ -324,7 +324,7 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
      * Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
 
 3. **QUESTÕES PREDITIVAS**:
-   - Gere EXATAMENTE ${estrutura.disciplina.questoes} questões
+   - Gere EXATAMENTE 5 questões (não mais, não menos)
    - No estilo da banca ${estrutura.banca} (A, B, C, D, E ou Certo/Errado)
    - Contextualizadas com o concurso ${estrutura.concurso} e cargo ${estrutura.curso}
    - Gabarito Comentado: explique o porquê das outras estarem erradas
@@ -608,8 +608,11 @@ REGRAS:
       
     } catch (error) {
       console.error('❌ [RevisaoConfig] Erro ao gerar material:', error)
+      console.error('❌ [RevisaoConfig] Detalhes do erro:', error.message)
+      console.error('❌ [RevisaoConfig] Stack:', error.stack)
       setMateriasStatus(prev => ({ ...prev, [disciplinaIdx]: 'error' }))
       setGenerationStatus(`❌ Erro: ${error.message}`)
+      alert(`Erro ao gerar material: ${error.message}\n\nTente novamente ou verifique o console para mais detalhes.`)
     } finally {
       setGenerating(false)
     }
