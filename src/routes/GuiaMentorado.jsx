@@ -231,12 +231,14 @@ ${JSON.stringify(editalSummary, null, 2)}
 INSTRUÇÕES:
 Crie um cronograma de estudo do dia atual até o dia da prova.
 
-REGRAS:
-1. TODAS as matérias do edital devem ser contempladas
-2. Dias de TAF devem ter estudo também
-3. Pode ter múltiplas matérias por dia
+REGRAS OBRIGATÓRIAS:
+1. TODAS as matérias do edital devem ser contempladas - NÃO PULE NENHUMA MATÉRIA OU TÓPICO
+2. Se necessário, use múltiplas matérias por dia para cobrir todo o conteúdo
+3. Dias de TAF devem ter estudo também (manhã: TAF, tarde/noite: estudo)
 4. Sem dia de descanso (simulado serve como descanso)
 5. Reta final: últimos 7 dias apenas revisão/simulado
+6. Distribua as matérias de forma equilibrada ao longo do período
+7. Priorize matérias mais importantes com mais tempo de estudo
 
 RETORNE APENAS ESTE JSON (sem texto adicional):
 {
