@@ -225,40 +225,52 @@ TEM TAF: ${config.hasTAF ? 'Sim' : 'Não'}
 TEM REDAÇÃO: ${config.hasRedacao ? 'Sim' : 'Não'}
 EXERCÍCIOS TAF: ${config.tafExercicios?.join(', ') || 'Nenhum'}
 
-EDITAL VERTICALIZADO:
+EDITAL VERTICALIZADO COMPLETO:
 ${JSON.stringify(editalSummary, null, 2)}
 
 INSTRUÇÕES:
-Você é um especialista em preparação para concursos públicos. Crie um CRONOGRAMA DE ESTUDO ESTRATÉGICO até o dia da prova.
+Você é um especialista em preparação para concursos públicos. Crie um CRONOGRAMA DE ESTUDO ESTRATÉGICO do dia atual até o dia da prova.
 
-O cronograma deve seguir estas FASES DE APRENDIZADO:
+REGRAS OBRIGATÓRIAS:
+1. TODAS as matérias do edital verticalizado DEVEM ser contempladas - não pule nenhuma disciplina ou tópico
+2. Dias de TAF DEVEM ter estudo também (manhã: TAF, tarde/noite: estudo)
+3. Pode ter mais de uma matéria por dia se necessário para cobrir todo o edital
+4. NÃO existe dia de descanso - o dia de simulado é o descanso
+5. Reta final: últimos 7 dias antes da prova são dedicados apenas a revisão e simulados
+
+FASES DE APRENDIZADO:
 1. FASE DE FUNDAMENTAÇÃO (30% do tempo): Conceitos básicos de cada disciplina
 2. FASE DE APROFUNDAMENTO (40% do tempo): Tópicos específicos e detalhados
 3. FASE DE CONSOLIDAÇÃO (20% do tempo): Revisão e fixação
-4. FASE FINAL (10% do tempo): Simulados, véspera de prova e preparação mental
+4. FASE FINAL (10% do tempo): Simulados e preparação mental
 
 DISTRIBUIÇÃO SEMANAL:
-- Segunda a Sexta: Estudo de matérias
-- Sábado: Revisão da semana ou simulado
-- Domingo: Descanso ou TAF/Redação leve
+- Segunda a Sexta: Estudo de matérias (pode ter mais de uma matéria por dia)
+- Sábado: Simulado completo (serve como descanso)
+- Domingo: Revisão da semana ou TAF + estudo leve
 
 CONSIDERAÇÕES ESTRATÉGICAS:
 - Disciplinas jurídicas (Direito Constitucional, Administrativo, Penal, Civil, Tributário, Trabalho) requerem mais tempo
 - Português e Raciocínio Lógico podem ter menos tempo
 - Intercale disciplinas diferentes para evitar fadiga
-- Incluir dias de descanso a cada 7 dias
-- Se tiver TAF, incluir 2-3 dias por semana para treino físico
-- Se tiver Redação, incluir 1 dia por semana para prática de redação
+- Se tiver TAF, incluir 2-3 dias por semana (manhã: TAF, tarde: estudo)
+- Se tiver Redação, incluir 1 dia por semana para prática
+- Reta final (7 dias antes da prova): apenas revisão e simulados
 
 RETORNE APENAS UM JSON válido com esta estrutura:
 {
   "cronograma": [
     {
       "data": "YYYY-MM-DD",
-      "tipo": "estudo|revisao|taf|redacao|descanso|simulado",
+      "tipo": "estudo|revisao|taf|redacao|simulado|reta_final",
       "fase": "fundamentacao|aprofundamento|consolidacao|final",
-      "disciplina": "nome da disciplina (se aplicável)",
-      "topico": "nome do tópico (se aplicável)",
+      "materias": [
+        {
+          "disciplina": "nome da disciplina",
+          "topico": "nome do tópico"
+        }
+      ],
+      "taf_exercicio": "nome do exercício TAF (se aplicável)",
       "descricao": "breve descrição do objetivo do dia"
     }
   ]
@@ -269,9 +281,11 @@ IMPORTANTE:
 - Comece sempre pela data atual: ${today.format('DD/MM/YYYY')}
 - Termine na data da prova: ${provaDate.format('DD/MM/YYYY')}
 - Não inclua dias passados
+- TODAS as matérias do edital devem ser contempladas
+- Se tiver TAF, o campo "materias" deve ter as matérias do dia e o campo "taf_exercicio" o exercício
+- Reta final: últimos 7 dias apenas revisão/simulado, sem novos tópicos
 - Seja específico nos tópicos do edital
-- Inclua dias de descanso estratégicos
-- Distribua TAF e Redação de forma equilibrada`
+- Use array "materias" para múltiplas matérias no mesmo dia`
 
       console.log('📝 Enviando prompt para IA...')
       
@@ -323,8 +337,8 @@ IMPORTANTE:
             cronogramaData.days[dayKey] = {
               type: dia.tipo,
               fase: dia.fase,
-              disciplina: dia.disciplina || '',
-              topico: dia.topico || '',
+              materias: dia.materias || [],
+              tafExercicio: dia.taf_exercicio || '',
               descricao: dia.descricao || '',
               completed: false,
             }
@@ -546,16 +560,16 @@ IMPORTANTE:
                             ? 'bg-green-500/10 border border-green-500/30'
                             : day.data.type === 'simulado'
                             ? 'bg-purple-500/10 border border-purple-500/30'
-                            : day.data.type === 'descanso'
-                            ? 'bg-gray-500/10 border border-gray-500/30'
+                            : day.data.type === 'reta_final'
+                            ? 'bg-red-500/10 border border-red-500/30'
                             : 'bg-purple-500/10 border border-purple-500/30'
                         }`}
                       >
                         {day.data.type === 'estudo' && (
                           <div className="flex items-center gap-1 mb-1">
                             <BookOpenIcon className="h-3 w-3 text-blue-400" />
-                            <span className="font-semibold text-blue-300 truncate">
-                              {day.data.disciplina}
+                            <span className="font-semibold text-blue-300">
+                              Estudo
                             </span>
                           </div>
                         )}
@@ -564,7 +578,7 @@ IMPORTANTE:
                           <div className="flex items-center gap-1 mb-1">
                             <DocumentTextIcon className="h-3 w-3 text-orange-400" />
                             <span className="font-semibold text-orange-300">
-                              TAF
+                              TAF + Estudo
                             </span>
                           </div>
                         )}
@@ -596,10 +610,11 @@ IMPORTANTE:
                           </div>
                         )}
                         
-                        {day.data.type === 'descanso' && (
+                        {day.data.type === 'reta_final' && (
                           <div className="flex items-center gap-1 mb-1">
-                            <span className="font-semibold text-gray-300">
-                              Descanso
+                            <FireIcon className="h-3 w-3 text-red-400" />
+                            <span className="font-semibold text-red-300">
+                              Reta Final
                             </span>
                           </div>
                         )}
@@ -610,9 +625,21 @@ IMPORTANTE:
                           </p>
                         )}
                         
-                        <p className="text-text-secondary truncate">
-                          {day.data.topico || day.data.exercicio || day.data.descricao}
-                        </p>
+                        {day.data.tafExercicio && (
+                          <p className="text-text-secondary text-[10px] mb-1">
+                            TAF: {day.data.tafExercicio}
+                          </p>
+                        )}
+                        
+                        {day.data.materias && day.data.materias.length > 0 && (
+                          <div className="space-y-0.5">
+                            {day.data.materias.map((m, idx) => (
+                              <div key={idx} className="text-text-secondary">
+                                <span className="font-medium">{m.disciplina}:</span> {m.topico}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         
                         {!day.isPast && (
                           <button
