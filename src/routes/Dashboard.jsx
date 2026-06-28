@@ -721,6 +721,19 @@ const Dashboard = () => {
           </Link>
 
           <Link
+            to="/guia-mentorado"
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
+            <div className="relative z-10">
+              <SparklesIcon className="h-8 w-8 text-background-primary mb-3" />
+              <h3 className="text-lg font-bold text-background-primary mb-1">Guia Mentorado</h3>
+              <p className="text-background-primary/80 text-sm">Cronograma estratégico</p>
+              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+
+          <Link
             to="/vespera-de-prova"
             className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-cyan to-accent-orange p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
           >
