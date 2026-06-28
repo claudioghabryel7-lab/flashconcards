@@ -412,6 +412,15 @@ FORMATO JSON:
 
 ⚠️ OBRIGATÓRIO: Inclua a data e hora atual no campo "dataGeracao" no formato DD/MM/AAAA HH:MM. Isso força a IA a gerar conteúdo atualizado.
 
+🚨 CRÍTICO - NÃO CORTAR O JSON:
+- O JSON deve ser COMPLETO e VÁLIDO
+- NÃO pare no meio do array questoes ou revisaoTurbo
+- Certifique-se de fechar todas as chaves e colchetes
+- Se o JSON for muito longo, simplifique as descrições mas NÃO corte a estrutura
+- Verifique se o array questoes está completo com EXATAMENTE 5 questões antes de finalizar
+- Verifique se o objeto revisaoTurbo está completo antes de finalizar
+- NÃO corte o JSON no meio - verifique se está completo antes de enviar
+
 REGRAS:
 - Use tom focado e direto
 - Seja ESPECÍFICO do concurso ${estrutura.concurso} e cargo ${estrutura.curso}
@@ -477,7 +486,7 @@ REGRAS:
                     }],
                     generationConfig: {
                       temperature: 0.7,
-                      maxOutputTokens: 32000,
+                      maxOutputTokens: 65536, // Aumentado para evitar corte em materiais longos
                     },
                     tools: [{
                       googleSearch: {}
@@ -549,22 +558,50 @@ REGRAS:
         console.log('✅ [RevisaoConfig] JSON parseado com sucesso')
       } catch (parseError) {
         console.error('❌ [RevisaoConfig] Erro ao fazer parse do JSON:', parseError.message)
+        console.error('❌ [RevisaoConfig] JSON que falhou:', generatedText.substring(0, 500))
         
-        // Tentar corrigir JSON
-        let fixedJson = generatedText
-        fixedJson = fixedJson.replace(/[\x00-\x1F\x7F-\x9F]/g, '')
-        fixedJson = fixedJson.replace(/[\u2028\u2029\u200B\u200C\u200D\uFEFF]/g, '')
-        fixedJson = fixedJson.replace(/\r\n/g, '\n')
-        fixedJson = fixedJson.replace(/\r/g, '\n')
-        fixedJson = fixedJson.replace(/,\s*}/g, '}')
-        fixedJson = fixedJson.replace(/,\s*]/g, ']')
-        
+        // Tentar completar JSON cortado
         try {
-          materialData = JSON.parse(fixedJson)
-          console.log('✅ [RevisaoConfig] JSON corrigido e parseado')
-        } catch (fixError) {
-          console.error('❌ [RevisaoConfig] Falha ao corrigir JSON:', fixError.message)
-          throw new Error(`JSON inválido: ${fixError.message}`)
+          const openBraces = (generatedText.match(/\{/g) || []).length
+          const closeBraces = (generatedText.match(/\}/g) || []).length
+          const openBrackets = (generatedText.match(/\[/g) || []).length
+          const closeBrackets = (generatedText.match(/\]/g) || []).length
+          
+          let completedJson = generatedText
+          
+          // Adicionar chaves/colchetes faltantes
+          for (let i = 0; i < openBraces - closeBraces; i++) {
+            completedJson += '}'
+          }
+          for (let i = 0; i < openBrackets - closeBrackets; i++) {
+            completedJson += ']'
+          }
+          
+          // Remover vírgula no final se houver
+          completedJson = completedJson.replace(/,\s*}/g, '}')
+          completedJson = completedJson.replace(/,\s*]/g, ']')
+          
+          materialData = JSON.parse(completedJson)
+          console.log('✅ [RevisaoConfig] JSON completado com sucesso')
+        } catch (completeError) {
+          console.error('❌ [RevisaoConfig] Erro ao completar JSON:', completeError.message)
+          
+          // Tentar corrigir JSON
+          let fixedJson = generatedText
+          fixedJson = fixedJson.replace(/[\x00-\x1F\x7F-\x9F]/g, '')
+          fixedJson = fixedJson.replace(/[\u2028\u2029\u200B\u200C\u200D\uFEFF]/g, '')
+          fixedJson = fixedJson.replace(/\r\n/g, '\n')
+          fixedJson = fixedJson.replace(/\r/g, '\n')
+          fixedJson = fixedJson.replace(/,\s*}/g, '}')
+          fixedJson = fixedJson.replace(/,\s*]/g, ']')
+          
+          try {
+            materialData = JSON.parse(fixedJson)
+            console.log('✅ [RevisaoConfig] JSON corrigido e parseado')
+          } catch (fixError) {
+            console.error('❌ [RevisaoConfig] Falha ao corrigir JSON:', fixError.message)
+            throw new Error(`JSON inválido ou incompleto: ${fixError.message}. Tente gerar novamente.`)
+          }
         }
       }
       
