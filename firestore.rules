@@ -161,6 +161,14 @@ service cloud.firestore {
         allow delete: if isAuthenticated() && 
                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        
+        // Subcoleção userSchedules para schedules personalizados de cada usuário
+        match /userSchedules/{userId} {
+          allow read: if isAuthenticated() && request.auth.uid == userId;
+          allow create: if isAuthenticated() && request.auth.uid == userId;
+          allow update: if isAuthenticated() && request.auth.uid == userId;
+          allow delete: if isAuthenticated() && request.auth.uid == userId;
+        }
       }
       
       match /materialApoio/{docId} {

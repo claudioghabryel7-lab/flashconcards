@@ -532,7 +532,7 @@ IMPORTANTE:
             {days.map((day, index) => (
               <div
                 key={index}
-                className={`min-h-[80px] sm:min-h-[100px] p-1 sm:p-2 border-r border-b border-border-primary ${
+                className={`min-h-[60px] sm:min-h-[80px] p-1 sm:p-2 border-r border-b border-border-primary ${
                   day.empty ? 'bg-background-card-hover' : 'bg-background-card'
                 } ${day.isToday ? 'ring-2 ring-accent-cyan' : ''}`}
               >
@@ -553,14 +553,14 @@ IMPORTANTE:
                         {day.date.date()}
                       </span>
                       {day.data?.completed && (
-                        <CheckIcon className="h-4 w-4 text-green-500" />
+                        <CheckIcon className="h-3 w-3 text-green-500" />
                       )}
                     </div>
                     
                     {day.data && (
                       <div
                         onClick={() => day.data && navigate(`/guia-mentorado/${selectedCourseId}/${day.dayKey}`)}
-                        className={`flex-1 rounded-lg p-1 sm:p-2 text-xs cursor-pointer hover:opacity-80 transition-opacity ${
+                        className={`flex-1 rounded-lg p-1 sm:p-2 text-xs cursor-pointer hover:opacity-80 transition-opacity flex items-center justify-center ${
                           day.data.type === 'estudo'
                             ? 'bg-blue-500/10 border border-blue-500/30'
                             : day.data.type === 'taf'
@@ -577,88 +577,27 @@ IMPORTANTE:
                         }`}
                       >
                         {day.data.type === 'estudo' && (
-                          <div className="flex items-center gap-1 mb-1">
-                            <BookOpenIcon className="h-3 w-3 text-blue-400" />
-                            <span className="font-semibold text-blue-300">
-                              Estudo
-                            </span>
-                          </div>
+                          <BookOpenIcon className="h-4 w-4 text-blue-400" />
                         )}
                         
                         {day.data.type === 'taf' && (
-                          <div className="flex items-center gap-1 mb-1">
-                            <DocumentTextIcon className="h-3 w-3 text-orange-400" />
-                            <span className="font-semibold text-orange-300">
-                              TAF + Estudo
-                            </span>
-                          </div>
+                          <DocumentTextIcon className="h-4 w-4 text-orange-400" />
                         )}
                         
                         {day.data.type === 'redacao' && (
-                          <div className="flex items-center gap-1 mb-1">
-                            <PencilIcon className="h-3 w-3 text-pink-400" />
-                            <span className="font-semibold text-pink-300">
-                              Redação
-                            </span>
-                          </div>
+                          <PencilIcon className="h-4 w-4 text-pink-400" />
                         )}
                         
                         {day.data.type === 'revisao' && (
-                          <div className="flex items-center gap-1 mb-1">
-                            <SparklesIcon className="h-3 w-3 text-green-400" />
-                            <span className="font-semibold text-green-300">
-                              Revisão
-                            </span>
-                          </div>
+                          <SparklesIcon className="h-4 w-4 text-green-400" />
                         )}
                         
                         {day.data.type === 'simulado' && (
-                          <div className="flex items-center gap-1 mb-1">
-                            <FireIcon className="h-3 w-3 text-purple-400" />
-                            <span className="font-semibold text-purple-300">
-                              Simulado
-                            </span>
-                          </div>
+                          <FireIcon className="h-4 w-4 text-purple-400" />
                         )}
                         
                         {day.data.type === 'reta_final' && (
-                          <div className="flex items-center gap-1 mb-1">
-                            <FireIcon className="h-3 w-3 text-red-400" />
-                            <span className="font-semibold text-red-300">
-                              Reta Final
-                            </span>
-                          </div>
-                        )}
-                        
-                        {day.data.fase && (
-                          <p className="text-[10px] text-text-muted mb-1">
-                            {day.data.fase}
-                          </p>
-                        )}
-                        
-                        {day.data.tafExercicio && (
-                          <p className="text-text-secondary text-[10px] mb-1">
-                            TAF: {day.data.tafExercicio}
-                          </p>
-                        )}
-                        
-                        {day.data.materias && day.data.materias.length > 0 && (
-                          <div className="space-y-0.5">
-                            {day.data.materias.map((m, idx) => (
-                              <div key={idx} className="text-text-secondary">
-                                <span className="font-medium">{m.disciplina}:</span> {m.topico}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        
-                        {!day.isPast && (
-                          <button
-                            onClick={() => toggleDayComplete(day.dayKey)}
-                            className="mt-1 text-xs text-accent-cyan hover:text-accent-cyan-dim"
-                          >
-                            {day.data.completed ? 'Desmarcar' : 'Concluir'}
-                          </button>
+                          <FireIcon className="h-4 w-4 text-red-400" />
                         )}
                       </div>
                     )}
