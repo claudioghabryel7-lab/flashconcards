@@ -792,7 +792,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                     className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all"
                   >
                     <ChartBarIcon className="h-5 w-5" />
-                    Avançar para Nível {desempenho.proximoNivel}
+                    Gerar mais 50 questões (Nível {desempenho.proximoNivel})
                   </button>
                 )}
                 
