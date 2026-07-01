@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy, deleteDoc } from 'firebase/firestore'
-import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, TrashIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, TrashIcon, QuestionMarkCircleIcon, ChartBarIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
@@ -159,6 +159,7 @@ const QuestoesTopicoView = () => {
   const [answers, setAnswers] = useState([])
   const [desempenho, setDesempenho] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [nivelAtual, setNivelAtual] = useState(1)
 
   // Verificar se as questões têm a estrutura nova ou antiga
   const questoesArray = useMemo(() => {
@@ -233,7 +234,28 @@ const QuestoesTopicoView = () => {
         setLoading(true)
         setError('')
 
-        // Tentar encontrar documento usando função que sanitiza a chave
+        // Carregar desempenho do usuário primeiro para saber o nível
+        if (user) {
+          const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoTopico', sanitizeTopicKeyForFirestore(trimmedKey))
+          const desempenhoDoc = await getDoc(desempenhoRef)
+          if (desempenhoDoc.exists()) {
+            const desempenhoData = desempenhoDoc.data()
+            setNivelAtual(desempenhoData.nivel || 1)
+          }
+        }
+
+        // Tentar encontrar documento usando função que sanitiza a chave (com nível)
+        const sanitizedKey = sanitizeTopicKeyForFirestore(trimmedKey)
+        const questoesRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', `${sanitizedKey}_nivel_${nivelAtual}`)
+        const questoesDoc = await getDoc(questoesRef)
+        
+        if (questoesDoc.exists()) {
+          setQuestoes({ id: questoesDoc.id, ...questoesDoc.data() })
+          setLoading(false)
+          return
+        }
+
+        // Se não encontrar do nível atual, tentar sem nível (compatibilidade)
         const foundDoc = await findDocumentByTopicKey(resolvedCourseId, trimmedKey)
         if (foundDoc) {
           setQuestoes(foundDoc)
@@ -259,7 +281,7 @@ const QuestoesTopicoView = () => {
     }
 
     loadQuestoes()
-  }, [resolvedTopicKey, resolvedCourseId])
+  }, [resolvedTopicKey, resolvedCourseId, user, nivelAtual])
 
   const handleGenerateQuestoes = async () => {
     if (!resolvedCourseId || !resolvedTopicKey) return false
@@ -355,9 +377,15 @@ CONTEXTO:
 - TIPO DE PROVA: ${tipoProva}
 - DISCIPLINA: ${contextoDisciplina?.disciplina || effectiveTopicNome || resolvedTopicKey}
 - TÓPICO: ${effectiveTopicNome || resolvedTopicKey}
+- NÍVEL DE PRÁTICA: ${nivelAtual} (de 1 a 10, onde 1 é básico e 10 é avançado)
 
 EDITAL BASE (trecho relevante para este tópico):
 ${editalText.substring(0, 8000)}${editalText.length > 8000 ? '\n\n[texto truncado...]' : ''}
+
+INSTRUÇÕES SOBRE DIFICULDADE POR NÍVEL:
+- Nível ${nivelAtual}: ${nivelAtual === 1 ? 'Questões básicas e diretas, foco em conceitos fundamentais' : nivelAtual <= 3 ? 'Questões de nível fácil a médio, com aplicação de conceitos básicos' : nivelAtual <= 6 ? 'Questões de nível médio, exigindo análise e interpretação' : nivelAtual <= 8 ? 'Questões de nível avançado, com casos complexos e detalhados' : 'Questões de nível especialista, com nuances jurídicas profundas e casos excepcionais'}
+- Aumente progressivamente a dificuldade conforme o nível
+- Nos níveis mais altos, inclua casos práticos, jurisprudência recente e questões de concursos anteriores
 
 TAREFA:
 Gere EXATAMENTE 50 questões de ${tipoProva} para o tópico "${effectiveTopicNome || resolvedTopicKey}".
@@ -405,6 +433,7 @@ ESTRUTURA DO JSON:
   "curso": "${courseName || 'Curso Preparatório'}",
   "topico": "${effectiveTopicNome || resolvedTopicKey}",
   "tipoProva": "${tipoProva}",
+  "nivel": ${nivelAtual},
   "dataGeracao": "${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}",
   "questoes": [
     {
@@ -556,16 +585,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       const payload = {
         ...parsed,
         topico: parsed.topico || effectiveTopicNome || resolvedTopicKey,
+        nivel: nivelAtual,
         updatedAt: serverTimestamp(),
         generatedAt: serverTimestamp(),
       }
 
       const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
       
-      await setDoc(doc(db, 'courses', resolvedCourseId, 'questoesTopico', sanitizedKey), payload, {
+      await setDoc(doc(db, 'courses', resolvedCourseId, 'questoesTopico', `${sanitizedKey}_nivel_${nivelAtual}`), payload, {
         merge: true,
       })
-      setQuestoes({ id: sanitizedKey, ...payload })
+      setQuestoes({ id: `${sanitizedKey}_nivel_${nivelAtual}`, ...payload })
       setError('')
       setProgress(100)
       return true
@@ -619,6 +649,12 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       .filter(a => !a.isCorrect && a.probabilidade >= 70)
       .map(a => a.assunto)
     
+    // Verificar se completou todas as questões do nível
+    const completouNivel = totalQuestoes >= 50
+    
+    // Avançar para o próximo nível se completou e não está no nível máximo
+    const proximoNivel = completouNivel && nivelAtual < 10 ? nivelAtual + 1 : nivelAtual
+    
     const desempenhoData = {
       totalQuestoes,
       acertos,
@@ -627,6 +663,9 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       precisaRevisar,
       respostas: answers,
       topicKey: resolvedTopicKey,
+      nivel: nivelAtual,
+      completouNivel,
+      proximoNivel,
       updatedAt: serverTimestamp()
     }
     
@@ -657,10 +696,15 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       setDeleting(true)
       
       const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
-      const questoesRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', sanitizedKey)
-      await deleteDoc(questoesRef)
+      
+      // Apagar todos os níveis
+      for (let i = 1; i <= 10; i++) {
+        const questoesRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', `${sanitizedKey}_nivel_${i}`)
+        await deleteDoc(questoesRef)
+      }
 
       setQuestoes(null)
+      setNivelAtual(1)
       setCurrentQuestionIndex(0)
       setSelectedAnswer(null)
       setShowResult(false)
@@ -671,6 +715,18 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       setError(`Erro ao apagar: ${error.message || 'Erro desconhecido'}`)
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const handleAvancarNivel = () => {
+    if (desempenho?.completouNivel && desempenho?.proximoNivel > nivelAtual) {
+      setNivelAtual(desempenho.proximoNivel)
+      setQuestoes(null)
+      setDesempenho(null)
+      setCurrentQuestionIndex(0)
+      setSelectedAnswer(null)
+      setShowResult(false)
+      setAnswers([])
     }
   }
 
@@ -744,6 +800,9 @@ Retorne APENAS o JSON válido, sem texto adicional.`
               </h1>
               <p className="text-slate-600 dark:text-slate-400 mt-1">
                 Tópico: <span className="font-semibold">{effectiveTopicNome || resolvedTopicKey}</span>
+              </p>
+              <p className="text-sm text-slate-500 dark:text-slate-500 mt-1">
+                Nível Atual: <span className="font-bold text-alego-600 dark:text-alego-400">{nivelAtual}/10</span>
               </p>
             </div>
           </div>
@@ -958,6 +1017,20 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   </div>
                 </div>
 
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                  <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                    📊 Progresso de Níveis
+                  </h4>
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    Nível Atual: <span className="font-bold">{desempenho.nivel}</span>/10
+                  </p>
+                  {desempenho.completouNivel && desempenho.proximoNivel > desempenho.nivel && (
+                    <p className="text-sm text-green-800 dark:text-green-200 mt-2 font-semibold">
+                      ✅ Você completou este nível! Pode avançar para o nível {desempenho.proximoNivel}.
+                    </p>
+                  )}
+                </div>
+
                 {desempenho.precisaRevisar && desempenho.precisaRevisar.length > 0 && (
                   <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                     <h4 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-3">
@@ -974,6 +1047,16 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
               {/* Botões de ação */}
               <div className="pt-4 space-y-3">
+                {desempenho.completouNivel && desempenho.proximoNivel > desempenho.nivel && (
+                  <button
+                    onClick={handleAvancarNivel}
+                    className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all"
+                  >
+                    <ChartBarIcon className="h-5 w-5" />
+                    Gerar mais 50 questões (Nível {desempenho.proximoNivel})
+                  </button>
+                )}
+                
                 <button
                   onClick={handleRestart}
                   className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
