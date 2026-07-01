@@ -28,6 +28,7 @@ const PraticaIncidenciaView = () => {
   const [error, setError] = useState('')
   const [desempenho, setDesempenho] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [nivelAtual, setNivelAtual] = useState(1)
 
   const disciplinaIndex = parseInt(disciplinaIdx)
 
@@ -108,9 +109,9 @@ const PraticaIncidenciaView = () => {
           }
         }
 
-        // Carregar questões existentes
+        // Carregar questões existentes do nível atual
         if (sanitizedDisciplinaNome) {
-          const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', sanitizedDisciplinaNome)
+          const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', `${sanitizedDisciplinaNome}_nivel_${nivelAtual}`)
           const questoesDoc = await getDoc(questoesRef)
           if (questoesDoc.exists()) {
             setQuestoes(questoesDoc.data())
@@ -122,7 +123,9 @@ const PraticaIncidenciaView = () => {
           const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoIncidencia', sanitizedDisciplinaNome)
           const desempenhoDoc = await getDoc(desempenhoRef)
           if (desempenhoDoc.exists()) {
-            setDesempenho(desempenhoDoc.data())
+            const desempenhoData = desempenhoDoc.data()
+            setDesempenho(desempenhoData)
+            setNivelAtual(desempenhoData.nivel || 1)
           }
         }
 
@@ -178,6 +181,7 @@ CONTEXTO:
 - BANCA EXAMINADORA: ${banca || 'NÃO DEFINIDA'}
 - TIPO DE PROVA: ${tipoProva}
 - DISCIPLINA: ${conteudoIncidencia.disciplina || 'Disciplina'}
+- NÍVEL DE PRÁTICA: ${nivelAtual} (de 1 a 10, onde 1 é básico e 10 é avançado)
 
 ASSUNTOS COM MAIOR INCIDÊNCIA (Top Gerais):
 ${topAssuntos.map((a, i) => `${i + 1}. ${a.assunto} - ${a.probabilidade}% de chance\n   Revisão: ${a.revisao}`).join('\n\n')}
@@ -189,6 +193,11 @@ ${analisePorTopico.map(t =>
     .map((a, i) => `  ${i + 1}. ${a.assunto} - ${a.probabilidade}%\n     Revisão: ${a.revisao}`)
     .join('\n')
 ).join('\n\n')}
+
+INSTRUÇÕES SOBRE DIFICULDADE POR NÍVEL:
+- Nível ${nivelAtual}: ${nivelAtual === 1 ? 'Questões básicas e diretas, foco em conceitos fundamentais' : nivelAtual <= 3 ? 'Questões de nível fácil a médio, com aplicação de conceitos básicos' : nivelAtual <= 6 ? 'Questões de nível médio, exigindo análise e interpretação' : nivelAtual <= 8 ? 'Questões de nível avançado, com casos complexos e detalhados' : 'Questões de nível especialista, com nuances jurídicas profundas e casos excepcionais'}
+- Aumente progressivamente a dificuldade conforme o nível
+- Nos níveis mais altos, inclua casos práticos, jurisprudência recente e questões de concursos anteriores
 
 TAREFA:
 Gere EXATAMENTE 50 questões de ${tipoProva} baseadas nos assuntos com maior probabilidade de incidência.
@@ -235,6 +244,7 @@ ESTRUTURA DO JSON:
   "cargo": "${cargo || 'NÃO DEFINIDO'}",
   "curso": "${courseName || 'Curso Preparatório'}",
   "tipoProva": "${tipoProva}",
+  "nivel": ${nivelAtual},
   "questoes": [
     {
       "numero": 1,
@@ -322,16 +332,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       setProgress(90)
       setStatus('Salvando questões...')
 
-      // Salvar no Firestore (compartilhado para todos)
+      // Salvar no Firestore (compartilhado para todos, por nível)
       const disciplina = editalVerticalizado?.disciplinas[disciplinaIndex]
       const sanitizedDisciplinaNome = disciplina?.nome
         .replace(/[^a-zA-Z0-9]/g, '_')
         .substring(0, 100)
 
-      const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', sanitizedDisciplinaNome)
+      const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', `${sanitizedDisciplinaNome}_nivel_${nivelAtual}`)
       await setDoc(questoesRef, {
         ...parsed,
         disciplinaIdx: disciplinaIndex,
+        nivel: nivelAtual,
         updatedAt: serverTimestamp(),
         generatedAt: serverTimestamp(),
       }, { merge: true })
@@ -389,6 +400,12 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       .filter(a => !a.isCorrect && a.probabilidade >= 70)
       .map(a => a.assunto)
     
+    // Verificar se completou todas as questões do nível
+    const completouNivel = totalQuestoes >= 50
+    
+    // Avançar para o próximo nível se completou e não está no nível máximo
+    const proximoNivel = completouNivel && nivelAtual < 10 ? nivelAtual + 1 : nivelAtual
+    
     const desempenhoData = {
       totalQuestoes,
       acertos,
@@ -397,6 +414,9 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       precisaRevisar,
       respostas: answers,
       disciplinaIdx,
+      nivel: nivelAtual,
+      completouNivel,
+      proximoNivel,
       updatedAt: serverTimestamp()
     }
     
@@ -438,10 +458,14 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         .replace(/[^a-zA-Z0-9]/g, '_')
         .substring(0, 100)
 
-      const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', sanitizedDisciplinaNome)
-      await deleteDoc(questoesRef)
+      // Apagar todos os níveis
+      for (let i = 1; i <= 10; i++) {
+        const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', `${sanitizedDisciplinaNome}_nivel_${i}`)
+        await deleteDoc(questoesRef)
+      }
 
       setQuestoes(null)
+      setNivelAtual(1)
       setStatus('')
       setProgress(0)
     } catch (error) {
@@ -449,6 +473,18 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       setStatus(`❌ Erro ao apagar: ${error.message || 'Erro desconhecido'}`)
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const handleAvancarNivel = () => {
+    if (desempenho?.completouNivel && desempenho?.proximoNivel > nivelAtual) {
+      setNivelAtual(desempenho.proximoNivel)
+      setQuestoes(null)
+      setDesempenho(null)
+      setCurrentQuestionIndex(0)
+      setSelectedAnswer(null)
+      setShowResult(false)
+      setAnswers([])
     }
   }
 
@@ -508,6 +544,9 @@ Retorne APENAS o JSON válido, sem texto adicional.`
               <p className="text-slate-600 dark:text-slate-400 mt-1">
                 Disciplina: <span className="font-semibold">{disciplina?.nome || 'Não encontrada'}</span>
               </p>
+              <p className="text-sm text-slate-500 dark:text-slate-500 mt-1">
+                Nível Atual: <span className="font-bold text-alego-600 dark:text-alego-400">{nivelAtual}/10</span>
+              </p>
             </div>
           </div>
         </div>
@@ -521,13 +560,14 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   {/* Informações sobre a geração */}
                   <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6">
                     <h3 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-4">
-                      📝 Questões Baseadas em Incidência
+                      📝 Questões Baseadas em Incidência - Nível {nivelAtual}
                     </h3>
                     <div className="text-sm text-green-800 dark:text-green-200 space-y-2">
                       <p>• As questões serão geradas baseadas nos assuntos com maior probabilidade de incidência</p>
                       <p>• Distribuição por probabilidade: Alta (40-50%), Média (30-40%), Baixa (10-20%)</p>
                       <p>• Estilo adaptado à banca examinadora</p>
                       <p>• 50 questões (Certo/Errado ou Múltipla Escolha, conforme a banca)</p>
+                      <p>• Dificuldade: {nivelAtual === 1 ? 'Básica' : nivelAtual <= 3 ? 'Fácil a Média' : nivelAtual <= 6 ? 'Média' : nivelAtual <= 8 ? 'Avançada' : 'Especialista'}</p>
                     </div>
                   </div>
 
@@ -716,6 +756,20 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   </div>
                 </div>
 
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                  <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                    📊 Progresso de Níveis
+                  </h4>
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    Nível Atual: <span className="font-bold">{desempenho.nivel}</span>/10
+                  </p>
+                  {desempenho.completouNivel && desempenho.proximoNivel > desempenho.nivel && (
+                    <p className="text-sm text-green-800 dark:text-green-200 mt-2 font-semibold">
+                      ✅ Você completou este nível! Pode avançar para o nível {desempenho.proximoNivel}.
+                    </p>
+                  )}
+                </div>
+
                 {desempenho.precisaRevisar && desempenho.precisaRevisar.length > 0 && (
                   <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                     <h4 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-3">
@@ -732,6 +786,16 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
               {/* Botões de ação */}
               <div className="pt-4 space-y-3">
+                {desempenho.completouNivel && desempenho.proximoNivel > desempenho.nivel && (
+                  <button
+                    onClick={handleAvancarNivel}
+                    className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all"
+                  >
+                    <ChartBarIcon className="h-5 w-5" />
+                    Avançar para Nível {desempenho.proximoNivel}
+                  </button>
+                )}
+                
                 <button
                   onClick={handleRestart}
                   className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
