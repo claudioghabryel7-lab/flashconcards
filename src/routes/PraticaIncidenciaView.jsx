@@ -373,13 +373,22 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       const docId = `${sanitizedDisciplinaNome}_nivel_${nivelAtual}`
 
       const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', docId)
-      await setDoc(questoesRef, {
-        ...parsed,
-        disciplinaIdx: disciplinaIndex,
-        nivel: nivelAtual,
-        updatedAt: serverTimestamp(),
-        generatedAt: serverTimestamp(),
-      }, { merge: true })
+      
+      try {
+        await setDoc(questoesRef, {
+          ...parsed,
+          disciplinaIdx: disciplinaIndex,
+          nivel: nivelAtual,
+          updatedAt: serverTimestamp(),
+          generatedAt: serverTimestamp(),
+        }, { merge: true })
+      } catch (saveError) {
+        console.error('Erro ao salvar questões:', saveError)
+        if (saveError.message?.includes('Missing or insufficient permissions')) {
+          throw new Error('Erro de permissão ao salvar questões. Verifique as regras do Firebase.')
+        }
+        throw saveError
+      }
 
       setQuestoes(parsed)
       setProgress(100)
