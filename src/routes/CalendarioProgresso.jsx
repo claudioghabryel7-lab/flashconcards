@@ -1,13 +1,47 @@
 import { useState, useEffect } from 'react'
-import { collection, doc, onSnapshot, query, where, orderBy, getDoc, setDoc, deleteDoc } from 'firebase/firestore'
+import { collection, doc, onSnapshot, query, where, orderBy, getDoc, setDoc, deleteDoc, getDocs } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import ProgressCalendar from '../components/ProgressCalendar'
 import EditalProgressChart from '../components/EditalProgressChart'
 import dayjs from 'dayjs'
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 
 dayjs.locale('pt-br')
+
+// Cores para o gráfico de pizza
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF6B6B', '#4ECDC4', '#45B7D1']
+
+// Componente para exibir métricas
+const MetricCard = ({ title, data, valueKey, unit, emptyMessage }) => {
+  if (!data || data.length === 0) {
+    return (
+      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
+        <h4 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">{title}</h4>
+        <p className="text-xs text-slate-500 dark:text-slate-500">{emptyMessage}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
+      <h4 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">{title}</h4>
+      <div className="space-y-1">
+        {data.slice(0, 3).map((item, index) => (
+          <div key={index} className="flex items-center justify-between text-xs">
+            <span className="text-slate-700 dark:text-slate-300 truncate flex-1 mr-2">
+              {item.nome}
+            </span>
+            <span className="text-slate-900 dark:text-white font-medium">
+              {item[valueKey]?.toFixed(1)} {unit}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 const CalendarioProgresso = () => {
   const { user, profile } = useAuth()
@@ -18,6 +52,18 @@ const CalendarioProgresso = () => {
   const [currentStreak, setCurrentStreak] = useState(0)
   const [studyBySubject, setStudyBySubject] = useState({})
   const [courseName, setCourseName] = useState('')
+  const [questoesData, setQuestoesData] = useState({
+    porMateria: [],
+    porTopico: [],
+    metricas: {
+      maisEstuda: [],
+      menosEstuda: [],
+      maisResolveu: [],
+      menosResolveu: [],
+      maisErrou: [],
+      menosErrou: []
+    }
+  })
 
   useEffect(() => {
     if (!user || !profile?.selectedCourseId) {
@@ -97,8 +143,123 @@ const CalendarioProgresso = () => {
       setLoading(false)
     })
 
+    // Carregar dados de desempenho de questões
+    loadQuestoesData(courseId)
+
     return () => unsubscribe()
   }, [user, profile])
+
+  // Carregar dados de desempenho de questões
+  const loadQuestoesData = async (courseId) => {
+    if (!user || !courseId) return
+
+    try {
+      // Carregar desempenho por tópico
+      const desempenhoTopicoRef = collection(db, 'users', user.uid, 'desempenhoTopico')
+      const desempenhoTopicoSnapshot = await getDocs(desempenhoTopicoRef)
+      
+      // Carregar desempenho por incidência
+      const desempenhoIncidenciaRef = collection(db, 'users', user.uid, 'desempenhoIncidencia')
+      const desempenhoIncidenciaSnapshot = await getDocs(desempenhoIncidenciaRef)
+
+      // Processar dados por matéria
+      const materiaStats = {}
+      
+      // Processar desempenho por tópico
+      desempenhoTopicoSnapshot.forEach((doc) => {
+        const data = doc.data()
+        const materia = data.topicKey || 'Geral'
+        
+        if (!materiaStats[materia]) {
+          materiaStats[materia] = {
+            totalQuestoes: 0,
+            acertos: 0,
+            erros: 0,
+            horasEstudo: 0,
+            nome: materia
+          }
+        }
+        
+        materiaStats[materia].totalQuestoes += data.totalQuestoes || 0
+        materiaStats[materia].acertos += data.acertos || 0
+        materiaStats[materia].erros += data.erros || 0
+      })
+
+      // Processar desempenho por incidência
+      desempenhoIncidenciaSnapshot.forEach((doc) => {
+        const data = doc.data()
+        // Extrair nome da disciplina do ID do documento
+        const materia = doc.id.split('_nivel_')[0] || 'Geral'
+        
+        if (!materiaStats[materia]) {
+          materiaStats[materia] = {
+            totalQuestoes: 0,
+            acertos: 0,
+            erros: 0,
+            horasEstudo: 0,
+            nome: materia
+          }
+        }
+        
+        materiaStats[materia].totalQuestoes += data.totalQuestoes || 0
+        materiaStats[materia].acertos += data.acertos || 0
+        materiaStats[materia].erros += data.erros || 0
+      })
+
+      // Adicionar horas de estudo por matéria (do progress collection)
+      const progressRef = collection(db, 'progress')
+      const progressSnapshot = await getDocs(query(progressRef, where('uid', '==', user.uid)))
+      
+      progressSnapshot.forEach((doc) => {
+        const data = doc.data()
+        if (data.materia && data.courseId === courseId) {
+          const materia = data.materia
+          if (!materiaStats[materia]) {
+            materiaStats[materia] = {
+              totalQuestoes: 0,
+              acertos: 0,
+              erros: 0,
+              horasEstudo: 0,
+              nome: materia
+            }
+          }
+          materiaStats[materia].horasEstudo += data.hours || 0
+        }
+      })
+
+      // Converter para array e calcular métricas
+      const materiaArray = Object.values(materiaStats)
+      
+      // Calcular métricas
+      const metricas = {
+        maisEstuda: [...materiaArray].sort((a, b) => b.horasEstudo - a.horasEstudo).slice(0, 5),
+        menosEstuda: [...materiaArray].filter(m => m.horasEstudo > 0).sort((a, b) => a.horasEstudo - b.horasEstudo).slice(0, 5),
+        maisResolveu: [...materiaArray].sort((a, b) => b.totalQuestoes - a.totalQuestoes).slice(0, 5),
+        menosResolveu: [...materiaArray].filter(m => m.totalQuestoes > 0).sort((a, b) => a.totalQuestoes - b.totalQuestoes).slice(0, 5),
+        maisErrou: [...materiaArray].sort((a, b) => b.erros - a.erros).slice(0, 5),
+        menosErrou: [...materiaArray].filter(m => m.totalQuestoes > 0).sort((a, b) => (a.erros / a.totalQuestoes) - (b.erros / b.totalQuestoes)).slice(0, 5)
+      }
+
+      // Preparar dados para gráfico de pizza por matéria
+      const porMateria = materiaArray.map(m => ({
+        name: m.nome,
+        value: m.totalQuestoes,
+        acertos: m.acertos,
+        erros: m.erros,
+        horas: m.horasEstudo
+      })).filter(m => m.value > 0).sort((a, b) => b.value - a.value)
+
+      setQuestoesData({
+        porMateria,
+        porTopico: [], // Será implementado depois
+        metricas
+      })
+
+      console.log('📊 Dados de questões:', { materiaArray, metricas, porMateria })
+    } catch (error) {
+      console.error('Erro ao carregar dados de questões:', error)
+    }
+  }
 
   // Calcular streak atual (dias consecutivos de estudo)
   const calculateCurrentStreak = (dates) => {
@@ -249,6 +410,76 @@ const CalendarioProgresso = () => {
       <div className="mb-8">
         <EditalProgressChart courseId={profile?.selectedCourseId} />
       </div>
+
+      {/* Gráficos de Questões por Matéria */}
+      {questoesData.porMateria.length > 0 && (
+        <div className="mb-8">
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-6">
+              📊 Progresso de Questões por Matéria
+            </h2>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Gráfico de Pizza */}
+              <div className="h-80">
+                <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-4">Distribuição de Questões</h3>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={questoesData.porMateria}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {questoesData.porMateria.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Métricas */}
+              <div className="space-y-4">
+                <MetricCard
+                  title="📚 Mais Estuda"
+                  data={questoesData.metricas.maisEstuda}
+                  valueKey="horasEstudo"
+                  unit="h"
+                  emptyMessage="Nenhum dado de estudo"
+                />
+                <MetricCard
+                  title="📖 Menos Estuda"
+                  data={questoesData.metricas.menosEstuda}
+                  valueKey="horasEstudo"
+                  unit="h"
+                  emptyMessage="Nenhum dado de estudo"
+                />
+                <MetricCard
+                  title="✅ Mais Resolveu"
+                  data={questoesData.metricas.maisResolveu}
+                  valueKey="totalQuestoes"
+                  unit="q"
+                  emptyMessage="Nenhuma questão resolvida"
+                />
+                <MetricCard
+                  title="❌ Mais Errou"
+                  data={questoesData.metricas.maisErrou}
+                  valueKey="erros"
+                  unit="erros"
+                  emptyMessage="Nenhum erro registrado"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Calendar */}
       <div className="bg-white dark:bg-slate-800 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm border border-slate-200 dark:border-slate-700">
