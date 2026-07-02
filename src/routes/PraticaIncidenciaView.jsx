@@ -29,6 +29,9 @@ const PraticaIncidenciaView = () => {
   const [desempenho, setDesempenho] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [nivelAtual, setNivelAtual] = useState(1)
+  const [niveisDisponiveis, setNiveisDisponiveis] = useState([])
+  const [mostrarSeletorNiveis, setMostrarSeletorNiveis] = useState(false)
+  const [historicoNiveis, setHistoricoNiveis] = useState([])
 
   const disciplinaIndex = parseInt(disciplinaIdx)
 
@@ -127,6 +130,35 @@ const PraticaIncidenciaView = () => {
             setDesempenho(desempenhoData)
             setNivelAtual(desempenhoData.nivel || 1)
           }
+        }
+
+        // Verificar quais níveis estão disponíveis
+        if (sanitizedDisciplinaNome) {
+          const niveisDisponiveis = []
+          for (let i = 1; i <= 10; i++) {
+            const nivelDocRef = doc(db, 'courses', courseId, 'questoesIncidencia', `${sanitizedDisciplinaNome}_nivel_${i}`)
+            const nivelDoc = await getDoc(nivelDocRef)
+            if (nivelDoc.exists()) {
+              niveisDisponiveis.push(i)
+            }
+          }
+          setNiveisDisponiveis(niveisDisponiveis)
+        }
+
+        // Carregar histórico de desempenho por nível
+        if (user && sanitizedDisciplinaNome) {
+          const historico = []
+          for (let i = 1; i <= 10; i++) {
+            const desempenhoNivelRef = doc(db, 'users', user.uid, 'desempenhoIncidencia', `${sanitizedDisciplinaNome}_nivel_${i}`)
+            const desempenhoNivelDoc = await getDoc(desempenhoNivelRef)
+            if (desempenhoNivelDoc.exists()) {
+              historico.push({
+                nivel: i,
+                ...desempenhoNivelDoc.data()
+              })
+            }
+          }
+          setHistoricoNiveis(historico)
         }
 
         setLoading(false)
@@ -338,7 +370,12 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         .replace(/[^a-zA-Z0-9]/g, '_')
         .substring(0, 100)
 
-      const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', `${sanitizedDisciplinaNome}_nivel_${nivelAtual}`)
+      const docId = `${sanitizedDisciplinaNome}_nivel_${nivelAtual}`
+      console.log('💾 Salvando questões em:', `courses/${courseId}/questoesIncidencia/${docId}`)
+      console.log('📊 Nível atual:', nivelAtual)
+      console.log('📝 Número de questões:', parsed.questoes?.length)
+
+      const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', docId)
       await setDoc(questoesRef, {
         ...parsed,
         disciplinaIdx: disciplinaIndex,
@@ -347,6 +384,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         generatedAt: serverTimestamp(),
       }, { merge: true })
 
+      console.log('✅ Questões salvas com sucesso!')
       setQuestoes(parsed)
       setProgress(100)
       setStatus('✅ Questões geradas com sucesso!')
@@ -429,8 +467,15 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         .replace(/[^a-zA-Z0-9]/g, '_')
         .substring(0, 100)
       
+      // Salvar desempenho geral da disciplina (para saber o nível atual)
       const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoIncidencia', sanitizedDisciplinaNome)
       setDoc(desempenhoRef, desempenhoData, { merge: true })
+      
+      // Salvar desempenho específico do nível
+      const desempenhoNivelRef = doc(db, 'users', user.uid, 'desempenhoIncidencia', `${sanitizedDisciplinaNome}_nivel_${nivelAtual}`)
+      setDoc(desempenhoNivelRef, desempenhoData, { merge: true })
+      
+      console.log('💾 Desempenho salvo para nível', nivelAtual)
     }
   }
 
@@ -486,6 +531,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       setShowResult(false)
       setAnswers([])
     }
+  }
+
+  const handleMudarNivel = (novoNivel) => {
+    setNivelAtual(novoNivel)
+    setQuestoes(null)
+    setDesempenho(null)
+    setCurrentQuestionIndex(0)
+    setSelectedAnswer(null)
+    setShowResult(false)
+    setAnswers([])
+    setMostrarSeletorNiveis(false)
   }
 
   if (loading) {
@@ -544,9 +600,36 @@ Retorne APENAS o JSON válido, sem texto adicional.`
               <p className="text-slate-600 dark:text-slate-400 mt-1">
                 Disciplina: <span className="font-semibold">{disciplina?.nome || 'Não encontrada'}</span>
               </p>
-              <p className="text-sm text-slate-500 dark:text-slate-500 mt-1">
-                Nível Atual: <span className="font-bold text-alego-600 dark:text-alego-400">{nivelAtual}/10</span>
-              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-sm text-slate-500 dark:text-slate-500">
+                  Nível Atual: <span className="font-bold text-alego-600 dark:text-alego-400">{nivelAtual}/10</span>
+                </p>
+                {niveisDisponiveis.length > 0 && (
+                  <button
+                    onClick={() => setMostrarSeletorNiveis(!mostrarSeletorNiveis)}
+                    className="text-xs text-alego-600 dark:text-alego-400 hover:underline"
+                  >
+                    ({niveisDisponiveis.length} disponíveis)
+                  </button>
+                )}
+              </div>
+              {mostrarSeletorNiveis && niveisDisponiveis.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {niveisDisponiveis.map((nivel) => (
+                    <button
+                      key={nivel}
+                      onClick={() => handleMudarNivel(nivel)}
+                      className={`px-3 py-1 rounded-full text-sm font-medium transition-all ${
+                        nivel === nivelAtual
+                          ? 'bg-alego-600 text-white'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+                      }`}
+                    >
+                      Nível {nivel}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -769,6 +852,35 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                     </p>
                   )}
                 </div>
+
+                {historicoNiveis.length > 0 && (
+                  <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-4">
+                    <h4 className="font-semibold text-purple-900 dark:text-purple-100 mb-3">
+                      📈 Histórico por Nível
+                    </h4>
+                    <div className="space-y-2">
+                      {historicoNiveis.map((hist) => (
+                        <div key={hist.nivel} className="flex items-center justify-between text-sm">
+                          <span className="text-purple-800 dark:text-purple-200">
+                            Nível {hist.nivel}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-purple-700 dark:text-purple-300">
+                              {hist.acertos}/{hist.totalQuestoes} acertos
+                            </span>
+                            <span className={`font-semibold ${
+                              hist.aproveitamento >= 70 ? 'text-green-600 dark:text-green-400' :
+                              hist.aproveitamento >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
+                              'text-red-600 dark:text-red-400'
+                            }`}>
+                              {hist.aproveitamento}%
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {desempenho.precisaRevisar && desempenho.precisaRevisar.length > 0 && (
                   <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">

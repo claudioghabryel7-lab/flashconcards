@@ -160,6 +160,9 @@ const QuestoesTopicoView = () => {
   const [desempenho, setDesempenho] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [nivelAtual, setNivelAtual] = useState(1)
+  const [niveisDisponiveis, setNiveisDisponiveis] = useState([])
+  const [mostrarSeletorNiveis, setMostrarSeletorNiveis] = useState(false)
+  const [historicoNiveis, setHistoricoNiveis] = useState([])
 
   // Verificar se as questões têm a estrutura nova ou antiga
   const questoesArray = useMemo(() => {
@@ -234,35 +237,81 @@ const QuestoesTopicoView = () => {
         setLoading(true)
         setError('')
 
+        // Tentar encontrar documento usando função que sanitiza a chave (com nível)
+        const sanitizedKey = sanitizeTopicKeyForFirestore(trimmedKey)
+        console.log('🔍 Carregando questões para tópico:', trimmedKey)
+        console.log('🔑 Sanitized key:', sanitizedKey)
+        console.log('📊 Nível atual:', nivelAtual)
+        
         // Carregar desempenho do usuário primeiro para saber o nível
         if (user) {
-          const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoTopico', sanitizeTopicKeyForFirestore(trimmedKey))
+          const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoTopico', sanitizedKey)
           const desempenhoDoc = await getDoc(desempenhoRef)
           if (desempenhoDoc.exists()) {
             const desempenhoData = desempenhoDoc.data()
+            console.log('📈 Desempenho encontrado:', desempenhoData)
             setNivelAtual(desempenhoData.nivel || 1)
+          } else {
+            console.log('📈 Desempenho não encontrado, usando nível 1')
           }
+        } else {
+          console.log('👤 Usuário não logado, usando nível padrão:', nivelAtual)
         }
 
-        // Tentar encontrar documento usando função que sanitiza a chave (com nível)
-        const sanitizedKey = sanitizeTopicKeyForFirestore(trimmedKey)
-        const questoesRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', `${sanitizedKey}_nivel_${nivelAtual}`)
+        // Verificar quais níveis estão disponíveis
+        const niveisDisponiveis = []
+        for (let i = 1; i <= 10; i++) {
+          const nivelDocRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', `${sanitizedKey}_nivel_${i}`)
+          const nivelDoc = await getDoc(nivelDocRef)
+          if (nivelDoc.exists()) {
+            niveisDisponiveis.push(i)
+          }
+        }
+        setNiveisDisponiveis(niveisDisponiveis)
+        console.log('📊 Níveis disponíveis:', niveisDisponiveis)
+
+        // Carregar histórico de desempenho por nível
+        if (user) {
+          const historico = []
+          for (let i = 1; i <= 10; i++) {
+            const desempenhoNivelRef = doc(db, 'users', user.uid, 'desempenhoTopico', `${sanitizedKey}_nivel_${i}`)
+            const desempenhoNivelDoc = await getDoc(desempenhoNivelRef)
+            if (desempenhoNivelDoc.exists()) {
+              historico.push({
+                nivel: i,
+                ...desempenhoNivelDoc.data()
+              })
+            }
+          }
+          setHistoricoNiveis(historico)
+          console.log('📈 Histórico de níveis:', historico)
+        }
+        
+        // Tentar carregar do nível atual
+        const docId = `${sanitizedKey}_nivel_${nivelAtual}`
+        console.log('📂 Buscando documento:', `courses/${resolvedCourseId}/questoesTopico/${docId}`)
+        const questoesRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', docId)
         const questoesDoc = await getDoc(questoesRef)
         
         if (questoesDoc.exists()) {
+          console.log('✅ Questões encontradas do nível', nivelAtual)
           setQuestoes({ id: questoesDoc.id, ...questoesDoc.data() })
           setLoading(false)
           return
         }
 
+        console.log('❌ Questões não encontradas do nível', nivelAtual)
+        
         // Se não encontrar do nível atual, tentar sem nível (compatibilidade)
         const foundDoc = await findDocumentByTopicKey(resolvedCourseId, trimmedKey)
         if (foundDoc) {
+          console.log('✅ Questões encontradas sem nível (compatibilidade)')
           setQuestoes(foundDoc)
           setLoading(false)
           return
         }
 
+        console.log('❌ Nenhuma questão encontrada')
         setError('Chame o professor Flash, ele vai te mostrar o caminho. Aguarde até ele te entregar as questões e não feche a página.')
         setLoading(false)
       } catch (err) {
@@ -592,10 +641,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
       const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
       
-      await setDoc(doc(db, 'courses', resolvedCourseId, 'questoesTopico', `${sanitizedKey}_nivel_${nivelAtual}`), payload, {
+      const docId = `${sanitizedKey}_nivel_${nivelAtual}`
+      console.log('💾 Salvando questões em:', `courses/${resolvedCourseId}/questoesTopico/${docId}`)
+      console.log('📊 Nível atual:', nivelAtual)
+      console.log('📝 Número de questões:', parsed.questoes?.length)
+      
+      await setDoc(doc(db, 'courses', resolvedCourseId, 'questoesTopico', docId), payload, {
         merge: true,
       })
-      setQuestoes({ id: `${sanitizedKey}_nivel_${nivelAtual}`, ...payload })
+      
+      console.log('✅ Questões salvas com sucesso!')
+      setQuestoes({ id: docId, ...payload })
       setError('')
       setProgress(100)
       return true
@@ -672,8 +728,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     setDesempenho(desempenhoData)
     
     if (user) {
-      const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoTopico', sanitizeTopicKeyForFirestore(resolvedTopicKey))
+      const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
+      
+      // Salvar desempenho geral do tópico (para saber o nível atual)
+      const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoTopico', sanitizedKey)
       setDoc(desempenhoRef, desempenhoData, { merge: true })
+      
+      // Salvar desempenho específico do nível
+      const desempenhoNivelRef = doc(db, 'users', user.uid, 'desempenhoTopico', `${sanitizedKey}_nivel_${nivelAtual}`)
+      setDoc(desempenhoNivelRef, desempenhoData, { merge: true })
+      
+      console.log('💾 Desempenho salvo para nível', nivelAtual)
     }
   }
 
@@ -728,6 +793,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       setShowResult(false)
       setAnswers([])
     }
+  }
+
+  const handleMudarNivel = (novoNivel) => {
+    setNivelAtual(novoNivel)
+    setQuestoes(null)
+    setDesempenho(null)
+    setCurrentQuestionIndex(0)
+    setSelectedAnswer(null)
+    setShowResult(false)
+    setAnswers([])
+    setMostrarSeletorNiveis(false)
   }
 
   if (loading) {
@@ -801,9 +877,36 @@ Retorne APENAS o JSON válido, sem texto adicional.`
               <p className="text-slate-600 dark:text-slate-400 mt-1">
                 Tópico: <span className="font-semibold">{effectiveTopicNome || resolvedTopicKey}</span>
               </p>
-              <p className="text-sm text-slate-500 dark:text-slate-500 mt-1">
-                Nível Atual: <span className="font-bold text-alego-600 dark:text-alego-400">{nivelAtual}/10</span>
-              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-sm text-slate-500 dark:text-slate-500">
+                  Nível Atual: <span className="font-bold text-alego-600 dark:text-alego-400">{nivelAtual}/10</span>
+                </p>
+                {niveisDisponiveis.length > 0 && (
+                  <button
+                    onClick={() => setMostrarSeletorNiveis(!mostrarSeletorNiveis)}
+                    className="text-xs text-alego-600 dark:text-alego-400 hover:underline"
+                  >
+                    ({niveisDisponiveis.length} disponíveis)
+                  </button>
+                )}
+              </div>
+              {mostrarSeletorNiveis && niveisDisponiveis.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {niveisDisponiveis.map((nivel) => (
+                    <button
+                      key={nivel}
+                      onClick={() => handleMudarNivel(nivel)}
+                      className={`px-3 py-1 rounded-full text-sm font-medium transition-all ${
+                        nivel === nivelAtual
+                          ? 'bg-alego-600 text-white'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+                      }`}
+                    >
+                      Nível {nivel}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1030,6 +1133,35 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                     </p>
                   )}
                 </div>
+
+                {historicoNiveis.length > 0 && (
+                  <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-4">
+                    <h4 className="font-semibold text-purple-900 dark:text-purple-100 mb-3">
+                      📈 Histórico por Nível
+                    </h4>
+                    <div className="space-y-2">
+                      {historicoNiveis.map((hist) => (
+                        <div key={hist.nivel} className="flex items-center justify-between text-sm">
+                          <span className="text-purple-800 dark:text-purple-200">
+                            Nível {hist.nivel}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-purple-700 dark:text-purple-300">
+                              {hist.acertos}/{hist.totalQuestoes} acertos
+                            </span>
+                            <span className={`font-semibold ${
+                              hist.aproveitamento >= 70 ? 'text-green-600 dark:text-green-400' :
+                              hist.aproveitamento >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
+                              'text-red-600 dark:text-red-400'
+                            }`}>
+                              {hist.aproveitamento}%
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {desempenho.precisaRevisar && desempenho.precisaRevisar.length > 0 && (
                   <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
