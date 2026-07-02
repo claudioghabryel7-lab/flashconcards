@@ -90,14 +90,11 @@ const CalendarioProgresso = () => {
             date: data.date,
             hours: data.hours || 0,
             courseId: data.courseId,
-            materia: data.materia, // 🔥 DEBUG: Verificar se matéria está vindo
+            materia: data.materia,
             lastUpdated: data.lastUpdated
           })
         }
       })
-
-      // 🔥 DEBUG: Mostrar dados brutos do Firestore
-      console.log('📅 Firestore - Dados brutos:', progressData)
 
       // Ordenar no cliente por data
       progressData.sort((a, b) => b.date.localeCompare(a.date))
@@ -131,9 +128,9 @@ const CalendarioProgresso = () => {
       })
       
       // 🔥 DEBUG: Mostrar dados do bySubject
-      console.log('📅 Calendário - bySubject:', bySubject)
-      console.log('📅 Calendário - studyDates:', studyDates)
-      console.log('📅 Calendário - hoje:', new Date().toISOString().split('T')[0])
+      // console.log('📅 Calendário - bySubject:', bySubject)
+      // console.log('📅 Calendário - studyDates:', studyDates)
+      // console.log('📅 Calendário - hoje:', new Date().toISOString().split('T')[0])
       
       setStudyBySubject(bySubject)
       
@@ -251,11 +248,9 @@ const CalendarioProgresso = () => {
 
       setQuestoesData({
         porMateria,
-        porTopico: [], // Será implementado depois
+        porTopico: [],
         metricas
       })
-
-      console.log('📊 Dados de questões:', { materiaArray, metricas, porMateria })
     } catch (error) {
       console.error('Erro ao carregar dados de questões:', error)
     }
@@ -412,13 +407,13 @@ const CalendarioProgresso = () => {
       </div>
 
       {/* Gráficos de Questões por Matéria */}
-      {questoesData.porMateria.length > 0 && (
-        <div className="mb-8">
-          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-6">
-              📊 Progresso de Questões por Matéria
-            </h2>
-            
+      <div className="mb-8">
+        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-6">
+            📊 Progresso de Questões por Matéria
+          </h2>
+          
+          {questoesData.porMateria.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Gráfico de Pizza */}
               <div className="h-80">
@@ -477,9 +472,15 @@ const CalendarioProgresso = () => {
                 />
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-slate-600 dark:text-slate-400">
+                Nenhuma questão respondida ainda. Comece a praticar para ver seu progresso aqui!
+              </p>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Calendar */}
       <div className="bg-white dark:bg-slate-800 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm border border-slate-200 dark:border-slate-700">

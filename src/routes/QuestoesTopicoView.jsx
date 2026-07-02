@@ -239,9 +239,6 @@ const QuestoesTopicoView = () => {
 
         // Tentar encontrar documento usando função que sanitiza a chave (com nível)
         const sanitizedKey = sanitizeTopicKeyForFirestore(trimmedKey)
-        console.log('🔍 Carregando questões para tópico:', trimmedKey)
-        console.log('🔑 Sanitized key:', sanitizedKey)
-        console.log('📊 Nível atual:', nivelAtual)
         
         // Carregar desempenho do usuário primeiro para saber o nível
         if (user) {
@@ -249,13 +246,8 @@ const QuestoesTopicoView = () => {
           const desempenhoDoc = await getDoc(desempenhoRef)
           if (desempenhoDoc.exists()) {
             const desempenhoData = desempenhoDoc.data()
-            console.log('📈 Desempenho encontrado:', desempenhoData)
             setNivelAtual(desempenhoData.nivel || 1)
-          } else {
-            console.log('📈 Desempenho não encontrado, usando nível 1')
           }
-        } else {
-          console.log('👤 Usuário não logado, usando nível padrão:', nivelAtual)
         }
 
         // Verificar quais níveis estão disponíveis
@@ -268,7 +260,6 @@ const QuestoesTopicoView = () => {
           }
         }
         setNiveisDisponiveis(niveisDisponiveis)
-        console.log('📊 Níveis disponíveis:', niveisDisponiveis)
 
         // Carregar histórico de desempenho por nível
         if (user) {
@@ -284,34 +275,27 @@ const QuestoesTopicoView = () => {
             }
           }
           setHistoricoNiveis(historico)
-          console.log('📈 Histórico de níveis:', historico)
         }
         
         // Tentar carregar do nível atual
         const docId = `${sanitizedKey}_nivel_${nivelAtual}`
-        console.log('📂 Buscando documento:', `courses/${resolvedCourseId}/questoesTopico/${docId}`)
         const questoesRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', docId)
         const questoesDoc = await getDoc(questoesRef)
         
         if (questoesDoc.exists()) {
-          console.log('✅ Questões encontradas do nível', nivelAtual)
           setQuestoes({ id: questoesDoc.id, ...questoesDoc.data() })
           setLoading(false)
           return
         }
 
-        console.log('❌ Questões não encontradas do nível', nivelAtual)
-        
         // Se não encontrar do nível atual, tentar sem nível (compatibilidade)
         const foundDoc = await findDocumentByTopicKey(resolvedCourseId, trimmedKey)
         if (foundDoc) {
-          console.log('✅ Questões encontradas sem nível (compatibilidade)')
           setQuestoes(foundDoc)
           setLoading(false)
           return
         }
 
-        console.log('❌ Nenhuma questão encontrada')
         setError('Chame o professor Flash, ele vai te mostrar o caminho. Aguarde até ele te entregar as questões e não feche a página.')
         setLoading(false)
       } catch (err) {
@@ -642,15 +626,11 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
       
       const docId = `${sanitizedKey}_nivel_${nivelAtual}`
-      console.log('💾 Salvando questões em:', `courses/${resolvedCourseId}/questoesTopico/${docId}`)
-      console.log('📊 Nível atual:', nivelAtual)
-      console.log('📝 Número de questões:', parsed.questoes?.length)
-      
+
       await setDoc(doc(db, 'courses', resolvedCourseId, 'questoesTopico', docId), payload, {
         merge: true,
       })
-      
-      console.log('✅ Questões salvas com sucesso!')
+
       setQuestoes({ id: docId, ...payload })
       setError('')
       setProgress(100)
@@ -737,8 +717,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       // Salvar desempenho específico do nível
       const desempenhoNivelRef = doc(db, 'users', user.uid, 'desempenhoTopico', `${sanitizedKey}_nivel_${nivelAtual}`)
       setDoc(desempenhoNivelRef, desempenhoData, { merge: true })
-      
-      console.log('💾 Desempenho salvo para nível', nivelAtual)
     }
   }
 

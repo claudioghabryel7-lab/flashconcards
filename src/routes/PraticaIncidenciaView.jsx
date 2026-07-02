@@ -371,9 +371,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         .substring(0, 100)
 
       const docId = `${sanitizedDisciplinaNome}_nivel_${nivelAtual}`
-      console.log('💾 Salvando questões em:', `courses/${courseId}/questoesIncidencia/${docId}`)
-      console.log('📊 Nível atual:', nivelAtual)
-      console.log('📝 Número de questões:', parsed.questoes?.length)
 
       const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', docId)
       await setDoc(questoesRef, {
@@ -384,7 +381,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         generatedAt: serverTimestamp(),
       }, { merge: true })
 
-      console.log('✅ Questões salvas com sucesso!')
       setQuestoes(parsed)
       setProgress(100)
       setStatus('✅ Questões geradas com sucesso!')
@@ -474,8 +470,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       // Salvar desempenho específico do nível
       const desempenhoNivelRef = doc(db, 'users', user.uid, 'desempenhoIncidencia', `${sanitizedDisciplinaNome}_nivel_${nivelAtual}`)
       setDoc(desempenhoNivelRef, desempenhoData, { merge: true })
-      
-      console.log('💾 Desempenho salvo para nível', nivelAtual)
     }
   }
 
