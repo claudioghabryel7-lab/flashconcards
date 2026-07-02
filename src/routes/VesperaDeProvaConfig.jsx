@@ -444,7 +444,7 @@ REGRAS:
       
       setGenerationStatus('Processando resposta da IA...')
       
-      const generatedText = data.candidates[0]?.content?.parts[0]?.text
+      const generatedText = response.candidates[0]?.content?.parts[0]?.text
       
       if (!generatedText) {
         throw new Error('A IA não retornou nenhum conteúdo')
