@@ -540,9 +540,7 @@ service cloud.firestore {
     
     match /sharedQuestoes/{questaoId} {
       allow read: if true;
-      allow create: if isAuthenticated() && 
-                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }

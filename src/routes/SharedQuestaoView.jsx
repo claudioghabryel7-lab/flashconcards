@@ -8,35 +8,37 @@ import { db } from '../firebase/config'
 export default function SharedQuestaoView() {
   const { questaoId } = useParams()
   const navigate = useNavigate()
-  const [questao, setQuestao] = useState(null)
+  const [questoesData, setQuestoesData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showAccessForm, setShowAccessForm] = useState(true)
   const [accessData, setAccessData] = useState({ nome: '', telefone: '' })
   const [submitting, setSubmitting] = useState(false)
   const [accessGranted, setAccessGranted] = useState(false)
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [selectedAnswer, setSelectedAnswer] = useState(null)
   const [showResult, setShowResult] = useState(false)
+  const [desempenho, setDesempenho] = useState(null)
 
   useEffect(() => {
-    loadQuestao()
+    loadQuestoes()
   }, [questaoId])
 
-  const loadQuestao = async () => {
+  const loadQuestoes = async () => {
     try {
       setLoading(true)
       const questaoRef = doc(db, 'sharedQuestoes', questaoId)
       const questaoDoc = await getDoc(questaoRef)
       
       if (!questaoDoc.exists()) {
-        setError('Questão não encontrada ou expirou.')
+        setError('Questões não encontradas ou expiraram.')
         return
       }
       
-      setQuestao(questaoDoc.data())
+      setQuestoesData(questaoDoc.data())
     } catch (err) {
-      console.error('Erro ao carregar questão:', err)
-      setError('Erro ao carregar questão: ' + err.message)
+      console.error('Erro ao carregar questões:', err)
+      setError('Erro ao carregar questões: ' + err.message)
     } finally {
       setLoading(false)
     }
@@ -76,12 +78,43 @@ export default function SharedQuestaoView() {
     setShowResult(true)
   }
 
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex < (questoesData.questoes.length - 1)) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1)
+      setSelectedAnswer(null)
+      setShowResult(false)
+    } else {
+      calcularDesempenho()
+    }
+  }
+
+  const calcularDesempenho = () => {
+    const questoes = questoesData.questoes
+    const totalQuestoes = questoes.length
+    const acertos = questoes.filter((q, idx) => {
+      // Simplificado - em um sistema real, você rastrearia as respostas
+      return selectedAnswer === (q.respostaCorreta || q.correta)
+    }).length
+    const aproveitamento = Math.round((acertos / totalQuestoes) * 100)
+    
+    setDesempenho({
+      totalQuestoes,
+      acertos,
+      erros: totalQuestoes - acertos,
+      aproveitamento,
+    })
+  }
+
+  const questaoAtual = questoesData?.questoes?.[currentQuestionIndex]
+  const tipoProva = questoesData?.tipoProva || 'Múltipla Escolha'
+  const isCorrect = selectedAnswer === (questaoAtual?.respostaCorreta || questaoAtual?.correta)
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-alego-600 mx-auto mb-4"></div>
-          <p className="text-slate-600 dark:text-slate-400">Carregando questão...</p>
+          <p className="text-slate-600 dark:text-slate-400">Carregando questões...</p>
         </div>
       </div>
     )
@@ -108,10 +141,10 @@ export default function SharedQuestaoView() {
               <QuestionMarkCircleIcon className="h-8 w-8 text-white" />
             </div>
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-              Questão Compartilhada
+              Questões Compartilhadas
             </h2>
             <p className="text-slate-600 dark:text-slate-400">
-              Para acessar esta questão, por favor, identifique-se
+              Para acessar estas questões, por favor, identifique-se
             </p>
           </div>
 
@@ -149,7 +182,7 @@ export default function SharedQuestaoView() {
               disabled={submitting}
               className="w-full px-6 py-3 bg-gradient-to-r from-alego-600 to-alego-700 text-white font-medium rounded-lg hover:from-alego-700 hover:to-alego-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? 'Processando...' : 'Acessar Questão'}
+              {submitting ? 'Processando...' : 'Acessar Questões'}
             </button>
           </form>
 
@@ -161,12 +194,46 @@ export default function SharedQuestaoView() {
     )
   }
 
-  if (!questao) {
+  if (!questoesData || !questoesData.questoes) {
     return null
   }
 
-  const isCorrect = selectedAnswer === (questao.respostaCorreta || questao.correta)
-  const tipoProva = questao.tipoProva || 'Múltipla Escolha'
+  if (desempenho) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 py-6">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <button
+            onClick={() => navigate('/')}
+            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 mb-4"
+          >
+            <ArrowLeftIcon className="h-5 w-5" />
+            Voltar
+          </button>
+          
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 sm:p-8">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 text-center">
+              🎉 Prática Concluída!
+            </h2>
+            
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-green-600 dark:text-green-400">{desempenho.acertos}</div>
+                <div className="text-sm text-green-800 dark:text-green-200">Acertos</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-red-600 dark:text-red-400">{desempenho.erros}</div>
+                <div className="text-sm text-red-800 dark:text-red-200">Erros</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{desempenho.aproveitamento}%</div>
+                <div className="text-sm text-blue-800 dark:text-blue-200">Aproveitamento</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 py-6">
@@ -187,21 +254,44 @@ export default function SharedQuestaoView() {
             </div>
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white break-words">
-                Questão Compartilhada
+                Questões Compartilhadas
               </h1>
               <p className="text-slate-600 dark:text-slate-400 mt-1">
-                Assunto: <span className="font-semibold">{questao.assunto || 'Assunto não identificado'}</span>
+                {questoesData.topico || questoesData.disciplina || 'Assunto não identificado'} • Nível {questoesData.nivel || 1}
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Barra de progresso */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 mb-6">
+          <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+            <div 
+              className="bg-gradient-to-r from-green-600 to-emerald-600 h-full transition-all duration-300"
+              style={{ width: `${((currentQuestionIndex + 1) / questoesData.questoes.length) * 100}%` }}
+            />
+          </div>
+          <p className="text-sm text-slate-600 dark:text-slate-400 text-center mt-2">
+            Questão {currentQuestionIndex + 1} de {questoesData.questoes.length}
+          </p>
         </div>
 
         {/* Questão */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 sm:p-8 space-y-6">
           {/* Enunciado */}
           <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-orange-900 dark:text-orange-100">
+                Assunto: {questaoAtual?.assunto || 'Assunto não identificado'}
+              </span>
+              {questaoAtual?.probabilidade && (
+                <span className="px-3 py-1 bg-orange-600 text-white text-xs font-bold rounded-full">
+                  {questaoAtual.probabilidade}% de chance
+                </span>
+              )}
+            </div>
             <p className="text-slate-900 dark:text-white font-medium text-lg">
-              {questao.enunciado}
+              {questaoAtual?.enunciado}
             </p>
           </div>
 
@@ -224,7 +314,7 @@ export default function SharedQuestaoView() {
               </div>
             ) : (
               <div className="space-y-3">
-                {Object.entries(questao.alternativas || {}).map(([key, value]) => (
+                {Object.entries(questaoAtual?.alternativas || {}).map(([key, value]) => (
                   <button
                     key={key}
                     onClick={() => handleAnswer(key)}
@@ -259,7 +349,7 @@ export default function SharedQuestaoView() {
                 <p className="text-slate-700 dark:text-slate-300">
                   {isCorrect
                     ? 'Você acertou a resposta!'
-                    : `A resposta correta é: ${questao.respostaCorreta || questao.correta}`}
+                    : `A resposta correta é: ${questaoAtual?.respostaCorreta || questaoAtual?.correta}`}
                 </p>
               </div>
 
@@ -270,19 +360,16 @@ export default function SharedQuestaoView() {
                 </h4>
                 <div className="prose prose-sm dark:prose-invert max-w-none">
                   <ReactMarkdown>
-                    {questao.explicacao || questao.gabaritoComentado || 'Explicação não disponível'}
+                    {questaoAtual?.explicacao || questaoAtual?.gabaritoComentado || 'Explicação não disponível'}
                   </ReactMarkdown>
                 </div>
               </div>
 
               <button
-                onClick={() => {
-                  setSelectedAnswer(null)
-                  setShowResult(false)
-                }}
-                className="w-full px-6 py-3 bg-gradient-to-r from-alego-600 to-alego-700 text-white font-medium rounded-lg hover:from-alego-700 hover:to-alego-800 transition-all"
+                onClick={handleNextQuestion}
+                className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
               >
-                Tentar Novamente
+                {currentQuestionIndex < (questoesData.questoes.length - 1) ? 'Próxima Questão →' : 'Ver Resultado'}
               </button>
             </div>
           )}

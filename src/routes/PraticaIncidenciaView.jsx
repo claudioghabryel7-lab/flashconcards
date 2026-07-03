@@ -675,12 +675,14 @@ Retorne APENAS o JSON válido, sem texto adicional.`
   }
 
   const handleShareQuestao = async () => {
-    const questaoAtual = questoesParaExibir[currentQuestionIndex]
-    if (!questaoAtual) return
-    
     // Verificar se é admin
     if (profile?.role !== 'admin') {
       alert('Apenas administradores podem compartilhar questões')
+      return
+    }
+    
+    if (!questoes || !questoes.questoes || questoes.questoes.length === 0) {
+      alert('Não há questões para compartilhar')
       return
     }
     
@@ -689,11 +691,13 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       const questaoId = sharedQuestaoRef.id
       
       await setDoc(sharedQuestaoRef, {
-        ...questaoAtual,
         id: questaoId,
+        questoes: questoes.questoes,
         tipoProva: questoes.tipoProva,
         disciplina: conteudoIncidencia?.disciplina || 'Disciplina',
         courseId: courseId,
+        nivel: nivelAtual,
+        totalQuestoes: questoes.questoes.length,
         sharedBy: profile?.email || 'admin',
         sharedAt: serverTimestamp(),
       })
@@ -702,10 +706,10 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       
       // Copiar para clipboard
       await navigator.clipboard.writeText(shareUrl)
-      alert('Link copiado para a área de transferência!')
+      alert(`Link copiado para a área de transferência!\n\n${questoes.questoes.length} questões compartilhadas.`)
     } catch (error) {
-      console.error('Erro ao compartilhar questão:', error)
-      alert('Erro ao compartilhar questão: ' + error.message)
+      console.error('Erro ao compartilhar questões:', error)
+      alert('Erro ao compartilhar questões: ' + error.message)
     }
   }
 
