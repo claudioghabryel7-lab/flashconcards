@@ -467,8 +467,9 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       .filter(a => !a.isCorrect && a.probabilidade >= 70)
       .map(a => a.assunto)
     
-    // Verificar se completou todas as questões do nível
-    const completouNivel = totalQuestoes >= 50
+    // Verificar se completou todas as questões do nível (considerando o total disponível)
+    const totalQuestoesDisponiveis = questoes?.questoes?.length || 0
+    const completouNivel = totalQuestoes >= totalQuestoesDisponiveis
     
     // Avançar para o próximo nível se completou e não está no nível máximo
     const proximoNivel = completouNivel && nivelAtual < 10 ? nivelAtual + 1 : nivelAtual
@@ -551,7 +552,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
   const handleAvancarNivel = () => {
     if (desempenho?.completouNivel && desempenho?.proximoNivel > nivelAtual) {
       setNivelAtual(desempenho.proximoNivel)
-      setQuestoes(null)
+      // Não limpar questoes aqui - deixar o useEffect recarregar
       setDesempenho(null)
       setCurrentQuestionIndex(0)
       setSelectedAnswer(null)
@@ -562,7 +563,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
   const handleMudarNivel = (novoNivel) => {
     setNivelAtual(novoNivel)
-    setQuestoes(null)
+    // Não limpar questoes aqui - deixar o useEffect recarregar
     setDesempenho(null)
     setCurrentQuestionIndex(0)
     setSelectedAnswer(null)
