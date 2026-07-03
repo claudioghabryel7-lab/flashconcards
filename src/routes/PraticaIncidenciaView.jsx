@@ -36,6 +36,7 @@ const PraticaIncidenciaView = () => {
   const [novoGabarito, setNovoGabarito] = useState('')
   const [novaExplicacao, setNovaExplicacao] = useState('')
   const [salvandoEdicao, setSalvandoEdicao] = useState(false)
+  const [modoAdminNavegacao, setModoAdminNavegacao] = useState(false)
 
   const disciplinaIndex = parseInt(disciplinaIdx)
 
@@ -612,6 +613,20 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     setNovaExplicacao('')
   }
 
+  const handleToggleModoAdmin = () => {
+    setModoAdminNavegacao(!modoAdminNavegacao)
+    setShowResult(modoAdminNavegacao ? false : true)
+    setSelectedAnswer(null)
+  }
+
+  const handlePreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1)
+      setShowResult(modoAdminNavegacao)
+      setSelectedAnswer(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -755,7 +770,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                 <div className="space-y-6">
                   {/* Botão de excluir para admin */}
                   {profile?.role === 'admin' && (
-                    <div className="flex justify-end">
+                    <div className="flex justify-between items-center gap-2">
+                      <button
+                        onClick={handleToggleModoAdmin}
+                        className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                          modoAdminNavegacao
+                            ? 'bg-purple-600 text-white hover:bg-purple-700'
+                            : 'bg-gray-600 text-white hover:bg-gray-700'
+                        }`}
+                      >
+                        {modoAdminNavegacao ? '🔒 Modo Prática' : '🔓 Modo Navegação'}
+                      </button>
                       <button
                         onClick={handleDeleteQuestoes}
                         disabled={deleting}
@@ -802,25 +827,20 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                             <button
                               key={key}
                               onClick={() => handleAnswer(key)}
-                              disabled={showResult}
+                              disabled={showResult || modoAdminNavegacao}
                               className={`text-center p-6 rounded-lg border-2 transition-all ${
-                                showResult
+                                modoAdminNavegacao || showResult
                                   ? key === questoes.questoes[currentQuestionIndex].respostaCorreta
                                     ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                                    : key === selectedAnswer
-                                      ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 opacity-50'
+                                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 opacity-50'
                                   : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
                               }`}
                             >
                               <div className="flex flex-col items-center gap-2">
                                 <span className="text-2xl font-bold text-slate-900 dark:text-white">{key === 'C' ? 'C' : 'E'}</span>
                                 <span className="text-sm text-slate-700 dark:text-slate-300">{key === 'C' ? 'Certo' : 'Errado'}</span>
-                                {showResult && key === questoes.questoes[currentQuestionIndex].respostaCorreta && (
+                                {(modoAdminNavegacao || showResult) && key === questoes.questoes[currentQuestionIndex].respostaCorreta && (
                                   <CheckCircleIcon className="h-6 w-6 text-green-600" />
-                                )}
-                                {showResult && key === selectedAnswer && key !== questoes.questoes[currentQuestionIndex].respostaCorreta && (
-                                  <XCircleIcon className="h-6 w-6 text-red-600" />
                                 )}
                               </div>
                             </button>
@@ -831,26 +851,21 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                           {Object.entries(questoes.questoes[currentQuestionIndex].alternativas).map(([key, value]) => (
                             <button
                               key={key}
-                              onClick={() => handleAnswer(key)}
-                              disabled={showResult}
+                              onClick={() => !modoAdminNavegacao && handleAnswer(key)}
+                              disabled={showResult || modoAdminNavegacao}
                               className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                                showResult
+                                modoAdminNavegacao || showResult
                                   ? key === questoes.questoes[currentQuestionIndex].respostaCorreta
                                     ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                                    : key === selectedAnswer
-                                      ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 opacity-50'
+                                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 opacity-50'
                                   : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
                               }`}
                             >
                               <div className="flex items-center gap-3">
                                 <span className="font-bold text-slate-900 dark:text-white">{key})</span>
                                 <span className="text-slate-700 dark:text-slate-300">{value}</span>
-                                {showResult && key === questoes.questoes[currentQuestionIndex].respostaCorreta && (
+                                {(modoAdminNavegacao || showResult) && key === questoes.questoes[currentQuestionIndex].respostaCorreta && (
                                   <CheckCircleIcon className="h-5 w-5 text-green-600 ml-auto" />
-                                )}
-                                {showResult && key === selectedAnswer && key !== questoes.questoes[currentQuestionIndex].respostaCorreta && (
-                                  <XCircleIcon className="h-5 w-5 text-red-600 ml-auto" />
                                 )}
                               </div>
                             </button>
@@ -859,7 +874,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                       )}
 
                       {/* Explicação */}
-                      {showResult && (
+                      {(showResult || modoAdminNavegacao) && (
                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                           <div className="flex items-center justify-between mb-2">
                             <h4 className="font-semibold text-blue-900 dark:text-blue-100">
@@ -923,15 +938,25 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         </div>
                       )}
 
-                      {/* Botão próxima */}
-                      {showResult && (
-                        <button
-                          onClick={handleNextQuestion}
-                          className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
-                        >
-                          {currentQuestionIndex < questoes.questoes.length - 1 ? 'Próxima Questão' : 'Ver Resultado'}
-                        </button>
-                      )}
+                      {/* Botões de navegação */}
+                      {showResult || modoAdminNavegacao ? (
+                        <div className="flex gap-3">
+                          {currentQuestionIndex > 0 && (
+                            <button
+                              onClick={handlePreviousQuestion}
+                              className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 transition-all"
+                            >
+                              ← Anterior
+                            </button>
+                          )}
+                          <button
+                            onClick={handleNextQuestion}
+                            className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
+                          >
+                            {currentQuestionIndex < questoes.questoes.length - 1 ? 'Próxima Questão →' : 'Ver Resultado'}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   )}
                 </div>
