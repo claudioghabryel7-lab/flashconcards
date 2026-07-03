@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy, deleteDoc } from 'firebase/firestore'
-import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, TrashIcon, QuestionMarkCircleIcon, ChartBarIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, TrashIcon, QuestionMarkCircleIcon, ChartBarIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
@@ -168,6 +168,7 @@ const QuestoesTopicoView = () => {
   const [novaExplicacao, setNovaExplicacao] = useState('')
   const [salvandoEdicao, setSalvandoEdicao] = useState(false)
   const [modoAdminNavegacao, setModoAdminNavegacao] = useState(false)
+  const [termoBusca, setTermoBusca] = useState('')
 
   // Verificar se as questões têm a estrutura nova ou antiga
   const questoesArray = useMemo(() => {
@@ -182,6 +183,24 @@ const QuestoesTopicoView = () => {
     }
     return []
   }, [questoes])
+
+  // Questões filtradas por busca
+  const questoesFiltradas = useMemo(() => {
+    if (!termoBusca) return questoesArray
+    const termo = termoBusca.toLowerCase()
+    return questoesArray.filter((questao) => {
+      const enunciado = (questao.enunciado || '').toLowerCase()
+      const assunto = (questao.assunto || '').toLowerCase()
+      const explicacao = (questao.explicacao || questao.gabaritoComentado || '').toLowerCase()
+      return enunciado.includes(termo) || assunto.includes(termo) || explicacao.includes(termo)
+    })
+  }, [questoesArray, termoBusca])
+
+  // Índice da questão atual nas questões filtradas
+  const questoesParaExibir = modoAdminNavegacao && termoBusca ? questoesFiltradas : questoesArray
+  const indiceQuestaoAtual = modoAdminNavegacao && termoBusca 
+    ? questoesArray.indexOf(questoesParaExibir[currentQuestionIndex]) 
+    : currentQuestionIndex
 
   const tipoProva = useMemo(() => {
     if (!questoes) return 'Múltipla Escolha'
@@ -1025,7 +1044,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                 <div className="space-y-6">
                   {/* Botão de excluir para admin */}
                   {profile?.role === 'admin' && (
-                    <div className="flex justify-between items-center gap-2">
+                    <div className="flex justify-between items-center gap-2 flex-wrap">
                       <button
                         onClick={handleToggleModoAdmin}
                         className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
@@ -1036,6 +1055,37 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                       >
                         {modoAdminNavegacao ? '🔒 Modo Prática' : '🔓 Modo Navegação'}
                       </button>
+                      {modoAdminNavegacao && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="relative">
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <input
+                              type="text"
+                              value={termoBusca}
+                              onChange={(e) => setTermoBusca(e.target.value)}
+                              placeholder="Buscar questões..."
+                              className="pl-9 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white w-64"
+                            />
+                          </div>
+                          <select
+                            value={nivelAtual}
+                            onChange={(e) => handleMudarNivel(parseInt(e.target.value))}
+                            className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                          >
+                            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                              <option key={n} value={n}>Nível {n}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={handleGenerateQuestoes}
+                            disabled={generating}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+                          >
+                            <FireIcon className="h-4 w-4" />
+                            {generating ? 'Gerando...' : 'Gerar Nível'}
+                          </button>
+                        </div>
+                      )}
                       <button
                         onClick={handleDeleteQuestoes}
                         disabled={deleting}
@@ -1048,36 +1098,37 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   )}
 
                   {/* Barra de progresso */}
-                  {questoesArray.length > 0 && (
+                  {questoesParaExibir.length > 0 && (
                     <>
                       <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
                         <div 
                           className="bg-gradient-to-r from-green-600 to-emerald-600 h-full transition-all duration-300"
-                          style={{ width: `${((currentQuestionIndex + 1) / questoesArray.length) * 100}%` }}
+                          style={{ width: `${((currentQuestionIndex + 1) / questoesParaExibir.length) * 100}%` }}
                         />
                       </div>
                       <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
-                        Questão {currentQuestionIndex + 1} de {questoesArray.length}
+                        Questão {currentQuestionIndex + 1} de {questoesParaExibir.length}
+                        {termoBusca && ` (${questoesArray.length} total)`}
                       </p>
                     </>
                   )}
 
                   {/* Questão atual */}
-                  {questoesArray[currentQuestionIndex] && (
+                  {questoesParaExibir[currentQuestionIndex] && (
                     <div className="space-y-4">
                       <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-semibold text-orange-900 dark:text-orange-100">
-                            Assunto: {questoesArray[currentQuestionIndex].assunto || 'Assunto não identificado'}
+                            Assunto: {questoesParaExibir[currentQuestionIndex].assunto || 'Assunto não identificado'}
                           </span>
-                          {questoesArray[currentQuestionIndex].probabilidade && (
+                          {questoesParaExibir[currentQuestionIndex].probabilidade && (
                             <span className="px-3 py-1 bg-orange-600 text-white text-xs font-bold rounded-full">
-                              {questoesArray[currentQuestionIndex].probabilidade}% de chance
+                              {questoesParaExibir[currentQuestionIndex].probabilidade}% de chance
                             </span>
                           )}
                         </div>
                         <p className="text-slate-900 dark:text-white font-medium">
-                          {questoesArray[currentQuestionIndex].enunciado}
+                          {questoesParaExibir[currentQuestionIndex].enunciado}
                         </p>
                       </div>
 
@@ -1091,7 +1142,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                               disabled={showResult || modoAdminNavegacao}
                               className={`text-center p-6 rounded-lg border-2 transition-all ${
                                 modoAdminNavegacao || showResult
-                                  ? key === (questoesArray[currentQuestionIndex].respostaCorreta || questoesArray[currentQuestionIndex].correta)
+                                  ? key === (questoesParaExibir[currentQuestionIndex].respostaCorreta || questoesParaExibir[currentQuestionIndex].correta)
                                     ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
                                     : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 opacity-50'
                                   : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
@@ -1100,7 +1151,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                               <div className="flex flex-col items-center gap-2">
                                 <span className="text-2xl font-bold text-slate-900 dark:text-white">{key === 'C' ? 'C' : 'E'}</span>
                                 <span className="text-sm text-slate-700 dark:text-slate-300">{key === 'C' ? 'Certo' : 'Errado'}</span>
-                                {(modoAdminNavegacao || showResult) && key === (questoesArray[currentQuestionIndex].respostaCorreta || questoesArray[currentQuestionIndex].correta) && (
+                                {(modoAdminNavegacao || showResult) && key === (questoesParaExibir[currentQuestionIndex].respostaCorreta || questoesParaExibir[currentQuestionIndex].correta) && (
                                   <CheckCircleIcon className="h-6 w-6 text-green-600" />
                                 )}
                               </div>
@@ -1109,14 +1160,14 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          {Object.entries(questoesArray[currentQuestionIndex].alternativas || {}).map(([key, value]) => (
+                          {Object.entries(questoesParaExibir[currentQuestionIndex].alternativas || {}).map(([key, value]) => (
                             <button
                               key={key}
                               onClick={() => !modoAdminNavegacao && handleAnswer(key)}
                               disabled={showResult || modoAdminNavegacao}
                               className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                                 modoAdminNavegacao || showResult
-                                  ? key === (questoesArray[currentQuestionIndex].respostaCorreta || questoesArray[currentQuestionIndex].correta)
+                                  ? key === (questoesParaExibir[currentQuestionIndex].respostaCorreta || questoesParaExibir[currentQuestionIndex].correta)
                                     ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
                                     : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 opacity-50'
                                   : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
@@ -1125,7 +1176,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                               <div className="flex items-center gap-3">
                                 <span className="font-bold text-slate-900 dark:text-white">{key})</span>
                                 <span className="text-slate-700 dark:text-slate-300">{value}</span>
-                                {(modoAdminNavegacao || showResult) && key === (questoesArray[currentQuestionIndex].respostaCorreta || questoesArray[currentQuestionIndex].correta) && (
+                                {(modoAdminNavegacao || showResult) && key === (questoesParaExibir[currentQuestionIndex].respostaCorreta || questoesParaExibir[currentQuestionIndex].correta) && (
                                   <CheckCircleIcon className="h-5 w-5 text-green-600 ml-auto" />
                                 )}
                               </div>
@@ -1193,7 +1244,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                             </div>
                           ) : (
                             <p className="text-sm text-blue-800 dark:text-blue-200">
-                              {questoesArray[currentQuestionIndex].explicacao || questoesArray[currentQuestionIndex].gabaritoComentado || 'Explicação não disponível'}
+                              {questoesParaExibir[currentQuestionIndex].explicacao || questoesParaExibir[currentQuestionIndex].gabaritoComentado || 'Explicação não disponível'}
                             </p>
                           )}
                         </div>
@@ -1214,7 +1265,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                             onClick={handleNextQuestion}
                             className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
                           >
-                            {currentQuestionIndex < questoesArray.length - 1 ? 'Próxima Questão →' : 'Ver Resultado'}
+                            {currentQuestionIndex < questoesParaExibir.length - 1 ? 'Próxima Questão →' : 'Ver Resultado'}
                           </button>
                         </div>
                       ) : null}
