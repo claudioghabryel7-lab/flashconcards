@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { doc, getDoc, setDoc, deleteDoc, serverTimestamp, getDocs, collection, query, where, orderBy } from 'firebase/firestore'
 import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, ChartBarIcon, TrashIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import ReactMarkdown from 'react-markdown'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
@@ -997,9 +998,11 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                               </div>
                             </div>
                           ) : (
-                            <p className="text-sm text-blue-800 dark:text-blue-200">
-                              {questoesParaExibir[currentQuestionIndex].explicacao}
-                            </p>
+                            <div className="prose prose-sm dark:prose-invert max-w-none">
+                              <ReactMarkdown>
+                                {questoesParaExibir[currentQuestionIndex].explicacao}
+                              </ReactMarkdown>
+                            </div>
                           )}
                         </div>
                       )}

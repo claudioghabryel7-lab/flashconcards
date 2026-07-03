@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy, deleteDoc } from 'firebase/firestore'
 import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, TrashIcon, QuestionMarkCircleIcon, ChartBarIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import ReactMarkdown from 'react-markdown'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
@@ -1260,9 +1261,11 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                               </div>
                             </div>
                           ) : (
-                            <p className="text-sm text-blue-800 dark:text-blue-200">
-                              {questoesParaExibir[currentQuestionIndex].explicacao || questoesParaExibir[currentQuestionIndex].gabaritoComentado || 'Explicação não disponível'}
-                            </p>
+                            <div className="prose prose-sm dark:prose-invert max-w-none">
+                              <ReactMarkdown>
+                                {questoesParaExibir[currentQuestionIndex].explicacao || questoesParaExibir[currentQuestionIndex].gabaritoComentado || 'Explicação não disponível'}
+                              </ReactMarkdown>
+                            </div>
                           )}
                         </div>
                       )}
