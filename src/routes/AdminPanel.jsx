@@ -287,6 +287,11 @@ const AdminPanel = () => {
   const [aiKeysStatus, setAiKeysStatus] = useState([])
   const [aiStatusError, setAiStatusError] = useState('')
   
+  // Estados para gerenciar links compartilhados
+  const [sharedLinks, setSharedLinks] = useState([])
+  const [loadingSharedLinks, setLoadingSharedLinks] = useState(false)
+  const [sharedLinksAccessData, setSharedLinksAccessData] = useState({}) // Dados de acesso por link
+  
   // Sensores para drag and drop
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -339,6 +344,69 @@ const AdminPanel = () => {
       loadConcursoNews()
     }
   }, [activeTab])
+
+  // Carregar links compartilhados quando a aba 'shared-links' for ativada
+  useEffect(() => {
+    if (activeTab === 'shared-links') {
+      loadSharedLinks()
+    }
+  }, [activeTab])
+
+  const loadSharedLinks = async () => {
+    try {
+      setLoadingSharedLinks(true)
+      const sharedQuestoesRef = collection(db, 'sharedQuestoes')
+      const sharedQuestoesSnapshot = await getDocs(sharedQuestoesRef)
+      const linksList = sharedQuestoesSnapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      }))
+      
+      // Carregar dados de acesso para cada link
+      const accessData = {}
+      for (const link of linksList) {
+        const accessRef = collection(db, 'sharedQuestoesAccess')
+        const accessQuery = query(accessRef, where('questaoId', '==', link.id))
+        const accessSnapshot = await getDocs(accessQuery)
+        accessData[link.id] = accessSnapshot.docs.map(doc => doc.data())
+      }
+      
+      setSharedLinksAccessData(accessData)
+      setSharedLinks(linksList)
+    } catch (err) {
+      console.error('Erro ao carregar links compartilhados:', err)
+    } finally {
+      setLoadingSharedLinks(false)
+    }
+  }
+
+  const toggleSharedLinkStatus = async (linkId, currentStatus) => {
+    try {
+      const linkRef = doc(db, 'sharedQuestoes', linkId)
+      await updateDoc(linkRef, {
+        status: currentStatus === 'ativo' ? 'inativo' : 'ativo'
+      })
+      // Recarregar links
+      loadSharedLinks()
+    } catch (err) {
+      console.error('Erro ao alterar status do link:', err)
+      alert('Erro ao alterar status do link: ' + err.message)
+    }
+  }
+
+  const deleteSharedLink = async (linkId) => {
+    if (!confirm('Tem certeza que deseja excluir este link compartilhado?')) return
+    
+    try {
+      const linkRef = doc(db, 'sharedQuestoes', linkId)
+      await deleteDoc(linkRef)
+      // Recarregar links
+      loadSharedLinks()
+    } catch (err) {
+      console.error('Erro ao excluir link:', err)
+      alert('Erro ao excluir link: ' + err.message)
+    }
+  }
 
   // Carregar edital do curso selecionado
   useEffect(() => {
@@ -6747,6 +6815,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     { id: 'reviews', label: '⭐ Avaliações', icon: '⭐' },
     { id: 'news', label: '📰 Notícias de Concursos', icon: '📰' },
     { id: 'simulados', label: '📝 Simulados', icon: '📝' },
+    { id: 'shared-links', label: '🔗 Links Compartilhados', icon: '🔗' },
     { id: 'trials', label: '🎁 Testes Gratuitos', icon: '🎁' },
     { id: 'prompt-test', label: '🧪 Teste de Prompts', icon: '🧪' },
   ]
@@ -12480,6 +12549,165 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                       })}
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Links Compartilhados */}
+            {activeTab === 'shared-links' && (
+              <div className="space-y-6">
+                <div className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl shadow-xl border border-blue-200 dark:border-blue-800 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-indigo-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
+                  
+                  <div className="relative">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl">
+                        <span className="text-2xl">🔗</span>
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-black text-blue-700 dark:text-blue-300">
+                          Links Compartilhados
+                        </h2>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                          Gerencie links de questões compartilhadas e acompanhe os acessos
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/5 to-indigo-500/5 rounded-full blur-2xl -mr-16 -mt-16"></div>
+                  
+                  <div className="relative">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <span>📊</span> Links Ativos
+                      </h3>
+                      <button
+                        onClick={loadSharedLinks}
+                        disabled={loadingSharedLinks}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <ArrowPathIcon className="h-4 w-4" />
+                        Atualizar
+                      </button>
+                    </div>
+
+                    {loadingSharedLinks ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                        <p className="text-slate-600 dark:text-slate-400">Carregando links...</p>
+                      </div>
+                    ) : sharedLinks.length === 0 ? (
+                      <div className="text-center py-8">
+                        <ShareIcon className="h-16 w-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+                        <p className="text-slate-600 dark:text-slate-400">
+                          Nenhum link compartilhado encontrado
+                        </p>
+                        <p className="text-sm text-slate-500 dark:text-slate-500 mt-2">
+                          Compartilhe questões para ver os links aqui
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {sharedLinks.map((link) => {
+                          const accessData = sharedLinksAccessData[link.id] || []
+                          const accessCount = accessData.length
+                          const isLinkActive = link.status !== 'inativo'
+                          
+                          return (
+                            <div key={link.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-slate-50 dark:bg-slate-900/50">
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className={`px-2 py-1 text-xs font-bold rounded ${
+                                      isLinkActive 
+                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
+                                        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                    }`}>
+                                      {isLinkActive ? 'Ativo' : 'Inativo'}
+                                    </span>
+                                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                                      {link.sharedAt?.toDate?.() ? new Date(link.sharedAt.toDate()).toLocaleDateString('pt-BR') : 'Data desconhecida'}
+                                    </span>
+                                  </div>
+                                  <p className="font-semibold text-slate-900 dark:text-white mb-1">
+                                    {link.topico || link.disciplina || 'Sem título'}
+                                  </p>
+                                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    Nível {link.nivel || 1} • {link.totalQuestoes || 0} questões
+                                  </p>
+                                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    Compartilhado por: {link.sharedBy || 'Admin'}
+                                  </p>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => toggleSharedLinkStatus(link.id, link.status)}
+                                    className={`p-2 rounded-lg transition-colors ${
+                                      isLinkActive
+                                        ? 'bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400'
+                                        : 'bg-green-100 hover:bg-green-200 text-green-600 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-400'
+                                    }`}
+                                    title={isLinkActive ? 'Desativar link' : 'Ativar link'}
+                                  >
+                                    {isLinkActive ? (
+                                      <XMarkIcon className="h-4 w-4" />
+                                    ) : (
+                                      <CheckCircleIcon className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const shareUrl = `${window.location.origin}/share-questao/${link.id}`
+                                      navigator.clipboard.writeText(shareUrl)
+                                      alert('Link copiado para a área de transferência!')
+                                    }}
+                                    className="p-2 bg-blue-100 hover:bg-blue-200 text-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 rounded-lg transition-colors"
+                                    title="Copiar link"
+                                  >
+                                    <DocumentArrowUpIcon className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteSharedLink(link.id)}
+                                    className="p-2 bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 rounded-lg transition-colors"
+                                    title="Excluir link"
+                                  >
+                                    <TrashIcon className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              {/* Estatísticas de acesso */}
+                              <div className="border-t border-slate-200 dark:border-slate-700 pt-3 mt-3">
+                                <div className="flex items-center gap-2 text-sm">
+                                  <UserPlusIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                  <span className="font-semibold text-slate-900 dark:text-white">
+                                    {accessCount} {accessCount === 1 ? 'pessoa acessou' : 'pessoas acessaram'}
+                                  </span>
+                                </div>
+                                {accessCount > 0 && (
+                                  <div className="mt-2 space-y-1">
+                                    {accessData.slice(0, 5).map((access, idx) => (
+                                      <div key={idx} className="text-xs text-slate-600 dark:text-slate-400">
+                                        {access.nome || 'Sem nome'}
+                                      </div>
+                                    ))}
+                                    {accessData.length > 5 && (
+                                      <p className="text-xs text-slate-500 dark:text-slate-500">
+                                        +{accessData.length - 5} outros acessos
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

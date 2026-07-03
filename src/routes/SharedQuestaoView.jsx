@@ -12,7 +12,7 @@ export default function SharedQuestaoView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showAccessForm, setShowAccessForm] = useState(true)
-  const [accessData, setAccessData] = useState({ nome: '', telefone: '' })
+  const [accessData, setAccessData] = useState({ nome: '' })
   const [submitting, setSubmitting] = useState(false)
   const [accessGranted, setAccessGranted] = useState(false)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
@@ -35,7 +35,15 @@ export default function SharedQuestaoView() {
         return
       }
       
-      setQuestoesData(questaoDoc.data())
+      const data = questaoDoc.data()
+      
+      // Verificar se o link está ativo
+      if (data.status === 'inativo') {
+        setError('Este link foi desativado pelo administrador.')
+        return
+      }
+      
+      setQuestoesData(data)
     } catch (err) {
       console.error('Erro ao carregar questões:', err)
       setError('Erro ao carregar questões: ' + err.message)
@@ -47,8 +55,8 @@ export default function SharedQuestaoView() {
   const handleAccessSubmit = async (e) => {
     e.preventDefault()
     
-    if (!accessData.nome || !accessData.telefone) {
-      alert('Por favor, preencha todos os campos.')
+    if (!accessData.nome) {
+      alert('Por favor, preencha seu nome.')
       return
     }
 
@@ -59,7 +67,6 @@ export default function SharedQuestaoView() {
       await addDoc(collection(db, 'sharedQuestoesAccess'), {
         questaoId,
         nome: accessData.nome,
-        telefone: accessData.telefone,
         accessedAt: serverTimestamp(),
       })
       
@@ -160,20 +167,6 @@ export default function SharedQuestaoView() {
                 required
                 className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-alego-500 focus:border-transparent"
                 placeholder="Digite seu nome completo"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Telefone *
-              </label>
-              <input
-                type="tel"
-                value={accessData.telefone}
-                onChange={(e) => setAccessData({ ...accessData, telefone: e.target.value })}
-                required
-                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-alego-500 focus:border-transparent"
-                placeholder="(00) 00000-0000"
               />
             </div>
 

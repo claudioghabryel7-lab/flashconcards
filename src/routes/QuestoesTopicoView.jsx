@@ -940,6 +940,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         totalQuestoes: questoes.questoes.length,
         sharedBy: profile?.email || 'admin',
         sharedAt: serverTimestamp(),
+        status: 'ativo',
       })
       
       const shareUrl = `${window.location.origin}/share-questao/${questaoId}`
