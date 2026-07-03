@@ -85,11 +85,11 @@ ${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 12000)}\n\n` : ''
    - O Padrão da Banca: Como a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar este tópico especificamente no concurso
 
 2. **REVISÃO TURBO EM FLASHCARDS**:
-   - Gere NO MÍNIMO 50 flashcards e ATÉ 150 flashcards para cobrir completamente este tópico específico
-   - O MÍNIMO OBRIGATÓRIO é 50 flashcards - não gere menos que isso
-   - Se o tópico for extenso, gere até 150 flashcards para cobertura completa
+   - Gere EXATAMENTE 50 flashcards para este tópico específico
+   - Foque APENAS nos 50 tópicos/conceitos MAIS IMPORTANTES para a banca ${banca || 'NÃO DEFINIDA'}
+   - Priorize o que tem maior probabilidade de cair no concurso ${courseName || 'Concurso público'}
    - Cada flashcard deve ser:
-     * Pergunta: Objetiva, direta, focada em um conceito específico
+     * Pergunta: Objetiva, direta, focada em um conceito específico IMPORTANTE
      * Resposta: Clara, completa, explicativa (NADA SUPERFICIAL, QUERO BEM COMPLETO)
      * Citar exemplos práticos do concurso ${courseName || 'Concurso público'}
      * Ser específico para o cargo

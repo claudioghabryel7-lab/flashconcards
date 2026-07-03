@@ -251,7 +251,7 @@ service cloud.firestore {
       match /questoesTopico/{docId} {
         allow read: if isAuthenticated();
         allow create: if isAuthenticated();
-        allow update: if isAuthenticated();
+        allow update: if isAdmin();
         allow delete: if isAdmin();
       }
       
@@ -282,8 +282,8 @@ service cloud.firestore {
       
       match /questoesIncidencia/{docId} {
         allow read: if isAuthenticated();
-        allow create: if isAuthenticated();
-        allow update: if isAuthenticated();
+        allow create: if isAdmin();
+        allow update: if isAdmin();
         allow delete: if isAdmin();
       }
       

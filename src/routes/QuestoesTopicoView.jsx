@@ -163,6 +163,10 @@ const QuestoesTopicoView = () => {
   const [niveisDisponiveis, setNiveisDisponiveis] = useState([])
   const [mostrarSeletorNiveis, setMostrarSeletorNiveis] = useState(false)
   const [historicoNiveis, setHistoricoNiveis] = useState([])
+  const [editandoQuestao, setEditandoQuestao] = useState(false)
+  const [novoGabarito, setNovoGabarito] = useState('')
+  const [novaExplicacao, setNovaExplicacao] = useState('')
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false)
 
   // Verificar se as questões têm a estrutura nova ou antiga
   const questoesArray = useMemo(() => {
@@ -792,6 +796,63 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     setMostrarSeletorNiveis(false)
   }
 
+  const handleIniciarEdicao = () => {
+    const questaoAtual = questoesArray[currentQuestionIndex]
+    setNovoGabarito(questaoAtual.respostaCorreta || questaoAtual.correta || '')
+    setNovaExplicacao(questaoAtual.explicacao || questaoAtual.gabaritoComentado || '')
+    setEditandoQuestao(true)
+  }
+
+  const handleSalvarEdicao = async () => {
+    if (!questoes || !questoes.id) return
+    
+    // Verificar se é admin
+    if (profile?.role !== 'admin') {
+      alert('Apenas administradores podem editar questões')
+      return
+    }
+    
+    try {
+      setSalvandoEdicao(true)
+      
+      const questaoAtual = questoesArray[currentQuestionIndex]
+      const questoesAtualizadas = [...questoesArray]
+      questoesAtualizadas[currentQuestionIndex] = {
+        ...questaoAtual,
+        respostaCorreta: novoGabarito,
+        correta: novoGabarito,
+        explicacao: novaExplicacao,
+        gabaritoComentado: novaExplicacao
+      }
+      
+      const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
+      const docId = `${sanitizedKey}_nivel_${nivelAtual}`
+      
+      await setDoc(doc(db, 'courses', resolvedCourseId, 'questoesTopico', docId), {
+        ...questoes,
+        questoes: questoesAtualizadas
+      }, { merge: true })
+      
+      setQuestoes({
+        ...questoes,
+        questoes: questoesAtualizadas
+      })
+      
+      setEditandoQuestao(false)
+    } catch (error) {
+      console.error('Erro ao salvar edição:', error)
+      alert('Erro ao salvar edição: ' + error.message)
+    } finally {
+      setSalvandoEdicao(false)
+    }
+  }
+
+  const handleCancelarEdicao = () => {
+    setEditandoQuestao(false)
+    setNovoGabarito('')
+    setNovaExplicacao('')
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -1060,12 +1121,65 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                       {/* Explicação */}
                       {showResult && (
                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                          <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                            💡 Explicação:
-                          </h4>
-                          <p className="text-sm text-blue-800 dark:text-blue-200">
-                            {questoesArray[currentQuestionIndex].explicacao || questoesArray[currentQuestionIndex].gabaritoComentado || 'Explicação não disponível'}
-                          </p>
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-semibold text-blue-900 dark:text-blue-100">
+                              💡 Explicação:
+                            </h4>
+                            {profile?.role === 'admin' && !editandoQuestao && (
+                              <button
+                                onClick={handleIniciarEdicao}
+                                className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                Editar
+                              </button>
+                            )}
+                          </div>
+                          {editandoQuestao ? (
+                            <div className="space-y-3">
+                              <div>
+                                <label className="block text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">
+                                  Gabarito:
+                                </label>
+                                <input
+                                  type="text"
+                                  value={novoGabarito}
+                                  onChange={(e) => setNovoGabarito(e.target.value)}
+                                  className="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-700 rounded-md bg-white dark:bg-slate-800 text-blue-900 dark:text-blue-100"
+                                  placeholder="Digite o gabarito correto"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">
+                                  Explicação:
+                                </label>
+                                <textarea
+                                  value={novaExplicacao}
+                                  onChange={(e) => setNovaExplicacao(e.target.value)}
+                                  className="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-700 rounded-md bg-white dark:bg-slate-800 text-blue-900 dark:text-blue-100 min-h-[100px]"
+                                  placeholder="Digite a explicação"
+                                />
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={handleSalvarEdicao}
+                                  disabled={salvandoEdicao}
+                                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                                >
+                                  {salvandoEdicao ? 'Salvando...' : 'Salvar'}
+                                </button>
+                                <button
+                                  onClick={handleCancelarEdicao}
+                                  className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-blue-800 dark:text-blue-200">
+                              {questoesArray[currentQuestionIndex].explicacao || questoesArray[currentQuestionIndex].gabaritoComentado || 'Explicação não disponível'}
+                            </p>
+                          )}
                         </div>
                       )}
 
