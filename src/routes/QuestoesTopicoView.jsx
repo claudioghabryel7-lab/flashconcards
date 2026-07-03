@@ -644,6 +644,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         ...parsed,
         topico: parsed.topico || effectiveTopicNome || resolvedTopicKey,
         nivel: nivelAtual,
+        status: 'indisponivel',
         updatedAt: serverTimestamp(),
         generatedAt: serverTimestamp(),
       }
@@ -888,6 +889,59 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank')
   }
 
+  const handleToggleStatus = async () => {
+    if (!questoes || !questoes.id) return
+    
+    try {
+      const novoStatus = questoes.status === 'disponivel' ? 'indisponivel' : 'disponivel'
+      const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
+      const docId = `${sanitizedKey}_nivel_${nivelAtual}`
+      
+      await setDoc(doc(db, 'courses', resolvedCourseId, 'questoesTopico', docId), {
+        ...questoes,
+        status: novoStatus,
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+      
+      setQuestoes({
+        ...questoes,
+        status: novoStatus,
+      })
+    } catch (error) {
+      console.error('Erro ao alterar status:', error)
+      alert('Erro ao alterar status: ' + error.message)
+    }
+  }
+
+  const handleShareQuestao = async () => {
+    const questaoAtual = questoesParaExibir[currentQuestionIndex]
+    if (!questaoAtual) return
+    
+    try {
+      const sharedQuestaoRef = doc(collection(db, 'sharedQuestoes'))
+      const questaoId = sharedQuestaoRef.id
+      
+      await setDoc(sharedQuestaoRef, {
+        ...questaoAtual,
+        id: questaoId,
+        tipoProva: tipoProva,
+        topico: effectiveTopicNome || resolvedTopicKey,
+        courseId: resolvedCourseId,
+        sharedBy: profile?.email || 'admin',
+        sharedAt: serverTimestamp(),
+      })
+      
+      const shareUrl = `${window.location.origin}/share-questao/${questaoId}`
+      
+      // Copiar para clipboard
+      await navigator.clipboard.writeText(shareUrl)
+      alert('Link copiado para a área de transferência!')
+    } catch (error) {
+      console.error('Erro ao compartilhar questão:', error)
+      alert('Erro ao compartilhar questão: ' + error.message)
+    }
+  }
+
   const handlePreviousQuestion = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(currentQuestionIndex - 1)
@@ -1050,70 +1104,117 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* Botão de excluir para admin */}
-                  {profile?.role === 'admin' && (
-                    <div className="flex justify-between items-center gap-2 flex-wrap">
-                      <button
-                        onClick={handleToggleModoAdmin}
-                        className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                          modoAdminNavegacao
-                            ? 'bg-purple-600 text-white hover:bg-purple-700'
-                            : 'bg-gray-600 text-white hover:bg-gray-700'
-                        }`}
-                      >
-                        {modoAdminNavegacao ? '🔒 Modo Prática' : '🔓 Modo Navegação'}
-                      </button>
-                      {modoAdminNavegacao && (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <div className="relative">
-                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                            <input
-                              type="text"
-                              value={termoBusca}
-                              onChange={(e) => setTermoBusca(e.target.value)}
-                              placeholder="Buscar questões..."
-                              className="pl-9 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white w-64"
-                            />
-                          </div>
+                  {/* Status do conteúdo para usuários */}
+                  {profile?.role !== 'admin' && questoes && (
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg ${
+                        questoes.status === 'disponivel'
+                          ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200'
+                          : 'bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-200'
+                      }`}>
+                        {questoes.status === 'disponivel' ? '✅ Disponível' : '⏳ Conteúdo Pendente'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Bloqueio de acesso para conteúdo indisponível */}
+                  {profile?.role !== 'admin' && questoes && questoes.status !== 'disponivel' ? (
+                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-6 text-center">
+                      <QuestionMarkCircleIcon className="h-12 w-12 text-orange-600 dark:text-orange-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-orange-900 dark:text-orange-100 mb-2">
+                        Conteúdo em Preparação
+                      </h3>
+                      <p className="text-sm text-orange-800 dark:text-orange-200">
+                        Este conteúdo ainda está sendo revisado pelo administrador. Em breve estará disponível para prática.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Botão de excluir para admin */}
+                      {profile?.role === 'admin' && (
+                        <div className="flex justify-between items-center gap-2 flex-wrap">
                           <button
-                            type="button"
-                            onClick={handlePesquisarGoogle}
-                            className="p-3 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white hover:opacity-80 transition shadow-lg"
-                            title="Pesquisar no Google"
+                            onClick={handleToggleModoAdmin}
+                            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                              modoAdminNavegacao
+                                ? 'bg-purple-600 text-white hover:bg-purple-700'
+                                : 'bg-gray-600 text-white hover:bg-gray-700'
+                            }`}
                           >
-                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                            </svg>
+                            {modoAdminNavegacao ? '🔒 Modo Prática' : '🔓 Modo Navegação'}
                           </button>
-                          <select
-                            value={nivelAtual}
-                            onChange={(e) => handleMudarNivel(parseInt(e.target.value))}
-                            className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
-                          >
-                            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                              <option key={n} value={n}>Nível {n}</option>
-                            ))}
-                          </select>
+                          {modoAdminNavegacao && (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <div className="relative">
+                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <input
+                                  type="text"
+                                  value={termoBusca}
+                                  onChange={(e) => setTermoBusca(e.target.value)}
+                                  placeholder="Buscar questões..."
+                                  className="pl-9 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white w-64"
+                                />
+                              </div>
+                              <button
+                                onClick={handleShareQuestao}
+                                className="p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition shadow-lg"
+                                title="Compartilhar Questão"
+                              >
+                                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handlePesquisarGoogle}
+                                className="p-3 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white hover:opacity-80 transition shadow-lg"
+                                title="Pesquisar no Google"
+                              >
+                                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                              </button>
+                              <select
+                                value={nivelAtual}
+                                onChange={(e) => handleMudarNivel(parseInt(e.target.value))}
+                                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                              >
+                                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                                  <option key={n} value={n}>Nível {n}</option>
+                                ))}
+                              </select>
+                              <button
+                                onClick={handleGenerateQuestoes}
+                                disabled={generating}
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+                              >
+                                <FireIcon className="h-4 w-4" />
+                                {generating ? 'Gerando...' : 'Gerar Nível'}
+                              </button>
+                            </div>
+                          )}
                           <button
-                            onClick={handleGenerateQuestoes}
-                            disabled={generating}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+                            onClick={handleToggleStatus}
+                            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                              questoes?.status === 'disponivel'
+                                ? 'bg-orange-600 text-white hover:bg-orange-700'
+                                : 'bg-green-600 text-white hover:bg-green-700'
+                            }`}
                           >
-                            <FireIcon className="h-4 w-4" />
-                            {generating ? 'Gerando...' : 'Gerar Nível'}
+                            {questoes?.status === 'disponivel' ? '🔒 Indisponibilizar' : '🔓 Disponibilizar'}
+                          </button>
+                          <button
+                            onClick={handleDeleteQuestoes}
+                            disabled={deleting}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                            {deleting ? 'Apagando...' : 'Apagar Questões'}
                           </button>
                         </div>
                       )}
-                      <button
-                        onClick={handleDeleteQuestoes}
-                        disabled={deleting}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <TrashIcon className="h-4 w-4" />
-                        {deleting ? 'Apagando...' : 'Apagar Questões'}
-                      </button>
-                    </div>
-                  )}
+                      </>
+                    )}
 
                   {/* Barra de progresso */}
                   {questoesParaExibir.length > 0 && (

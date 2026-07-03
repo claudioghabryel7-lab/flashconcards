@@ -179,7 +179,8 @@ service cloud.firestore {
       }
       
       match /materialApoio/{docId} {
-        allow read: if isAuthenticated();
+        allow read: if isAuthenticated() && 
+                     (resource.data.status == 'disponivel' || isAdmin());
         allow create: if isAuthenticated() && 
                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
@@ -249,8 +250,9 @@ service cloud.firestore {
       }
       
       match /questoesTopico/{docId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated();
+        allow read: if isAuthenticated() && 
+                     (resource.data.status == 'disponivel' || isAdmin());
+        allow create: if isAdmin();
         allow update: if isAdmin();
         allow delete: if isAdmin();
       }
@@ -263,11 +265,14 @@ service cloud.firestore {
       }
       
       match /flashcards/{flashcardId} {
-        allow read: if true;
+        allow read: if true && 
+                     (resource.data.status == 'disponivel' || isAdmin());
         allow create: if isAuthenticated() && 
                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-        allow update: if isAuthenticated();
+        allow update: if isAuthenticated() && 
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
         allow delete: if isAuthenticated() && 
                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
@@ -281,7 +286,8 @@ service cloud.firestore {
       }
       
       match /questoesIncidencia/{docId} {
-        allow read: if isAuthenticated();
+        allow read: if isAuthenticated() && 
+                     (resource.data.status == 'disponivel' || isAdmin());
         allow create: if isAdmin();
         allow update: if isAdmin();
         allow delete: if isAdmin();
@@ -530,6 +536,24 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && 
                    exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    match /sharedQuestoes/{questaoId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && 
+                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    match /sharedQuestoesAccess/{accessId} {
+      allow read: if isAuthenticated() && 
+                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow create: if true;
+      allow update: if false;
+      allow delete: if isAdmin();
     }
     
     match /leads/{leadId} {

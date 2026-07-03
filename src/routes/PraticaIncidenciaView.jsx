@@ -402,6 +402,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
           ...parsed,
           disciplinaIdx: disciplinaIndex,
           nivel: nivelAtual,
+          status: 'indisponivel',
           updatedAt: serverTimestamp(),
           generatedAt: serverTimestamp(),
         }, { merge: true })
@@ -644,6 +645,63 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank')
   }
 
+  const handleToggleStatus = async () => {
+    if (!questoes) return
+    
+    try {
+      const novoStatus = questoes.status === 'disponivel' ? 'indisponivel' : 'disponivel'
+      const disciplina = editalVerticalizado?.disciplinas[disciplinaIndex]
+      const sanitizedDisciplinaNome = disciplina?.nome
+        .replace(/[^a-zA-Z0-9]/g, '_')
+        .substring(0, 100)
+      
+      const docId = `${sanitizedDisciplinaNome}_nivel_${nivelAtual}`
+      
+      await setDoc(doc(db, 'courses', courseId, 'questoesIncidencia', docId), {
+        ...questoes,
+        status: novoStatus,
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+      
+      setQuestoes({
+        ...questoes,
+        status: novoStatus,
+      })
+    } catch (error) {
+      console.error('Erro ao alterar status:', error)
+      alert('Erro ao alterar status: ' + error.message)
+    }
+  }
+
+  const handleShareQuestao = async () => {
+    const questaoAtual = questoesParaExibir[currentQuestionIndex]
+    if (!questaoAtual) return
+    
+    try {
+      const sharedQuestaoRef = doc(collection(db, 'sharedQuestoes'))
+      const questaoId = sharedQuestaoRef.id
+      
+      await setDoc(sharedQuestaoRef, {
+        ...questaoAtual,
+        id: questaoId,
+        tipoProva: questoes.tipoProva,
+        disciplina: conteudoIncidencia?.disciplina || 'Disciplina',
+        courseId: courseId,
+        sharedBy: profile?.email || 'admin',
+        sharedAt: serverTimestamp(),
+      })
+      
+      const shareUrl = `${window.location.origin}/share-questao/${questaoId}`
+      
+      // Copiar para clipboard
+      await navigator.clipboard.writeText(shareUrl)
+      alert('Link copiado para a área de transferência!')
+    } catch (error) {
+      console.error('Erro ao compartilhar questão:', error)
+      alert('Erro ao compartilhar questão: ' + error.message)
+    }
+  }
+
   const handlePreviousQuestion = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(currentQuestionIndex - 1)
@@ -793,8 +851,34 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* Botão de excluir para admin */}
-                  {profile?.role === 'admin' && (
+                  {/* Status do conteúdo para usuários */}
+                  {profile?.role !== 'admin' && questoes && (
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg ${
+                        questoes.status === 'disponivel'
+                          ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200'
+                          : 'bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-200'
+                      }`}>
+                        {questoes.status === 'disponivel' ? '✅ Disponível' : '⏳ Conteúdo Pendente'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Bloqueio de acesso para conteúdo indisponível */}
+                  {profile?.role !== 'admin' && questoes && questoes.status !== 'disponivel' ? (
+                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-6 text-center">
+                      <QuestionMarkCircleIcon className="h-12 w-12 text-orange-600 dark:text-orange-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-orange-900 dark:text-orange-100 mb-2">
+                        Conteúdo em Preparação
+                      </h3>
+                      <p className="text-sm text-orange-800 dark:text-orange-200">
+                        Este conteúdo ainda está sendo revisado pelo administrador. Em breve estará disponível para prática.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Botão de excluir para admin */}
+                      {profile?.role === 'admin' && (
                     <div className="flex justify-between items-center gap-2 flex-wrap">
                       <button
                         onClick={handleToggleModoAdmin}
@@ -818,6 +902,15 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                               className="pl-9 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white w-64"
                             />
                           </div>
+                          <button
+                            onClick={handleShareQuestao}
+                            className="p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition shadow-lg"
+                            title="Compartilhar Questão"
+                          >
+                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+                            </svg>
+                          </button>
                           <button
                             type="button"
                             onClick={handlePesquisarGoogle}
@@ -848,6 +941,16 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         </div>
                       )}
                       <button
+                        onClick={handleToggleStatus}
+                        className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                          questoes?.status === 'disponivel'
+                            ? 'bg-orange-600 text-white hover:bg-orange-700'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
+                      >
+                        {questoes?.status === 'disponivel' ? '🔒 Indisponibilizar' : '🔓 Disponibilizar'}
+                      </button>
+                      <button
                         onClick={handleDeleteQuestoes}
                         disabled={deleting}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -857,6 +960,8 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                       </button>
                     </div>
                   )}
+                      </>
+                    )}
 
                   {/* Barra de progresso */}
                   <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden">

@@ -50,6 +50,7 @@ const FlashcardView = lazy(() => import('./routes/FlashcardView'))
 const FlashcardsTopicoView = lazy(() => import('./routes/FlashcardsTopicoView'))
 const FlashcardPIP = lazy(() => import('./routes/FlashcardPIP'))
 const FlashQuestoes = lazy(() => import('./routes/FlashQuestoes'))
+const SharedQuestaoView = lazy(() => import('./routes/SharedQuestaoView'))
 const Cursos = lazy(() => import('./routes/Cursos'))
 const Demo = lazy(() => import('./routes/Demo'))
 // Importação direta para testar
@@ -185,6 +186,8 @@ function App() {
           <Route path="/demo" element={<Demo />} />
           {/* Página de Compartilhamento de Flashcards - Acessível sem login */}
           <Route path="/share-flashcards/:token" element={<SharedFlashcardPIP />} />
+          {/* Página de Compartilhamento de Questões - Acessível sem login */}
+          <Route path="/share-questao/:questaoId" element={<SharedQuestaoView />} />
           <Route path="/guia-estudos" element={<GuiaEstudos />} />
           <Route
             path="/guia-mentorado"
