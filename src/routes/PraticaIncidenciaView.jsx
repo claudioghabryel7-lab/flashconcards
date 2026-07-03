@@ -678,6 +678,12 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     const questaoAtual = questoesParaExibir[currentQuestionIndex]
     if (!questaoAtual) return
     
+    // Verificar se é admin
+    if (profile?.role !== 'admin') {
+      alert('Apenas administradores podem compartilhar questões')
+      return
+    }
+    
     try {
       const sharedQuestaoRef = doc(collection(db, 'sharedQuestoes'))
       const questaoId = sharedQuestaoRef.id
