@@ -636,6 +636,13 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     setSelectedAnswer(null)
   }
 
+  const handlePesquisarGoogle = () => {
+    const questaoAtual = questoesParaExibir[currentQuestionIndex]
+    if (!questaoAtual) return
+    const searchQuery = encodeURIComponent(`${questaoAtual.enunciado} ${questaoAtual.assunto || ''}`)
+    window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank')
+  }
+
   const handlePreviousQuestion = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(currentQuestionIndex - 1)
@@ -810,6 +817,16 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                               className="pl-9 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white w-64"
                             />
                           </div>
+                          <button
+                            type="button"
+                            onClick={handlePesquisarGoogle}
+                            className="p-3 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white hover:opacity-80 transition shadow-lg"
+                            title="Pesquisar no Google"
+                          >
+                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                          </button>
                           <select
                             value={nivelAtual}
                             onChange={(e) => handleMudarNivel(parseInt(e.target.value))}
