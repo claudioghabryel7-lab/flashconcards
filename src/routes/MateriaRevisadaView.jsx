@@ -1,17 +1,17 @@
 import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
-import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import ContentPublishButton from '../components/ContentPublishButton'
+import { isContentAvailable, toggleContentStatus } from '../utils/contentStatus'
 
 const MateriaRevisadaView = () => {
   const { materiaId } = useParams()
   const navigate = useNavigate()
-  const { profile } = useAuth()
-  const { darkMode } = useDarkMode()
+  const { profile, isAdmin } = useAuth()
   const [materia, setMateria] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -115,6 +115,21 @@ const MateriaRevisadaView = () => {
     }
   }, [materiaId, courseId])
 
+  const handleToggleStatus = async () => {
+    if (!materia?.id || !isAdmin) return
+    try {
+      const novoStatus = toggleContentStatus(materia.status)
+      await updateDoc(doc(db, 'courses', courseId, 'materiasRevisadas', materia.id), {
+        status: novoStatus,
+        updatedAt: serverTimestamp(),
+      })
+      setMateria((prev) => ({ ...prev, status: novoStatus }))
+    } catch (err) {
+      console.error(err)
+      alert('Erro ao alterar status')
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -145,19 +160,35 @@ const MateriaRevisadaView = () => {
     )
   }
 
-  return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
-      {/* Botão Voltar */}
-      <Link
-        to="/materia-revisada"
-        className="inline-flex items-center gap-2 mb-6 text-alego-600 dark:text-alego-400 hover:text-alego-700 dark:hover:text-alego-300 transition"
-      >
-        <ArrowLeftIcon className="w-5 h-5" />
-        <span>Voltar para Matérias Revisadas</span>
-      </Link>
+  if (!isContentAvailable(materia.status, isAdmin)) {
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <div className="cp-card p-10 text-center">
+          <p className="text-4xl mb-3">🔒</p>
+          <p className="font-medium text-cp-text">Conteúdo em preparação</p>
+          <p className="mt-2 text-sm text-cp-muted">Esta matéria ainda não foi disponibilizada pelo administrador.</p>
+          <Link to="/materia-revisada" className="cp-btn-ghost mt-6 inline-flex">
+            <ArrowLeftIcon className="h-4 w-4" />
+            Voltar
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
-      {/* Conteúdo Principal */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 sm:p-8 lg:p-10">
+  return (
+    <div className="space-y-6 pb-10 max-w-5xl mx-auto">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <Link to="/materia-revisada" className="inline-flex items-center gap-2 text-sm text-cp-muted hover:text-cp-accent">
+          <ArrowLeftIcon className="h-4 w-4" />
+          Matérias Revisadas
+        </Link>
+        {isAdmin && (
+          <ContentPublishButton status={materia.status} onToggle={handleToggleStatus} />
+        )}
+      </div>
+
+      <div className="cp-card p-6 sm:p-8 lg:p-10">
         {/* Título */}
         <div className="mb-8 pb-6 border-b border-slate-200 dark:border-slate-700">
           <h1 className="text-3xl sm:text-4xl font-bold text-alego-600 dark:text-alego-400 mb-3">

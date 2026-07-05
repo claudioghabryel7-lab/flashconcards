@@ -36,6 +36,8 @@ import {
   where,
 } from 'firebase/firestore'
 import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager'
+import ContentPublishButton from '../components/ContentPublishButton'
+import { defaultContentStatus, toggleContentStatus } from '../utils/contentStatus'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
 import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signOut } from 'firebase/auth'
@@ -133,6 +135,8 @@ const AdminPanel = () => {
   const [generatingMateriaRevisada, setGeneratingMateriaRevisada] = useState(false)
   const [materiaRevisadaProgress, setMateriaRevisadaProgress] = useState('')
   const [existingMateriasRevisadas, setExistingMateriasRevisadas] = useState([])
+  const [redacaoConfig, setRedacaoConfig] = useState({ tema: '', status: defaultContentStatus() })
+  const [savingRedacaoConfig, setSavingRedacaoConfig] = useState(false)
   const [generatingAllMaterias, setGeneratingAllMaterias] = useState(false)
   const [allMateriasProgress, setAllMateriasProgress] = useState('')
   
@@ -4974,6 +4978,7 @@ CRÍTICO:
         await updateDoc(existingDoc.ref, {
           ...materiaData,
           materia,
+          status: existingDoc.data().status || defaultContentStatus(),
           updatedAt: serverTimestamp(),
         })
         setMateriaRevisadaProgress(`✅ Matéria revisada atualizada com sucesso!`)
@@ -4982,6 +4987,7 @@ CRÍTICO:
         await addDoc(materiasRef, {
           ...materiaData,
           materia,
+          status: defaultContentStatus(),
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         })
@@ -4990,7 +4996,7 @@ CRÍTICO:
 
       // 6. Atualizar lista de matérias existentes
       const allMaterias = await getDocs(materiasRef)
-      setExistingMateriasRevisadas(allMaterias.docs.map(doc => doc.data().materia))
+      setExistingMateriasRevisadas(allMaterias.docs.map((d) => ({ id: d.id, ...d.data() })))
 
       setMessage(`✅ Matéria revisada "${materia}" gerada e salva com sucesso! Baseada exclusivamente no edital do curso.`)
       
@@ -5307,6 +5313,7 @@ CRÍTICO:
           await addDoc(materiasRef, {
             ...materiaData,
             materia,
+            status: defaultContentStatus(),
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           })
@@ -5322,7 +5329,7 @@ CRÍTICO:
 
       // Atualizar lista
       const allMaterias = await getDocs(materiasRef)
-      setExistingMateriasRevisadas(allMaterias.docs.map(doc => doc.data().materia))
+      setExistingMateriasRevisadas(allMaterias.docs.map((d) => ({ id: d.id, ...d.data() })))
 
       setAllMateriasProgress(`\n✅ Processo concluído!\n\n✅ Sucesso: ${sucesso} matéria(s)\n${erros > 0 ? `⚠️ Erros: ${erros} matéria(s)` : ''}`)
       setMessage(`✅ Geração em lote concluída! ${sucesso} matéria(s) gerada(s) com sucesso.${erros > 0 ? ` ${erros} matéria(s) com erro.` : ''}`)
@@ -6032,11 +6039,88 @@ CRÍTICO:
     const materiasRef = collection(db, 'courses', courseId, 'materiasRevisadas')
     
     getDocs(materiasRef).then((snapshot) => {
-      setExistingMateriasRevisadas(snapshot.docs.map(doc => doc.data().materia))
+      setExistingMateriasRevisadas(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })))
     }).catch((err) => {
       console.error('Erro ao carregar matérias revisadas:', err)
     })
   }, [materiaRevisadaForm.courseId])
+
+  const handleToggleMateriaRevisadaStatus = async (materiaDoc) => {
+    if (!materiaDoc?.id) return
+    try {
+      const courseId = materiaRevisadaForm.courseId || 'alego-default'
+      const novoStatus = toggleContentStatus(materiaDoc.status)
+      await updateDoc(doc(db, 'courses', courseId, 'materiasRevisadas', materiaDoc.id), {
+        status: novoStatus,
+        updatedAt: serverTimestamp(),
+      })
+      setExistingMateriasRevisadas((prev) =>
+        prev.map((m) => (m.id === materiaDoc.id ? { ...m, status: novoStatus } : m))
+      )
+    } catch (err) {
+      console.error(err)
+      setMessage('❌ Erro ao alterar status da matéria revisada')
+    }
+  }
+
+  const loadRedacaoConfig = async (courseId) => {
+    try {
+      const snap = await getDoc(doc(db, 'courses', courseId, 'config', 'redacao'))
+      if (snap.exists()) {
+        setRedacaoConfig({
+          tema: snap.data().tema || '',
+          status: snap.data().status || defaultContentStatus(),
+        })
+      } else {
+        setRedacaoConfig({ tema: '', status: defaultContentStatus() })
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  useEffect(() => {
+    if (!materiaRevisadaForm.courseId) return
+    loadRedacaoConfig(materiaRevisadaForm.courseId)
+  }, [materiaRevisadaForm.courseId])
+
+  const handleSaveRedacaoConfig = async () => {
+    const courseId = materiaRevisadaForm.courseId || 'alego-default'
+    setSavingRedacaoConfig(true)
+    try {
+      await setDoc(
+        doc(db, 'courses', courseId, 'config', 'redacao'),
+        {
+          tema: redacaoConfig.tema.trim(),
+          status: redacaoConfig.status,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      )
+      setMessage('✅ Configuração de redação salva!')
+    } catch (err) {
+      setMessage(`❌ Erro ao salvar redação: ${err.message}`)
+    } finally {
+      setSavingRedacaoConfig(false)
+    }
+  }
+
+  const handleToggleRedacaoStatus = async () => {
+    const courseId = materiaRevisadaForm.courseId || 'alego-default'
+    const novoStatus = toggleContentStatus(redacaoConfig.status)
+    setRedacaoConfig((prev) => ({ ...prev, status: novoStatus }))
+    try {
+      await setDoc(
+        doc(db, 'courses', courseId, 'config', 'redacao'),
+        { status: novoStatus, updatedAt: serverTimestamp() },
+        { merge: true }
+      )
+      setMessage(novoStatus === 'disponivel' ? '✅ Redação disponibilizada!' : '🔒 Redação ocultada dos alunos.')
+    } catch (err) {
+      setRedacaoConfig((prev) => ({ ...prev, status: redacaoConfig.status }))
+      setMessage(`❌ Erro ao alterar status: ${err.message}`)
+    }
+  }
 
   // Salvar configuração de questões e BIZUs (por curso)
   const handleSaveQuestoesConfig = async () => {
@@ -8348,21 +8432,62 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem 
                   {/* Lista de Matérias Revisadas Existentes */}
                   {existingMateriasRevisadas.length > 0 && (
                     <div className="mt-6 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
-                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">
-                        Matérias Revisadas Existentes:
+                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-3">
+                        Matérias Revisadas — disponibilizar para alunos:
                       </p>
-                      <div className="flex flex-wrap gap-2">
-                        {existingMateriasRevisadas.map((materia, idx) => (
-                          <span
-                            key={idx}
-                            className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-semibold"
+                      <div className="space-y-2">
+                        {existingMateriasRevisadas.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2"
                           >
-                            {materia}
-                          </span>
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                              {item.materia}
+                            </span>
+                            <ContentPublishButton
+                              status={item.status}
+                              onToggle={() => handleToggleMateriaRevisadaStatus(item)}
+                              size="xs"
+                            />
+                          </div>
                         ))}
                       </div>
                     </div>
                   )}
+
+                {/* Treino de Redação — tema e disponibilização */}
+                <div className="mt-8 rounded-2xl border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/20 dark:to-indigo-900/20 p-6">
+                  <p className="text-lg font-bold text-violet-700 dark:text-violet-300 mb-1">
+                    ✍️ Treino de Redação
+                  </p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                    Defina o tema e disponibilize a redação para os alunos do curso selecionado.
+                  </p>
+                  <label className="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-400 mb-2">
+                    Tema da redação
+                  </label>
+                  <textarea
+                    value={redacaoConfig.tema}
+                    onChange={(e) => setRedacaoConfig((prev) => ({ ...prev, tema: e.target.value }))}
+                    rows={4}
+                    placeholder="Ex: A importância da eficiência no serviço público..."
+                    className="w-full rounded-xl border border-violet-200 dark:border-violet-700 bg-white dark:bg-slate-800 p-3 text-sm"
+                  />
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <ContentPublishButton
+                      status={redacaoConfig.status}
+                      onToggle={handleToggleRedacaoStatus}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveRedacaoConfig}
+                      disabled={savingRedacaoConfig}
+                      className="rounded-full bg-violet-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      {savingRedacaoConfig ? 'Salvando...' : 'Salvar tema e status'}
+                    </button>
+                  </div>
+                </div>
                 </div>
               </div>
             )}

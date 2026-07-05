@@ -160,6 +160,7 @@ REGRAS:
       dificuldade: item.dificuldade || 'médio',
       courseId: resolvedId,
       shared: true,
+      status: 'indisponivel',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       order: index,

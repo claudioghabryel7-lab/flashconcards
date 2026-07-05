@@ -1,14 +1,13 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore'
+import { collection, getDocs, orderBy, query } from 'firebase/firestore'
+import { BookOpenIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
-import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import { isContentAvailable, CONTENT_STATUS } from '../utils/contentStatus'
 
 const MateriaRevisada = () => {
-  const { profile } = useAuth()
-  const { darkMode } = useDarkMode()
+  const { profile, isAdmin } = useAuth()
   const navigate = useNavigate()
   const [materias, setMaterias] = useState([])
   const [loading, setLoading] = useState(true)
@@ -20,94 +19,88 @@ const MateriaRevisada = () => {
       try {
         setLoading(true)
         const materiasRef = collection(db, 'courses', courseId, 'materiasRevisadas')
-        
-        // Tentar com orderBy primeiro, se falhar, buscar sem orderBy
         let snapshot
         try {
-          const materiasQuery = query(materiasRef, orderBy('materia', 'asc'))
-          snapshot = await getDocs(materiasQuery)
-        } catch (orderByError) {
-          // Se falhar (provavelmente falta índice), buscar sem orderBy e ordenar localmente
-          if (isDevEnv()) {
-            console.warn('orderBy falhou, buscando sem ordenação:', orderByError)
-          }
+          snapshot = await getDocs(query(materiasRef, orderBy('materia', 'asc')))
+        } catch {
           snapshot = await getDocs(materiasRef)
         }
-        
-        const materiasData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-        
-        // Ordenar localmente por nome da matéria se não foi possível usar orderBy
-        materiasData.sort((a, b) => {
-          const nomeA = (a.materia || '').toLowerCase()
-          const nomeB = (b.materia || '').toLowerCase()
-          return nomeA.localeCompare(nomeB)
-        })
-        
+
+        const materiasData = snapshot.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((m) => isContentAvailable(m.status, isAdmin))
+          .sort((a, b) => (a.materia || '').localeCompare(b.materia || ''))
+
         setMaterias(materiasData)
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        if (isDevEnv()) {
-          console.error('Erro ao carregar matérias revisadas:', errorMessage)
-        }
-        setMaterias([]) // Definir array vazio em caso de erro
+      } catch {
+        setMaterias([])
       } finally {
         setLoading(false)
       }
     }
 
-    if (courseId && db) {
-      loadMaterias()
-    } else {
-      setLoading(false)
-    }
-  }, [courseId])
+    if (courseId && db) loadMaterias()
+    else setLoading(false)
+  }, [courseId, isAdmin])
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-alego-600 border-t-transparent"></div>
-          <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">Carregando matérias revisadas...</p>
-        </div>
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
+      <div>
+        <span className="cp-badge cp-badge-accent">Revisão</span>
+        <h1 className="cp-headline mt-3 text-2xl sm:text-3xl">Matérias Revisadas</h1>
+        <p className="mt-2 text-sm text-cp-muted">Conteúdo técnico condensado por disciplina</p>
+      </div>
+
       {materias.length === 0 ? (
-        <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-xl shadow-lg">
-          <p className="text-slate-600 dark:text-slate-400">
-            Nenhuma matéria revisada disponível ainda.
-          </p>
-          <p className="text-sm text-slate-500 dark:text-slate-500 mt-2">
-            O administrador ainda não gerou matérias revisadas para este curso.
+        <div className="cp-card p-12 text-center">
+          <BookOpenIcon className="mx-auto mb-4 h-12 w-12 text-cp-muted" />
+          <p className="font-medium text-cp-text">Nenhuma matéria disponível</p>
+          <p className="mt-2 text-sm text-cp-muted">
+            {isAdmin
+              ? 'Gere matérias no painel admin e clique em Disponibilizar.'
+              : 'O administrador ainda não liberou matérias revisadas para este curso.'}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {materias.map((materia) => (
-            <div
-              key={materia.id}
-              className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-all hover:scale-105"
-              onClick={() => navigate(`/materia-revisada/${materia.id}`)}
-            >
-              <h3 className="text-xl font-bold text-alego-600 dark:text-alego-400 mb-2">
-                {materia.materia}
-              </h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-                Clique para ver detalhes completos
-              </p>
-              {materia.titulo && (
-                <p className="text-xs text-slate-400 dark:text-slate-500 italic truncate">
-                  {materia.titulo}
-                </p>
-              )}
-            </div>
-          ))}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {materias.map((materia, idx) => {
+            const hue = [...(materia.materia || 'M')].reduce((a, c) => a + c.charCodeAt(0), 0) % 360
+            return (
+              <button
+                key={materia.id}
+                type="button"
+                onClick={() => navigate(`/materia-revisada/${materia.id}`)}
+                className="cp-card group p-5 text-left transition hover:border-cp-accent/30"
+              >
+                <div className="mb-4 flex items-start justify-between gap-2">
+                  <span
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white"
+                    style={{ background: `hsl(${hue}, 60%, 50%)` }}
+                  >
+                    {(materia.materia || 'M').charAt(0).toUpperCase()}
+                  </span>
+                  {isAdmin && materia.status !== CONTENT_STATUS.AVAILABLE && (
+                    <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600">
+                      Rascunho
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-sm font-semibold text-cp-text group-hover:text-cp-accent">{materia.materia}</h3>
+                {materia.titulo && (
+                  <p className="mt-1 line-clamp-2 text-xs text-cp-muted">{materia.titulo}</p>
+                )}
+                <ChevronRightIcon className="mt-3 h-4 w-4 text-cp-accent opacity-0 transition group-hover:opacity-100" />
+              </button>
+            )
+          })}
         </div>
       )}
     </div>
@@ -115,4 +108,3 @@ const MateriaRevisada = () => {
 }
 
 export default MateriaRevisada
-

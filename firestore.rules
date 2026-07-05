@@ -147,7 +147,11 @@ service cloud.firestore {
       }
       
       match /config/{configId} {
-        allow read: if isAuthenticated();
+        allow read: if isAuthenticated() && (
+          configId != 'redacao' ||
+          resource.data.status == 'disponivel' ||
+          isAdmin()
+        );
         allow create: if isAuthenticated() && 
                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
@@ -230,7 +234,8 @@ service cloud.firestore {
       }
       
       match /materiasRevisadas/{docId} {
-        allow read: if isAuthenticated();
+        allow read: if isAuthenticated() && 
+                     (resource.data.status == 'disponivel' || isAdmin());
         allow create: if isAuthenticated() && 
                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';

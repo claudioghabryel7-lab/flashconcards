@@ -2,28 +2,31 @@ import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { canAccessRedacao, isTrialMode } from '../utils/trialLimits'
-import { doc, getDoc } from 'firebase/firestore'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
-import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import ContentPublishButton from '../components/ContentPublishButton'
+import { isContentAvailable, toggleContentStatus, defaultContentStatus, CONTENT_STATUS } from '../utils/contentStatus'
 import {
   ClockIcon,
   PlayIcon,
   PauseIcon,
-  TrophyIcon,
-  ArrowDownIcon,
   SparklesIcon,
   DocumentTextIcon,
+  ArrowPathIcon,
+  PencilSquareIcon,
 } from '@heroicons/react/24/outline'
 
 const TreinoRedacao = () => {
   const navigate = useNavigate()
-  const { user, profile } = useAuth()
-  const { darkMode } = useDarkMode()
+  const { user, profile, isAdmin } = useAuth()
   const [loading, setLoading] = useState(false)
+  const [configLoading, setConfigLoading] = useState(true)
   const [redacaoTema, setRedacaoTema] = useState('')
+  const [redacaoStatus, setRedacaoStatus] = useState(defaultContentStatus())
+  const [editingTema, setEditingTema] = useState(false)
+  const [savingTema, setSavingTema] = useState(false)
   const [redacaoTexto, setRedacaoTexto] = useState('')
   const [timeLeft, setTimeLeft] = useState(3600) // 1 hora em segundos
   const [isRunning, setIsRunning] = useState(false)
@@ -97,10 +100,34 @@ const TreinoRedacao = () => {
     loadCourse()
   }, [profile])
 
-  // Gerar tema de redação ao carregar
+  // Carregar tema configurado pelo admin (ou gerar se admin sem tema)
   useEffect(() => {
-    generateTheme()
-  }, [selectedCourseId])
+    if (selectedCourseId === null && profile === undefined) return
+
+    const loadConfig = async () => {
+      setConfigLoading(true)
+      try {
+        const courseId = getCourseId()
+        const configSnap = await getDoc(doc(db, 'courses', courseId, 'config', 'redacao'))
+        if (configSnap.exists()) {
+          const data = configSnap.data()
+          setRedacaoTema(data.tema || '')
+          setRedacaoStatus(data.status || defaultContentStatus())
+        } else {
+          setRedacaoStatus(defaultContentStatus())
+          if (isAdmin) {
+            await generateTheme()
+          }
+        }
+      } catch (err) {
+        console.error(err)
+      } finally {
+        setConfigLoading(false)
+      }
+    }
+
+    loadConfig()
+  }, [selectedCourseId, profile, isAdmin])
 
   // Timer
   useEffect(() => {
@@ -185,6 +212,9 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       theme = theme.replace(/^[-•]\s*/, '').trim()
       
       setRedacaoTema(theme)
+      if (isAdmin) {
+        await saveRedacaoConfig(theme, redacaoStatus)
+      }
       setIsRunning(true)
     } catch (err) {
       console.error('Erro ao gerar tema:', err)
@@ -193,6 +223,30 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
     } finally {
       setLoading(false)
     }
+  }
+
+  const saveRedacaoConfig = async (tema = redacaoTema, status = redacaoStatus) => {
+    setSavingTema(true)
+    try {
+      await setDoc(
+        doc(db, 'courses', getCourseId(), 'config', 'redacao'),
+        { tema: tema.trim(), status, updatedAt: serverTimestamp() },
+        { merge: true }
+      )
+      setRedacaoStatus(status)
+      setEditingTema(false)
+    } catch (err) {
+      console.error(err)
+      alert('Erro ao salvar tema')
+    } finally {
+      setSavingTema(false)
+    }
+  }
+
+  const handleToggleRedacaoStatus = async () => {
+    const novo = toggleContentStatus(redacaoStatus)
+    setRedacaoStatus(novo)
+    await saveRedacaoConfig(redacaoTema, novo)
   }
 
   // Gerar novo tema
@@ -534,128 +588,106 @@ CRÍTICO:
   // Tela de resultados
   if (resultado) {
     return (
-      <div className="space-y-6 py-2">
-        <div className="max-w-4xl mx-auto">
-          <div className="cp-card rounded-2xl p-8">
-            <h2 className="cp-headline mb-6 text-2xl">Resultado do Treino de Redação</h2>
+      <div className="space-y-6 pb-10">
+        <div className="max-w-4xl mx-auto space-y-4">
+          <div>
+            <span className="cp-badge cp-badge-accent">Resultado</span>
+            <h1 className="cp-headline mt-3 text-2xl">Treino de Redação</h1>
+          </div>
 
-            {/* Nota */}
-            <div className="mb-6 p-6 bg-gradient-to-r from-alego-600 to-alego-700 rounded-xl text-white">
-              <p className="text-sm opacity-90 mb-1">Sua Nota</p>
-              <p className="text-5xl font-black mb-2">{resultado.nota}</p>
-              <p className="text-sm opacity-80">de 1000 pontos</p>
+          <div className="cp-card overflow-hidden p-0">
+            <div className="bg-gradient-to-r from-cp-accent to-cp-accent2 p-6 text-white">
+              <p className="font-mono text-[10px] uppercase tracking-wider opacity-80">Sua nota</p>
+              <p className="mt-1 text-5xl font-black">{resultado.nota}</p>
+              <p className="mt-1 text-sm opacity-80">de 1000 pontos</p>
             </div>
 
-            {/* Critérios */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-              <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Domínio</p>
-                <p className="text-2xl font-bold text-purple-600">{resultado.criterios.dominio}</p>
-              </div>
-              <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Compreensão</p>
-                <p className="text-2xl font-bold text-blue-600">{resultado.criterios.compreensao}</p>
-              </div>
-              <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Argumentação</p>
-                <p className="text-2xl font-bold text-green-600">{resultado.criterios.argumentacao}</p>
-              </div>
-              <div className="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Estrutura</p>
-                <p className="text-2xl font-bold text-yellow-600">{resultado.criterios.estrutura}</p>
-              </div>
-              <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Conhecimento</p>
-                <p className="text-2xl font-bold text-orange-600">{resultado.criterios.conhecimento}</p>
-              </div>
+            <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-5">
+              {[
+                { label: 'Domínio', value: resultado.criterios.dominio },
+                { label: 'Compreensão', value: resultado.criterios.compreensao },
+                { label: 'Argumentação', value: resultado.criterios.argumentacao },
+                { label: 'Estrutura', value: resultado.criterios.estrutura },
+                { label: 'Conhecimento', value: resultado.criterios.conhecimento },
+              ].map((c) => (
+                <div key={c.label} className="cp-card !p-3 text-center">
+                  <p className="font-mono text-[10px] uppercase text-cp-muted">{c.label}</p>
+                  <p className="mt-1 text-xl font-semibold text-cp-accent">{c.value}</p>
+                </div>
+              ))}
             </div>
+          </div>
 
-            {/* Estatísticas */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="text-center p-4 bg-slate-50 dark:bg-slate-700 rounded-xl">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Parágrafos</p>
-                <p className="text-2xl font-bold">{resultado.paragraphCount}</p>
-              </div>
-              <div className="text-center p-4 bg-slate-50 dark:bg-slate-700 rounded-xl">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Linhas</p>
-                <p className="text-2xl font-bold">{resultado.lines}</p>
-              </div>
-              <div className="text-center p-4 bg-slate-50 dark:bg-slate-700 rounded-xl">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Palavras</p>
-                <p className="text-2xl font-bold">{resultado.wordCount}</p>
-              </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="cp-card p-4 text-center">
+              <p className="font-mono text-[10px] uppercase text-cp-muted">Parágrafos</p>
+              <p className="mt-1 text-xl font-semibold text-cp-text">{resultado.paragraphCount}</p>
             </div>
+            <div className="cp-card p-4 text-center">
+              <p className="font-mono text-[10px] uppercase text-cp-muted">Linhas</p>
+              <p className="mt-1 text-xl font-semibold text-cp-text">{resultado.lines}</p>
+            </div>
+            <div className="cp-card p-4 text-center">
+              <p className="font-mono text-[10px] uppercase text-cp-muted">Palavras</p>
+              <p className="mt-1 text-xl font-semibold text-cp-text">{resultado.wordCount}</p>
+            </div>
+          </div>
 
-            {/* Feedback */}
-            <div className="mb-6 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-              <h3 className="text-xl font-bold mb-4 text-blue-700 dark:text-blue-300">
-                Feedback Geral
-              </h3>
-              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-                {resultado.feedback}
+          <div className="cp-card border-cp-accent/30 p-5 sm:p-6">
+            <p className="font-mono text-[11px] uppercase tracking-wider text-cp-accent mb-3">Feedback geral</p>
+            <p className="text-sm leading-relaxed text-cp-text whitespace-pre-wrap">{resultado.feedback}</p>
+          </div>
+
+          {resultado.dicas && resultado.dicas.length > 0 && (
+            <div className="cp-card p-5 sm:p-6">
+              <p className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-emerald-600">
+                <SparklesIcon className="h-4 w-4" />
+                Dicas de melhoria
               </p>
+              <ul className="space-y-2">
+                {resultado.dicas.map((dica, index) => (
+                  <li key={index} className="flex items-start gap-2 text-sm text-cp-text">
+                    <span className="font-bold text-emerald-500">•</span>
+                    <span>{dica}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
+          )}
 
-            {/* Dicas de Melhoria */}
-            {resultado.dicas && resultado.dicas.length > 0 && (
-              <div className="mb-6 p-6 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
-                <h3 className="text-xl font-bold mb-4 text-green-700 dark:text-green-300 flex items-center gap-2">
-                  <SparklesIcon className="h-6 w-6" />
-                  Dicas de Melhoria
-                </h3>
-                <ul className="space-y-2">
-                  {resultado.dicas.map((dica, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
-                      <span className="text-green-600 dark:text-green-400 font-bold mt-0.5">•</span>
-                      <span>{dica}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+          <div className="cp-card border-amber-500/30 p-5 sm:p-6">
+            <p className="mb-2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-amber-600">
+              <DocumentTextIcon className="h-4 w-4" />
+              Redação nota 1000
+            </p>
+            {resultado.tema && (
+              <p className="mb-3 text-xs font-medium text-cp-muted">Tema: {resultado.tema}</p>
             )}
-
-            <div className="mb-6 p-6 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
-              <h3 className="text-xl font-bold mb-4 text-amber-700 dark:text-amber-300 flex items-center gap-2">
-                <DocumentTextIcon className="h-6 w-6" />
-                🏆 Redação Nota 1000 (Esqueleto Perfeito)
-              </h3>
-              <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">
-                Redação exemplar gerada para o tema atual{courseName ? ` — ${courseName}` : ''}{courseCompetition ? ` (${courseCompetition})` : ''}, no estilo da banca {courseBanca}.
+            <div className="rounded-xl border border-cp-border bg-cp-bg/40 p-4">
+              <p className="font-serif text-sm leading-relaxed text-cp-text whitespace-pre-wrap">
+                {resultado?.redacaoModelo || 'Redação modelo não disponível. Tente analisar novamente.'}
               </p>
-              {resultado.tema && (
-                <p className="text-xs text-amber-700 dark:text-amber-300 mb-3 font-medium">
-                  Tema: {resultado.tema}
-                </p>
-              )}
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-amber-300 dark:border-amber-700">
-                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap font-serif">
-                  {resultado?.redacaoModelo || 'Redação modelo não disponível. Tente analisar novamente.'}
-                </p>
-              </div>
             </div>
+          </div>
 
-            {/* Botões */}
-            <div className="flex gap-4">
-              <button
-                onClick={handleNewTheme}
-                className="flex-1 bg-alego-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-alego-700 flex items-center justify-center gap-2"
-              >
-                Novo Tema
-              </button>
-              <button
-                onClick={() => {
-                  setResultado(null) // Limpar resultado anterior
-                  setRedacaoTexto('') // Limpar texto
-                  setTimeLeft(3600) // Resetar timer
-                  setIsRunning(false) // Parar timer
-                  setAnalizing(false) // Limpar estado de análise
-                  generateTheme() // Gerar novo tema
-                }}
-                className="flex-1 bg-slate-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-slate-700 flex items-center justify-center gap-2"
-              >
-                Treinar Novamente
-              </button>
-            </div>
+          <div className="flex gap-3">
+            <button type="button" onClick={handleNewTheme} className="cp-btn-primary flex-1 !py-3">
+              Novo tema
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setResultado(null)
+                setRedacaoTexto('')
+                setTimeLeft(3600)
+                setIsRunning(false)
+                setAnalizing(false)
+                generateTheme()
+              }}
+              className="cp-btn-ghost flex-1 !py-3"
+            >
+              Treinar novamente
+            </button>
           </div>
         </div>
       </div>
@@ -663,107 +695,104 @@ CRÍTICO:
   }
 
   return (
-    <div className="space-y-6 py-2">
-      <div className="max-w-4xl mx-auto">
-        {/* Header com timer */}
-        <div className="cp-card rounded-xl p-4 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <ClockIcon className={`h-5 w-5 ${timeLeft < 600 ? 'text-red-500' : 'text-alego-600'}`} />
-              <span className={`font-bold text-lg ${timeLeft < 600 ? 'text-red-500' : ''}`}>
-                {formatTime(timeLeft)}
-              </span>
+    <div className="space-y-6 pb-10">
+      {configLoading ? (
+        <div className="cp-card flex min-h-[40vh] items-center justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+        </div>
+      ) : !isContentAvailable(redacaoStatus, isAdmin) ? (
+        <div className="cp-card p-12 text-center max-w-lg mx-auto">
+          <p className="text-4xl mb-3">🔒</p>
+          <p className="font-medium text-cp-text">Redação em preparação</p>
+          <p className="mt-2 text-sm text-cp-muted">O administrador ainda não disponibilizou o treino de redação.</p>
+        </div>
+      ) : (
+      <div className="max-w-4xl mx-auto space-y-4">
+        <div>
+          <span className="cp-badge cp-badge-accent">Redação</span>
+          <h1 className="cp-headline mt-3 text-2xl">Treino de Redação</h1>
+          {courseName && <p className="mt-1 text-sm text-cp-muted">{courseName} · Banca {courseBanca}</p>}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="cp-card p-4">
+            <p className="font-mono text-[10px] uppercase text-cp-muted">Tempo</p>
+            <p className={`mt-1 text-xl font-semibold ${timeLeft < 600 ? 'text-red-500' : 'text-cp-text'}`}>
+              {formatTime(timeLeft)}
+            </p>
+            <button type="button" onClick={() => setIsRunning(!isRunning)} className="mt-2 cp-btn-ghost !py-1 !text-xs">
+              {isRunning ? <><PauseIcon className="h-3 w-3" /> Pausar</> : <><PlayIcon className="h-3 w-3" /> Iniciar</>}
+            </button>
+          </div>
+          <div className="cp-card p-4">
+            <p className="font-mono text-[10px] uppercase text-cp-muted">Palavras</p>
+            <p className="mt-1 text-xl font-semibold text-cp-text">{wordCount}</p>
+          </div>
+          <div className="cp-card p-4">
+            <p className="font-mono text-[10px] uppercase text-cp-muted">Parágrafos</p>
+            <p className="mt-1 text-xl font-semibold text-cp-text">{paragraphCount}</p>
+          </div>
+          <div className="cp-card p-4">
+            <p className="font-mono text-[10px] uppercase text-cp-muted">Linhas</p>
+            <p className="mt-1 text-xl font-semibold text-cp-text">{lines}</p>
+          </div>
+        </div>
+
+        <div className="cp-card border-cp-accent/30 p-5 sm:p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <p className="font-mono text-[11px] uppercase tracking-wider text-cp-accent">Tema proposto</p>
+            <div className="flex flex-wrap gap-2">
+              {isAdmin && (
+                <>
+                  <ContentPublishButton status={redacaoStatus} onToggle={handleToggleRedacaoStatus} size="xs" />
+                  <button type="button" onClick={() => setEditingTema(!editingTema)} className="cp-btn-ghost !py-1 !text-xs">
+                    <PencilSquareIcon className="h-3.5 w-3.5" />
+                    Editar tema
+                  </button>
+                </>
+              )}
+              {isAdmin && (
+                <button type="button" onClick={generateTheme} disabled={loading} className="cp-btn-ghost !py-1 !text-xs">
+                  <ArrowPathIcon className="h-3.5 w-3.5" />
+                  {loading ? 'Gerando...' : 'Gerar com IA'}
+                </button>
+              )}
             </div>
-            <button
-              onClick={() => setIsRunning(!isRunning)}
-              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-            >
-              {isRunning ? <PauseIcon className="h-5 w-5" /> : <PlayIcon className="h-5 w-5" />}
-            </button>
           </div>
-          <div className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400 mt-2">
-            <span>{charCount} caracteres</span>
-            <span>{wordCount} palavras</span>
-            <span>{paragraphCount} parágrafos</span>
-            <span>{lines} linhas</span>
-          </div>
+          {editingTema && isAdmin ? (
+            <div className="space-y-3">
+              <textarea
+                value={redacaoTema}
+                onChange={(e) => setRedacaoTema(e.target.value)}
+                rows={4}
+                className="w-full rounded-xl border border-cp-border bg-cp-bg/60 p-3 text-sm text-cp-text"
+              />
+              <button type="button" onClick={() => saveRedacaoConfig()} disabled={savingTema} className="cp-btn-primary !py-2 !text-sm">
+                {savingTema ? 'Salvando...' : 'Salvar tema'}
+              </button>
+            </div>
+          ) : (
+            <p className="text-base font-medium leading-relaxed text-cp-text sm:text-lg">
+              {loading ? 'Gerando tema...' : redacaoTema || 'Tema não definido'}
+            </p>
+          )}
+          <p className="mt-3 text-xs text-cp-muted">Dissertação argumentativa · 25–30 linhas · 4 espaços = novo parágrafo</p>
         </div>
 
-        {/* Tema da redação */}
-        <div className="cp-card mb-4 rounded-xl border-2 border-cp-accent/30 p-6">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xl font-bold text-alego-600">Tema da Redação</h2>
-            <button
-              onClick={generateTheme}
-              disabled={loading}
-              className="text-sm px-3 py-1 bg-alego-600 text-white rounded-lg hover:bg-alego-700 disabled:opacity-50"
-            >
-              {loading ? 'Gerando...' : 'Novo Tema'}
-            </button>
-          </div>
-          <p className="text-lg font-medium text-slate-700 dark:text-slate-300">
-            {loading ? 'Gerando tema...' : (redacaoTema || 'Carregando tema...')}
-          </p>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-            Escreva uma dissertação argumentativa de 25 a 30 linhas sobre o tema proposto.
-          </p>
-          <p className="text-sm text-alego-600 dark:text-alego-400 mt-2 font-semibold">
-            💡 Dica: Use 4 espaços no início de uma linha para criar um parágrafo.
-          </p>
-        </div>
-
-        {/* Editor de redação */}
-        <div className={`rounded-xl p-6 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
-          <div className="flex items-center justify-between mb-3">
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
-              Sua Redação
-            </label>
-            <button
-              type="button"
-              onClick={() => {
-                const textarea = textareaRef.current
-                if (!textarea) return
-                const start = textarea.selectionStart
-                const end = textarea.selectionEnd
-                const textBefore = redacaoTexto.substring(0, start)
-                const textAfter = redacaoTexto.substring(end)
-                const newText = textBefore + '\n' + textAfter
-                setRedacaoTexto(newText)
-                setTimeout(() => {
-                  const newPosition = start + 1
-                  textarea.focus()
-                  textarea.setSelectionRange(newPosition, newPosition)
-                }, 0)
-              }}
-              disabled={analizing || timeLeft === 0}
-              className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Inserir quebra de linha"
-            >
-              <ArrowDownIcon className="h-4 w-4" />
-              Quebra de Linha
-            </button>
-          </div>
+        <div className="cp-card p-5 sm:p-6">
+          <label className="mb-3 block text-sm font-medium text-cp-text">Sua redação</label>
           <textarea
             ref={textareaRef}
             value={redacaoTexto}
             onChange={(e) => setRedacaoTexto(e.target.value)}
-            placeholder="Comece a escrever sua redação aqui...
-
-Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
-
-    Exemplo: Este é um parágrafo porque começa com 4 espaços."
-            className="w-full h-96 p-4 rounded-lg border-2 border-slate-300 dark:border-slate-600 focus:border-alego-500 focus:outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-base leading-relaxed resize-none font-serif font-mono"
+            placeholder="Comece a escrever sua redação aqui..."
+            className="min-h-[360px] w-full resize-none rounded-xl border border-cp-border bg-cp-bg/40 p-4 font-serif text-base leading-relaxed text-cp-text focus:border-cp-accent/40 focus:outline-none focus:ring-2 focus:ring-cp-accent/20"
             disabled={analizing || timeLeft === 0}
-            style={{
-              tabSize: 4,
-            }}
           />
-          <div className="mt-4 flex items-center justify-between text-sm">
-            <span className="text-slate-500 dark:text-slate-400">
-              Mínimo recomendado: 25 linhas | Parágrafos: {paragraphCount}
-            </span>
-            <span className={`font-semibold ${wordCount < 200 ? 'text-orange-500' : wordCount > 500 ? 'text-blue-500' : 'text-green-500'}`}>
-              {wordCount >= 200 && wordCount <= 500 ? '✓ Tamanho adequado' : wordCount < 200 ? '⚠ Muito curta' : '⚠ Muito longa'}
+          <div className="mt-3 flex items-center justify-between text-xs text-cp-muted">
+            <span>{charCount} caracteres</span>
+            <span className={wordCount < 200 ? 'text-amber-500' : 'text-emerald-500'}>
+              {wordCount < 200 ? 'Muito curta' : 'Tamanho ok'}
             </span>
           </div>
         </div>
@@ -810,7 +839,7 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
           <button
             onClick={handleFinish}
             disabled={analizing || !redacaoTexto.trim()}
-            className="flex-1 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="cp-btn-primary flex-1 !py-3"
           >
             {analizing ? (
               <>
@@ -819,13 +848,14 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
               </>
             ) : (
               <>
-                <TrophyIcon className="h-5 w-5" />
+                <SparklesIcon className="h-5 w-5" />
                 <span>Finalizar e Ver Resultado</span>
               </>
             )}
           </button>
         </div>
       </div>
+      )}
     </div>
   )
 }
