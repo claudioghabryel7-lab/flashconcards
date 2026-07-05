@@ -15,6 +15,15 @@ service cloud.firestore {
             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+
+    /** Conteúdo liberado pelo admin (status ausente = bloqueado para alunos) */
+    function isPublishedContent() {
+      return resource.data.status == 'disponivel';
+    }
+
+    function canReadPublishedContent() {
+      return isAuthenticated() && (isPublishedContent() || isAdmin());
+    }
     
     match /users/{userId} {
       allow read: if isAuthenticated() || (request.auth != null && request.auth.uid == userId);
@@ -231,11 +240,15 @@ service cloud.firestore {
         allow delete: if isAuthenticated() && 
                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+
+        match /partes/{parteId} {
+          allow read: if isAuthenticated();
+          allow create, update, delete: if isAdmin();
+        }
       }
       
       match /materiasRevisadas/{docId} {
-        allow read: if isAuthenticated() && 
-                     (resource.data.status == 'disponivel' || isAdmin());
+        allow read: if canReadPublishedContent();
         allow create: if isAuthenticated() && 
                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
@@ -248,8 +261,7 @@ service cloud.firestore {
       }
       
       match /conteudosCompletos/{docId} {
-        allow read: if isAuthenticated() &&
-                     (resource.data.status == 'disponivel' || isAdmin());
+        allow read: if canReadPublishedContent();
         allow create: if isAuthenticated();
         allow update: if isAuthenticated();
         allow delete: if isAdmin();
@@ -261,8 +273,7 @@ service cloud.firestore {
       }
       
       match /questoesTopico/{docId} {
-        allow read: if isAuthenticated() && 
-                     (resource.data.status == 'disponivel' || isAdmin());
+        allow read: if canReadPublishedContent();
         allow create: if isAdmin();
         allow update: if isAdmin();
         allow delete: if isAdmin();
@@ -276,8 +287,7 @@ service cloud.firestore {
       }
       
       match /flashcards/{flashcardId} {
-        allow read: if true && 
-                     (resource.data.status == 'disponivel' || isAdmin());
+        allow read: if canReadPublishedContent();
         allow create: if isAuthenticated() && 
                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
@@ -290,16 +300,14 @@ service cloud.firestore {
       }
       
       match /conteudosIncidencia/{docId} {
-        allow read: if isAuthenticated() &&
-                     (resource.data.status == 'disponivel' || isAdmin());
+        allow read: if canReadPublishedContent();
         allow create: if isAuthenticated();
         allow update: if isAuthenticated();
         allow delete: if isAdmin();
       }
       
       match /questoesIncidencia/{docId} {
-        allow read: if isAuthenticated() && 
-                     (resource.data.status == 'disponivel' || isAdmin());
+        allow read: if canReadPublishedContent();
         allow create: if isAdmin();
         allow update: if isAdmin();
         allow delete: if isAdmin();

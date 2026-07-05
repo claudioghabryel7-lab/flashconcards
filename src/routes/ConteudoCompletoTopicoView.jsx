@@ -106,32 +106,29 @@ const sanitizeTopicKeyForFirestore = (topicKey = '') => {
 
 // Função reversa para buscar documentos: tenta encontrar por topicKey sanitizado ou original
 const findDocumentByTopicKey = async (courseId, topicKey) => {
-  // Tentar com a chave sanitizada primeiro
-  const sanitizedKey = sanitizeTopicKeyForFirestore(topicKey)
-  try {
-    const sanitizedRef = doc(db, 'courses', courseId, 'conteudosCompletos', sanitizedKey)
-    const sanitizedDoc = await getDoc(sanitizedRef)
-    if (sanitizedDoc.exists()) {
-      return { id: sanitizedDoc.id, ...sanitizedDoc.data() }
-    }
-  } catch (e) {
-    // Ignorar erro se a chave sanitizada for inválida
-  }
-  
-  // Tentar com a chave original (para compatibilidade com documentos antigos)
-  // Mas apenas se não contiver caracteres problemáticos
-  if (!topicKey.includes('::') && !topicKey.includes('/') && !topicKey.includes('\\')) {
+  const tryRead = async (docId) => {
+    const ref = doc(db, 'courses', courseId, 'conteudosCompletos', docId)
     try {
-      const originalRef = doc(db, 'courses', courseId, 'conteudosCompletos', topicKey)
-      const originalDoc = await getDoc(originalRef)
-      if (originalDoc.exists()) {
-        return { id: originalDoc.id, ...originalDoc.data() }
+      const snap = await getDoc(ref)
+      if (snap.exists()) {
+        return { id: snap.id, ...snap.data() }
       }
     } catch (e) {
-      // Ignorar erro se a chave original for inválida
+      if (e?.code === 'permission-denied') {
+        return { locked: true }
+      }
     }
+    return null
   }
-  
+
+  const sanitizedKey = sanitizeTopicKeyForFirestore(topicKey)
+  const fromSanitized = await tryRead(sanitizedKey)
+  if (fromSanitized) return fromSanitized
+
+  if (!topicKey.includes('::') && !topicKey.includes('/') && !topicKey.includes('\\')) {
+    return tryRead(topicKey)
+  }
+
   return null
 }
 
@@ -296,6 +293,11 @@ const ConteudoCompletoTopicoView = () => {
         
         // Tentar encontrar documento usando função que sanitiza a chave
         const foundDoc = await findDocumentByTopicKey(resolvedCourseId, trimmedKey)
+        if (foundDoc?.locked) {
+          setConteudo({ status: CONTENT_STATUS.UNAVAILABLE, materia: effectiveTopicNome || trimmedKey })
+          setLoading(false)
+          return
+        }
         if (foundDoc) {
           setConteudo(foundDoc)
           setLoading(false)
@@ -304,6 +306,11 @@ const ConteudoCompletoTopicoView = () => {
 
         // 2) Buscar por número do tópico (considerando possíveis duplicidades)
         const conteudosRef = collection(db, 'courses', resolvedCourseId, 'conteudosCompletos')
+
+        const buildQuery = (...extra) =>
+          isAdmin
+            ? query(conteudosRef, ...extra)
+            : query(conteudosRef, where('status', '==', CONTENT_STATUS.AVAILABLE), ...extra)
 
         const tryMatchFromSnapshot = (snap) => {
           if (snap.empty) return null
@@ -341,7 +348,7 @@ const ConteudoCompletoTopicoView = () => {
         }
 
         if (topicNumeroFromKey) {
-          const qNumero = query(conteudosRef, where('numero', '==', topicNumeroFromKey), limit(10))
+          const qNumero = buildQuery(where('numero', '==', topicNumeroFromKey), limit(10))
           const numeroSnap = await getDocs(qNumero)
           const matchedFromNumero = tryMatchFromSnapshot(numeroSnap)
           if (matchedFromNumero) {
@@ -353,7 +360,7 @@ const ConteudoCompletoTopicoView = () => {
 
         // 3) Buscar por nome/matéria se tivermos essa informação
         if (effectiveTopicNome) {
-          const qMateria = query(conteudosRef, where('materia', '==', effectiveTopicNome), limit(10))
+          const qMateria = buildQuery(where('materia', '==', effectiveTopicNome), limit(10))
           const materiaSnap = await getDocs(qMateria)
           const matchedFromMateria = tryMatchFromSnapshot(materiaSnap)
           if (matchedFromMateria) {
@@ -382,7 +389,7 @@ const ConteudoCompletoTopicoView = () => {
     }
 
     loadConteudo()
-  }, [resolvedTopicKey, resolvedCourseId])
+  }, [resolvedTopicKey, resolvedCourseId, isAdmin, effectiveTopicNome, topicNumeroFromKey])
 
   // Registrar automaticamente a matéria estudada quando o conteúdo for carregado
   useEffect(() => {

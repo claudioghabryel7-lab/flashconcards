@@ -20,6 +20,12 @@ export const metadata: Metadata = {
   description:
     'Plataforma preditiva de estudos para concursos públicos com IA, edital verticalizado, flashcards e questões personalizadas por banca.',
   applicationName: 'Concurseiro Preditivo',
+  icons: {
+    icon: [{ url: '/course-icons/logo.png', type: 'image/png' }],
+    shortcut: '/course-icons/logo.png',
+    apple: '/course-icons/logo.png',
+  },
+  manifest: '/manifest.json',
 }
 
 export const dynamic = 'force-dynamic'

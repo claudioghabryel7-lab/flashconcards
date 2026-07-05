@@ -65,7 +65,9 @@ const FlashcardsTopicoView = () => {
       setLoading(true)
       setError(null)
       try {
-        let existing = await fetchFlashcardsForTopico(courseId, disciplina, modulo, topicKey)
+        let existing = await fetchFlashcardsForTopico(courseId, disciplina, modulo, topicKey, {
+          includeUnpublished: isAdmin,
+        })
 
         if (existing.length === 0 && isAdmin) {
           setGenerating(true)

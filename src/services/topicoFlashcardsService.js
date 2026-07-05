@@ -4,6 +4,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
+  where,
   writeBatch,
   serverTimestamp,
 } from 'firebase/firestore'
@@ -14,21 +16,65 @@ import {
   formatTopicoAsModulo,
 } from '../utils/editalVerticalizadoLoader'
 import { callGeminiWithRetry, extractJsonFromResponse } from '../utils/geminiApi'
+import { CONTENT_STATUS } from '../utils/contentStatus'
 
 /**
  * Busca flashcards já salvos para um tópico (compartilhados entre usuários do curso).
+ * Alunos: apenas status disponivel (exigido pelas regras do Firestore).
  */
-export async function fetchFlashcardsForTopico(courseId, disciplina, modulo, topicKey) {
+export async function fetchFlashcardsForTopico(
+  courseId,
+  disciplina,
+  modulo,
+  topicKey,
+  { includeUnpublished = false } = {}
+) {
   const resolvedId = courseId || 'alego-default'
   const flashcardsRef = collection(db, 'courses', resolvedId, 'flashcards')
-  const snapshot = await getDocs(flashcardsRef)
 
-  return snapshot.docs
-    .map((d) => normalizeFlashcard({ id: d.id, ...d.data() }))
-    .filter((card) => {
-      if (topicKey && card.topicKey === topicKey) return true
-      return cardMatchesModule(card, disciplina, modulo)
-    })
+  const filterClient = (docs) =>
+    docs
+      .map((d) => normalizeFlashcard({ id: d.id, ...d.data() }))
+      .filter((card) => {
+        if (topicKey && card.topicKey === topicKey) return true
+        return cardMatchesModule(card, disciplina, modulo)
+      })
+
+  if (includeUnpublished) {
+    const snapshot = await getDocs(flashcardsRef)
+    return filterClient(snapshot.docs)
+  }
+
+  const published = CONTENT_STATUS.AVAILABLE
+  let docs = []
+
+  if (topicKey) {
+    const byTopic = await getDocs(
+      query(flashcardsRef, where('status', '==', published), where('topicKey', '==', topicKey))
+    )
+    docs = byTopic.docs
+  }
+
+  if (docs.length === 0 && disciplina && modulo) {
+    const byModule = await getDocs(
+      query(
+        flashcardsRef,
+        where('status', '==', published),
+        where('materia', '==', disciplina),
+        where('modulo', '==', modulo)
+      )
+    )
+    docs = byModule.docs
+  }
+
+  if (docs.length === 0 && disciplina) {
+    const byMateria = await getDocs(
+      query(flashcardsRef, where('status', '==', published), where('materia', '==', disciplina))
+    )
+    docs = byMateria.docs.filter((d) => filterClient([d]).length > 0)
+  }
+
+  return filterClient(docs)
 }
 
 /**

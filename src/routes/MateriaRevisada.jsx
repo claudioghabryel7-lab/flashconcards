@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, getDocs, orderBy, query } from 'firebase/firestore'
+import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import { BookOpenIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -20,10 +20,26 @@ const MateriaRevisada = () => {
         setLoading(true)
         const materiasRef = collection(db, 'courses', courseId, 'materiasRevisadas')
         let snapshot
-        try {
-          snapshot = await getDocs(query(materiasRef, orderBy('materia', 'asc')))
-        } catch {
-          snapshot = await getDocs(materiasRef)
+        if (isAdmin) {
+          try {
+            snapshot = await getDocs(query(materiasRef, orderBy('materia', 'asc')))
+          } catch {
+            snapshot = await getDocs(materiasRef)
+          }
+        } else {
+          try {
+            snapshot = await getDocs(
+              query(
+                materiasRef,
+                where('status', '==', CONTENT_STATUS.AVAILABLE),
+                orderBy('materia', 'asc')
+              )
+            )
+          } catch {
+            snapshot = await getDocs(
+              query(materiasRef, where('status', '==', CONTENT_STATUS.AVAILABLE))
+            )
+          }
         }
 
         const materiasData = snapshot.docs

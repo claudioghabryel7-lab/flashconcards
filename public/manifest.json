@@ -1,18 +1,23 @@
 {
-  "name": "FlashConCards - Flashcards para Concursos",
-  "short_name": "FlashConCards",
-  "description": "A melhor plataforma de flashcards para concursos públicos. Estude para Polícia Militar, PMGO, PC e muito mais!",
+  "name": "Concurseiro Preditivo",
+  "short_name": "Concurseiro",
+  "description": "Plataforma preditiva de estudos para concursos públicos com IA, edital verticalizado e flashcards.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#667eea",
+  "background_color": "#0a0e17",
+  "theme_color": "#6366f1",
   "orientation": "portrait-primary",
-  "icons": [],
+  "icons": [
+    {
+      "src": "/course-icons/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
   "categories": ["education", "productivity"],
   "lang": "pt-BR",
   "dir": "ltr",
   "scope": "/",
   "prefer_related_applications": false
 }
-
-
