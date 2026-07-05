@@ -566,11 +566,10 @@ service cloud.firestore {
     }
     
     match /sharedQuestoesAccess/{accessId} {
-      allow read: if isAuthenticated() && 
-                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow read: if isAdmin();
       allow create: if true;
-      allow update: if false;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['completed', 'acertos', 'erros', 'aproveitamento', 'totalQuestoes', 'completedAt']);
       allow delete: if isAdmin();
     }
     

@@ -1,9 +1,17 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { doc, getDoc, setDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore'
-import { ArrowLeftIcon, CheckCircleIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline'
-import ReactMarkdown from 'react-markdown'
+import { useParams, useNavigate, Link } from 'react-router-dom'
+import { doc, getDoc, updateDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore'
+import { ArrowLeftIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
+import {
+  QuestoesLoading,
+  QuestoesHeader,
+  QuestoesProgressBar,
+  QuestaoEnunciadoCard,
+  QuestaoAlternativas,
+  QuestaoExplicacao,
+  ResultadoDesempenho,
+} from '../components/QuestoesPraticaCP'
 
 export default function SharedQuestaoView() {
   const { questaoId } = useParams()
@@ -13,11 +21,13 @@ export default function SharedQuestaoView() {
   const [error, setError] = useState('')
   const [showAccessForm, setShowAccessForm] = useState(true)
   const [accessData, setAccessData] = useState({ nome: '' })
+  const [accessDocId, setAccessDocId] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [accessGranted, setAccessGranted] = useState(false)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [selectedAnswer, setSelectedAnswer] = useState(null)
   const [showResult, setShowResult] = useState(false)
+  const [answers, setAnswers] = useState([])
   const [desempenho, setDesempenho] = useState(null)
 
   useEffect(() => {
@@ -29,20 +39,18 @@ export default function SharedQuestaoView() {
       setLoading(true)
       const questaoRef = doc(db, 'sharedQuestoes', questaoId)
       const questaoDoc = await getDoc(questaoRef)
-      
+
       if (!questaoDoc.exists()) {
         setError('Questões não encontradas ou expiraram.')
         return
       }
-      
+
       const data = questaoDoc.data()
-      
-      // Verificar se o link está ativo
       if (data.status === 'inativo') {
         setError('Este link foi desativado pelo administrador.')
         return
       }
-      
+
       setQuestoesData(data)
     } catch (err) {
       console.error('Erro ao carregar questões:', err)
@@ -54,22 +62,20 @@ export default function SharedQuestaoView() {
 
   const handleAccessSubmit = async (e) => {
     e.preventDefault()
-    
-    if (!accessData.nome) {
+    if (!accessData.nome?.trim()) {
       alert('Por favor, preencha seu nome.')
       return
     }
 
     try {
       setSubmitting(true)
-      
-      // Registrar acesso
-      await addDoc(collection(db, 'sharedQuestoesAccess'), {
+      const ref = await addDoc(collection(db, 'sharedQuestoesAccess'), {
         questaoId,
-        nome: accessData.nome,
+        nome: accessData.nome.trim(),
         accessedAt: serverTimestamp(),
+        completed: false,
       })
-      
+      setAccessDocId(ref.id)
       setAccessGranted(true)
       setShowAccessForm(false)
     } catch (err) {
@@ -81,12 +87,47 @@ export default function SharedQuestaoView() {
   }
 
   const handleAnswer = (answer) => {
+    const questao = questoesData.questoes[currentQuestionIndex]
+    const correta = questao.respostaCorreta || questao.correta
     setSelectedAnswer(answer)
+    setAnswers((prev) => [
+      ...prev,
+      {
+        isCorrect: answer === correta,
+        assunto: questao.assunto || '',
+        probabilidade: questao.probabilidade || 0,
+      },
+    ])
     setShowResult(true)
   }
 
+  const calcularDesempenho = async () => {
+    const totalQuestoes = answers.length
+    const acertos = answers.filter((a) => a.isCorrect).length
+    const erros = totalQuestoes - acertos
+    const aproveitamento = totalQuestoes > 0 ? Math.round((acertos / totalQuestoes) * 100) : 0
+
+    const result = { totalQuestoes, acertos, erros, aproveitamento }
+    setDesempenho(result)
+
+    if (accessDocId) {
+      try {
+        await updateDoc(doc(db, 'sharedQuestoesAccess', accessDocId), {
+          completed: true,
+          acertos,
+          erros,
+          aproveitamento,
+          totalQuestoes,
+          completedAt: serverTimestamp(),
+        })
+      } catch (err) {
+        console.error('Erro ao salvar conclusão:', err)
+      }
+    }
+  }
+
   const handleNextQuestion = () => {
-    if (currentQuestionIndex < (questoesData.questoes.length - 1)) {
+    if (currentQuestionIndex < questoesData.questoes.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1)
       setSelectedAnswer(null)
       setShowResult(false)
@@ -95,45 +136,18 @@ export default function SharedQuestaoView() {
     }
   }
 
-  const calcularDesempenho = () => {
-    const questoes = questoesData.questoes
-    const totalQuestoes = questoes.length
-    const acertos = questoes.filter((q, idx) => {
-      // Simplificado - em um sistema real, você rastrearia as respostas
-      return selectedAnswer === (q.respostaCorreta || q.correta)
-    }).length
-    const aproveitamento = Math.round((acertos / totalQuestoes) * 100)
-    
-    setDesempenho({
-      totalQuestoes,
-      acertos,
-      erros: totalQuestoes - acertos,
-      aproveitamento,
-    })
-  }
-
-  const questaoAtual = questoesData?.questoes?.[currentQuestionIndex]
   const tipoProva = questoesData?.tipoProva || 'Múltipla Escolha'
-  const isCorrect = selectedAnswer === (questaoAtual?.respostaCorreta || questaoAtual?.correta)
+  const questaoAtual = questoesData?.questoes?.[currentQuestionIndex]
+  const total = questoesData?.questoes?.length || 0
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-alego-600 mx-auto mb-4"></div>
-          <p className="text-slate-600 dark:text-slate-400">Carregando questões...</p>
-        </div>
-      </div>
-    )
-  }
+  if (loading) return <QuestoesLoading />
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto px-4">
-          <QuestionMarkCircleIcon className="h-16 w-16 text-red-600 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">Erro</h2>
-          <p className="text-slate-600 dark:text-slate-400">{error}</p>
+      <div className="max-w-lg mx-auto p-8">
+        <div className="cp-card p-10 text-center">
+          <QuestionMarkCircleIcon className="h-10 w-10 text-red-400 mx-auto mb-3" />
+          <p className="font-medium text-cp-text">{error}</p>
         </div>
       </div>
     )
@@ -141,232 +155,100 @@ export default function SharedQuestaoView() {
 
   if (showAccessForm && !accessGranted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8">
+      <div className="flex min-h-[60vh] items-center justify-center p-4">
+        <div className="cp-card max-w-md w-full p-8">
           <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-alego-500 to-alego-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <QuestionMarkCircleIcon className="h-8 w-8 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-              Questões Compartilhadas
-            </h2>
-            <p className="text-slate-600 dark:text-slate-400">
-              Para acessar estas questões, por favor, identifique-se
-            </p>
+            <span className="cp-badge cp-badge-accent mb-3">Link compartilhado</span>
+            <h2 className="cp-headline text-xl">Identifique-se</h2>
+            <p className="mt-2 text-sm text-cp-muted">Informe seu nome para acessar as questões</p>
           </div>
-
           <form onSubmit={handleAccessSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Nome Completo *
-              </label>
+              <label className="font-mono text-[10px] uppercase text-cp-muted">Nome completo</label>
               <input
                 type="text"
                 value={accessData.nome}
-                onChange={(e) => setAccessData({ ...accessData, nome: e.target.value })}
+                onChange={(e) => setAccessData({ nome: e.target.value })}
                 required
-                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-alego-500 focus:border-transparent"
-                placeholder="Digite seu nome completo"
+                className="mt-1 w-full rounded-xl border border-cp-border bg-cp-bg/60 px-3 py-2.5 text-sm text-cp-text"
+                placeholder="Seu nome"
               />
             </div>
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full px-6 py-3 bg-gradient-to-r from-alego-600 to-alego-700 text-white font-medium rounded-lg hover:from-alego-700 hover:to-alego-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? 'Processando...' : 'Acessar Questões'}
+            <button type="submit" disabled={submitting} className="cp-btn-primary w-full justify-center">
+              {submitting ? 'Processando…' : 'Acessar questões'}
             </button>
           </form>
-
-          <p className="text-xs text-slate-500 dark:text-slate-500 text-center mt-4">
-            Seus dados serão usados apenas para controle de acesso
-          </p>
         </div>
       </div>
     )
   }
 
-  if (!questoesData || !questoesData.questoes) {
-    return null
-  }
+  if (!questoesData?.questoes) return null
 
   if (desempenho) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 py-6">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <button
-            onClick={() => navigate('/')}
-            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 mb-4"
-          >
-            <ArrowLeftIcon className="h-5 w-5" />
-            Voltar
-          </button>
-          
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 sm:p-8">
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 text-center">
-              🎉 Prática Concluída!
-            </h2>
-            
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-green-600 dark:text-green-400">{desempenho.acertos}</div>
-                <div className="text-sm text-green-800 dark:text-green-200">Acertos</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-red-600 dark:text-red-400">{desempenho.erros}</div>
-                <div className="text-sm text-red-800 dark:text-red-200">Erros</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{desempenho.aproveitamento}%</div>
-                <div className="text-sm text-blue-800 dark:text-blue-200">Aproveitamento</div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="space-y-6 max-w-3xl mx-auto p-4">
+        <button type="button" onClick={() => navigate('/')} className="cp-btn-ghost !px-0">
+          <ArrowLeftIcon className="h-4 w-4" />
+          Voltar
+        </button>
+        <ResultadoDesempenho desempenho={desempenho} />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 py-6">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-6">
-          <button
-            onClick={() => navigate('/')}
-            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 mb-4"
-          >
-            <ArrowLeftIcon className="h-5 w-5" />
+    <div className="space-y-6 max-w-3xl mx-auto p-4">
+      <QuestoesHeader
+        badge="Questões compartilhadas"
+        title={questoesData.topico || questoesData.disciplina || 'Prática'}
+        subtitle={`Nível ${questoesData.nivel || 1} · ${total} questões · ${accessData.nome}`}
+        backLink={
+          <button type="button" onClick={() => navigate('/')} className="cp-btn-ghost !px-0 mb-2">
+            <ArrowLeftIcon className="h-4 w-4" />
             Voltar
           </button>
-          
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-gradient-to-br from-alego-500 to-alego-600 rounded-xl flex-shrink-0">
-              <QuestionMarkCircleIcon className="h-8 w-8 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white break-words">
-                Questões Compartilhadas
-              </h1>
-              <p className="text-slate-600 dark:text-slate-400 mt-1">
-                {questoesData.topico || questoesData.disciplina || 'Assunto não identificado'} • Nível {questoesData.nivel || 1}
-              </p>
-            </div>
-          </div>
-        </div>
+        }
+      />
 
-        {/* Barra de progresso */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 mb-6">
-          <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-            <div 
-              className="bg-gradient-to-r from-green-600 to-emerald-600 h-full transition-all duration-300"
-              style={{ width: `${((currentQuestionIndex + 1) / questoesData.questoes.length) * 100}%` }}
+      <div className="cp-card p-6 sm:p-8 space-y-4">
+        <QuestoesProgressBar current={currentQuestionIndex} total={total} />
+
+        {questaoAtual && (
+          <>
+            <QuestaoEnunciadoCard
+              assunto={questaoAtual.assunto}
+              probabilidade={questaoAtual.probabilidade}
+              enunciado={questaoAtual.enunciado}
             />
-          </div>
-          <p className="text-sm text-slate-600 dark:text-slate-400 text-center mt-2">
-            Questão {currentQuestionIndex + 1} de {questoesData.questoes.length}
-          </p>
-        </div>
 
-        {/* Questão */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 sm:p-8 space-y-6">
-          {/* Enunciado */}
-          <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-orange-900 dark:text-orange-100">
-                Assunto: {questaoAtual?.assunto || 'Assunto não identificado'}
-              </span>
-              {questaoAtual?.probabilidade && (
-                <span className="px-3 py-1 bg-orange-600 text-white text-xs font-bold rounded-full">
-                  {questaoAtual.probabilidade}% de chance
-                </span>
-              )}
-            </div>
-            <p className="text-slate-900 dark:text-white font-medium text-lg">
-              {questaoAtual?.enunciado}
-            </p>
-          </div>
-
-          {/* Alternativas */}
-          {!showResult ? (
-            tipoProva === 'Certo/Errado' ? (
-              <div className="grid grid-cols-2 gap-4">
-                {['C', 'E'].map((key) => (
-                  <button
-                    key={key}
-                    onClick={() => handleAnswer(key)}
-                    className="text-center p-6 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-alego-500 hover:bg-alego-50 dark:hover:bg-alego-900/20 transition-all"
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <span className="text-2xl font-bold text-slate-900 dark:text-white">{key === 'C' ? 'C' : 'E'}</span>
-                      <span className="text-sm text-slate-700 dark:text-slate-300">{key === 'C' ? 'Certo' : 'Errado'}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
+            {!showResult ? (
+              <QuestaoAlternativas
+                tipoProva={tipoProva}
+                questao={questaoAtual}
+                showResult={showResult}
+                modoAdminNavegacao={false}
+                onAnswer={handleAnswer}
+              />
             ) : (
-              <div className="space-y-3">
-                {Object.entries(questaoAtual?.alternativas || {}).map(([key, value]) => (
-                  <button
-                    key={key}
-                    onClick={() => handleAnswer(key)}
-                    className="w-full text-left p-4 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-alego-500 hover:bg-alego-50 dark:hover:bg-alego-900/20 transition-all"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-slate-900 dark:text-white">{key})</span>
-                      <span className="text-slate-700 dark:text-slate-300">{value}</span>
-                    </div>
-                  </button>
-                ))}
+              <div className="space-y-4">
+                <QuestaoAlternativas
+                  tipoProva={tipoProva}
+                  questao={questaoAtual}
+                  showResult
+                  modoAdminNavegacao={false}
+                  onAnswer={() => {}}
+                />
+                <QuestaoExplicacao
+                  explicacao={questaoAtual.explicacao || questaoAtual.gabaritoComentado}
+                />
+                <button type="button" onClick={handleNextQuestion} className="cp-btn-primary w-full justify-center">
+                  {currentQuestionIndex < total - 1 ? 'Próxima questão →' : 'Ver resultado'}
+                </button>
               </div>
-            )
-          ) : (
-            /* Resultado */
-            <div className="space-y-6">
-              <div className={`p-6 rounded-lg border-2 ${
-                isCorrect
-                  ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
-                  : 'bg-red-50 dark:bg-red-900/20 border-red-500'
-              }`}>
-                <div className="flex items-center gap-3 mb-2">
-                  {isCorrect ? (
-                    <CheckCircleIcon className="h-8 w-8 text-green-600" />
-                  ) : (
-                    <QuestionMarkCircleIcon className="h-8 w-8 text-red-600" />
-                  )}
-                  <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-                    {isCorrect ? 'Correto!' : 'Incorreto'}
-                  </h3>
-                </div>
-                <p className="text-slate-700 dark:text-slate-300">
-                  {isCorrect
-                    ? 'Você acertou a resposta!'
-                    : `A resposta correta é: ${questaoAtual?.respostaCorreta || questaoAtual?.correta}`}
-                </p>
-              </div>
-
-              {/* Explicação */}
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                  💡 Explicação:
-                </h4>
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <ReactMarkdown>
-                    {questaoAtual?.explicacao || questaoAtual?.gabaritoComentado || 'Explicação não disponível'}
-                  </ReactMarkdown>
-                </div>
-              </div>
-
-              <button
-                onClick={handleNextQuestion}
-                className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
-              >
-                {currentQuestionIndex < (questoesData.questoes.length - 1) ? 'Próxima Questão →' : 'Ver Resultado'}
-              </button>
-            </div>
-          )}
-        </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   )

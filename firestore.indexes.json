@@ -48,6 +48,13 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "materia", "order": "ASCENDING" }
       ]
+    {
+      "collectionGroup": "sharedQuestoesAccess",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "questaoId", "order": "ASCENDING" },
+        { "fieldPath": "accessedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

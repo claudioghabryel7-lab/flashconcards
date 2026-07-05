@@ -297,6 +297,7 @@ const AdminPanel = () => {
   const [sharedLinks, setSharedLinks] = useState([])
   const [loadingSharedLinks, setLoadingSharedLinks] = useState(false)
   const [sharedLinksAccessData, setSharedLinksAccessData] = useState({}) // Dados de acesso por link
+  const [expandedAccessLinks, setExpandedAccessLinks] = useState({})
   
   // Sensores para drag and drop
   const sensors = useSensors(
@@ -372,9 +373,21 @@ const AdminPanel = () => {
       const accessData = {}
       for (const link of linksList) {
         const accessRef = collection(db, 'sharedQuestoesAccess')
-        const accessQuery = query(accessRef, where('questaoId', '==', link.id))
-        const accessSnapshot = await getDocs(accessQuery)
-        accessData[link.id] = accessSnapshot.docs.map(doc => doc.data())
+        let accessSnapshot
+        try {
+          accessSnapshot = await getDocs(
+            query(accessRef, where('questaoId', '==', link.id), orderBy('accessedAt', 'desc'))
+          )
+        } catch {
+          accessSnapshot = await getDocs(query(accessRef, where('questaoId', '==', link.id)))
+        }
+        accessData[link.id] = accessSnapshot.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => {
+            const ta = a.accessedAt?.toDate?.()?.getTime() || 0
+            const tb = b.accessedAt?.toDate?.()?.getTime() || 0
+            return tb - ta
+          })
       }
       
       setSharedLinksAccessData(accessData)
@@ -12785,22 +12798,68 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                               
                               {/* Estatísticas de acesso */}
                               <div className="border-t border-slate-200 dark:border-slate-700 pt-3 mt-3">
-                                <div className="flex items-center gap-2 text-sm">
-                                  <UserPlusIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                  <span className="font-semibold text-slate-900 dark:text-white">
-                                    {accessCount} {accessCount === 1 ? 'pessoa acessou' : 'pessoas acessaram'}
-                                  </span>
+                                <div className="flex items-center justify-between gap-2 text-sm mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <UserPlusIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                    <span className="font-semibold text-slate-900 dark:text-white">
+                                      {accessCount} {accessCount === 1 ? 'acesso' : 'acessos'}
+                                    </span>
+                                    {accessData.filter((a) => a.completed).length > 0 && (
+                                      <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                                        · {accessData.filter((a) => a.completed).length} concluíram
+                                      </span>
+                                    )}
+                                  </div>
+                                  {accessCount > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setExpandedAccessLinks((prev) => ({
+                                          ...prev,
+                                          [link.id]: !prev[link.id],
+                                        }))
+                                      }
+                                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                                    >
+                                      {expandedAccessLinks[link.id] ? 'Recolher' : 'Ver todos'}
+                                    </button>
+                                  )}
                                 </div>
                                 {accessCount > 0 && (
-                                  <div className="mt-2 space-y-1">
-                                    {accessData.slice(0, 5).map((access, idx) => (
-                                      <div key={idx} className="text-xs text-slate-600 dark:text-slate-400">
-                                        {access.nome || 'Sem nome'}
-                                      </div>
-                                    ))}
-                                    {accessData.length > 5 && (
+                                  <div
+                                    className={`space-y-1.5 ${
+                                      expandedAccessLinks[link.id] ? 'max-h-64 overflow-y-auto pr-1' : ''
+                                    }`}
+                                  >
+                                    {(expandedAccessLinks[link.id] ? accessData : accessData.slice(0, 5)).map(
+                                      (access) => (
+                                        <div
+                                          key={access.id || access.nome}
+                                          className="flex items-center justify-between gap-2 text-xs rounded-lg bg-white dark:bg-slate-800 px-2 py-1.5 border border-slate-200 dark:border-slate-700"
+                                        >
+                                          <span className="font-medium text-slate-800 dark:text-slate-200 truncate">
+                                            {access.nome || 'Sem nome'}
+                                          </span>
+                                          <span className="shrink-0 flex items-center gap-2 text-slate-500">
+                                            {access.completed ? (
+                                              <span className="text-emerald-600 dark:text-emerald-400">
+                                                ✓ {access.aproveitamento ?? 0}%
+                                              </span>
+                                            ) : (
+                                              <span className="text-amber-600 dark:text-amber-400">Iniciou</span>
+                                            )}
+                                            {access.accessedAt?.toDate && (
+                                              <span>
+                                                {access.accessedAt.toDate().toLocaleDateString('pt-BR')}
+                                              </span>
+                                            )}
+                                          </span>
+                                        </div>
+                                      )
+                                    )}
+                                    {!expandedAccessLinks[link.id] && accessData.length > 5 && (
                                       <p className="text-xs text-slate-500 dark:text-slate-500">
-                                        +{accessData.length - 5} outros acessos
+                                        +{accessData.length - 5} outros — clique em &quot;Ver todos&quot;
                                       </p>
                                     )}
                                   </div>

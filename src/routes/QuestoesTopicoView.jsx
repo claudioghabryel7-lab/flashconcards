@@ -9,6 +9,18 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { incrementQuestoesStats } from '../utils/questoesStats'
+import { isContentAvailable, toggleContentStatus } from '../utils/contentStatus'
+import ContentPublishButton from '../components/ContentPublishButton'
+import {
+  QuestoesLoading,
+  QuestoesHeader,
+  NivelSelector,
+  QuestoesProgressBar,
+  QuestaoEnunciadoCard,
+  QuestaoAlternativas,
+  QuestaoExplicacao,
+  ResultadoDesempenho,
+} from '../components/QuestoesPraticaCP'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -909,7 +921,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     if (!questoes || !questoes.id) return
     
     try {
-      const novoStatus = questoes.status === 'disponivel' ? 'indisponivel' : 'disponivel'
+      const novoStatus = toggleContentStatus(questoes.status)
       const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
       const docId = `${sanitizedKey}_nivel_${nivelAtual}`
       
@@ -977,155 +989,78 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     }
   }
 
+  const isAdmin = profile?.role === 'admin'
+
   if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="text-center space-y-4 w-full max-w-md px-6">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-alego-600 border-t-transparent"></div>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Carregando questões...
-          </p>
-        </div>
-      </div>
-    )
+    return <QuestoesLoading />
   }
 
   if (!questoes && error) {
     return (
-      <div className="min-h-screen py-6">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Link
-            to="/edital-verticalizado"
-            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 mb-6"
-          >
-            <ArrowLeftIcon className="h-5 w-5" />
-            Voltar ao Edital Verticalizado
-          </Link>
-          
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 text-center space-y-4">
-            <QuestionMarkCircleIcon className="h-16 w-16 text-slate-300 dark:text-slate-600 mx-auto" />
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-              Questões não disponíveis
-            </h1>
-            <p className="text-slate-600 dark:text-slate-400">
-              {error}
-            </p>
-            <button
-              onClick={handleGenerateQuestoes}
-              disabled={generating}
-              className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <FireIcon className="h-5 w-5" />
-              {generating ? 'Gerando Questões...' : 'Gerar Questões'}
-            </button>
-          </div>
+      <div className="space-y-6">
+        <Link to="/edital-verticalizado" className="inline-flex items-center gap-2 text-sm text-cp-muted hover:text-cp-accent transition">
+          <ArrowLeftIcon className="h-4 w-4" />
+          Voltar ao edital
+        </Link>
+        <div className="cp-card p-10 text-center space-y-4">
+          <QuestionMarkCircleIcon className="h-12 w-12 text-cp-muted mx-auto" />
+          <h1 className="cp-headline text-xl">Questões não disponíveis</h1>
+          <p className="text-sm text-cp-muted">{error}</p>
+          <button type="button" onClick={handleGenerateQuestoes} disabled={generating} className="cp-btn-primary w-full justify-center">
+            <FireIcon className="h-5 w-5" />
+            {generating ? 'Gerando questões…' : 'Gerar questões'}
+          </button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen py-6">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-6">
-          <Link
-            to="/edital-verticalizado"
-            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 mb-4"
-          >
-            <ArrowLeftIcon className="h-5 w-5" />
-            Voltar ao Edital Verticalizado
-          </Link>
-          
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex-shrink-0">
-              <FireIcon className="h-8 w-8 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white break-words">
-                Prática de Questões - Tópico
-              </h1>
-              <p className="text-slate-600 dark:text-slate-400 mt-1">
-                Tópico: <span className="font-semibold">{effectiveTopicNome || resolvedTopicKey}</span>
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                <p className="text-sm text-slate-500 dark:text-slate-500">
-                  Nível Atual: <span className="font-bold text-alego-600 dark:text-alego-400">{nivelAtual}/10</span>
-                </p>
-                {niveisDisponiveis.length > 0 && (
-                  <button
-                    onClick={() => setMostrarSeletorNiveis(!mostrarSeletorNiveis)}
-                    className="text-xs text-alego-600 dark:text-alego-400 hover:underline"
-                  >
-                    ({niveisDisponiveis.length} disponíveis)
-                  </button>
-                )}
-              </div>
-              {mostrarSeletorNiveis && niveisDisponiveis.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {niveisDisponiveis.map((nivel) => (
-                    <button
-                      key={nivel}
-                      onClick={() => handleMudarNivel(nivel)}
-                      className={`px-3 py-1 rounded-full text-sm font-medium transition-all ${
-                        nivel === nivelAtual
-                          ? 'bg-alego-600 text-white'
-                          : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-                      }`}
-                    >
-                      Nível {nivel}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+    <div className="space-y-6">
+      {courseName && (
+        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cp-muted">{courseName}</p>
+      )}
 
-        {/* Conteúdo Principal */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 sm:p-8">
+      <Link to="/edital-verticalizado" className="inline-flex items-center gap-2 text-sm text-cp-muted hover:text-cp-accent transition">
+        <ArrowLeftIcon className="h-4 w-4" />
+        Voltar ao edital
+      </Link>
+
+      <QuestoesHeader
+        badge="Questões preditivas"
+        title={effectiveTopicNome || resolvedTopicKey}
+        subtitle={
+          <>
+            Nível <span className="font-mono text-cp-accent">{nivelAtual}</span>/10
+            {niveisDisponiveis.length > 0 && (
+              <button type="button" onClick={() => setMostrarSeletorNiveis(!mostrarSeletorNiveis)} className="ml-2 text-cp-accent hover:underline text-xs">
+                ({niveisDisponiveis.length} níveis)
+              </button>
+            )}
+          </>
+        }
+      />
+
+      {mostrarSeletorNiveis && (
+        <NivelSelector niveis={niveisDisponiveis} nivelAtual={nivelAtual} onSelect={handleMudarNivel} />
+      )}
+
+      <div className="cp-card p-6 sm:p-8">
           {!desempenho ? (
             <div className="space-y-6">
               {!questoes ? (
                 <div className="space-y-6">
                   {/* Informações sobre a geração */}
-                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-4">
-                      📝 Questões Baseadas no Tópico
-                    </h3>
-                    <div className="text-sm text-green-800 dark:text-green-200 space-y-2">
-                      <p>• As questões serão geradas especificamente para este tópico</p>
-                      <p>• Estilo adaptado à banca examinadora</p>
-                      <p>• 50 questões (Certo/Errado ou Múltipla Escolha, conforme a banca)</p>
-                    </div>
-                  </div>
-
-                  {/* Status da geração */}
-                  {generating && (
-                    <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
-                      <p className="text-sm text-gray-800 dark:text-gray-200">
-                        Gerando questões com IA...
-                      </p>
-                      {progress > 0 && (
-                        <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mt-2">
-                          <div
-                            className="h-2 bg-green-600 dark:bg-green-400 transition-all duration-300"
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Botão de ação */}
-                  <div className="pt-4">
-                    <button
-                      onClick={handleGenerateQuestoes}
-                      disabled={generating}
-                      className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-lg"
-                    >
-                      <FireIcon className="h-6 w-6" />
-                      {generating ? 'Gerando Questões...' : 'Gerar Questões'}
+                  <div className="cp-card !border-cp-accent/20 p-5 space-y-4">
+                    <p className="font-mono text-[10px] uppercase text-cp-muted">Geração — nível {nivelAtual}</p>
+                    <ul className="text-sm text-cp-muted space-y-1">
+                      <li>• Questões específicas deste tópico</li>
+                      <li>• 50 questões no estilo da banca</li>
+                      <li>• Dificuldade progressiva por nível</li>
+                    </ul>
+                    <button type="button" onClick={handleGenerateQuestoes} disabled={generating} className="cp-btn-primary w-full justify-center">
+                      <FireIcon className="h-5 w-5" />
+                      {generating ? 'Gerando questões…' : 'Gerar questões'}
                     </button>
                   </div>
                 </div>
@@ -1134,417 +1069,246 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   {/* Status do conteúdo para usuários */}
                   {profile?.role !== 'admin' && questoes && (
                     <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg ${
-                        questoes.status === 'disponivel'
-                          ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200'
-                          : 'bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-200'
-                      }`}>
-                        {questoes.status === 'disponivel' ? '✅ Disponível' : '⏳ Conteúdo Pendente'}
+                      <span className={`cp-badge ${questoes.status === 'disponivel' ? 'cp-badge-accent' : ''}`}>
+                        {questoes.status === 'disponivel' ? 'Disponível' : 'Conteúdo pendente'}
                       </span>
                     </div>
                   )}
 
                   {/* Bloqueio de acesso para conteúdo indisponível */}
-                  {profile?.role !== 'admin' && questoes && questoes.status !== 'disponivel' ? (
-                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-6 text-center">
-                      <QuestionMarkCircleIcon className="h-12 w-12 text-orange-600 dark:text-orange-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-orange-900 dark:text-orange-100 mb-2">
-                        Conteúdo em Preparação
-                      </h3>
-                      <p className="text-sm text-orange-800 dark:text-orange-200">
-                        Este conteúdo ainda está sendo revisado pelo administrador. Em breve estará disponível para prática.
-                      </p>
+                  {!isAdmin && questoes && !isContentAvailable(questoes.status, isAdmin) ? (
+                    <div className="cp-card p-8 text-center">
+                      <QuestionMarkCircleIcon className="h-10 w-10 text-amber-400 mx-auto mb-3" />
+                      <p className="font-medium text-cp-text">Questões em preparação</p>
+                      <p className="mt-2 text-sm text-cp-muted">O administrador ainda não liberou este nível.</p>
                     </div>
                   ) : (
                     <>
                       {/* Botão de excluir para admin */}
-                      {profile?.role === 'admin' && (
-                        <div className="flex justify-between items-center gap-2 flex-wrap">
-                          <button
-                            onClick={handleToggleModoAdmin}
-                            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                              modoAdminNavegacao
-                                ? 'bg-purple-600 text-white hover:bg-purple-700'
-                                : 'bg-gray-600 text-white hover:bg-gray-700'
-                            }`}
-                          >
-                            {modoAdminNavegacao ? '🔒 Modo Prática' : '🔓 Modo Navegação'}
+                      {isAdmin && (
+                        <div className="flex justify-between items-center gap-2 flex-wrap mb-4">
+                          <button type="button" onClick={handleToggleModoAdmin} className={`cp-btn-ghost !text-xs ${modoAdminNavegacao ? '!border-cp-accent/40 !text-cp-accent' : ''}`}>
+                            {modoAdminNavegacao ? 'Modo prática' : 'Modo navegação'}
                           </button>
                           {modoAdminNavegacao && (
                             <div className="flex items-center gap-2 flex-wrap">
                               <div className="relative">
-                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-cp-muted" />
                                 <input
                                   type="text"
                                   value={termoBusca}
                                   onChange={(e) => setTermoBusca(e.target.value)}
-                                  placeholder="Buscar questões..."
-                                  className="pl-9 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white w-64"
+                                  placeholder="Buscar questões…"
+                                  className="pl-9 pr-4 py-2 text-sm rounded-lg border border-cp-border bg-cp-bg/60 text-cp-text w-64"
                                 />
                               </div>
-                              <button
-                                onClick={handleShareQuestao}
-                                className="p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition shadow-lg"
-                                title="Compartilhar Questão"
-                              >
-                                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+                              <button type="button" onClick={handleShareQuestao} className="cp-btn-ghost !p-2" title="Compartilhar questão">
+                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                                 </svg>
                               </button>
-                              <button
-                                type="button"
-                                onClick={handlePesquisarGoogle}
-                                className="p-3 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white hover:opacity-80 transition shadow-lg"
-                                title="Pesquisar no Google"
-                              >
-                                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                              <button type="button" onClick={handlePesquisarGoogle} className="cp-btn-ghost !p-2" title="Pesquisar no Google">
+                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
                               </button>
                               <select
                                 value={nivelAtual}
                                 onChange={(e) => handleMudarNivel(parseInt(e.target.value))}
-                                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                                className="rounded-lg border border-cp-border bg-cp-bg/60 px-3 py-2 text-sm text-cp-text"
                               >
                                 {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                                   <option key={n} value={n}>Nível {n}</option>
                                 ))}
                               </select>
-                              <button
-                                onClick={handleGenerateQuestoes}
-                                disabled={generating}
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
-                              >
+                              <button type="button" onClick={handleGenerateQuestoes} disabled={generating} className="cp-btn-primary !text-xs">
                                 <FireIcon className="h-4 w-4" />
-                                {generating ? 'Gerando...' : 'Gerar Nível'}
+                                {generating ? 'Gerando…' : 'Gerar nível'}
                               </button>
                             </div>
                           )}
-                          <button
-                            onClick={handleToggleStatus}
-                            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                              questoes?.status === 'disponivel'
-                                ? 'bg-orange-600 text-white hover:bg-orange-700'
-                                : 'bg-green-600 text-white hover:bg-green-700'
-                            }`}
-                          >
-                            {questoes?.status === 'disponivel' ? '🔒 Indisponibilizar' : '🔓 Disponibilizar'}
-                          </button>
-                          <button
-                            onClick={handleDeleteQuestoes}
-                            disabled={deleting}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
+                          <ContentPublishButton status={questoes?.status} onToggle={handleToggleStatus} />
+                          <button type="button" onClick={handleDeleteQuestoes} disabled={deleting} className="cp-btn-ghost !text-xs !text-red-400">
                             <TrashIcon className="h-4 w-4" />
-                            {deleting ? 'Apagando...' : 'Apagar Questões'}
+                            {deleting ? 'Apagando…' : 'Apagar'}
                           </button>
                         </div>
                       )}
-                      </>
-                    )}
 
-                  {/* Barra de progresso */}
-                  {questoesParaExibir.length > 0 && (
-                    <>
-                      <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-                        <div 
-                          className="bg-gradient-to-r from-green-600 to-emerald-600 h-full transition-all duration-300"
-                          style={{ width: `${((currentQuestionIndex + 1) / questoesParaExibir.length) * 100}%` }}
+                      {questoesParaExibir.length > 0 && (
+                        <QuestoesProgressBar
+                          current={currentQuestionIndex}
+                          total={questoesParaExibir.length}
+                          extraLabel={termoBusca ? ` (${questoesArray.length} total)` : ''}
                         />
-                      </div>
-                      <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
-                        Questão {currentQuestionIndex + 1} de {questoesParaExibir.length}
-                        {termoBusca && ` (${questoesArray.length} total)`}
-                      </p>
-                    </>
-                  )}
-
-                  {/* Questão atual */}
-                  {questoesParaExibir[currentQuestionIndex] && (
-                    <div className="space-y-4">
-                      <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-orange-900 dark:text-orange-100">
-                            Assunto: {questoesParaExibir[currentQuestionIndex].assunto || 'Assunto não identificado'}
-                          </span>
-                          {questoesParaExibir[currentQuestionIndex].probabilidade && (
-                            <span className="px-3 py-1 bg-orange-600 text-white text-xs font-bold rounded-full">
-                              {questoesParaExibir[currentQuestionIndex].probabilidade}% de chance
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-slate-900 dark:text-white font-medium">
-                          {questoesParaExibir[currentQuestionIndex].enunciado}
-                        </p>
-                      </div>
-
-                      {/* Alternativas - Certo/Errado ou Múltipla */}
-                      {tipoProva === 'Certo/Errado' ? (
-                        <div className="grid grid-cols-2 gap-4">
-                          {['C', 'E'].map((key) => (
-                            <button
-                              key={key}
-                              onClick={() => !modoAdminNavegacao && handleAnswer(key)}
-                              disabled={showResult || modoAdminNavegacao}
-                              className={`text-center p-6 rounded-lg border-2 transition-all ${
-                                modoAdminNavegacao || showResult
-                                  ? key === (questoesParaExibir[currentQuestionIndex].respostaCorreta || questoesParaExibir[currentQuestionIndex].correta)
-                                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 opacity-50'
-                                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
-                              }`}
-                            >
-                              <div className="flex flex-col items-center gap-2">
-                                <span className="text-2xl font-bold text-slate-900 dark:text-white">{key === 'C' ? 'C' : 'E'}</span>
-                                <span className="text-sm text-slate-700 dark:text-slate-300">{key === 'C' ? 'Certo' : 'Errado'}</span>
-                                {(modoAdminNavegacao || showResult) && key === (questoesParaExibir[currentQuestionIndex].respostaCorreta || questoesParaExibir[currentQuestionIndex].correta) && (
-                                  <CheckCircleIcon className="h-6 w-6 text-green-600" />
-                                )}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {Object.entries(questoesParaExibir[currentQuestionIndex].alternativas || {}).map(([key, value]) => (
-                            <button
-                              key={key}
-                              onClick={() => !modoAdminNavegacao && handleAnswer(key)}
-                              disabled={showResult || modoAdminNavegacao}
-                              className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                                modoAdminNavegacao || showResult
-                                  ? key === (questoesParaExibir[currentQuestionIndex].respostaCorreta || questoesParaExibir[currentQuestionIndex].correta)
-                                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 opacity-50'
-                                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <span className="font-bold text-slate-900 dark:text-white">{key})</span>
-                                <span className="text-slate-700 dark:text-slate-300">{value}</span>
-                                {(modoAdminNavegacao || showResult) && key === (questoesParaExibir[currentQuestionIndex].respostaCorreta || questoesParaExibir[currentQuestionIndex].correta) && (
-                                  <CheckCircleIcon className="h-5 w-5 text-green-600 ml-auto" />
-                                )}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
                       )}
 
-                      {/* Explicação */}
-                      {(showResult || modoAdminNavegacao) && (
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-semibold text-blue-900 dark:text-blue-100">
-                              💡 Explicação:
-                            </h4>
-                            {profile?.role === 'admin' && !editandoQuestao && (
-                              <button
-                                onClick={handleIniciarEdicao}
-                                className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                              >
-                                Editar
-                              </button>
-                            )}
-                          </div>
-                          {editandoQuestao ? (
-                            <div className="space-y-3">
-                              <div>
-                                <label className="block text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">
-                                  Gabarito:
-                                </label>
-                                <input
-                                  type="text"
-                                  value={novoGabarito}
-                                  onChange={(e) => setNovoGabarito(e.target.value)}
-                                  className="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-700 rounded-md bg-white dark:bg-slate-800 text-blue-900 dark:text-blue-100"
-                                  placeholder="Digite o gabarito correto"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">
-                                  Explicação:
-                                </label>
-                                <textarea
-                                  value={novaExplicacao}
-                                  onChange={(e) => setNovaExplicacao(e.target.value)}
-                                  className="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-700 rounded-md bg-white dark:bg-slate-800 text-blue-900 dark:text-blue-100 min-h-[100px]"
-                                  placeholder="Digite a explicação"
-                                />
-                              </div>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={handleSalvarEdicao}
-                                  disabled={salvandoEdicao}
-                                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                                >
-                                  {salvandoEdicao ? 'Salvando...' : 'Salvar'}
-                                </button>
-                                <button
-                                  onClick={handleCancelarEdicao}
-                                  className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-                                >
-                                  Cancelar
-                                </button>
-                              </div>
-                            </div>
+                      {questoesParaExibir[currentQuestionIndex] && (
+                        <div className="space-y-4">
+                          <QuestaoEnunciadoCard
+                            assunto={questoesParaExibir[currentQuestionIndex].assunto}
+                            probabilidade={questoesParaExibir[currentQuestionIndex].probabilidade}
+                            enunciado={questoesParaExibir[currentQuestionIndex].enunciado}
+                          />
+
+                          {!showResult && !modoAdminNavegacao ? (
+                            <QuestaoAlternativas
+                              tipoProva={tipoProva}
+                              questao={questoesParaExibir[currentQuestionIndex]}
+                              showResult={showResult}
+                              modoAdminNavegacao={modoAdminNavegacao}
+                              onAnswer={handleAnswer}
+                            />
                           ) : (
-                            <div className="prose prose-sm dark:prose-invert max-w-none">
-                              <ReactMarkdown>
-                                {questoesParaExibir[currentQuestionIndex].explicacao || questoesParaExibir[currentQuestionIndex].gabaritoComentado || 'Explicação não disponível'}
-                              </ReactMarkdown>
-                            </div>
+                            <>
+                              <QuestaoAlternativas
+                                tipoProva={tipoProva}
+                                questao={questoesParaExibir[currentQuestionIndex]}
+                                showResult
+                                modoAdminNavegacao={modoAdminNavegacao}
+                                onAnswer={handleAnswer}
+                              />
+                              <QuestaoExplicacao
+                                explicacao={
+                                  questoesParaExibir[currentQuestionIndex].explicacao ||
+                                  questoesParaExibir[currentQuestionIndex].gabaritoComentado
+                                }
+                                editSlot={
+                                  editandoQuestao ? (
+                                    <div className="space-y-3">
+                                      <div>
+                                        <label className="block text-xs font-medium text-cp-muted mb-1">Gabarito</label>
+                                        <input
+                                          type="text"
+                                          value={novoGabarito}
+                                          onChange={(e) => setNovoGabarito(e.target.value)}
+                                          className="w-full rounded-lg border border-cp-border bg-cp-bg/60 px-3 py-2 text-sm text-cp-text"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-cp-muted mb-1">Explicação</label>
+                                        <textarea
+                                          value={novaExplicacao}
+                                          onChange={(e) => setNovaExplicacao(e.target.value)}
+                                          rows={4}
+                                          className="w-full rounded-lg border border-cp-border bg-cp-bg/60 px-3 py-2 text-sm text-cp-text resize-y"
+                                        />
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <button type="button" onClick={handleSalvarEdicao} disabled={salvandoEdicao} className="cp-btn-primary !text-xs">
+                                          {salvandoEdicao ? 'Salvando…' : 'Salvar'}
+                                        </button>
+                                        <button type="button" onClick={handleCancelarEdicao} className="cp-btn-ghost !text-xs">
+                                          Cancelar
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : isAdmin && !editandoQuestao ? (
+                                    <button type="button" onClick={handleIniciarEdicao} className="text-xs text-cp-accent hover:underline mb-2">
+                                      Editar explicação
+                                    </button>
+                                  ) : null
+                                }
+                              />
+                              {(showResult || modoAdminNavegacao) && (
+                                <div className="flex gap-3">
+                                  {currentQuestionIndex > 0 && (
+                                    <button type="button" onClick={handlePreviousQuestion} className="cp-btn-ghost flex-1 justify-center">
+                                      ← Anterior
+                                    </button>
+                                  )}
+                                  <button type="button" onClick={handleNextQuestion} className="cp-btn-primary flex-1 justify-center">
+                                    {currentQuestionIndex < questoesParaExibir.length - 1 ? 'Próxima →' : 'Ver resultado'}
+                                  </button>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
-
-                      {/* Botões de navegação */}
-                      {showResult || modoAdminNavegacao ? (
-                        <div className="flex gap-3">
-                          {currentQuestionIndex > 0 && (
-                            <button
-                              onClick={handlePreviousQuestion}
-                              className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 transition-all"
-                            >
-                              ← Anterior
-                            </button>
-                          )}
-                          <button
-                            onClick={handleNextQuestion}
-                            className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
-                          >
-                            {currentQuestionIndex < questoesParaExibir.length - 1 ? 'Próxima Questão →' : 'Ver Resultado'}
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
+                    </>
                   )}
                 </div>
               )}
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Resultado final */}
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6">
-                <h3 className="text-xl font-semibold text-green-900 dark:text-green-100 mb-4 text-center">
-                  🎉 Prática Concluída!
-                </h3>
-                
-                <div className="grid grid-cols-3 gap-4 mb-6">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-green-600 dark:text-green-400">{desempenho.acertos}</div>
-                    <div className="text-sm text-green-800 dark:text-green-200">Acertos</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-red-600 dark:text-red-400">{desempenho.erros}</div>
-                    <div className="text-sm text-red-800 dark:text-red-200">Erros</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{desempenho.aproveitamento}%</div>
-                    <div className="text-sm text-blue-800 dark:text-blue-200">Aproveitamento</div>
-                  </div>
-                </div>
+              <ResultadoDesempenho desempenho={desempenho} />
 
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
-                  <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                    📊 Progresso de Níveis
-                  </h4>
-                  <p className="text-sm text-blue-800 dark:text-blue-200">
-                    Nível Atual: <span className="font-bold">{desempenho.nivel}</span>/10
+              <div className="rounded-xl border border-cp-border/60 bg-cp-bg/40 p-4 space-y-2">
+                <h4 className="font-mono text-[10px] uppercase text-cp-muted">Progresso de níveis</h4>
+                <p className="text-sm text-cp-muted">
+                  Nível atual: <span className="font-mono text-cp-accent">{desempenho.nivel}</span>/10
+                </p>
+                {desempenho.completouNivel && desempenho.proximoNivel > desempenho.nivel && (
+                  <p className="text-sm text-emerald-400">
+                    Você completou este nível. Pode avançar para o nível {desempenho.proximoNivel}.
                   </p>
-                  {desempenho.completouNivel && desempenho.proximoNivel > desempenho.nivel && (
-                    <p className="text-sm text-green-800 dark:text-green-200 mt-2 font-semibold">
-                      ✅ Você completou este nível! Pode avançar para o nível {desempenho.proximoNivel}.
-                    </p>
-                  )}
-                </div>
-
-                {historicoNiveis.length > 0 && (
-                  <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-4">
-                    <h4 className="font-semibold text-purple-900 dark:text-purple-100 mb-3">
-                      📈 Histórico por Nível
-                    </h4>
-                    <div className="space-y-2">
-                      {historicoNiveis.map((hist) => (
-                        <div key={hist.nivel} className="flex items-center justify-between text-sm">
-                          <span className="text-purple-800 dark:text-purple-200">
-                            Nível {hist.nivel}
-                          </span>
-                          <div className="flex items-center gap-3">
-                            <span className="text-purple-700 dark:text-purple-300">
-                              {hist.acertos}/{hist.totalQuestoes} acertos
-                            </span>
-                            <span className={`font-semibold ${
-                              hist.aproveitamento >= 70 ? 'text-green-600 dark:text-green-400' :
-                              hist.aproveitamento >= 50 ? 'text-yellow-600 dark:text-yellow-400' :
-                              'text-red-600 dark:text-red-400'
-                            }`}>
-                              {hist.aproveitamento}%
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {desempenho.precisaRevisar && desempenho.precisaRevisar.length > 0 && (
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                    <h4 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-3">
-                      ⚠️ Precisa Revisar (Errou em assuntos com alta probabilidade):
-                    </h4>
-                    <ul className="list-disc list-inside space-y-1">
-                      {desempenho.precisaRevisar.map((assunto, idx) => (
-                        <li key={idx} className="text-sm text-yellow-800 dark:text-yellow-200">{assunto}</li>
-                      ))}
-                    </ul>
-                  </div>
                 )}
               </div>
 
-              {/* Botões de ação */}
-              <div className="pt-4 space-y-3">
+              {historicoNiveis.length > 0 && (
+                <div className="rounded-xl border border-cp-border/60 bg-cp-bg/40 p-4">
+                  <h4 className="font-mono text-[10px] uppercase text-cp-muted mb-3">Histórico por nível</h4>
+                  <div className="space-y-2">
+                    {historicoNiveis.map((hist) => (
+                      <div key={hist.nivel} className="flex items-center justify-between text-sm">
+                        <span className="text-cp-muted">Nível {hist.nivel}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-cp-muted">{hist.acertos}/{hist.totalQuestoes} acertos</span>
+                          <span className={`font-mono ${
+                            hist.aproveitamento >= 70 ? 'text-emerald-400' :
+                            hist.aproveitamento >= 50 ? 'text-amber-400' :
+                            'text-red-400'
+                          }`}>
+                            {hist.aproveitamento}%
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {desempenho.precisaRevisar?.length > 0 && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                  <h4 className="font-mono text-[10px] uppercase text-amber-400 mb-3">Precisa revisar</h4>
+                  <ul className="list-disc list-inside space-y-1">
+                    {desempenho.precisaRevisar.map((assunto, idx) => (
+                      <li key={idx} className="text-sm text-cp-muted">{assunto}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="pt-2 space-y-3">
                 {desempenho.completouNivel && desempenho.proximoNivel > desempenho.nivel && (
-                  <button
-                    onClick={handleAvancarNivel}
-                    className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all"
-                  >
+                  <button type="button" onClick={handleAvancarNivel} className="cp-btn-primary w-full justify-center">
                     <ChartBarIcon className="h-5 w-5" />
-                    Gerar mais 50 questões (Nível {desempenho.proximoNivel})
+                    Gerar mais 50 questões (nível {desempenho.proximoNivel})
                   </button>
                 )}
-                
-                <button
-                  onClick={handleRestart}
-                  className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
-                >
+
+                <button type="button" onClick={handleRestart} className="cp-btn-primary w-full justify-center">
                   <FireIcon className="h-5 w-5" />
-                  Praticar Novamente
+                  Praticar novamente
                 </button>
-                
-                {profile?.role === 'admin' && (
-                  <button
-                    onClick={handleDeleteQuestoes}
-                    disabled={deleting}
-                    className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
+
+                {isAdmin && (
+                  <button type="button" onClick={handleDeleteQuestoes} disabled={deleting} className="cp-btn-ghost w-full justify-center !text-red-400">
                     <TrashIcon className="h-5 w-5" />
-                    {deleting ? 'Apagando...' : 'Apagar Questões'}
+                    {deleting ? 'Apagando…' : 'Apagar questões'}
                   </button>
                 )}
-                
-                <Link
-                  to="/edital-verticalizado"
-                  className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-slate-600 text-white font-medium rounded-lg hover:bg-slate-700 transition-all"
-                >
+
+                <Link to="/edital-verticalizado" className="cp-btn-ghost w-full justify-center">
                   <ArrowLeftIcon className="h-5 w-5" />
-                  Voltar ao Edital Verticalizado
+                  Voltar ao edital verticalizado
                 </Link>
               </div>
             </div>
           )}
         </div>
-      </div>
     </div>
   )
 }
