@@ -33,8 +33,9 @@ export function QuestoesHeader({ badge, title, subtitle, backLink }) {
   )
 }
 
-export function NivelSelector({ niveis, nivelAtual, onSelect }) {
+export function NivelSelector({ niveis, nivelAtual, niveisComConteudo, onSelect }) {
   if (!niveis?.length) return null
+  const comConteudo = niveisComConteudo || []
   return (
     <div className="flex flex-wrap gap-2">
       {niveis.map((nivel) => (
@@ -45,7 +46,9 @@ export function NivelSelector({ niveis, nivelAtual, onSelect }) {
           className={`rounded-lg px-3 py-1.5 font-mono text-xs transition ${
             nivel === nivelAtual
               ? 'border border-cp-accent/40 bg-cp-accent/15 text-cp-accent'
-              : 'border border-cp-border bg-cp-surface text-cp-muted hover:border-cp-accent/30'
+              : comConteudo.includes(nivel)
+                ? 'border border-cp-border bg-cp-surface text-cp-muted hover:border-cp-accent/30'
+                : 'border border-dashed border-cp-border/70 bg-cp-bg/40 text-cp-muted/70 hover:border-cp-accent/30'
           }`}
         >
           Nível {nivel}

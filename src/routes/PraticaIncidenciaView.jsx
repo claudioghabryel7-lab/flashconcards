@@ -1,5 +1,5 @@
 import { readEnv, isDevEnv } from '@/lib/env.js'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { doc, getDoc, setDoc, deleteDoc, serverTimestamp, getDocs, collection, query, where, orderBy } from 'firebase/firestore'
 import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, ChartBarIcon, TrashIcon, MagnifyingGlassIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline'
@@ -43,8 +43,18 @@ const PraticaIncidenciaView = () => {
   const [salvandoEdicao, setSalvandoEdicao] = useState(false)
   const [modoAdminNavegacao, setModoAdminNavegacao] = useState(false)
   const [termoBusca, setTermoBusca] = useState('')
+  const [carregandoNivel, setCarregandoNivel] = useState(false)
+  const desempenhoNivelInicial = useRef(false)
 
   const disciplinaIndex = parseInt(disciplinaIdx)
+
+  const sanitizedDisciplinaNome = useMemo(() => {
+    const disciplina = editalVerticalizado?.disciplinas?.[disciplinaIndex]
+    if (!disciplina?.nome) return ''
+    return disciplina.nome.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100)
+  }, [editalVerticalizado, disciplinaIndex])
+
+  const todosNiveis = useMemo(() => Array.from({ length: 10 }, (_, i) => i + 1), [])
 
   // Questões filtradas por busca
   const questoesFiltradas = useMemo(() => {
@@ -139,17 +149,8 @@ const PraticaIncidenciaView = () => {
           }
         }
 
-        // Carregar questões existentes do nível atual
-        if (sanitizedDisciplinaNome) {
-          const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', `${sanitizedDisciplinaNome}_nivel_${nivelAtual}`)
-          const questoesDoc = await getDoc(questoesRef)
-          if (questoesDoc.exists()) {
-            setQuestoes(questoesDoc.data())
-          }
-        }
-
-        // Carregar desempenho do usuário
-        if (user && sanitizedDisciplinaNome) {
+        // Carregar desempenho do usuário (nível inicial — apenas na primeira carga)
+        if (user && sanitizedDisciplinaNome && !desempenhoNivelInicial.current) {
           const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoIncidencia', sanitizedDisciplinaNome)
           const desempenhoDoc = await getDoc(desempenhoRef)
           if (desempenhoDoc.exists()) {
@@ -157,6 +158,7 @@ const PraticaIncidenciaView = () => {
             setDesempenho(desempenhoData)
             setNivelAtual(desempenhoData.nivel || 1)
           }
+          desempenhoNivelInicial.current = true
         }
 
         // Verificar quais níveis estão disponíveis
@@ -198,6 +200,44 @@ const PraticaIncidenciaView = () => {
 
     loadData()
   }, [courseId, disciplinaIdx, user])
+
+  useEffect(() => {
+    if (!courseId || !sanitizedDisciplinaNome) return
+
+    let cancelled = false
+
+    const loadQuestoesNivel = async () => {
+      setCarregandoNivel(true)
+      setQuestoes(null)
+      setCurrentQuestionIndex(0)
+      setSelectedAnswer(null)
+      setShowResult(false)
+      setAnswers([])
+
+      try {
+        const questoesRef = doc(
+          db,
+          'courses',
+          courseId,
+          'questoesIncidencia',
+          `${sanitizedDisciplinaNome}_nivel_${nivelAtual}`
+        )
+        const questoesDoc = await getDoc(questoesRef)
+        if (cancelled) return
+        setQuestoes(questoesDoc.exists() ? questoesDoc.data() : null)
+      } catch (err) {
+        console.error('Erro ao carregar questões do nível:', err)
+        if (!cancelled) setQuestoes(null)
+      } finally {
+        if (!cancelled) setCarregandoNivel(false)
+      }
+    }
+
+    loadQuestoesNivel()
+    return () => {
+      cancelled = true
+    }
+  }, [courseId, sanitizedDisciplinaNome, nivelAtual])
 
   const handleGenerateQuestoes = async () => {
     if (!courseId || !conteudoIncidencia) return
@@ -419,6 +459,9 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       }
 
       setQuestoes(parsed)
+      setNiveisDisponiveis((prev) =>
+        prev.includes(nivelAtual) ? prev : [...prev, nivelAtual].sort((a, b) => a - b)
+      )
       setProgress(100)
       setStatus('✅ Questões geradas com sucesso!')
 
@@ -556,7 +599,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
   const handleAvancarNivel = () => {
     if (desempenho?.completouNivel && desempenho?.proximoNivel > nivelAtual) {
       setNivelAtual(desempenho.proximoNivel)
-      // Não limpar questoes aqui - deixar o useEffect recarregar
+      setQuestoes(null)
       setDesempenho(null)
       setCurrentQuestionIndex(0)
       setSelectedAnswer(null)
@@ -566,14 +609,16 @@ Retorne APENAS o JSON válido, sem texto adicional.`
   }
 
   const handleMudarNivel = (novoNivel) => {
+    if (novoNivel === nivelAtual) return
     setNivelAtual(novoNivel)
-    // Não limpar questoes aqui - deixar o useEffect recarregar
+    setQuestoes(null)
     setDesempenho(null)
     setCurrentQuestionIndex(0)
     setSelectedAnswer(null)
     setShowResult(false)
     setAnswers([])
     setMostrarSeletorNiveis(false)
+    setStatus('')
   }
 
   const handleIniciarEdicao = () => {
@@ -779,19 +824,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
             <h1 className="cp-headline text-xl sm:text-2xl">{disciplina?.nome || 'Disciplina'}</h1>
             <p className="mt-1 text-sm text-cp-muted">
               Nível <span className="font-mono text-cp-accent2">{nivelAtual}</span>/10
-              {niveisDisponiveis.length > 0 && (
-                <button type="button" onClick={() => setMostrarSeletorNiveis(!mostrarSeletorNiveis)} className="ml-2 text-cp-accent hover:underline text-xs">
-                  ({niveisDisponiveis.length} níveis)
-                </button>
-              )}
+              <button type="button" onClick={() => setMostrarSeletorNiveis(!mostrarSeletorNiveis)} className="ml-2 text-cp-accent hover:underline text-xs">
+                (escolher nível{niveisDisponiveis.length > 0 ? ` · ${niveisDisponiveis.length} gerados` : ''})
+              </button>
             </p>
           </div>
         </div>
       </div>
 
-      {mostrarSeletorNiveis && niveisDisponiveis.length > 0 && (
+      {mostrarSeletorNiveis && (
         <div className="flex flex-wrap gap-2">
-          {niveisDisponiveis.map((nivel) => (
+          {todosNiveis.map((nivel) => (
             <button
               key={nivel}
               type="button"
@@ -799,7 +842,9 @@ Retorne APENAS o JSON válido, sem texto adicional.`
               className={`rounded-lg px-3 py-1.5 font-mono text-xs transition ${
                 nivel === nivelAtual
                   ? 'border border-cp-accent2/40 bg-cp-accent2/15 text-cp-accent2'
-                  : 'border border-cp-border bg-cp-surface text-cp-muted hover:border-cp-accent/30'
+                  : niveisDisponiveis.includes(nivel)
+                    ? 'border border-cp-border bg-cp-surface text-cp-muted hover:border-cp-accent/30'
+                    : 'border border-dashed border-cp-border/70 bg-cp-bg/40 text-cp-muted/70 hover:border-cp-accent/30'
               }`}
             >
               Nível {nivel}
@@ -809,7 +854,12 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       )}
 
       <div className="cp-card p-6 sm:p-8">
-          {!desempenho ? (
+          {carregandoNivel ? (
+            <div className="py-12 text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+              <p className="mt-3 text-sm text-cp-muted">Carregando nível {nivelAtual}…</p>
+            </div>
+          ) : !desempenho ? (
             <div className="space-y-6">
               {!questoes ? (
                 <div className="space-y-6">

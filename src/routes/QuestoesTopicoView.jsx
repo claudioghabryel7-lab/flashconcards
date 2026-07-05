@@ -1,5 +1,5 @@
 import { readEnv, isDevEnv } from '@/lib/env.js'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy, deleteDoc } from 'firebase/firestore'
 import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, TrashIcon, QuestionMarkCircleIcon, ChartBarIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
@@ -184,6 +184,10 @@ const QuestoesTopicoView = () => {
   const [salvandoEdicao, setSalvandoEdicao] = useState(false)
   const [modoAdminNavegacao, setModoAdminNavegacao] = useState(false)
   const [termoBusca, setTermoBusca] = useState('')
+  const [carregandoNivel, setCarregandoNivel] = useState(false)
+  const desempenhoNivelInicial = useRef(false)
+
+  const todosNiveis = useMemo(() => Array.from({ length: 10 }, (_, i) => i + 1), [])
 
   // Verificar se as questões têm a estrutura nova ou antiga
   const questoesArray = useMemo(() => {
@@ -258,7 +262,7 @@ const QuestoesTopicoView = () => {
   }, [resolvedCourseId])
 
   useEffect(() => {
-    const loadQuestoes = async () => {
+    const loadMeta = async () => {
       if (!resolvedTopicKey || !resolvedCourseId) {
         setError('Questões não encontradas')
         setLoading(false)
@@ -266,94 +270,106 @@ const QuestoesTopicoView = () => {
       }
 
       const trimmedKey = resolvedTopicKey.trim()
-      if (!trimmedKey || trimmedKey === '') {
+      if (!trimmedKey) {
         setError('Tópico inválido: identificação do tópico está vazia')
         setLoading(false)
         return
       }
 
       try {
-        setLoading(true)
-        setError('')
-
-        // Tentar encontrar documento usando função que sanitiza a chave (com nível)
         const sanitizedKey = sanitizeTopicKeyForFirestore(trimmedKey)
-        
-        // Carregar desempenho do usuário primeiro para saber o nível
-        if (user) {
+
+        if (user && !desempenhoNivelInicial.current) {
           const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoTopico', sanitizedKey)
           const desempenhoDoc = await getDoc(desempenhoRef)
           if (desempenhoDoc.exists()) {
-            const desempenhoData = desempenhoDoc.data()
-            setNivelAtual(desempenhoData.nivel || 1)
+            setNivelAtual(desempenhoDoc.data().nivel || 1)
           }
+          desempenhoNivelInicial.current = true
         }
 
-        // Verificar quais níveis estão disponíveis
         const niveisDisponiveis = []
         for (let i = 1; i <= 10; i++) {
           const nivelDocRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', `${sanitizedKey}_nivel_${i}`)
           const nivelDoc = await getDoc(nivelDocRef)
-          if (nivelDoc.exists()) {
-            niveisDisponiveis.push(i)
-          }
+          if (nivelDoc.exists()) niveisDisponiveis.push(i)
         }
         setNiveisDisponiveis(niveisDisponiveis)
 
-        // Carregar histórico de desempenho por nível
         if (user) {
           const historico = []
           for (let i = 1; i <= 10; i++) {
             const desempenhoNivelRef = doc(db, 'users', user.uid, 'desempenhoTopico', `${sanitizedKey}_nivel_${i}`)
             const desempenhoNivelDoc = await getDoc(desempenhoNivelRef)
             if (desempenhoNivelDoc.exists()) {
-              historico.push({
-                nivel: i,
-                ...desempenhoNivelDoc.data()
-              })
+              historico.push({ nivel: i, ...desempenhoNivelDoc.data() })
             }
           }
           setHistoricoNiveis(historico)
         }
-        
-        // Tentar carregar do nível atual
-        const docId = `${sanitizedKey}_nivel_${nivelAtual}`
-        const questoesRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', docId)
-        const questoesDoc = await getDoc(questoesRef)
-        
-        if (questoesDoc.exists()) {
-          setQuestoes({ id: questoesDoc.id, ...questoesDoc.data() })
-          setLoading(false)
-          return
-        }
-
-        // Se não encontrar do nível atual, tentar sem nível (compatibilidade)
-        const foundDoc = await findDocumentByTopicKey(resolvedCourseId, trimmedKey)
-        if (foundDoc) {
-          setQuestoes(foundDoc)
-          setLoading(false)
-          return
-        }
-
-        setError('Chame o professor Flash, ele vai te mostrar o caminho. Aguarde até ele te entregar as questões e não feche a página.')
-        setLoading(false)
       } catch (err) {
-        console.error('Não se preocupe, chame o professor Flash novamente e dará certo.', err)
-        const errorMessage = err.message || String(err)
-        
-        if (errorMessage.includes('Invalid document reference') || errorMessage.includes('even number of segments')) {
-          setError('Erro: Tópico inválido. Por favor, verifique se o tópico possui identificação válida.')
-        } else if (errorMessage.includes('Missing or insufficient permissions')) {
-          setError('Erro de permissão. Por favor, verifique se você está autenticado e tente novamente.')
-        } else {
-          setError('Erro ao carregar questões. Tente novamente.')
-        }
-        setLoading(false)
+        console.error('Erro ao carregar metadados do tópico:', err)
       }
     }
 
-    loadQuestoes()
-  }, [resolvedTopicKey, resolvedCourseId, user, nivelAtual])
+    loadMeta()
+  }, [resolvedTopicKey, resolvedCourseId, user])
+
+  useEffect(() => {
+    if (!resolvedTopicKey || !resolvedCourseId) {
+      setLoading(false)
+      return
+    }
+
+    const trimmedKey = resolvedTopicKey.trim()
+    if (!trimmedKey) {
+      setLoading(false)
+      return
+    }
+
+    let cancelled = false
+
+    const loadQuestoesNivel = async () => {
+      setCarregandoNivel(true)
+      setQuestoes(null)
+      setError('')
+      setCurrentQuestionIndex(0)
+      setSelectedAnswer(null)
+      setShowResult(false)
+      setAnswers([])
+
+      try {
+        const sanitizedKey = sanitizeTopicKeyForFirestore(trimmedKey)
+        const docId = `${sanitizedKey}_nivel_${nivelAtual}`
+        const questoesRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', docId)
+        const questoesDoc = await getDoc(questoesRef)
+
+        if (cancelled) return
+
+        if (questoesDoc.exists()) {
+          setQuestoes({ id: questoesDoc.id, ...questoesDoc.data() })
+        } else if (nivelAtual === 1) {
+          const foundDoc = await findDocumentByTopicKey(resolvedCourseId, trimmedKey)
+          if (!cancelled && foundDoc) setQuestoes(foundDoc)
+        }
+      } catch (err) {
+        console.error('Erro ao carregar questões do nível:', err)
+        if (!cancelled) {
+          setError('Erro ao carregar questões. Tente novamente.')
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+          setCarregandoNivel(false)
+        }
+      }
+    }
+
+    loadQuestoesNivel()
+    return () => {
+      cancelled = true
+    }
+  }, [resolvedTopicKey, resolvedCourseId, nivelAtual])
 
   const handleGenerateQuestoes = async () => {
     if (!resolvedCourseId || !resolvedTopicKey) return false
@@ -680,6 +696,9 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       }
 
       setQuestoes({ id: docId, ...payload })
+      setNiveisDisponiveis((prev) =>
+        prev.includes(nivelAtual) ? prev : [...prev, nivelAtual].sort((a, b) => a - b)
+      )
       setError('')
       setProgress(100)
       return true
@@ -836,8 +855,10 @@ Retorne APENAS o JSON válido, sem texto adicional.`
   }
 
   const handleMudarNivel = (novoNivel) => {
+    if (novoNivel === nivelAtual) return
     setNivelAtual(novoNivel)
-    // Não limpar questoes aqui - deixar o useEffect recarregar
+    setQuestoes(null)
+    setError('')
     setDesempenho(null)
     setCurrentQuestionIndex(0)
     setSelectedAnswer(null)
@@ -1032,21 +1053,29 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         subtitle={
           <>
             Nível <span className="font-mono text-cp-accent">{nivelAtual}</span>/10
-            {niveisDisponiveis.length > 0 && (
-              <button type="button" onClick={() => setMostrarSeletorNiveis(!mostrarSeletorNiveis)} className="ml-2 text-cp-accent hover:underline text-xs">
-                ({niveisDisponiveis.length} níveis)
-              </button>
-            )}
+            <button type="button" onClick={() => setMostrarSeletorNiveis(!mostrarSeletorNiveis)} className="ml-2 text-cp-accent hover:underline text-xs">
+              (escolher nível{niveisDisponiveis.length > 0 ? ` · ${niveisDisponiveis.length} gerados` : ''})
+            </button>
           </>
         }
       />
 
       {mostrarSeletorNiveis && (
-        <NivelSelector niveis={niveisDisponiveis} nivelAtual={nivelAtual} onSelect={handleMudarNivel} />
+        <NivelSelector
+          niveis={todosNiveis}
+          niveisComConteudo={niveisDisponiveis}
+          nivelAtual={nivelAtual}
+          onSelect={handleMudarNivel}
+        />
       )}
 
       <div className="cp-card p-6 sm:p-8">
-          {!desempenho ? (
+          {carregandoNivel ? (
+            <div className="py-12 text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+              <p className="mt-3 text-sm text-cp-muted">Carregando nível {nivelAtual}…</p>
+            </div>
+          ) : !desempenho ? (
             <div className="space-y-6">
               {!questoes ? (
                 <div className="space-y-6">
