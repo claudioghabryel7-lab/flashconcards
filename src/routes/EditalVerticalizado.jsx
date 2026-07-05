@@ -460,26 +460,40 @@ const EditalVerticalizado = () => {
       .catch((err) => console.error('Erro ao carregar status dos tópicos:', err))
   }, [courseId, isAdmin])
 
-  const handleToggleTopicoPublish = async (topicKey) => {
+  const handleToggleTopicoPublish = async (topicKey, disciplinaNome, moduloLabel) => {
     if (!isAdmin || !courseId || !topicKey || publishingTopicKey) return
 
     const current = topicPublishMap[topicKey] || CONTENT_STATUS.UNAVAILABLE
     const next = toggleTopicoPublishStatus(current)
     const actionLabel = next === CONTENT_STATUS.AVAILABLE ? 'liberar' : 'bloquear'
 
-    if (!window.confirm(`${next === CONTENT_STATUS.AVAILABLE ? 'Liberar' : 'Bloquear'} todos os recursos deste tópico para os alunos?`)) {
+    const incidenciaNote = disciplinaNome
+      ? `\n\nInclui também o conteúdo e questões por incidência de "${disciplinaNome}".`
+      : ''
+
+    if (
+      !window.confirm(
+        `${next === CONTENT_STATUS.AVAILABLE ? 'Liberar' : 'Bloquear'} todos os recursos deste tópico (flashcards, estudar, questões preditivas e incidência)?${incidenciaNote}`
+      )
+    ) {
       return
     }
 
     setPublishingTopicKey(topicKey)
     try {
-      const result = await setTopicoPublishStatus(courseId, topicKey, next)
+      const result = await setTopicoPublishStatus(courseId, topicKey, next, {
+        disciplinaNome,
+        moduloLabel,
+      })
       setTopicPublishMap((prev) => ({ ...prev, [topicKey]: next }))
       const parts = []
       if (result.flashcards) parts.push(`${result.flashcards} flashcards`)
-      if (result.questoes) parts.push(`${result.questoes} níveis de questões`)
+      if (result.questoes) parts.push(`${result.questoes} níveis de questões preditivas`)
       if (result.conteudo) parts.push('material de apoio')
-      const detail = parts.length ? `\n\nAtualizado: ${parts.join(', ')}.` : '\n\nNenhum conteúdo gerado encontrado ainda para este tópico.'
+      if (result.incidencia) parts.push(`${result.incidencia} itens de incidência`)
+      const detail = parts.length
+        ? `\n\nAtualizado: ${parts.join(', ')}.`
+        : '\n\nNenhum conteúdo gerado encontrado ainda para este tópico.'
       alert(next === CONTENT_STATUS.AVAILABLE ? `✅ Tópico liberado!${detail}` : `🔒 Tópico bloqueado!${detail}`)
     } catch (err) {
       console.error(err)
@@ -1310,7 +1324,7 @@ REGRAS IMPORTANTES:
                 <>
                   <button
                     type="button"
-                    onClick={() => handleToggleTopicoPublish(topicKey)}
+                    onClick={() => handleToggleTopicoPublish(topicKey, disciplina.nome, moduloLabel)}
                     disabled={isPublishing}
                     className={`rounded-lg px-2.5 py-1.5 font-mono text-[10px] font-semibold transition disabled:opacity-50 ${
                       isPublished

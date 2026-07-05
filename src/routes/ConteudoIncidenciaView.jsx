@@ -7,6 +7,7 @@ import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { isContentAvailable } from '../utils/contentStatus'
 
 const ConteudoIncidenciaView = () => {
   const { courseId, disciplinaIdx } = useParams()
@@ -296,6 +297,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       await setDoc(incidenciaRef, {
         ...parsed,
         disciplinaIdx: disciplinaIndex,
+        status: 'indisponivel',
         updatedAt: serverTimestamp(),
         generatedAt: serverTimestamp(),
       }, { merge: true })
@@ -373,6 +375,24 @@ Retorne APENAS o JSON válido, sem texto adicional.`
   }
 
   const disciplina = editalVerticalizado.disciplinas[disciplinaIndex]
+  const isAdmin = profile?.role === 'admin'
+
+  if (conteudoGerado && !isContentAvailable(conteudoGerado.status, isAdmin)) {
+    return (
+      <div className="max-w-lg mx-auto p-8">
+        <div className="cp-card p-10 text-center">
+          <p className="text-4xl mb-3">🔒</p>
+          <p className="font-medium text-cp-text">Conteúdo de incidência em preparação</p>
+          <p className="mt-2 text-sm text-cp-muted">
+            O administrador ainda não liberou este material.
+          </p>
+          <Link to="/edital-verticalizado" className="cp-btn-ghost mt-6 inline-flex">
+            Voltar ao edital
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen py-6">

@@ -1381,6 +1381,7 @@ img[loading="lazy"] {
 
 .noji-flip-container {
   perspective: 1400px;
+  min-height: 320px;
 }
 
 .noji-flip-inner {
@@ -1389,25 +1390,40 @@ img[loading="lazy"] {
   min-height: 320px;
   transform-style: preserve-3d;
   transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
 }
 
-.noji-flip-container.is-flipped .noji-flip-inner {
+.noji-flip-inner.is-flipped {
   transform: rotateY(180deg);
 }
 
 .noji-flip-front,
 .noji-flip-back {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-height: 320px;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+
+.noji-flip-front {
+  transform: rotateY(0deg) translateZ(1px);
+  z-index: 2;
 }
 
 .noji-flip-back {
-  transform: rotateY(180deg);
+  transform: rotateY(180deg) translateZ(1px);
+  z-index: 1;
 }
 
 @media (min-width: 640px) {
   .noji-card,
-  .noji-flip-inner {
+  .noji-flip-container,
+  .noji-flip-inner,
+  .noji-flip-front,
+  .noji-flip-back {
     min-height: 360px;
   }
 }

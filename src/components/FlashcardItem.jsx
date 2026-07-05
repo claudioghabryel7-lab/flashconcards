@@ -40,7 +40,7 @@ const FlashcardItem = ({
     setEditPergunta(card.pergunta)
     setEditResposta(card.resposta)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [card.id, card.pergunta, card.resposta])
+  }, [card.id])
 
   const toggle = () => {
     if (editing) return
@@ -78,13 +78,10 @@ const FlashcardItem = ({
 
   return (
     <div className="noji-card-wrap relative mx-auto w-full max-w-xl px-1 sm:px-0">
-      <div
-        className={`noji-flip-container relative mx-auto w-full min-h-[320px] cursor-pointer select-none sm:min-h-[360px] ${flipped ? 'is-flipped' : ''}`}
-        onClick={toggle}
-      >
-        <div className="noji-flip-inner">
+      <div className="noji-flip-container relative mx-auto w-full min-h-[320px] cursor-pointer select-none sm:min-h-[360px]">
+        <div className={`noji-flip-inner ${flipped ? 'is-flipped' : ''}`} onClick={toggle}>
         <div
-          className={`noji-card-face noji-flip-front absolute inset-0 flex flex-col rounded-3xl ${cardColor} p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor}`}
+          className={`noji-card-face noji-flip-front flex flex-col rounded-3xl ${cardColor} p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor}`}
         >
           <div className="relative z-10 flex h-full min-h-[280px] flex-col sm:min-h-[320px]">
             <div className="absolute right-0 top-0 z-20 flex gap-1.5">
@@ -191,7 +188,7 @@ const FlashcardItem = ({
         </div>
 
         <div
-          className={`noji-card-face noji-flip-back absolute inset-0 flex flex-col rounded-3xl p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor} ${
+          className={`noji-card-face noji-flip-back flex flex-col rounded-3xl p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor} ${
             cardColor === 'bg-white' || cardColor === 'bg-slate-100'
               ? 'bg-slate-900 dark:bg-slate-800'
               : 'bg-slate-900'

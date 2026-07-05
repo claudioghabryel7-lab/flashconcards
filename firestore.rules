@@ -290,7 +290,8 @@ service cloud.firestore {
       }
       
       match /conteudosIncidencia/{docId} {
-        allow read: if isAuthenticated();
+        allow read: if isAuthenticated() &&
+                     (resource.data.status == 'disponivel' || isAdmin());
         allow create: if isAuthenticated();
         allow update: if isAuthenticated();
         allow delete: if isAdmin();

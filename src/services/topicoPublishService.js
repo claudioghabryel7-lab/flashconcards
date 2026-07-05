@@ -9,8 +9,34 @@ import {
 import { db } from '../firebase/config'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 import { sanitizeTopicKeyForFirestore } from '../utils/topicKeyFirestore'
+import { cardMatchesModule } from '../utils/editalVerticalizadoLoader'
 
 const MAX_BATCH = 450
+
+export function sanitizeDisciplinaName(nome = '') {
+  return nome.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100)
+}
+
+function topicKeysMatch(a, b) {
+  if (!a || !b) return false
+  if (a === b) return true
+  try {
+    const da = decodeURIComponent(a)
+    const db = decodeURIComponent(b)
+    if (da === db || da === b || a === db) return true
+  } catch {
+    /* ignore */
+  }
+  return sanitizeTopicKeyForFirestore(a) === sanitizeTopicKeyForFirestore(b)
+}
+
+function cardBelongsToTopic(card, topicKey, disciplinaNome, moduloLabel) {
+  if (topicKeysMatch(card.topicKey, topicKey)) return true
+  if (disciplinaNome && moduloLabel && cardMatchesModule(card, disciplinaNome, moduloLabel)) {
+    return true
+  }
+  return false
+}
 
 async function commitBatches(operations) {
   for (let i = 0; i < operations.length; i += MAX_BATCH) {
@@ -38,9 +64,14 @@ export async function loadTopicoPublishMap(courseId) {
 
 /**
  * Disponibiliza ou bloqueia todos os recursos de um tópico:
- * flashcards, questões preditivas (níveis 1–10) e conteúdo completo.
+ * flashcards, questões preditivas, material de apoio e incidência da disciplina.
  */
-export async function setTopicoPublishStatus(courseId, topicKey, status) {
+export async function setTopicoPublishStatus(
+  courseId,
+  topicKey,
+  status,
+  { disciplinaNome = '', moduloLabel = '' } = {}
+) {
   if (!topicKey?.trim()) {
     throw new Error('Tópico inválido')
   }
@@ -50,14 +81,14 @@ export async function setTopicoPublishStatus(courseId, topicKey, status) {
   const operations = []
   const now = serverTimestamp()
 
-  // Flashcards do tópico
+  // Flashcards — topicKey ou matéria/módulo
   const flashcardsSnap = await getDocs(collection(db, 'courses', resolvedId, 'flashcards'))
   flashcardsSnap.docs.forEach((d) => {
     const data = d.data()
-    if (data.topicKey === topicKey) {
+    if (cardBelongsToTopic(data, topicKey, disciplinaNome, moduloLabel)) {
       operations.push({
         ref: doc(db, 'courses', resolvedId, 'flashcards', d.id),
-        data: { status, updatedAt: now },
+        data: { status, topicKey, updatedAt: now },
       })
     }
   })
@@ -74,8 +105,7 @@ export async function setTopicoPublishStatus(courseId, topicKey, status) {
     }
   }
 
-  // Questões legadas (doc id = topicKey ou sanitizedKey sem nível)
-  for (const legacyId of [sanitizedKey, topicKey]) {
+  for (const legacyId of [sanitizedKey, topicKey, decodeURIComponentSafe(topicKey)]) {
     if (!legacyId) continue
     const legacyRef = doc(db, 'courses', resolvedId, 'questoesTopico', legacyId)
     const legacyDoc = await getDoc(legacyRef)
@@ -87,7 +117,7 @@ export async function setTopicoPublishStatus(courseId, topicKey, status) {
     }
   }
 
-  // Conteúdo completo (material de apoio)
+  // Material de apoio (Estudar)
   const conteudoRef = doc(db, 'courses', resolvedId, 'conteudosCompletos', sanitizedKey)
   const conteudoDoc = await getDoc(conteudoRef)
   if (conteudoDoc.exists()) {
@@ -97,29 +127,59 @@ export async function setTopicoPublishStatus(courseId, topicKey, status) {
     })
   }
 
-  // Registro central de status (para UI do edital)
+  // Incidência da disciplina — conteúdo + questões (níveis 1–10)
+  if (disciplinaNome) {
+    const discKey = sanitizeDisciplinaName(disciplinaNome)
+
+    const incidenciaRef = doc(db, 'courses', resolvedId, 'conteudosIncidencia', discKey)
+    const incidenciaDoc = await getDoc(incidenciaRef)
+    if (incidenciaDoc.exists()) {
+      operations.push({
+        ref: incidenciaRef,
+        data: { status, updatedAt: now },
+      })
+    }
+
+    for (let nivel = 1; nivel <= 10; nivel++) {
+      const qiRef = doc(db, 'courses', resolvedId, 'questoesIncidencia', `${discKey}_nivel_${nivel}`)
+      const qiDoc = await getDoc(qiRef)
+      if (qiDoc.exists()) {
+        operations.push({
+          ref: qiRef,
+          data: { status, updatedAt: now },
+        })
+      }
+    }
+  }
+
+  // Registro central (UI do edital)
   operations.push({
     ref: doc(db, 'courses', resolvedId, 'topicoStatus', sanitizedKey),
-    data: { topicKey, status, updatedAt: now },
+    data: { topicKey, status, disciplinaNome, updatedAt: now },
   })
-
-  if (operations.length === 1) {
-    // Só topicoStatus — ainda assim salva para marcar intenção
-    await commitBatches(operations)
-    return { flashcards: 0, questoes: 0, conteudo: false }
-  }
 
   await commitBatches(operations)
 
-  const flashcardsCount = operations.filter((op) =>
-    op.ref.path.includes('/flashcards/')
-  ).length
-  const questoesCount = operations.filter((op) =>
-    op.ref.path.includes('/questoesTopico/')
-  ).length
-  const conteudoUpdated = conteudoDoc.exists()
+  return {
+    flashcards: operations.filter((op) => op.ref.path.includes('/flashcards/')).length,
+    questoes: operations.filter((op) => op.ref.path.includes('/questoesTopico/')).length,
+    conteudo: conteudoDoc.exists(),
+    incidencia: disciplinaNome
+      ? operations.filter(
+          (op) =>
+            op.ref.path.includes('/conteudosIncidencia/') ||
+            op.ref.path.includes('/questoesIncidencia/')
+        ).length
+      : 0,
+  }
+}
 
-  return { flashcards: flashcardsCount, questoes: questoesCount, conteudo: conteudoUpdated }
+function decodeURIComponentSafe(value) {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
 }
 
 export function toggleTopicoPublishStatus(currentStatus) {
