@@ -18,7 +18,7 @@ import { useStudyTimer } from '../hooks/useStudyTimer'
 import { useStudySession } from '../hooks/useStudySession'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder, applyModuleOrder, getModuleOrder } from '../utils/subjectOrder'
-import { FolderIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon, LockClosedIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { ChevronRightIcon, ChevronDownIcon, ClockIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { canAccessMateria, canAccessModulo, isTrialMode } from '../utils/trialLimits'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import {
@@ -1171,12 +1171,12 @@ IMPORTANTE:
   return (
     <div className="space-y-6">
       <CPPageHeader
-        badge="SRS · IA"
-        title="Flashcards com IA"
+        badge="Noji · SRS"
+        title="Flashcards"
         subtitle={
           isStudying
-            ? `Estudando: ${selectedMateria} • ${selectedModulo}`
-            : 'Clique em um tópico do edital para abrir os flashcards'
+            ? `${selectedMateria} › ${selectedModulo}`
+            : 'Biblioteca de decks com repetição espaçada'
         }
         backHref="/dashboard"
         actions={
@@ -1255,22 +1255,25 @@ IMPORTANTE:
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Painel de matérias — estilo Edital */}
-        <div className="cp-card flex flex-col overflow-hidden lg:max-h-[calc(100vh-12rem)]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(260px,320px)_1fr]">
+        {/* Biblioteca de decks — estilo Noji */}
+        <div className="noji-deck-panel cp-card flex flex-col overflow-hidden lg:max-h-[calc(100vh-12rem)]">
           <div className="border-b border-cp-border p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <span className="cp-badge cp-badge-accent !text-[10px]">Edital</span>
-              <p className="text-sm font-medium text-cp-text">Matérias e tópicos</p>
+            <div className="mb-1 flex items-center justify-between">
+              <p className="text-sm font-semibold text-cp-text">Meus decks</p>
+              <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 font-mono text-[10px] font-medium text-indigo-500">
+                SRS
+              </span>
             </div>
+            <p className="mb-3 text-[11px] text-cp-muted">Matérias e tópicos do edital</p>
             <div className="relative">
               <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cp-muted" />
               <input
                 type="search"
                 value={sidebarSearch}
                 onChange={(e) => setSidebarSearch(e.target.value)}
-                placeholder="Buscar matéria ou tópico..."
-                className="w-full rounded-xl border border-cp-border bg-cp-bg/60 py-2 pl-9 pr-3 text-sm text-cp-text placeholder:text-cp-muted focus:border-cp-accent/40 focus:outline-none focus:ring-1 focus:ring-cp-accent/25"
+                placeholder="Buscar deck..."
+                className="w-full rounded-xl border border-cp-border bg-cp-bg/60 py-2.5 pl-9 pr-3 text-sm text-cp-text placeholder:text-cp-muted focus:border-indigo-400/50 focus:outline-none focus:ring-2 focus:ring-indigo-400/20"
               />
             </div>
           </div>
@@ -1300,27 +1303,49 @@ IMPORTANTE:
 
                   if (modulos.length === 0 && !hasEdital) return null
 
+                  const deckHue = [...materia].reduce((a, c) => a + c.charCodeAt(0), 0) % 360
+                  const totalDue = modulos.reduce((acc, m) => {
+                    const cardsInMod = organizedCards[materia][m] || []
+                    return acc + cardsInMod.filter((c) => isCardDue(cardProgress[c.id], srsNow)).length
+                  }, 0)
+
                   return (
-                    <div key={materia} className="overflow-hidden rounded-xl border border-cp-border bg-cp-bg/30">
+                    <div key={materia} className="overflow-hidden rounded-2xl border border-cp-border/80 bg-cp-bg/20">
                       <button
                         type="button"
                         onClick={() => toggleMateria(materia)}
-                        className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition ${
-                          isSelected ? 'bg-cp-accent/10 text-cp-accent' : 'text-cp-text hover:bg-cp-surface/60'
+                        className={`flex w-full items-center gap-2.5 px-3 py-3 text-left text-sm transition ${
+                          isSelected ? 'bg-indigo-500/10' : 'hover:bg-cp-surface/50'
                         }`}
                       >
+                        <span
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm"
+                          style={{ background: `hsl(${deckHue}, 65%, 52%)` }}
+                        >
+                          {materia.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className={`block truncate font-medium ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-cp-text'}`}>
+                            {materia}
+                          </span>
+                          <span className="text-[10px] text-cp-muted">{modulos.length} tópicos</span>
+                        </span>
+                        {totalDue > 0 ? (
+                          <span className="shrink-0 rounded-full bg-indigo-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                            {totalDue}
+                          </span>
+                        ) : (
+                          <span className="shrink-0 font-mono text-[10px] text-cp-muted">{modulos.length}</span>
+                        )}
                         {isExpanded ? (
                           <ChevronDownIcon className="h-4 w-4 shrink-0 text-cp-muted" />
                         ) : (
                           <ChevronRightIcon className="h-4 w-4 shrink-0 text-cp-muted" />
                         )}
-                        <FolderIcon className="h-4 w-4 shrink-0" />
-                        <span className="min-w-0 flex-1 truncate font-medium">{materia}</span>
-                        <span className="font-mono text-[10px] text-cp-muted">{modulos.length}</span>
                       </button>
 
                       {isExpanded && (
-                        <div className="space-y-1 border-t border-cp-border/60 px-2 py-2">
+                        <div className="space-y-0.5 border-t border-cp-border/50 px-2 py-2">
                           {(() => {
                             const moduleOrderConfig = moduleOrderConfigs[materia] || {
                               order: null,
@@ -1346,21 +1371,23 @@ IMPORTANTE:
                                   type="button"
                                   onClick={() => selectModulo(materia, modulo)}
                                   disabled={!canAccessMod && !isModuloSelected}
-                                  className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition ${
+                                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs transition ${
                                     !canAccessMod && !isModuloSelected
                                       ? 'cursor-not-allowed opacity-40'
                                       : isModuloSelected
-                                        ? 'bg-cp-accent text-white'
-                                        : 'text-cp-muted hover:bg-cp-surface/80 hover:text-cp-text'
+                                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
+                                        : dueInModulo > 0
+                                          ? 'bg-indigo-500/5 text-cp-text hover:bg-indigo-500/10'
+                                          : 'text-cp-muted hover:bg-cp-surface/80 hover:text-cp-text'
                                   }`}
                                 >
                                   <span className="mr-2 min-w-0 flex-1 truncate">{modulo}</span>
                                   <span
-                                    className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] ${
+                                    className={`shrink-0 rounded-lg px-2 py-0.5 font-mono text-[10px] font-semibold ${
                                       isModuloSelected
-                                        ? 'bg-white/20'
+                                        ? 'bg-white/20 text-white'
                                         : dueInModulo > 0
-                                          ? 'bg-cp-accent2/15 text-cp-accent2'
+                                          ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400'
                                           : 'bg-cp-surface text-cp-muted'
                                     }`}
                                   >
@@ -1373,9 +1400,9 @@ IMPORTANTE:
                           <button
                             type="button"
                             onClick={() => startMiniSim(materia)}
-                            className="w-full rounded-lg border border-dashed border-cp-accent/30 px-2.5 py-2 text-left text-[11px] font-medium text-cp-accent transition hover:bg-cp-accent/10"
+                            className="w-full rounded-xl border border-dashed border-indigo-400/30 px-3 py-2.5 text-left text-[11px] font-medium text-indigo-600 transition hover:bg-indigo-500/5 dark:text-indigo-400"
                           >
-                            ⚡ Mini simulado (10 cards)
+                            ⚡ Revisão rápida (10 cards)
                           </button>
                         </div>
                       )}
@@ -1386,106 +1413,94 @@ IMPORTANTE:
           </div>
         </div>
 
-        {/* Área de estudo */}
-        <div className="lg:col-span-2">
+        {/* Sessão de estudo — estilo Noji */}
+        <div className="min-h-[520px] lg:min-h-[calc(100vh-12rem)]">
           {!selectedMateria || !selectedModulo ? (
-            <div className="cp-card p-12 text-center">
-              <p className="text-4xl mb-4">📚</p>
-              <p className="text-lg font-medium text-cp-text">Selecione um tópico</p>
-              <p className="mt-2 text-sm text-cp-muted">
-                Expanda uma matéria na lista e escolha o módulo para estudar
+            <div className="noji-empty cp-card flex h-full min-h-[480px] flex-col items-center justify-center p-12 text-center">
+              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-indigo-500 to-violet-600 text-3xl shadow-lg shadow-indigo-500/25">
+                📚
+              </div>
+              <p className="text-xl font-semibold text-cp-text">Escolha um deck</p>
+              <p className="mt-2 max-w-sm text-sm text-cp-muted">
+                Selecione uma matéria e um tópico na biblioteca para iniciar a revisão com repetição espaçada
               </p>
+              <div className="mt-8 flex flex-wrap justify-center gap-3 text-[11px] text-cp-muted">
+                <span className="rounded-full border border-cp-border px-3 py-1">Toque para virar</span>
+                <span className="rounded-full border border-cp-border px-3 py-1">Difícil · 1 min</span>
+                <span className="rounded-full border border-cp-border px-3 py-1">Fácil · SRS progressivo</span>
+              </div>
             </div>
           ) : activeCards.length === 0 ? (
-            <div className="cp-card p-8 text-center">
-              <p className="text-sm font-medium text-cp-text">Nenhum card para revisar agora</p>
-              <p className="mt-2 text-xs text-cp-muted">
+            <div className="noji-empty cp-card flex h-full min-h-[480px] flex-col items-center justify-center p-10 text-center">
+              <div className="mb-4 text-5xl">✨</div>
+              <p className="text-lg font-semibold text-cp-text">Tudo em dia!</p>
+              <p className="mt-2 max-w-md text-sm text-cp-muted">
                 {moduleStats.total > 0
                   ? moduleStats.due === 0 && moduleStats.nextDue
-                    ? `Próxima revisão: ${moduleStats.nextDue.format('DD/MM HH:mm')}`
-                    : `${moduleStats.total} cards neste módulo · SRS ativo`
-                  : 'Este módulo ainda não tem flashcards.'}
+                    ? `Próxima revisão em ${moduleStats.nextDue.format('DD/MM [às] HH:mm')}`
+                    : `${moduleStats.total} cards neste deck · nenhum pendente agora`
+                  : 'Este tópico ainda não tem flashcards.'}
               </p>
-              <p className="mt-3 font-mono text-[10px] text-cp-muted">
-                Difícil → 1 min · Fácil → intervalos progressivos (15m → 1h → 6h → 1d…)
-              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMateria(null)
+                  setSelectedModulo(null)
+                }}
+                className="mt-6 rounded-xl border border-cp-border px-5 py-2.5 text-sm font-medium text-cp-text transition hover:bg-cp-surface"
+              >
+                ← Voltar aos decks
+              </button>
             </div>
           ) : (
-            <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 dark:from-slate-900 dark:via-blue-900/20 dark:to-purple-900/20 overflow-hidden">
-              {/* Background decorativo */}
-              <div className="absolute inset-0 overflow-hidden">
-                <div className="absolute top-0 left-0 w-96 h-96 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl -ml-48 -mt-48"></div>
-                <div className="absolute bottom-0 right-0 w-96 h-96 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 rounded-full blur-3xl -mr-48 -mb-48"></div>
-              </div>
-              
-              {/* Header fixo */}
-              <div className="sticky top-0 z-10 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 px-4 py-3">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur-md opacity-50"></div>
-                      <div className="relative rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 p-2 shadow-lg">
-                        <span className="text-white text-lg">⚡</span>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-sm font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
-                        {selectedMateria}
-                      </p>
-                      <p className="text-base font-bold text-slate-900 dark:text-white">
-                        {selectedModulo}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {activeCards.length} {activeCards.length === 1 ? 'card' : 'cards'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={shuffle}
-                      className="group/btn relative inline-flex items-center justify-center gap-2 px-3 py-2 border-2 border-purple-500/30 dark:border-purple-400/30 text-purple-600 dark:text-purple-400 font-bold rounded-xl hover:bg-purple-50/50 dark:hover:bg-purple-900/20 transition-all overflow-hidden"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/10 to-purple-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
-                      <span className="relative z-10 text-sm">🔀 Embaralhar</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedMateria(null)
-                        setSelectedModulo(null)
-                        setStudyMode('module')
-                        setMiniSimCards([])
-                      }}
-                      className="group/btn relative inline-flex items-center justify-center gap-2 px-3 py-2 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-all overflow-hidden"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-r from-slate-500/0 via-slate-500/10 to-slate-500/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700"></div>
-                      <span className="relative z-10 text-sm">← Voltar</span>
-                    </button>
-                  </div>
+            <div className="noji-session cp-card flex h-full min-h-[520px] flex-col overflow-hidden lg:min-h-[calc(100vh-12rem)]">
+              {/* Header da sessão */}
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-cp-border px-4 py-3 sm:px-6">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
+                    {selectedMateria}
+                  </p>
+                  <p className="truncate text-base font-semibold text-cp-text">{selectedModulo}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="hidden rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 sm:inline">
+                    {activeCards.length} para revisar
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMateria(null)
+                      setSelectedModulo(null)
+                      setStudyMode('module')
+                      setMiniSimCards([])
+                    }}
+                    className="rounded-xl border border-cp-border px-3 py-1.5 text-xs font-medium text-cp-muted transition hover:bg-cp-surface hover:text-cp-text"
+                  >
+                    Sair
+                  </button>
                 </div>
               </div>
-              
-              {/* Área do card - responsiva e fixa */}
-              <div className="relative flex items-center justify-center min-h-[calc(100vh-120px)] px-2 sm:px-4 py-4">
-                <div className="w-full max-w-2xl xl:max-w-3xl">
-                  <FlashcardList
-                    cards={activeCards}
-                    currentIndex={currentIndex}
-                    onSelect={setCurrentIndex}
-                    onToggleFavorite={toggleFavorite}
-                    onRateDifficulty={rateDifficulty}
-                    favorites={favorites}
-                    cardProgress={cardProgress}
-                    onPrev={goPrev}
-                    onNext={goNext}
-                    onShuffle={shuffle}
-                    viewedIds={viewedIds}
-                    showRating={needsReview}
-                    onExplainCard={handleExplainCard}
-                    onDeleteFlashcard={handleDeleteFlashcard}
-                  />
-                </div>
+
+              {/* Área do card */}
+              <div className="flex flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6">
+                <FlashcardList
+                  cards={activeCards}
+                  currentIndex={currentIndex}
+                  onSelect={setCurrentIndex}
+                  onToggleFavorite={toggleFavorite}
+                  onRateDifficulty={rateDifficulty}
+                  favorites={favorites}
+                  cardProgress={cardProgress}
+                  onPrev={goPrev}
+                  onNext={goNext}
+                  onShuffle={shuffle}
+                  viewedIds={viewedIds}
+                  showRating={needsReview}
+                  onExplainCard={handleExplainCard}
+                  onDeleteFlashcard={handleDeleteFlashcard}
+                  deckTitle={selectedModulo}
+                  deckSubtitle={selectedMateria}
+                />
               </div>
             </div>
           )}

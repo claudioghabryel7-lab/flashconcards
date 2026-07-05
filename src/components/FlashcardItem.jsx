@@ -1,13 +1,12 @@
-﻿import { useState } from 'react'
-
-import { motion, AnimatePresence } from 'framer-motion'
+﻿import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { HeartIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/solid'
 import { useAuth } from '../hooks/useAuth'
 
-const FlashcardItem = ({ 
-  card, 
-  isFavorite, 
-  onToggleFavorite, 
+const FlashcardItem = ({
+  card,
+  isFavorite,
+  onToggleFavorite,
   onRateDifficulty,
   showRating = false,
   cardProgress = null,
@@ -16,7 +15,9 @@ const FlashcardItem = ({
   onEditFlashcard = null,
   cardColor = 'bg-white',
   textColor = 'text-slate-900',
-  borderColor = 'border-white'
+  borderColor = 'border-slate-200',
+  onFlipChange = null,
+  ratingBelowCard = true,
 }) => {
   const [flipped, setFlipped] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -25,16 +26,26 @@ const FlashcardItem = ({
   const { profile } = useAuth()
   const isAdmin = profile?.role === 'admin'
 
+  useEffect(() => {
+    setFlipped(false)
+    setEditing(false)
+    setEditPergunta(card.pergunta)
+    setEditResposta(card.resposta)
+  }, [card.id, card.pergunta, card.resposta])
+
+  useEffect(() => {
+    onFlipChange?.(flipped)
+  }, [flipped, onFlipChange])
+
   const toggle = () => {
+    if (editing) return
     setFlipped(!flipped)
   }
 
   const handleRate = (difficulty) => {
     if (onRateDifficulty) {
       onRateDifficulty(card.id, difficulty)
-      setTimeout(() => {
-        setFlipped(false)
-      }, 300)
+      setTimeout(() => setFlipped(false), 200)
     }
   }
 
@@ -58,91 +69,102 @@ const FlashcardItem = ({
     }
   }
 
+  const showInlineRating = showRating && !ratingBelowCard && flipped
+
   return (
-    <div className='relative mx-auto w-full max-w-2xl xl:max-w-3xl px-2 sm:px-0 mb-4'>
+    <div className="noji-card-wrap relative mx-auto w-full max-w-xl px-1 sm:px-0">
       <motion.div
-        className='relative min-h-[400px] sm:min-h-[450px] md:min-h-[500px] max-h-[85vh] sm:max-h-[90vh] w-full cursor-pointer group overflow-visible'
-        style={{ perspective: 1200 }}
+        className="noji-card relative mx-auto w-full cursor-pointer select-none"
+        style={{ perspective: 1400 }}
         onClick={toggle}
-        whileHover={{ scale: 1.02 }}
-        transition={{ duration: 0.2 }}
+        whileTap={{ scale: 0.995 }}
       >
         <motion.div
-          className={`absolute inset-0 flex flex-col justify-between rounded-lg ${cardColor} p-4 sm:p-6 md:p-8 shadow-2xl border-2 ${borderColor} overflow-hidden`}
+          className={`noji-card-face absolute inset-0 flex flex-col rounded-3xl ${cardColor} p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor}`}
           animate={{ rotateY: flipped ? 180 : 0 }}
-          transition={{ duration: 0.6, ease: 'easeInOut' }}
+          transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
           style={{ backfaceVisibility: 'hidden', transformStyle: 'preserve-3d' }}
         >
-          <div className='relative z-10 h-full flex flex-col overflow-hidden min-h-0'>
-            {/* Botões de ação */}
-            <div className='absolute right-2 sm:right-3 md:right-4 top-2 sm:top-3 md:top-4 z-20 flex gap-2'>
-              {/* Botão de favoritos */}
+          <div className="relative z-10 flex h-full min-h-[320px] sm:min-h-[360px] flex-col">
+            <div className="absolute right-0 top-0 z-20 flex gap-1.5">
               <button
-                type='button'
-                onClick={(event) => {
-                  event.stopPropagation()
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
                   onToggleFavorite(card.id)
                 }}
-                className={'group/fav flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg transition-all touch-manipulation border border-slate-300 dark:border-slate-600 ' +
-                  (isFavorite 
-                    ? 'text-red-500 bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-600' 
-                    : 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-300 dark:hover:border-red-600')
-                }
+                className={`flex h-9 w-9 items-center justify-center rounded-full transition-all ${
+                  isFavorite
+                    ? 'bg-rose-50 text-rose-500 dark:bg-rose-950/40'
+                    : 'text-slate-400 hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800'
+                }`}
+                aria-label={isFavorite ? 'Remover dos favoritos' : 'Favoritar'}
               >
-                <HeartIcon className='h-5 w-5 sm:h-6 sm:w-6' />
+                <HeartIcon className="h-5 w-5" />
               </button>
-              
-              {/* Botão de editar (apenas admin) */}
-              {isAdmin && !editing && (
+              {onExplainCard && (
                 <button
-                  type='button'
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    handleEdit()
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onExplainCard(card)
                   }}
-                  className='group/edit flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg transition-all touch-manipulation text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-900 dark:hover:border-white'
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/40"
+                  aria-label="Explicação da IA"
                 >
-                  <PencilIcon className='h-5 w-5 sm:h-6 sm:w-6' />
+                  <span className="text-base">💡</span>
                 </button>
               )}
-              
-              {/* Botão de excluir (apenas admin) */}
               {isAdmin && !editing && (
-                <button
-                  type='button'
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    handleDelete()
-                  }}
-                  className='group/delete flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg transition-all touch-manipulation text-slate-400 hover:text-red-500 border border-slate-300 dark:border-slate-600 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-300 dark:hover:border-red-600'
-                >
-                  <TrashIcon className='h-5 w-5 sm:h-6 sm:w-6' />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleEdit()
+                    }}
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800"
+                    aria-label="Editar"
+                  >
+                    <PencilIcon className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDelete()
+                    }}
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
+                    aria-label="Excluir"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
+                </>
               )}
             </div>
 
-            <div className='flex-1 flex flex-col justify-center items-center text-center px-2 sm:px-4 py-4 sm:py-6'>
+            <div className="flex flex-1 flex-col items-center justify-center px-2 py-8 text-center">
               {editing ? (
-                <div className='w-full space-y-4' onClick={(e) => e.stopPropagation()}>
+                <div className="w-full space-y-4" onClick={(e) => e.stopPropagation()}>
                   <textarea
                     value={editPergunta}
                     onChange={(e) => setEditPergunta(e.target.value)}
-                    className='w-full p-3 rounded-lg border-2 border-slate-900 dark:border-white bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-lg font-bold resize-none'
-                    rows={3}
-                    placeholder='Pergunta'
+                    className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-4 text-lg font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    rows={4}
+                    placeholder="Pergunta"
                   />
-                  <div className='flex gap-2 justify-center'>
+                  <div className="flex justify-center gap-2">
                     <button
-                      type='button'
+                      type="button"
                       onClick={handleSaveEdit}
-                      className='px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg font-bold hover:opacity-80 transition'
+                      className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
                     >
                       Salvar
                     </button>
                     <button
-                      type='button'
+                      type="button"
                       onClick={() => setEditing(false)}
-                      className='px-4 py-2 border-2 border-slate-900 dark:border-white text-slate-900 dark:text-white rounded-lg font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition'
+                      className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300"
                     >
                       Cancelar
                     </button>
@@ -150,151 +172,97 @@ const FlashcardItem = ({
                 </div>
               ) : (
                 <>
-                  <h3 className={`text-lg sm:text-xl md:text-2xl font-bold ${textColor} mb-4 sm:mb-6 leading-relaxed`}>
+                  <span className="mb-4 inline-flex rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
+                    Pergunta
+                  </span>
+                  <h3 className={`text-xl font-semibold leading-relaxed sm:text-2xl ${textColor}`}>
                     {card.pergunta}
                   </h3>
-                  
-                  <div className={`text-xs sm:text-sm ${textColor === 'text-white' ? 'text-slate-300' : 'text-slate-600 dark:text-slate-400'} font-medium`}>
-                    Clique para ver resposta 
-                  </div>
+                  <p className="noji-hint mt-8 text-sm text-slate-400">
+                    Toque para revelar a resposta
+                  </p>
                 </>
               )}
             </div>
 
-            <div className='flex flex-wrap gap-1 sm:gap-2 justify-center'>
-              {card.materia && (
-                <span className={`px-2 py-1 border ${borderColor} ${textColor} text-xs rounded`}>
-                  {card.materia}
-                </span>
-              )}
-              {card.modulo && (
-                <span className={`px-2 py-1 border ${borderColor} ${textColor} text-xs rounded`}>
-                  {card.modulo}
-                </span>
-              )}
-              {cardProgress?.lastDifficulty && (
-                <span className={`px-2 py-1 text-xs rounded border ${
-                  cardProgress.lastDifficulty === 'easy' 
-                    ? 'border-emerald-600 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400' 
-                    : 'border-orange-600 text-orange-600 dark:border-orange-400 dark:text-orange-400'
-                }`}>
-                  Última: {cardProgress.lastDifficulty === 'easy' ? 'Fácil' : 'Difícil'}
-                </span>
-              )}
-            </div>
+            {(card.materia || card.modulo) && (
+              <div className="mt-auto flex flex-wrap justify-center gap-1.5 pt-2">
+                {card.materia && (
+                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    {card.materia}
+                  </span>
+                )}
+                {card.modulo && (
+                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    {card.modulo}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </motion.div>
 
         <motion.div
-          className={`absolute inset-0 rounded-lg ${cardColor === 'bg-white' ? 'bg-slate-900 dark:bg-white' : 'bg-slate-900'} p-4 sm:p-6 md:p-8 shadow-2xl border-2 ${borderColor} overflow-hidden`}
-          animate={{ rotateY: flipped ? 0 : 180 }}
-          transition={{ duration: 0.6, ease: 'easeInOut' }}
+          className={`noji-card-face absolute inset-0 flex flex-col rounded-3xl p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor} ${
+            cardColor === 'bg-white' || cardColor === 'bg-slate-100'
+              ? 'bg-slate-900 dark:bg-slate-800'
+              : 'bg-slate-900'
+          }`}
+          animate={{ rotateY: flipped ? 0 : -180 }}
+          transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
           style={{ backfaceVisibility: 'hidden', transformStyle: 'preserve-3d' }}
         >
-          <div className='relative z-10 h-full flex flex-col'>
-            <div className='flex-1 flex flex-col justify-center items-center text-center px-2 sm:px-4 py-4 sm:py-6 min-h-0'>
-              <div className='mb-4 sm:mb-6'>
-                <div className={`inline-flex px-3 py-1 rounded text-xs font-bold border ${borderColor} ${textColor === 'text-white' ? 'text-white dark:text-slate-900' : 'text-slate-900 dark:text-white'}`}>
-                  Resposta
-                </div>
-              </div>
-              
+          <div className="relative z-10 flex h-full min-h-[320px] sm:min-h-[360px] flex-col">
+            <div className="flex flex-1 flex-col items-center justify-center px-2 py-6 text-center">
+              <span className="mb-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white/70">
+                Resposta
+              </span>
               {editing ? (
-                <div className='w-full space-y-4' onClick={(e) => e.stopPropagation()}>
+                <div className="w-full space-y-4" onClick={(e) => e.stopPropagation()}>
                   <textarea
                     value={editResposta}
                     onChange={(e) => setEditResposta(e.target.value)}
-                    className='w-full p-3 rounded-lg border-2 border-white dark:border-slate-900 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-base resize-none'
+                    className="w-full resize-none rounded-2xl border border-white/20 bg-white/10 p-4 text-base text-white"
                     rows={6}
-                    placeholder='Resposta'
+                    placeholder="Resposta"
                   />
-                  <div className='flex gap-2 justify-center'>
-                    <button
-                      type='button'
-                      onClick={handleSaveEdit}
-                      className='px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg font-bold hover:opacity-80 transition'
-                    >
-                      Salvar
-                    </button>
-                    <button
-                      type='button'
-                      onClick={() => setEditing(false)}
-                      className='px-4 py-2 border-2 border-white dark:border-slate-900 text-white dark:text-slate-900 rounded-lg font-bold hover:bg-slate-800 dark:hover:bg-slate-200 transition'
-                    >
-                      Cancelar
-                    </button>
-                  </div>
                 </div>
               ) : (
-                <div className={`text-base sm:text-lg md:text-xl font-medium ${textColor === 'text-white' ? 'text-white dark:text-slate-900' : 'text-slate-900 dark:text-white'} leading-relaxed overflow-y-auto max-h-[200px] sm:max-h-[300px] md:max-h-[400px] px-1`}>
+                <div className="max-h-[240px] overflow-y-auto text-lg font-medium leading-relaxed text-white sm:text-xl">
                   {card.resposta}
                 </div>
               )}
             </div>
-            
-            {showRating && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: flipped ? 1 : 0, y: flipped ? 0 : 20 }}
-                transition={{ delay: flipped ? 0.3 : 0 }}
-                className='space-y-2 sm:space-y-2.5 md:space-y-3 mt-2 sm:mt-3 md:mt-4 flex-shrink-0 pb-2 sm:pb-0'
-                style={{ pointerEvents: flipped ? 'auto' : 'none' }}
-              >
-                {cardProgress?.lastDifficulty && (
-                  <div className='flex justify-center mb-2'>
-                    <span className={`px-3 py-1 text-xs rounded font-medium border ${borderColor} ${
-                      textColor === 'text-white' 
-                        ? 'text-white dark:text-slate-900' 
-                        : 'text-slate-900 dark:text-white'
-                    }`}>
-                      Última revisão: {cardProgress.lastDifficulty === 'easy' ? 'Fácil' : 'Difícil'}
-                    </span>
-                  </div>
-                )}
-                
-                <p className={`text-center text-xs sm:text-sm md:text-base font-bold ${textColor === 'text-white' ? 'text-white dark:text-slate-900' : 'text-slate-900 dark:text-white'} mb-3 sm:mb-4`}>
-                  Como foi essa revisão?
-                </p>
-                <div className='flex gap-2 sm:gap-3'>
-                  <motion.button
-                    type='button'
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleRate('hard')
-                    }}
-                    className={`group/btn relative flex-1 rounded-lg ${cardColor === 'bg-white' ? 'bg-white dark:bg-slate-900' : 'bg-white'} px-3 sm:px-4 md:px-5 py-3 sm:py-3.5 md:py-4 text-xs sm:text-sm md:text-base font-black ${textColor === 'text-white' ? 'text-slate-900 dark:text-white' : 'text-slate-900 dark:text-white'} border-2 ${borderColor} min-h-[48px] sm:min-h-[52px] md:min-h-[56px] overflow-hidden touch-manipulation hover:opacity-80 transition`}
+
+            {showInlineRating && (
+              <div className="mt-auto space-y-3 border-t border-white/10 pt-4" onClick={(e) => e.stopPropagation()}>
+                <p className="text-center text-xs font-medium text-white/60">Como foi essa revisão?</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleRate('hard')}
+                    className="noji-rate-hard flex-1 rounded-2xl py-3.5 text-sm font-bold"
                   >
-                    <span className='relative z-10 flex items-center justify-center gap-2 sm:gap-2.5 md:gap-3'>
-                      <span className='whitespace-nowrap'>Difícil</span>
-                      <span className='text-xs sm:text-sm opacity-75'>(1 min)</span>
-                    </span>
-                  </motion.button>
-                  <motion.button
-                    type='button'
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleRate('easy')
-                    }}
-                    className={`group/btn relative flex-1 rounded-lg ${cardColor === 'bg-white' ? 'bg-white dark:bg-slate-900' : 'bg-white'} px-3 sm:px-4 md:px-5 py-3 sm:py-3.5 md:py-4 text-xs sm:text-sm md:text-base font-black ${textColor === 'text-white' ? 'text-slate-900 dark:text-white' : 'text-slate-900 dark:text-white'} border-2 ${borderColor} min-h-[48px] sm:min-h-[52px] md:min-h-[56px] overflow-hidden touch-manipulation hover:opacity-80 transition`}
+                    Difícil
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRate('easy')}
+                    className="noji-rate-easy flex-1 rounded-2xl py-3.5 text-sm font-bold"
                   >
-                    <span className='relative z-10 flex items-center justify-center gap-2 sm:gap-2.5 md:gap-3'>
-                      <span className='whitespace-nowrap'>Fácil</span>
-                      <span className='text-xs sm:text-sm opacity-75'>(15 min)</span>
-                    </span>
-                  </motion.button>
+                    Fácil
+                  </button>
                 </div>
-              </motion.div>
+              </div>
             )}
           </div>
         </motion.div>
       </motion.div>
+
+      {/* Spacer for absolute card height */}
+      <div className="invisible min-h-[320px] sm:min-h-[360px]" aria-hidden="true" />
     </div>
   )
 }
 
 export default FlashcardItem
-

@@ -1368,3 +1368,101 @@ img[loading="lazy"] {
 .cta-button-glow {
   animation: cta-glow 2s ease-in-out infinite;
 }
+
+/* ── Noji Flashcards ── */
+.noji-study {
+  --noji-hard: #ef4444;
+  --noji-easy: #10b981;
+}
+
+.noji-card {
+  min-height: 320px;
+}
+
+@media (min-width: 640px) {
+  .noji-card {
+    min-height: 360px;
+  }
+}
+
+.noji-tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  color: var(--text-muted, #64748b);
+  transition: background 0.15s, color 0.15s;
+}
+
+.noji-tool-btn:hover {
+  background: rgba(99, 102, 241, 0.08);
+  color: #6366f1;
+}
+
+.noji-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border-color, rgba(148, 163, 184, 0.3));
+  color: var(--text-secondary, #64748b);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.noji-nav-btn:hover {
+  background: rgba(99, 102, 241, 0.06);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #6366f1;
+}
+
+.noji-rate-hard {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.noji-rate-hard:hover {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+}
+
+.dark .noji-rate-hard {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.2) 100%);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.noji-rate-easy {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.noji-rate-easy:hover {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+}
+
+.dark .noji-rate-easy {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.2) 100%);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.noji-session {
+  background: linear-gradient(180deg, var(--bg-secondary, #fafafa) 0%, var(--bg-primary, #fff) 100%);
+}
+
+.dark .noji-session {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.6) 0%, var(--bg-primary) 100%);
+}
+
+.noji-deck-panel {
+  scrollbar-width: thin;
+}
+
+.noji-progress-fill {
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+}
