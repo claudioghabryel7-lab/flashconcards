@@ -2,12 +2,14 @@ import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
-import { ArrowLeftIcon, FireIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, FireIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
-import { isContentAvailable } from '../utils/contentStatus'
+import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
+import ContentPublishButton from '../components/ContentPublishButton'
+import { probabilidadeBadgeClass } from '../utils/htmlTextHelpers'
 
 const ConteudoIncidenciaView = () => {
   const { courseId, disciplinaIdx } = useParams()
@@ -24,6 +26,10 @@ const ConteudoIncidenciaView = () => {
   const [conteudoGerado, setConteudoGerado] = useState(null)
   const [error, setError] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [editingRevisao, setEditingRevisao] = useState(false)
+  const [editDraft, setEditDraft] = useState(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [togglingStatus, setTogglingStatus] = useState(false)
 
   const disciplinaIndex = parseInt(disciplinaIdx)
 
@@ -315,6 +321,48 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     }
   }
 
+  const getSanitizedDisciplinaKey = (nome) =>
+    (nome || '').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100)
+
+  const handleToggleStatus = async () => {
+    if (!courseId || !disciplina || !conteudoGerado) return
+    setTogglingStatus(true)
+    try {
+      const key = getSanitizedDisciplinaKey(disciplina.nome)
+      const next = toggleContentStatus(conteudoGerado.status)
+      const ref = doc(db, 'courses', courseId, 'conteudosIncidencia', key)
+      await setDoc(ref, { status: next, updatedAt: serverTimestamp() }, { merge: true })
+      setConteudoGerado((prev) => ({ ...prev, status: next }))
+    } catch (err) {
+      alert('Erro ao alterar status: ' + err.message)
+    } finally {
+      setTogglingStatus(false)
+    }
+  }
+
+  const handleStartEditRevisao = () => {
+    if (!conteudoGerado) return
+    setEditDraft(JSON.parse(JSON.stringify(conteudoGerado)))
+    setEditingRevisao(true)
+  }
+
+  const handleSaveRevisao = async () => {
+    if (!courseId || !disciplina || !editDraft) return
+    setSavingEdit(true)
+    try {
+      const key = getSanitizedDisciplinaKey(disciplina.nome)
+      const ref = doc(db, 'courses', courseId, 'conteudosIncidencia', key)
+      await setDoc(ref, { ...editDraft, updatedAt: serverTimestamp() }, { merge: true })
+      setConteudoGerado(editDraft)
+      setEditingRevisao(false)
+      setEditDraft(null)
+    } catch (err) {
+      alert('Erro ao salvar: ' + err.message)
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (!courseId || !disciplina) return
 
@@ -348,8 +396,8 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-alego-600 border-t-transparent"></div>
-          <p className="mt-4 text-lg font-semibold text-alego-600">Carregando dados...</p>
+          <div className="inline-block h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+          <p className="mt-4 text-sm text-cp-muted">Carregando incidência…</p>
         </div>
       </div>
     )
@@ -357,17 +405,12 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
   if (error || !editalVerticalizado?.disciplinas) {
     return (
-      <div className="max-w-4xl mx-auto p-4">
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 text-center space-y-4">
-          <h2 className="text-2xl font-bold text-red-600 dark:text-red-400">
-            {error || 'Dados não encontrados'}
-          </h2>
-          <Link
-            to="/edital-verticalizado"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition"
-          >
-            <ArrowLeftIcon className="w-5 h-5" />
-            Voltar ao Edital Verticalizado
+      <div className="max-w-lg mx-auto p-8">
+        <div className="cp-card p-10 text-center space-y-4">
+          <p className="font-medium text-red-400">{error || 'Dados não encontrados'}</p>
+          <Link to="/edital-verticalizado" className="cp-btn-ghost inline-flex">
+            <ArrowLeftIcon className="h-4 w-4" />
+            Voltar ao edital
           </Link>
         </div>
       </div>
@@ -394,214 +437,273 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     )
   }
 
+  const displayData = editingRevisao && editDraft ? editDraft : conteudoGerado
+  const topAssuntosCount = displayData?.topAssuntosGerais?.length || 0
+  const topicosCount = displayData?.analisePorTopico?.length || disciplina?.topicos?.length || 0
+
+  const updateTopAssunto = (idx, field, value) => {
+    setEditDraft((prev) => {
+      const next = { ...prev, topAssuntosGerais: [...(prev.topAssuntosGerais || [])] }
+      next.topAssuntosGerais[idx] = { ...next.topAssuntosGerais[idx], [field]: value }
+      return next
+    })
+  }
+
+  const updateTopicoAssunto = (tIdx, aIdx, field, value) => {
+    setEditDraft((prev) => {
+      const analise = [...(prev.analisePorTopico || [])]
+      const assuntos = [...(analise[tIdx].assuntos || [])]
+      assuntos[aIdx] = { ...assuntos[aIdx], [field]: value }
+      analise[tIdx] = { ...analise[tIdx], assuntos }
+      return { ...prev, analisePorTopico: analise }
+    })
+  }
+
   return (
-    <div className="min-h-screen py-6">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-6">
-          <Link
-            to="/edital-verticalizado"
-            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 mb-4"
-          >
-            <ArrowLeftIcon className="h-5 w-5" />
-            Voltar ao Edital Verticalizado
-          </Link>
-          
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex-shrink-0">
-              <FireIcon className="h-8 w-8 text-white" />
+    <div className="space-y-6">
+      {courseName && (
+        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cp-muted">{courseName}</p>
+      )}
+
+      <Link to="/edital-verticalizado" className="inline-flex items-center gap-2 text-sm text-cp-muted hover:text-cp-accent transition">
+        <ArrowLeftIcon className="h-4 w-4" />
+        Voltar ao edital
+      </Link>
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10">
+            <FireIcon className="h-6 w-6 text-red-400" />
+          </div>
+          <div>
+            <span className="cp-badge cp-badge-accent mb-2">Revisão por incidência</span>
+            <h1 className="cp-headline text-xl sm:text-2xl">{disciplina?.nome || 'Disciplina'}</h1>
+            <p className="mt-1 text-sm text-cp-muted">O que mais cai nesta matéria — ordenado por probabilidade</p>
+          </div>
+        </div>
+        {isAdmin && conteudoGerado && (
+          <div className="flex flex-wrap items-center gap-2">
+            <ContentPublishButton
+              status={conteudoGerado.status}
+              onToggle={handleToggleStatus}
+              disabled={togglingStatus}
+            />
+            {!editingRevisao ? (
+              <button type="button" onClick={handleStartEditRevisao} className="cp-btn-ghost !text-xs">
+                <PencilIcon className="h-4 w-4" />
+                Editar revisões
+              </button>
+            ) : (
+              <>
+                <button type="button" onClick={handleSaveRevisao} disabled={savingEdit} className="cp-btn-primary !text-xs">
+                  {savingEdit ? 'Salvando…' : 'Salvar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEditingRevisao(false); setEditDraft(null) }}
+                  className="cp-btn-ghost !text-xs"
+                >
+                  Cancelar
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {!conteudoGerado ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="cp-card p-4">
+              <p className="font-mono text-[10px] uppercase text-cp-muted">Tópicos</p>
+              <p className="mt-1 text-2xl font-medium text-cp-text">{disciplina?.topicos?.length || 0}</p>
             </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white break-words">
-                Conteúdo de Maior Incidência
-              </h1>
-              <p className="text-slate-600 dark:text-slate-400 mt-1">
-                Disciplina: <span className="font-semibold">{disciplina?.nome || 'Não encontrada'}</span>
+            <div className="cp-card p-4">
+              <p className="font-mono text-[10px] uppercase text-cp-muted">Disciplina</p>
+              <p className="mt-1 text-sm font-medium text-cp-text truncate">{disciplina?.nome}</p>
+            </div>
+            <div className="cp-card p-4 col-span-2 sm:col-span-1">
+              <p className="font-mono text-[10px] uppercase text-cp-muted">Status</p>
+              <p className="mt-1 text-sm text-cp-muted">Aguardando geração</p>
+            </div>
+          </div>
+
+          <div className="cp-card p-5 space-y-4">
+            <p className="text-sm text-cp-text">
+              A IA analisa todos os tópicos, atribui probabilidade de incidência e gera o conteúdo de revisão para cada assunto.
+            </p>
+            {status && (
+              <div>
+                <p className="text-xs text-cp-muted">{status}</p>
+                {progress > 0 && (
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-cp-border">
+                    <div className="h-full rounded-full bg-gradient-to-r from-cp-accent to-red-500 transition-all" style={{ width: `${progress}%` }} />
+                  </div>
+                )}
+              </div>
+            )}
+            <button type="button" onClick={handleGenerate} disabled={generating} className="cp-btn-primary w-full justify-center">
+              <FireIcon className="h-5 w-5" />
+              {generating ? 'Gerando análise…' : 'Gerar conteúdo de incidência'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="cp-card p-4">
+              <p className="font-mono text-[10px] uppercase text-cp-muted">Top assuntos</p>
+              <p className="mt-1 text-2xl font-medium text-cp-text">{topAssuntosCount}</p>
+            </div>
+            <div className="cp-card p-4">
+              <p className="font-mono text-[10px] uppercase text-cp-muted">Tópicos</p>
+              <p className="mt-1 text-2xl font-medium text-cp-text">{topicosCount}</p>
+            </div>
+            <div className="cp-card p-4">
+              <p className="font-mono text-[10px] uppercase text-cp-muted">Dicas</p>
+              <p className="mt-1 text-2xl font-medium text-cp-accent2">{displayData?.dicasEstudo?.length || 0}</p>
+            </div>
+            <div className="cp-card p-4">
+              <p className="font-mono text-[10px] uppercase text-cp-muted">Status</p>
+              <p className={`mt-1 text-sm font-medium ${conteudoGerado.status === CONTENT_STATUS.AVAILABLE ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {conteudoGerado.status === CONTENT_STATUS.AVAILABLE ? 'Liberado' : 'Pendente'}
               </p>
             </div>
           </div>
-        </div>
 
-        {/* Conteúdo Principal */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 sm:p-8">
-          {!conteudoGerado ? (
-            <div className="space-y-6">
-              {/* Informações sobre a geração */}
-              <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-orange-900 dark:text-orange-100 mb-4">
-                  📊 Análise de Probabilidade
-                </h3>
-                <div className="text-sm text-orange-800 dark:text-orange-200 space-y-2">
-                  <p>• A IA analisará TODOS os tópicos desta disciplina</p>
-                  <p>• Identificará assuntos com maior probabilidade de cair</p>
-                  <p>• Gerará conteúdo completo para os assuntos mais relevantes</p>
-                  <p>• Baseado no histórico da banca e no edital</p>
-                  <p>• Total de tópicos: {disciplina?.topicos?.length || 0}</p>
-                </div>
-              </div>
-
-              {/* Status da geração */}
-              {status && (
-                <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
-                  <p className="text-sm text-gray-800 dark:text-gray-200">
-                    {status}
-                  </p>
-                  {progress > 0 && (
-                    <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mt-2">
-                      <div
-                        className="h-2 bg-orange-600 dark:bg-orange-400 transition-all duration-300"
-                        style={{ width: `${progress}%` }}
-                      />
+          {displayData?.topAssuntosGerais?.length > 0 && (
+            <div className="cp-card p-5 space-y-3">
+              <h2 className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Top assuntos gerais</h2>
+              {(editingRevisao
+                ? displayData.topAssuntosGerais
+                : [...(displayData.topAssuntosGerais || [])].sort((a, b) => (b.probabilidade || 0) - (a.probabilidade || 0))
+              ).map((assunto, idx) => (
+                  <div key={idx} className="rounded-xl border border-cp-border/60 p-4 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      {editingRevisao ? (
+                        <input
+                          type="text"
+                          value={assunto.assunto || ''}
+                          onChange={(e) => updateTopAssunto(idx, 'assunto', e.target.value)}
+                          className="flex-1 min-w-[140px] rounded-lg border border-cp-border bg-cp-bg/60 px-2 py-1 text-sm text-cp-text"
+                        />
+                      ) : (
+                        <span className="font-medium text-cp-text">{assunto.assunto}</span>
+                      )}
+                      <span className={`cp-badge !text-[10px] border ${probabilidadeBadgeClass(assunto.probabilidade)}`}>
+                        {assunto.probabilidade}% chance
+                      </span>
                     </div>
-                  )}
-                </div>
-              )}
-
-              {/* Botão de ação */}
-              <div className="pt-4">
-                <button
-                  onClick={handleGenerate}
-                  disabled={generating}
-                  className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white font-medium rounded-lg hover:from-orange-700 hover:to-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-lg"
-                >
-                  <FireIcon className="h-6 w-6" />
-                  {generating ? 'Gerando Análise...' : 'Gerar Conteúdo de Incidência'}
-                </button>
-              </div>
-
-              {/* Informações importantes */}
-              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1 pt-4">
-                <p>• A análise levará em consideração o histórico da banca</p>
-                <p>• Conteúdo será salvo no Firestore para consulta futura</p>
-                <p>• O processo pode levar alguns minutos dependendo da quantidade de tópicos</p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Conteúdo gerado */}
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-4">
-                  ✅ Conteúdo Gerado com Sucesso
-                </h3>
-                
-                {conteudoGerado.topAssuntosGerais && (
-                  <div className="mb-6">
-                    <h4 className="font-semibold text-green-900 dark:text-green-100 mb-3">
-                      🔥 Top Assuntos Gerais (Ordenados por Probabilidade):
-                    </h4>
-                    <div className="space-y-3">
-                      {conteudoGerado.topAssuntosGerais
-                        .sort((a, b) => b.probabilidade - a.probabilidade)
-                        .map((assunto, idx) => (
-                        <div key={idx} className="bg-white dark:bg-slate-800 rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-semibold text-slate-900 dark:text-white">{assunto.assunto}</span>
-                            <span className="px-3 py-1 bg-orange-600 text-white text-sm font-bold rounded-full">
-                              {assunto.probabilidade}% de chance
-                            </span>
-                          </div>
-                          {assunto.revisao && (
-                            <div className="text-sm text-slate-700 dark:text-slate-300 mt-2">
-                              <strong>📚 O que estudar:</strong>
-                              <p className="mt-1 whitespace-pre-wrap">{assunto.revisao}</p>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    {(assunto.revisao || editingRevisao) && (
+                      <div>
+                        <p className="font-mono text-[10px] uppercase text-cp-muted mb-1">O que estudar</p>
+                        {editingRevisao ? (
+                          <textarea
+                            value={assunto.revisao || ''}
+                            onChange={(e) => updateTopAssunto(idx, 'revisao', e.target.value)}
+                            rows={4}
+                            className="w-full rounded-xl border border-cp-border bg-cp-bg/60 px-3 py-2 text-sm text-cp-text resize-y"
+                          />
+                        ) : (
+                          <p className="text-sm text-cp-muted whitespace-pre-wrap">{assunto.revisao}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
-                )}
-
-                {conteudoGerado.dicasEstudo && (
-                  <div className="mb-6">
-                    <h4 className="font-semibold text-green-900 dark:text-green-100 mb-3">
-                      💡 Dicas de Estudo:
-                    </h4>
-                    <ul className="list-disc list-inside space-y-2">
-                      {conteudoGerado.dicasEstudo.map((dica, idx) => (
-                        <li key={idx} className="text-sm text-slate-700 dark:text-slate-300">{dica}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {conteudoGerado.analisePorTopico && (
-                  <div>
-                    <h4 className="font-semibold text-green-900 dark:text-green-100 mb-3">
-                      📋 Análise por Tópico (Ordenados por Probabilidade):
-                    </h4>
-                    <div className="space-y-4">
-                      {conteudoGerado.analisePorTopico.map((topico, idx) => (
-                        <div key={idx} className="bg-white dark:bg-slate-800 rounded-lg p-4">
-                          <h5 className="font-semibold text-slate-900 dark:text-white mb-3">
-                            {topico.topicoNumero} - {topico.topicoNome}
-                          </h5>
-                          {topico.assuntos && topico.assuntos.length > 0 && (
-                            <div className="space-y-3">
-                              {topico.assuntos
-                                .sort((a, b) => b.probabilidade - a.probabilidade)
-                                .map((assunto, aIdx) => (
-                                <div key={aIdx} className="border-l-4 border-orange-500 pl-3">
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="font-medium text-slate-900 dark:text-white">{assunto.assunto}</span>
-                                    <span className="px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 text-xs font-bold rounded">
-                                      {assunto.probabilidade}%
-                                    </span>
-                                  </div>
-                                  {assunto.revisao && (
-                                    <div className="text-sm text-slate-700 dark:text-slate-300 mt-1">
-                                      <strong>📚 O que estudar:</strong>
-                                      <p className="mt-1 whitespace-pre-wrap">{assunto.revisao}</p>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Botões de ação */}
-              <div className="pt-4 space-y-3">
-                <Link
-                  to={`/pratica-incidencia/${courseId}/${disciplinaIdx}`}
-                  className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
-                >
-                  <FireIcon className="h-5 w-5" />
-                  Praticar com Questões
-                </Link>
-                
-                <button
-                  onClick={() => {
-                    setConteudoGerado(null)
-                    setStatus('')
-                    setProgress(0)
-                  }}
-                  className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-slate-600 text-white font-medium rounded-lg hover:bg-slate-700 transition-all"
-                >
-                  <ArrowLeftIcon className="h-5 w-5" />
-                  Gerar Novamente
-                </button>
-                
-                {profile?.role === 'admin' && (
-                  <button
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <TrashIcon className="h-5 w-5" />
-                    {deleting ? 'Apagando...' : 'Apagar Conteúdo'}
-                  </button>
-                )}
-              </div>
+                ))}
             </div>
           )}
+
+          {displayData?.dicasEstudo?.length > 0 && (
+            <div className="cp-card p-5">
+              <h2 className="font-mono text-[10px] uppercase tracking-wider text-cp-muted mb-3">Dicas de estudo</h2>
+              <ul className="space-y-2">
+                {displayData.dicasEstudo.map((dica, idx) => (
+                  <li key={idx} className="flex gap-2 text-sm text-cp-text">
+                    <span className="text-cp-accent2">•</span>
+                    {dica}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {displayData?.analisePorTopico?.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="font-mono text-[10px] uppercase tracking-wider text-cp-muted px-1">Análise por tópico</h2>
+              {displayData.analisePorTopico.map((topico, tIdx) => (
+                <div key={tIdx} className="cp-card overflow-hidden">
+                  <div className="border-b border-cp-border px-4 py-3 bg-cp-bg/30">
+                    <p className="text-sm font-medium text-cp-text">
+                      {topico.topicoNumero && (
+                        <span className="mr-2 font-mono text-xs text-cp-accent">{topico.topicoNumero}</span>
+                      )}
+                      {topico.topicoNome}
+                    </p>
+                  </div>
+                  <div className="divide-y divide-cp-border/50 p-4 space-y-3">
+                    {[...(topico.assuntos || [])]
+                      .sort((a, b) => (b.probabilidade || 0) - (a.probabilidade || 0))
+                      .map((assunto, aIdx) => (
+                        <div key={aIdx} className="pl-3 border-l-2 border-cp-accent/40 space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            {editingRevisao ? (
+                              <input
+                                type="text"
+                                value={assunto.assunto || ''}
+                                onChange={(e) => updateTopicoAssunto(tIdx, aIdx, 'assunto', e.target.value)}
+                                className="flex-1 min-w-[140px] rounded-lg border border-cp-border bg-cp-bg/60 px-2 py-1 text-sm text-cp-text"
+                              />
+                            ) : (
+                              <span className="text-sm font-medium text-cp-text">{assunto.assunto}</span>
+                            )}
+                            <span className={`font-mono text-[10px] px-2 py-0.5 rounded-full border ${probabilidadeBadgeClass(assunto.probabilidade)}`}>
+                              {assunto.probabilidade}%
+                            </span>
+                          </div>
+                          {(assunto.revisao || editingRevisao) && (
+                            editingRevisao ? (
+                              <textarea
+                                value={assunto.revisao || ''}
+                                onChange={(e) => updateTopicoAssunto(tIdx, aIdx, 'revisao', e.target.value)}
+                                rows={3}
+                                className="w-full rounded-xl border border-cp-border bg-cp-bg/60 px-3 py-2 text-sm text-cp-text resize-y"
+                              />
+                            ) : (
+                              <p className="text-sm text-cp-muted whitespace-pre-wrap">{assunto.revisao}</p>
+                            )
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link to={`/pratica-incidencia/${courseId}/${disciplinaIdx}`} className="cp-btn-primary flex-1 justify-center">
+              <FireIcon className="h-5 w-5" />
+              Praticar questões
+            </Link>
+            {isAdmin && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setConteudoGerado(null); setStatus(''); setProgress(0) }}
+                  className="cp-btn-ghost flex-1 justify-center"
+                >
+                  Gerar novamente
+                </button>
+                <button type="button" onClick={handleDelete} disabled={deleting} className="cp-btn-ghost !text-red-400 flex-1 justify-center">
+                  <TrashIcon className="h-4 w-4" />
+                  {deleting ? 'Apagando…' : 'Apagar'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

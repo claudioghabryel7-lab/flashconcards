@@ -127,9 +127,10 @@ export async function setTopicoPublishStatus(
     })
   }
 
-  // Incidência da disciplina — conteúdo + questões (níveis 1–10)
+  // Incidência da disciplina — conteúdo de revisão + questões (níveis 1–10) + matéria revisada
   if (disciplinaNome) {
     const discKey = sanitizeDisciplinaName(disciplinaNome)
+    const discNorm = disciplinaNome.toLowerCase().trim()
 
     const incidenciaRef = doc(db, 'courses', resolvedId, 'conteudosIncidencia', discKey)
     const incidenciaDoc = await getDoc(incidenciaRef)
@@ -150,6 +151,17 @@ export async function setTopicoPublishStatus(
         })
       }
     }
+
+    const materiasSnap = await getDocs(collection(db, 'courses', resolvedId, 'materiasRevisadas'))
+    materiasSnap.docs.forEach((d) => {
+      const materia = (d.data().materia || '').toLowerCase().trim()
+      if (materia && (materia === discNorm || materia.includes(discNorm) || discNorm.includes(materia))) {
+        operations.push({
+          ref: doc(db, 'courses', resolvedId, 'materiasRevisadas', d.id),
+          data: { status, updatedAt: now },
+        })
+      }
+    })
   }
 
   // Registro central (UI do edital)
@@ -171,6 +183,9 @@ export async function setTopicoPublishStatus(
             op.ref.path.includes('/questoesIncidencia/')
         ).length
       : 0,
+    materiasRevisadas: disciplinaNome
+      ? operations.filter((op) => op.ref.path.includes('/materiasRevisadas/')).length
+      : 0,
   }
 }
 
@@ -186,4 +201,50 @@ export function toggleTopicoPublishStatus(currentStatus) {
   return currentStatus === CONTENT_STATUS.AVAILABLE
     ? CONTENT_STATUS.UNAVAILABLE
     : CONTENT_STATUS.AVAILABLE
+}
+
+/** Libera ou bloqueia conteúdo de incidência, questões e matéria revisada de uma disciplina */
+export async function setDisciplinaIncidenciaPublishStatus(courseId, disciplinaNome, status) {
+  if (!disciplinaNome?.trim()) {
+    throw new Error('Disciplina inválida')
+  }
+
+  const resolvedId = courseId || 'alego-default'
+  const discKey = sanitizeDisciplinaName(disciplinaNome)
+  const discNorm = disciplinaNome.toLowerCase().trim()
+  const operations = []
+  const now = serverTimestamp()
+
+  const incidenciaRef = doc(db, 'courses', resolvedId, 'conteudosIncidencia', discKey)
+  const incidenciaDoc = await getDoc(incidenciaRef)
+  if (incidenciaDoc.exists()) {
+    operations.push({ ref: incidenciaRef, data: { status, updatedAt: now } })
+  }
+
+  for (let nivel = 1; nivel <= 10; nivel++) {
+    const qiRef = doc(db, 'courses', resolvedId, 'questoesIncidencia', `${discKey}_nivel_${nivel}`)
+    const qiDoc = await getDoc(qiRef)
+    if (qiDoc.exists()) {
+      operations.push({ ref: qiRef, data: { status, updatedAt: now } })
+    }
+  }
+
+  const materiasSnap = await getDocs(collection(db, 'courses', resolvedId, 'materiasRevisadas'))
+  materiasSnap.docs.forEach((d) => {
+    const materia = (d.data().materia || '').toLowerCase().trim()
+    if (materia && (materia === discNorm || materia.includes(discNorm) || discNorm.includes(materia))) {
+      operations.push({
+        ref: doc(db, 'courses', resolvedId, 'materiasRevisadas', d.id),
+        data: { status, updatedAt: now },
+      })
+    }
+  })
+
+  await commitBatches(operations)
+
+  return {
+    conteudoIncidencia: incidenciaDoc.exists(),
+    questoesIncidencia: operations.filter((op) => op.ref.path.includes('/questoesIncidencia/')).length,
+    materiasRevisadas: operations.filter((op) => op.ref.path.includes('/materiasRevisadas/')).length,
+  }
 }

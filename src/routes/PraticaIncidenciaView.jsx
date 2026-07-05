@@ -2,12 +2,15 @@ import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { doc, getDoc, setDoc, deleteDoc, serverTimestamp, getDocs, collection, query, where, orderBy } from 'firebase/firestore'
-import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, ChartBarIcon, TrashIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, ChartBarIcon, TrashIcon, MagnifyingGlassIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline'
 import ReactMarkdown from 'react-markdown'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
+import ContentPublishButton from '../components/ContentPublishButton'
+import { probabilidadeBadgeClass } from '../utils/htmlTextHelpers'
 
 const PraticaIncidenciaView = () => {
   const { courseId, disciplinaIdx } = useParams()
@@ -651,7 +654,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     if (!questoes) return
     
     try {
-      const novoStatus = questoes.status === 'disponivel' ? 'indisponivel' : 'disponivel'
+      const novoStatus = toggleContentStatus(questoes.status)
       const disciplina = editalVerticalizado?.disciplinas[disciplinaIndex]
       const sanitizedDisciplinaNome = disciplina?.nome
         .replace(/[^a-zA-Z0-9]/g, '_')
@@ -723,12 +726,14 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     }
   }
 
+  const isAdmin = profile?.role === 'admin'
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-alego-600 border-t-transparent"></div>
-          <p className="mt-4 text-lg font-semibold text-alego-600">Carregando dados...</p>
+          <div className="inline-block h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+          <p className="mt-4 text-sm text-cp-muted">Carregando questões…</p>
         </div>
       </div>
     )
@@ -736,17 +741,12 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
   if (error || !conteudoIncidencia) {
     return (
-      <div className="max-w-4xl mx-auto p-4">
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 text-center space-y-4">
-          <h2 className="text-2xl font-bold text-red-600 dark:text-red-400">
-            {error || 'Dados não encontrados'}
-          </h2>
-          <Link
-            to={`/conteudo-incidencia/${courseId}/${disciplinaIdx}`}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition"
-          >
+      <div className="max-w-lg mx-auto p-8">
+        <div className="cp-card p-10 text-center space-y-4">
+          <p className="font-medium text-red-400">{error || 'Dados não encontrados'}</p>
+          <Link to={`/conteudo-incidencia/${courseId}/${disciplinaIdx}`} className="cp-btn-ghost inline-flex">
             <ArrowLeftIcon className="w-5 h-5" />
-            Voltar ao Conteúdo de Incidência
+            Voltar ao conteúdo de incidência
           </Link>
         </div>
       </div>
@@ -756,81 +756,71 @@ Retorne APENAS o JSON válido, sem texto adicional.`
   const disciplina = editalVerticalizado?.disciplinas[disciplinaIndex]
 
   return (
-    <div className="min-h-screen py-6">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-6">
-          <Link
-            to={`/conteudo-incidencia/${courseId}/${disciplinaIdx}`}
-            className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-alego-600 dark:hover:text-alego-400 mb-4"
-          >
-            <ArrowLeftIcon className="h-5 w-5" />
-            Voltar ao Conteúdo de Incidência
-          </Link>
-          
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex-shrink-0">
-              <FireIcon className="h-8 w-8 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white break-words">
-                Prática de Questões - Incidência
-              </h1>
-              <p className="text-slate-600 dark:text-slate-400 mt-1">
-                Disciplina: <span className="font-semibold">{disciplina?.nome || 'Não encontrada'}</span>
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                <p className="text-sm text-slate-500 dark:text-slate-500">
-                  Nível Atual: <span className="font-bold text-alego-600 dark:text-alego-400">{nivelAtual}/10</span>
-                </p>
-                {niveisDisponiveis.length > 0 && (
-                  <button
-                    onClick={() => setMostrarSeletorNiveis(!mostrarSeletorNiveis)}
-                    className="text-xs text-alego-600 dark:text-alego-400 hover:underline"
-                  >
-                    ({niveisDisponiveis.length} disponíveis)
-                  </button>
-                )}
-              </div>
-              {mostrarSeletorNiveis && niveisDisponiveis.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {niveisDisponiveis.map((nivel) => (
-                    <button
-                      key={nivel}
-                      onClick={() => handleMudarNivel(nivel)}
-                      className={`px-3 py-1 rounded-full text-sm font-medium transition-all ${
-                        nivel === nivelAtual
-                          ? 'bg-alego-600 text-white'
-                          : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-                      }`}
-                    >
-                      Nível {nivel}
-                    </button>
-                  ))}
-                </div>
+    <div className="space-y-6">
+      {courseName && (
+        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cp-muted">{courseName}</p>
+      )}
+
+      <Link
+        to={`/conteudo-incidencia/${courseId}/${disciplinaIdx}`}
+        className="inline-flex items-center gap-2 text-sm text-cp-muted hover:text-cp-accent transition"
+      >
+        <ArrowLeftIcon className="h-4 w-4" />
+        Voltar ao conteúdo de incidência
+      </Link>
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-cp-accent2/30 bg-cp-accent2/10">
+            <FireIcon className="h-6 w-6 text-cp-accent2" />
+          </div>
+          <div>
+            <span className="cp-badge cp-badge-accent mb-2">Questões por incidência</span>
+            <h1 className="cp-headline text-xl sm:text-2xl">{disciplina?.nome || 'Disciplina'}</h1>
+            <p className="mt-1 text-sm text-cp-muted">
+              Nível <span className="font-mono text-cp-accent2">{nivelAtual}</span>/10
+              {niveisDisponiveis.length > 0 && (
+                <button type="button" onClick={() => setMostrarSeletorNiveis(!mostrarSeletorNiveis)} className="ml-2 text-cp-accent hover:underline text-xs">
+                  ({niveisDisponiveis.length} níveis)
+                </button>
               )}
-            </div>
+            </p>
           </div>
         </div>
+      </div>
 
-        {/* Conteúdo Principal */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 sm:p-8">
+      {mostrarSeletorNiveis && niveisDisponiveis.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {niveisDisponiveis.map((nivel) => (
+            <button
+              key={nivel}
+              type="button"
+              onClick={() => handleMudarNivel(nivel)}
+              className={`rounded-lg px-3 py-1.5 font-mono text-xs transition ${
+                nivel === nivelAtual
+                  ? 'border border-cp-accent2/40 bg-cp-accent2/15 text-cp-accent2'
+                  : 'border border-cp-border bg-cp-surface text-cp-muted hover:border-cp-accent/30'
+              }`}
+            >
+              Nível {nivel}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="cp-card p-6 sm:p-8">
           {!desempenho ? (
             <div className="space-y-6">
               {!questoes ? (
                 <div className="space-y-6">
                   {/* Informações sobre a geração */}
-                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-4">
-                      📝 Questões Baseadas em Incidência - Nível {nivelAtual}
-                    </h3>
-                    <div className="text-sm text-green-800 dark:text-green-200 space-y-2">
-                      <p>• As questões serão geradas baseadas nos assuntos com maior probabilidade de incidência</p>
-                      <p>• Distribuição por probabilidade: Alta (40-50%), Média (30-40%), Baixa (10-20%)</p>
-                      <p>• Estilo adaptado à banca examinadora</p>
-                      <p>• 50 questões (Certo/Errado ou Múltipla Escolha, conforme a banca)</p>
-                      <p>• Dificuldade: {nivelAtual === 1 ? 'Básica' : nivelAtual <= 3 ? 'Fácil a Média' : nivelAtual <= 6 ? 'Média' : nivelAtual <= 8 ? 'Avançada' : 'Especialista'}</p>
-                    </div>
+                  <div className="cp-card !border-cp-accent2/20 p-5 space-y-4">
+                    <p className="font-mono text-[10px] uppercase text-cp-muted">Geração — nível {nivelAtual}</p>
+                    <ul className="text-sm text-cp-muted space-y-1">
+                      <li>• Baseadas nos assuntos de maior incidência</li>
+                      <li>• 50 questões no estilo da banca</li>
+                      <li>• Dificuldade progressiva por nível</li>
+                    </ul>
                   </div>
 
                   {/* Status da geração */}
@@ -851,16 +841,10 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   )}
 
                   {/* Botão de ação */}
-                  <div className="pt-4">
-                    <button
-                      onClick={handleGenerateQuestoes}
-                      disabled={generating}
-                      className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-lg"
-                    >
-                      <FireIcon className="h-6 w-6" />
-                      {generating ? 'Gerando Questões...' : 'Gerar Questões'}
+                    <button type="button" onClick={handleGenerateQuestoes} disabled={generating} className="cp-btn-primary w-full justify-center">
+                      <FireIcon className="h-5 w-5" />
+                      {generating ? 'Gerando questões…' : 'Gerar questões'}
                     </button>
-                  </div>
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -878,30 +862,23 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   )}
 
                   {/* Bloqueio de acesso para conteúdo indisponível */}
-                  {profile?.role !== 'admin' && questoes && questoes.status !== 'disponivel' ? (
-                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-6 text-center">
-                      <QuestionMarkCircleIcon className="h-12 w-12 text-orange-600 dark:text-orange-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-orange-900 dark:text-orange-100 mb-2">
-                        Conteúdo em Preparação
-                      </h3>
-                      <p className="text-sm text-orange-800 dark:text-orange-200">
-                        Este conteúdo ainda está sendo revisado pelo administrador. Em breve estará disponível para prática.
-                      </p>
+                  {!isAdmin && questoes && !isContentAvailable(questoes.status, isAdmin) ? (
+                    <div className="cp-card p-8 text-center">
+                      <QuestionMarkCircleIcon className="h-10 w-10 text-amber-400 mx-auto mb-3" />
+                      <p className="font-medium text-cp-text">Questões em preparação</p>
+                      <p className="mt-2 text-sm text-cp-muted">O administrador ainda não liberou este nível.</p>
                     </div>
                   ) : (
                     <>
                       {/* Botão de excluir para admin */}
-                      {profile?.role === 'admin' && (
-                    <div className="flex justify-between items-center gap-2 flex-wrap">
+                      {isAdmin && (
+                    <div className="flex justify-between items-center gap-2 flex-wrap mb-4">
                       <button
+                        type="button"
                         onClick={handleToggleModoAdmin}
-                        className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                          modoAdminNavegacao
-                            ? 'bg-purple-600 text-white hover:bg-purple-700'
-                            : 'bg-gray-600 text-white hover:bg-gray-700'
-                        }`}
+                        className={`cp-btn-ghost !text-xs ${modoAdminNavegacao ? '!border-cp-accent/40 !text-cp-accent' : ''}`}
                       >
-                        {modoAdminNavegacao ? '🔒 Modo Prática' : '🔓 Modo Navegação'}
+                        {modoAdminNavegacao ? 'Modo prática' : 'Modo navegação'}
                       </button>
                       {modoAdminNavegacao && (
                         <div className="flex items-center gap-2 flex-wrap">
@@ -953,23 +930,10 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                           </button>
                         </div>
                       )}
-                      <button
-                        onClick={handleToggleStatus}
-                        className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                          questoes?.status === 'disponivel'
-                            ? 'bg-orange-600 text-white hover:bg-orange-700'
-                            : 'bg-green-600 text-white hover:bg-green-700'
-                        }`}
-                      >
-                        {questoes?.status === 'disponivel' ? '🔒 Indisponibilizar' : '🔓 Disponibilizar'}
-                      </button>
-                      <button
-                        onClick={handleDeleteQuestoes}
-                        disabled={deleting}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
+                      <ContentPublishButton status={questoes?.status} onToggle={handleToggleStatus} />
+                      <button type="button" onClick={handleDeleteQuestoes} disabled={deleting} className="cp-btn-ghost !text-xs !text-red-400">
                         <TrashIcon className="h-4 w-4" />
-                        {deleting ? 'Apagando...' : 'Apagar Questões'}
+                        {deleting ? 'Apagando…' : 'Apagar'}
                       </button>
                     </div>
                   )}
@@ -977,32 +941,27 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                     )}
 
                   {/* Barra de progresso */}
-                  <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-                    <div 
-                      className="bg-gradient-to-r from-green-600 to-emerald-600 h-full transition-all duration-300"
+                  <div className="h-1.5 overflow-hidden rounded-full bg-cp-border mb-2">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-cp-accent to-cp-accent2 transition-all duration-300"
                       style={{ width: `${((currentQuestionIndex + 1) / questoesParaExibir.length) * 100}%` }}
                     />
                   </div>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
+                  <p className="text-xs font-mono text-cp-muted text-center mb-4">
                     Questão {currentQuestionIndex + 1} de {questoesParaExibir.length}
                     {termoBusca && ` (${questoes.questoes.length} total)`}
                   </p>
 
-                  {/* Questão atual */}
                   {questoesParaExibir[currentQuestionIndex] && (
                     <div className="space-y-4">
-                      <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-orange-900 dark:text-orange-100">
-                            Assunto: {questoesParaExibir[currentQuestionIndex].assunto}
-                          </span>
-                          <span className="px-3 py-1 bg-orange-600 text-white text-xs font-bold rounded-full">
-                            {questoesParaExibir[currentQuestionIndex].probabilidade}% de chance
+                      <div className="rounded-xl border border-cp-border p-4 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs font-mono text-cp-muted">{questoesParaExibir[currentQuestionIndex].assunto}</span>
+                          <span className={`font-mono text-[10px] px-2 py-0.5 rounded-full border ${probabilidadeBadgeClass(questoesParaExibir[currentQuestionIndex].probabilidade)}`}>
+                            {questoesParaExibir[currentQuestionIndex].probabilidade}% chance
                           </span>
                         </div>
-                        <p className="text-slate-900 dark:text-white font-medium">
-                          {questoesParaExibir[currentQuestionIndex].enunciado}
-                        </p>
+                        <p className="text-sm text-cp-text font-medium">{questoesParaExibir[currentQuestionIndex].enunciado}</p>
                       </div>
 
                       {/* Alternativas - Certo/Errado ou Múltipla */}
@@ -1270,7 +1229,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
               </div>
             </div>
           )}
-        </div>
       </div>
     </div>
   )

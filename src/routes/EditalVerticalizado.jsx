@@ -32,6 +32,8 @@ import {
   loadTopicoPublishMap,
   setTopicoPublishStatus,
   toggleTopicoPublishStatus,
+  setDisciplinaIncidenciaPublishStatus,
+  sanitizeDisciplinaName,
 } from '../services/topicoPublishService'
 
 // Gera uma chave estável e mais específica para cada tópico do edital,
@@ -140,6 +142,8 @@ const EditalVerticalizado = () => {
   const [expandedDisciplinas, setExpandedDisciplinas] = useState(new Set())
   const [topicPublishMap, setTopicPublishMap] = useState({})
   const [publishingTopicKey, setPublishingTopicKey] = useState(null)
+  const [disciplinaIncidenciaMap, setDisciplinaIncidenciaMap] = useState({})
+  const [publishingDisciplinaIdx, setPublishingDisciplinaIdx] = useState(null)
 
   const isAdmin = profile?.role === 'admin'
 
@@ -460,6 +464,19 @@ const EditalVerticalizado = () => {
       .catch((err) => console.error('Erro ao carregar status dos tópicos:', err))
   }, [courseId, isAdmin])
 
+  useEffect(() => {
+    if (!courseId) return
+    getDocs(collection(db, 'courses', courseId || 'alego-default', 'conteudosIncidencia'))
+      .then((snap) => {
+        const map = {}
+        snap.docs.forEach((d) => {
+          map[d.id] = d.data().status || CONTENT_STATUS.UNAVAILABLE
+        })
+        setDisciplinaIncidenciaMap(map)
+      })
+      .catch((err) => console.error('Erro ao carregar incidência das disciplinas:', err))
+  }, [courseId, editalVerticalizado])
+
   const handleToggleTopicoPublish = async (topicKey, disciplinaNome, moduloLabel) => {
     if (!isAdmin || !courseId || !topicKey || publishingTopicKey) return
 
@@ -468,12 +485,12 @@ const EditalVerticalizado = () => {
     const actionLabel = next === CONTENT_STATUS.AVAILABLE ? 'liberar' : 'bloquear'
 
     const incidenciaNote = disciplinaNome
-      ? `\n\nInclui também o conteúdo e questões por incidência de "${disciplinaNome}".`
+      ? `\n\nInclui também conteúdo de revisão por incidência, questões e matéria revisada de "${disciplinaNome}".`
       : ''
 
     if (
       !window.confirm(
-        `${next === CONTENT_STATUS.AVAILABLE ? 'Liberar' : 'Bloquear'} todos os recursos deste tópico (flashcards, estudar, questões preditivas e incidência)?${incidenciaNote}`
+        `${next === CONTENT_STATUS.AVAILABLE ? 'Liberar' : 'Bloquear'} todos os recursos deste tópico (flashcards, estudar, questões preditivas e revisão por incidência)?${incidenciaNote}`
       )
     ) {
       return
@@ -491,6 +508,7 @@ const EditalVerticalizado = () => {
       if (result.questoes) parts.push(`${result.questoes} níveis de questões preditivas`)
       if (result.conteudo) parts.push('material de apoio')
       if (result.incidencia) parts.push(`${result.incidencia} itens de incidência`)
+      if (result.materiasRevisadas) parts.push(`${result.materiasRevisadas} matéria(s) revisada(s)`)
       const detail = parts.length
         ? `\n\nAtualizado: ${parts.join(', ')}.`
         : '\n\nNenhum conteúdo gerado encontrado ainda para este tópico.'
@@ -500,6 +518,40 @@ const EditalVerticalizado = () => {
       alert(`Erro ao ${actionLabel} tópico: ${err.message}`)
     } finally {
       setPublishingTopicKey(null)
+    }
+  }
+
+  const handleToggleDisciplinaIncidencia = async (disciplinaIdx, disciplinaNome) => {
+    if (!isAdmin || !courseId || publishingDisciplinaIdx !== null) return
+
+    const discKey = sanitizeDisciplinaName(disciplinaNome)
+    const current = disciplinaIncidenciaMap[discKey] || CONTENT_STATUS.UNAVAILABLE
+    const next = toggleTopicoPublishStatus(current)
+    const actionLabel = next === CONTENT_STATUS.AVAILABLE ? 'liberar' : 'bloquear'
+
+    if (
+      !window.confirm(
+        `${next === CONTENT_STATUS.AVAILABLE ? 'Liberar' : 'Bloquear'} conteúdo de revisão por incidência, questões e matéria revisada de "${disciplinaNome}"?`
+      )
+    ) {
+      return
+    }
+
+    setPublishingDisciplinaIdx(disciplinaIdx)
+    try {
+      const result = await setDisciplinaIncidenciaPublishStatus(courseId, disciplinaNome, next)
+      setDisciplinaIncidenciaMap((prev) => ({ ...prev, [discKey]: next }))
+      const parts = []
+      if (result.conteudoIncidencia) parts.push('conteúdo de incidência')
+      if (result.questoesIncidencia) parts.push(`${result.questoesIncidencia} níveis de questões`)
+      if (result.materiasRevisadas) parts.push(`${result.materiasRevisadas} matéria(s) revisada(s)`)
+      const detail = parts.length ? `\n\nAtualizado: ${parts.join(', ')}.` : '\n\nNenhum conteúdo gerado encontrado.'
+      alert(next === CONTENT_STATUS.AVAILABLE ? `✅ Disciplina liberada!${detail}` : `🔒 Disciplina bloqueada!${detail}`)
+    } catch (err) {
+      console.error(err)
+      alert(`Erro ao ${actionLabel} incidência: ${err.message}`)
+    } finally {
+      setPublishingDisciplinaIdx(null)
     }
   }
 
@@ -1508,23 +1560,71 @@ REGRAS IMPORTANTES:
                           <ChevronRightIcon className="h-5 w-5 shrink-0 text-cp-muted" />
                         )}
                       </button>
-                      <div className="flex shrink-0 items-center gap-1 border-l border-cp-border px-2 sm:px-3">
-                        <Link
-                          to={`/conteudo-incidencia/${courseId || 'alego-default'}/${idx}`}
-                          className="rounded-lg border border-red-500/25 bg-red-500/10 p-2 text-red-400 transition hover:bg-red-500/20"
-                          title="Conteúdo de maior incidência"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <FireIcon className="h-4 w-4" />
-                        </Link>
+                      <div className="flex shrink-0 flex-col items-center justify-center gap-1 border-l border-cp-border px-2 sm:px-3 py-2">
+                        {(() => {
+                          const discKey = sanitizeDisciplinaName(disciplina.nome || '')
+                          const incStatus = disciplinaIncidenciaMap[discKey] || CONTENT_STATUS.UNAVAILABLE
+                          const incPublished = incStatus === CONTENT_STATUS.AVAILABLE
+                          const isPublishingDisc = publishingDisciplinaIdx === idx
+                          return (
+                            <>
+                              <span
+                                className={`cp-badge !py-0.5 !text-[9px] ${
+                                  incPublished
+                                    ? '!border-emerald-500/30 !bg-emerald-500/10 !text-emerald-500'
+                                    : '!border-amber-500/30 !bg-amber-500/10 !text-amber-500'
+                                }`}
+                                title={incPublished ? 'Incidência liberada' : 'Incidência pendente'}
+                              >
+                                {incPublished ? 'Incid. OK' : 'Incid.'}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <Link
+                                  to={`/conteudo-incidencia/${courseId || 'alego-default'}/${idx}`}
+                                  className="rounded-lg border border-red-500/25 bg-red-500/10 p-2 text-red-400 transition hover:bg-red-500/20"
+                                  title="Conteúdo de revisão por incidência"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <FireIcon className="h-4 w-4" />
+                                </Link>
+                                <Link
+                                  to={`/pratica-incidencia/${courseId || 'alego-default'}/${idx}`}
+                                  className="rounded-lg border border-cp-accent2/25 bg-cp-accent2/10 p-2 text-cp-accent2 transition hover:bg-cp-accent2/20"
+                                  title="Questões por incidência"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <QuestionMarkCircleIcon className="h-4 w-4" />
+                                </Link>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleToggleDisciplinaIncidencia(idx, disciplina.nome)
+                                    }}
+                                    disabled={isPublishingDisc}
+                                    className={`rounded-lg px-2 py-1.5 font-mono text-[9px] font-semibold transition disabled:opacity-50 ${
+                                      incPublished
+                                        ? 'border border-amber-500/30 bg-amber-500/10 text-amber-500'
+                                        : 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
+                                    }`}
+                                    title={incPublished ? 'Bloquear incidência da disciplina' : 'Liberar incidência da disciplina'}
+                                  >
+                                    {isPublishingDisc ? '…' : incPublished ? 'Bloq.' : 'Lib.'}
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          )
+                        })()}
                         {profile?.role === 'admin' && (
                           <button
                             type="button"
                             onClick={() => handleDeleteDisciplina(idx)}
-                            className="rounded-lg border border-red-500/20 p-2 text-red-400/70 transition hover:bg-red-500/10"
+                            className="rounded-lg border border-red-500/20 p-1.5 text-red-400/70 transition hover:bg-red-500/10"
                             title="Apagar disciplina"
                           >
-                            <TrashIcon className="h-4 w-4" />
+                            <TrashIcon className="h-3.5 w-3.5" />
                           </button>
                         )}
                       </div>

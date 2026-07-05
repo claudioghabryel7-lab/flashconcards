@@ -9,6 +9,8 @@ import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { isContentAvailable, CONTENT_STATUS } from '../utils/contentStatus'
+import SimpleMaterialEditor from '../components/SimpleMaterialEditor'
+import { stripHtml } from '../utils/htmlTextHelpers'
 import ReactMarkdown from 'react-markdown'
 import jsPDF from 'jspdf'
 
@@ -172,7 +174,8 @@ const ConteudoCompletoTopicoView = () => {
   const [validating, setValidating] = useState(false)
   const [validationMessage, setValidationMessage] = useState('')
   const [editingContent, setEditingContent] = useState(false)
-  const [editedContent, setEditedContent] = useState('')
+  const [editDraft, setEditDraft] = useState(null)
+  const [savingEdit, setSavingEdit] = useState(false)
 
   // Função para registrar matéria estudada no calendário
   const registrarMateriaEstudada = async (materia) => {
@@ -1019,45 +1022,41 @@ REGRAS:
   }
 
   const handleEditContent = () => {
-    // Editar todo o objeto JSON do conteúdo
-    const contentToEdit = {
-      ...conteudo,
-      updatedAt: undefined,
-      generatedAt: undefined,
-    }
-    setEditedContent(JSON.stringify(contentToEdit, null, 2))
+    const { updatedAt, generatedAt, id, ...rest } = conteudo
+    setEditDraft({
+      ...rest,
+      contentPlain: stripHtml(rest.content || ''),
+      padraoBancaPlain: stripHtml(rest.raioXProbabilidade?.padraoBanca || ''),
+    })
     setEditingContent(true)
   }
 
-  const handleSaveContent = async () => {
+  const handleSaveContent = async (payload) => {
     try {
+      setSavingEdit(true)
       const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
       const contentRef = doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', sanitizedKey)
-      
-      let parsedContent
-      try {
-        parsedContent = JSON.parse(editedContent)
-      } catch (e) {
-        alert('Erro: JSON inválido. Verifique a formatação.')
-        return
-      }
-      
+
       await setDoc(contentRef, {
-        ...parsedContent,
+        ...payload,
+        topicKey: resolvedTopicKey,
         updatedAt: serverTimestamp(),
       }, { merge: true })
-      
-      setConteudo(parsedContent)
+
+      setConteudo({ ...conteudo, ...payload })
       setEditingContent(false)
+      setEditDraft(null)
     } catch (error) {
       console.error('Erro ao salvar conteúdo:', error)
       alert('Erro ao salvar conteúdo. Tente novamente.')
+    } finally {
+      setSavingEdit(false)
     }
   }
 
   const handleCancelEdit = () => {
     setEditingContent(false)
-    setEditedContent('')
+    setEditDraft(null)
   }
 
   if (loading) {
@@ -1159,115 +1158,73 @@ REGRAS:
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
-      <Link
-        to="/edital-verticalizado"
-        className="inline-flex items-center gap-2 mb-6 text-alego-600 dark:text-alego-400 hover:text-alego-700 dark:hover:text-alego-300 transition"
-      >
+    <div className="space-y-6 max-w-5xl mx-auto p-4 sm:p-6">
+      <Link to="/edital-verticalizado" className="inline-flex items-center gap-2 text-sm text-cp-muted hover:text-cp-accent transition">
         <ArrowLeftIcon className="w-5 h-5" />
-        <span>Voltar ao Edital Verticalizado</span>
+        Voltar ao edital
       </Link>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 sm:p-8 lg:p-10">
-        <div className="mb-8 pb-6 border-b border-slate-200 dark:border-slate-700">
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Material de Apoio</p>
+      <div className="cp-card p-6 sm:p-8">
+        <div className="mb-8 pb-6 border-b border-cp-border">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted mb-1">Material de apoio</p>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
-              <h1 className="text-3xl sm:text-4xl font-bold text-alego-600 dark:text-alego-400 mb-2 break-words">
+              <h1 className="cp-headline text-2xl sm:text-3xl break-words">
                 {conteudo.materia || conteudo.titulo || resolvedTopicKey}
               </h1>
-              {conteudo.titulo && conteudo.titulo !== conteudo.materia && (
-                <h2 className="text-2xl sm:text-3xl font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  {conteudo.titulo}
-                </h2>
-              )}
               {conteudo.subtitulo && (
-                <p className="text-lg text-slate-600 dark:text-slate-400 italic">
-                  {replaceConcursoWithCourse(conteudo.subtitulo)}
-                </p>
+                <p className="mt-2 text-sm text-cp-muted italic">{replaceConcursoWithCourse(conteudo.subtitulo)}</p>
               )}
             </div>
 
-            <div className="flex flex-col items-start gap-2 lg:items-end">
-              <div className="flex gap-2 flex-wrap">
-                {conteudo && (
-                  <button
-                    type="button"
-                    onClick={handleDownloadPDF}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-accent-orange to-accent-cyan hover:shadow-glow text-white text-sm font-semibold transition"
-                  >
-                    <DocumentArrowDownIcon className="w-4 h-4" />
-                    Baixar PDF
-                  </button>
-                )}
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={handleEditContent}
-                    disabled={editingContent}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition"
-                  >
-                    <PencilIcon className="w-4 h-4" />
-                    {editingContent ? 'Editando...' : 'Editar Conteúdo'}
-                  </button>
-                )}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={handleDownloadPDF} className="cp-btn-ghost !text-xs">
+                <DocumentArrowDownIcon className="w-4 h-4" />
+                PDF
+              </button>
+              {isAdmin && (
                 <button
                   type="button"
-                  onClick={handleValidateTopic}
-                  disabled={validating || generating || editingContent}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition"
+                  onClick={handleEditContent}
+                  disabled={editingContent}
+                  className="cp-btn-ghost !text-xs"
                 >
-                  {validating
-                    ? 'Analisando matéria…'
-                    : 'Reportar Matéria'}
+                  <PencilIcon className="w-4 h-4" />
+                  {editingContent ? 'Editando…' : 'Editar'}
                 </button>
-              </div>
-              {validationMessage && (
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-md text-left lg:text-right">
-                  {validationMessage}
-                </p>
               )}
+              <button
+                type="button"
+                onClick={handleValidateTopic}
+                disabled={validating || generating || editingContent}
+                className="cp-btn-ghost !text-xs !text-red-400"
+              >
+                {validating ? 'Analisando…' : 'Reportar'}
+              </button>
             </div>
           </div>
+          {validationMessage && (
+            <p className="mt-3 text-xs text-cp-muted">{validationMessage}</p>
+          )}
         </div>
 
         <div className="max-w-none">
           {courseName && (
-            <div className="mb-6 p-4 bg-alego-50 dark:bg-alego-900/20 border-l-4 border-alego-500 rounded-r-lg">
-              <p className="text-slate-700 dark:text-slate-300 text-base leading-relaxed">
-                <strong className="font-bold text-slate-900 dark:text-slate-100">Este material foi elaborado para o curso <span className="text-alego-600 dark:text-alego-400 font-semibold">{courseName}</span>.</strong> Use-o para estudar este tópico específico do edital.
+            <div className="mb-6 cp-card !border-cp-accent/30 p-4">
+              <p className="text-sm text-cp-text">
+                Material elaborado para <span className="text-cp-accent font-medium">{courseName}</span>.
               </p>
             </div>
           )}
 
-          {editingContent && isAdmin ? (
-            <div className="space-y-4">
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                Editando todo o conteúdo em formato JSON. Você pode modificar qualquer campo: content, secoes, titulo, subtitulo, etc.
-              </p>
-              <textarea
-                value={editedContent}
-                onChange={(e) => setEditedContent(e.target.value)}
-                className="w-full p-4 rounded-lg border-2 border-blue-300 dark:border-blue-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 min-h-[600px] resize-y font-mono text-sm"
-                placeholder="Conteúdo JSON completo"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleSaveContent}
-                  className="px-4 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition"
-                >
-                  Salvar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCancelEdit}
-                  className="px-4 py-2 bg-slate-500 text-white rounded-lg font-bold hover:bg-slate-600 transition"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
+          {editingContent && isAdmin && editDraft ? (
+            <SimpleMaterialEditor
+              draft={editDraft}
+              onChange={setEditDraft}
+              onSave={handleSaveContent}
+              onCancel={handleCancelEdit}
+              saving={savingEdit}
+            />
           ) : (
             <>
               {/* Raio-X de Probabilidade */}
