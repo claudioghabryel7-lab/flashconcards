@@ -8,6 +8,7 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { isContentAvailable, CONTENT_STATUS } from '../utils/contentStatus'
 import ReactMarkdown from 'react-markdown'
 import jsPDF from 'jspdf'
 
@@ -989,6 +990,8 @@ REGRAS:
         ...parsed,
         materia: parsed.materia || parsed.titulo || resolvedTopicKey,
         numero: parsed.numero || resolvedTopicKey,
+        topicKey: resolvedTopicKey,
+        status: CONTENT_STATUS.UNAVAILABLE,
         updatedAt: serverTimestamp(),
         generatedAt: serverTimestamp(),
       }
@@ -1133,6 +1136,23 @@ REGRAS:
               Biblioteca de Conteúdos
             </Link>
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isContentAvailable(conteudo?.status, isAdmin)) {
+    return (
+      <div className="max-w-lg mx-auto p-8">
+        <div className="cp-card p-10 text-center">
+          <p className="text-4xl mb-3">🔒</p>
+          <p className="font-medium text-cp-text">Conteúdo em preparação</p>
+          <p className="mt-2 text-sm text-cp-muted">
+            O administrador ainda não liberou o material de apoio deste tópico.
+          </p>
+          <Link to="/edital-verticalizado" className="cp-btn-ghost mt-6 inline-flex">
+            Voltar ao edital
+          </Link>
         </div>
       </div>
     )

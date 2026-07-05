@@ -248,10 +248,16 @@ service cloud.firestore {
       }
       
       match /conteudosCompletos/{docId} {
-        allow read: if isAuthenticated();
+        allow read: if isAuthenticated() &&
+                     (resource.data.status == 'disponivel' || isAdmin());
         allow create: if isAuthenticated();
         allow update: if isAuthenticated();
         allow delete: if isAdmin();
+      }
+
+      match /topicoStatus/{docId} {
+        allow read: if isAuthenticated() && isAdmin();
+        allow create, update, delete: if isAdmin();
       }
       
       match /questoesTopico/{docId} {

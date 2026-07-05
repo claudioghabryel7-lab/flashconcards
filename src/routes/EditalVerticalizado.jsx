@@ -27,6 +27,12 @@ import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import AudioReader from '../components/AudioReader'
 import { processIAContent, isHtmlContent } from '../utils/iaContentProcessor'
 import { formatTopicoAsModulo } from '../utils/editalVerticalizadoLoader'
+import { CONTENT_STATUS } from '../utils/contentStatus'
+import {
+  loadTopicoPublishMap,
+  setTopicoPublishStatus,
+  toggleTopicoPublishStatus,
+} from '../services/topicoPublishService'
 
 // Gera uma chave estável e mais específica para cada tópico do edital,
 // combinando numeração + nome. Isso evita colisões entre tópicos diferentes
@@ -132,6 +138,10 @@ const EditalVerticalizado = () => {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedDisciplinas, setExpandedDisciplinas] = useState(new Set())
+  const [topicPublishMap, setTopicPublishMap] = useState({})
+  const [publishingTopicKey, setPublishingTopicKey] = useState(null)
+
+  const isAdmin = profile?.role === 'admin'
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
 
@@ -442,6 +452,42 @@ const EditalVerticalizado = () => {
 
     return () => unsub()
   }, [courseId])
+
+  useEffect(() => {
+    if (!isAdmin || !courseId) return
+    loadTopicoPublishMap(courseId)
+      .then(setTopicPublishMap)
+      .catch((err) => console.error('Erro ao carregar status dos tópicos:', err))
+  }, [courseId, isAdmin])
+
+  const handleToggleTopicoPublish = async (topicKey) => {
+    if (!isAdmin || !courseId || !topicKey || publishingTopicKey) return
+
+    const current = topicPublishMap[topicKey] || CONTENT_STATUS.UNAVAILABLE
+    const next = toggleTopicoPublishStatus(current)
+    const actionLabel = next === CONTENT_STATUS.AVAILABLE ? 'liberar' : 'bloquear'
+
+    if (!window.confirm(`${next === CONTENT_STATUS.AVAILABLE ? 'Liberar' : 'Bloquear'} todos os recursos deste tópico para os alunos?`)) {
+      return
+    }
+
+    setPublishingTopicKey(topicKey)
+    try {
+      const result = await setTopicoPublishStatus(courseId, topicKey, next)
+      setTopicPublishMap((prev) => ({ ...prev, [topicKey]: next }))
+      const parts = []
+      if (result.flashcards) parts.push(`${result.flashcards} flashcards`)
+      if (result.questoes) parts.push(`${result.questoes} níveis de questões`)
+      if (result.conteudo) parts.push('material de apoio')
+      const detail = parts.length ? `\n\nAtualizado: ${parts.join(', ')}.` : '\n\nNenhum conteúdo gerado encontrado ainda para este tópico.'
+      alert(next === CONTENT_STATUS.AVAILABLE ? `✅ Tópico liberado!${detail}` : `🔒 Tópico bloqueado!${detail}`)
+    } catch (err) {
+      console.error(err)
+      alert(`Erro ao ${actionLabel} tópico: ${err.message}`)
+    } finally {
+      setPublishingTopicKey(null)
+    }
+  }
 
   // Função para carregar progresso individual do usuário
   const loadUserProgress = async (editalBase) => {
@@ -999,6 +1045,7 @@ REGRAS IMPORTANTES:
           pergunta: flashcard.frente || flashcard.pergunta || '',
           resposta: flashcard.verso || flashcard.resposta || '',
           shared: true,
+          status: CONTENT_STATUS.UNAVAILABLE,
           userId: user.uid,
           courseId: courseId,
           createdAt: serverTimestamp(),
@@ -1198,6 +1245,9 @@ REGRAS IMPORTANTES:
         highlightedTopico.toLowerCase().includes((topico.nome || '').toLowerCase()))
     const moduloLabel = formatTopicoAsModulo(topico)
     const paddingLeft = getTopicoNivelPadding(topico)
+    const publishStatus = topicPublishMap[topicKey] || CONTENT_STATUS.UNAVAILABLE
+    const isPublished = publishStatus === CONTENT_STATUS.AVAILABLE
+    const isPublishing = publishingTopicKey === topicKey
 
     return (
       <div
@@ -1256,8 +1306,21 @@ REGRAS IMPORTANTES:
                 <FireIcon className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Questões</span>
               </Link>
-              {profile?.role === 'admin' && (
+              {isAdmin && (
                 <>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleTopicoPublish(topicKey)}
+                    disabled={isPublishing}
+                    className={`rounded-lg px-2.5 py-1.5 font-mono text-[10px] font-semibold transition disabled:opacity-50 ${
+                      isPublished
+                        ? 'border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        : 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    }`}
+                    title={isPublished ? 'Bloquear conteúdo do tópico' : 'Liberar conteúdo do tópico'}
+                  >
+                    {isPublishing ? '...' : isPublished ? 'Bloquear' : 'Liberar'}
+                  </button>
                   <button
                     onClick={() => handleEditTopico(disciplinaIdx, topicoIdx)}
                     className="rounded-lg border border-cp-border p-1.5 text-cp-muted transition hover:border-cp-accent/30 hover:text-cp-accent"
