@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { doc, onSnapshot, getDoc, updateDoc, collection, getDocs, query, where, orderBy, setDoc, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore'
 import dayjs from 'dayjs'
@@ -16,6 +16,9 @@ import {
   QuestionMarkCircleIcon,
   DocumentDuplicateIcon,
   FireIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -126,6 +129,112 @@ const EditalVerticalizado = () => {
   const [newDisciplinaNome, setNewDisciplinaNome] = useState('')
   const [newTopicoNome, setNewTopicoNome] = useState('')
   const [newTopicoNumero, setNewTopicoNumero] = useState('')
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [expandedDisciplinas, setExpandedDisciplinas] = useState(new Set())
+
+  const normalizedSearch = searchQuery.trim().toLowerCase()
+
+  const editalStats = useMemo(() => {
+    const disciplinas = editalVerticalizado?.disciplinas?.filter((d) => d?.nome) || []
+    const totalTopicos = disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)
+    const estudados = disciplinas.reduce(
+      (sum, d) => sum + (d.topicos?.filter((t) => t?.estudado)?.length || 0),
+      0
+    )
+    return {
+      disciplinas: disciplinas.length,
+      totalTopicos,
+      estudados,
+      pct: totalTopicos ? Math.round((estudados / totalTopicos) * 100) : 0,
+    }
+  }, [editalVerticalizado])
+
+  const filteredDisciplinas = useMemo(() => {
+    if (!editalVerticalizado?.disciplinas) return []
+    const valid = editalVerticalizado.disciplinas
+      .map((disciplina, originalIdx) => ({ disciplina, originalIdx }))
+      .filter(({ disciplina }) => disciplina && disciplina.nome)
+
+    if (!normalizedSearch) {
+      return valid.map(({ disciplina, originalIdx }) => ({
+        disciplina,
+        originalIdx,
+        topicos: (disciplina.topicos || [])
+          .map((topico, topicoIdx) => ({ topico, topicoIdx }))
+          .filter(({ topico }) => topico && (topico.nome || topico.numero)),
+      }))
+    }
+
+    return valid
+      .map(({ disciplina, originalIdx }) => {
+        const disciplinaMatch = (disciplina.nome || '').toLowerCase().includes(normalizedSearch)
+        const topicosFiltrados = (disciplina.topicos || [])
+          .map((topico, topicoIdx) => ({ topico, topicoIdx }))
+          .filter(({ topico }) => {
+            if (!topico || (!topico.nome && !topico.numero)) return false
+            const nome = (topico.nome || '').toLowerCase()
+            const numero = (topico.numero || '').toString().toLowerCase()
+            return nome.includes(normalizedSearch) || numero.includes(normalizedSearch)
+          })
+
+        if (disciplinaMatch) {
+          return {
+            disciplina,
+            originalIdx,
+            topicos: (disciplina.topicos || [])
+              .map((topico, topicoIdx) => ({ topico, topicoIdx }))
+              .filter(({ topico }) => topico && (topico.nome || topico.numero)),
+          }
+        }
+        if (topicosFiltrados.length > 0) {
+          return { disciplina, originalIdx, topicos: topicosFiltrados }
+        }
+        return null
+      })
+      .filter(Boolean)
+  }, [editalVerticalizado, normalizedSearch])
+
+  const toggleDisciplina = useCallback((idx) => {
+    setExpandedDisciplinas((prev) => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }, [])
+
+  const expandAllDisciplinas = useCallback(() => {
+    if (!editalVerticalizado?.disciplinas) return
+    setExpandedDisciplinas(
+      new Set(
+        editalVerticalizado.disciplinas
+          .map((d, i) => (d?.nome ? i : null))
+          .filter((i) => i !== null)
+      )
+    )
+  }, [editalVerticalizado])
+
+  const collapseAllDisciplinas = useCallback(() => {
+    setExpandedDisciplinas(new Set())
+  }, [])
+
+  useEffect(() => {
+    if (!normalizedSearch || filteredDisciplinas.length === 0) return
+    setExpandedDisciplinas(new Set(filteredDisciplinas.map((item) => item.originalIdx)))
+  }, [normalizedSearch, filteredDisciplinas])
+
+  useEffect(() => {
+    if (!highlightedDisciplina || !editalVerticalizado?.disciplinas) return
+    const idx = editalVerticalizado.disciplinas.findIndex(
+      (disc) =>
+        (disc.nome || '').toLowerCase().includes(highlightedDisciplina.toLowerCase()) ||
+        highlightedDisciplina.toLowerCase().includes((disc.nome || '').toLowerCase())
+    )
+    if (idx >= 0) {
+      setExpandedDisciplinas((prev) => new Set([...prev, idx]))
+    }
+  }, [highlightedDisciplina, editalVerticalizado])
 
   // Determinar courseId e destacar disciplina/tópico se vier dos links
   useEffect(() => {
@@ -1046,10 +1155,10 @@ REGRAS IMPORTANTES:
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-alego-600 border-t-transparent"></div>
-          <p className="mt-4 text-lg font-semibold text-alego-600">Carregando edital verticalizado...</p>
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+          <p className="mt-4 font-mono text-sm text-cp-muted">Carregando edital...</p>
         </div>
       </div>
     )
@@ -1057,431 +1166,419 @@ REGRAS IMPORTANTES:
 
   if (!editalVerticalizado) {
     return (
-      <div className="space-y-6">
-        <div className={`bg-background-card rounded-2xl shadow-lg border border-slate-20late-70primpryxt-center`}>
-          <DocumentTextIcon className="h-16 w-16 text-text-muted mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-text-primary mb-2">
-            Edital Verticalizado não disponível
-          </h2>
-          <p className="text-text-secondary mb-6">
-            O edital verticalizado ainda não foi configurado para este curso.
-          </p>
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-alego-600 text-white rounded-xl font-semibold hover:bg-alego-700 transition-all"
-          >
-            Voltar ao Dashboard
-          </Link>
+      <div className="cp-card p-10 text-center">
+        <DocumentTextIcon className="mx-auto mb-4 h-14 w-14 text-cp-muted" />
+        <h2 className="text-xl font-medium text-cp-text">Edital não disponível</h2>
+        <p className="mt-2 text-sm text-cp-muted">
+          O edital verticalizado ainda não foi configurado para este curso.
+        </p>
+        <Link to="/dashboard" className="cp-btn-primary mt-6 inline-flex">
+          Voltar ao Dashboard
+        </Link>
+      </div>
+    )
+  }
+
+  const getTopicoNivelPadding = (topico) => {
+    let nivel = topico.nivel || 0
+    if (topico.numero && typeof topico.numero === 'string') {
+      const partes = topico.numero.split('.').filter((p) => p.trim())
+      nivel = Math.max(0, partes.length - 2)
+    }
+    return 12 + nivel * 14
+  }
+
+  const renderTopicoRow = (disciplina, disciplinaIdx, topico, topicoIdx) => {
+    if (!topico) return null
+
+    const topicKey = makeTopicKey(topico)
+    const isHighlighted =
+      highlightedTopico &&
+      ((topico.nome || '').toLowerCase().includes(highlightedTopico.toLowerCase()) ||
+        highlightedTopico.toLowerCase().includes((topico.nome || '').toLowerCase()))
+    const moduloLabel = formatTopicoAsModulo(topico)
+    const paddingLeft = getTopicoNivelPadding(topico)
+
+    return (
+      <div
+        key={`${disciplinaIdx}-${topicoIdx}`}
+        id={`topico-${disciplinaIdx}-${topicoIdx}`}
+        className={`group flex flex-col gap-2 px-4 py-3 transition sm:flex-row sm:items-center sm:gap-3 ${
+          isHighlighted ? 'bg-cp-accent/10 ring-1 ring-inset ring-cp-accent/30' : 'hover:bg-cp-surface/50'
+        }`}
+        style={{ paddingLeft: `${Math.min(paddingLeft, 48)}px` }}
+      >
+        <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 sm:items-center">
+          <input
+            type="checkbox"
+            checked={!!topico.estudado}
+            onChange={() => handleToggleCheckbox(disciplinaIdx, topicoIdx, 'estudado')}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-cp-border text-cp-accent focus:ring-cp-accent/40 sm:mt-0"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm leading-snug text-cp-text">
+              {topico.numero && (
+                <span className="mr-2 font-mono text-xs text-cp-accent">{topico.numero}</span>
+              )}
+              <span className={topico.estudado ? 'text-cp-muted line-through' : ''}>{topico.nome || ''}</span>
+            </p>
+          </div>
+        </label>
+
+        <div className="flex flex-wrap items-center gap-1.5 pl-7 sm:shrink-0 sm:pl-0">
+          {!topicKey || topicKey.trim() === '' ? (
+            <span className="rounded-lg border border-cp-border px-2 py-1 font-mono text-[10px] text-cp-muted">
+              Sem ID
+            </span>
+          ) : (
+            <>
+              <Link
+                to={`/flashcards/topico/${courseId || 'alego-default'}?disciplina=${encodeURIComponent(disciplina.nome || '')}&modulo=${encodeURIComponent(moduloLabel)}&topicKey=${encodeURIComponent(topicKey)}`}
+                className="inline-flex items-center gap-1 rounded-lg border border-cp-accent/25 bg-cp-accent/10 px-2 py-1.5 font-mono text-[10px] text-cp-accent transition hover:bg-cp-accent/20"
+                title="Flashcards"
+              >
+                <SparklesIcon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Flash</span>
+              </Link>
+              <Link
+                to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
+                className="inline-flex items-center gap-1 rounded-lg border border-cp-border bg-cp-surface px-2 py-1.5 font-mono text-[10px] text-cp-text transition hover:border-cp-accent/30"
+                title="Estudar conteúdo"
+              >
+                <BookOpenIcon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Estudar</span>
+              </Link>
+              <Link
+                to={`/questoes-topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
+                className="inline-flex items-center gap-1 rounded-lg border border-cp-accent2/25 bg-cp-accent2/10 px-2 py-1.5 font-mono text-[10px] text-cp-accent2 transition hover:bg-cp-accent2/20"
+                title="Questões preditivas"
+              >
+                <FireIcon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Questões</span>
+              </Link>
+              {profile?.role === 'admin' && (
+                <>
+                  <button
+                    onClick={() => handleEditTopico(disciplinaIdx, topicoIdx)}
+                    className="rounded-lg border border-cp-border p-1.5 text-cp-muted transition hover:border-cp-accent/30 hover:text-cp-accent"
+                    title="Editar tópico"
+                  >
+                    <PencilIcon className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTopico(disciplinaIdx, topicoIdx)}
+                    className="rounded-lg border border-red-500/20 p-1.5 text-red-400/80 transition hover:bg-red-500/10"
+                    title="Apagar tópico"
+                  >
+                    <TrashIcon className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTopicContent(topicKey)}
+                    className="rounded-lg border border-red-500/20 p-1.5 text-red-400/60 transition hover:bg-red-500/10"
+                    title="Apagar conteúdo IA"
+                  >
+                    <XMarkIcon className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
     )
   }
 
+  const hasDisciplinas =
+    editalVerticalizado?.disciplinas &&
+    Array.isArray(editalVerticalizado.disciplinas) &&
+    editalVerticalizado.disciplinas.length > 0
+
+  const accentBorders = [
+    'border-cp-accent/40 text-cp-accent',
+    'border-cp-accent2/40 text-cp-accent2',
+    'border-cp-accent3/40 text-cp-accent3',
+    'border-cp-accent4/40 text-cp-accent4',
+  ]
+
   return (
     <div className="space-y-6">
       {courseName && (
-        <p className="text-sm font-semibold text-text-secondary">{courseName.toUpperCase()}</p>
+        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cp-muted">{courseName}</p>
       )}
 
-      {/* Conteúdo Principal */}
-        <div className={`bg-background-card rounded-xl sm:rounded-2xl shadow-lg border border-border-primary p-2 sm:p-3 md:p-4 lg:p-6`}>
-          {/* Descrição removida conforme solicitado */}
-
-          {/* Tabela de Edital Verticalizado */}
-          {editalVerticalizado?.disciplinas && Array.isArray(editalVerticalizado.disciplinas) && editalVerticalizado.disciplinas.length > 0 ? (
-            <>
-              {/* Informações sobre o edital */}
-              <div className="mb-3 sm:mb-4 pb-2 sm:pb-3 border-b border-border-primary">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-text-secondary">
-                    <span className="font-semibold text-text-primary text-xs sm:text-sm">
-                      {editalVerticalizado.disciplinas.length} {editalVerticalizado.disciplinas.length === 1 ? 'disciplina' : 'disciplinas'}
-                    </span>
-                    <span className="font-semibold text-text-primary text-xs sm:text-sm">
-                      {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0)} {editalVerticalizado.disciplinas.reduce((sum, d) => sum + (d.topicos?.length || 0), 0) === 1 ? 'tópico' : 'tópicos'}
-                    </span>
-                  </div>
-                  {profile?.role === 'admin' && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        onClick={openFlashcardsModal}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 sm:px-3 sm:py-1.5 bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary text-xs sm:text-xs font-semibold rounded-lg hover:from-accent-orange-dim hover:to-accent-cyan-dim transition-all shadow-lg shadow-accent-orange/20 border border-accent-orange/30 active:scale-95"
-                      >
-                        <SparklesIcon className="h-4 w-4 sm:h-4 sm:w-4" />
-                        <span className="hidden sm:inline">Flashcards</span>
-                        <span className="sm:hidden">Flash</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
+      {hasDisciplinas ? (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="cp-card p-4">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Disciplinas</p>
+              <p className="mt-1 text-2xl font-medium text-cp-text">{editalStats.disciplinas}</p>
+            </div>
+            <div className="cp-card p-4">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Tópicos</p>
+              <p className="mt-1 text-2xl font-medium text-cp-text">{editalStats.totalTopicos}</p>
+            </div>
+            <div className="cp-card p-4">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Estudados</p>
+              <p className="mt-1 text-2xl font-medium text-cp-accent">{editalStats.estudados}</p>
+            </div>
+            <div className="cp-card p-4">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Progresso</p>
+              <p className="mt-1 text-2xl font-medium text-cp-accent2">{editalStats.pct}%</p>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-cp-border">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-cp-accent to-cp-accent2 transition-all"
+                  style={{ width: `${editalStats.pct}%` }}
+                />
               </div>
-              
-              <div className="overflow-x-auto -mx-2 sm:-mx-3 md:-mx-4 lg:mx-0 scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-background-card">
-              <div className="min-w-full inline-block">
-                <table className="w-full min-w-[400px] sm:min-w-[500px] md:min-w-[600px] lg:min-w-[640px] border-collapse border border-border-primary bg-background-card text-[10px] sm:text-xs md:text-sm">
-                  <thead>
-                    <tr className="bg-accent-cyan text-white">
-                      <th className="border border-border-primary px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-left font-bold text-[9px] sm:text-xs md:text-sm">
-                        <span className="sm:hidden">DISC.</span>
-                        <span className="hidden sm:inline">DISCIPLINAS</span>
-                      </th>
-                      <th className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
-                        <span className="hidden sm:inline">Estudado</span>
-                        <span className="sm:hidden">Est.</span>
-                      </th>
-                      {profile?.role === 'admin' && (
-                        <>
-                          <th className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
-                            <span className="hidden sm:inline">Editar</span>
-                            <span className="sm:hidden">Ed</span>
-                          </th>
-                          <th className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center font-bold text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
-                            <span className="hidden sm:inline">Ações</span>
-                            <span className="sm:hidden">Aç</span>
-                          </th>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                <tbody>
-                  {editalVerticalizado.disciplinas
-                    .filter(disciplina => disciplina && disciplina.nome) // Filtrar disciplinas inválidas
-                    .map((disciplina, idx) => {
-                      // Log para debug (apenas no console, apenas para primeira disciplina)
-                      if (idx === 0) {
-                        // Logs removidos para limpar console
-                      }
-                      return (
-                    <React.Fragment key={idx}>
-                      {/* Linha principal da disciplina (destaque laranja) */}
-                      <tr className="bg-accent-orange text-white font-bold">
-                        <td className="border border-border-primary px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm lg:text-base">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold break-words">{disciplina.nome || 'Disciplina sem nome'}</span>
-                            {disciplina.totalQuestoes && (
-                              <span className="block sm:inline text-[9px] sm:text-xs opacity-90 whitespace-nowrap">
-                                ({disciplina.totalQuestoes} Q)
-                              </span>
-                            )}
-                            <Link
-                              to={`/conteudo-incidencia/${courseId || 'alego-default'}/${idx}`}
-                              className="inline-flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-[9px] sm:text-xs font-semibold rounded hover:bg-red-700 transition whitespace-nowrap active:scale-95"
-                              title="Gerar Conteúdo de Maior Incidência"
-                            >
-                              <FireIcon className="h-3 w-3 sm:h-4 sm:w-4" />
-                              <span className="hidden xs:inline sm:inline">Incidência</span>
-                              <span className="xs:hidden sm:hidden">🔥</span>
-                            </Link>
-                          </div>
-                        </td>
-                        <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
-                        {profile?.role === 'admin' && (
-                          <>
-                            <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
-                            <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <button
-                                  onClick={() => handleDeleteDisciplina(idx)}
-                                  className="inline-flex items-center justify-center p-2 sm:p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
-                                  title="Apagar disciplina"
-                                >
-                                  <TrashIcon className="h-4 w-4 sm:h-4 sm:w-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                      
-                      {/* Tópicos da disciplina */}
-                      {disciplina.topicos && Array.isArray(disciplina.topicos) && disciplina.topicos.length > 0 && disciplina.topicos
-                        .filter(topico => topico && (topico.nome || topico.numero)) // Filtrar tópicos inválidos
-                        .map((topico, topicoIdx) => {
-                          // Log para debug (apenas no console, apenas para primeira disciplina)
-                          if (idx === 0 && topicoIdx === 0) {
-                            // Log removido para limpar console
-                          }
-                          if (!topico) return null // Proteção extra
-                          
-                          // Calcular indentação baseada na numeração (ex: 1.1 = nivel 0, 1.1.2 = nivel 1, 1.2.5.1 = nivel 2)
-                          let nivelCalculado = topico.nivel || 0
-                          if (topico.numero && typeof topico.numero === 'string') {
-                            // Contar quantos níveis há na numeração (1.1 = 2 partes = nivel 0, 1.1.2 = 3 partes = nivel 1)
-                            const partes = topico.numero.split('.').filter(p => p.trim())
-                            nivelCalculado = Math.max(0, partes.length - 2)
-                          }
-                          // Ajustar indentação responsiva
-                          const basePadding = 8
-                          const nivelPadding = nivelCalculado * (nivelCalculado > 0 ? 10 : 12) // Menos padding em mobile para níveis profundos
-                          const paddingLeft = basePadding + nivelPadding
-                          
-                          const isHighlighted = highlightedTopico && (
-                            (topico.nome || '').toLowerCase().includes(highlightedTopico.toLowerCase()) ||
-                            highlightedTopico.toLowerCase().includes((topico.nome || '').toLowerCase())
-                          )
-                          
-                          return (
-                            <tr key={`${idx}-${topicoIdx}`} id={`topico-${idx}-${topicoIdx}`} className={`${isHighlighted ? 'ring-2 ring-accent-orange bg-accent-orange/10' : ''} hover:bg-background-card-hover bg-background-card`}>
-                              <td 
-                                className="border border-border-primary px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 text-text-primary text-[9px] sm:text-xs md:text-sm break-words"
-                                style={{ 
-                                  paddingLeft: `${Math.max(paddingLeft - 4, 8)}px` // Reduzir padding em mobile
-                                }}
-                              >
-                                <div className="flex flex-col gap-1.5 sm:gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-start gap-1 sm:gap-2">
-                                      {topico.numero && <span className="font-medium whitespace-nowrap text-[9px] sm:text-xs">{topico.numero} </span>}
-                                      <span className="break-words leading-tight">{topico.nome || ''}</span>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center justify-between gap-2">
-                                    {(() => {
-                                      const topicKey = makeTopicKey(topico)
-                                      // Validar que o topicKey não está vazio antes de criar o link
-                                      if (!topicKey || topicKey.trim() === '') {
-                                        return (
-                                          <span className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold bg-background-card-hover text-text-muted cursor-not-allowed whitespace-nowrap flex-shrink-0 border border-border-primary" title="Tópico sem identificação válida">
-                                            <BookOpenIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                            <span className="hidden xs:inline sm:inline">Estudar</span>
-                                            <span className="xs:hidden sm:hidden">E</span>
-                                          </span>
-                                        )
-                                      }
-                                      const moduloLabel = formatTopicoAsModulo(topico)
-                                      return (
-                                        <>
-                                          <Link
-                                            to={`/flashcards/topico/${courseId || 'alego-default'}?disciplina=${encodeURIComponent(disciplina.nome || '')}&modulo=${encodeURIComponent(moduloLabel)}&topicKey=${encodeURIComponent(topicKey)}`}
-                                            className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary hover:from-accent-orange-dim hover:to-accent-cyan-dim transition-all whitespace-nowrap flex-shrink-0 active:scale-95 shadow-lg shadow-accent-orange/20 border border-accent-orange/30"
-                                            title="Flashcards deste tópico (gerados uma vez e salvos para todos)"
-                                          >
-                                            <SparklesIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                            <span className="hidden xs:inline sm:inline">Flashcards</span>
-                                            <span className="xs:hidden sm:hidden">FC</span>
-                                          </Link>
-                                          <Link
-                                            to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
-                                            className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold bg-background-card-hover text-accent-cyan hover:bg-background-card-hover hover:text-accent-cyan-dim transition-all whitespace-nowrap flex-shrink-0 active:scale-95 border border-accent-cyan/30"
-                                            title="Estudar conteúdo deste tópico"
-                                          >
-                                            <BookOpenIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                            <span className="hidden xs:inline sm:inline">Estudar</span>
-                                            <span className="xs:hidden sm:hidden">E</span>
-                                          </Link>
-                                          <Link
-                                            to={`/questoes-topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
-                                            className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold bg-gradient-to-r from-accent-cyan to-accent-orange text-background-primary hover:from-accent-cyan-dim hover:to-accent-orange-dim transition-all whitespace-nowrap flex-shrink-0 active:scale-95 shadow-lg shadow-accent-cyan/20 border border-accent-cyan/30"
-                                            title="Questões preditivas deste tópico (BOOK QUESTÕES)"
-                                          >
-                                            <FireIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                            <span className="hidden xs:inline sm:inline">Praticar</span>
-                                            <span className="xs:hidden sm:hidden">Q</span>
-                                          </Link>
-                                          {profile?.role === 'admin' && (
-                                            <button
-                                              onClick={(e) => {
-                                                e.preventDefault()
-                                                e.stopPropagation()
-                                                handleDeleteTopicContent(topicKey)
-                                              }}
-                                              className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all whitespace-nowrap flex-shrink-0 active:scale-95 border border-red-500/30"
-                                              title="Apagar conteúdo deste tópico (apenas admin)"
-                                            >
-                                              <TrashIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                              <span className="hidden xs:inline sm:inline">Apagar</span>
-                                              <span className="xs:hidden sm:hidden">X</span>
-                                            </button>
-                                          )}
-                                        </>
-                                      )
-                                    })()}
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={!!topico.estudado}
-                                  onChange={() => handleToggleCheckbox(idx, topicoIdx, 'estudado')}
-                                  className="w-4 h-4 sm:w-5 sm:h-5 md:w-4 md:h-4 text-blue-600 bg-white bg-background-card border-gray-300 rounded focus:ring-blue-500 focus:ring-accent-cyan focus:ring-2 cursor-pointer touch-manipulation"
-                                  style={{ touchAction: 'manipulation' }}
-                                />
-                              </td>
-                              {profile?.role === 'admin' && (
-                                <>
-                                  <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
-                                    <button
-                                      onClick={() => handleEditTopico(idx, topicoIdx)}
-                                      className="inline-flex items-center justify-center p-2 sm:p-1.5 text-accent-cyan hover:text-accent-cyan-dim hover:bg-accent-cyan/10 rounded transition-colors"
-                                      title="Editar tópico"
-                                    >
-                                      <PencilIcon className="h-4 w-4 sm:h-4 sm:w-4" />
-                                    </button>
-                                  </td>
-                                  <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 text-center">
-                                    <div className="flex items-center justify-center gap-1">
-                                      <button
-                                        onClick={() => handleDeleteTopico(idx, topicoIdx)}
-                                        className="inline-flex items-center justify-center p-2 sm:p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
-                                        title="Apagar tópico"
-                                      >
-                                        <TrashIcon className="h-4 w-4 sm:h-4 sm:w-4" />
-                                      </button>
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                            </tr>
-                          )
-                        })}
+            </div>
+          </div>
 
-                        {/* Linha para adicionar novo tópico (apenas admin) */}
+          <div className="cp-card p-4 sm:p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="relative min-w-0 flex-1">
+                <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cp-muted" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar disciplina ou tópico..."
+                  className="w-full rounded-xl border border-cp-border bg-cp-bg/60 py-2.5 pl-10 pr-10 text-sm text-cp-text placeholder:text-cp-muted focus:border-cp-accent/40 focus:outline-none focus:ring-1 focus:ring-cp-accent/25"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-cp-muted transition hover:text-cp-text"
+                    aria-label="Limpar busca"
+                  >
+                    <XMarkIcon className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={expandAllDisciplinas} className="cp-btn-ghost !px-3 !py-2 !text-xs">
+                  Expandir tudo
+                </button>
+                <button type="button" onClick={collapseAllDisciplinas} className="cp-btn-ghost !px-3 !py-2 !text-xs">
+                  Recolher tudo
+                </button>
+                {profile?.role === 'admin' && (
+                  <button type="button" onClick={openFlashcardsModal} className="cp-btn-primary !px-3 !py-2 !text-xs">
+                    <SparklesIcon className="h-4 w-4" />
+                    Flashcards IA
+                  </button>
+                )}
+              </div>
+            </div>
+            {normalizedSearch && (
+              <p className="mt-3 font-mono text-xs text-cp-muted">
+                {filteredDisciplinas.length} disciplina(s) · busca: &quot;{searchQuery}&quot;
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {filteredDisciplinas.length === 0 ? (
+              <div className="cp-card p-10 text-center">
+                <MagnifyingGlassIcon className="mx-auto mb-3 h-10 w-10 text-cp-muted" />
+                <p className="text-sm text-cp-muted">Nenhum resultado para &quot;{searchQuery}&quot;</p>
+              </div>
+            ) : (
+              filteredDisciplinas.map(({ disciplina, originalIdx: idx, topicos }) => {
+                const isExpanded = expandedDisciplinas.has(idx)
+                const total = topicos.length
+                const estudados = topicos.filter(({ topico }) => topico.estudado).length
+                const pct = total ? Math.round((estudados / total) * 100) : 0
+                const accent = accentBorders[idx % accentBorders.length]
+
+                return (
+                  <div
+                    key={idx}
+                    className={`cp-card overflow-hidden transition ${isExpanded ? 'ring-1 ring-cp-accent/15' : ''}`}
+                  >
+                    <div className="flex items-stretch">
+                      <button
+                        type="button"
+                        onClick={() => toggleDisciplina(idx)}
+                        className="flex min-w-0 flex-1 items-center gap-3 p-4 text-left transition hover:bg-cp-surface/40"
+                      >
+                        <div
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-cp-bg/80 font-mono text-xs font-semibold ${accent}`}
+                        >
+                          {String(idx + 1).padStart(2, '0')}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="truncate text-sm font-medium text-cp-text sm:text-base">{disciplina.nome}</h3>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                            <span className="cp-badge !py-0.5 !text-[10px]">{total} tópicos</span>
+                            {disciplina.totalQuestoes ? (
+                              <span className="font-mono text-[10px] text-cp-muted">{disciplina.totalQuestoes} Q</span>
+                            ) : null}
+                            <span className="font-mono text-[10px] text-cp-muted">
+                              {estudados}/{total} concluídos
+                            </span>
+                          </div>
+                          <div className="mt-2 h-1 w-full max-w-[200px] overflow-hidden rounded-full bg-cp-border">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-cp-accent to-cp-accent2"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                        {isExpanded ? (
+                          <ChevronDownIcon className="h-5 w-5 shrink-0 text-cp-muted" />
+                        ) : (
+                          <ChevronRightIcon className="h-5 w-5 shrink-0 text-cp-muted" />
+                        )}
+                      </button>
+                      <div className="flex shrink-0 items-center gap-1 border-l border-cp-border px-2 sm:px-3">
+                        <Link
+                          to={`/conteudo-incidencia/${courseId || 'alego-default'}/${idx}`}
+                          className="rounded-lg border border-red-500/25 bg-red-500/10 p-2 text-red-400 transition hover:bg-red-500/20"
+                          title="Conteúdo de maior incidência"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <FireIcon className="h-4 w-4" />
+                        </Link>
                         {profile?.role === 'admin' && (
-                          <tr className="bg-background-card-hover">
-                            <td className="border border-border-primary px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm" style={{ paddingLeft: '16px' }}>
-                              {addingTopico?.disciplinaIdx === idx ? (
-                                <div className="flex gap-2">
-                                  <input
-                                    type="text"
-                                    value={newTopicoNumero}
-                                    onChange={(e) => setNewTopicoNumero(e.target.value)}
-                                    placeholder="Número (opcional)"
-                                    className="w-20 px-2 py-1 text-xs border border-border-primary rounded bg-background-card text-text-primary"
-                                  />
-                                  <input
-                                    type="text"
-                                    value={newTopicoNome}
-                                    onChange={(e) => setNewTopicoNome(e.target.value)}
-                                    placeholder="Nome do tópico"
-                                    className="flex-1 px-2 py-1 text-xs border border-border-primary rounded bg-background-card text-text-primary"
-                                    autoFocus
-                                    onKeyPress={(e) => {
-                                      if (e.key === 'Enter') handleAddTopico(idx)
-                                      if (e.key === 'Escape') {
-                                        setAddingTopico(null)
-                                        setNewTopicoNome('')
-                                        setNewTopicoNumero('')
-                                      }
-                                    }}
-                                  />
-                                  <button
-                                    onClick={() => handleAddTopico(idx)}
-                                    className="px-3 py-2 sm:px-2 sm:py-1 bg-accent-orange text-background-primary text-xs sm:text-xs rounded-lg hover:bg-accent-orange-dim transition-colors"
-                                  >
-                                    <CheckIcon className="h-4 w-4 sm:h-4 sm:w-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDisciplina(idx)}
+                            className="rounded-lg border border-red-500/20 p-2 text-red-400/70 transition hover:bg-red-500/10"
+                            title="Apagar disciplina"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="border-t border-cp-border bg-cp-bg/20">
+                        <div className="divide-y divide-cp-border/50">
+                          {topicos.map(({ topico, topicoIdx }) =>
+                            renderTopicoRow(disciplina, idx, topico, topicoIdx)
+                          )}
+                        </div>
+                        {profile?.role === 'admin' && (
+                          <div className="border-t border-cp-border/50 px-4 py-3">
+                            {addingTopico?.disciplinaIdx === idx ? (
+                              <div className="flex flex-wrap gap-2">
+                                <input
+                                  type="text"
+                                  value={newTopicoNumero}
+                                  onChange={(e) => setNewTopicoNumero(e.target.value)}
+                                  placeholder="Nº"
+                                  className="w-16 rounded-lg border border-cp-border bg-cp-surface px-2 py-1.5 font-mono text-xs text-cp-text"
+                                />
+                                <input
+                                  type="text"
+                                  value={newTopicoNome}
+                                  onChange={(e) => setNewTopicoNome(e.target.value)}
+                                  placeholder="Nome do tópico"
+                                  className="min-w-[140px] flex-1 rounded-lg border border-cp-border bg-cp-surface px-2 py-1.5 text-xs text-cp-text"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleAddTopico(idx)
+                                    if (e.key === 'Escape') {
                                       setAddingTopico(null)
                                       setNewTopicoNome('')
                                       setNewTopicoNumero('')
-                                    }}
-                                    className="px-3 py-2 sm:px-2 sm:py-1 bg-red-500/10 text-red-400 text-xs sm:text-xs rounded-lg hover:bg-red-500/20 transition-colors"
-                                  >
-                                    <XMarkIcon className="h-4 w-4 sm:h-4 sm:w-4" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => setAddingTopico({ disciplinaIdx: idx })}
-                                  className="px-3 py-2 sm:px-2 sm:py-1 bg-accent-cyan text-background-primary text-xs sm:text-xs rounded-lg hover:bg-accent-cyan-dim transition"
-                                >
-                                  <PlusIcon className="h-4 w-4 sm:h-3 sm:w-3" />
-                                  <span className="hidden sm:inline">Adicionar tópico</span>
-                                  <span className="sm:hidden">Adicionar</span>
+                                    }
+                                  }}
+                                />
+                                <button type="button" onClick={() => handleAddTopico(idx)} className="cp-btn-primary !px-3 !py-1.5 !text-xs">
+                                  <CheckIcon className="h-4 w-4" />
                                 </button>
-                              )}
-                            </td>
-                            <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
-                            {profile?.role === 'admin' && (
-                              <>
-                                <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
-                                <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
-                              </>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setAddingTopico(null)
+                                    setNewTopicoNome('')
+                                    setNewTopicoNumero('')
+                                  }}
+                                  className="rounded-lg border border-cp-border px-3 py-1.5 text-xs text-cp-muted"
+                                >
+                                  <XMarkIcon className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setAddingTopico({ disciplinaIdx: idx })}
+                                className="cp-btn-ghost !px-3 !py-1.5 !text-xs"
+                              >
+                                <PlusIcon className="h-4 w-4" />
+                                Adicionar tópico
+                              </button>
                             )}
-                          </tr>
-                        )}
-                    </React.Fragment>
-                      )
-                    })}
-
-                  {/* Linha para adicionar nova disciplina (apenas admin) */}
-                  {profile?.role === 'admin' && (
-                    <tr className="bg-background-card-hover">
-                      <td className="border border-border-primary px-1.5 sm:px-2 md:px-3 lg:px-4 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm">
-                        {addingDisciplina ? (
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={newDisciplinaNome}
-                              onChange={(e) => setNewDisciplinaNome(e.target.value)}
-                              placeholder="Nome da disciplina"
-                              className="flex-1 px-2 py-1 text-xs border border-border-primary rounded bg-background-card text-text-primary"
-                              autoFocus
-                              onKeyPress={(e) => {
-                                if (e.key === 'Enter') handleAddDisciplina()
-                                if (e.key === 'Escape') {
-                                  setAddingDisciplina(false)
-                                  setNewDisciplinaNome('')
-                                }
-                              }}
-                            />
-                            <button
-                              onClick={handleAddDisciplina}
-                              className="px-3 py-2 sm:px-2 sm:py-1 bg-accent-orange text-background-primary text-xs sm:text-xs rounded-lg hover:bg-accent-orange-dim transition-colors"
-                            >
-                              <CheckIcon className="h-4 w-4 sm:h-4 sm:w-4" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setAddingDisciplina(false)
-                                setNewDisciplinaNome('')
-                              }}
-                              className="px-3 py-2 sm:px-2 sm:py-1 bg-red-500/10 text-red-400 text-xs sm:text-xs rounded-lg hover:bg-red-500/20 transition-colors"
-                            >
-                              <XMarkIcon className="h-4 w-4 sm:h-4 sm:w-4" />
-                            </button>
                           </div>
-                        ) : (
-                          <button
-                            onClick={() => setAddingDisciplina(true)}
-                            className="inline-flex items-center gap-1 px-3 py-2 sm:px-2 sm:py-1 bg-accent-cyan text-background-primary text-xs sm:text-xs rounded-lg hover:bg-accent-cyan-dim transition"
-                          >
-                            <PlusIcon className="h-4 w-4 sm:h-3 sm:w-3" />
-                            <span className="hidden sm:inline">Adicionar disciplina</span>
-                            <span className="sm:hidden">Adicionar</span>
-                          </button>
                         )}
-                      </td>
-                      <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
-                      {profile?.role === 'admin' && (
-                        <>
-                          <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
-                          <td className="border border-border-primary px-1 sm:px-1.5 md:px-2 lg:px-3 py-1.5 sm:py-2 md:py-2.5 text-center"></td>
-                        </>
-                      )}
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          {profile?.role === 'admin' && (
+            <div className="cp-card p-4">
+              {addingDisciplina ? (
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    type="text"
+                    value={newDisciplinaNome}
+                    onChange={(e) => setNewDisciplinaNome(e.target.value)}
+                    placeholder="Nome da disciplina"
+                    className="min-w-[160px] flex-1 rounded-lg border border-cp-border bg-cp-surface px-3 py-2 text-sm text-cp-text"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAddDisciplina()
+                      if (e.key === 'Escape') {
+                        setAddingDisciplina(false)
+                        setNewDisciplinaNome('')
+                      }
+                    }}
+                  />
+                  <button type="button" onClick={handleAddDisciplina} className="cp-btn-primary !px-3 !py-2 !text-xs">
+                    <CheckIcon className="h-4 w-4" />
+                    Salvar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingDisciplina(false)
+                      setNewDisciplinaNome('')
+                    }}
+                    className="cp-btn-ghost !px-3 !py-2 !text-xs"
+                  >
+                    Cancelar
+                  </button>
                 </div>
-              </div>
-            </>
-          ) : editalVerticalizado?.secoes && Array.isArray(editalVerticalizado.secoes) && editalVerticalizado.secoes.length > 0 ? (
-            <div className="space-y-4 sm:space-y-6">
+              ) : (
+                <button type="button" onClick={() => setAddingDisciplina(true)} className="cp-btn-ghost !text-xs">
+                  <PlusIcon className="h-4 w-4" />
+                  Adicionar disciplina
+                </button>
+              )}
+            </div>
+          )}
+
+          {editalVerticalizado.updatedAt && (
+            <p className="text-center font-mono text-[10px] text-cp-muted">
+              Atualizado em{' '}
+              {editalVerticalizado.updatedAt.toDate?.().toLocaleDateString('pt-BR') || '—'}
+            </p>
+          )}
+        </>
+      ) : editalVerticalizado?.secoes && Array.isArray(editalVerticalizado.secoes) && editalVerticalizado.secoes.length > 0 ? (
+            <div className="space-y-4">
               {editalVerticalizado.secoes.map((secao, idx) => (
-<div
-                  key={idx}
-                  className="border-l-4 border-indigo-500 pl-3 sm:pl-4 md:pl-6 py-3 sm:py-4 bg-background-card-hover rounded-r-lg"
-                >
-                  <h2 className="text-base sm:text-lg md:text-xl font-bold text-text-primary mb-2 sm:mb-3 break-words">
-                    {secao.titulo}
-                  </h2>
+                <div key={idx} className="cp-card border-l-2 border-cp-accent p-4 sm:p-6">
+                  <h2 className="text-base font-medium text-cp-text sm:text-lg">{secao.titulo}</h2>
                   {secao.subtitulo && (
-                    <p className="text-xs sm:text-sm text-text-secondary mb-2 sm:mb-3 break-words">
-                      {secao.subtitulo}
-                    </p>
+                    <p className="mt-1 text-sm text-cp-muted">{secao.subtitulo}</p>
                   )}
                   {secao.conteudo ? (
                     <>
@@ -1563,29 +1660,19 @@ REGRAS IMPORTANTES:
               ))}
             </div>
           ) : editalVerticalizado?.conteudo ? (
-            <div className="ia-content-enhanced">
+            <div className="cp-card ia-content-enhanced p-4 sm:p-6">
               <div
-                dangerouslySetInnerHTML={{ 
-                  __html: processContentForDisplay(editalVerticalizado.conteudo) 
+                dangerouslySetInnerHTML={{
+                  __html: processContentForDisplay(editalVerticalizado.conteudo),
                 }}
               />
             </div>
           ) : (
-            <div className="text-center py-12">
-              <BookOpenIcon className="h-12 w-12 text-text-muted mx-auto mb-3" />
-              <p className="text-text-secondary">
-                Conteúdo ainda não disponível.
-              </p>
+            <div className="cp-card p-10 text-center">
+              <BookOpenIcon className="mx-auto mb-3 h-12 w-12 text-cp-muted" />
+              <p className="text-sm text-cp-muted">Conteúdo ainda não disponível.</p>
             </div>
           )}
-
-          {/* Footer */}
-          {editalVerticalizado.updatedAt && (
-            <div className="mt-4 sm:mt-6 md:mt-8 pt-4 sm:pt-6 border-t border-border-primary text-xs text-text-secondary">
-              Última atualização: {editalVerticalizado.updatedAt.toDate?.().toLocaleDateString('pt-BR') || 'Data não disponível'}
-            </div>
-          )}
-        </div>
 
       {/* Modal de Edição de Tópico */}
       {editModalOpen && (

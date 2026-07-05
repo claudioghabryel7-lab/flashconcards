@@ -31,7 +31,7 @@ export const LEGACY_PAGE_META: Record<string, LegacyPageMeta> = {
   '/edital-verticalizado': {
     badge: 'Edital',
     title: 'Edital Verticalizado',
-    subtitle: 'Conteúdo organizado por disciplina e tópico',
+    subtitle: 'Disciplinas colapsáveis, busca rápida e progresso por tópico',
     backHref: null,
   },
   '/conteudo-completo': {
