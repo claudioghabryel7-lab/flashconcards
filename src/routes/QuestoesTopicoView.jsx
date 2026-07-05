@@ -7,6 +7,7 @@ import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { incrementQuestoesStats } from '../utils/questoesStats'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -710,30 +711,41 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     }
   }
 
-  const calcularDesempenho = () => {
+  const calcularDesempenho = async () => {
     const totalQuestoes = answers.length
     const acertos = answers.filter(a => a.isCorrect).length
-    const aproveitamento = Math.round((acertos / totalQuestoes) * 100)
+    const erros = totalQuestoes - acertos
+    const aproveitamento = totalQuestoes > 0 ? Math.round((acertos / totalQuestoes) * 100) : 0
     
     const precisaRevisar = answers
       .filter(a => !a.isCorrect && a.probabilidade >= 70)
       .map(a => a.assunto)
     
-    // Verificar se completou todas as questões do nível (considerando o total disponível)
     const totalQuestoesDisponiveis = questoesArray.length
     const completouNivel = totalQuestoes >= totalQuestoesDisponiveis
-    
-    // Avançar para o próximo nível se completou e não está no nível máximo
     const proximoNivel = completouNivel && nivelAtual < 10 ? nivelAtual + 1 : nivelAtual
+
+    let disciplina = effectiveTopicNome || 'Geral'
+    try {
+      const editalVerticalRef = doc(db, 'courses', resolvedCourseId, 'editalVerticalizado', 'principal')
+      const edSnap = await getDoc(editalVerticalRef)
+      if (edSnap.exists()) {
+        const ctx = extractContextFromEdital(edSnap.data(), resolvedTopicKey)
+        if (ctx?.disciplina) disciplina = ctx.disciplina
+      }
+    } catch (_) {
+      /* mantém fallback */
+    }
     
     const desempenhoData = {
       totalQuestoes,
       acertos,
-      erros: totalQuestoes - acertos,
+      erros,
       aproveitamento,
       precisaRevisar,
       respostas: answers,
       topicKey: resolvedTopicKey,
+      disciplina,
       nivel: nivelAtual,
       completouNivel,
       proximoNivel,
@@ -745,13 +757,15 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     if (user) {
       const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
       
-      // Salvar desempenho geral do tópico (para saber o nível atual)
       const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoTopico', sanitizedKey)
       setDoc(desempenhoRef, desempenhoData, { merge: true })
       
-      // Salvar desempenho específico do nível
       const desempenhoNivelRef = doc(db, 'users', user.uid, 'desempenhoTopico', `${sanitizedKey}_nivel_${nivelAtual}`)
       setDoc(desempenhoNivelRef, desempenhoData, { merge: true })
+
+      if (totalQuestoes > 0) {
+        await incrementQuestoesStats(user.uid, resolvedCourseId, disciplina, acertos, erros)
+      }
     }
   }
 

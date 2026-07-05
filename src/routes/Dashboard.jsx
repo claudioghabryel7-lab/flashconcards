@@ -15,6 +15,7 @@ import {
   where,
   writeBatch,
   getDocs,
+  deleteDoc,
 } from 'firebase/firestore'
 import {
   TrophyIcon,
@@ -44,7 +45,8 @@ import { motion } from 'framer-motion'
 import { DocumentTextIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import InstallPWAButton from '../components/InstallPWAButton'
 import LGPDConsent from '../components/LGPDConsent'
-// import StudyTimeChart from '../components/StudyTimeChart' // TEMPORARIAMENTE DESATIVADO
+import ProgressCalendar from '../components/ProgressCalendar'
+import { byMateriaToChartData } from '../utils/questoesStats'
 
 dayjs.locale('pt-br')
 
@@ -59,6 +61,7 @@ const Dashboard = () => {
   const [editalVerticalizado, setEditalVerticalizado] = useState(null)
   const [loadingEdital, setLoadingEdital] = useState(false)
   const [questoesStats, setQuestoesStats] = useState({ correct: 0, wrong: 0, byMateria: {} })
+  const [savingProgress, setSavingProgress] = useState(false)
   const { subjectOrder } = useSubjectOrder()
 
   
@@ -148,6 +151,19 @@ const Dashboard = () => {
 
         startTransition(() => {
           setProgressData(data)
+
+          const bySubject = {}
+          data.forEach((item) => {
+            if (item.hours > 0 && item.date) {
+              if (!bySubject[item.date]) {
+                bySubject[item.date] = { hours: 0, count: 0, materia: null }
+              }
+              bySubject[item.date].hours += parseFloat(item.hours || 0)
+              bySubject[item.date].count += 1
+              if (item.materia) bySubject[item.date].materia = item.materia
+            }
+          })
+          setStudyBySubject(bySubject)
         })
       },
       (error) => {
@@ -413,6 +429,7 @@ const Dashboard = () => {
 
   // Forçar atualização diária do progresso por matéria
   const [currentDate, setCurrentDate] = useState(dayjs().format('YYYY-MM-DD'))
+  const [studyBySubject, setStudyBySubject] = useState({})
   
   useEffect(() => {
     const updateDate = () => {
@@ -426,94 +443,74 @@ const Dashboard = () => {
     return () => clearInterval(interval)
   }, [])
 
-  // Calcular estatísticas
-  const stats = useMemo(() => {
-    const totalDays = new Set(progressData.map((item) => item.date)).size
-    const totalHours = progressData.reduce((sum, item) => sum + parseFloat(item.hours || 0), 0)
-    const studiedCards = Object.keys(cardProgress).filter(
-      (cardId) => cardProgress[cardId]?.reviewCount > 0
-    ).length
-    const totalCards = allCards.length
+  const studyDates = useMemo(
+    () => progressData.filter((item) => item.hours > 0 && item.date).map((item) => item.date),
+    [progressData]
+  )
 
-    // Calcular sequência (streak)
-    const dates = progressData.map((item) => item.date).sort().reverse()
+  const currentStreak = useMemo(() => {
+    if (!studyDates.length) return 0
+    const sorted = [...new Set(studyDates)]
+      .map((d) => dayjs(d))
+      .filter((d) => d.isValid())
+      .sort((a, b) => b.diff(a))
+    if (!sorted.length) return 0
     let streak = 0
-    let currentDateForStreak = dayjs().startOf('day')
-    
-    for (const dateStr of dates) {
-      const date = dayjs(dateStr)
-      if (date.isSame(currentDateForStreak, 'day')) {
+    let expected = dayjs().startOf('day')
+    if (!sorted[0].isSame(expected, 'day') && !sorted[0].isSame(expected.subtract(1, 'day'), 'day')) {
+      return 0
+    }
+    if (sorted[0].isSame(expected.subtract(1, 'day'), 'day')) expected = expected.subtract(1, 'day')
+    for (const d of sorted) {
+      if (d.isSame(expected, 'day')) {
         streak++
-        currentDateForStreak = currentDateForStreak.subtract(1, 'day')
-      } else if (date.isBefore(currentDateForStreak, 'day')) {
-        break
-      }
+        expected = expected.subtract(1, 'day')
+      } else if (d.isBefore(expected, 'day')) break
     }
+    return streak
+  }, [studyDates])
 
-    // Progresso por matéria
-    const bySubject = {}
-    allCards.forEach((card) => {
-      const materia = card.materia || 'Geral'
-      if (!bySubject[materia]) {
-        bySubject[materia] = { totalCards: 0, studiedCards: 0 }
+  const questoesPorMateria = useMemo(
+    () => byMateriaToChartData(questoesStats.byMateria),
+    [questoesStats.byMateria]
+  )
+
+  const handleMarkDay = async (dateStr) => {
+    if (!user || savingProgress) return
+    setSavingProgress(true)
+    try {
+      const courseKey = selectedCourseId || 'alego'
+      const progressDoc = doc(db, 'progress', `${user.uid}_${courseKey}_${dateStr}`)
+      const existing = await getDoc(progressDoc)
+      if (existing.exists()) {
+        await deleteDoc(progressDoc)
+      } else {
+        await setDoc(progressDoc, {
+          uid: user.uid,
+          date: dateStr,
+          hours: 0.1,
+          courseId: selectedCourseId || null,
+          lastUpdated: dayjs().format('HH:mm:ss'),
+        })
       }
-      bySubject[materia].totalCards++
-      if (cardProgress[card.id]?.reviewCount > 0) {
-        bySubject[materia].studiedCards++
-      }
-    })
+    } catch (err) {
+      console.error('Erro ao marcar dia:', err)
+    } finally {
+      setSavingProgress(false)
+    }
+  }
 
-    // Calcular porcentagem por matéria
-    Object.keys(bySubject).forEach((materia) => {
-      const stats = bySubject[materia]
-      stats.percentage = stats.totalCards > 0
-        ? Math.round((stats.studiedCards / stats.totalCards) * 100)
-        : 0
-    })
-
-    // Cards para revisar (próximos reviews)
+  const cardsToReviewCount = useMemo(() => {
     const now = dayjs()
-    const cardsToReview = allCards.filter((card) => {
+    return allCards.filter((card) => {
+      const cardCourseId = card.courseId || null
+      const currentCourseId = selectedCourseId || null
+      if (cardCourseId !== currentCourseId) return false
       const progress = cardProgress[card.id]
-      if (!progress || !progress.nextReview) return false
+      if (!progress?.nextReview) return true
       const nextReview = dayjs(progress.nextReview)
-      return nextReview.isBefore(now) || nextReview.isSame(now, 'day')
-    })
-
-    // Taxa de acerto (baseado em questoesStats - questões respondidas)
-    const totalQuestoes = questoesStats.correct + questoesStats.wrong
-    const accuracy = totalQuestoes > 0 
-      ? Math.round((questoesStats.correct / totalQuestoes) * 100) 
-      : 0
-
-    return {
-      totalDays,
-      totalHours: totalHours.toFixed(1),
-      studiedCards,
-      totalCards,
-      streak,
-      bySubject,
-      cardsToReview: cardsToReview.length,
-      accuracy,
-    }
-  }, [progressData, cardProgress, allCards, questoesStats, currentDate]) // Adicionar currentDate como dependência
-
-  // Cards para revisar (detalhado) - FILTRADO POR CURSO
-  const reviewCards = useMemo(() => {
-    const now = dayjs()
-    return allCards
-      .filter((card) => {
-        // Garantir que o card pertence ao curso selecionado
-        const cardCourseId = card.courseId || null
-        const currentCourseId = selectedCourseId || null
-        if (cardCourseId !== currentCourseId) return false
-        
-        const progress = cardProgress[card.id]
-        if (!progress || !progress.nextReview) return false
-        const nextReview = dayjs(progress.nextReview)
-        return nextReview.isBefore(now) || nextReview.isSame(now, 'day')
-      })
-      .slice(0, 5) // Limitar a 5 cards
+      return nextReview.isBefore(now) || nextReview.isSame(now)
+    }).length
   }, [allCards, cardProgress, selectedCourseId])
 
   if (loading) {
@@ -527,49 +524,13 @@ const Dashboard = () => {
     )
   }
 
-  const statCards = [
-    {
-      label: 'Sequência',
-      value: stats.streak,
-      suffix: 'dias',
-      icon: FireIcon,
-      accent: 'cp-card-accent-amber',
-      iconClass: 'text-cp-accent4 bg-cp-accent4/10 border-cp-accent4/20',
-    },
-    {
-      label: 'Horas estudadas',
-      value: stats.totalHours,
-      suffix: 'h',
-      icon: ClockIcon,
-      accent: 'cp-card-accent-cyan',
-      iconClass: 'text-cp-accent2 bg-cp-accent2/10 border-cp-accent2/20',
-    },
-    {
-      label: 'Flashcards',
-      value: `${stats.studiedCards}/${stats.totalCards}`,
-      suffix: '',
-      icon: BookOpenIcon,
-      accent: 'cp-card-accent-violet',
-      iconClass: 'text-cp-accent bg-cp-accent/10 border-cp-accent/20',
-    },
-    {
-      label: 'Taxa de acerto',
-      value: stats.accuracy,
-      suffix: '%',
-      icon: ChartBarIcon,
-      accent: 'cp-card-accent-pink',
-      iconClass: 'text-cp-accent3 bg-cp-accent3/10 border-cp-accent3/20',
-    },
-  ]
-
   const quickLinks = [
-    { to: '/flashcards', title: 'Flashcards com IA', desc: 'Estude com flashcards inteligentes', icon: SparklesIcon, accent: 'cp-card-accent-violet' },
+    { to: '/flashcards', title: 'Flashcards com IA', desc: 'Repetição espaçada por tópico', icon: SparklesIcon, accent: 'cp-card-accent-violet' },
     { to: '/edital-verticalizado', title: 'Edital Verticalizado', desc: 'Conteúdo organizado do edital', icon: DocumentTextIcon, accent: 'cp-card-accent-cyan' },
-    { to: '/calendario', title: 'Calendário de Progresso', desc: 'Acompanhe seu estudo', icon: CalendarIcon, accent: 'cp-card-accent-amber' },
     { to: '/guia-mentorado', title: 'Guia Mentorado', desc: 'Cronograma estratégico', icon: LightBulbIcon, accent: 'cp-card-accent-pink' },
     { to: '/vespera-de-prova', title: 'Véspera de Prova', desc: 'Revisão final antes da prova', icon: ClockIcon, accent: 'cp-card-accent-cyan' },
-    { to: '/treino-redacao', title: 'Treino de Redação', desc: 'Pratique escrevendo redações', icon: DocumentTextIcon, accent: 'cp-card-accent-violet' },
-    { to: '/feed', title: 'FlashSocial', desc: 'Compartilhe com a comunidade', icon: UsersIcon, accent: 'cp-card-accent-amber' },
+    { to: '/treino-redacao', title: 'Treino de Redação', desc: 'Pratique redações com IA', icon: DocumentTextIcon, accent: 'cp-card-accent-violet' },
+    { to: '/materia-revisada', title: 'Matéria Revisada', desc: 'Registro do que você revisou', icon: CheckCircleIcon, accent: 'cp-card-accent-amber' },
   ]
 
   return (
@@ -591,43 +552,69 @@ const Dashboard = () => {
               {courseName ? `Progresso em ${courseName}` : 'Acompanhe seu progresso preditivo'}
             </p>
           </div>
-          <Link to="/simulado" className="cp-btn-primary shrink-0 self-start sm:self-auto">
-            <TrophyIcon className="h-4 w-4" />
-            Fazer simulado
+          <Link to="/flashcards" className="cp-btn-primary shrink-0 self-start sm:self-auto">
+            <SparklesIcon className="h-4 w-4" />
+            Estudar flashcards
           </Link>
         </div>
       </motion.div>
 
-      {/* Stats */}
+      {/* Progresso — calendário + questões por matéria */}
       <motion.div
+        id="progresso"
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
-        className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4"
+        className="mb-8 space-y-6"
       >
-        {statCards.map((card) => {
-          const Icon = card.icon
-          return (
-            <div key={card.label} className={`cp-card p-4 sm:p-5 ${card.accent}`}>
-              <div className="mb-3 flex items-center justify-between">
-                <span className="font-mono text-[10px] text-cp-muted">{card.label}</span>
-                <div className={`flex h-8 w-8 items-center justify-center rounded-xl border ${card.iconClass}`}>
-                  <Icon className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <span className="cp-badge cp-badge-accent">Progresso</span>
+        </div>
+
+        <div className="cp-card overflow-hidden p-1 sm:p-2">
+          <ProgressCalendar
+            dates={studyDates}
+            streak={currentStreak}
+            bySubject={studyBySubject}
+            onMarkDay={handleMarkDay}
+          />
+        </div>
+
+        <div className="cp-card p-5 sm:p-6">
+          <h3 className="text-base font-medium text-cp-text sm:text-lg">Questões por matéria</h3>
+          <p className="mt-1 text-xs text-cp-muted sm:text-sm">
+            Dados reais das questões respondidas nos tópicos do edital
+          </p>
+          {questoesPorMateria.length > 0 ? (
+            <div className="mt-4 space-y-3">
+              {questoesPorMateria.map((m) => (
+                <div key={m.name} className="rounded-xl border border-cp-border bg-cp-bg/40 p-3 sm:p-4">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="truncate text-sm font-medium text-cp-text">{m.name}</span>
+                    <span className="font-mono text-xs text-cp-accent">{m.aproveitamento}%</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-cp-border">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-cp-accent to-cp-accent2"
+                      style={{ width: `${m.aproveitamento}%` }}
+                    />
+                  </div>
+                  <p className="mt-2 font-mono text-[10px] text-cp-muted">
+                    {m.acertos} acertos · {m.erros} erros · {m.value} questões
+                  </p>
                 </div>
-              </div>
-              <p className="text-2xl font-semibold tracking-tight text-cp-text sm:text-3xl">
-                {card.value}
-                {card.suffix && (
-                  <span className="ml-1 text-sm font-normal text-cp-muted">{card.suffix}</span>
-                )}
-              </p>
+              ))}
             </div>
-          )
-        })}
+          ) : (
+            <p className="mt-6 py-8 text-center text-sm text-cp-muted">
+              Responda questões nos tópicos do edital para ver seu progresso aqui.
+            </p>
+          )}
+        </div>
       </motion.div>
 
       {/* Revisão pendente */}
-      {stats.cardsToReview > 0 && (
+      {cardsToReviewCount > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -637,7 +624,7 @@ const Dashboard = () => {
           <div>
             <p className="font-mono text-xs text-cp-accent2">revisão pendente</p>
             <p className="mt-1 text-sm text-cp-text">
-              <strong>{stats.cardsToReview}</strong> flashcards aguardando revisão
+              <strong>{cardsToReviewCount}</strong> flashcards aguardando revisão
             </p>
           </div>
           <Link to="/flashcards" className="cp-btn-primary !py-2.5 !text-sm">
@@ -651,7 +638,7 @@ const Dashboard = () => {
         <InstallPWAButton />
       </div>
 
-      {/* Edital Verticalizado */}
+      {/* Edital Verticalizado — stats cards removidos acima */}
       {selectedCourseId && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}

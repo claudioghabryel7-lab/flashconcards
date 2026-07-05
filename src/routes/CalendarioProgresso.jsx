@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import ProgressCalendar from '../components/ProgressCalendar'
 import EditalProgressChart from '../components/EditalProgressChart'
+import { byMateriaToChartData } from '../utils/questoesStats'
 import dayjs from 'dayjs'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 
@@ -146,110 +147,55 @@ const CalendarioProgresso = () => {
     return () => unsubscribe()
   }, [user, profile])
 
-  // Carregar dados de desempenho de questões
+  // Carregar dados de desempenho de questões (questoesStats + desempenhoTopico)
   const loadQuestoesData = async (courseId) => {
     if (!user || !courseId) return
 
     try {
-      // Carregar desempenho por tópico
-      const desempenhoTopicoRef = collection(db, 'users', user.uid, 'desempenhoTopico')
-      const desempenhoTopicoSnapshot = await getDocs(desempenhoTopicoRef)
-      
-      // Carregar desempenho por incidência
-      const desempenhoIncidenciaRef = collection(db, 'users', user.uid, 'desempenhoIncidencia')
-      const desempenhoIncidenciaSnapshot = await getDocs(desempenhoIncidenciaRef)
+      const courseKey = courseId || 'alego'
+      const statsRef = doc(db, 'questoesStats', `${user.uid}_${courseKey}`)
+      const statsSnap = await getDoc(statsRef)
 
-      // Processar dados por matéria
-      const materiaStats = {}
-      
-      // Processar desempenho por tópico
-      desempenhoTopicoSnapshot.forEach((doc) => {
-        const data = doc.data()
-        const materia = data.topicKey || 'Geral'
-        
-        if (!materiaStats[materia]) {
-          materiaStats[materia] = {
-            totalQuestoes: 0,
-            acertos: 0,
-            erros: 0,
-            horasEstudo: 0,
-            nome: materia
-          }
-        }
-        
-        materiaStats[materia].totalQuestoes += data.totalQuestoes || 0
-        materiaStats[materia].acertos += data.acertos || 0
-        materiaStats[materia].erros += data.erros || 0
-      })
+      const byMateriaFromStats = statsSnap.exists() ? statsSnap.data().byMateria || {} : {}
+      let porMateria = byMateriaToChartData(byMateriaFromStats)
 
-      // Processar desempenho por incidência
-      desempenhoIncidenciaSnapshot.forEach((doc) => {
-        const data = doc.data()
-        // Extrair nome da disciplina do ID do documento
-        const materia = doc.id.split('_nivel_')[0] || 'Geral'
-        
-        if (!materiaStats[materia]) {
-          materiaStats[materia] = {
-            totalQuestoes: 0,
-            acertos: 0,
-            erros: 0,
-            horasEstudo: 0,
-            nome: materia
-          }
-        }
-        
-        materiaStats[materia].totalQuestoes += data.totalQuestoes || 0
-        materiaStats[materia].acertos += data.acertos || 0
-        materiaStats[materia].erros += data.erros || 0
-      })
+      // Complementar com desempenhoTopico agrupado por disciplina
+      if (porMateria.length === 0) {
+        const desempenhoTopicoRef = collection(db, 'users', user.uid, 'desempenhoTopico')
+        const desempenhoTopicoSnapshot = await getDocs(desempenhoTopicoRef)
+        const materiaStats = {}
 
-      // Adicionar horas de estudo por matéria (do progress collection)
-      const progressRef = collection(db, 'progress')
-      const progressSnapshot = await getDocs(query(progressRef, where('uid', '==', user.uid)))
-      
-      progressSnapshot.forEach((doc) => {
-        const data = doc.data()
-        if (data.materia && data.courseId === courseId) {
-          const materia = data.materia
+        desempenhoTopicoSnapshot.forEach((docSnap) => {
+          if (docSnap.id.includes('_nivel_')) return
+          const data = docSnap.data()
+          const materia = data.disciplina || data.materia || 'Geral'
           if (!materiaStats[materia]) {
-            materiaStats[materia] = {
-              totalQuestoes: 0,
-              acertos: 0,
-              erros: 0,
-              horasEstudo: 0,
-              nome: materia
-            }
+            materiaStats[materia] = { correct: 0, wrong: 0 }
           }
-          materiaStats[materia].horasEstudo += data.hours || 0
-        }
-      })
+          materiaStats[materia].correct += data.acertos || 0
+          materiaStats[materia].wrong += data.erros || 0
+        })
 
-      // Converter para array e calcular métricas
-      const materiaArray = Object.values(materiaStats)
-      
-      // Calcular métricas
-      const metricas = {
-        maisEstuda: [...materiaArray].sort((a, b) => b.horasEstudo - a.horasEstudo).slice(0, 5),
-        menosEstuda: [...materiaArray].filter(m => m.horasEstudo > 0).sort((a, b) => a.horasEstudo - b.horasEstudo).slice(0, 5),
-        maisResolveu: [...materiaArray].sort((a, b) => b.totalQuestoes - a.totalQuestoes).slice(0, 5),
-        menosResolveu: [...materiaArray].filter(m => m.totalQuestoes > 0).sort((a, b) => a.totalQuestoes - b.totalQuestoes).slice(0, 5),
-        maisErrou: [...materiaArray].sort((a, b) => b.erros - a.erros).slice(0, 5),
-        menosErrou: [...materiaArray].filter(m => m.totalQuestoes > 0).sort((a, b) => (a.erros / a.totalQuestoes) - (b.erros / b.totalQuestoes)).slice(0, 5)
+        porMateria = byMateriaToChartData(materiaStats)
       }
-
-      // Preparar dados para gráfico de pizza por matéria
-      const porMateria = materiaArray.map(m => ({
-        name: m.nome,
-        value: m.totalQuestoes,
-        acertos: m.acertos,
-        erros: m.erros,
-        horas: m.horasEstudo
-      })).filter(m => m.value > 0).sort((a, b) => b.value - a.value)
 
       setQuestoesData({
         porMateria,
         porTopico: [],
-        metricas
+        metricas: {
+          maisEstuda: [],
+          menosEstuda: [],
+          maisResolveu: porMateria.slice(0, 5).map((m) => ({
+            nome: m.name,
+            totalQuestoes: m.value,
+          })),
+          menosResolveu: [],
+          maisErrou: [...porMateria].sort((a, b) => b.erros - a.erros).slice(0, 5).map((m) => ({
+            nome: m.name,
+            erros: m.erros,
+          })),
+          menosErrou: [],
+        },
       })
     } catch (error) {
       console.error('Erro ao carregar dados de questões:', error)

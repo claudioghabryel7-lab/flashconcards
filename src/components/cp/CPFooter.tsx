@@ -25,7 +25,6 @@ export default function CPFooter({ fullBleed = false }: CPFooterProps) {
             <ul className="space-y-2.5 text-cp-muted">
               <li><Link href="/dashboard" className="transition hover:text-cp-text">Dashboard</Link></li>
               <li><Link href="/flashcards" className="transition hover:text-cp-text">Flashcards</Link></li>
-              <li><Link href="/flashquestoes" className="transition hover:text-cp-text">Questões</Link></li>
               <li><Link href="/edital-verticalizado" className="transition hover:text-cp-text">Edital</Link></li>
             </ul>
           </div>

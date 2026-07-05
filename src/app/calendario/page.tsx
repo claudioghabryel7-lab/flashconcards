@@ -1,13 +1,13 @@
 'use client'
 
-import LegacyPage from '@/components/next/LegacyPage'
-import CalendarioPageComponent from '@/routes/CalendarioProgresso'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
+/** Calendário integrado ao Dashboard — redireciona para #progresso */
 export default function CalendarioPage() {
-  return (
-    <LegacyPage
-      component={CalendarioPageComponent}
-      requireCourseSelection
-    />
-  )
+  const router = useRouter()
+  useEffect(() => {
+    router.replace('/dashboard#progresso')
+  }, [router])
+  return null
 }

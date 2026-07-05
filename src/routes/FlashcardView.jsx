@@ -17,7 +17,7 @@ import { useStudyTimer } from '../hooks/useStudyTimer'
 import { useStudySession } from '../hooks/useStudySession'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder, applyModuleOrder, getModuleOrder } from '../utils/subjectOrder'
-import { FolderIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon, LockClosedIcon } from '@heroicons/react/24/outline'
+import { FolderIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon, LockClosedIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { canAccessMateria, canAccessModulo, isTrialMode } from '../utils/trialLimits'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import {
@@ -26,6 +26,10 @@ import {
   rateExplanationCache,
 } from '../utils/cache'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
+import {
+  calculateNextReview,
+  isCardDue,
+} from '../utils/spacedRepetition'
 
 const MATERIAS = [
   'Português',
@@ -119,6 +123,8 @@ const FlashcardView = () => {
   } = useEditalFlashcards(selectedCourseId, user, profile)
   const [generatingFlashcards, setGeneratingFlashcards] = useState(false) // Estado para loading de geração
   const [selectedDifficulty, setSelectedDifficulty] = useState('') // Dificuldade selecionada para geração
+  const [sidebarSearch, setSidebarSearch] = useState('')
+  const [srsNow, setSrsNow] = useState(() => dayjs())
   
   // Hook de rastreamento de sessão de estudo
   const { sessionActive, sessionStartTime, resetInactivityTimeout } = useStudySession(
@@ -513,17 +519,28 @@ const FlashcardView = () => {
     return () => clearTimeout(retryTimeout)
   }, [cards.length, organizedCards, searchParams, selectedMateria, selectedModulo])
 
-  // Cards filtrados baseado na seleção - SIMPLIFICADO SEM SRS
+  // Cards do módulo — SRS: só exibe cards novos ou com revisão vencida
+  const moduleAllCards = useMemo(() => {
+    if (!selectedMateria || !selectedModulo) return []
+    return organizedCards[selectedMateria]?.[selectedModulo] || []
+  }, [selectedMateria, selectedModulo, organizedCards])
+
   const filteredCards = useMemo(() => {
-    if (!selectedMateria || !selectedModulo || studyMode === 'miniSim') {
-      return []
-    }
-    
-    // Mostrar TODOS os cards - SEM FILTRO SRS
-    const allCards = organizedCards[selectedMateria]?.[selectedModulo] || []
-    console.log('🔍 Total de cards no módulo:', allCards.length)
-    return allCards
-  }, [selectedMateria, selectedModulo, organizedCards, studyMode])
+    if (studyMode === 'miniSim' || !selectedMateria || !selectedModulo) return []
+    return moduleAllCards.filter((card) => isCardDue(cardProgress[card.id], srsNow))
+  }, [selectedMateria, selectedModulo, moduleAllCards, cardProgress, studyMode, srsNow])
+
+  const moduleStats = useMemo(() => {
+    const total = moduleAllCards.length
+    const due = moduleAllCards.filter((c) => isCardDue(cardProgress[c.id], srsNow)).length
+    const nextDue = moduleAllCards
+      .map((c) => cardProgress[c.id]?.nextReview)
+      .filter(Boolean)
+      .map((d) => dayjs(d))
+      .filter((d) => d.isValid() && d.isAfter(srsNow))
+      .sort((a, b) => a.diff(b))[0]
+    return { total, due, nextDue }
+  }, [moduleAllCards, cardProgress, srsNow])
 
   const activeCards = studyMode === 'miniSim' ? miniSimCards : filteredCards
 
@@ -534,96 +551,18 @@ const FlashcardView = () => {
     setTimerActive(false)
   }, [selectedMateria, selectedModulo, studyMode])
 
-  // Sistema SRS Simples - Verificação a cada 30 segundos
+  // Atualizar fila SRS periodicamente (cards difíceis voltam em ~1 min)
   useEffect(() => {
     if (!user || studyMode === 'miniSim') return
-
-    // Log removido para performance
-    // console.log('🔍 Iniciando SRS Simples - Verificação a cada 30 segundos')
-    
-    const interval = setInterval(() => {
-      // Verificação SRS silenciosa para performance
-      const dummy = new Date()
-      // Logs removidos: console.log(`🔍 Verificação SRS - ${now.format('HH:mm:ss')}`)
-      // console.log(`🔄 SRS: Verificando cards para reaparecerem...`)
-    }, 30000) // 30 segundos - mais estável
-
+    const interval = setInterval(() => setSrsNow(dayjs()), 15000)
     return () => clearInterval(interval)
-  }, [user, studyMode, selectedMateria, selectedModulo, organizedCards, cardProgress])
-
-  // Sistema SRS Simples - Cards nunca somem de forma inesperada
+  }, [user, studyMode])
 
   const checkModuleCompletion = (ratingsSnapshot) => {
     if (studyMode === 'miniSim') return false
     if (!selectedMateria || !selectedModulo) return false
     if (activeCards.length === 0) return false
     return activeCards.every((card) => ratingsSnapshot[card.id] === 'easy')
-  }
-
-  // Calcular próxima revisão - SRS SIMPLES E FUNCIONAL
-  const calculateNextReview = (currentProgress, difficulty) => {
-    const now = dayjs()
-    
-    // Se é a primeira vez vendo o card
-    if (!currentProgress || !currentProgress.nextReview) {
-      const nextReview = now.add(1, 'minute')
-      // Log removido para performance
-      // console.log(`📝 Novo card - Próxima revisão: ${nextReview.format('HH:mm:ss')}`)
-      return {
-        easeFactor: 2.5,
-        intervalMinutes: 1,
-        nextReview: nextReview.toISOString(),
-        reviewCount: 1,
-        consecutiveCorrect: 1
-      }
-    }
-
-    // Calcular nova revisão baseado na dificuldade
-    let newInterval = 1
-    let newStatus = 'hard'
-    
-    if (difficulty === 'hard') {
-      // Difícil: 1 minuto
-      newInterval = 1
-      newStatus = 'hard'
-      const nextReview = now.add(newInterval, 'minute')
-      // Log removido para performance
-      // console.log(`📊 Card marcado como DIFÍCIL - Próxima revisão: ${nextReview.format('HH:mm:ss')}`)
-      return {
-        easeFactor: 2.5,
-        intervalMinutes: newInterval,
-        nextReview: nextReview.toISOString(),
-        reviewCount: (currentProgress.reviewCount || 0) + 1,
-        consecutiveCorrect: 0,
-        lastDifficulty: difficulty
-      }
-    } else if (difficulty === 'easy') {
-      // Fácil: 15 minutos
-      newInterval = 15
-      newStatus = 'easy'
-      const nextReview = now.add(newInterval, 'minute')
-      // Log removido para performance
-      // console.log(`📊 Card marcado como FÁCIL - Próxima revisão: ${nextReview.format('HH:mm:ss')}`)
-      return {
-        easeFactor: 2.5,
-        intervalMinutes: newInterval,
-        nextReview: nextReview.toISOString(),
-        reviewCount: (currentProgress.reviewCount || 0) + 1,
-        consecutiveCorrect: (currentProgress.consecutiveCorrect || 0) + 1,
-        lastDifficulty: difficulty
-      }
-    }
-
-    // Padrão: 1 minuto
-    const nextReview = now.add(1, 'minute')
-    return {
-      easeFactor: 2.5,
-      intervalMinutes: 1,
-      nextReview: nextReview.toISOString(),
-      reviewCount: (currentProgress.reviewCount || 0) + 1,
-      consecutiveCorrect: 0,
-      lastDifficulty: 'hard'
-    }
   }
 
   const toggleMateria = (materia) => {
@@ -735,17 +674,14 @@ const FlashcardView = () => {
   // Avaliar dificuldade - Sistema Noji/Anki simplificado
   const rateDifficulty = async (cardId, difficulty) => {
     if (!user) return
-    
+
     const now = dayjs()
     const currentProgress = cardProgress[cardId] || {}
-    
-    // Calcular nova revisão usando algoritmo estilo Noji
-    const newProgressData = calculateNextReview(currentProgress, difficulty)
-    
+    const newProgressData = calculateNextReview(currentProgress, difficulty, now)
+
     const newProgress = {
       ...currentProgress,
       ...newProgressData,
-      lastDifficulty: difficulty,
       lastReviewed: now.toISOString(),
     }
     
@@ -766,6 +702,7 @@ const FlashcardView = () => {
 
     // Atualizar estado local
     setCardProgress(currentCardProgress)
+    setSrsNow(dayjs())
 
     setSessionRatings((prevRatings) => {
       const updated = { ...prevRatings, [cardId]: difficulty }
@@ -1317,150 +1254,160 @@ IMPORTANTE:
         </div>
       )}
 
-      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
-        {/* Árvore de Pastas - Design Tecnológico */}
-        <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6">
-          {/* Background decorativo */}
-          <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
-          
-          <div className="relative">
-            <div className="flex items-center gap-3 mb-5">
-              <FolderIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              <p className="text-sm font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
-                Edital Verticalizado
-              </p>
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Painel de matérias — estilo Edital */}
+        <div className="cp-card flex flex-col overflow-hidden lg:max-h-[calc(100vh-12rem)]">
+          <div className="border-b border-cp-border p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="cp-badge cp-badge-accent !text-[10px]">Edital</span>
+              <p className="text-sm font-medium text-cp-text">Matérias e tópicos</p>
             </div>
-          <div className="space-y-2">
-            {/* Não renderizar enquanto está carregando para evitar flash */}
+            <div className="relative">
+              <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cp-muted" />
+              <input
+                type="search"
+                value={sidebarSearch}
+                onChange={(e) => setSidebarSearch(e.target.value)}
+                placeholder="Buscar matéria ou tópico..."
+                className="w-full rounded-xl border border-cp-border bg-cp-bg/60 py-2 pl-9 pr-3 text-sm text-cp-text placeholder:text-cp-muted focus:border-cp-accent/40 focus:outline-none focus:ring-1 focus:ring-cp-accent/25"
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 space-y-2 overflow-y-auto p-3">
             {cardsLoading ? (
-              <div className="text-center py-8">
-                <p className="text-sm text-slate-500 dark:text-slate-400">Carregando...</p>
-              </div>
+              <p className="py-8 text-center font-mono text-xs text-cp-muted">Carregando...</p>
             ) : (
-              <>
-            {/* Usar matérias dos flashcards organizados com ordem personalizada */}
-            {(() => {
-              const orderedSubjects = applySubjectOrder(organizedCards, subjectOrderConfig)
-              return orderedSubjects.map((materia) => {
-              const modulos = organizedCards[materia] ? Object.keys(organizedCards[materia]) : []
-              const isExpanded = expandedMaterias[materia]
-              const isSelected = selectedMateria === materia
-              
-              if (modulos.length === 0 && !hasEdital) return null
-              
-              return (
-                <div key={materia} className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleMateria(materia)}
-                    className={`group relative flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-bold transition-all overflow-hidden ${
-                      isSelected
-                        ? 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30 dark:border-blue-400/30'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50/50 dark:hover:bg-slate-700/50 border border-slate-200/50 dark:border-slate-700/50'
-                    }`}
-                  >
-                    {/* Background hover */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    
-                    <div className={`relative flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-transform duration-300 ${
-                      isExpanded ? 'rotate-90' : ''
-                    } ${isSelected ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'}`}>
-                      <ChevronRightIcon className="h-4 w-4" />
-                    </div>
-                    <FolderIcon className={`h-5 w-5 flex-shrink-0 ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`} />
-                    <span className="flex-1 font-semibold">{materia}</span>
-                    <span className={`rounded-full px-3 py-1 text-xs font-black ${
-                      isSelected
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
-                    }`}>
-                      {modulos.length}
-                    </span>
-                  </button>
-                  
-                  {isExpanded && (
-                    <div className="ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-700 space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                      {(() => {
-                        // Usar ordem de módulos carregada
-                        const moduleOrderConfig = moduleOrderConfigs[materia] || { order: null, source: 'default', isCustom: false }
-                        const orderedModules = applyModuleOrder(modulos, moduleOrderConfig)
-                        return orderedModules.map((modulo) => {
-                        const cardsInModulo = organizedCards[materia][modulo] || []
-                        const isModuloSelected =
-                          studyMode === 'module' &&
-                          selectedMateria === materia &&
-                          selectedModulo === modulo
-                        const canAccessMod = !isTrialMode() || canAccessModulo(materia, modulo)
-                        
-                        return (
-                          <button
-                            key={modulo}
-                            type="button"
-                            onClick={() => selectModulo(materia, modulo)}
-                            disabled={!canAccessMod && !isModuloSelected}
-                            className={`group/module relative flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-semibold transition-all ${
-                              !canAccessMod && !isModuloSelected
-                                ? 'opacity-50 cursor-not-allowed'
-                                : isModuloSelected
-                                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-                                : 'text-slate-600 dark:text-slate-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 border border-transparent hover:border-blue-500/30'
-                            }`}
-                          >
-                            <span className="relative z-10">{modulo}</span>
-                            <span className={`relative z-10 rounded-full px-2 py-0.5 text-xs font-bold ${
-                              isModuloSelected
-                                ? 'bg-white/20 text-white'
-                                : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                            }`}>
-                              {cardsInModulo.length}
-                            </span>
-                            {isModuloSelected && (
-                              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-white/10 to-purple-500/0 animate-shimmer-slide"></div>
-                            )}
-                          </button>
-                        )
-                      })})()}
+              applySubjectOrder(organizedCards, subjectOrderConfig)
+                .filter((materia) => {
+                  if (!sidebarSearch.trim()) return true
+                  const q = sidebarSearch.trim().toLowerCase()
+                  if (materia.toLowerCase().includes(q)) return true
+                  const modulos = organizedCards[materia] ? Object.keys(organizedCards[materia]) : []
+                  return modulos.some((m) => m.toLowerCase().includes(q))
+                })
+                .map((materia) => {
+                  const modulos = organizedCards[materia] ? Object.keys(organizedCards[materia]) : []
+                  const isExpanded = expandedMaterias[materia]
+                  const isSelected = selectedMateria === materia
+                  const q = sidebarSearch.trim().toLowerCase()
+                  const filteredModulos = q
+                    ? modulos.filter(
+                        (m) => m.toLowerCase().includes(q) || materia.toLowerCase().includes(q)
+                      )
+                    : modulos
+
+                  if (modulos.length === 0 && !hasEdital) return null
+
+                  return (
+                    <div key={materia} className="overflow-hidden rounded-xl border border-cp-border bg-cp-bg/30">
                       <button
                         type="button"
-                        onClick={() => startMiniSim(materia)}
-                        className="group/btn relative w-full rounded-lg border-2 border-dashed border-blue-400 dark:border-blue-500 px-3 py-2 text-left text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-all overflow-hidden"
+                        onClick={() => toggleMateria(materia)}
+                        className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition ${
+                          isSelected ? 'bg-cp-accent/10 text-cp-accent' : 'text-cp-text hover:bg-cp-surface/60'
+                        }`}
                       >
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/5 to-purple-500/0 opacity-0 group-hover/btn:opacity-100 transition-opacity"></div>
-                        <span className="relative z-10 flex items-center gap-2">
-                          <span>⚡</span>
-                          <span>Mini simulado (10 cards)</span>
-                        </span>
+                        {isExpanded ? (
+                          <ChevronDownIcon className="h-4 w-4 shrink-0 text-cp-muted" />
+                        ) : (
+                          <ChevronRightIcon className="h-4 w-4 shrink-0 text-cp-muted" />
+                        )}
+                        <FolderIcon className="h-4 w-4 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate font-medium">{materia}</span>
+                        <span className="font-mono text-[10px] text-cp-muted">{modulos.length}</span>
                       </button>
+
+                      {isExpanded && (
+                        <div className="space-y-1 border-t border-cp-border/60 px-2 py-2">
+                          {(() => {
+                            const moduleOrderConfig = moduleOrderConfigs[materia] || {
+                              order: null,
+                              source: 'default',
+                              isCustom: false,
+                            }
+                            const orderedModules = applyModuleOrder(filteredModulos, moduleOrderConfig)
+                            return orderedModules.map((modulo) => {
+                              const cardsInModulo = organizedCards[materia][modulo] || []
+                              const dueInModulo = cardsInModulo.filter((c) =>
+                                isCardDue(cardProgress[c.id], srsNow)
+                              ).length
+                              const isModuloSelected =
+                                studyMode === 'module' &&
+                                selectedMateria === materia &&
+                                selectedModulo === modulo
+                              const canAccessMod =
+                                !isTrialMode() || canAccessModulo(materia, modulo)
+
+                              return (
+                                <button
+                                  key={modulo}
+                                  type="button"
+                                  onClick={() => selectModulo(materia, modulo)}
+                                  disabled={!canAccessMod && !isModuloSelected}
+                                  className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition ${
+                                    !canAccessMod && !isModuloSelected
+                                      ? 'cursor-not-allowed opacity-40'
+                                      : isModuloSelected
+                                        ? 'bg-cp-accent text-white'
+                                        : 'text-cp-muted hover:bg-cp-surface/80 hover:text-cp-text'
+                                  }`}
+                                >
+                                  <span className="mr-2 min-w-0 flex-1 truncate">{modulo}</span>
+                                  <span
+                                    className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] ${
+                                      isModuloSelected
+                                        ? 'bg-white/20'
+                                        : dueInModulo > 0
+                                          ? 'bg-cp-accent2/15 text-cp-accent2'
+                                          : 'bg-cp-surface text-cp-muted'
+                                    }`}
+                                  >
+                                    {dueInModulo}/{cardsInModulo.length}
+                                  </span>
+                                </button>
+                              )
+                            })
+                          })()}
+                          <button
+                            type="button"
+                            onClick={() => startMiniSim(materia)}
+                            className="w-full rounded-lg border border-dashed border-cp-accent/30 px-2.5 py-2 text-left text-[11px] font-medium text-cp-accent transition hover:bg-cp-accent/10"
+                          >
+                            ⚡ Mini simulado (10 cards)
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              )
-            })})()}
-              </>
+                  )
+                })
             )}
-          </div>
           </div>
         </div>
 
-        {/* Área de Estudo - Design Tecnológico */}
+        {/* Área de estudo */}
         <div className="lg:col-span-2">
           {!selectedMateria || !selectedModulo ? (
-            <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-12 text-center">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-purple-500/5 to-cyan-500/5"></div>
-              <div className="relative">
-                <div className="inline-block mb-4 text-6xl animate-bounce">📚</div>
-                <p className="text-xl font-black bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent mb-2">
-                  Selecione uma matéria e módulo para começar
-                </p>
-                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
-                  Navegue pela estrutura ao lado e escolha o conteúdo que deseja estudar
-                </p>
-              </div>
+            <div className="cp-card p-12 text-center">
+              <p className="text-4xl mb-4">📚</p>
+              <p className="text-lg font-medium text-cp-text">Selecione um tópico</p>
+              <p className="mt-2 text-sm text-cp-muted">
+                Expanda uma matéria na lista e escolha o módulo para estudar
+              </p>
             </div>
           ) : activeCards.length === 0 ? (
-            <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8 text-center">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-purple-500/5 to-cyan-500/5"></div>
-              <p className="relative text-slate-600 dark:text-slate-400 font-semibold">Nenhum card encontrado neste módulo.</p>
+            <div className="cp-card p-8 text-center">
+              <p className="text-sm font-medium text-cp-text">Nenhum card para revisar agora</p>
+              <p className="mt-2 text-xs text-cp-muted">
+                {moduleStats.total > 0
+                  ? moduleStats.due === 0 && moduleStats.nextDue
+                    ? `Próxima revisão: ${moduleStats.nextDue.format('DD/MM HH:mm')}`
+                    : `${moduleStats.total} cards neste módulo · SRS ativo`
+                  : 'Este módulo ainda não tem flashcards.'}
+              </p>
+              <p className="mt-3 font-mono text-[10px] text-cp-muted">
+                Difícil → 1 min · Fácil → intervalos progressivos (15m → 1h → 6h → 1d…)
+              </p>
             </div>
           ) : (
             <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 dark:from-slate-900 dark:via-blue-900/20 dark:to-purple-900/20 overflow-hidden">

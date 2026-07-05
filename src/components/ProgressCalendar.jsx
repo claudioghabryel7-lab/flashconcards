@@ -79,7 +79,7 @@ const ProgressCalendar = ({ dates = [], streak = 0, bySubject = {}, onMarkDay = 
           <CalendarIcon className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 dark:text-blue-400" />
           <div>
             <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-              Calendário de Progresso
+              Progresso
             </h3>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
               {today.format('MMM/YYYY').replace(/^\w/, (c) => c.toUpperCase())} · 28 dias
