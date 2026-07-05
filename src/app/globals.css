@@ -26,7 +26,7 @@
   --cp-aurora-3: rgba(219, 39, 119, 0.08);
   --cp-grid-dot: rgba(124, 58, 237, 0.12);
   --cp-grid-line: rgba(124, 58, 237, 0.06);
-  --cp-watermark-opacity: 0.07;
+  --cp-watermark-opacity: 0.09;
   --font-display: 'Syne', var(--font-geist-sans), system-ui, sans-serif;
   --font-sans: var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
@@ -52,7 +52,7 @@
   --cp-aurora-3: rgba(244, 114, 182, 0.08);
   --cp-grid-dot: rgba(255, 255, 255, 0.08);
   --cp-grid-line: rgba(255, 255, 255, 0.03);
-  --cp-watermark-opacity: 0.1;
+  --cp-watermark-opacity: 0.12;
 }
 
 * {
@@ -110,20 +110,19 @@ body {
 }
 
 .cp-card {
-  background: var(--cp-surface);
+  background: var(--cp-bg-elevated);
   border: 1px solid var(--cp-border);
   border-radius: 16px;
-  backdrop-filter: blur(12px);
-  transition: border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .cp-card:hover {
   border-color: var(--cp-border-hover);
-  box-shadow: 0 0 0 1px var(--cp-glow), 0 20px 40px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 0 0 1px var(--cp-glow), 0 12px 24px rgba(0, 0, 0, 0.08);
 }
 
 .dark .cp-card:hover {
-  box-shadow: 0 0 0 1px var(--cp-glow), 0 20px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 1px var(--cp-glow), 0 12px 24px rgba(0, 0, 0, 0.25);
 }
 
 .cp-card-accent-violet { border-top: 2px solid var(--cp-accent); }
@@ -215,6 +214,12 @@ body {
   0%, 100% { opacity: 0.5; transform: translate(0, 0) scale(1); }
   33% { opacity: 0.8; transform: translate(2%, -2%) scale(1.05); }
   66% { opacity: 0.6; transform: translate(-2%, 1%) scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-aurora {
+    animation: none !important;
+  }
 }
 
 .cp-aurora {

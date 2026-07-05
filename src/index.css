@@ -1379,8 +1379,35 @@ img[loading="lazy"] {
   min-height: 320px;
 }
 
+.noji-flip-container {
+  perspective: 1400px;
+}
+
+.noji-flip-inner {
+  position: relative;
+  width: 100%;
+  min-height: 320px;
+  transform-style: preserve-3d;
+  transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.noji-flip-container.is-flipped .noji-flip-inner {
+  transform: rotateY(180deg);
+}
+
+.noji-flip-front,
+.noji-flip-back {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.noji-flip-back {
+  transform: rotateY(180deg);
+}
+
 @media (min-width: 640px) {
-  .noji-card {
+  .noji-card,
+  .noji-flip-inner {
     min-height: 360px;
   }
 }

@@ -7,7 +7,6 @@ import {
 } from '@heroicons/react/24/solid'
 import { ArrowRightIcon as ArrowRightOutline, DocumentTextIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
-import { motion } from 'framer-motion'
 import LGPDConsent from '../components/LGPDConsent'
 
 const quickLinks = [
@@ -24,24 +23,15 @@ const Dashboard = () => {
 
   return (
     <div className="pb-10">
-      <motion.div
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="mb-8"
-      >
+      <div className="mb-8 animate-fade-in">
         <span className="cp-badge cp-badge-accent">Dashboard</span>
         <h1 className="cp-headline mt-4 text-3xl sm:text-4xl">
           Olá, <span className="cp-gradient-text">{user?.displayName?.split(' ')[0] || 'estudante'}</span>
         </h1>
         <p className="mt-2 text-cp-muted">Acesso rápido às ferramentas de estudo</p>
-      </motion.div>
+      </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-      >
+      <div className="animate-fade-in">
         <div className="mb-4 flex items-center gap-2">
           <span className="cp-badge">Acesso rápido</span>
         </div>
@@ -64,7 +54,7 @@ const Dashboard = () => {
             )
           })}
         </div>
-      </motion.div>
+      </div>
 
       <LGPDConsent />
     </div>

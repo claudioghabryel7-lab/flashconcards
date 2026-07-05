@@ -31,7 +31,6 @@ const FlashcardList = ({
   onShuffle,
   viewedIds,
   showRating = false,
-  onExplainCard = null,
   onDeleteFlashcard = null,
   onEditFlashcard = null,
   deckTitle = '',
@@ -182,7 +181,6 @@ const FlashcardList = ({
           onRateDifficulty={onRateDifficulty}
           showRating={showRating}
           cardProgress={cardProgress[currentCard.id] || null}
-          onExplainCard={onExplainCard}
           onDeleteFlashcard={onDeleteFlashcard}
           onEditFlashcard={onEditFlashcard}
           cardColor={cardColor}

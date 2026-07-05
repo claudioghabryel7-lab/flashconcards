@@ -21,11 +21,6 @@ import { applySubjectOrder, applyModuleOrder, getModuleOrder } from '../utils/su
 import { ChevronRightIcon, ChevronDownIcon, ClockIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { canAccessMateria, canAccessModulo, isTrialMode } from '../utils/trialLimits'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
-import {
-  getOrCreateExplanationCache,
-  saveExplanationCache,
-  rateExplanationCache,
-} from '../utils/cache'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import {
   calculateNextReview,
@@ -104,13 +99,6 @@ const FlashcardView = () => {
   const [moduleCompleted, setModuleCompleted] = useState(false)
   const [studyMode, setStudyMode] = useState('module')
   const [miniSimCards, setMiniSimCards] = useState([])
-  const [explanationModal, setExplanationModal] = useState({
-    open: false,
-    loading: false,
-    text: '',
-    error: null,
-    card: null,
-  })
   const [editalPrompt, setEditalPrompt] = useState('')
   const [selectedCourseId, setSelectedCourseId] = useState(null) // Curso selecionado (null = ALEGO padrão)
   const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
@@ -760,178 +748,6 @@ const FlashcardView = () => {
   const currentCard = activeCards[currentIndex]
   const needsReview = true // Sempre mostra os botões de avaliação
 
-  // Chamar Groq API como fallback
-  const callGroqAPI = async (prompt) => {
-    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-    if (!groqApiKey) {
-      throw new Error('GROQ_API_KEY não configurada')
-    }
-
-    try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${groqApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 400,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error?.message || `Groq API error: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return data.choices[0]?.message?.content || 'Desculpe, não consegui gerar uma explicação.'
-    } catch (err) {
-      console.error('Erro ao chamar Groq API:', err)
-      throw err
-    }
-  }
-
-  const generateCardExplanation = async (card) => {
-    // 🔥 NOVO: VERIFICAR CACHE PRIMEIRO
-    // Log removido para limpar console
-    const cachedExplanation = await getOrCreateExplanationCache(card.id)
-    
-    if (cachedExplanation && cachedExplanation.text) {
-      // Log removido para limpar console
-      return cachedExplanation.text // Retornar explicação do cache
-    }
-
-    // Log removido para limpar console
-
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
-      throw new Error('API do Gemini não configurada.')
-    }
-
-    // Buscar prompt do curso correto do flashcard
-    let courseEditalPrompt = ''
-    try {
-      const cardCourseId = card.courseId || selectedCourseId || 'alego-default'
-      const promptRef = doc(db, 'courses', cardCourseId, 'prompts', 'edital')
-      const promptDoc = await getDoc(promptRef)
-      
-      if (promptDoc.exists()) {
-        const data = promptDoc.data()
-        let combinedText = ''
-        if (data.prompt || data.content) {
-          combinedText += data.prompt || data.content || ''
-        }
-        if (data.pdfText) {
-          if (combinedText) combinedText += '\n\n'
-          const totalLength = data.pdfText.length
-          let limitedPdfText = ''
-          if (totalLength <= 20000) {
-            limitedPdfText = data.pdfText
-          } else {
-            const inicio = data.pdfText.substring(0, 15000)
-            const fim = data.pdfText.substring(totalLength - 5000)
-            limitedPdfText = `${inicio}\n\n[... conteúdo intermediário omitido ...]\n\n${fim}`
-          }
-          combinedText += `CONTEÚDO DO PDF DO EDITAL:\n${limitedPdfText}`
-        }
-        courseEditalPrompt = combinedText
-      }
-    } catch (err) {
-      // Log removido para limpar console
-      // Usar editalPrompt como fallback se houver
-      courseEditalPrompt = editalPrompt || ''
-    }
-
-    const preferredModel = readEnv('VITE_GEMINI_MODEL') || 'gemini-2.5-flash'
-    const fallbackModels = ['gemini-2.5-pro-latest', 'gemini-2.5-pro', 'gemini-2.5-pro']
-    const candidates = [preferredModel, ...fallbackModels].filter(
-      (value, idx, arr) => value && arr.indexOf(value) === idx,
-    )
-
-    const prompt = `
-Explique o conteúdo deste flashcard de forma clara, prática e em até 5 parágrafos curtos.
-
-Matéria: ${card.materia || 'Não informado'}
-Módulo: ${card.modulo || 'Não informado'}
-Pergunta do flashcard: "${card.pergunta}"
-Resposta correta: "${card.resposta}"
-
-${courseEditalPrompt ? `Contexto do concurso:\n${courseEditalPrompt}` : ''}
-
-Regras:
-- Seja didático, direto e motivador.
-- Traga exemplos simples quando fizer sentido.
-- Foque no entendimento do conceito, não apenas repetir a resposta.
-
-🚨 TRAVAS DE SEGURANÇA JURÍDICA:
-- Use apenas leis e jurisprudência atualizadas (incluindo inovações legislativas de 2025 e 2026)
-- Não cite dispositivos não-recepcionados pela CF/88
-- Verifique jurisprudência atualizada do STF/STJ
-- DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`.trim()
-
-    try {
-      const response = await callGeminiWithRetry(prompt, {
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 300,
-        }
-      })
-      const explanationText = extractGeneratedText(response)
-      
-      // 🔥 NOVO: SALVAR NO CACHE
-      await saveExplanationCache(card.id, explanationText)
-      
-      return explanationText
-    } catch (err) {
-      console.error('Erro ao gerar explicação:', err)
-      throw err
-    }
-  }
-
-  const handleExplainCard = async (card) => {
-    setExplanationModal({
-      open: true,
-      loading: true,
-      text: '',
-      error: null,
-      card,
-    })
-
-    try {
-      const explanation = await generateCardExplanation(card)
-      setExplanationModal((prev) => ({
-        ...prev,
-        loading: false,
-        text: explanation,
-      }))
-    } catch (err) {
-      setExplanationModal((prev) => ({
-        ...prev,
-        loading: false,
-        error: err.message || 'Erro ao gerar explicação.',
-      }))
-    }
-  }
-
-  const closeExplanationModal = () => {
-    setExplanationModal({
-      open: false,
-      loading: false,
-      text: '',
-      error: null,
-      card: null,
-    })
-  }
-
   // Função para gerar 10 flashcards por IA
   const generateFlashcardsByDifficulty = async (difficulty) => {
     if (!selectedMateria || !selectedModulo) {
@@ -1495,7 +1311,6 @@ IMPORTANTE:
                   onShuffle={shuffle}
                   viewedIds={viewedIds}
                   showRating={needsReview}
-                  onExplainCard={handleExplainCard}
                   onDeleteFlashcard={handleDeleteFlashcard}
                 />
               </div>
@@ -1543,75 +1358,6 @@ IMPORTANTE:
         </div>
       )}
 
-      {explanationModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="relative max-w-3xl w-full rounded-2xl bg-white dark:bg-slate-900 shadow-2xl max-h-[85vh] overflow-hidden border border-slate-200 dark:border-slate-700">
-            {/* Background decorativo */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
-            
-            <div className="relative p-6 sm:p-8 max-h-[85vh] overflow-y-auto">
-              <div className="flex items-start justify-between gap-4 mb-6">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg blur-md opacity-50"></div>
-                      <div className="relative rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 p-2">
-                        <span className="text-white text-lg">💡</span>
-                      </div>
-                    </div>
-                    <p className="text-xs font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
-                      Explicação da IA
-                    </p>
-                  </div>
-                  <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mb-2">
-                    {explanationModal.card?.pergunta}
-                  </h3>
-                  {explanationModal.card?.materia && (
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-1 text-xs font-bold rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
-                        {explanationModal.card.materia}
-                      </span>
-                      <span className="px-2 py-1 text-xs font-bold rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
-                        {explanationModal.card?.modulo}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={closeExplanationModal}
-                  className="group relative flex-shrink-0 w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition-all hover:scale-110"
-                >
-                  <span className="text-lg font-bold text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white">✕</span>
-                </button>
-              </div>
-              
-              <div className="relative rounded-xl bg-gradient-to-br from-blue-50/50 via-purple-50/30 to-cyan-50/50 dark:from-blue-900/20 dark:via-purple-900/20 dark:to-cyan-900/20 p-6 border border-blue-200/50 dark:border-blue-800/50 backdrop-blur-sm">
-                {explanationModal.loading && (
-                  <div className="text-center py-8">
-                    <div className="inline-block animate-spin text-blue-500 text-4xl mb-4">⚙️</div>
-                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">Gerando explicação... aguarde alguns segundos.</p>
-                  </div>
-                )}
-                {explanationModal.error && (
-                  <div className="text-center py-8">
-                    <p className="text-lg font-bold text-rose-600 dark:text-rose-400 mb-2">❌ Erro</p>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      {explanationModal.error}
-                    </p>
-                  </div>
-                )}
-                {!explanationModal.loading && !explanationModal.error && (
-                  <p className="text-sm sm:text-base text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
-                    {explanationModal.text}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
       {/* Modal de Loading para Geração de Flashcards */}
       {generatingFlashcards && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">

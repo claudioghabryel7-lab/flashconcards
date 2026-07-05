@@ -1,5 +1,4 @@
-﻿import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+﻿import { useState, useEffect, memo } from 'react'
 import { HeartIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/solid'
 import { useAuth } from '../hooks/useAuth'
 
@@ -10,7 +9,6 @@ const FlashcardItem = ({
   onRateDifficulty,
   showRating = false,
   cardProgress = null,
-  onExplainCard = null,
   onDeleteFlashcard = null,
   onEditFlashcard = null,
   cardColor = 'bg-white',
@@ -80,17 +78,13 @@ const FlashcardItem = ({
 
   return (
     <div className="noji-card-wrap relative mx-auto w-full max-w-xl px-1 sm:px-0">
-      <motion.div
-        className="noji-card relative mx-auto w-full min-h-[320px] cursor-pointer select-none sm:min-h-[360px]"
-        style={{ perspective: 1400, transformStyle: 'preserve-3d' }}
+      <div
+        className={`noji-flip-container relative mx-auto w-full min-h-[320px] cursor-pointer select-none sm:min-h-[360px] ${flipped ? 'is-flipped' : ''}`}
         onClick={toggle}
-        whileTap={{ scale: 0.995 }}
       >
-        <motion.div
-          className={`noji-card-face absolute inset-0 flex flex-col rounded-3xl ${cardColor} p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor}`}
-          animate={{ rotateY: flipped ? 180 : 0 }}
-          transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
-          style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+        <div className="noji-flip-inner">
+        <div
+          className={`noji-card-face noji-flip-front absolute inset-0 flex flex-col rounded-3xl ${cardColor} p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor}`}
         >
           <div className="relative z-10 flex h-full min-h-[280px] flex-col sm:min-h-[320px]">
             <div className="absolute right-0 top-0 z-20 flex gap-1.5">
@@ -109,19 +103,6 @@ const FlashcardItem = ({
               >
                 <HeartIcon className="h-5 w-5" />
               </button>
-              {onExplainCard && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onExplainCard(card)
-                  }}
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/40"
-                  aria-label="Explicação da IA"
-                >
-                  <span className="text-base">💡</span>
-                </button>
-              )}
               {isAdmin && !editing && (
                 <>
                   <button
@@ -207,17 +188,14 @@ const FlashcardItem = ({
               </div>
             )}
           </div>
-        </motion.div>
+        </div>
 
-        <motion.div
-          className={`noji-card-face absolute inset-0 flex flex-col rounded-3xl p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor} ${
+        <div
+          className={`noji-card-face noji-flip-back absolute inset-0 flex flex-col rounded-3xl p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor} ${
             cardColor === 'bg-white' || cardColor === 'bg-slate-100'
               ? 'bg-slate-900 dark:bg-slate-800'
               : 'bg-slate-900'
           }`}
-          animate={{ rotateY: flipped ? 0 : -180 }}
-          transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
-          style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
         >
           <div className="relative z-10 flex h-full min-h-[280px] flex-col sm:min-h-[320px]">
             <div className="flex flex-1 flex-col items-center justify-center px-2 py-6 text-center">
@@ -263,10 +241,11 @@ const FlashcardItem = ({
               </div>
             )}
           </div>
-        </motion.div>
-      </motion.div>
+        </div>
+        </div>
+      </div>
     </div>
   )
 }
 
-export default FlashcardItem
+export default memo(FlashcardItem)

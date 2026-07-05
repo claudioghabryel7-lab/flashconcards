@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { motion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 import type { ReactNode } from 'react'
 
@@ -24,12 +23,7 @@ export function CPPageHeader({
 }: CPPageHeaderProps) {
   const showBack = backHref != null && backHref !== ''
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45 }}
-      className="cp-page-header mb-8"
-    >
+    <div className="cp-page-header mb-8 animate-fade-in">
       {showBack && (
         <Link
           href={backHref}
@@ -47,7 +41,7 @@ export function CPPageHeader({
         </div>
         {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
       </div>
-    </motion.div>
+    </div>
   )
 }
 
