@@ -77,13 +77,25 @@ const FlashcardItem = ({
   const showInlineRating = showRating && !ratingBelowCard && flipped
 
   return (
-    <div className="noji-card-wrap relative mx-auto w-full max-w-xl px-1 sm:px-0">
-      <div className="noji-flip-container relative mx-auto w-full min-h-[320px] cursor-pointer select-none sm:min-h-[360px]">
-        <div className={`noji-flip-inner ${flipped ? 'is-flipped' : ''}`} onClick={toggle}>
+    <div className="relative mx-auto w-full max-w-xl px-1 sm:px-0">
+      <div
+        className="relative mx-auto h-[320px] w-full min-h-[320px] cursor-pointer select-none overflow-hidden sm:h-[360px] sm:min-h-[360px]"
+        style={{ perspective: '1400px' }}
+      >
         <div
-          className={`noji-card-face noji-flip-front flex flex-col rounded-3xl ${cardColor} p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor}`}
+          className="relative h-full w-full transition-transform duration-500 ease-out"
+          style={{
+            transformStyle: 'preserve-3d',
+            transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+          }}
+          onClick={toggle}
         >
-          <div className="relative z-10 flex h-full min-h-[280px] flex-col sm:min-h-[320px]">
+          {/* Frente */}
+          <div
+            className={`absolute inset-0 flex h-full w-full flex-col overflow-hidden rounded-3xl p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor} ${cardColor}`}
+            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+          >
+            <div className="relative z-10 flex h-full flex-col">
             <div className="absolute right-0 top-0 z-20 flex gap-1.5">
               <button
                 type="button"
@@ -184,17 +196,23 @@ const FlashcardItem = ({
                 )}
               </div>
             )}
+            </div>
           </div>
-        </div>
 
-        <div
-          className={`noji-card-face noji-flip-back flex flex-col rounded-3xl p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor} ${
-            cardColor === 'bg-white' || cardColor === 'bg-slate-100'
-              ? 'bg-slate-900 dark:bg-slate-800'
-              : 'bg-slate-900'
-          }`}
-        >
-          <div className="relative z-10 flex h-full min-h-[280px] flex-col sm:min-h-[320px]">
+          {/* Verso */}
+          <div
+            className={`absolute inset-0 flex h-full w-full flex-col overflow-hidden rounded-3xl p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor} ${
+              cardColor === 'bg-white' || cardColor === 'bg-slate-100'
+                ? 'bg-slate-900 dark:bg-slate-800'
+                : 'bg-slate-900'
+            }`}
+            style={{
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+              transform: 'rotateY(180deg)',
+            }}
+          >
+            <div className="relative z-10 flex h-full flex-col">
             <div className="flex flex-1 flex-col items-center justify-center px-2 py-6 text-center">
               <span className="mb-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white/70">
                 Resposta
@@ -237,8 +255,8 @@ const FlashcardItem = ({
                 </div>
               </div>
             )}
+            </div>
           </div>
-        </div>
         </div>
       </div>
     </div>
