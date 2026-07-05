@@ -21,9 +21,12 @@ export const metadata: Metadata = {
     'Plataforma preditiva de estudos para concursos públicos com IA, edital verticalizado, flashcards e questões personalizadas por banca.',
   applicationName: 'Concurseiro Preditivo',
   icons: {
-    icon: [{ url: '/course-icons/logo.png', type: 'image/png' }],
-    shortcut: '/course-icons/logo.png',
-    apple: '/course-icons/logo.png',
+    icon: [
+      { url: '/favicon.png', type: 'image/png', sizes: '32x32' },
+      { url: '/course-icons/logo.png', type: 'image/png', sizes: '512x512' },
+    ],
+    shortcut: '/favicon.png',
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   manifest: '/manifest.json',
 }
