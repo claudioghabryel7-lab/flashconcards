@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { collection, query, getDocs, orderBy } from 'firebase/firestore'
@@ -27,7 +28,7 @@ const ConteudoCompleto = () => {
           snapshot = await getDocs(conteudosQuery)
         } catch (orderByError) {
           // Se falhar (provavelmente falta índice), buscar sem orderBy e ordenar localmente
-          if (import.meta.env.DEV) {
+          if (isDevEnv()) {
             console.warn('orderBy falhou, buscando sem ordenação:', orderByError)
           }
           snapshot = await getDocs(conteudosRef)
@@ -48,7 +49,7 @@ const ConteudoCompleto = () => {
         setConteudos(conteudosData)
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        if (import.meta.env.DEV) {
+        if (isDevEnv()) {
           console.error('Erro ao carregar conteúdos completos:', errorMessage)
         }
         setConteudos([]) // Definir array vazio em caso de erro

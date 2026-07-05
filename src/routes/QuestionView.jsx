@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { doc, setDoc, onSnapshot } from 'firebase/firestore'
@@ -249,8 +250,8 @@ const QuestionView = () => {
         return
       }
       
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
+      const groqApiKey = readEnv('VITE_GROQ_API_KEY')
       
       const prompt = `Você é um professor especialista em concursos públicos.
 

@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
@@ -19,7 +20,7 @@ export const QueryProvider = ({ children }) => {
     <QueryClientProvider client={queryClient}>
       {children}
       {/* Devtools desabilitado - descomente a linha abaixo para ativar em desenvolvimento */}
-      {/* {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />} */}
+      {/* {isDevEnv() && <ReactQueryDevtools initialIsOpen={false} />} */}
     </QueryClientProvider>
   )
 }

@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { doc, getDoc, setDoc, deleteDoc, serverTimestamp, getDocs, collection, query, where, orderBy } from 'firebase/firestore'
@@ -198,7 +199,7 @@ const PraticaIncidenciaView = () => {
   const handleGenerateQuestoes = async () => {
     if (!courseId || !conteudoIncidencia) return
 
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+    const apiKey = readEnv('VITE_GEMINI_API_KEY')
     if (!apiKey) {
       setStatus('❌ API Key não configurada.')
       return

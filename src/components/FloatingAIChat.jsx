@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState } from 'react'
 import {
   addDoc,
@@ -288,7 +289,7 @@ const FloatingAIChat = () => {
     if (availableModel) return // Já tem modelo, não precisa procurar novamente
     
     const findAvailableModel = async () => {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
       if (!apiKey) {
         console.warn('⚠️ VITE_GEMINI_API_KEY não configurada')
         setModelError('API key do Gemini não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env')
@@ -487,7 +488,7 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
 
   // Chamar Groq API como fallback
   const callGroqAPI = async (prompt) => {
-    const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
     if (!groqApiKey) {
       throw new Error('GROQ_API_KEY não configurada')
     }
@@ -527,7 +528,7 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
 
   // Enviar mensagem da IA
   const sendAIMessage = async (userMessage, isInitial = false) => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+    const apiKey = readEnv('VITE_GEMINI_API_KEY')
     if (!apiKey) {
       console.error('❌ API key do Gemini não configurada')
       const chatRef = collection(db, 'chats', user.uid, 'messages')
@@ -764,7 +765,7 @@ Pergunta do aluno: ${userMessage}
       
       // Se detectou erro de quota, usar Groq como fallback
       if (useGroqFallback) {
-        const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+        const groqApiKey = readEnv('VITE_GROQ_API_KEY')
         if (groqApiKey) {
           try {
             console.log('🔄 Tentando usar Groq como fallback...')

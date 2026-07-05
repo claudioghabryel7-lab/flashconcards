@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { collection, onSnapshot, doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -182,7 +183,7 @@ const MindMapView = () => {
       setCentralNodeTitle((materia || 'TÓPICO PRINCIPAL').toUpperCase())
       
       // Organizar com Gemini (se disponível)
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
       if (apiKey && validCards.length > 3) {
         try {
           setGenerationProgress('Organizando conteúdo com IA...')

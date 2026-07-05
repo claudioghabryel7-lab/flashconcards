@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useEditalFlashcards } from '../hooks/useEditalFlashcards'
@@ -272,7 +273,7 @@ const FlashQuestoes = () => {
 
   // Função para chamar Groq API (OTIMIZADA)
   const callGroqAPI = async (prompt) => {
-    const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
     if (!groqApiKey) {
       throw new Error('VITE_GROQ_API_KEY não configurada')
     }

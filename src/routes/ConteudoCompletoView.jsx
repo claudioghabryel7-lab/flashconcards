@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
@@ -30,7 +31,7 @@ const ConteudoCompletoView = () => {
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err)
-        if (import.meta.env.DEV) {
+        if (isDevEnv()) {
           console.error('Erro ao carregar nome do curso:', errorMessage)
         }
         setCourseName('Curso Preparatório')
@@ -97,7 +98,7 @@ const ConteudoCompletoView = () => {
         setLoading(false)
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err)
-        if (import.meta.env.DEV) {
+        if (isDevEnv()) {
           console.error('Erro ao carregar conteúdo completo:', errorMessage)
         }
         setError('Erro ao carregar conteúdo. Tente novamente.')

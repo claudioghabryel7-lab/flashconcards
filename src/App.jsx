@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { lazy, Suspense, startTransition } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
@@ -461,7 +462,7 @@ function App() {
   } catch (error) {
     // Garantir que o erro seja convertido para string antes de logar
     const errorMessage = error instanceof Error ? error.message : String(error)
-    if (import.meta.env.DEV) {
+    if (isDevEnv()) {
       console.error('Erro no componente App:', errorMessage)
     }
     return (

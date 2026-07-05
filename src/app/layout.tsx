@@ -26,8 +26,8 @@ export const dynamic = 'force-dynamic'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} dark h-full`} suppressHydrationWarning>
-      <body className="min-h-full bg-cp-bg text-cp-text antialiased">
+    <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} h-full`} suppressHydrationWarning>
+      <body className="min-h-full bg-cp-bg text-cp-text antialiased" suppressHydrationWarning>
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

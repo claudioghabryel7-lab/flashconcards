@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { canAccessRedacao, isTrialMode } from '../utils/trialLimits'
@@ -224,7 +225,7 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
     
     console.log('🚨 redacaoTexto:', redacaoTexto)
     console.log('🚨 redacaoTema:', redacaoTema)
-    console.log('🚨 VITE_GEMINI_API_KEY existe:', !!import.meta.env.VITE_GEMINI_API_KEY)
+    console.log('🚨 VITE_GEMINI_API_KEY existe:', !!readEnv('VITE_GEMINI_API_KEY'))
     
     if (!redacaoTexto.trim()) {
       console.log('🚨 Saindo - redação vazia')

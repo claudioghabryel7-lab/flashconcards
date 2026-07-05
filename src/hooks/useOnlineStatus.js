@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect } from 'react'
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db, firebaseInitialized, initFirebase } from '../firebase/config'
@@ -52,7 +53,7 @@ export const useOnlineStatus = () => {
       }, { merge: true }).catch(err => {
         // Garantir que o erro seja convertido para string antes de logar
         const errorMessage = err instanceof Error ? err.message : String(err)
-        if (import.meta.env.DEV) {
+        if (isDevEnv()) {
           console.error('Erro no heartbeat:', errorMessage)
         }
       })

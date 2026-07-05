@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import React, { StrictMode } from 'react'
 import ReactDOM, { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
@@ -65,7 +66,7 @@ const RootApp = () => {
   } catch (error) {
     // Garantir que o erro seja convertido para string antes de logar
     const errorMessage = error instanceof Error ? error.message : String(error)
-    if (import.meta.env.DEV) {
+    if (isDevEnv()) {
       console.error('Erro ao renderizar RootApp:', errorMessage)
     }
     return (

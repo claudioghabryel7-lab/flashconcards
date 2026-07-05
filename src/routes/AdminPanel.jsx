@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { checkGeminiApiKeysStatus } from '../utils/geminiApi'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import {
@@ -1886,7 +1887,7 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
       setFlashcardGenProgress('Enviando para IA...')
 
       // Chamar API
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + import.meta.env.VITE_GEMINI_API_KEY, {
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + readEnv('VITE_GEMINI_API_KEY'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2005,8 +2006,8 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
     setMessage('')
 
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
+      const groqApiKey = readEnv('VITE_GROQ_API_KEY')
       
       if (!apiKey && !groqApiKey) {
         throw new Error('Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
@@ -3434,7 +3435,7 @@ REGRAS CRÍTICAS:
     setMessage('')
 
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
       if (!apiKey) {
         throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
       }
@@ -3916,7 +3917,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     setMessage('')
 
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
       if (!apiKey) {
         throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
       }
@@ -5392,7 +5393,7 @@ CRÍTICO:
     const banca = unifiedData?.banca || ''
     const concursoName = unifiedData?.concursoName || ''
     
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+    const apiKey = readEnv('VITE_GEMINI_API_KEY')
     if (!apiKey) {
       throw new Error('VITE_GEMINI_API_KEY não configurada')
     }
@@ -5491,7 +5492,7 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
     const banca = unifiedData?.banca || ''
     const concursoName = unifiedData?.concursoName || ''
     
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+    const apiKey = readEnv('VITE_GEMINI_API_KEY')
     if (!apiKey) {
       throw new Error('VITE_GEMINI_API_KEY não configurada')
     }
@@ -5950,7 +5951,7 @@ CRÍTICO:
         } catch (err) {
           erros++
           const errorMessage = err instanceof Error ? err.message : String(err)
-          if (import.meta.env.DEV) {
+          if (isDevEnv()) {
             console.error(`Erro ao gerar conteúdo completo para "${materia}":`, errorMessage)
           }
           setAllConteudosCompletosProgress(`⚠️ Erro ao gerar "${materia}": ${errorMessage}\nContinuando com as próximas...`)
@@ -5961,7 +5962,7 @@ CRÍTICO:
       setMessage(`✅ Geração em lote concluída! ${sucesso} conteúdo(s) completo(s) gerado(s) com sucesso.${erros > 0 ? ` ${erros} conteúdo(s) com erro.` : ''}`)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
-      if (import.meta.env.DEV) {
+      if (isDevEnv()) {
         console.error('Erro ao gerar todos os conteúdos completos:', errorMessage)
       }
       setMessage(`❌ Erro ao gerar todos os conteúdos completos: ${errorMessage}`)
@@ -6013,7 +6014,7 @@ CRÍTICO:
       setMessage(`✅ ${conteudosCompletosToDelete.length} conteúdo(s) completo(s) apagado(s) com sucesso!`)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
-      if (import.meta.env.DEV) {
+      if (isDevEnv()) {
         console.error('Erro ao apagar todos os conteúdos completos:', errorMessage)
       }
       setMessage(`❌ Erro ao apagar todos os conteúdos completos: ${errorMessage}`)
@@ -6117,7 +6118,7 @@ CRÍTICO:
 
   // Chamar Groq API como fallback
   const callGroqAPI = async (prompt) => {
-    const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
     if (!groqApiKey) {
       throw new Error('GROQ_API_KEY não configurada')
     }
@@ -6167,8 +6168,8 @@ CRÍTICO:
     setMessage('')
 
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
+      const groqApiKey = readEnv('VITE_GROQ_API_KEY')
       
       if (!apiKey && !groqApiKey) {
         throw new Error('Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
@@ -7266,7 +7267,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                           }
                           
                           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
-                          const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+                          const apiKey = readEnv('VITE_GEMINI_API_KEY')
                           if (!apiKey) {
                             throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
                           }
@@ -8969,7 +8970,7 @@ ESTRUTURA SUGERIDA:
                           const courseId = selectedCourseForPrompts || 'alego-default'
                           
                           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
-                          const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+                          const apiKey = readEnv('VITE_GEMINI_API_KEY')
                           if (!apiKey) {
                             throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
                           }
@@ -9559,8 +9560,8 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                                 try {
                                   setMessage('🤖 Gerando descrição com IA...')
                                   
-                                  const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-                                  const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+                                  const apiKey = readEnv('VITE_GEMINI_API_KEY')
+                                  const groqApiKey = readEnv('VITE_GROQ_API_KEY')
                                   
                                   if (!apiKey && !groqApiKey) {
                                     setMessage('❌ Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')

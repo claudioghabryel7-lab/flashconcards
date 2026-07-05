@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { canDoSimulado, incrementSimuladoCount, canAccessRedacao, isTrialMode } from '../utils/trialLimits'
@@ -929,7 +930,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.
         // Continuar mesmo se não conseguir buscar flashcards
       }
 
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
       if (!apiKey) {
         throw new Error('VITE_GEMINI_API_KEY não configurada')
       }

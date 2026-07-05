@@ -1,5 +1,6 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 // Logger utilitário - desabilita logs em produção
-const isDev = import.meta.env.DEV
+const isDev = isDevEnv()
 
 export const logger = {
   log: (...args) => {

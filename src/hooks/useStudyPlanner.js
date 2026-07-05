@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { doc, getDoc, setDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore'
 import { db } from '../firebase/config'
@@ -188,7 +189,7 @@ export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
         })))
 
       // Chamar IA para gerar recomendações
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
       console.log('🔑 API Key disponível:', !!apiKey)
       if (!apiKey) {
         throw new Error('VITE_GEMINI_API_KEY não configurada')

@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState } from 'react'
 import {
   addDoc,
@@ -178,7 +179,7 @@ const AIChat = () => {
   // Descobrir qual modelo está disponível
   useEffect(() => {
     const findAvailableModel = async () => {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
       if (!apiKey || availableModel) return
 
       try {
@@ -239,7 +240,7 @@ const AIChat = () => {
 
   // Chamar Groq API como fallback
   const callGroqAPI = async (prompt) => {
-    const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
     if (!groqApiKey) {
       throw new Error('GROQ_API_KEY não configurada')
     }
@@ -278,7 +279,7 @@ const AIChat = () => {
   }
 
   const getMentorResponse = async (userMessage) => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+    const apiKey = readEnv('VITE_GEMINI_API_KEY')
     
     if (!apiKey) {
       return 'API key não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env'
@@ -517,7 +518,7 @@ Pergunta do aluno: ${userMessage}
           setQuotaDailyLimit(true)
           
           // Tentar usar Groq se disponível
-          const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+          const groqApiKey = readEnv('VITE_GROQ_API_KEY')
           if (groqApiKey) {
             try {
               setUsingGroq(true)

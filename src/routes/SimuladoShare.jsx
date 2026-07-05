@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion, collection, onSnapshot, query, where, getDocs } from 'firebase/firestore'
@@ -350,7 +351,7 @@ const SimuladoShare = () => {
 
       setLoadingStatus('Inicializando gerador de questões...')
       setLoadingProgress(15)
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
       if (!apiKey) {
         throw new Error('VITE_GEMINI_API_KEY não configurada')
       }
@@ -600,7 +601,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
   // Gerar tema de redação
   const generateRedacaoTheme = async () => {
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
       if (!apiKey) {
         setRedacaoTema('A importância da eficiência no serviço público')
         return
@@ -676,7 +677,7 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
     setAnalizingRedacao(true)
 
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
       if (!apiKey) {
         finishSimulado()
         return

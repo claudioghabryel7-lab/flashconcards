@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
@@ -754,7 +755,7 @@ const FlashcardView = () => {
 
   // Chamar Groq API como fallback
   const callGroqAPI = async (prompt) => {
-    const groqApiKey = import.meta.env.VITE_GROQ_API_KEY
+    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
     if (!groqApiKey) {
       throw new Error('GROQ_API_KEY não configurada')
     }
@@ -804,7 +805,7 @@ const FlashcardView = () => {
 
     // Log removido para limpar console
 
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+    const apiKey = readEnv('VITE_GEMINI_API_KEY')
     if (!apiKey) {
       throw new Error('API do Gemini não configurada.')
     }
@@ -843,7 +844,7 @@ const FlashcardView = () => {
       courseEditalPrompt = editalPrompt || ''
     }
 
-    const preferredModel = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash'
+    const preferredModel = readEnv('VITE_GEMINI_MODEL') || 'gemini-2.5-flash'
     const fallbackModels = ['gemini-2.5-pro-latest', 'gemini-2.5-pro', 'gemini-2.5-pro']
     const candidates = [preferredModel, ...fallbackModels].filter(
       (value, idx, arr) => value && arr.indexOf(value) === idx,
@@ -1030,7 +1031,7 @@ IMPORTANTE:
 - Garanta que cada flashcard seja único e contributivo`
 
       // Chamar a API do Gemini
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      const apiKey = readEnv('VITE_GEMINI_API_KEY')
       if (!apiKey) {
         throw new Error('VITE_GEMINI_API_KEY não configurada')
       }

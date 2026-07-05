@@ -1,30 +1,48 @@
 /**
- * Compatibilidade import.meta.env no Next.js (código legado Vite).
+ * Polyfill runtime para import.meta.env (código legado Vite → Next.js).
+ * Em produção, next.config também injeta via turbopack.define / DefinePlugin.
  */
-import { ENV, readEnv } from './env.js'
+import { readEnv, isDevEnv } from './env.js'
 
-const proxy = new Proxy(ENV, {
-  get(_target, prop) {
-    if (prop === 'env') return proxy
-    if (typeof prop !== 'string') return undefined
-    return readEnv(prop)
-  },
-  has(_target, prop) {
-    if (typeof prop !== 'string') return false
-    return readEnv(prop) != null
-  },
-})
+function createEnvProxy() {
+  return new Proxy(
+    {},
+    {
+      get(_target, prop) {
+        if (prop === 'env') return createEnvProxy()
+        if (prop === 'DEV') return isDevEnv()
+        if (prop === 'PROD') return !isDevEnv()
+        if (prop === 'MODE') return isDevEnv() ? 'development' : 'production'
+        if (typeof prop === 'string') return readEnv(prop)
+        return undefined
+      },
+      has(_target, prop) {
+        if (prop === 'DEV' || prop === 'PROD' || prop === 'MODE') return true
+        if (typeof prop === 'string') return readEnv(prop) != null
+        return false
+      },
+    }
+  )
+}
 
-try {
-  if (typeof import.meta !== 'undefined') {
-    Object.defineProperty(import.meta, 'env', {
-      value: proxy,
-      writable: false,
-      configurable: true,
-    })
+const envProxy = createEnvProxy()
+
+if (typeof import.meta !== 'undefined') {
+  try {
+    if (import.meta.env == null) {
+      import.meta.env = envProxy
+    }
+  } catch {
+    try {
+      Object.defineProperty(import.meta, 'env', {
+        value: envProxy,
+        writable: true,
+        configurable: true,
+      })
+    } catch {
+      /* bundler bloqueou — compile-time define no next.config cobre */
+    }
   }
-} catch {
-  // ignore — alguns bundlers não permitem redefinir import.meta.env
 }
 
 export {}

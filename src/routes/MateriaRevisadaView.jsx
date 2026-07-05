@@ -1,3 +1,4 @@
+import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
@@ -60,7 +61,7 @@ const MateriaRevisadaView = () => {
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err)
-        if (import.meta.env.DEV) {
+        if (isDevEnv()) {
           console.error('Erro ao carregar nome do curso:', errorMessage)
         }
         setCourseName('Curso Preparatório')
@@ -99,7 +100,7 @@ const MateriaRevisadaView = () => {
         setLoading(false)
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err)
-        if (import.meta.env.DEV) {
+        if (isDevEnv()) {
           console.error('Erro ao carregar matéria revisada:', errorMessage)
         }
         setError('Erro ao carregar matéria. Tente novamente.')
