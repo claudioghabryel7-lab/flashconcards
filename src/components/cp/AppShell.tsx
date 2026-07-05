@@ -24,7 +24,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="relative min-h-screen w-full text-cp-text">
-      <TechBackground />
+      <TechBackground showLogo={!fullBleed} />
       <CPHeader />
       <main
         className={
