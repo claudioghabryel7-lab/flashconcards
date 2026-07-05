@@ -3,11 +3,11 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-/** Calendário integrado ao Dashboard — redireciona para #progresso */
+/** Calendário removido do dashboard — redireciona para o dashboard */
 export default function CalendarioPage() {
   const router = useRouter()
   useEffect(() => {
-    router.replace('/dashboard#progresso')
+    router.replace('/dashboard')
   }, [router])
   return null
 }
