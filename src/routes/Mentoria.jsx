@@ -391,18 +391,7 @@ const Mentoria = () => {
   const shouldRecommendSimulado = daysSinceStart % 6 === 0
 
   return (
-    <div className="min-h-screen py-6">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white mb-2">
-            🎓 Minha Mentoria
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400">
-            {isIntensiveMode ? '🔥 Modo Intensivo de Revisão' : 'Plano personalizado de estudos'}
-          </p>
-        </div>
-
+    <div className="space-y-6">
         {!examDate ? (
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-8 text-center">
             <CalendarIcon className="h-16 w-16 text-alego-600 mx-auto mb-4" />
@@ -686,7 +675,6 @@ const Mentoria = () => {
             </div>
           </div>
         )}
-      </div>
     </div>
   )
 }

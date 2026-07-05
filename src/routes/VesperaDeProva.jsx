@@ -209,48 +209,33 @@ const VesperaDeProva = () => {
   }
   
   return (
-    <div className="min-h-screen bg-background-primary">
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-text-primary flex items-center gap-3">
-                <SparklesIcon className="h-8 w-8 text-accent-orange" />
-                Revisão
-              </h1>
-              <p className="text-text-secondary mt-2">
-                {courseName}
-              </p>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              {/* Botão de configurar (admin) */}
-              {isAdmin && (
-                <button
-                  onClick={() => navigate(`/vespera-de-prova/configurar/${courseId}`)}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-accent-orange to-accent-cyan text-white rounded-lg font-medium hover:from-accent-orange-dim hover:to-accent-cyan-dim transition"
-                >
-                  <SparklesIcon className="h-5 w-5" />
-                  Configurar
-                </button>
-              )}
-              
-              {/* Botão de compartilhar (admin) */}
-              {isAdmin && generatedMaterial && (
-                <button
-                  onClick={generateShareLink}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-bold hover:opacity-80 transition"
-                  title="Gerar link temporário de compartilhamento"
-                >
-                  <ShareIcon className="h-5 w-5" />
-                  Compartilhar
-                </button>
-              )}
-          </div>
+    <div className="space-y-6">
+      {courseName && (
+        <p className="text-text-secondary">{courseName}</p>
+      )}
+      {isAdmin && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => navigate(`/vespera-de-prova/configurar/${courseId}`)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-accent-orange to-accent-cyan text-white rounded-lg font-medium hover:from-accent-orange-dim hover:to-accent-cyan-dim transition"
+          >
+            <SparklesIcon className="h-5 w-5" />
+            Configurar
+          </button>
+          {generatedMaterial && (
+            <button
+              onClick={generateShareLink}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-bold hover:opacity-80 transition"
+              title="Gerar link temporário de compartilhamento"
+            >
+              <ShareIcon className="h-5 w-5" />
+              Compartilhar
+            </button>
+          )}
         </div>
-        
-        {/* Barra de progresso */}
+      )}
+
+      {/* Barra de progresso */}
         {generatedMaterial && user && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
@@ -271,8 +256,7 @@ const VesperaDeProva = () => {
             </div>
           </div>
         )}
-      </div>
-      
+
       {/* Estado inicial - sem material gerado */}
       {!generatedMaterial && (
         <div className="text-center py-16">
@@ -502,7 +486,6 @@ const VesperaDeProva = () => {
           ))}
         </div>
       )}
-      </div>
     </div>
   )
 }

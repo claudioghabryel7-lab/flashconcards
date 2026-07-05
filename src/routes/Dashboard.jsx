@@ -37,7 +37,6 @@ import {
 } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
-import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder } from '../utils/subjectOrder'
 import { isTrialMode, getTrialData } from '../utils/trialLimits'
@@ -51,7 +50,6 @@ dayjs.locale('pt-br')
 
 const Dashboard = () => {
   const { user, profile } = useAuth()
-  const { darkMode } = useDarkMode()
   const [progressData, setProgressData] = useState([])
   const [cardProgress, setCardProgress] = useState({})
   const [allCards, setAllCards] = useState([])
@@ -520,267 +518,255 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-accent-orange border-t-transparent"></div>
-          <p className="mt-4 text-lg font-semibold text-text-secondary">Carregando dashboard...</p>
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+          <p className="mt-4 font-mono text-sm text-cp-muted">Carregando dashboard...</p>
         </div>
       </div>
     )
   }
 
+  const statCards = [
+    {
+      label: 'Sequência',
+      value: stats.streak,
+      suffix: 'dias',
+      icon: FireIcon,
+      accent: 'cp-card-accent-amber',
+      iconClass: 'text-cp-accent4 bg-cp-accent4/10 border-cp-accent4/20',
+    },
+    {
+      label: 'Horas estudadas',
+      value: stats.totalHours,
+      suffix: 'h',
+      icon: ClockIcon,
+      accent: 'cp-card-accent-cyan',
+      iconClass: 'text-cp-accent2 bg-cp-accent2/10 border-cp-accent2/20',
+    },
+    {
+      label: 'Flashcards',
+      value: `${stats.studiedCards}/${stats.totalCards}`,
+      suffix: '',
+      icon: BookOpenIcon,
+      accent: 'cp-card-accent-violet',
+      iconClass: 'text-cp-accent bg-cp-accent/10 border-cp-accent/20',
+    },
+    {
+      label: 'Taxa de acerto',
+      value: stats.accuracy,
+      suffix: '%',
+      icon: ChartBarIcon,
+      accent: 'cp-card-accent-pink',
+      iconClass: 'text-cp-accent3 bg-cp-accent3/10 border-cp-accent3/20',
+    },
+  ]
+
+  const quickLinks = [
+    { to: '/flashcards', title: 'Flashcards com IA', desc: 'Estude com flashcards inteligentes', icon: SparklesIcon, accent: 'cp-card-accent-violet' },
+    { to: '/edital-verticalizado', title: 'Edital Verticalizado', desc: 'Conteúdo organizado do edital', icon: DocumentTextIcon, accent: 'cp-card-accent-cyan' },
+    { to: '/calendario', title: 'Calendário de Progresso', desc: 'Acompanhe seu estudo', icon: CalendarIcon, accent: 'cp-card-accent-amber' },
+    { to: '/guia-mentorado', title: 'Guia Mentorado', desc: 'Cronograma estratégico', icon: LightBulbIcon, accent: 'cp-card-accent-pink' },
+    { to: '/vespera-de-prova', title: 'Véspera de Prova', desc: 'Revisão final antes da prova', icon: ClockIcon, accent: 'cp-card-accent-cyan' },
+    { to: '/treino-redacao', title: 'Treino de Redação', desc: 'Pratique escrevendo redações', icon: DocumentTextIcon, accent: 'cp-card-accent-violet' },
+    { to: '/feed', title: 'FlashSocial', desc: 'Compartilhe com a comunidade', icon: UsersIcon, accent: 'cp-card-accent-amber' },
+  ]
+
   return (
-    <div className="min-h-screen py-6">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-8"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-black text-text-primary mb-2">
-                Dashboard
-              </h1>
-              <p className="text-text-secondary">
-                {courseName ? `Acompanhe seu progresso em ${courseName}` : 'Acompanhe seu progresso'}
+    <div className="pb-10">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="mb-8"
+      >
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <span className="cp-badge cp-badge-accent">Dashboard</span>
+            <h1 className="cp-headline mt-4 text-3xl sm:text-4xl">
+              Olá, <span className="cp-gradient-text">{user?.displayName?.split(' ')[0] || 'estudante'}</span>
+            </h1>
+            <p className="mt-2 text-cp-muted">
+              {courseName ? `Progresso em ${courseName}` : 'Acompanhe seu progresso preditivo'}
+            </p>
+          </div>
+          <Link to="/simulado" className="cp-btn-primary shrink-0 self-start sm:self-auto">
+            <TrophyIcon className="h-4 w-4" />
+            Fazer simulado
+          </Link>
+        </div>
+      </motion.div>
+
+      {/* Stats */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4"
+      >
+        {statCards.map((card) => {
+          const Icon = card.icon
+          return (
+            <div key={card.label} className={`cp-card p-4 sm:p-5 ${card.accent}`}>
+              <div className="mb-3 flex items-center justify-between">
+                <span className="font-mono text-[10px] text-cp-muted">{card.label}</span>
+                <div className={`flex h-8 w-8 items-center justify-center rounded-xl border ${card.iconClass}`}>
+                  <Icon className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="text-2xl font-semibold tracking-tight text-cp-text sm:text-3xl">
+                {card.value}
+                {card.suffix && (
+                  <span className="ml-1 text-sm font-normal text-cp-muted">{card.suffix}</span>
+                )}
               </p>
             </div>
-            <div className="flex gap-3">
-              <Link
-                to="/simulado"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary rounded-xl font-semibold hover:from-accent-orange-dim hover:to-accent-cyan-dim shadow-lg hover:shadow-xl transition-all"
-              >
-                <TrophyIcon className="h-5 w-5" />
-                Fazer Simulado
-              </Link>
-            </div>
-          </div>
-        </motion.div>
+          )
+        })}
+      </motion.div>
 
-        {/* Botões de Instalação PWA */}
-        <div className="mb-6">
-          <InstallPWAButton />
-        </div>
-
-        
-        {/* Edital Verticalizado */}
-        {selectedCourseId && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.5 }}
-            className="bg-background-card rounded-xl sm:rounded-2xl shadow-lg border border-border-primary p-4 sm:p-6 mb-6 sm:mb-8"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-                  <DocumentTextIcon className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600 dark:text-indigo-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
-                    Edital Verticalizado
-                  </h3>
-                  <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                    Edital organizado para estudos
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {loadingEdital ? (
-              <div className="text-center py-4">
-                <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-alego-600 border-t-transparent"></div>
-              </div>
-            ) : !editalVerticalizado ? (
-              <div className="text-center py-8">
-                <DocumentTextIcon className="h-12 w-12 text-text-muted mx-auto mb-3" />
-                <p className="text-text-secondary">
-                  Edital verticalizado ainda não disponível.
-                </p>
-                <p className="text-xs text-text-muted mt-1">
-                  O administrador precisa fazer upload do edital.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3 sm:space-y-4">
-                <div className="bg-background-card-hover rounded-lg sm:rounded-xl p-4 sm:p-6 border border-border-primary">
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-0 mb-3 sm:mb-4">
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-base sm:text-lg font-bold text-text-primary mb-2 break-words">
-                        {editalVerticalizado.titulo || 'Edital Verticalizado'}
-                      </h4>
-                      {editalVerticalizado.descricao && (
-                        <p className="text-xs sm:text-sm text-text-secondary mb-2 sm:mb-3 break-words">
-                          {editalVerticalizado.descricao}
-                        </p>
-                      )}
-                      {editalVerticalizado.updatedAt && (
-                        <p className="text-xs text-text-muted">
-                          Atualizado em {editalVerticalizado.updatedAt.toDate?.().toLocaleDateString('pt-BR') || 'Data não disponível'}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {editalVerticalizado.secoes && editalVerticalizado.secoes.length > 0 ? (
-                    <div className="space-y-2 sm:space-y-3">
-                      {editalVerticalizado.secoes.slice(0, 5).map((secao, idx) => (
-                        <div
-                          key={idx}
-                          className="bg-background-card rounded-lg p-3 sm:p-4 border border-border-primary"
-                        >
-                          <h5 className="font-semibold text-sm sm:text-base text-text-primary mb-2 break-words">
-                            {secao.titulo}
-                          </h5>
-                          {secao.conteudo && (
-                            <p className="text-xs sm:text-sm text-text-secondary line-clamp-2 break-words">
-                              {secao.conteudo.substring(0, 150)}...
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                      {editalVerticalizado.secoes.length > 5 && (
-                        <p className="text-xs text-text-muted text-center">
-                          +{editalVerticalizado.secoes.length - 5} seções adicionais
-                        </p>
-                      )}
-                    </div>
-                  ) : editalVerticalizado.conteudo ? (
-                    <div className="bg-white dark:bg-slate-700 rounded-lg p-3 sm:p-4 max-h-64 sm:max-h-96 overflow-y-auto">
-                      <div
-                        className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 prose prose-sm dark:prose-invert max-w-none break-words"
-                        dangerouslySetInnerHTML={{ __html: editalVerticalizado.conteudo.substring(0, 500) + '...' }}
-                      />
-                    </div>
-                  ) : null}
-
-                  <Link
-                    to={`/edital-verticalizado?course=${selectedCourseId}`}
-                    className="mt-3 sm:mt-4 inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-accent-orange text-background-primary rounded-lg font-semibold hover:bg-accent-orange-dim transition-all text-xs sm:text-sm w-full sm:w-auto justify-center"
-                  >
-                    Ver Edital Completo
-                    <ChevronRightIcon className="h-3 w-3 sm:h-4 sm:w-4" />
-                  </Link>
-                </div>
-              </div>
-            )}
-          </motion.div>
-        )}
-
-
-
-
-        
-        {/* Links Rápidos */}
+      {/* Revisão pendente */}
+      {stats.cardsToReview > 0 && (
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.8 }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+          transition={{ duration: 0.5, delay: 0.15 }}
+          className="cp-glass-panel mb-8 flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"
         >
-          <Link
-            to="/flashcards"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-orange to-accent-cyan p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
-            <div className="relative z-10">
-              <SparklesIcon className="h-8 w-8 text-background-primary mb-3" />
-              <h3 className="text-lg font-bold text-background-primary mb-1">Flashcards com IA</h3>
-              <p className="text-background-primary/80 text-sm">Estude com flashcards inteligentes</p>
-              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
-            </div>
+          <div>
+            <p className="font-mono text-xs text-cp-accent2">revisão pendente</p>
+            <p className="mt-1 text-sm text-cp-text">
+              <strong>{stats.cardsToReview}</strong> flashcards aguardando revisão
+            </p>
+          </div>
+          <Link to="/flashcards" className="cp-btn-primary !py-2.5 !text-sm">
+            <PlayIcon className="h-4 w-4" />
+            Revisar agora
           </Link>
-
-          <Link
-            to="/edital-verticalizado"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-cyan to-accent-orange p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
-            <div className="relative z-10">
-              <DocumentTextIcon className="h-8 w-8 text-background-primary mb-3" />
-              <h3 className="text-lg font-bold text-background-primary mb-1">Edital Verticalizado</h3>
-              <p className="text-background-primary/80 text-sm">Conteúdo organizado do edital</p>
-              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
-
-          <Link
-            to="/calendario"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-orange to-accent-cyan p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
-            <div className="relative z-10">
-              <CalendarIcon className="h-8 w-8 text-background-primary mb-3" />
-              <h3 className="text-lg font-bold text-background-primary mb-1">Calendário de Progresso</h3>
-              <p className="text-background-primary/80 text-sm">Acompanhe seu estudo</p>
-              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
-
-          <Link
-            to="/guia-mentorado"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
-            <div className="relative z-10">
-              <SparklesIcon className="h-8 w-8 text-background-primary mb-3" />
-              <h3 className="text-lg font-bold text-background-primary mb-1">Guia Mentorado</h3>
-              <p className="text-background-primary/80 text-sm">Cronograma estratégico</p>
-              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
-
-          <Link
-            to="/vespera-de-prova"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-cyan to-accent-orange p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
-            <div className="relative z-10">
-              <ClockIcon className="h-8 w-8 text-background-primary mb-3" />
-              <h3 className="text-lg font-bold text-background-primary mb-1">Véspera de Prova</h3>
-              <p className="text-background-primary/80 text-sm">Revisão final antes da prova</p>
-              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
-
-          <Link
-            to="/treino-redacao"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-orange to-accent-cyan p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
-            <div className="relative z-10">
-              <DocumentTextIcon className="h-8 w-8 text-background-primary mb-3" />
-              <h3 className="text-lg font-bold text-background-primary mb-1">Treino de Redação</h3>
-              <p className="text-background-primary/80 text-sm">Pratique escrevendo redações</p>
-              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
-
-          <Link
-            to="/feed"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-accent-cyan to-accent-orange p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-background-primary/10 rounded-full blur-xl"></div>
-            <div className="relative z-10">
-              <UsersIcon className="h-8 w-8 text-background-primary mb-3" />
-              <h3 className="text-lg font-bold text-background-primary mb-1">FlashSocial</h3>
-              <p className="text-background-primary/80 text-sm">Compartilhe com a comunidade</p>
-              <ArrowRightOutline className="h-5 w-5 text-background-primary mt-3 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
-
         </motion.div>
+      )}
 
-        {/* Gráfico de Tempo de Estudo - TEMPORARIAMENTE DESATIVADO */}
-        {/* <div className="mt-8">
-          <StudyTimeChart userId={user?.uid} />
-        </div> */}
+      <div className="mb-8">
+        <InstallPWAButton />
       </div>
 
-      {/* LGPD Consent Banner */}
+      {/* Edital Verticalizado */}
+      {selectedCourseId && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="cp-card cp-card-accent-violet mb-8 p-5 sm:p-6"
+        >
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cp-accent/20 bg-cp-accent/10">
+              <DocumentTextIcon className="h-5 w-5 text-cp-accent" />
+            </div>
+            <div>
+              <h3 className="text-base font-medium text-cp-text sm:text-lg">Edital Verticalizado</h3>
+              <p className="text-xs text-cp-muted sm:text-sm">Edital organizado para estudos</p>
+            </div>
+          </div>
+
+          {loadingEdital ? (
+            <div className="py-6 text-center">
+              <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+            </div>
+          ) : !editalVerticalizado ? (
+            <div className="py-8 text-center">
+              <DocumentTextIcon className="mx-auto mb-3 h-10 w-10 text-cp-muted" />
+              <p className="text-sm text-cp-muted">Edital verticalizado ainda não disponível.</p>
+              <p className="mt-1 text-xs text-cp-muted/70">O administrador precisa fazer upload do edital.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-cp-border bg-cp-surface p-4 sm:p-5">
+                <h4 className="text-base font-medium text-cp-text sm:text-lg">
+                  {editalVerticalizado.titulo || 'Edital Verticalizado'}
+                </h4>
+                {editalVerticalizado.descricao && (
+                  <p className="mt-2 text-sm text-cp-muted">{editalVerticalizado.descricao}</p>
+                )}
+                {editalVerticalizado.updatedAt && (
+                  <p className="mt-2 font-mono text-[10px] text-cp-muted">
+                    Atualizado em{' '}
+                    {editalVerticalizado.updatedAt.toDate?.().toLocaleDateString('pt-BR') || '—'}
+                  </p>
+                )}
+
+                {editalVerticalizado.secoes && editalVerticalizado.secoes.length > 0 ? (
+                  <div className="mt-4 space-y-2">
+                    {editalVerticalizado.secoes.slice(0, 5).map((secao, idx) => (
+                      <div key={idx} className="rounded-xl border border-cp-border bg-cp-bg/50 p-3 sm:p-4">
+                        <h5 className="text-sm font-medium text-cp-text">{secao.titulo}</h5>
+                        {secao.conteudo && (
+                          <p className="mt-1 line-clamp-2 text-xs text-cp-muted">
+                            {secao.conteudo.substring(0, 150)}...
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                    {editalVerticalizado.secoes.length > 5 && (
+                      <p className="text-center text-xs text-cp-muted">
+                        +{editalVerticalizado.secoes.length - 5} seções adicionais
+                      </p>
+                    )}
+                  </div>
+                ) : editalVerticalizado.conteudo ? (
+                  <div className="mt-4 max-h-64 overflow-y-auto rounded-xl border border-cp-border bg-cp-bg/50 p-4 sm:max-h-96">
+                    <div
+                      className="prose prose-sm max-w-none text-sm text-cp-muted dark:prose-invert"
+                      dangerouslySetInnerHTML={{
+                        __html: `${editalVerticalizado.conteudo.substring(0, 500)}...`,
+                      }}
+                    />
+                  </div>
+                ) : null}
+
+                <Link
+                  to={`/edital-verticalizado?course=${selectedCourseId}`}
+                  className="cp-btn-ghost mt-4 inline-flex !text-sm"
+                >
+                  Ver edital completo
+                  <ChevronRightIcon className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* Links rápidos */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.3 }}
+      >
+        <div className="mb-4 flex items-center gap-2">
+          <span className="cp-badge">Acesso rápido</span>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {quickLinks.map((link) => {
+            const Icon = link.icon
+            return (
+              <Link
+                key={link.to}
+                to={link.to}
+                className={`cp-card group p-5 transition ${link.accent}`}
+              >
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-cp-border bg-cp-surface text-cp-accent transition group-hover:border-cp-accent/30 group-hover:shadow-cp-glow">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <h3 className="text-sm font-medium text-cp-text">{link.title}</h3>
+                <p className="mt-1 text-xs text-cp-muted">{link.desc}</p>
+                <ArrowRightOutline className="mt-3 h-4 w-4 text-cp-accent transition group-hover:translate-x-1" />
+              </Link>
+            )
+          })}
+        </div>
+      </motion.div>
+
       <LGPDConsent />
     </div>
   )

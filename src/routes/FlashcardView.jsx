@@ -25,6 +25,7 @@ import {
   saveExplanationCache,
   rateExplanationCache,
 } from '../utils/cache'
+import { CPPageHeader } from '@/components/cp/CPPageLayout'
 
 const MATERIAS = [
   'Português',
@@ -1230,8 +1231,57 @@ IMPORTANTE:
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6">
+      <CPPageHeader
+        badge="SRS · IA"
+        title="Flashcards com IA"
+        subtitle={
+          isStudying
+            ? `Estudando: ${selectedMateria} • ${selectedModulo}`
+            : 'Clique em um tópico do edital para abrir os flashcards'
+        }
+        backHref="/dashboard"
+        actions={
+          isStudying ? (
+            <button
+              type="button"
+              onClick={() => setTimerActive(!timerActive)}
+              className={`relative group inline-flex items-center gap-3 px-5 py-3 rounded-xl border backdrop-blur-sm transition-all cursor-pointer ${
+                timerActive
+                  ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 dark:from-green-500/30 dark:to-emerald-500/30 border-green-500/50 dark:border-green-400/50 hover:border-green-500/70 dark:hover:border-green-400/70'
+                  : 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 border-blue-500/30 dark:border-blue-400/30 hover:border-blue-500/50 dark:hover:border-blue-400/50'
+              }`}
+              title={timerActive ? 'Clique para pausar o timer' : 'Clique para iniciar o timer'}
+            >
+              <div className="relative">
+                <div className={`absolute inset-0 rounded-full blur-md transition-opacity ${
+                  timerActive
+                    ? 'bg-green-500 opacity-50 group-hover:opacity-75 animate-pulse'
+                    : 'bg-blue-500 opacity-50 group-hover:opacity-75'
+                }`}></div>
+                <ClockIcon className={`relative h-6 w-6 ${
+                  timerActive
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-blue-600 dark:text-blue-400'
+                }`} />
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                  {timerActive ? 'Contando...' : 'Clique para contar'}
+                </p>
+                <p className={`text-xl font-black bg-clip-text text-transparent ${
+                  timerActive
+                    ? 'bg-gradient-to-r from-green-600 to-emerald-600 dark:from-green-400 dark:to-emerald-400'
+                    : 'bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400'
+                }`}>
+                  {formattedTime}
+                </p>
+              </div>
+            </button>
+          ) : undefined
+        }
+      />
+
       {/* Banner de Conversão para Teste */}
       {isTrialMode() && (
         <div className="rounded-2xl p-4 bg-gradient-to-r from-alego-600 to-alego-700 text-white shadow-xl">
@@ -1266,83 +1316,6 @@ IMPORTANTE:
           </Link>
         </div>
       )}
-      
-      {/* Header Tecnológico */}
-      <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
-        {/* Background gradient decorativo */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 rounded-full blur-3xl -mr-48 -mt-48"></div>
-        <div className="absolute bottom-0 left-0 w-72 h-72 bg-gradient-to-tr from-indigo-500/10 to-purple-500/10 rounded-full blur-3xl -ml-36 -mb-36"></div>
-        
-        <div className="relative">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur-lg opacity-50 animate-pulse"></div>
-              <div className="relative rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 p-3 shadow-lg">
-                <span className="text-white font-bold text-xl">📚</span>
-              </div>
-            </div>
-            <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
-              Sistema de Repetição Espaçada (SRS)
-            </p>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex-1">
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black mb-3">
-                <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 dark:from-blue-400 dark:via-purple-400 dark:to-cyan-400 bg-clip-text text-transparent">
-                  Flashcards Inteligentes
-                </span>
-              </h1>
-              <p className="text-sm sm:text-base font-semibold text-slate-600 dark:text-slate-400">
-                {isStudying 
-                  ? (
-                    <span>
-                      Estudando: <span className="font-black text-blue-600 dark:text-blue-400">{selectedMateria}</span> • <span className="font-black text-purple-600 dark:text-purple-400">{selectedModulo}</span>
-                    </span>
-                  )
-                  : 'Clique em um tópico do edital para abrir os flashcards'}
-              </p>
-            </div>
-            {isStudying && (
-              <button
-                type="button"
-                onClick={() => setTimerActive(!timerActive)}
-                className={`relative group inline-flex items-center gap-3 px-5 py-3 rounded-xl border backdrop-blur-sm transition-all cursor-pointer ${
-                  timerActive
-                    ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 dark:from-green-500/30 dark:to-emerald-500/30 border-green-500/50 dark:border-green-400/50 hover:border-green-500/70 dark:hover:border-green-400/70'
-                    : 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 border-blue-500/30 dark:border-blue-400/30 hover:border-blue-500/50 dark:hover:border-blue-400/50'
-                }`}
-                title={timerActive ? 'Clique para pausar o timer' : 'Clique para iniciar o timer'}
-              >
-                <div className="relative">
-                  <div className={`absolute inset-0 rounded-full blur-md transition-opacity ${
-                    timerActive 
-                      ? 'bg-green-500 opacity-50 group-hover:opacity-75 animate-pulse' 
-                      : 'bg-blue-500 opacity-50 group-hover:opacity-75'
-                  }`}></div>
-                  <ClockIcon className={`relative h-6 w-6 ${
-                    timerActive 
-                      ? 'text-green-600 dark:text-green-400' 
-                      : 'text-blue-600 dark:text-blue-400'
-                  }`} />
-                </div>
-                <div>
-                  <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                    {timerActive ? 'Contando...' : 'Clique para contar'}
-                  </p>
-                  <p className={`text-xl font-black bg-clip-text text-transparent ${
-                    timerActive
-                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 dark:from-green-400 dark:to-emerald-400'
-                      : 'bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400'
-                  }`}>
-                    {formattedTime}
-                  </p>
-                </div>
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
 
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Árvore de Pastas - Design Tecnológico */}
@@ -1700,7 +1673,6 @@ IMPORTANTE:
           </div>
         </div>
       )}
-      </div>
     </div>
   )
 }

@@ -76,16 +76,7 @@ const MateriaRevisada = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 space-y-6">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-alego-600 dark:text-alego-400 mb-2">
-          📖 Matérias Revisadas
-        </h1>
-        <p className="text-slate-600 dark:text-slate-400">
-          Conteúdo técnico completo baseado no edital do concurso
-        </p>
-      </div>
-
+    <div className="space-y-6">
       {materias.length === 0 ? (
         <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-xl shadow-lg">
           <p className="text-slate-600 dark:text-slate-400">

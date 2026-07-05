@@ -1,14 +1,15 @@
 import { useEffect } from 'react'
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
-import { db, firebaseInitialized } from '../firebase/config'
+import { db, firebaseInitialized, initFirebase } from '../firebase/config'
 import { useAuth } from './useAuth'
+import { isDevEnv } from '../lib/env.js'
 
 // Hook para rastrear status online/offline do usuário
 export const useOnlineStatus = () => {
   const { user } = useAuth()
 
   useEffect(() => {
-    // Verificar se Firebase está inicializado e user tem uid válido
+    initFirebase()
     if (!firebaseInitialized || !db || !user || !user.uid) return
 
     // Garantir que uid é uma string
@@ -33,7 +34,7 @@ export const useOnlineStatus = () => {
       } catch (err) {
         // Garantir que o erro seja convertido para string antes de logar
         const errorMessage = err instanceof Error ? err.message : String(err)
-        if (import.meta.env.DEV) {
+        if (isDevEnv()) {
           console.error('Erro ao atualizar status online:', errorMessage)
         }
       }

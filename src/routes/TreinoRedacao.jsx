@@ -533,10 +533,10 @@ CRÍTICO:
   // Tela de resultados
   if (resultado) {
     return (
-      <div className="min-h-screen py-8">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className={`rounded-2xl p-8 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
-            <h1 className="text-3xl font-bold mb-6 text-alego-600">Resultado do Treino de Redação</h1>
+      <div className="space-y-6 py-2">
+        <div className="max-w-4xl mx-auto">
+          <div className="cp-card rounded-2xl p-8">
+            <h2 className="cp-headline mb-6 text-2xl">Resultado do Treino de Redação</h2>
 
             {/* Nota */}
             <div className="mb-6 p-6 bg-gradient-to-r from-alego-600 to-alego-700 rounded-xl text-white">
@@ -662,10 +662,10 @@ CRÍTICO:
   }
 
   return (
-    <div className="min-h-screen py-4">
-      <div className="max-w-4xl mx-auto px-4">
+    <div className="space-y-6 py-2">
+      <div className="max-w-4xl mx-auto">
         {/* Header com timer */}
-        <div className={`rounded-xl p-4 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
+        <div className="cp-card rounded-xl p-4 mb-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <ClockIcon className={`h-5 w-5 ${timeLeft < 600 ? 'text-red-500' : 'text-alego-600'}`} />
@@ -689,7 +689,7 @@ CRÍTICO:
         </div>
 
         {/* Tema da redação */}
-        <div className={`rounded-xl p-6 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg border-2 border-alego-600`}>
+        <div className="cp-card mb-4 rounded-xl border-2 border-cp-accent/30 p-6">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-xl font-bold text-alego-600">Tema da Redação</h2>
             <button

@@ -249,47 +249,29 @@ const GuiaEstudos = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto space-y-8">
-        {/* Header com animação */}
+    <div className="max-w-5xl mx-auto space-y-8">
+      {stats && (
         <div
           data-animate
-          id="header"
-          className={`text-center space-y-4 transition-all duration-1000 ${
+          id="stats"
+          className={`flex flex-wrap items-center justify-center gap-4 transition-all duration-1000 ${
             visibleSteps.has('header') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-alego-600/30 to-alego-700/30 rounded-xl blur-lg animate-pulse"></div>
-              <div className="relative bg-gradient-to-br from-alego-600 to-alego-700 dark:from-alego-500 dark:to-alego-600 rounded-xl p-3 shadow-lg">
-                <AcademicCapIcon className="h-8 w-8 text-white" />
-              </div>
-            </div>
-            <h1 className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white">
-              Guia de Estudos
-            </h1>
+          <div className="px-4 py-2 rounded-lg bg-alego-100 dark:bg-alego-900/30 border border-alego-300 dark:border-alego-700">
+            <p className="text-xs text-alego-600 dark:text-alego-400 font-semibold">Seu Progresso</p>
+            <p className="text-lg font-black text-alego-700 dark:text-alego-300">
+              {stats.totalDays} dias • {stats.totalHours}h
+            </p>
           </div>
-          <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-            Aprenda como usar a plataforma para alcançar 100% de acerto na prova e redação perfeita
-          </p>
-          {stats && (
-            <div className="flex flex-wrap items-center justify-center gap-4 mt-6">
-              <div className="px-4 py-2 rounded-lg bg-alego-100 dark:bg-alego-900/30 border border-alego-300 dark:border-alego-700">
-                <p className="text-xs text-alego-600 dark:text-alego-400 font-semibold">Seu Progresso</p>
-                <p className="text-lg font-black text-alego-700 dark:text-alego-300">
-                  {stats.totalDays} dias • {stats.totalHours}h
-                </p>
-              </div>
-              <div className="px-4 py-2 rounded-lg bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700">
-                <p className="text-xs text-green-600 dark:text-green-400 font-semibold">Cards Estudados</p>
-                <p className="text-lg font-black text-green-700 dark:text-green-300">{stats.studiedCards}</p>
-              </div>
-            </div>
-          )}
+          <div className="px-4 py-2 rounded-lg bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700">
+            <p className="text-xs text-green-600 dark:text-green-400 font-semibold">Cards Estudados</p>
+            <p className="text-lg font-black text-green-700 dark:text-green-300">{stats.studiedCards}</p>
+          </div>
         </div>
+      )}
 
-        {/* Ciclo de Estudos com animação */}
+      {/* Ciclo de Estudos com animação */}
         <div
           data-animate
           id="cycle"

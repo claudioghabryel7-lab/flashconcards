@@ -1,4 +1,5 @@
 import { Component } from 'react'
+import { isDevEnv } from '../lib/env.js'
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -14,7 +15,7 @@ class ErrorBoundary extends Component {
     // Garantir que o erro seja convertido para string antes de logar
     const errorMessage = error instanceof Error ? error.message : String(error)
     const errorInfoString = errorInfo ? JSON.stringify(errorInfo, null, 2) : 'N/A'
-    if (import.meta.env.DEV) {
+    if (isDevEnv()) {
       console.error('Erro capturado pelo ErrorBoundary:', errorMessage, errorInfoString)
     }
   }

@@ -339,17 +339,7 @@ const CalendarioProgresso = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">
-          Calendário de Progresso
-        </h1>
-        <p className="text-slate-600 dark:text-slate-400">
-          Acompanhe seu progresso de estudos
-        </p>
-      </div>
-
+    <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm border border-slate-200 dark:border-slate-700">

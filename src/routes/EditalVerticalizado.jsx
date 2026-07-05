@@ -1057,63 +1057,33 @@ REGRAS IMPORTANTES:
 
   if (!editalVerticalizado) {
     return (
-      <div className="min-h-screen py-6">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="space-y-6">
+        <div className={`bg-background-card rounded-2xl shadow-lg border border-slate-20late-70primpryxt-center`}>
+          <DocumentTextIcon className="h-16 w-16 text-text-muted mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-text-primary mb-2">
+            Edital Verticalizado não disponível
+          </h2>
+          <p className="text-text-secondary mb-6">
+            O edital verticalizado ainda não foi configurado para este curso.
+          </p>
           <Link
             to="/dashboard"
-            className="inline-flex items-center gap-2 text-text-secondary hover:text-alego-600 hover:text-accent-cyan-dim mb-6"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-alego-600 text-white rounded-xl font-semibold hover:bg-alego-700 transition-all"
           >
-            <ChevronLeftIcon className="h-5 w-5" />
             Voltar ao Dashboard
           </Link>
-          
-          <div className={`bg-background-card rounded-2xl shadow-lg border border-slate-20late-70primpryxt-center`}>
-            <DocumentTextIcon className="h-16 w-16 text-text-muted mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-text-primary mb-2">
-              Edital Verticalizado não disponível
-            </h1>
-            <p className="text-text-secondary mb-6">
-              O edital verticalizado ainda não foi configurado para este curso.
-            </p>
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-alego-600 text-white rounded-xl font-semibold hover:bg-alego-700 transition-all"
-            >
-              Voltar ao Dashboard
-            </Link>
-          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen py-4 sm:py-6">
-      <div className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-4 sm:mb-6 md:mb-8">
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-2 text-text-secondary hover:text-alego-600 hover:text-accent-cyan-dim mb-3 sm:mb-4 text-sm sm:text-base"
-          >
-            <ChevronLeftIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-            <span className="hidden sm:inline">Voltar ao Dashboard</span>
-            <span className="sm:hidden">Voltar</span>
-          </Link>
-          
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="p-2 sm:p-3 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg sm:rounded-xl flex-shrink-0">
-              <DocumentTextIcon className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-text-primary break-words">
-                {courseName ? `EDITAL VERTICALIZADO ${courseName.toUpperCase()}` : (editalVerticalizado.titulo || 'EDITAL VERTICALIZADO')}
-              </h1>
-            </div>
-          </div>
-        </div>
+    <div className="space-y-6">
+      {courseName && (
+        <p className="text-sm font-semibold text-text-secondary">{courseName.toUpperCase()}</p>
+      )}
 
-        {/* Conteúdo Principal */}
+      {/* Conteúdo Principal */}
         <div className={`bg-background-card rounded-xl sm:rounded-2xl shadow-lg border border-border-primary p-2 sm:p-3 md:p-4 lg:p-6`}>
           {/* Descrição removida conforme solicitado */}
 
@@ -1616,7 +1586,6 @@ REGRAS IMPORTANTES:
             </div>
           )}
         </div>
-      </div>
 
       {/* Modal de Edição de Tópico */}
       {editModalOpen && (

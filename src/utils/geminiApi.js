@@ -327,12 +327,37 @@ export async function extractJsonFromResponse(response) {
   try {
     parsed = JSON.parse(jsonMatch[0])
   } catch {
-    // Tentar usar jsonrepair se o JSON estiver corrompido
-    const { default: jsonrepair } = await import('jsonrepair')
-    parsed = JSON.parse(jsonrepair(jsonMatch[0]))
+    parsed = await repairJsonText(jsonMatch[0])
   }
 
   return parsed
+}
+
+/**
+ * Repara JSON malformado retornado pela IA (fallback robusto).
+ */
+export async function repairJsonText(raw) {
+  const attempts = [
+    (s) => JSON.parse(s),
+    async (s) => {
+      const mod = await import('jsonrepair')
+      const repairFn = mod.jsonrepair || mod.default
+      if (typeof repairFn !== 'function') throw new Error('jsonrepair indisponível')
+      return JSON.parse(repairFn(s))
+    },
+    (s) => JSON.parse(s.replace(/,\s*([}\]])/g, '$1').replace(/[\u0000-\u001F]+/g, ' ')),
+  ]
+
+  let lastError
+  for (const attempt of attempts) {
+    try {
+      return await attempt(raw)
+    } catch (err) {
+      lastError = err
+    }
+  }
+
+  throw lastError || new Error('Não foi possível reparar o JSON da resposta')
 }
 
 /**

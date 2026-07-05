@@ -1,0 +1,63 @@
+'use client'
+
+import Link from 'next/link'
+import { motion } from 'framer-motion'
+import { ArrowLeft } from 'lucide-react'
+import type { ReactNode } from 'react'
+
+export type CPPageHeaderProps = {
+  badge?: string
+  title: ReactNode
+  subtitle?: string
+  backHref?: string | null
+  backLabel?: string
+  actions?: ReactNode
+}
+
+export function CPPageHeader({
+  badge,
+  title,
+  subtitle,
+  backHref = '/dashboard',
+  backLabel = 'Voltar ao Dashboard',
+  actions,
+}: CPPageHeaderProps) {
+  const showBack = backHref != null && backHref !== ''
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45 }}
+      className="cp-page-header mb-8"
+    >
+      {showBack && (
+        <Link
+          href={backHref}
+          className="mb-4 inline-flex items-center gap-2 text-sm text-cp-muted transition hover:text-cp-text"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {backLabel}
+        </Link>
+      )}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          {badge && <span className="cp-badge cp-badge-accent">{badge}</span>}
+          <h1 className="cp-headline mt-4 text-3xl sm:text-4xl">{title}</h1>
+          {subtitle && <p className="mt-2 max-w-2xl text-cp-muted">{subtitle}</p>}
+        </div>
+        {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+      </div>
+    </motion.div>
+  )
+}
+
+export function CPLoading({ label = 'Carregando...' }: { label?: string }) {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center">
+      <div className="text-center">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+        <p className="mt-4 font-mono text-sm text-cp-muted">{label}</p>
+      </div>
+    </div>
+  )
+}

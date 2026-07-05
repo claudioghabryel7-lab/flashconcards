@@ -1029,23 +1029,7 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
   const accuracy = totalAnswered > 0 ? ((stats.correct || 0) / totalAnswered * 100).toFixed(1) : 0
 
   return (
-    <div className="space-y-6 stark-bg-primary min-h-screen p-4 sm:p-6 lg:p-8">
-      {/* Header STARK */}
-      <div className="stark-glass stark-animate-fade-in p-6 sm:p-8 lg:p-10 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-purple-500/10"></div>
-        <div className="relative z-10">
-          <h1 className="stark-text-gradient text-3xl sm:text-4xl lg:text-5xl font-black mb-3 tracking-tight">
-            FLASHQUESTÕES
-          </h1>
-          <p className="stark-text-secondary text-sm sm:text-base">
-            {selectedCourse 
-              ? `Questões por tópico do edital verticalizado — ${selectedCourse.name}`
-              : 'Questões fictícias por tópico do edital verticalizado'}
-          </p>
-        </div>
-        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-full blur-3xl"></div>
-      </div>
-
+    <div className="space-y-6">
       {/* Estatísticas STARK */}
       <div className="stark-grid stark-animate-fade-in">
         <div className="stark-stats">

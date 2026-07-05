@@ -1579,8 +1579,8 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.
   // Tela de revisão de questões (admin) - DEVE estar antes de outros returns
   if (showQuestionReview && profile?.role === 'admin') {
     return (
-      <div className="min-h-screen py-8">
-        <div className="max-w-6xl mx-auto px-4">
+      <div className="space-y-6 py-2">
+        <div className="max-w-6xl mx-auto">
           <div className={`rounded-2xl p-6 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg mb-6`}>
             <div className="flex items-center justify-between mb-6">
               <div>
@@ -1700,11 +1700,10 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.
   // Tela de análise do edital
   if (!simuladoInfo && !analyzing) {
     return (
-      <div className="min-h-screen py-8">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className={`rounded-2xl p-8 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
-            <h1 className="text-3xl font-bold mb-2 text-alego-600">Simulado</h1>
-            <p className="text-slate-600 dark:text-slate-400 mb-6">
+      <div className="space-y-6 py-2">
+        <div className="max-w-4xl mx-auto">
+          <div className={`cp-card rounded-2xl p-8`}>
+            <p className="mb-6 text-cp-muted">
               {courseName ? `Simulado para ${courseName}` : 'Simulado baseado no edital do curso'}
             </p>
 
@@ -1813,8 +1812,8 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.
   // Tela de informações do simulado
   if (simuladoInfo && questions.length === 0) {
     return (
-      <div className="min-h-screen py-8">
-        <div className="max-w-4xl mx-auto px-4">
+      <div className="space-y-6 py-2">
+        <div className="max-w-4xl mx-auto">
           <div className={`rounded-2xl p-8 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
             <h1 className="text-3xl font-bold mb-2 text-alego-600">Simulado Preparado</h1>
             <p className="text-slate-600 dark:text-slate-400 mb-6">{simuladoInfo.descricao}</p>
@@ -1924,8 +1923,8 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.
     const lines = redacaoTexto.split('\n').length
 
     return (
-      <div className="min-h-screen py-4">
-        <div className="max-w-4xl mx-auto px-4">
+      <div className="space-y-6 py-2">
+        <div className="max-w-4xl mx-auto">
           {/* Header com timer */}
           <div className={`rounded-xl p-4 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
             <div className="flex items-center justify-between mb-2">
@@ -2050,8 +2049,8 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
   // Tela de resultados
   if (isFinished && results) {
     return (
-      <div className="min-h-screen py-8">
-        <div className="max-w-4xl mx-auto px-4">
+      <div className="space-y-6 py-2">
+        <div className="max-w-4xl mx-auto">
           <div className={`rounded-2xl p-8 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
             <h1 className="text-3xl font-bold mb-2 text-alego-600">Resultados do Simulado</h1>
 
@@ -2324,8 +2323,8 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
 
   // Tela do simulado em andamento
   return (
-    <div className="min-h-screen py-4">
-      <div className="max-w-4xl mx-auto px-4">
+    <div className="space-y-6 py-2">
+      <div className="max-w-4xl mx-auto">
         {/* Header com timer e progresso */}
         <div className={`rounded-xl p-4 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-white'} shadow-lg`}>
           <div className="flex items-center justify-between mb-2">

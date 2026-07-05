@@ -252,82 +252,56 @@ const RankingSimulado = () => {
   const rest = rankingData.slice(3)
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-      {/* Header */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-600 rounded-2xl shadow-2xl p-6 sm:p-8 text-white">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -ml-24 -mb-24"></div>
-        
-        <div className="relative z-10">
-          <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4 mb-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-sm">
-                <TrophyIcon className="h-8 w-8 sm:h-10 sm:w-10" />
-              </div>
-              <div>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-black mb-2">
-                  Ranking de Simulados
-                </h1>
-                <p className="text-purple-100 text-sm sm:text-base">
-                  Classificação baseada na melhor nota de cada aluno
-                </p>
-              </div>
-            </div>
-            
-            {/* Seletor de Curso */}
-            {courses.length > 1 && (
-              <select
-                value={selectedCourseId || ''}
-                onChange={(e) => setSelectedCourseId(e.target.value)}
-                className="bg-white/20 backdrop-blur-sm border-2 border-white/30 rounded-xl px-4 py-2 text-white font-semibold focus:outline-none focus:border-white/50 min-w-[200px]"
-              >
-                {courses.map(course => (
-                  <option key={course.id} value={course.id} className="text-slate-900">
-                    {course.name || course.competition || course.id}
-                  </option>
-                ))}
-              </select>
-            )}
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        {courses.length > 1 && (
+          <select
+            value={selectedCourseId || ''}
+            onChange={(e) => setSelectedCourseId(e.target.value)}
+            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-slate-900 dark:text-white font-semibold focus:outline-none focus:border-purple-500 min-w-[200px]"
+          >
+            {courses.map(course => (
+              <option key={course.id} value={course.id}>
+                {course.name || course.competition || course.id}
+              </option>
+            ))}
+          </select>
+        )}
+        {courseName && (
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 rounded-full">
+            <span className="text-sm font-semibold text-purple-800 dark:text-purple-200">{courseName}</span>
           </div>
+        )}
+      </div>
 
-          {/* Curso selecionado */}
-          {courseName && (
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full">
-              <span className="text-sm font-semibold">{courseName}</span>
-            </div>
-          )}
-
-          {/* Posição do usuário atual */}
-          {currentUserRank && (
-            <div className="mt-6 p-4 bg-white/20 backdrop-blur-sm rounded-xl border border-white/30">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="text-3xl font-black">#{userRank}</div>
-                  <div>
-                    <div className="font-bold text-lg">{currentUserRank.userName}</div>
-                    <div className="text-sm text-purple-100">Sua posição</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-6">
-                  {currentUserRank.streak > 0 && (
-                    <div className="flex items-center gap-2">
-                      <FireIcon className="h-6 w-6 text-orange-300" />
-                      <div>
-                        <div className="font-bold">{currentUserRank.streak}</div>
-                        <div className="text-xs text-purple-100">Streak</div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="text-right">
-                    <div className="text-2xl font-black">{currentUserRank.finalScore}</div>
-                    <div className="text-xs text-purple-100">Melhor nota</div>
-                  </div>
-                </div>
+      {currentUserRank && (
+        <div className="p-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 rounded-xl text-white">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <div className="text-3xl font-black">#{userRank}</div>
+              <div>
+                <div className="font-bold text-lg">{currentUserRank.userName}</div>
+                <div className="text-sm text-purple-100">Sua posição</div>
               </div>
             </div>
-          )}
+            <div className="flex items-center gap-6">
+              {currentUserRank.streak > 0 && (
+                <div className="flex items-center gap-2">
+                  <FireIcon className="h-6 w-6 text-orange-300" />
+                  <div>
+                    <div className="font-bold">{currentUserRank.streak}</div>
+                    <div className="text-xs text-purple-100">Streak</div>
+                  </div>
+                </div>
+              )}
+              <div className="text-right">
+                <div className="text-2xl font-black">{currentUserRank.finalScore}</div>
+                <div className="text-xs text-purple-100">Melhor nota</div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Top 3 Pódio */}
       {top3.length > 0 && (

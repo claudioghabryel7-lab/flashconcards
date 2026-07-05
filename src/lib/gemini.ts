@@ -1,65 +1,66 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI } from '@google/generative-ai'
+import { readEnv } from './env.js'
 
-// Ler chave de API do ambiente (VITE_ para Vite)
-const API_KEY = import.meta.env.VITE_GOOGLE_AI_API_KEY;
+const MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro']
 
-if (!API_KEY) {
-  throw new Error("VITE_GOOGLE_AI_API_KEY não encontrada nas variáveis de ambiente");
+function getApiKey() {
+  return (
+    readEnv('VITE_GEMINI_API_KEY') ||
+    readEnv('VITE_GOOGLE_AI_API_KEY') ||
+    readEnv('VITE_GEMINI_API_KEY_1') ||
+    ''
+  )
 }
 
-// Inicializar o Gemini
-const genAI = new GoogleGenerativeAI(API_KEY);
+let genAI: GoogleGenerativeAI | null = null
 
-// Lista de modelos Gemini 2.5 para fallback
-const MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.5-pro",
-];
+function getGenAI() {
+  if (!genAI) {
+    const apiKey = getApiKey()
+    if (!apiKey) {
+      throw new Error('Chave Gemini não configurada no .env')
+    }
+    genAI = new GoogleGenerativeAI(apiKey)
+  }
+  return genAI
+}
 
-// Modelo principal Gemini 2.5 Flash (funciona na API v1beta)
-export const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+export const geminiModel = {
+  async generateContent(prompt: string) {
+    const model = getGenAI().getGenerativeModel({ model: 'gemini-2.5-flash' })
+    return model.generateContent(prompt)
+  },
+}
 
-/**
- * Função para chamar Gemini com sistema de fallback entre modelos
- * Tenta cada modelo na ordem até conseguir sucesso
- */
-export async function callGeminiWithFallback(prompt: string, options?: { temperature?: number; maxOutputTokens?: number }) {
-  const { temperature = 0.7, maxOutputTokens = 32000 } = options || {};
-  
+export async function callGeminiWithFallback(
+  prompt: string,
+  options?: { temperature?: number; maxOutputTokens?: number },
+) {
+  const { temperature = 0.7, maxOutputTokens = 32000 } = options || {}
+
   for (const modelName of MODELS) {
     try {
-      console.log(`🔄 Tentando modelo: ${modelName}`);
-      const model = genAI.getGenerativeModel({ 
+      const model = getGenAI().getGenerativeModel({
         model: modelName,
-        generationConfig: { temperature, maxOutputTokens }
-      });
-      
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-      
-      console.log(`✅ Sucesso com modelo: ${modelName}`);
-      return text;
+        generationConfig: { temperature, maxOutputTokens },
+      })
+      const result = await model.generateContent(prompt)
+      return result.response.text()
     } catch (error) {
-      console.error(`❌ Erro com modelo ${modelName}:`, error);
-      // Continua para o próximo modelo
+      console.error(`Erro com modelo ${modelName}:`, error)
     }
   }
-  
-  throw new Error("Todos os modelos Gemini 2.5 falharam");
+
+  throw new Error('Todos os modelos Gemini falharam')
 }
 
-// Função para testar a API
 export async function testGeminiAPI() {
   try {
-    const text = await callGeminiWithFallback("Olá, você está funcionando?");
-    console.log("Gemini 2.5 API funcionando:", text);
-    return true;
-  } catch (error) {
-    console.error("Erro na API Gemini 2.5:", error);
-    return false;
+    await callGeminiWithFallback('Olá, você está funcionando?')
+    return true
+  } catch {
+    return false
   }
 }
 
-// Exportar a instância do genAI para uso em outras funções
-export { genAI };
+export { getGenAI as genAI }

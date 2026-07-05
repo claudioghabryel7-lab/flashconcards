@@ -18,6 +18,7 @@ import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import { CPPageHeader } from '@/components/cp/CPPageLayout'
 
 const GuiaMentorado = () => {
   const { user, profile } = useAuth()
@@ -480,51 +481,36 @@ IMPORTANTE:
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
   
   return (
-    <div className="min-h-screen bg-background-primary text-text-primary">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-2 text-text-muted hover:text-text-primary mb-4 transition-colors"
-          >
-            <ChevronLeftIcon className="h-5 w-5" />
-            Voltar ao Dashboard
-          </button>
-          
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">
-                📅 Guia Mentorado
-              </h1>
-              <p className="text-text-secondary mt-1">
-                Cronograma estratégico baseado no edital verticalizado
-              </p>
-            </div>
-            
-            {isAdmin && (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowConfigModal(true)}
-                  className="px-4 py-2 bg-accent-cyan text-background-primary rounded-lg hover:bg-accent-cyan-dim transition-colors flex items-center gap-2"
-                >
-                  <PencilIcon className="h-4 w-4" />
-                  Configurar
-                </button>
-                <button
-                  onClick={generateCronograma}
-                  disabled={loading || !config.dataProva || !editalVerticalizado}
-                  className="px-4 py-2 bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary rounded-lg hover:from-accent-orange-dim hover:to-accent-cyan-dim transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  <SparklesIcon className="h-4 w-4" />
-                  Gerar Cronograma
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {/* Mensagem de Progresso */}
+    <div className="space-y-6">
+      <CPPageHeader
+        badge="Cronograma"
+        title="Guia Mentorado"
+        subtitle="Cronograma estratégico baseado no edital verticalizado"
+        backHref="/dashboard"
+        actions={
+          isAdmin ? (
+            <>
+              <button
+                onClick={() => setShowConfigModal(true)}
+                className="px-4 py-2 bg-accent-cyan text-background-primary rounded-lg hover:bg-accent-cyan-dim transition-colors flex items-center gap-2"
+              >
+                <PencilIcon className="h-4 w-4" />
+                Configurar
+              </button>
+              <button
+                onClick={generateCronograma}
+                disabled={loading || !config.dataProva || !editalVerticalizado}
+                className="px-4 py-2 bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary rounded-lg hover:from-accent-orange-dim hover:to-accent-cyan-dim transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <SparklesIcon className="h-4 w-4" />
+                Gerar Cronograma
+              </button>
+            </>
+          ) : undefined
+        }
+      />
+
+      {/* Mensagem de Progresso */}
         {message && (
           <div className="mb-6 p-4 rounded-xl bg-accent-cyan/10 border border-accent-cyan/30 text-accent-cyan text-center">
             {message}
@@ -782,7 +768,6 @@ IMPORTANTE:
             </div>
           </div>
         )}
-      </div>
     </div>
   )
 }

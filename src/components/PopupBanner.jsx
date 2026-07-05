@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { doc, getDoc, onSnapshot } from 'firebase/firestore'
-import { db } from '../firebase/config'
+import { db, initFirebase, firebaseInitialized } from '../firebase/config'
 import LazyImage from './LazyImage'
 
 // Função para validar imagem base64 (fora do componente para evitar re-criações)
@@ -25,6 +25,14 @@ const PopupBanner = () => {
   const [imageError, setImageError] = useState(false)
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    initFirebase()
+    if (!firebaseInitialized || !db) {
+      setLoading(false)
+      return
+    }
+
     // Tentar carregar do cache primeiro
     const cacheKey = 'popupBanner'
     try {

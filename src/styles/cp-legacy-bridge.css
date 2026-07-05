@@ -1,0 +1,163 @@
+/**
+ * Ponte visual: componentes legacy → tema Concurseiro Preditivo
+ * Escopo: .cp-legacy-root (aplicado via LegacyPage)
+ */
+
+.cp-legacy-root {
+  --bg-primary: var(--cp-bg);
+  --bg-secondary: var(--cp-bg-elevated);
+  --bg-card: var(--cp-surface);
+  --bg-card-hover: color-mix(in srgb, var(--cp-surface) 85%, var(--cp-text) 5%);
+  --text-primary: var(--cp-text);
+  --text-secondary: var(--cp-text-muted);
+  --text-muted: var(--cp-text-muted);
+  --border-primary: var(--cp-border);
+  --border-secondary: var(--cp-border-hover);
+  --accent-orange: var(--cp-accent);
+  --accent-orange-dim: var(--cp-accent);
+  --accent-cyan: var(--cp-accent-2);
+  --accent-cyan-dim: var(--cp-accent-2);
+
+  --stark-bg-primary: var(--cp-bg);
+  --stark-bg-secondary: var(--cp-bg-elevated);
+  --stark-bg-card: var(--cp-surface);
+  --stark-bg-hover: color-mix(in srgb, var(--cp-surface) 85%, var(--cp-text) 5%);
+  --stark-text-primary: var(--cp-text);
+  --stark-text-secondary: var(--cp-text-muted);
+  --stark-text-muted: var(--cp-text-muted);
+  --stark-accent-cyan: var(--cp-accent-2);
+  --stark-accent-purple: var(--cp-accent);
+  --glass-stark: var(--cp-surface);
+  --glass-stark-border: var(--cp-border);
+  --border-stark: 1px solid var(--cp-border);
+}
+
+.cp-legacy-root .min-h-screen.bg-background-primary,
+.cp-legacy-root .stark-bg-primary.min-h-screen,
+.cp-legacy-root .min-h-screen.bg-background-primary.text-text-primary {
+  min-height: auto !important;
+  background: transparent !important;
+}
+
+.cp-legacy-root .max-w-7xl.mx-auto.px-4,
+.cp-legacy-root .max-w-7xl.mx-auto.px-4.sm\:px-6.lg\:px-8 {
+  max-width: none !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.cp-legacy-root .bg-background-card,
+.cp-legacy-root .stark-card,
+.cp-legacy-root .stark-glass,
+.cp-legacy-root .stark-stats,
+.cp-legacy-root .glass-card {
+  background: var(--cp-surface) !important;
+  border: 1px solid var(--cp-border) !important;
+  border-radius: 16px !important;
+  backdrop-filter: blur(12px);
+  box-shadow: none !important;
+}
+
+.cp-legacy-root .bg-background-card-hover,
+.cp-legacy-root .stark-card:hover {
+  background: color-mix(in srgb, var(--cp-surface) 90%, var(--cp-text) 4%) !important;
+  border-color: var(--cp-border-hover) !important;
+}
+
+.cp-legacy-root .text-text-primary,
+.cp-legacy-root .stark-text-primary,
+.cp-legacy-root .text-slate-900.dark\:text-white,
+.cp-legacy-root h1.text-slate-900,
+.cp-legacy-root h2.text-slate-900,
+.cp-legacy-root h3.text-slate-900 {
+  color: var(--cp-text) !important;
+}
+
+.cp-legacy-root .text-text-secondary,
+.cp-legacy-root .text-text-muted,
+.cp-legacy-root .stark-text-secondary,
+.cp-legacy-root .stark-text-muted,
+.cp-legacy-root .text-slate-600.dark\:text-slate-400,
+.cp-legacy-root .text-slate-500.dark\:text-slate-400 {
+  color: var(--cp-text-muted) !important;
+}
+
+.cp-legacy-root .text-alego-600,
+.cp-legacy-root .dark\:text-alego-400,
+.cp-legacy-root .text-blue-600.dark\:text-blue-400 {
+  color: var(--cp-accent) !important;
+}
+
+.cp-legacy-root .stark-text-gradient,
+.cp-legacy-root .gradient-text,
+.cp-legacy-root h1 .bg-clip-text.text-transparent,
+.cp-legacy-root .cp-gradient-text {
+  background: linear-gradient(135deg, var(--cp-accent) 0%, var(--cp-accent-2) 50%, var(--cp-accent-3) 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+}
+
+.cp-legacy-root [class*='from-accent-orange'][class*='to-accent-cyan'],
+.cp-legacy-root [class*='from-accent-cyan'][class*='to-accent-orange'],
+.cp-legacy-root .bg-accent-orange,
+.cp-legacy-root .stark-button {
+  background: linear-gradient(135deg, var(--cp-accent), var(--cp-accent-2)) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 9999px !important;
+  box-shadow: 0 2px 16px var(--cp-glow) !important;
+}
+
+.cp-legacy-root [class*='from-accent-orange'][class*='to-accent-cyan']:hover,
+.cp-legacy-root .bg-accent-orange:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.cp-legacy-root .border-border-primary,
+.cp-legacy-root .border-slate-200.dark\:border-slate-700 {
+  border-color: var(--cp-border) !important;
+}
+
+.cp-legacy-root input,
+.cp-legacy-root select,
+.cp-legacy-root textarea,
+.cp-legacy-root .premium-input {
+  background: var(--cp-surface) !important;
+  border: 1px solid var(--cp-border) !important;
+  color: var(--cp-text) !important;
+  border-radius: 12px !important;
+}
+
+.cp-legacy-root input:focus,
+.cp-legacy-root select:focus,
+.cp-legacy-root textarea:focus {
+  border-color: var(--cp-accent) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cp-accent) 25%, transparent) !important;
+}
+
+.cp-legacy-root table {
+  border-color: var(--cp-border) !important;
+}
+
+.cp-legacy-root th,
+.cp-legacy-root td {
+  border-color: var(--cp-border) !important;
+  color: var(--cp-text) !important;
+}
+
+.cp-legacy-root .bg-accent-orange.text-white,
+.cp-legacy-root tr.bg-accent-orange {
+  background: var(--cp-accent) !important;
+  color: #fff !important;
+}
+
+.cp-legacy-root .bg-slate-800,
+.cp-legacy-root .bg-white,
+.cp-legacy-root .dark\:bg-slate-800 {
+  background: var(--cp-surface) !important;
+  color: var(--cp-text) !important;
+  border: 1px solid var(--cp-border) !important;
+}

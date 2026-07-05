@@ -47,6 +47,7 @@ import { createSlug } from '../utils/slug'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import * as pdfjsLib from 'pdfjs-dist'
 import { jsonrepair } from 'jsonrepair'
+import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import LawDetector from '../utils/lawDetector'
 import LawDownloader from '../utils/lawDownloader'
 import { generateShareToken } from '../utils/shareToken'
@@ -6847,38 +6848,15 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
   }, [isAdmin])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 dark:from-slate-900 dark:via-blue-900/20 dark:to-purple-900/20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* Header Tecnológico */}
-        <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8 mb-6">
-          {/* Background decorativo */}
-          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 rounded-full blur-3xl -mr-48 -mt-48"></div>
-          <div className="absolute bottom-0 left-0 w-72 h-72 bg-gradient-to-tr from-indigo-500/10 to-purple-500/10 rounded-full blur-3xl -ml-36 -mb-36"></div>
-          
-          <div className="relative">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur-lg opacity-50 animate-pulse"></div>
-                <div className="relative rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 p-3 shadow-lg">
-                  <span className="text-white font-bold text-xl">⚙️</span>
-                </div>
-              </div>
-              <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">
-                Painel Administrativo
-              </p>
-            </div>
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black mb-2">
-              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 dark:from-blue-400 dark:via-purple-400 dark:to-cyan-400 bg-clip-text text-transparent">
-                Administração do Sistema
-              </span>
-            </h1>
-            <p className="text-sm sm:text-base font-semibold text-slate-600 dark:text-slate-400">
-              Gerencie flashcards, usuários, configurações e mais
-            </p>
-          </div>
-        </div>
+    <div className="space-y-6">
+      <CPPageHeader
+        badge="Admin"
+        title="Painel Admin"
+        subtitle="Gerencie flashcards, usuários, configurações e mais"
+        backHref="/dashboard"
+      />
 
-        {/* Mensagem de feedback */}
+      {/* Mensagem de feedback */}
         {message && (
           <div className="mb-6 relative overflow-hidden rounded-xl bg-gradient-to-r from-emerald-500/10 to-green-500/10 border border-emerald-500/30 dark:border-emerald-400/30 px-4 py-3 backdrop-blur-sm">
             <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 via-green-500/5 to-emerald-500/5"></div>
@@ -13045,7 +13023,6 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
             )}
           </div>
         </div>
-      </div>
 
       {/* Modal de Status da IA */}
       {showAiStatusModal && (

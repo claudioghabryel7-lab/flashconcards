@@ -14,7 +14,8 @@ import {
   updateProfile,
 } from 'firebase/auth'
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
-import { auth, db, firebaseInitialized } from '../firebase/config'
+import { auth, db, firebaseInitialized, initFirebase } from '../firebase/config'
+import { isDevEnv } from '../lib/env.js'
 
 const AuthContext = createContext(null)
 
@@ -31,7 +32,7 @@ const getCachedProfile = (uid) => {
       return data
     }
     // Em desenvolvimento, não limpar cache tão rápido para evitar logout frequente
-    if (import.meta.env.DEV) {
+    if (isDevEnv()) {
       console.log('Cache expirado, mas mantendo em desenvolvimento para evitar logout')
       return data
     }
@@ -60,7 +61,7 @@ export const AuthProvider = ({ children }) => {
 
   // Observar mudanças no estado de autenticação do Firebase
   useEffect(() => {
-    // Se Firebase não foi inicializado, apenas marcar como não carregando
+    initFirebase()
     if (!firebaseInitialized || !auth || !db) {
       setLoading(false)
       return
@@ -99,7 +100,7 @@ export const AuthProvider = ({ children }) => {
               // Verificar se o usuário foi deletado
               if (data.deleted === true) {
                 // Usuário foi removido pelo admin - fazer logout imediato
-                if (import.meta.env.DEV) {
+                if (isDevEnv()) {
                   console.log('Usuário foi removido do sistema. Fazendo logout...')
                 }
                 try {
@@ -108,7 +109,7 @@ export const AuthProvider = ({ children }) => {
                   setProfile(null)
                   return
                 } catch (err) {
-                  if (import.meta.env.DEV) {
+                  if (isDevEnv()) {
                     console.error('Erro ao fazer logout:', err)
                   }
                   setUser(null)
@@ -271,7 +272,7 @@ export const AuthProvider = ({ children }) => {
               // Não fazer logout, apenas limpar profile (o onAuthStateChanged vai recriar se necessário)
               console.log('Perfil não encontrado, mas usuário não foi deletado. Aguardando recriação...')
               // Em desenvolvimento, manter perfil do cache para evitar logout
-              if (import.meta.env.DEV) {
+              if (isDevEnv()) {
                 const cachedProfile = getCachedProfile(firebaseUser.uid)
                 if (cachedProfile) {
                   console.log('Mantendo perfil do cache em desenvolvimento')
@@ -297,7 +298,7 @@ export const AuthProvider = ({ children }) => {
         if (error.code === 'permission-denied') {
           console.warn('Permissão negada ao ler perfil do usuário. Isso é normal se o usuário não estiver completamente autenticado.')
           // Em desenvolvimento, não resetar profile para evitar logout frequente
-          if (import.meta.env.DEV) {
+          if (isDevEnv()) {
             console.log('Mantendo perfil atual em desenvolvimento (erro de permissão)')
             return
           }
@@ -306,7 +307,7 @@ export const AuthProvider = ({ children }) => {
         }
         console.error('Erro no onSnapshot do perfil:', error)
         // Em desenvolvimento, não resetar profile para evitar logout frequente
-        if (import.meta.env.DEV) {
+        if (isDevEnv()) {
           console.log('Mantendo perfil atual em desenvolvimento (erro geral)')
           return
         }

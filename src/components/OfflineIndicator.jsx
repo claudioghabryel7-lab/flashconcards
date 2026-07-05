@@ -3,10 +3,14 @@ import { WifiIcon } from '@heroicons/react/24/outline'
 import { useDarkMode } from '../hooks/useDarkMode'
 
 const OfflineIndicator = () => {
-  const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [isOnline, setIsOnline] = useState(true)
   const { darkMode } = useDarkMode()
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    setIsOnline(navigator.onLine)
+
     const handleOnline = () => setIsOnline(true)
     const handleOffline = () => setIsOnline(false)
 
