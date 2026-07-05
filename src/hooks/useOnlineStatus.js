@@ -1,9 +1,8 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
+import { isDevEnv } from '@/lib/env.js'
 import { useEffect } from 'react'
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db, firebaseInitialized, initFirebase } from '../firebase/config'
 import { useAuth } from './useAuth'
-import { isDevEnv } from '../lib/env.js'
 
 // Hook para rastrear status online/offline do usuário
 export const useOnlineStatus = () => {
