@@ -296,7 +296,8 @@ const FlashcardsTopicoView = () => {
       )}
 
       {!loading && !generating && !error && cards.length > 0 && (
-        <FlashcardList
+        <div className="mx-auto max-w-2xl px-4 py-6">
+          <FlashcardList
           cards={cards}
           currentIndex={currentIndex}
           onSelect={setCurrentIndex}
@@ -312,6 +313,7 @@ const FlashcardsTopicoView = () => {
           onEditFlashcard={handleEditFlashcard}
           onDeleteFlashcard={handleDeleteFlashcard}
         />
+        </div>
       )}
     </div>
   )

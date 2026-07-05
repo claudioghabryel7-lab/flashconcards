@@ -16,10 +16,20 @@ const FlashcardItem = ({
   cardColor = 'bg-white',
   textColor = 'text-slate-900',
   borderColor = 'border-slate-200',
+  flipped: flippedProp,
   onFlipChange = null,
   ratingBelowCard = true,
 }) => {
-  const [flipped, setFlipped] = useState(false)
+  const [internalFlipped, setInternalFlipped] = useState(false)
+  const isControlled = typeof flippedProp === 'boolean'
+  const flipped = isControlled ? flippedProp : internalFlipped
+
+  const setFlipped = (value) => {
+    const next = typeof value === 'function' ? value(flipped) : value
+    if (isControlled) onFlipChange?.(next)
+    else setInternalFlipped(next)
+  }
+
   const [editing, setEditing] = useState(false)
   const [editPergunta, setEditPergunta] = useState(card.pergunta)
   const [editResposta, setEditResposta] = useState(card.resposta)
@@ -31,11 +41,8 @@ const FlashcardItem = ({
     setEditing(false)
     setEditPergunta(card.pergunta)
     setEditResposta(card.resposta)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card.id, card.pergunta, card.resposta])
-
-  useEffect(() => {
-    onFlipChange?.(flipped)
-  }, [flipped, onFlipChange])
 
   const toggle = () => {
     if (editing) return
@@ -74,8 +81,8 @@ const FlashcardItem = ({
   return (
     <div className="noji-card-wrap relative mx-auto w-full max-w-xl px-1 sm:px-0">
       <motion.div
-        className="noji-card relative mx-auto w-full cursor-pointer select-none"
-        style={{ perspective: 1400 }}
+        className="noji-card relative mx-auto w-full min-h-[320px] cursor-pointer select-none sm:min-h-[360px]"
+        style={{ perspective: 1400, transformStyle: 'preserve-3d' }}
         onClick={toggle}
         whileTap={{ scale: 0.995 }}
       >
@@ -83,9 +90,9 @@ const FlashcardItem = ({
           className={`noji-card-face absolute inset-0 flex flex-col rounded-3xl ${cardColor} p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor}`}
           animate={{ rotateY: flipped ? 180 : 0 }}
           transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
-          style={{ backfaceVisibility: 'hidden', transformStyle: 'preserve-3d' }}
+          style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
         >
-          <div className="relative z-10 flex h-full min-h-[320px] sm:min-h-[360px] flex-col">
+          <div className="relative z-10 flex h-full min-h-[280px] flex-col sm:min-h-[320px]">
             <div className="absolute right-0 top-0 z-20 flex gap-1.5">
               <button
                 type="button"
@@ -210,9 +217,9 @@ const FlashcardItem = ({
           }`}
           animate={{ rotateY: flipped ? 0 : -180 }}
           transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
-          style={{ backfaceVisibility: 'hidden', transformStyle: 'preserve-3d' }}
+          style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
         >
-          <div className="relative z-10 flex h-full min-h-[320px] sm:min-h-[360px] flex-col">
+          <div className="relative z-10 flex h-full min-h-[280px] flex-col sm:min-h-[320px]">
             <div className="flex flex-1 flex-col items-center justify-center px-2 py-6 text-center">
               <span className="mb-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white/70">
                 Resposta
@@ -258,9 +265,6 @@ const FlashcardItem = ({
           </div>
         </motion.div>
       </motion.div>
-
-      {/* Spacer for absolute card height */}
-      <div className="invisible min-h-[320px] sm:min-h-[360px]" aria-hidden="true" />
     </div>
   )
 }

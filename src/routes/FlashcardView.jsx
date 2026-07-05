@@ -305,7 +305,7 @@ const FlashcardView = () => {
 
   // Selecionar matéria e módulo baseado em query params
   useEffect(() => {
-    const materiaParam = searchParams.get('materia')
+    const materiaParam = searchParams.get('materia') || searchParams.get('disciplina')
     const moduloParam = searchParams.get('modulo')
     
     // Log removido para limpar console
@@ -463,7 +463,7 @@ const FlashcardView = () => {
   
   // Forçar tentativa novamente quando cards mudarem (retry mechanism)
   useEffect(() => {
-    const materiaParam = searchParams.get('materia')
+    const materiaParam = searchParams.get('materia') || searchParams.get('disciplina')
     const moduloParam = searchParams.get('modulo')
     
     if (!materiaParam || !moduloParam) return
@@ -585,11 +585,13 @@ const FlashcardView = () => {
         return
       }
     }
-    
-    const cid = selectedCourseId || 'alego-default'
-    navigate(
-      `/flashcards/topico/${cid}?disciplina=${encodeURIComponent(materia)}&modulo=${encodeURIComponent(modulo)}`
-    )
+
+    setSelectedMateria(materia)
+    setSelectedModulo(modulo)
+    setStudyMode('module')
+    setCurrentIndex(0)
+    setExpandedMaterias((prev) => ({ ...prev, [materia]: true }))
+    setSearchParams({ materia, modulo })
   }
 
   const startMiniSim = (materia) => {
@@ -735,6 +737,11 @@ const FlashcardView = () => {
     setMiniSimCards([])
     setSelectedMateria(null)
     setSelectedModulo(null)
+    setSearchParams({})
+  }
+
+  const exitStudySession = () => {
+    handleExitModule()
   }
 
   const shuffle = () => {
@@ -1443,10 +1450,7 @@ IMPORTANTE:
               </p>
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedMateria(null)
-                  setSelectedModulo(null)
-                }}
+                onClick={exitStudySession}
                 className="mt-6 rounded-xl border border-cp-border px-5 py-2.5 text-sm font-medium text-cp-text transition hover:bg-cp-surface"
               >
                 ← Voltar aos decks
@@ -1468,12 +1472,7 @@ IMPORTANTE:
                   </span>
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedMateria(null)
-                      setSelectedModulo(null)
-                      setStudyMode('module')
-                      setMiniSimCards([])
-                    }}
+                    onClick={exitStudySession}
                     className="rounded-xl border border-cp-border px-3 py-1.5 text-xs font-medium text-cp-muted transition hover:bg-cp-surface hover:text-cp-text"
                   >
                     Sair
@@ -1498,8 +1497,6 @@ IMPORTANTE:
                   showRating={needsReview}
                   onExplainCard={handleExplainCard}
                   onDeleteFlashcard={handleDeleteFlashcard}
-                  deckTitle={selectedModulo}
-                  deckSubtitle={selectedMateria}
                 />
               </div>
             </div>

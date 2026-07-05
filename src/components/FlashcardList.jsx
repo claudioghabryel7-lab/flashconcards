@@ -94,7 +94,7 @@ const FlashcardList = ({
   if (!currentCard) return null
 
   return (
-    <div className="noji-study flex h-full flex-col">
+    <div className="noji-study mx-auto flex w-full max-w-2xl flex-col">
       {/* Barra de progresso — estilo Noji */}
       <div className="mb-4 space-y-2">
         <div className="flex items-center justify-between text-xs font-medium text-cp-muted">
@@ -113,9 +113,9 @@ const FlashcardList = ({
         </div>
       </div>
 
-      {/* Toolbar compacta */}
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <div className="min-w-0 flex-1">
+      {/* Toolbar compacta — título opcional quando não há header externo */}
+      {(deckTitle || deckSubtitle) && (
+        <div className="mb-2 min-w-0">
           {deckSubtitle && (
             <p className="truncate text-[11px] font-medium uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
               {deckSubtitle}
@@ -125,6 +125,8 @@ const FlashcardList = ({
             <p className="truncate text-sm font-semibold text-cp-text">{deckTitle}</p>
           )}
         </div>
+      )}
+      <div className="mb-4 flex items-center justify-end gap-2">
         <div className="relative flex shrink-0 items-center gap-1">
           <button
             type="button"
@@ -173,6 +175,8 @@ const FlashcardList = ({
       <div className="flex flex-1 flex-col items-center justify-center py-2">
         <FlashcardItem
           card={currentCard}
+          flipped={flipped}
+          onFlipChange={setFlipped}
           isFavorite={favorites.includes(currentCard.id)}
           onToggleFavorite={onToggleFavorite}
           onRateDifficulty={onRateDifficulty}
@@ -184,7 +188,6 @@ const FlashcardList = ({
           cardColor={cardColor}
           textColor={textColor}
           borderColor={borderColor}
-          onFlipChange={setFlipped}
           ratingBelowCard
         />
       </div>
