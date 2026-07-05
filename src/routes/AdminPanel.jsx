@@ -13067,6 +13067,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                       forbidden: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
                       invalid: 'bg-black dark:bg-black/50 border-black dark:border-black',
                       error: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
+                      missing: 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700',
                     }
 
                     const statusIcons = {
@@ -13076,6 +13077,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                       forbidden: '🔒',
                       invalid: '❌',
                       error: '⚠️',
+                      missing: '🔑',
                     }
 
                     return (

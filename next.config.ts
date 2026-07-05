@@ -21,6 +21,8 @@ const viteEnvKeys = [
   'VITE_GOOGLE_AI_API_KEY',
   'VITE_GROQ_API_KEY',
   'VITE_GEMINI_MODEL',
+  'VITE_GOOGLE_SEARCH_API_KEY',
+  'VITE_GOOGLE_SEARCH_ENGINE_ID',
 ]
 
 const env: Record<string, string> = {}

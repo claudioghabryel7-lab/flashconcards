@@ -6,6 +6,7 @@
  */
 
 import { performRAG, googleSearch } from './googleSearch.js'
+import { readEnv } from '../lib/env.js'
 
 const MODELS = [
   'gemini-2.5-flash',
@@ -65,22 +66,34 @@ function extractSearchTopic(prompt) {
  */
 function loadApiKeys() {
   const apiKeys = []
-  
-  // Primeiro tenta a key principal
-  const mainKey = import.meta.env.VITE_GEMINI_API_KEY
+
+  const mainKey = readEnv('VITE_GEMINI_API_KEY') || readEnv('VITE_GOOGLE_AI_API_KEY')
   if (mainKey) {
     apiKeys.push(mainKey)
   }
-  
-  // Depois tenta numbered keys (apenas se a principal não existir ou para backup)
+
   for (let i = 1; i <= 10; i++) {
-    const key = import.meta.env[`VITE_GEMINI_API_KEY_${i}`]
+    const key = readEnv(`VITE_GEMINI_API_KEY_${i}`)
     if (key && !apiKeys.includes(key)) {
       apiKeys.push(key)
     }
   }
-  
+
   return apiKeys
+}
+
+async function callGeminiViaServer(prompt, options = {}) {
+  const response = await fetch('/api/gemini/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, ...options }),
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.error || `Erro na API Gemini (${response.status})`)
+  }
+  return data
 }
 
 /**
@@ -197,10 +210,27 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     }
   }
 
+  const finalPrompt = enhancedPrompt
+
   // Teste silencioso para filtrar apenas API keys disponíveis
-  const apiKeys = await getAvailableApiKeys()
+  let apiKeys = await getAvailableApiKeys()
+
+  // Sem keys no cliente (comum no Next/Vercel) → proxy server-side
+  if (apiKeys.length === 0 && typeof window !== 'undefined') {
+    console.log('🔑 Nenhuma key no cliente — usando /api/gemini/generate')
+    return callGeminiViaServer(finalPrompt, {
+      generationConfig,
+      useGoogleSearch,
+      useFunctionCalling,
+      tools,
+      models,
+    })
+  }
+
   if (apiKeys.length === 0) {
-    throw new Error('Nenhuma API key do Gemini disponível no momento (todas estão com quota ou alta demanda)')
+    throw new Error(
+      'Nenhuma API key do Gemini configurada. Defina VITE_GEMINI_API_KEY no .env.local (local) ou nas variáveis do Vercel.'
+    )
   }
 
   console.log(`🔑 API Keys disponíveis: ${apiKeys.length} de ${loadApiKeys().length} totais`)
@@ -213,9 +243,6 @@ export async function callGeminiWithRetry(prompt, options = {}) {
   if (useFunctionCalling) {
     console.log(`🔧 Function Calling ativado com ${tools.length} ferramentas`)
   }
-
-  // Usar o prompt com contexto RAG
-  const finalPrompt = enhancedPrompt
 
   let lastError = null
 
@@ -285,6 +312,21 @@ export async function callGeminiWithRetry(prompt, options = {}) {
   }
 
   // Se chegou aqui, todos os modelos e keys falharam
+  if (typeof window !== 'undefined') {
+    try {
+      console.log('🔄 Tentando proxy server-side /api/gemini/generate...')
+      return await callGeminiViaServer(finalPrompt, {
+        generationConfig,
+        useGoogleSearch,
+        useFunctionCalling,
+        tools,
+        models,
+      })
+    } catch (serverErr) {
+      lastError = serverErr
+    }
+  }
+
   throw new Error(
     `Todos os modelos e API keys falharam. Último erro: ${lastError?.message || 'Erro desconhecido'}`
   )
@@ -471,6 +513,18 @@ function formatWaitTime(seconds) {
 export async function checkGeminiApiKeysStatus() {
   const apiKeys = loadApiKeys()
   const results = []
+
+  if (apiKeys.length === 0) {
+    return [
+      {
+        name: 'Configuração',
+        keyPreview: '—',
+        status: 'missing',
+        message:
+          'Nenhuma chave encontrada. Configure VITE_GEMINI_API_KEY no .env.local ou no painel do Vercel e faça redeploy.',
+      },
+    ]
+  }
 
   for (let i = 0; i < apiKeys.length; i++) {
     const key = apiKeys[i]

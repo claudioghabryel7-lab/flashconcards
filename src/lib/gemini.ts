@@ -4,12 +4,14 @@ import { readEnv } from './env.js'
 const MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro']
 
 function getApiKey() {
-  return (
-    readEnv('VITE_GEMINI_API_KEY') ||
-    readEnv('VITE_GOOGLE_AI_API_KEY') ||
-    readEnv('VITE_GEMINI_API_KEY_1') ||
-    ''
-  )
+  const keys = []
+  const main = readEnv('VITE_GEMINI_API_KEY') || readEnv('VITE_GOOGLE_AI_API_KEY')
+  if (main) keys.push(main)
+  for (let i = 1; i <= 10; i++) {
+    const k = readEnv(`VITE_GEMINI_API_KEY_${i}`)
+    if (k && !keys.includes(k)) keys.push(k)
+  }
+  return keys[0] || ''
 }
 
 let genAI: GoogleGenerativeAI | null = null

@@ -1,8 +1,8 @@
 /**
  * Google Search API Integration for RAG (Retrieval-Augmented Generation)
- * This module provides search functionality to retrieve up-to-date legal information
- * before generating AI content, preventing hallucinations.
  */
+
+import { readEnv } from '../lib/env.js'
 
 /**
  * Performs a Google Search query and returns the results
@@ -11,8 +11,8 @@
  * @returns {Promise<Array>} - Array of search results with title, snippet, and link
  */
 export async function googleSearch(query, numResults = 5) {
-  const apiKey = import.meta.env.VITE_GOOGLE_SEARCH_API_KEY
-  const searchEngineId = import.meta.env.VITE_GOOGLE_SEARCH_ENGINE_ID
+  const apiKey = readEnv('VITE_GOOGLE_SEARCH_API_KEY')
+  const searchEngineId = readEnv('VITE_GOOGLE_SEARCH_ENGINE_ID')
 
   if (!apiKey || !searchEngineId) {
     console.warn('Google Search API credentials not configured. Skipping search.')

@@ -1,13 +1,17 @@
 /**
  * Compatibilidade import.meta.env no Next.js (código legado Vite).
  */
-import { ENV } from './env.js'
+import { ENV, readEnv } from './env.js'
 
 const proxy = new Proxy(ENV, {
-  get(target, prop) {
-    if (prop in target) return target[prop]
-    if (prop === 'env') return target
-    return undefined
+  get(_target, prop) {
+    if (prop === 'env') return proxy
+    if (typeof prop !== 'string') return undefined
+    return readEnv(prop)
+  },
+  has(_target, prop) {
+    if (typeof prop !== 'string') return false
+    return readEnv(prop) != null
   },
 })
 

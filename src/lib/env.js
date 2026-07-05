@@ -19,6 +19,8 @@ export const ENV = {
   VITE_GOOGLE_AI_API_KEY: process.env.VITE_GOOGLE_AI_API_KEY,
   VITE_GROQ_API_KEY: process.env.VITE_GROQ_API_KEY,
   VITE_GEMINI_MODEL: process.env.VITE_GEMINI_MODEL,
+  VITE_GOOGLE_SEARCH_API_KEY: process.env.VITE_GOOGLE_SEARCH_API_KEY,
+  VITE_GOOGLE_SEARCH_ENGINE_ID: process.env.VITE_GOOGLE_SEARCH_ENGINE_ID,
   DEV: process.env.NODE_ENV !== 'production',
   PROD: process.env.NODE_ENV === 'production',
   MODE: process.env.NODE_ENV || 'development',
@@ -26,7 +28,17 @@ export const ENV = {
 
 /** @param {keyof typeof ENV | string} key */
 export function readEnv(key) {
-  return ENV[key] || undefined
+  const fromStatic = ENV[key]
+  if (fromStatic != null && String(fromStatic).trim() !== '') {
+    return String(fromStatic).trim()
+  }
+  if (typeof process !== 'undefined' && process.env?.[key]) {
+    const runtime = process.env[key]
+    if (runtime != null && String(runtime).trim() !== '') {
+      return String(runtime).trim()
+    }
+  }
+  return undefined
 }
 
 export function isDevEnv() {
