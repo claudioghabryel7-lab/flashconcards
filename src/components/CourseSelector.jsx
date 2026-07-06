@@ -4,6 +4,7 @@ import { collection, getDocs, query, where, doc, setDoc } from 'firebase/firesto
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { AcademicCapIcon, CheckCircleIcon, MagnifyingGlassIcon } from '@heroicons/react/24/solid'
+import { buildWhatsAppCourseUrl, formatCoursePrice, hasPurchasedCourse } from '../utils/courseAccess'
 
 const CourseSelector = () => {
   const { user, profile } = useAuth()
@@ -29,16 +30,13 @@ const CourseSelector = () => {
           ...doc.data(),
         }))
 
-        // Filtrar cursos (admin vê todos, outros só comprados e ALEGO)
+        // Todos os cursos ativos (preview gratuito para não comprados)
         const purchasedCourses = profile.purchasedCourses || []
         const isAdmin = profile.role === 'admin'
         
         const filtered = isAdmin 
           ? allCourses.filter(c => c.active !== false)
-          : allCourses.filter(c => {
-              if (c.id === 'alego-default') return true
-              return purchasedCourses.includes(c.id) && c.active !== false
-            })
+          : allCourses.filter(c => c.active !== false)
 
         // Ordenar: ALEGO primeiro
         const sorted = filtered.sort((a, b) => {
@@ -114,7 +112,7 @@ const CourseSelector = () => {
             Escolha seu Curso
           </h2>
           <p className="text-text-secondary">
-            Selecione o curso que deseja estudar agora
+            Selecione o curso que deseja estudar. Sem compra, você acessa 3 tópicos liberados e o Guia Mentorado.
           </p>
         </div>
 
@@ -151,49 +149,72 @@ const CourseSelector = () => {
 
         <div className="space-y-3 mb-6">
           {filteredCourses.length > 0 ? (
-            filteredCourses.map((course) => (
-              <button
+            filteredCourses.map((course) => {
+              const owned = hasPurchasedCourse(profile, course.id)
+              return (
+              <div
                 key={course.id || 'default'}
-                type="button"
-                onClick={() => setSelectedCourseId(course.id)}
-                className={`w-full text-left p-4 rounded-lg border-2 transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                className={`rounded-lg border-2 transition-all ${
                   selectedCourseId === course.id
                     ? 'border-accent-orange bg-background-card-hover'
-                    : 'border-border-primary hover:border-accent-orange/50 bg-background-card'
+                    : 'border-border-primary bg-background-card'
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                      selectedCourseId === course.id
-                        ? 'border-accent-orange bg-accent-orange'
-                        : 'border-border-primary'
-                    }`}>
-                      {selectedCourseId === course.id && (
-                        <CheckCircleIcon className="h-4 w-4 text-background-primary" />
-                      )}
-                    </div>
-                    <div>
-                      <p className={`font-bold text-lg ${
+                <button
+                  type="button"
+                  onClick={() => setSelectedCourseId(course.id)}
+                  className="w-full text-left p-4 hover:scale-[1.01] active:scale-[0.99] transition-all"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
                         selectedCourseId === course.id
-                          ? 'text-accent-orange'
-                          : 'text-text-primary'
+                          ? 'border-accent-orange bg-accent-orange'
+                          : 'border-border-primary'
                       }`}>
-                        {course.name || 'Curso Padrão'}
-                      </p>
-                      <p className="text-sm text-text-muted">
-                        {course.competition || 'Curso Padrão'}
-                      </p>
+                        {selectedCourseId === course.id && (
+                          <CheckCircleIcon className="h-4 w-4 text-background-primary" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className={`font-bold text-lg truncate ${
+                          selectedCourseId === course.id
+                            ? 'text-accent-orange'
+                            : 'text-text-primary'
+                        }`}>
+                          {course.name || 'Curso Padrão'}
+                        </p>
+                        <p className="text-sm text-text-muted">
+                          {course.competition || 'Curso Padrão'}
+                        </p>
+                        {!owned && course.id !== 'alego-default' && (
+                          <p className="mt-1 text-sm font-bold text-accent-orange">
+                            {formatCoursePrice(course.price)}
+                          </p>
+                        )}
+                        {owned && (
+                          <p className="mt-1 text-xs font-semibold text-accent-cyan">Curso adquirido</p>
+                        )}
+                        {!owned && course.id !== 'alego-default' && (
+                          <p className="mt-0.5 text-xs text-text-muted">Preview: 3 tópicos + Guia Mentorado</p>
+                        )}
+                      </div>
                     </div>
+                    {!owned && course.id !== 'alego-default' && (
+                      <a
+                        href={buildWhatsAppCourseUrl(course.name)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="shrink-0 rounded-lg bg-accent-orange px-3 py-2 text-xs font-bold text-background-primary hover:bg-accent-orange-dim transition-colors"
+                      >
+                        Comprar
+                      </a>
+                    )}
                   </div>
-                  {course.isDefault && (
-                    <span className="px-3 py-1 rounded-full bg-background-card-hover text-xs font-semibold text-text-muted">
-                      Padrão
-                    </span>
-                  )}
-                </div>
-              </button>
-            ))
+                </button>
+              </div>
+            )})
           ) : (
             <div className="text-center py-12">
               <MagnifyingGlassIcon className="h-12 w-12 text-text-muted mx-auto mb-4" />

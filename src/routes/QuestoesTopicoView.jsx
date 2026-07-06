@@ -21,6 +21,7 @@ import {
   QuestaoExplicacao,
   ResultadoDesempenho,
 } from '../components/QuestoesPraticaCP'
+import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -227,7 +228,11 @@ const QuestoesTopicoView = () => {
     return questoes.tipoProva || 'Múltipla Escolha'
   }, [questoes])
 
-  const resolvedCourseId = useMemo(() => courseId || 'alego-default', [courseId])
+  const resolvedCourseId = useMemo(
+    () => courseId || profile?.selectedCourseId || 'alego-default',
+    [courseId, profile?.selectedCourseId]
+  )
+  const { canAccess: hasTopicAccess } = useTopicCourseAccess(resolvedCourseId, topicKey, profile)
   const resolvedTopicKey = useMemo(() => normalizeKey(topicKey), [topicKey])
   const { numero: topicNumeroFromKey, nome: topicNomeFromKey } = useMemo(
     () => parseTopicKey(topicKey),
@@ -1036,7 +1041,8 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
   const canPractice =
     isAdmin ||
-    (isContentAvailable(topicoPublishStatus, false) &&
+    (hasTopicAccess &&
+      isContentAvailable(topicoPublishStatus, false) &&
       questoes &&
       isContentAvailable(questoes.status, false))
 

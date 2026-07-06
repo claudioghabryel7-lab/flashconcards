@@ -8,6 +8,7 @@ import {
 } from '@heroicons/react/24/outline'
 import FlashcardItem from './FlashcardItem'
 import { useSearchParams } from 'react-router-dom'
+import { getRatingButtonLabel } from '../utils/spacedRepetition'
 
 const COLOR_OPTIONS = [
   { name: 'Branco', bg: 'bg-white', text: 'text-slate-900', border: 'border-slate-200' },
@@ -92,8 +93,12 @@ const FlashcardList = ({
 
   if (!currentCard) return null
 
+  const cardProg = cardProgress[currentCard.id]
+  const hardLabel = getRatingButtonLabel('hard', cardProg)
+  const easyLabel = getRatingButtonLabel('easy', cardProg)
+
   return (
-    <div className="noji-study mx-auto flex w-full max-w-2xl flex-col">
+    <div className="noji-study mx-auto flex w-full max-w-2xl flex-col pb-[max(1rem,env(safe-area-inset-bottom))]">
       {/* Barra de progresso — estilo Noji */}
       <div className="mb-4 space-y-2">
         <div className="flex items-center justify-between text-xs font-medium text-cp-muted">
@@ -201,18 +206,20 @@ const FlashcardList = ({
               type="button"
               onClick={() => handleRate('hard')}
               className="noji-rate-hard group flex flex-col items-center rounded-2xl px-4 py-4 transition active:scale-[0.98]"
+              style={{ touchAction: 'manipulation' }}
             >
               <span className="text-base font-bold">Difícil</span>
-              <span className="mt-0.5 text-[11px] opacity-80">Repetir em 1 min</span>
+              <span className="mt-0.5 text-[11px] opacity-80">Repetir em {hardLabel}</span>
               <span className="mt-1 text-[10px] opacity-50">Tecla 1</span>
             </button>
             <button
               type="button"
               onClick={() => handleRate('easy')}
               className="noji-rate-easy group flex flex-col items-center rounded-2xl px-4 py-4 transition active:scale-[0.98]"
+              style={{ touchAction: 'manipulation' }}
             >
               <span className="text-base font-bold">Fácil</span>
-              <span className="mt-0.5 text-[11px] opacity-80">Intervalo progressivo</span>
+              <span className="mt-0.5 text-[11px] opacity-80">Próximo em {easyLabel}</span>
               <span className="mt-1 text-[10px] opacity-50">Tecla 2</span>
             </button>
           </div>

@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect, memo } from 'react'
+import { useMemo, useState, useRef, useEffect, memo, startTransition } from 'react'
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   ArrowLeftOnRectangleIcon,
@@ -15,6 +15,7 @@ import {
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import Logo from './Logo.jsx'
+import TopicNotificationsButton from './TopicNotificationsButton'
 
 const Header = () => {
   const { user, logout, isAdmin, profile } = useAuth()
@@ -162,6 +163,8 @@ const Header = () => {
 
               {user ? (
                 <>
+                  <TopicNotificationsButton />
+
                   {/* Trocar Curso - Desktop */}
                   <button
                     type="button"
@@ -203,8 +206,8 @@ const Header = () => {
                   <button
                     ref={menuRef}
                     type="button"
-                    onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-background-card transition-all duration-200"
+                    onClick={() => startTransition(() => setIsMenuOpen((v) => !v))}
+                className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-background-card transition-colors"
                 aria-label="Abrir menu lateral"
                   >
                     {isMenuOpen ? (
@@ -239,7 +242,7 @@ const Header = () => {
           {/* Drawer */}
           <div
             ref={drawerRef}
-            className="fixed inset-y-0 left-0 w-72 sm:w-80 max-w-[85vw] bg-background-card backdrop-blur-xl shadow-2xl z-50 flex flex-col border-r border-border-primary"
+            className="fixed inset-y-0 left-0 w-72 sm:w-80 max-w-[85vw] bg-background-card shadow-2xl z-50 flex flex-col border-r border-border-primary will-change-transform"
           >
             {/* Drawer Header */}
             <div className="flex items-center justify-between p-4 border-b border-border-primary">

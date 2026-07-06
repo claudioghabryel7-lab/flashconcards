@@ -37,6 +37,14 @@ import {
   resolveTopicPublishStatus,
 } from '../services/topicoPublishService'
 import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
+import {
+  canAccessTopicoContent,
+  getFreeTopicKeys,
+  hasPurchasedCourse,
+  buildWhatsAppCourseUrl,
+  formatCoursePrice,
+  topicKeysMatch,
+} from '../utils/courseAccess'
 
 // Gera uma chave estável e mais específica para cada tópico do edital,
 // combinando numeração + nome. Isso evita colisões entre tópicos diferentes
@@ -117,6 +125,7 @@ const EditalVerticalizado = () => {
   const [loading, setLoading] = useState(true)
   const [courseId, setCourseId] = useState(null)
   const [courseName, setCourseName] = useState('')
+  const [coursePrice, setCoursePrice] = useState(null)
   const [highlightedDisciplina, setHighlightedDisciplina] = useState(null)
   const [highlightedTopico, setHighlightedTopico] = useState(null)
   
@@ -148,6 +157,11 @@ const EditalVerticalizado = () => {
   const [publishingDisciplinaIdx, setPublishingDisciplinaIdx] = useState(null)
 
   const isAdmin = profile?.role === 'admin'
+  const ownsCourse = hasPurchasedCourse(profile, courseId)
+  const freeTopicKeys = useMemo(
+    () => (profile?.uid && editalVerticalizadoBase ? getFreeTopicKeys(editalVerticalizadoBase, profile.uid, courseId) : []),
+    [profile?.uid, editalVerticalizadoBase, courseId]
+  )
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
 
@@ -332,6 +346,7 @@ const EditalVerticalizado = () => {
         if (courseDoc.exists()) {
           const data = courseDoc.data()
           setCourseName(data.name || data.competition || '')
+          setCoursePrice(data.price ?? null)
         }
       } catch (err) {
         console.error('Erro ao carregar nome do curso:', err)
@@ -1321,7 +1336,20 @@ REGRAS IMPORTANTES:
     const paddingLeft = getTopicoNivelPadding(topico)
     const publishStatus = resolveTopicPublishStatus(topicPublishMap, topicKey)
     const isPublished = publishStatus === CONTENT_STATUS.AVAILABLE
+    const canUseTopic = canAccessTopicoContent({
+      profile,
+      courseId,
+      topicKey,
+      edital: editalVerticalizadoBase,
+      publishStatus,
+    })
+    const isFreePreview = !ownsCourse && !isAdmin && isPublished && freeTopicKeys.some((k) => topicKeysMatch(k, topicKey))
     const isPublishing = publishingTopicKey === topicKey
+
+    const topicLinkClass = (accent) =>
+      canUseTopic || isAdmin
+        ? accent
+        : 'border-cp-border/60 bg-cp-surface/50 text-cp-muted/60 pointer-events-none opacity-60'
 
     return (
       <div
@@ -1345,6 +1373,9 @@ REGRAS IMPORTANTES:
                 <span className="mr-2 font-mono text-xs text-cp-accent">{topico.numero}</span>
               )}
               <span className={topico.estudado ? 'text-cp-muted line-through' : ''}>{topico.nome || ''}</span>
+              {isFreePreview && (
+                <span className="ml-2 rounded bg-cp-accent/15 px-1.5 py-0.5 font-mono text-[9px] text-cp-accent">Grátis</span>
+              )}
             </p>
           </div>
         </label>
@@ -1358,31 +1389,41 @@ REGRAS IMPORTANTES:
             <>
               <Link
                 to={`/flashcards/topico/${courseId || 'alego-default'}?disciplina=${encodeURIComponent(disciplina.nome || '')}&modulo=${encodeURIComponent(moduloLabel)}&topicKey=${topicKeyParam}`}
-                className="inline-flex items-center gap-1 rounded-lg border border-cp-accent/25 bg-cp-accent/10 px-2 py-1.5 font-mono text-[10px] text-cp-accent transition hover:bg-cp-accent/20"
-                title="Flashcards"
+                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 font-mono text-[10px] transition ${topicLinkClass(
+                  'border-cp-accent/25 bg-cp-accent/10 text-cp-accent hover:bg-cp-accent/20'
+                )}`}
+                title={canUseTopic || isAdmin ? 'Flashcards' : 'Aguarde o administrador liberar este tópico'}
+                aria-disabled={!canUseTopic && !isAdmin}
+                onClick={(e) => {
+                  if (!canUseTopic && !isAdmin) e.preventDefault()
+                }}
               >
                 <SparklesIcon className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Flash</span>
               </Link>
               <Link
                 to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
-                className="inline-flex items-center gap-1 rounded-lg border border-cp-border bg-cp-surface px-2 py-1.5 font-mono text-[10px] text-cp-text transition hover:border-cp-accent/30"
-                title="Estudar conteúdo"
+                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 font-mono text-[10px] transition ${topicLinkClass(
+                  'border-cp-border bg-cp-surface text-cp-text hover:border-cp-accent/30'
+                )}`}
+                title={canUseTopic || isAdmin ? 'Estudar conteúdo' : 'Aguarde o administrador liberar este tópico'}
+                aria-disabled={!canUseTopic && !isAdmin}
+                onClick={(e) => {
+                  if (!canUseTopic && !isAdmin) e.preventDefault()
+                }}
               >
                 <BookOpenIcon className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Estudar</span>
               </Link>
               <Link
                 to={`/questoes-topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
-                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 font-mono text-[10px] transition ${
-                  isPublished || isAdmin
-                    ? 'border-cp-accent2/25 bg-cp-accent2/10 text-cp-accent2 hover:bg-cp-accent2/20'
-                    : 'border-cp-border/60 bg-cp-surface/50 text-cp-muted/60 pointer-events-none opacity-60'
-                }`}
-                title={isPublished || isAdmin ? 'Questões preditivas' : 'Questões ainda não liberadas pelo administrador'}
-                aria-disabled={!isPublished && !isAdmin}
+                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 font-mono text-[10px] transition ${topicLinkClass(
+                  'border-cp-accent2/25 bg-cp-accent2/10 text-cp-accent2 hover:bg-cp-accent2/20'
+                )}`}
+                title={canUseTopic || isAdmin ? 'Questões preditivas' : 'Questões ainda não liberadas pelo administrador'}
+                aria-disabled={!canUseTopic && !isAdmin}
                 onClick={(e) => {
-                  if (!isPublished && !isAdmin) e.preventDefault()
+                  if (!canUseTopic && !isAdmin) e.preventDefault()
                 }}
               >
                 <FireIcon className="h-3.5 w-3.5" />
@@ -1449,6 +1490,26 @@ REGRAS IMPORTANTES:
     <div className="space-y-6">
       {courseName && (
         <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cp-muted">{courseName}</p>
+      )}
+
+      {!ownsCourse && !isAdmin && courseId && courseId !== 'alego-default' && (
+        <div className="cp-card flex flex-col gap-3 border-cp-accent/25 bg-cp-accent/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-cp-text">Preview gratuito ativo</p>
+            <p className="mt-1 text-xs text-cp-muted">
+              Você tem acesso a {freeTopicKeys.length} tópicos liberados (flashcards, conteúdo e questões) e ao Guia Mentorado.
+              Adquira o curso completo por {formatCoursePrice(coursePrice)}.
+            </p>
+          </div>
+          <a
+            href={buildWhatsAppCourseUrl(courseName)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="cp-btn-primary shrink-0 !text-xs"
+          >
+            Comprar via WhatsApp
+          </a>
+        </div>
       )}
 
       {hasDisciplinas ? (

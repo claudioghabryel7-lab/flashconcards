@@ -1,11 +1,12 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { doc, getDoc, onSnapshot, setDoc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
+import { doc, getDoc, onSnapshot, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { ChevronLeftIcon, PhotoIcon, ShareIcon } from '@heroicons/react/24/outline'
 import FlashcardList from '../components/FlashcardList'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
+import { useSRSDeck } from '../hooks/useSRSDeck'
 import {
   fetchFlashcardsForTopico,
   generateAndSaveFlashcardsForTopico,
@@ -13,7 +14,8 @@ import {
 import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
 import { generateShareToken } from '../utils/shareToken'
 import { CONTENT_STATUS, isContentAvailable, toggleContentStatus } from '../utils/contentStatus'
-import dayjs from 'dayjs'
+import { persistCardReview } from '../utils/spacedRepetition'
+import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import toast from 'react-hot-toast'
 
 const FlashcardsTopicoView = () => {
@@ -26,6 +28,7 @@ const FlashcardsTopicoView = () => {
   const topicKey = normalizeTopicKeyForStorage(searchParams.get('topicKey') || '')
 
   const courseId = courseIdParam || profile?.selectedCourseId || 'alego-default'
+  const { canAccess: hasTopicAccess } = useTopicCourseAccess(courseId, topicKey, profile)
 
   const [cards, setCards] = useState([])
   const [loading, setLoading] = useState(true)
@@ -141,6 +144,36 @@ const FlashcardsTopicoView = () => {
     [cards, cardProgress]
   )
 
+  const { dueQueue, stats } = useSRSDeck(cards, cardProgress)
+  const studyCards = dueQueue
+
+  const handleRate = useCallback(
+    async (cardId, difficulty) => {
+      if (!user) return
+      try {
+        const { updated } = await persistCardReview(user.uid, cardId, cardProgress, difficulty, courseId)
+        setCardProgress(updated)
+        setTimeout(() => {
+          setCurrentIndex((i) => {
+            const remaining = dueQueue.filter((c) => c.id !== cardId).length
+            if (remaining <= 0) return 0
+            return i >= remaining ? 0 : i
+          })
+        }, 200)
+      } catch (err) {
+        console.error(err)
+        toast.error('Erro ao salvar revisão')
+      }
+    },
+    [user, cardProgress, courseId, dueQueue],
+  )
+
+  useEffect(() => {
+    if (currentIndex >= studyCards.length && studyCards.length > 0) {
+      setCurrentIndex(0)
+    }
+  }, [studyCards.length, currentIndex])
+
   const handleRegenerate = async () => {
     if (!isAdmin || regenerating || generating) return
     if (!window.confirm(`Regenerar flashcards deste tópico? Serão criados de ${MIN_TOPIC_FLASHCARDS} a 50 cards focados apenas neste tópico.`)) {
@@ -207,22 +240,6 @@ const FlashcardsTopicoView = () => {
     } finally {
       setPublishing(false)
     }
-  }
-
-  const handleRate = async (cardId, difficulty) => {
-    if (!user) return
-    const current = cardProgress[cardId] || {}
-    const now = dayjs()
-    const intervalMinutes = difficulty === 'easy' ? 15 : 1
-    const next = {
-      ...current,
-      nextReview: now.add(intervalMinutes, 'minute').toISOString(),
-      reviewCount: (current.reviewCount || 0) + 1,
-      lastDifficulty: difficulty,
-    }
-    const updated = { ...cardProgress, [cardId]: next }
-    setCardProgress(updated)
-    await setDoc(doc(db, 'userProgress', user.uid), { cardProgress: updated }, { merge: true })
   }
 
   const toggleFavorite = async (id) => {
@@ -300,7 +317,7 @@ const FlashcardsTopicoView = () => {
     )
   }
 
-  const canStudy = isAdmin || (cards.length > 0 && isContentAvailable(publishStatus, false))
+  const canStudy = isAdmin || (hasTopicAccess && cards.length > 0 && isContentAvailable(publishStatus, false))
 
   return (
     <div className="space-y-6 pb-10">
@@ -387,18 +404,34 @@ const FlashcardsTopicoView = () => {
         </div>
       )}
 
-      {!loading && !generating && !regenerating && !error && canStudy && cards.length > 0 && (
+      {!loading && !generating && !regenerating && !error && canStudy && cards.length > 0 && studyCards.length === 0 && (
+        <div className="cp-card p-10 text-center">
+          <p className="text-4xl mb-3">✨</p>
+          <p className="font-medium text-cp-text">Tudo em dia!</p>
+          <p className="mt-2 text-sm text-cp-muted">
+            {stats.nextDue
+              ? `Próxima revisão em ${stats.nextDue.format('DD/MM [às] HH:mm')}`
+              : `${stats.total} cards neste tópico · nenhum pendente agora`}
+          </p>
+        </div>
+      )}
+
+      {!loading && !generating && !regenerating && !error && canStudy && studyCards.length > 0 && (
         <div className="cp-card p-4 sm:p-6">
+          <div className="mb-4 flex items-center justify-between text-xs text-cp-muted">
+            <span>Revisão espaçada · {studyCards.length} para revisar agora</span>
+            <span>{stats.reviewed}/{stats.total} já estudados</span>
+          </div>
           <FlashcardList
-            cards={cards}
+            cards={studyCards}
             currentIndex={currentIndex}
             onSelect={setCurrentIndex}
             onToggleFavorite={toggleFavorite}
             onRateDifficulty={handleRate}
             favorites={favorites}
             cardProgress={cardProgress}
-            onPrev={() => setCurrentIndex((i) => (i - 1 < 0 ? cards.length - 1 : i - 1))}
-            onNext={() => setCurrentIndex((i) => (i + 1 >= cards.length ? 0 : i + 1))}
+            onPrev={() => setCurrentIndex((i) => (i - 1 < 0 ? studyCards.length - 1 : i - 1))}
+            onNext={() => setCurrentIndex((i) => (i + 1 >= studyCards.length ? 0 : i + 1))}
             onShuffle={() => setCards((prev) => [...prev].sort(() => Math.random() - 0.5))}
             viewedIds={viewedIds}
             showRating

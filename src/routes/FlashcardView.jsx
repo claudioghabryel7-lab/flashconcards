@@ -25,6 +25,10 @@ import {
   calculateNextReview,
   isCardDue,
 } from '../utils/spacedRepetition'
+import { CONTENT_STATUS } from '../utils/contentStatus'
+import {
+  filterOrganizedCardsWithContent,
+} from '../utils/courseAccess'
 
 const MATERIAS = [
   'Português',
@@ -103,6 +107,8 @@ const FlashcardView = () => {
   const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
   const [timerActive, setTimerActive] = useState(false) // Timer só inicia quando usuário clicar no relógio
 
+  const isAdmin = profile?.role === 'admin'
+
   const {
     cards,
     edital,
@@ -159,10 +165,15 @@ const FlashcardView = () => {
         ...doc.data(),
       }))
       
-      // Filtrar apenas cursos comprados (ou todos se admin)
+      // Filtrar cursos: admin vê comprados; aluno vê comprados + curso selecionado (preview)
       const filtered = isAdmin 
         ? allCourses.filter(c => c.active !== false)
-        : allCourses.filter(c => purchasedCourses.includes(c.id) && c.active !== false)
+        : allCourses.filter(c => {
+            if (c.active === false) return false
+            if (purchasedCourses.includes(c.id)) return true
+            if (courseFromProfile && c.id === courseFromProfile) return true
+            return c.id === 'alego-default'
+          })
       
       setAvailableCourses(filtered)
     }, (error) => {
@@ -274,11 +285,15 @@ const FlashcardView = () => {
 
   // Organizar por edital verticalizado (disciplinas/tópicos) + cards do usuário
   const organizedCards = useMemo(() => {
-    const allCards = [...cards, ...userCards].filter(
-      (card, index, self) => index === self.findIndex((c) => c.id === card.id)
-    )
-    return buildOrganizedCardsFromEdital(edital, allCards)
-  }, [cards, userCards, edital])
+    const publishedCards = [...cards, ...userCards].filter((card, index, self) => {
+      const isUnique = index === self.findIndex((c) => c.id === card.id)
+      if (!isUnique) return false
+      if (isAdmin) return true
+      return !card.status || card.status === CONTENT_STATUS.AVAILABLE
+    })
+    const organized = buildOrganizedCardsFromEdital(edital, publishedCards)
+    return isAdmin ? organized : filterOrganizedCardsWithContent(organized)
+  }, [cards, userCards, edital, isAdmin])
 
   // Carregar ordens de módulos para todas as matérias quando necessário
   useEffect(() => {

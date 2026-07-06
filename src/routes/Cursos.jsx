@@ -4,6 +4,7 @@ import { collection, doc, getDocs, query, where, limit } from 'firebase/firestor
 import { db } from '../firebase/config'
 import LazyImage from '../components/LazyImage'
 import { AcademicCapIcon, BookOpenIcon, SparklesIcon, ClockIcon } from '@heroicons/react/24/solid'
+import { buildWhatsAppCourseUrl } from '../utils/courseAccess'
 import { trackButtonClick } from '../utils/googleAds'
 
 const Cursos = () => {
@@ -155,15 +156,18 @@ const Cursos = () => {
 
                   <div className="flex gap-3 pt-2">
                     <a
-                      href={whatsappUrl}
+                      href={buildWhatsAppCourseUrl(course.name)}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={trackButtonClick}
                       className="flex-1 bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary px-6 py-3 rounded-xl font-bold text-sm hover:shadow-glow transition-all hover:scale-105 text-center"
                     >
-                      Quero começar!
+                      Comprar via WhatsApp
                     </a>
                   </div>
+                  <p className="text-xs text-text-muted pt-1">
+                    Sem compra: acesse 3 tópicos liberados + Guia Mentorado
+                  </p>
                 </div>
               </div>
             ))}

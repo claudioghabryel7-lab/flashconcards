@@ -6,6 +6,12 @@ import {
   normalizeFlashcard,
   buildNavigationFromEdital,
 } from '../utils/editalVerticalizadoLoader'
+import { CONTENT_STATUS } from '../utils/contentStatus'
+import {
+  hasPurchasedCourse,
+  getFreeTopicKeys,
+  topicKeysMatch,
+} from '../utils/courseAccess'
 
 /**
  * Carrega edital verticalizado + flashcards do curso (subcoleção) com fallback legado.
@@ -50,14 +56,35 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
     }
 
     setLoading(true)
-    const purchasedCourses = profile.purchasedCourses || []
     const isAdmin = profile.role === 'admin'
+    const ownsCourse = hasPurchasedCourse(profile, selectedCourseId)
+    const freeTopicKeys =
+      !isAdmin && !ownsCourse && edital
+        ? getFreeTopicKeys(edital, user.uid, courseId)
+        : []
 
     const applyAccessFilter = (data) => {
-      if (!isAdmin && selectedCourseId && !purchasedCourses.includes(selectedCourseId)) {
+      if (isAdmin) return data
+
+      let filtered = data.filter(
+        (card) => !card.status || card.status === CONTENT_STATUS.AVAILABLE
+      )
+
+      if (selectedCourseId && ownsCourse) {
+        return filtered
+      }
+
+      if (selectedCourseId && freeTopicKeys.length > 0) {
+        return filtered.filter((card) =>
+          freeTopicKeys.some((key) => topicKeysMatch(key, card.topicKey))
+        )
+      }
+
+      if (selectedCourseId && !ownsCourse) {
         return []
       }
-      return data
+
+      return filtered
     }
 
     const mapDocs = (docs) =>
@@ -133,7 +160,7 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
     )
 
     return () => unsub()
-  }, [user, profile, selectedCourseId])
+  }, [user, profile, selectedCourseId, edital])
 
   const organizedModules = useMemo(
     () => buildNavigationFromEdital(edital, cards),

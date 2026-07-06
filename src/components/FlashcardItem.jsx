@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, memo } from 'react'
+﻿import { useState, useEffect, memo, useRef } from 'react'
 import { HeartIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/solid'
 import { useAuth } from '../hooks/useAuth'
 
@@ -21,6 +21,7 @@ const FlashcardItem = ({
   const [internalFlipped, setInternalFlipped] = useState(false)
   const isControlled = typeof flippedProp === 'boolean'
   const flipped = isControlled ? flippedProp : internalFlipped
+  const touchStart = useRef(null)
 
   const setFlipped = (value) => {
     const next = typeof value === 'function' ? value(flipped) : value
@@ -45,6 +46,19 @@ const FlashcardItem = ({
   const toggle = () => {
     if (editing) return
     setFlipped(!flipped)
+  }
+
+  const handlePointerDown = (e) => {
+    if (editing) return
+    touchStart.current = { x: e.clientX, y: e.clientY }
+  }
+
+  const handlePointerUp = (e) => {
+    if (editing || !touchStart.current) return
+    const dx = Math.abs(e.clientX - touchStart.current.x)
+    const dy = Math.abs(e.clientY - touchStart.current.y)
+    touchStart.current = null
+    if (dx < 12 && dy < 12) toggle()
   }
 
   const handleRate = (difficulty) => {
@@ -75,133 +89,150 @@ const FlashcardItem = ({
   }
 
   const showInlineRating = showRating && !ratingBelowCard && flipped
+  const cardHeight = 'min-h-[min(340px,52dvh)] h-[min(340px,52dvh)] sm:min-h-[360px] sm:h-[360px]'
 
   return (
-    <div className="relative mx-auto w-full max-w-xl px-1 sm:px-0">
+    <div className="relative mx-auto w-full max-w-xl px-0 sm:px-0">
       <div
-        className="relative mx-auto h-[320px] w-full min-h-[320px] cursor-pointer select-none overflow-hidden sm:h-[360px] sm:min-h-[360px]"
-        style={{ perspective: '1400px' }}
+        className={`relative mx-auto w-full cursor-pointer select-none ${cardHeight}`}
+        style={{ perspective: '1200px', WebkitPerspective: '1200px', touchAction: 'manipulation' }}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.code === 'Enter' || e.code === 'Space') {
+            e.preventDefault()
+            toggle()
+          }
+        }}
+        aria-label={flipped ? 'Mostrar pergunta' : 'Mostrar resposta'}
       >
         <div
-          className="relative h-full w-full transition-transform duration-500 ease-out"
+          className="relative h-full w-full transition-transform duration-500 ease-out will-change-transform"
           style={{
             transformStyle: 'preserve-3d',
+            WebkitTransformStyle: 'preserve-3d',
             transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
           }}
-          onClick={toggle}
         >
           {/* Frente */}
           <div
-            className={`absolute inset-0 flex h-full w-full flex-col overflow-hidden rounded-3xl p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor} ${cardColor}`}
-            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+            className={`absolute inset-0 flex h-full w-full flex-col overflow-hidden rounded-3xl border p-5 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] sm:p-8 ${borderColor} ${cardColor}`}
+            style={{
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+              transform: 'rotateY(0deg) translateZ(1px)',
+            }}
           >
-            <div className="relative z-10 flex h-full flex-col">
-            <div className="absolute right-0 top-0 z-20 flex gap-1.5">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onToggleFavorite(card.id)
-                }}
-                className={`flex h-9 w-9 items-center justify-center rounded-full transition-all ${
-                  isFavorite
-                    ? 'bg-rose-50 text-rose-500 dark:bg-rose-950/40'
-                    : 'text-slate-400 hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800'
-                }`}
-                aria-label={isFavorite ? 'Remover dos favoritos' : 'Favoritar'}
-              >
-                <HeartIcon className="h-5 w-5" />
-              </button>
-              {isAdmin && !editing && (
-                <>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleEdit()
-                    }}
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800"
-                    aria-label="Editar"
-                  >
-                    <PencilIcon className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDelete()
-                    }}
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
-                    aria-label="Excluir"
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
-                </>
-              )}
-            </div>
-
-            <div className="flex flex-1 flex-col items-center justify-center px-2 py-8 text-center">
-              {editing ? (
-                <div className="w-full space-y-4" onClick={(e) => e.stopPropagation()}>
-                  <textarea
-                    value={editPergunta}
-                    onChange={(e) => setEditPergunta(e.target.value)}
-                    className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-4 text-lg font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    rows={4}
-                    placeholder="Pergunta"
-                  />
-                  <div className="flex justify-center gap-2">
+            <div className="relative z-10 flex h-full min-h-0 flex-col">
+              <div className="absolute right-0 top-0 z-20 flex gap-1">
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onToggleFavorite(card.id)
+                  }}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
+                    isFavorite
+                      ? 'bg-rose-50 text-rose-500 dark:bg-rose-950/40'
+                      : 'text-slate-400 hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800'
+                  }`}
+                  aria-label={isFavorite ? 'Remover dos favoritos' : 'Favoritar'}
+                >
+                  <HeartIcon className="h-5 w-5" />
+                </button>
+                {isAdmin && !editing && (
+                  <>
                     <button
                       type="button"
-                      onClick={handleSaveEdit}
-                      className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleEdit()
+                      }}
+                      className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800"
+                      aria-label="Editar"
                     >
-                      Salvar
+                      <PencilIcon className="h-4 w-4" />
                     </button>
                     <button
                       type="button"
-                      onClick={() => setEditing(false)}
-                      className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDelete()
+                      }}
+                      className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
+                      aria-label="Excluir"
                     >
-                      Cancelar
+                      <TrashIcon className="h-4 w-4" />
                     </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <span className="mb-4 inline-flex rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
-                    Pergunta
-                  </span>
-                  <h3 className={`text-xl font-semibold leading-relaxed sm:text-2xl ${textColor}`}>
-                    {card.pergunta}
-                  </h3>
-                  <p className="noji-hint mt-8 text-sm text-slate-400">
-                    Toque para revelar a resposta
-                  </p>
-                </>
-              )}
-            </div>
-
-            {(card.materia || card.modulo) && (
-              <div className="mt-auto flex flex-wrap justify-center gap-1.5 pt-2">
-                {card.materia && (
-                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                    {card.materia}
-                  </span>
-                )}
-                {card.modulo && (
-                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                    {card.modulo}
-                  </span>
+                  </>
                 )}
               </div>
-            )}
+
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-6 text-center sm:px-2 sm:py-8">
+                {editing ? (
+                  <div className="w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+                    <textarea
+                      value={editPergunta}
+                      onChange={(e) => setEditPergunta(e.target.value)}
+                      className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-4 text-base font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white sm:text-lg"
+                      rows={4}
+                      placeholder="Pergunta"
+                    />
+                    <div className="flex justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveEdit}
+                        className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                      >
+                        Salvar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditing(false)}
+                        className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <span className="mb-3 inline-flex rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
+                      Pergunta
+                    </span>
+                    <h3 className={`text-lg font-semibold leading-relaxed sm:text-2xl ${textColor}`}>
+                      {card.pergunta}
+                    </h3>
+                    <p className="noji-hint mt-6 text-sm text-slate-400">Toque para revelar a resposta</p>
+                  </>
+                )}
+              </div>
+
+              {(card.materia || card.modulo) && (
+                <div className="mt-auto flex shrink-0 flex-wrap justify-center gap-1.5 pt-2">
+                  {card.materia && (
+                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                      {card.materia}
+                    </span>
+                  )}
+                  {card.modulo && (
+                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                      {card.modulo}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Verso */}
           <div
-            className={`absolute inset-0 flex h-full w-full flex-col overflow-hidden rounded-3xl p-6 sm:p-8 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] border ${borderColor} ${
+            className={`absolute inset-0 flex h-full w-full flex-col overflow-hidden rounded-3xl border p-5 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] sm:p-8 ${borderColor} ${
               cardColor === 'bg-white' || cardColor === 'bg-slate-100'
                 ? 'bg-slate-900 dark:bg-slate-800'
                 : 'bg-slate-900'
@@ -209,52 +240,54 @@ const FlashcardItem = ({
             style={{
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
-              transform: 'rotateY(180deg)',
+              transform: 'rotateY(180deg) translateZ(1px)',
             }}
           >
-            <div className="relative z-10 flex h-full flex-col">
-            <div className="flex flex-1 flex-col items-center justify-center px-2 py-6 text-center">
-              <span className="mb-4 inline-flex rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white/70">
-                Resposta
-              </span>
-              {editing ? (
-                <div className="w-full space-y-4" onClick={(e) => e.stopPropagation()}>
-                  <textarea
-                    value={editResposta}
-                    onChange={(e) => setEditResposta(e.target.value)}
-                    className="w-full resize-none rounded-2xl border border-white/20 bg-white/10 p-4 text-base text-white"
-                    rows={6}
-                    placeholder="Resposta"
-                  />
-                </div>
-              ) : (
-                <div className="max-h-[240px] overflow-y-auto text-lg font-medium leading-relaxed text-white sm:text-xl">
-                  {card.resposta}
+            <div className="relative z-10 flex h-full min-h-0 flex-col">
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-4 text-center sm:px-2 sm:py-6">
+                <span className="mb-3 inline-flex shrink-0 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white/70">
+                  Resposta
+                </span>
+                {editing ? (
+                  <div className="w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+                    <textarea
+                      value={editResposta}
+                      onChange={(e) => setEditResposta(e.target.value)}
+                      className="w-full resize-none rounded-2xl border border-white/20 bg-white/10 p-4 text-base text-white"
+                      rows={6}
+                      placeholder="Resposta"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full text-base font-medium leading-relaxed text-white sm:text-xl">
+                    {card.resposta}
+                  </div>
+                )}
+              </div>
+
+              {showInlineRating && (
+                <div className="mt-auto shrink-0 space-y-3 border-t border-white/10 pt-4" onClick={(e) => e.stopPropagation()}>
+                  <p className="text-center text-xs font-medium text-white/60">Como foi essa revisão?</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleRate('hard')}
+                      className="noji-rate-hard flex-1 rounded-2xl py-3.5 text-sm font-bold"
+                      style={{ touchAction: 'manipulation' }}
+                    >
+                      Difícil
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRate('easy')}
+                      className="noji-rate-easy flex-1 rounded-2xl py-3.5 text-sm font-bold"
+                      style={{ touchAction: 'manipulation' }}
+                    >
+                      Fácil
+                    </button>
+                  </div>
                 </div>
               )}
-            </div>
-
-            {showInlineRating && (
-              <div className="mt-auto space-y-3 border-t border-white/10 pt-4" onClick={(e) => e.stopPropagation()}>
-                <p className="text-center text-xs font-medium text-white/60">Como foi essa revisão?</p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleRate('hard')}
-                    className="noji-rate-hard flex-1 rounded-2xl py-3.5 text-sm font-bold"
-                  >
-                    Difícil
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRate('easy')}
-                    className="noji-rate-easy flex-1 rounded-2xl py-3.5 text-sm font-bold"
-                  >
-                    Fácil
-                  </button>
-                </div>
-              </div>
-            )}
             </div>
           </div>
         </div>

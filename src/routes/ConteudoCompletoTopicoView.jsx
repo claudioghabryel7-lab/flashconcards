@@ -10,6 +10,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { isContentAvailable, CONTENT_STATUS } from '../utils/contentStatus'
 import SimpleMaterialEditor from '../components/SimpleMaterialEditor'
+import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import { stripHtml } from '../utils/htmlTextHelpers'
 import ReactMarkdown from 'react-markdown'
 import jsPDF from 'jspdf'
@@ -211,7 +212,11 @@ const ConteudoCompletoTopicoView = () => {
     }
   }
 
-  const resolvedCourseId = useMemo(() => courseId || 'alego-default', [courseId])
+  const resolvedCourseId = useMemo(
+    () => courseId || profile?.selectedCourseId || 'alego-default',
+    [courseId, profile?.selectedCourseId]
+  )
+  const { canAccess: hasTopicAccess } = useTopicCourseAccess(resolvedCourseId, topicKey, profile)
   const resolvedTopicKey = useMemo(() => normalizeKey(topicKey), [topicKey])
   const { numero: topicNumeroFromKey, nome: topicNomeFromKey } = useMemo(
     () => parseTopicKey(topicKey),
@@ -1140,6 +1145,23 @@ REGRAS:
               Biblioteca de Conteúdos
             </Link>
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAdmin && !hasTopicAccess) {
+    return (
+      <div className="max-w-lg mx-auto p-8">
+        <div className="cp-card p-10 text-center">
+          <p className="text-4xl mb-3">🔒</p>
+          <p className="font-medium text-cp-text">Acesso não disponível</p>
+          <p className="mt-2 text-sm text-cp-muted">
+            Este tópico não está no seu preview gratuito ou ainda não foi liberado pelo administrador.
+          </p>
+          <Link to="/edital-verticalizado" className="cp-btn-ghost mt-6 inline-flex">
+            Voltar ao edital
+          </Link>
         </div>
       </div>
     )

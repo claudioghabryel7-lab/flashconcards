@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { doc, onSnapshot, getDoc, updateDoc, collection, getDocs, query, where, setDoc, serverTimestamp } from 'firebase/firestore'
 import dayjs from 'dayjs'
@@ -19,6 +19,7 @@ import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
+import { hasPurchasedCourse } from '../utils/courseAccess'
 
 const GuiaMentorado = () => {
   const { user, profile } = useAuth()
@@ -41,30 +42,39 @@ const GuiaMentorado = () => {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   
-  // Carregar cursos
+  // Carregar cursos (apenas relevantes para o usuário)
   useEffect(() => {
     const loadCourses = async () => {
       try {
         const coursesRef = collection(db, 'courses')
         const coursesSnapshot = await getDocs(coursesRef)
-        const coursesList = coursesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-        setCourses(coursesList)
-        
-        // Selecionar curso do usuário ou o primeiro
-        if (profile?.selectedCourseId) {
+        const coursesList = coursesSnapshot.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((c) => c.active !== false)
+
+        const isAdminUser = profile?.role === 'admin'
+        const visible = isAdminUser
+          ? coursesList
+          : coursesList.filter(
+              (c) =>
+                c.id === 'alego-default' ||
+                hasPurchasedCourse(profile, c.id) ||
+                c.id === profile?.selectedCourseId
+            )
+
+        setCourses(visible)
+
+        if (profile?.selectedCourseId && visible.some((c) => c.id === profile.selectedCourseId)) {
           setSelectedCourseId(profile.selectedCourseId)
-        } else if (coursesList.length > 0) {
-          setSelectedCourseId(coursesList[0].id)
+        } else if (visible.length > 0) {
+          setSelectedCourseId(visible[0].id)
         }
       } catch (error) {
         console.error('Erro ao carregar cursos:', error)
       }
     }
-    
-    loadCourses()
+
+    if (profile) loadCourses()
   }, [profile])
   
   // Carregar edital verticalizado
@@ -132,44 +142,44 @@ const GuiaMentorado = () => {
     setIsAdmin(profile?.role === 'admin')
   }, [profile])
   
-  // Gerar dias do mês
-  const getDaysInMonth = () => {
-    const days = []
+  // Gerar dias do mês (memoizado)
+  const days = useMemo(() => {
+    const result = []
     const firstDay = currentMonth.startOf('month')
     const lastDay = currentMonth.endOf('month')
-    
-    // Adicionar dias vazios antes do primeiro dia
+
     const startDayOfWeek = firstDay.day()
     for (let i = 0; i < startDayOfWeek; i++) {
-      days.push({ empty: true })
+      result.push({ empty: true })
     }
-    
-    // Adicionar dias do mês
+
     for (let i = 1; i <= lastDay.date(); i++) {
       const date = currentMonth.date(i)
       const dayKey = date.format('YYYY-MM-DD')
       const dayData = cronograma?.days?.[dayKey] || null
-      
-      days.push({
-        date: date,
-        dayKey: dayKey,
+
+      result.push({
+        date,
+        dayKey,
         data: dayData,
         isToday: date.isSame(dayjs(), 'day'),
         isPast: date.isBefore(dayjs(), 'day'),
       })
     }
-    
-    return days
-  }
-  
+
+    return result
+  }, [currentMonth, cronograma])
+
+  const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
   // Navegação do calendário
-  const previousMonth = () => {
-    setCurrentMonth(currentMonth.subtract(1, 'month'))
-  }
-  
-  const nextMonth = () => {
-    setCurrentMonth(currentMonth.add(1, 'month'))
-  }
+  const previousMonth = useCallback(() => {
+    setCurrentMonth((m) => m.subtract(1, 'month'))
+  }, [])
+
+  const nextMonth = useCallback(() => {
+    setCurrentMonth((m) => m.add(1, 'month'))
+  }, [])
   
   // Salvar configuração
   const saveConfig = async (newConfig) => {
@@ -477,8 +487,6 @@ IMPORTANTE:
     }
   }
   
-  const days = getDaysInMonth()
-  const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
   
   return (
     <div className="space-y-6">
@@ -554,34 +562,36 @@ IMPORTANTE:
         )}
         
         {/* Calendário */}
-        <div className="bg-background-card rounded-xl border border-border-primary overflow-hidden">
+        <div className="bg-background-card rounded-2xl border border-border-primary overflow-hidden shadow-sm">
           {/* Navegação do Mês */}
-          <div className="flex items-center justify-between p-4 border-b border-border-primary">
+          <div className="flex items-center justify-between px-4 py-4 sm:px-6 border-b border-border-primary bg-background-card-hover/40">
             <button
               onClick={previousMonth}
-              className="p-2 rounded-lg hover:bg-background-card-hover transition-colors"
+              className="p-2.5 rounded-xl hover:bg-background-card transition-colors"
+              aria-label="Mês anterior"
             >
               <ChevronLeftIcon className="h-5 w-5" />
             </button>
             
-            <h2 className="text-xl font-bold text-text-primary">
-              {currentMonth.format('MMMM YYYY')}
+            <h2 className="text-lg sm:text-xl font-bold text-text-primary capitalize">
+              {currentMonth.format('MMMM [de] YYYY')}
             </h2>
             
             <button
               onClick={nextMonth}
-              className="p-2 rounded-lg hover:bg-background-card-hover transition-colors"
+              className="p-2.5 rounded-xl hover:bg-background-card transition-colors"
+              aria-label="Próximo mês"
             >
               <ChevronRightIcon className="h-5 w-5" />
             </button>
           </div>
           
           {/* Dias da Semana */}
-          <div className="grid grid-cols-7 border-b border-border-primary">
+          <div className="grid grid-cols-7 gap-px bg-border-primary/50 px-2 pt-2 sm:px-3">
             {weekDays.map((day) => (
               <div
                 key={day}
-                className="p-2 sm:p-3 text-center text-xs sm:text-sm font-semibold text-text-secondary"
+                className="py-2 sm:py-3 text-center text-[11px] sm:text-xs font-bold uppercase tracking-wide text-text-muted"
               >
                 {day}
               </div>
@@ -589,21 +599,25 @@ IMPORTANTE:
           </div>
           
           {/* Dias do Mês */}
-          <div className="grid grid-cols-7">
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-2 p-2 sm:p-3">
             {days.map((day, index) => (
               <div
                 key={index}
-                className={`min-h-[60px] sm:min-h-[80px] p-1 sm:p-2 border-r border-b border-border-primary ${
-                  day.empty ? 'bg-background-card-hover' : 'bg-background-card'
-                } ${day.isToday ? 'ring-2 ring-accent-cyan' : ''}`}
+                className={`min-h-[72px] sm:min-h-[96px] rounded-xl p-2 sm:p-2.5 ${
+                  day.empty
+                    ? 'bg-transparent'
+                    : day.isToday
+                    ? 'bg-accent-cyan/10 ring-2 ring-accent-cyan/60'
+                    : 'bg-background-card-hover/60 border border-border-primary/60'
+                }`}
               >
                 {day.empty ? (
-                  <div className="h-full"></div>
+                  <div className="h-full" />
                 ) : (
-                  <div className="h-full flex flex-col">
-                    <div className="flex items-center justify-between mb-1">
+                  <div className="h-full flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
                       <span
-                        className={`text-xs sm:text-sm font-semibold ${
+                        className={`text-sm sm:text-base font-bold leading-none ${
                           day.isToday
                             ? 'text-accent-cyan'
                             : day.isPast
@@ -614,27 +628,28 @@ IMPORTANTE:
                         {day.date.date()}
                       </span>
                       {day.data?.completed && (
-                        <CheckIcon className="h-3 w-3 text-green-500" />
+                        <CheckIcon className="h-3.5 w-3.5 text-green-500 shrink-0" />
                       )}
                     </div>
                     
                     {day.data && (
-                      <div
-                        onClick={() => day.data && navigate(`/guia-mentorado/${selectedCourseId}/${day.dayKey}`)}
-                        className={`flex-1 rounded-lg p-1 sm:p-2 text-xs cursor-pointer hover:opacity-80 transition-opacity flex items-center justify-center ${
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/guia-mentorado/${selectedCourseId}/${day.dayKey}`)}
+                        className={`flex-1 w-full rounded-lg px-1 py-1.5 text-[10px] sm:text-xs cursor-pointer hover:opacity-90 transition-opacity flex flex-col items-center justify-center gap-1 min-h-[40px] ${
                           day.data.type === 'estudo'
-                            ? 'bg-blue-500/10 border border-blue-500/30'
+                            ? 'bg-blue-500/15 border border-blue-500/30 text-blue-400'
                             : day.data.type === 'taf'
-                            ? 'bg-orange-500/10 border border-orange-500/30'
+                            ? 'bg-orange-500/15 border border-orange-500/30 text-orange-400'
                             : day.data.type === 'redacao'
-                            ? 'bg-pink-500/10 border border-pink-500/30'
+                            ? 'bg-pink-500/15 border border-pink-500/30 text-pink-400'
                             : day.data.type === 'revisao'
-                            ? 'bg-green-500/10 border border-green-500/30'
+                            ? 'bg-green-500/15 border border-green-500/30 text-green-400'
                             : day.data.type === 'simulado'
-                            ? 'bg-purple-500/10 border border-purple-500/30'
+                            ? 'bg-purple-500/15 border border-purple-500/30 text-purple-400'
                             : day.data.type === 'reta_final'
-                            ? 'bg-red-500/10 border border-red-500/30'
-                            : 'bg-purple-500/10 border border-purple-500/30'
+                            ? 'bg-red-500/15 border border-red-500/30 text-red-400'
+                            : 'bg-purple-500/15 border border-purple-500/30 text-purple-400'
                         }`}
                       >
                         {day.data.type === 'estudo' && (
@@ -660,7 +675,7 @@ IMPORTANTE:
                         {day.data.type === 'reta_final' && (
                           <FireIcon className="h-4 w-4 text-red-400" />
                         )}
-                      </div>
+                      </button>
                     )}
                   </div>
                 )}
