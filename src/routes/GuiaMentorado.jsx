@@ -1,29 +1,23 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { doc, onSnapshot, getDoc, updateDoc, collection, getDocs, query, where, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, onSnapshot, getDoc, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore'
 import dayjs from 'dayjs'
 import {
   CalendarIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  FireIcon,
-  BookOpenIcon,
   PencilIcon,
-  CheckIcon,
   XMarkIcon,
   SparklesIcon,
-  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
-import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import { hasPurchasedCourse } from '../utils/courseAccess'
+import MentoradoCalendar from '../components/guiaMentorado/MentoradoCalendar'
 
 const GuiaMentorado = () => {
-  const { user, profile } = useAuth()
-  const { darkMode } = useDarkMode()
+  const { profile } = useAuth()
   const navigate = useNavigate()
   
   const [currentMonth, setCurrentMonth] = useState(dayjs())
@@ -39,7 +33,8 @@ const GuiaMentorado = () => {
   })
   const [isAdmin, setIsAdmin] = useState(false)
   const [showConfigModal, setShowConfigModal] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [calendarLoading, setCalendarLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
   const [message, setMessage] = useState('')
   
   // Carregar cursos (apenas relevantes para o usuário)
@@ -80,22 +75,19 @@ const GuiaMentorado = () => {
   // Carregar edital verticalizado
   useEffect(() => {
     if (!selectedCourseId) return
-    
-    const loadEdital = async () => {
-      try {
-        const editalRef = collection(db, 'courses', selectedCourseId, 'editalVerticalizado')
-        const editalSnapshot = await getDocs(editalRef)
-        
-        if (!editalSnapshot.empty) {
-          const editalData = editalSnapshot.docs[0].data()
-          setEditalVerticalizado(editalData)
-        }
-      } catch (error) {
+
+    let cancelled = false
+    loadEditalVerticalizado(selectedCourseId)
+      .then((data) => {
+        if (!cancelled) setEditalVerticalizado(data)
+      })
+      .catch((error) => {
         console.error('Erro ao carregar edital verticalizado:', error)
-      }
+      })
+
+    return () => {
+      cancelled = true
     }
-    
-    loadEdital()
   }, [selectedCourseId])
   
   // Carregar configuração do cronograma
@@ -121,19 +113,20 @@ const GuiaMentorado = () => {
   // Carregar cronograma do mês atual
   useEffect(() => {
     if (!selectedCourseId) return
-    
+
+    setCalendarLoading(true)
     const monthKey = currentMonth.format('YYYY-MM')
     const cronogramaRef = doc(db, 'courses', selectedCourseId, 'cronograma', monthKey)
-    
-    const unsubscribe = onSnapshot(cronogramaRef, (doc) => {
-      if (doc.exists()) {
-        setCronograma(doc.data())
-      } else {
-        setCronograma(null)
-      }
-      setLoading(false)
-    })
-    
+
+    const unsubscribe = onSnapshot(
+      cronogramaRef,
+      (snapshot) => {
+        setCronograma(snapshot.exists() ? snapshot.data() : null)
+        setCalendarLoading(false)
+      },
+      () => setCalendarLoading(false)
+    )
+
     return () => unsubscribe()
   }, [selectedCourseId, currentMonth])
   
@@ -142,37 +135,6 @@ const GuiaMentorado = () => {
     setIsAdmin(profile?.role === 'admin')
   }, [profile])
   
-  // Gerar dias do mês (memoizado)
-  const days = useMemo(() => {
-    const result = []
-    const firstDay = currentMonth.startOf('month')
-    const lastDay = currentMonth.endOf('month')
-
-    const startDayOfWeek = firstDay.day()
-    for (let i = 0; i < startDayOfWeek; i++) {
-      result.push({ empty: true })
-    }
-
-    for (let i = 1; i <= lastDay.date(); i++) {
-      const date = currentMonth.date(i)
-      const dayKey = date.format('YYYY-MM-DD')
-      const dayData = cronograma?.days?.[dayKey] || null
-
-      result.push({
-        date,
-        dayKey,
-        data: dayData,
-        isToday: date.isSame(dayjs(), 'day'),
-        isPast: date.isBefore(dayjs(), 'day'),
-      })
-    }
-
-    return result
-  }, [currentMonth, cronograma])
-
-  const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-
-  // Navegação do calendário
   const previousMonth = useCallback(() => {
     setCurrentMonth((m) => m.subtract(1, 'month'))
   }, [])
@@ -180,6 +142,17 @@ const GuiaMentorado = () => {
   const nextMonth = useCallback(() => {
     setCurrentMonth((m) => m.add(1, 'month'))
   }, [])
+
+  const goToToday = useCallback(() => {
+    setCurrentMonth(dayjs())
+  }, [])
+
+  const handleDayClick = useCallback(
+    (dayKey) => {
+      navigate(`/guia-mentorado/${selectedCourseId}/${dayKey}`)
+    },
+    [navigate, selectedCourseId]
+  )
   
   // Salvar configuração
   const saveConfig = async (newConfig) => {
@@ -203,7 +176,7 @@ const GuiaMentorado = () => {
       return
     }
     
-    setLoading(true)
+    setGenerating(true)
     
     try {
       const provaDate = dayjs(config.dataProva)
@@ -212,7 +185,7 @@ const GuiaMentorado = () => {
       
       if (daysUntilProva <= 0) {
         alert('A data da prova deve ser no futuro.')
-        setLoading(false)
+        setGenerating(false)
         return
       }
       
@@ -463,30 +436,9 @@ IMPORTANTE:
       alert('Erro ao gerar cronograma: ' + error.message)
       setMessage('')
     } finally {
-      setLoading(false)
+      setGenerating(false)
     }
   }
-  
-  // Marcar dia como completo
-  const toggleDayComplete = async (dayKey) => {
-    if (!cronograma) return
-    
-    try {
-      const updatedDays = { ...cronograma.days }
-      updatedDays[dayKey] = {
-        ...updatedDays[dayKey],
-        completed: !updatedDays[dayKey].completed,
-      }
-      
-      const cronogramaRef = doc(db, 'courses', selectedCourseId, 'cronograma', currentMonth.format('YYYY-MM'))
-      await updateDoc(cronogramaRef, {
-        days: updatedDays,
-      })
-    } catch (error) {
-      console.error('Erro ao atualizar dia:', error)
-    }
-  }
-  
   
   return (
     <div className="space-y-6">
@@ -500,201 +452,85 @@ IMPORTANTE:
             <>
               <button
                 onClick={() => setShowConfigModal(true)}
-                className="px-4 py-2 bg-accent-cyan text-background-primary rounded-lg hover:bg-accent-cyan-dim transition-colors flex items-center gap-2"
+                className="cp-btn-ghost !text-sm"
               >
                 <PencilIcon className="h-4 w-4" />
                 Configurar
               </button>
               <button
                 onClick={generateCronograma}
-                disabled={loading || !config.dataProva || !editalVerticalizado}
-                className="px-4 py-2 bg-gradient-to-r from-accent-orange to-accent-cyan text-background-primary rounded-lg hover:from-accent-orange-dim hover:to-accent-cyan-dim transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                disabled={generating || !config.dataProva || !editalVerticalizado}
+                className="cp-btn-primary !text-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <SparklesIcon className="h-4 w-4" />
-                Gerar Cronograma
+                {generating ? 'Gerando...' : 'Gerar Cronograma'}
               </button>
             </>
           ) : undefined
         }
       />
 
-      {/* Mensagem de Progresso */}
-        {message && (
-          <div className="mb-6 p-4 rounded-xl bg-accent-cyan/10 border border-accent-cyan/30 text-accent-cyan text-center">
-            {message}
-          </div>
-        )}
-        
-        {/* Seleção de Curso */}
-        <div className="mb-6">
-          <label className="block text-sm font-semibold text-text-secondary mb-2">
-            Curso
-          </label>
-          <select
-            value={selectedCourseId}
-            onChange={(e) => setSelectedCourseId(e.target.value)}
-            className="w-full sm:w-64 rounded-xl border border-border-primary bg-background-card px-4 py-2 text-text-primary focus:border-accent-cyan focus:outline-none"
-          >
-            {courses.map((course) => (
-              <option key={course.id} value={course.id}>
-                {course.name}
-              </option>
-            ))}
-          </select>
+      {message && (
+        <div className="rounded-xl border border-[var(--cp-accent-2)]/30 bg-[var(--cp-accent-2)]/10 px-4 py-3 text-center text-sm text-[var(--cp-accent-2)]">
+          {message}
         </div>
-        
-        {/* Informações da Prova */}
-        {config.dataProva && (
-          <div className="mb-6 p-4 rounded-xl bg-background-card border border-border-primary">
-            <div className="flex items-center gap-2 mb-2">
-              <CalendarIcon className="h-5 w-5 text-accent-orange" />
-              <span className="font-semibold text-text-primary">Data da Prova</span>
-            </div>
-            <p className="text-text-secondary">
+      )}
+
+      <div>
+        <label className="mb-2 block font-mono text-xs uppercase tracking-wide text-cp-muted">
+          Curso
+        </label>
+        <select
+          value={selectedCourseId}
+          onChange={(e) => setSelectedCourseId(e.target.value)}
+          className="w-full rounded-xl border border-cp-border bg-cp-surface px-4 py-2.5 text-cp-text focus:border-[var(--cp-accent)] focus:outline-none sm:w-72"
+        >
+          {courses.map((course) => (
+            <option key={course.id} value={course.id}>
+              {course.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {config.dataProva && (
+        <div className="cp-card flex items-center gap-4 !rounded-2xl p-4">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-cp-border bg-cp-surface">
+            <CalendarIcon className="h-5 w-5 text-[var(--cp-accent-4)]" />
+          </div>
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-wide text-cp-muted">Data da prova</p>
+            <p className="text-cp-text">
               {dayjs(config.dataProva).format('DD/MM/YYYY')}
               {dayjs(config.dataProva).isAfter(dayjs()) && (
-                <span className="ml-2 text-accent-cyan">
+                <span className="ml-2 text-[var(--cp-accent-2)]">
                   ({dayjs(config.dataProva).diff(dayjs(), 'day')} dias restantes)
                 </span>
               )}
             </p>
           </div>
-        )}
-        
-        {/* Calendário */}
-        <div className="bg-background-card rounded-2xl border border-border-primary overflow-hidden shadow-sm">
-          {/* Navegação do Mês */}
-          <div className="flex items-center justify-between px-4 py-4 sm:px-6 border-b border-border-primary bg-background-card-hover/40">
-            <button
-              onClick={previousMonth}
-              className="p-2.5 rounded-xl hover:bg-background-card transition-colors"
-              aria-label="Mês anterior"
-            >
-              <ChevronLeftIcon className="h-5 w-5" />
-            </button>
-            
-            <h2 className="text-lg sm:text-xl font-bold text-text-primary capitalize">
-              {currentMonth.format('MMMM [de] YYYY')}
-            </h2>
-            
-            <button
-              onClick={nextMonth}
-              className="p-2.5 rounded-xl hover:bg-background-card transition-colors"
-              aria-label="Próximo mês"
-            >
-              <ChevronRightIcon className="h-5 w-5" />
-            </button>
-          </div>
-          
-          {/* Dias da Semana */}
-          <div className="grid grid-cols-7 gap-px bg-border-primary/50 px-2 pt-2 sm:px-3">
-            {weekDays.map((day) => (
-              <div
-                key={day}
-                className="py-2 sm:py-3 text-center text-[11px] sm:text-xs font-bold uppercase tracking-wide text-text-muted"
-              >
-                {day}
-              </div>
-            ))}
-          </div>
-          
-          {/* Dias do Mês */}
-          <div className="grid grid-cols-7 gap-1.5 sm:gap-2 p-2 sm:p-3">
-            {days.map((day, index) => (
-              <div
-                key={index}
-                className={`min-h-[72px] sm:min-h-[96px] rounded-xl p-2 sm:p-2.5 ${
-                  day.empty
-                    ? 'bg-transparent'
-                    : day.isToday
-                    ? 'bg-accent-cyan/10 ring-2 ring-accent-cyan/60'
-                    : 'bg-background-card-hover/60 border border-border-primary/60'
-                }`}
-              >
-                {day.empty ? (
-                  <div className="h-full" />
-                ) : (
-                  <div className="h-full flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`text-sm sm:text-base font-bold leading-none ${
-                          day.isToday
-                            ? 'text-accent-cyan'
-                            : day.isPast
-                            ? 'text-text-muted'
-                            : 'text-text-primary'
-                        }`}
-                      >
-                        {day.date.date()}
-                      </span>
-                      {day.data?.completed && (
-                        <CheckIcon className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                      )}
-                    </div>
-                    
-                    {day.data && (
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/guia-mentorado/${selectedCourseId}/${day.dayKey}`)}
-                        className={`flex-1 w-full rounded-lg px-1 py-1.5 text-[10px] sm:text-xs cursor-pointer hover:opacity-90 transition-opacity flex flex-col items-center justify-center gap-1 min-h-[40px] ${
-                          day.data.type === 'estudo'
-                            ? 'bg-blue-500/15 border border-blue-500/30 text-blue-400'
-                            : day.data.type === 'taf'
-                            ? 'bg-orange-500/15 border border-orange-500/30 text-orange-400'
-                            : day.data.type === 'redacao'
-                            ? 'bg-pink-500/15 border border-pink-500/30 text-pink-400'
-                            : day.data.type === 'revisao'
-                            ? 'bg-green-500/15 border border-green-500/30 text-green-400'
-                            : day.data.type === 'simulado'
-                            ? 'bg-purple-500/15 border border-purple-500/30 text-purple-400'
-                            : day.data.type === 'reta_final'
-                            ? 'bg-red-500/15 border border-red-500/30 text-red-400'
-                            : 'bg-purple-500/15 border border-purple-500/30 text-purple-400'
-                        }`}
-                      >
-                        {day.data.type === 'estudo' && (
-                          <BookOpenIcon className="h-4 w-4 text-blue-400" />
-                        )}
-                        
-                        {day.data.type === 'taf' && (
-                          <DocumentTextIcon className="h-4 w-4 text-orange-400" />
-                        )}
-                        
-                        {day.data.type === 'redacao' && (
-                          <PencilIcon className="h-4 w-4 text-pink-400" />
-                        )}
-                        
-                        {day.data.type === 'revisao' && (
-                          <SparklesIcon className="h-4 w-4 text-green-400" />
-                        )}
-                        
-                        {day.data.type === 'simulado' && (
-                          <FireIcon className="h-4 w-4 text-purple-400" />
-                        )}
-                        
-                        {day.data.type === 'reta_final' && (
-                          <FireIcon className="h-4 w-4 text-red-400" />
-                        )}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
         </div>
+      )}
+
+      <MentoradoCalendar
+        currentMonth={currentMonth}
+        cronograma={cronograma}
+        examDate={config.dataProva}
+        loading={calendarLoading}
+        onPreviousMonth={previousMonth}
+        onNextMonth={nextMonth}
+        onGoToday={goToToday}
+        onDayClick={handleDayClick}
+      />
         
-        {/* Modal de Configuração */}
         {showConfigModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-background-card rounded-xl p-6 w-full max-w-md">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-text-primary">
-                  Configurar Guia Mentorado
-                </h3>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="cp-card w-full max-w-md !rounded-2xl p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="cp-headline text-lg text-cp-text">Configurar Guia Mentorado</h3>
                 <button
                   onClick={() => setShowConfigModal(false)}
-                  className="text-text-muted hover:text-text-primary"
+                  className="text-cp-muted transition hover:text-cp-text"
                 >
                   <XMarkIcon className="h-6 w-6" />
                 </button>
@@ -702,14 +538,14 @@ IMPORTANTE:
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-text-secondary mb-2">
+                  <label className="mb-2 block text-sm font-medium text-cp-muted">
                     Data da Prova *
                   </label>
                   <input
                     type="date"
                     value={config.dataProva || ''}
                     onChange={(e) => setConfig({ ...config, dataProva: e.target.value })}
-                    className="w-full rounded-lg border border-border-primary bg-background-card-hover px-4 py-2 text-text-primary focus:border-accent-cyan focus:outline-none"
+                    className="w-full rounded-lg border border-cp-border bg-cp-surface px-4 py-2 text-cp-text focus:border-[var(--cp-accent)] focus:outline-none"
                   />
                 </div>
                 
@@ -721,7 +557,7 @@ IMPORTANTE:
                     onChange={(e) => setConfig({ ...config, hasTAF: e.target.checked })}
                     className="rounded"
                   />
-                  <label htmlFor="hasTAF" className="text-sm text-text-primary">
+                  <label htmlFor="hasTAF" className="text-sm text-cp-text">
                     Possui TAF (Teste de Aptidão Física)
                   </label>
                 </div>
@@ -734,14 +570,14 @@ IMPORTANTE:
                     onChange={(e) => setConfig({ ...config, hasRedacao: e.target.checked })}
                     className="rounded"
                   />
-                  <label htmlFor="hasRedacao" className="text-sm text-text-primary">
+                  <label htmlFor="hasRedacao" className="text-sm text-cp-text">
                     Possui Redação
                   </label>
                 </div>
                 
                 {config.hasTAF && (
                   <div>
-                    <label className="block text-sm font-semibold text-text-secondary mb-2">
+                    <label className="mb-2 block text-sm font-medium text-cp-muted">
                       Exercícios do TAF
                     </label>
                     <div className="grid grid-cols-2 gap-2">
@@ -758,7 +594,7 @@ IMPORTANTE:
                             }}
                             className="rounded"
                           />
-                          <span className="text-sm text-text-primary">{exercicio}</span>
+                          <span className="text-sm text-cp-text">{exercicio}</span>
                         </label>
                       ))}
                     </div>
@@ -766,16 +602,16 @@ IMPORTANTE:
                 )}
               </div>
               
-              <div className="flex gap-3 mt-6">
+              <div className="mt-6 flex gap-3">
                 <button
                   onClick={() => setShowConfigModal(false)}
-                  className="flex-1 px-4 py-2 text-text-primary bg-background-card-hover rounded-lg font-medium transition-colors"
+                  className="cp-btn-ghost flex-1 !text-sm"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={() => saveConfig(config)}
-                  className="flex-1 px-4 py-2 bg-accent-cyan text-background-primary rounded-lg font-medium hover:bg-accent-cyan-dim transition-colors"
+                  className="cp-btn-primary flex-1 !text-sm"
                 >
                   Salvar
                 </button>

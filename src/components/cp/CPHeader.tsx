@@ -1,22 +1,21 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   Menu,
-  X,
   BookOpen,
   ShieldCheck,
   LogOut,
   RefreshCw,
   Moon,
   Sun,
-  ChevronRight,
 } from 'lucide-react'
 import CPLogo from './CPLogo'
 import UserAvatar from '../UserAvatar'
 import TopicNotificationsButton from '../TopicNotificationsButton'
+import CPDrawerMenu from './CPDrawerMenu'
 import { useAuth } from '@/hooks/useAuth'
 import { useDarkMode } from '@/hooks/useDarkMode.jsx'
 import OnlineNowBadge from './OnlineNowBadge'
@@ -61,21 +60,32 @@ const menuCategories: NavCategory[] = [
 export default function CPHeader() {
   const [scrolled, setScrolled] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const drawerRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname() || '/'
   const router = useRouter()
   const { user, logout, isAdmin, profile } = useAuth()
   const { darkMode, toggleDarkMode } = useDarkMode()
 
+  const closeDrawer = useCallback(() => setDrawerOpen(false), [])
+  const openDrawer = useCallback(() => setDrawerOpen(true), [])
+
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8)
-    window.addEventListener('scroll', onScroll)
+    let ticking = false
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        setScrolled(window.scrollY > 8)
+        ticking = false
+      })
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
   useEffect(() => {
-    setDrawerOpen(false)
-  }, [pathname])
+    closeDrawer()
+  }, [pathname, closeDrawer])
 
   useEffect(() => {
     document.body.style.overflow = drawerOpen ? 'hidden' : ''
@@ -101,15 +111,13 @@ export default function CPHeader() {
   const isComunidade = pathname.startsWith('/comunidade')
   if (hideShell || isComunidade) return null
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
-
   return (
     <>
       <header
-        className={`sticky top-0 z-50 w-full transition-all duration-500 ${
+        className={`sticky top-0 z-50 w-full transition-[border-color,background-color,box-shadow] duration-300 ${
           scrolled
-            ? 'border-b border-cp-border bg-cp-bg/75 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)]'
-            : 'border-b border-cp-border/50 bg-cp-bg/40 backdrop-blur-xl'
+            ? 'border-b border-cp-border bg-cp-bg/90 shadow-[0_4px_24px_rgba(0,0,0,0.08)] md:backdrop-blur-md'
+            : 'border-b border-cp-border/50 bg-cp-bg/80'
         }`}
       >
         <div className="cp-container-wide flex h-[4.5rem] items-center justify-between gap-4">
@@ -186,7 +194,7 @@ export default function CPHeader() {
 
             <button
               type="button"
-              onClick={() => setDrawerOpen(true)}
+              onClick={openDrawer}
               className="flex h-10 w-10 items-center justify-center rounded-full border border-cp-border bg-cp-surface text-cp-text transition hover:border-cp-accent/30 hover:shadow-cp-glow"
               aria-label="Abrir menu"
             >
@@ -196,154 +204,16 @@ export default function CPHeader() {
         </div>
       </header>
 
-      {drawerOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm"
-            onClick={() => setDrawerOpen(false)}
-          />
-          <aside
-            ref={drawerRef}
-            className="fixed inset-y-0 right-0 z-[70] flex w-[min(100vw,360px)] flex-col border-l border-cp-border bg-cp-bg/95 shadow-2xl backdrop-blur-2xl"
-          >
-            {/* Drawer header */}
-            <div className="flex items-center justify-between border-b border-cp-border px-5 py-4">
-              <CPLogo size="sm" />
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-cp-border text-cp-muted transition hover:bg-cp-surface hover:text-cp-text"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {user && (
-              <div className="border-b border-cp-border px-5 py-4 space-y-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    router.push('/perfil')
-                    setDrawerOpen(false)
-                  }}
-                  className="cp-card flex w-full items-center gap-3 !rounded-2xl p-3 text-left transition hover:border-cp-accent/30"
-                >
-                  <UserAvatar
-                    photoBase64={profile?.photoBase64}
-                    name={profile?.displayName || user.displayName || ''}
-                    size="sm"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-cp-text">
-                      {profile?.displayName || user.displayName || user.email?.split('@')[0]}
-                    </p>
-                    <p className="font-mono text-[10px] text-cp-muted">
-                      {isAdmin ? 'administrador' : 'investigador'} · editar perfil
-                    </p>
-                  </div>
-                </button>
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-xs text-cp-muted">Tópicos liberados</span>
-                  <TopicNotificationsButton />
-                </div>
-              </div>
-            )}
-
-            {/* Nav */}
-            <div className="flex-1 overflow-y-auto px-4 py-4">
-              {filteredCategories.map((category) => {
-                const Icon = category.icon
-                return (
-                  <div key={category.label} className="mb-6">
-                    <div className="mb-3 flex items-center gap-2 px-1">
-                      <span className="cp-badge cp-badge-accent !text-[10px]">
-                        <Icon className="h-3 w-3" />
-                        {category.label}
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      {category.items.map((item) => (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={() => setDrawerOpen(false)}
-                          className={`group flex items-center justify-between rounded-xl px-4 py-3 text-sm transition ${
-                            isActive(item.href)
-                              ? 'border border-cp-accent/25 bg-cp-accent/10 font-medium text-cp-accent'
-                              : 'text-cp-muted hover:bg-cp-surface hover:text-cp-text'
-                          }`}
-                        >
-                          {item.label}
-                          <ChevronRight
-                            className={`h-4 w-4 transition ${
-                              isActive(item.href)
-                                ? 'text-cp-accent'
-                                : 'text-cp-muted/50 group-hover:translate-x-0.5 group-hover:text-cp-muted'
-                            }`}
-                          />
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-
-              {!user && (
-                <div className="mb-6">
-                  <div className="mb-3 px-1">
-                    <span className="cp-badge cp-badge-cyan !text-[10px]">Conta</span>
-                  </div>
-                  <div className="space-y-1">
-                    <Link
-                      href="/login"
-                      onClick={() => setDrawerOpen(false)}
-                      className="flex items-center justify-between rounded-xl px-4 py-3 text-sm text-cp-muted transition hover:bg-cp-surface hover:text-cp-text"
-                    >
-                      Entrar
-                      <ChevronRight className="h-4 w-4 text-cp-muted/50" />
-                    </Link>
-                    <Link
-                      href="/cursos"
-                      onClick={() => setDrawerOpen(false)}
-                      className="cp-btn-primary mt-2 w-full !text-sm"
-                    >
-                      Começar agora
-                    </Link>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Drawer footer */}
-            {user && (
-              <div className="space-y-2 border-t border-cp-border p-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    router.push('/select-course')
-                    setDrawerOpen(false)
-                  }}
-                  className="cp-btn-ghost w-full !text-sm"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  Trocar curso
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    logout()
-                    setDrawerOpen(false)
-                  }}
-                  className="flex w-full items-center justify-center gap-2 rounded-full border border-cp-border px-4 py-2.5 text-sm text-cp-muted transition hover:bg-cp-surface hover:text-cp-text"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sair
-                </button>
-              </div>
-            )}
-          </aside>
-        </>
-      )}
+      <CPDrawerMenu
+        open={drawerOpen}
+        onClose={closeDrawer}
+        pathname={pathname}
+        filteredCategories={filteredCategories}
+        user={user}
+        profile={profile}
+        isAdmin={isAdmin}
+        onLogout={logout}
+      />
     </>
   )
 }
