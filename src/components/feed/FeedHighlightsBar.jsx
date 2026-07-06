@@ -22,7 +22,7 @@ export default function FeedHighlightsBar({ highlights, currentUser }) {
 
         {currentUser && (
           <Link
-            to={`/comunidade/perfil/${currentUser.uid}`}
+            to={`/profile/${currentUser.uid}`}
             className="flex w-[72px] shrink-0 flex-col items-center gap-1.5"
           >
             <FeedStoryAvatar
@@ -40,7 +40,7 @@ export default function FeedHighlightsBar({ highlights, currentUser }) {
         {highlights.map((h, i) => (
           <Link
             key={h.authorId}
-            to={`/comunidade/perfil/${h.authorId}`}
+            to={`/profile/${h.authorId}`}
             className="flex w-[72px] shrink-0 flex-col items-center gap-1.5"
           >
             <FeedStoryAvatar

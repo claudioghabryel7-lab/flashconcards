@@ -15,8 +15,14 @@ import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import FeedHighlightsBar from '../components/feed/FeedHighlightsBar'
 import FeedPost from '../components/feed/FeedPost'
+import FeedPostEditModal from '../components/feed/FeedPostEditModal'
 import ComunidadeShell from '../components/feed/ComunidadeShell'
 import toast from 'react-hot-toast'
+import {
+  deleteFeedComment,
+  deleteFeedPost,
+  updateFeedPostTheme,
+} from '../services/trilhaFeedMutations'
 
 const BOOKMARK_KEY = 'trilhaFeedBookmarks'
 
@@ -38,11 +44,13 @@ function saveBookmarks(uid, ids) {
 }
 
 export default function ComunidadeTrilha() {
-  const { user, profile } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const [posts, setPosts] = useState([])
   const [commentInputs, setCommentInputs] = useState({})
   const [expandedComments, setExpandedComments] = useState({})
   const [bookmarks, setBookmarks] = useState([])
+  const [editingPost, setEditingPost] = useState(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   const todayKey = dayjs().format('YYYY-MM-DD')
 
   useEffect(() => {
@@ -170,6 +178,45 @@ export default function ComunidadeTrilha() {
     }
   }, [])
 
+  const handleDeletePost = useCallback(
+    async (post) => {
+      if (!window.confirm('Apagar esta publicação? Essa ação não pode ser desfeita.')) return
+      try {
+        await deleteFeedPost(post.id)
+        toast.success('Publicação apagada.')
+      } catch {
+        toast.error('Erro ao apagar publicação.')
+      }
+    },
+    [],
+  )
+
+  const handleDeleteComment = useCallback(async (post, commentId) => {
+    try {
+      await deleteFeedComment(post.id, post.comments, commentId)
+      toast.success('Comentário apagado.')
+    } catch {
+      toast.error('Erro ao apagar comentário.')
+    }
+  }, [])
+
+  const handleSaveEdit = useCallback(
+    async (cardTheme) => {
+      if (!editingPost) return
+      setSavingEdit(true)
+      try {
+        await updateFeedPostTheme(editingPost.id, cardTheme)
+        toast.success('Publicação atualizada.')
+        setEditingPost(null)
+      } catch {
+        toast.error('Erro ao salvar alterações.')
+      } finally {
+        setSavingEdit(false)
+      }
+    },
+    [editingPost],
+  )
+
   const currentUserHighlight = user
     ? {
         uid: user.uid,
@@ -209,6 +256,7 @@ export default function ComunidadeTrilha() {
             post={post}
             user={user}
             profile={profile}
+            isAdmin={isAdmin}
             liked={post.likes?.includes(user?.uid)}
             bookmarked={bookmarks.includes(post.id)}
             isToday={post.featuredDate === todayKey}
@@ -224,9 +272,20 @@ export default function ComunidadeTrilha() {
             }
             onAddComment={() => addComment(post.id)}
             onShare={() => sharePost(post)}
+            onEditPost={() => setEditingPost(post)}
+            onDeletePost={() => handleDeletePost(post)}
+            onDeleteComment={(commentId) => handleDeleteComment(post, commentId)}
           />
         ))
       )}
+
+      <FeedPostEditModal
+        post={editingPost}
+        open={!!editingPost}
+        saving={savingEdit}
+        onClose={() => setEditingPost(null)}
+        onSave={handleSaveEdit}
+      />
     </ComunidadeShell>
   )
 }

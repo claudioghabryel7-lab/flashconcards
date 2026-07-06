@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Bookmark,
   Heart,
   MessageCircle,
   MoreHorizontal,
+  Pencil,
   Share2,
+  Trash2,
 } from 'lucide-react'
 import UserAvatar from '../UserAvatar'
 import FeedStoryAvatar from './FeedStoryAvatar'
@@ -16,6 +18,7 @@ export default function FeedPost({
   post,
   user,
   profile,
+  isAdmin,
   liked,
   bookmarked,
   isToday,
@@ -27,13 +30,20 @@ export default function FeedPost({
   onCommentChange,
   onAddComment,
   onShare,
+  onDeletePost,
+  onDeleteComment,
+  onEditPost,
 }) {
   const [likeAnim, setLikeAnim] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef(null)
   const likesCount = post.likesCount || post.likes?.length || 0
   const comments = post.comments || []
   const commentsCount = post.commentsCount || comments.length
   const modality = MODALITY_LABELS[post.modalidade] || post.modalidade
   const previewComments = showAllComments ? comments : comments.slice(0, 2)
+  const isAuthor = user?.uid === post.authorId
+  const canManagePost = isAuthor || isAdmin
 
   const handleLike = () => {
     onToggleLike()
@@ -47,11 +57,13 @@ export default function FeedPost({
     if (!liked) onToggleLike()
   }
 
+  const canDeleteComment = (comment) =>
+    user?.uid === comment.authorId || isAuthor || isAdmin
+
   return (
-    <article className="border-b border-cp-border bg-cp-surface">
-      {/* Header */}
+    <article className="border-b border-cp-border bg-cp-bg">
       <div className="flex items-center gap-3 px-3 py-2.5">
-        <Link to={`/comunidade/perfil/${post.authorId}`} className="shrink-0">
+        <Link to={`/profile/${post.authorId}`} className="shrink-0">
           <FeedStoryAvatar
             photoBase64={post.authorPhotoBase64}
             name={post.authorName}
@@ -62,7 +74,7 @@ export default function FeedPost({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <Link
-              to={`/comunidade/perfil/${post.authorId}`}
+              to={`/profile/${post.authorId}`}
               className="truncate text-sm font-semibold text-cp-text hover:text-cp-accent"
             >
               {post.authorName}
@@ -75,16 +87,58 @@ export default function FeedPost({
           </div>
           <p className="text-[11px] text-cp-muted">{formatFeedTime(post.createdAt)}</p>
         </div>
-        <button
-          type="button"
-          className="shrink-0 p-1 text-cp-muted transition hover:text-cp-text"
-          aria-label="Mais opções"
-        >
-          <MoreHorizontal className="h-5 w-5" />
-        </button>
+        {canManagePost && (
+          <div className="relative shrink-0" ref={menuRef}>
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              className="p-1 text-cp-muted transition hover:text-cp-text"
+              aria-label="Mais opções"
+            >
+              <MoreHorizontal className="h-5 w-5" />
+            </button>
+            {menuOpen && (
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-30"
+                  aria-label="Fechar menu"
+                  onClick={() => setMenuOpen(false)}
+                />
+                <div className="absolute right-0 top-full z-40 mt-1 min-w-[180px] overflow-hidden rounded-xl border border-cp-border bg-cp-bg-elevated shadow-xl">
+                  {isAuthor && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onEditPost?.()
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-3 text-sm text-cp-text transition hover:bg-cp-surface"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Editar aparência
+                    </button>
+                  )}
+                  {(isAuthor || isAdmin) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onDeletePost?.()
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-3 text-sm text-rose-500 transition hover:bg-cp-surface"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Apagar publicação
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Media */}
       <StudyPostMedia
         materia={post.materia}
         assunto={post.assunto}
@@ -92,10 +146,10 @@ export default function FeedPost({
         durationMinutes={post.durationMinutes}
         acertos={post.acertos}
         erros={post.erros}
+        cardTheme={post.cardTheme}
         onDoubleTapLike={handleDoubleTapLike}
       />
 
-      {/* Actions */}
       <div className="flex items-center justify-between px-3 pt-2.5">
         <div className="flex items-center gap-4">
           <button
@@ -135,18 +189,16 @@ export default function FeedPost({
         </button>
       </div>
 
-      {/* Likes */}
       {likesCount > 0 && (
         <p className="px-3 pt-1.5 text-sm font-semibold text-cp-text">
           {likesCount} {likesCount === 1 ? 'curtida' : 'curtidas'}
         </p>
       )}
 
-      {/* Caption */}
       <div className="px-3 pt-1">
         <p className="text-sm leading-relaxed text-cp-text">
           <Link
-            to={`/comunidade/perfil/${post.authorId}`}
+            to={`/profile/${post.authorId}`}
             className="mr-1 font-semibold hover:text-cp-accent"
           >
             {post.authorName}
@@ -165,7 +217,6 @@ export default function FeedPost({
         </p>
       </div>
 
-      {/* Comments preview */}
       <div className="space-y-2 px-3 pt-2 pb-1">
         {commentsCount > 2 && !showAllComments && (
           <button
@@ -179,26 +230,36 @@ export default function FeedPost({
 
         {previewComments.map((c) => (
           <div key={c.id} className="flex gap-2 text-sm">
-            <Link to={`/comunidade/perfil/${c.authorId}`} className="shrink-0">
+            <Link to={`/profile/${c.authorId}`} className="shrink-0">
               <UserAvatar photoBase64={c.authorPhotoBase64} name={c.authorName} size="xs" />
             </Link>
             <div className="min-w-0 flex-1">
               <p className="leading-snug">
                 <Link
-                  to={`/comunidade/perfil/${c.authorId}`}
+                  to={`/profile/${c.authorId}`}
                   className="mr-1.5 font-semibold text-cp-text hover:text-cp-accent"
                 >
                   {c.authorName}
                 </Link>
                 <span className="text-cp-text">{c.text}</span>
               </p>
-              <p className="mt-0.5 text-[10px] text-cp-muted">{formatCommentTime(c.createdAt)}</p>
+              <div className="mt-0.5 flex items-center gap-2">
+                <p className="text-[10px] text-cp-muted">{formatCommentTime(c.createdAt)}</p>
+                {canDeleteComment(c) && (
+                  <button
+                    type="button"
+                    onClick={() => onDeleteComment?.(c.id)}
+                    className="text-[10px] font-medium text-rose-500 hover:text-rose-400"
+                  >
+                    Apagar
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Comment input */}
       <div className="flex items-center gap-2 border-t border-cp-border/60 px-3 py-3">
         <UserAvatar
           photoBase64={profile?.photoBase64}

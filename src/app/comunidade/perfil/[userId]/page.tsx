@@ -1,8 +1,15 @@
 'use client'
 
-import LegacyPage from '@/components/next/LegacyPage'
-import ComunidadePerfil from '@/routes/ComunidadePerfil'
+import { useEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 
-export default function ComunidadePerfilPage() {
-  return <LegacyPage component={ComunidadePerfil} requireCourseSelection skipAutoHeader />
+export default function ComunidadePerfilRedirect() {
+  const { userId } = useParams()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (userId) router.replace(`/profile/${userId}`)
+  }, [userId, router])
+
+  return null
 }

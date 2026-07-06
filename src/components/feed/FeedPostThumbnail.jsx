@@ -1,28 +1,28 @@
 import { Link } from 'react-router-dom'
 import { Clock } from 'lucide-react'
-import { MODALITY_GRADIENTS, MODALITY_LABELS } from '../../utils/feedUtils'
+import { MODALITY_LABELS, resolveCardGradient } from '../../utils/feedUtils'
 
 export default function FeedPostThumbnail({ post }) {
-  const gradient = MODALITY_GRADIENTS[post.modalidade] || MODALITY_GRADIENTS.teoria
+  const gradientClass = resolveCardGradient(post)
   const modality = MODALITY_LABELS[post.modalidade] || post.modalidade
   const likes = post.likesCount || post.likes?.length || 0
   const comments = post.commentsCount || post.comments?.length || 0
 
   return (
     <Link
-      to={`/comunidade/publicacao/${post.id}`}
-      className={`group relative aspect-square overflow-hidden bg-gradient-to-br ${gradient}`}
+      to={`/comunidade?post=${post.id}`}
+      className={`group relative aspect-square overflow-hidden ${gradientClass}`}
     >
-      <div className="absolute inset-0 bg-black/10 transition group-hover:bg-black/35" />
+      <div className="absolute inset-0 bg-black/15 transition group-hover:bg-black/35" />
       <div className="relative flex h-full flex-col justify-between p-2">
-        <span className="rounded bg-white/20 px-1.5 py-0.5 text-[8px] font-semibold uppercase text-white">
+        <span className="w-fit rounded bg-black/35 px-1.5 py-0.5 text-[8px] font-semibold uppercase text-white">
           {modality}
         </span>
         <div>
-          <p className="line-clamp-2 text-[10px] font-bold leading-tight text-white">
+          <p className="line-clamp-2 text-[10px] font-bold leading-tight text-white drop-shadow">
             {post.materia || 'Estudo'}
           </p>
-          <p className="mt-0.5 inline-flex items-center gap-0.5 text-[9px] text-white/80">
+          <p className="mt-0.5 inline-flex items-center gap-0.5 text-[9px] text-white/85">
             <Clock className="h-2.5 w-2.5" />
             {post.durationMinutes || 0}m
           </p>
