@@ -9,6 +9,7 @@ import TechBackground from '@/components/cp/TechBackground'
 const SupportButton = dynamic(() => import('@/components/SupportButton'), { ssr: false })
 const PopupBanner = dynamic(() => import('@/components/PopupBanner'), { ssr: false })
 const OfflineIndicator = dynamic(() => import('@/components/OfflineIndicator'), { ssr: false })
+const TrilhaTimerBanner = dynamic(() => import('@/components/TrilhaTimerBanner'), { ssr: false })
 
 const MINIMAL_PATHS = ['/flashcards/pip', '/share-flashcards']
 const FULL_BLEED_PATHS = ['/', '/cursos', '/comunidade']
@@ -40,6 +41,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <SupportButton />
       <PopupBanner />
       <OfflineIndicator />
+      <TrilhaTimerBanner />
     </div>
   )
 }

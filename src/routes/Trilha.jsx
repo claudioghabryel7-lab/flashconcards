@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import {
   doc,
@@ -18,7 +18,9 @@ import {
   StopIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
+import { useTrilhaLiquidTimer } from '../hooks/useTrilhaLiquidTimer'
 import { db } from '../firebase/config'
+import { formatDuration } from '../utils/trilhaTimerPersistence'
 import StudyTimeChart from '../components/StudyTimeChart'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import toast from 'react-hot-toast'
@@ -49,13 +51,6 @@ const DEFAULT_FORM = {
   erros: 0,
 }
 
-function formatDuration(totalSeconds) {
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  return [hours, minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':')
-}
-
 function playAlarm() {
   if (typeof window === 'undefined') return
   const AudioContextClass = window.AudioContext || window.webkitAudioContext
@@ -81,16 +76,21 @@ export default function Trilha() {
   const { user, profile } = useAuth()
   const courseId = profile?.selectedCourseId || null
 
-  const [timerActive, setTimerActive] = useState(false)
-  const [timerPaused, setTimerPaused] = useState(false)
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
-  const [alarmMinutes, setAlarmMinutes] = useState(50)
-  const [alarmTriggered, setAlarmTriggered] = useState(false)
-  const [timerForm, setTimerForm] = useState({
-    materia: '',
-    assunto: '',
-    modalidade: 'teoria',
-  })
+  const {
+    timerActive,
+    timerPaused,
+    elapsedSeconds,
+    alarmMinutes,
+    alarmTriggered,
+    timerForm,
+    timerState,
+    setTimerForm,
+    setAlarmMinutes,
+    handleStart,
+    handlePause,
+    clearTimer,
+  } = useTrilhaLiquidTimer(user?.uid, courseId, { onAlarm: playAlarm })
+
   const [manualForm, setManualForm] = useState(DEFAULT_FORM)
   const [config, setConfig] = useState(DEFAULT_CONFIG)
   const [cycleInput, setCycleInput] = useState(DEFAULT_CONFIG.cycle.join(', '))
@@ -99,32 +99,6 @@ export default function Trilha() {
   const [manualEntries, setManualEntries] = useState([])
   const [questionStats, setQuestionStats] = useState({ total: 0, correct: 0, wrong: 0 })
   const [savingSession, setSavingSession] = useState(false)
-
-  const intervalRef = useRef(null)
-
-  useEffect(() => {
-    if (!timerActive || timerPaused) {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-      intervalRef.current = null
-      return
-    }
-
-    intervalRef.current = setInterval(() => {
-      setElapsedSeconds((current) => current + 1)
-    }, 1000)
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }, [timerActive, timerPaused])
-
-  useEffect(() => {
-    if (!timerActive || alarmTriggered || !alarmMinutes) return
-    if (elapsedSeconds < alarmMinutes * 60) return
-
-    playAlarm()
-    setAlarmTriggered(true)
-  }, [alarmMinutes, alarmTriggered, elapsedSeconds, timerActive])
 
   useEffect(() => {
     if (!user?.uid) return () => {}
@@ -219,21 +193,9 @@ export default function Trilha() {
     }
   }
 
-  const handleStart = () => {
-    setAlarmTriggered(false)
-    setTimerActive(true)
-    setTimerPaused(false)
-  }
-
-  const handlePause = () => {
-    setTimerPaused((current) => !current)
-  }
-
   const handleStop = async () => {
     if (!user?.uid || elapsedSeconds <= 0) {
-      setTimerActive(false)
-      setTimerPaused(false)
-      setElapsedSeconds(0)
+      clearTimer()
       return
     }
 
@@ -243,21 +205,19 @@ export default function Trilha() {
     }
 
     const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60))
+    const sessionCourseId = timerState?.courseId ?? courseId
     setSavingSession(true)
     try {
       await saveTimerSession({
         user,
         profile,
-        courseId,
+        courseId: sessionCourseId,
         timerForm,
         durationMinutes,
         elapsedSeconds,
       })
       toast.success('Sessão salva!')
-      setTimerActive(false)
-      setTimerPaused(false)
-      setElapsedSeconds(0)
-      setAlarmTriggered(false)
+      clearTimer()
     } catch (err) {
       console.error('Erro ao salvar sessão da Trilha:', err)
       toast.error(
