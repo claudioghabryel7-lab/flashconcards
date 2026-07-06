@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { doc, getDoc, onSnapshot, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
+import { doc, getDoc, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore'
+import { saveFlashcardContent, deleteFlashcardContent } from '../utils/flashcardPersistence'
 import { ChevronLeftIcon, PhotoIcon, ShareIcon } from '@heroicons/react/24/outline'
 import FlashcardList from '../components/FlashcardList'
 import ContentPublishButton from '../components/ContentPublishButton'
@@ -253,18 +254,12 @@ const FlashcardsTopicoView = () => {
 
   const handleEditFlashcard = async (cardId, newPergunta, newResposta) => {
     try {
-      const cardRef = doc(db, 'courses', courseId, 'flashcards', cardId)
-      await setDoc(
-        cardRef,
-        {
-          pergunta: newPergunta,
-          resposta: newResposta,
-          frente: newPergunta,
-          verso: newResposta,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      )
+      await saveFlashcardContent({
+        courseId,
+        cardId,
+        pergunta: newPergunta,
+        resposta: newResposta,
+      })
       setCards((prev) =>
         prev.map((card) =>
           card.id === cardId
@@ -275,12 +270,13 @@ const FlashcardsTopicoView = () => {
     } catch (error) {
       console.error('Erro ao editar flashcard:', error)
       alert('Erro ao editar flashcard. Tente novamente.')
+      throw error
     }
   }
 
   const handleDeleteFlashcard = async (cardId) => {
     try {
-      await deleteDoc(doc(db, 'courses', courseId, 'flashcards', cardId))
+      await deleteFlashcardContent({ courseId, cardId })
       setCards((prev) => prev.filter((card) => card.id !== cardId))
       setCurrentIndex(0)
     } catch (error) {

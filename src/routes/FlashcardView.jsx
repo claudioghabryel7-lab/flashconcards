@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { collection, doc, getDoc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
+import { saveFlashcardContent, deleteFlashcardContent } from '../utils/flashcardPersistence'
 import { useEditalFlashcards } from '../hooks/useEditalFlashcards'
 import {
   buildOrganizedCardsFromEdital,
@@ -148,6 +149,7 @@ const FlashcardView = () => {
   const [generatingFlashcards, setGeneratingFlashcards] = useState(false) // Estado para loading de geração
   const [selectedDifficulty, setSelectedDifficulty] = useState('') // Dificuldade selecionada para geração
   const [sidebarSearch, setSidebarSearch] = useState('')
+  const [shuffledCardIds, setShuffledCardIds] = useState(null)
   const [srsNow, setSrsNow] = useState(() => dayjs())
   
   // Hook de rastreamento de sessão de estudo
@@ -587,7 +589,20 @@ const FlashcardView = () => {
     return { total, due, nextDue }
   }, [moduleAllCards, cardProgress, srsNow])
 
-  const activeCards = studyMode === 'miniSim' ? miniSimCards : filteredCards
+  const activeCards = useMemo(() => {
+    const base = studyMode === 'miniSim' ? miniSimCards : filteredCards
+    if (!shuffledCardIds?.length) return base
+    const byId = new Map(base.map((c) => [c.id, c]))
+    const ordered = shuffledCardIds.map((id) => byId.get(id)).filter(Boolean)
+    base.forEach((c) => {
+      if (!shuffledCardIds.includes(c.id)) ordered.push(c)
+    })
+    return ordered
+  }, [studyMode, miniSimCards, filteredCards, shuffledCardIds])
+
+  useEffect(() => {
+    setShuffledCardIds(null)
+  }, [selectedMateria, selectedModulo, studyMode, filteredCards.length])
 
   useEffect(() => {
     setSessionRatings({})
@@ -674,34 +689,25 @@ const FlashcardView = () => {
   }
 
   const handleDeleteFlashcard = async (flashcardId) => {
-    if (!user) return
-    
+    if (!user || !isAdmin) return
+
     try {
-      // Deletar flashcard usando o serviço
-      await userFlashcardsService.deleteFlashcard(flashcardId)
-      
-      // Remover da lista de cards local
-      setCards((prevCards) => prevCards.filter(card => card.id !== flashcardId))
-      
-      // Resetar índice se necessário
-      setCurrentIndex((prevIndex) => {
-        const newIndex = prevIndex >= cards.length - 1 ? Math.max(0, cards.length - 2) : prevIndex
-        return newIndex
-      })
-      
-      // Remover dos favoritos se estiver lá
+      await deleteFlashcardContent({ courseId: activeCourseId, cardId: flashcardId })
+
+      setCurrentIndex((prevIndex) =>
+        prevIndex >= activeCards.length - 1 ? Math.max(0, activeCards.length - 2) : prevIndex,
+      )
+
       if (favorites.includes(flashcardId)) {
-        const newFavorites = favorites.filter(fav => fav !== flashcardId)
+        const newFavorites = favorites.filter((fav) => fav !== flashcardId)
         await updateFavorites(newFavorites)
       }
-      
-      // Remover do progresso se existir
+
       if (cardProgress[flashcardId]) {
         const newCardProgress = { ...cardProgress }
         delete newCardProgress[flashcardId]
         setCardProgress(newCardProgress)
-        
-        // Atualizar no Firestore
+
         const userProgressRef = doc(db, 'userProgress', user.uid)
         await setDoc(
           userProgressRef,
@@ -709,40 +715,28 @@ const FlashcardView = () => {
             cardProgress: newCardProgress,
             updatedAt: new Date().toISOString(),
           },
-          { merge: true }
+          { merge: true },
         )
       }
-      
     } catch (error) {
       console.error('Erro ao deletar flashcard:', error)
+      alert('Erro ao excluir flashcard. Tente novamente.')
     }
   }
 
   const handleEditFlashcard = async (cardId, newPergunta, newResposta) => {
     if (!isAdmin || !activeCourseId) return
     try {
-      const cardRef = doc(db, 'courses', activeCourseId, 'flashcards', cardId)
-      await setDoc(
-        cardRef,
-        {
-          pergunta: newPergunta,
-          resposta: newResposta,
-          frente: newPergunta,
-          verso: newResposta,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      )
-      setCards((prev) =>
-        prev.map((card) =>
-          card.id === cardId
-            ? { ...card, pergunta: newPergunta, resposta: newResposta, frente: newPergunta, verso: newResposta }
-            : card,
-        ),
-      )
+      await saveFlashcardContent({
+        courseId: activeCourseId,
+        cardId,
+        pergunta: newPergunta,
+        resposta: newResposta,
+      })
     } catch (error) {
       console.error('Erro ao editar flashcard:', error)
       alert('Erro ao editar flashcard. Tente novamente.')
+      throw error
     }
   }
 
@@ -823,11 +817,9 @@ const FlashcardView = () => {
 
   const shuffle = () => {
     setCurrentIndex(0)
-    // Embaralhar os cards ativos
-    setCards((prevCards) => {
-      const shuffled = [...prevCards].sort(() => Math.random() - 0.5)
-      return shuffled
-    })
+    setShuffledCardIds(
+      [...filteredCards].sort(() => Math.random() - 0.5).map((c) => c.id),
+    )
   }
 
   const viewedIds = useMemo(() => {

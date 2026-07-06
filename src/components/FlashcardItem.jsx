@@ -33,6 +33,7 @@ const FlashcardItem = ({
   }
 
   const [editing, setEditing] = useState(false)
+  const [savingEdit, setSavingEdit] = useState(false)
   const [editPergunta, setEditPergunta] = useState(card.pergunta)
   const [editResposta, setEditResposta] = useState(card.resposta)
   const { profile } = useAuth()
@@ -78,11 +79,20 @@ const FlashcardItem = ({
     setEditing(true)
   }
 
-  const handleSaveEdit = () => {
-    if (onEditFlashcard) {
-      onEditFlashcard(card.id, editPergunta, editResposta)
+  const handleSaveEdit = async () => {
+    if (!onEditFlashcard) {
+      setEditing(false)
+      return
     }
-    setEditing(false)
+    try {
+      setSavingEdit(true)
+      await onEditFlashcard(card.id, editPergunta, editResposta)
+      setEditing(false)
+    } catch {
+      // mantém formulário aberto em caso de erro
+    } finally {
+      setSavingEdit(false)
+    }
   }
 
   const editForm = (
@@ -107,13 +117,15 @@ const FlashcardItem = ({
         <button
           type="button"
           onClick={handleSaveEdit}
-          className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          disabled={savingEdit}
+          className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
         >
-          Salvar
+          {savingEdit ? 'Salvando…' : 'Salvar'}
         </button>
         <button
           type="button"
           onClick={() => setEditing(false)}
+          disabled={savingEdit}
           className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300"
         >
           Cancelar
