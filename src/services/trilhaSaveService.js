@@ -3,6 +3,10 @@ import dayjs from 'dayjs'
 import { db } from '../firebase/config'
 import { publishTrilhaActivity } from './trilhaFeedService'
 import { firestoreErrorMessage, stripUndefined, toFirestoreDate } from '../utils/firestoreHelpers'
+import {
+  saveTrilhaManualEntry,
+  saveTrilhaSession,
+} from './trilhaStorage'
 
 async function mirrorStudySession(userId, payload) {
   if (!userId || !db) return
@@ -91,7 +95,7 @@ export async function saveTimerSession({
     createdAt: serverTimestamp(),
   })
 
-  await addDoc(collection(db, 'users', user.uid, 'trilhaSessions'), sessionData)
+  await saveTrilhaSession(user.uid, sessionData)
 
   const payload = {
     materia,
@@ -125,7 +129,7 @@ export async function saveManualEntry({ user, profile, courseId, manualForm }) {
     createdAt: serverTimestamp(),
   })
 
-  await addDoc(collection(db, 'users', user.uid, 'trilhaManualEntries'), entryData)
+  await saveTrilhaManualEntry(user.uid, entryData)
 
   const payload = {
     materia,

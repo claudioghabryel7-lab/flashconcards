@@ -11,7 +11,8 @@
     "dev:vite": "vite",
     "build:vite": "vite build",
     "preview": "vite preview",
-    "generate:pages": "node scripts/generate-next-pages.mjs"
+    "generate:pages": "node scripts/generate-next-pages.mjs",
+    "deploy:rules": "firebase deploy --only firestore:rules --project flashconcards-b52d0"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -1,12 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
 import {
-  collection,
   doc,
   getDoc,
-  onSnapshot,
-  serverTimestamp,
-  setDoc,
 } from 'firebase/firestore'
 import {
   BellIcon,
@@ -27,6 +23,12 @@ import StudyTimeChart from '../components/StudyTimeChart'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import toast from 'react-hot-toast'
 import { saveManualEntry, saveTimerSession, firestoreErrorMessage } from '../services/trilhaSaveService'
+import {
+  saveTrilhaConfig,
+  subscribeTrilhaConfig,
+  subscribeTrilhaManualEntries,
+  subscribeTrilhaSessions,
+} from '../services/trilhaStorage'
 
 const DEFAULT_CONFIG = {
   cycle: ['Português', 'Direito Constitucional', 'Direito Administrativo'],
@@ -127,10 +129,7 @@ export default function Trilha() {
   useEffect(() => {
     if (!user?.uid) return () => {}
 
-    const configRef = doc(db, 'users', user.uid, 'trilha', 'config')
-    const unsubConfig = onSnapshot(configRef, (snap) => {
-      if (!snap.exists()) return
-      const data = snap.data()
+    const unsubConfig = subscribeTrilhaConfig(user.uid, (data) => {
       const merged = {
         ...DEFAULT_CONFIG,
         ...data,
@@ -141,33 +140,8 @@ export default function Trilha() {
       setCycleInput((merged.cycle || []).join(', '))
     })
 
-    const unsubSessions = onSnapshot(
-      collection(db, 'users', user.uid, 'trilhaSessions'),
-      (snap) => {
-        const rows = snap.docs.map((item) => ({ id: item.id, ...item.data() }))
-        rows.sort((a, b) => {
-          const aTime = a.createdAt?.toMillis?.() || 0
-          const bTime = b.createdAt?.toMillis?.() || 0
-          return bTime - aTime
-        })
-        setSessions(rows)
-      },
-      (err) => console.error('Erro ao carregar sessões da Trilha:', err),
-    )
-
-    const unsubManual = onSnapshot(
-      collection(db, 'users', user.uid, 'trilhaManualEntries'),
-      (snap) => {
-        const rows = snap.docs.map((item) => ({ id: item.id, ...item.data() }))
-        rows.sort((a, b) => {
-          const aTime = a.createdAt?.toMillis?.() || 0
-          const bTime = b.createdAt?.toMillis?.() || 0
-          return bTime - aTime
-        })
-        setManualEntries(rows)
-      },
-      (err) => console.error('Erro ao carregar registros manuais:', err),
-    )
+    const unsubSessions = subscribeTrilhaSessions(user.uid, setSessions)
+    const unsubManual = subscribeTrilhaManualEntries(user.uid, setManualEntries)
 
     const loadQuestionStats = async () => {
       const courseKey = courseId || 'alego'
@@ -236,19 +210,11 @@ export default function Trilha() {
   const saveConfig = async (nextConfig) => {
     if (!user?.uid) return false
     try {
-      await setDoc(
-        doc(db, 'users', user.uid, 'trilha', 'config'),
-        {
-          ...nextConfig,
-          courseId,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      )
+      await saveTrilhaConfig(user.uid, nextConfig, courseId)
       return true
     } catch (err) {
       console.error('Erro ao salvar config da Trilha:', err)
-      toast.error('Não foi possível salvar. Tente novamente.')
+      toast.error(firestoreErrorMessage(err, 'Não foi possível salvar. Tente novamente.'))
       return false
     }
   }
