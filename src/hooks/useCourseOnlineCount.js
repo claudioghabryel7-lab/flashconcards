@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { db, firebaseInitialized, initFirebase } from '../firebase/config'
-import { isPresenceFresh, resolveDisplayedOnlineCount } from '../utils/onlineNow'
+import { isPresenceFresh, resolveDisplayedOnlineCount, REAL_THRESHOLD } from '../utils/onlineNow'
 
 export function useCourseOnlineCount(courseId, options = {}) {
   const { fallbackSeed = courseId || 'global' } = options
@@ -10,7 +10,7 @@ export function useCourseOnlineCount(courseId, options = {}) {
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
-    const tick = setInterval(() => setNow(new Date()), 60_000)
+    const tick = setInterval(() => setNow(new Date()), 30_000)
     return () => clearInterval(tick)
   }, [])
 
@@ -55,6 +55,6 @@ export function useCourseOnlineCount(courseId, options = {}) {
     realCount,
     displayCount,
     loading,
-    usesRealCount: realCount > 10,
+    usesRealCount: realCount >= REAL_THRESHOLD,
   }
 }

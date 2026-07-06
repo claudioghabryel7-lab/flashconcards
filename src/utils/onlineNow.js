@@ -1,11 +1,10 @@
-const DAY_MIN = 5
-const DAY_MAX = 9
-const NIGHT_MIN = 0
-const NIGHT_MAX = 9
-const REAL_THRESHOLD = 10
+const SYNTHETIC_MIN = 0
+const SYNTHETIC_MAX = 2
+const REAL_THRESHOLD = 2
+const OSCILLATION_BUCKET_MS = 3 * 60 * 1000
 
 function getMinutesBucket(date = new Date()) {
-  return Math.floor(date.getTime() / (10 * 60 * 1000))
+  return Math.floor(date.getTime() / OSCILLATION_BUCKET_MS)
 }
 
 function hashString(value = '') {
@@ -16,36 +15,21 @@ function hashString(value = '') {
   return hash
 }
 
-/** Dia: 06h–22h59 | Noite: 23h–05h59 */
-export function isDayWindow(date = new Date()) {
-  const hour = date.getHours()
-  return hour >= 6 && hour < 23
-}
-
+/** Oscilação estável entre 0 e 2 (muda a cada ~3 min por seed). */
 export function getSyntheticOnlineCount(seed = 'global', date = new Date()) {
-  const isDay = isDayWindow(date)
-  const min = isDay ? DAY_MIN : NIGHT_MIN
-  const max = isDay ? DAY_MAX : NIGHT_MAX
-  const span = max - min + 1
+  const span = SYNTHETIC_MAX - SYNTHETIC_MIN + 1
   const bucket = getMinutesBucket(date)
   const hash = hashString(`${seed}:${bucket}`)
-  return min + (hash % span)
+  return SYNTHETIC_MIN + (hash % span)
 }
 
+/** Real a partir de 2; abaixo disso, oscila sinteticamente de 0 a 2. */
 export function resolveDisplayedOnlineCount(realCount = 0, seed = 'global', date = new Date()) {
-  if (realCount > REAL_THRESHOLD) {
+  if (realCount >= REAL_THRESHOLD) {
     return realCount
   }
 
-  const synthetic = getSyntheticOnlineCount(seed, date)
-  const isDay = isDayWindow(date)
-
-  if (isDay) {
-    return Math.min(DAY_MAX, Math.max(realCount, synthetic))
-  }
-
-  // À noite: pode ser 0; se houver poucos reais, usa o sintético (0–9)
-  return Math.min(NIGHT_MAX, Math.max(realCount, synthetic))
+  return getSyntheticOnlineCount(seed, date)
 }
 
 export function isPresenceFresh(lastSeen, now = Date.now()) {
@@ -65,3 +49,5 @@ export function isPresenceFresh(lastSeen, now = Date.now()) {
     return false
   }
 }
+
+export { REAL_THRESHOLD }
