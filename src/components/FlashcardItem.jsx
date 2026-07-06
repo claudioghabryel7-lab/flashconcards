@@ -44,7 +44,6 @@ const FlashcardItem = ({
   }, [card.id])
 
   const toggle = () => {
-    if (editing) return
     setFlipped(!flipped)
   }
 
@@ -72,7 +71,6 @@ const FlashcardItem = ({
     setEditPergunta(card.pergunta)
     setEditResposta(card.resposta)
     setEditing(true)
-    setFlipped(false)
   }
 
   const handleSaveEdit = () => {
@@ -176,12 +174,21 @@ const FlashcardItem = ({
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-6 text-center sm:px-2 sm:py-8">
                 {editing ? (
                   <div className="w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Frente</p>
                     <textarea
                       value={editPergunta}
                       onChange={(e) => setEditPergunta(e.target.value)}
                       className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-4 text-base font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white sm:text-lg"
-                      rows={4}
+                      rows={3}
                       placeholder="Pergunta"
+                    />
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Verso</p>
+                    <textarea
+                      value={editResposta}
+                      onChange={(e) => setEditResposta(e.target.value)}
+                      className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-4 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                      rows={4}
+                      placeholder="Resposta"
                     />
                     <div className="flex justify-center gap-2">
                       <button
@@ -244,20 +251,28 @@ const FlashcardItem = ({
             }}
           >
             <div className="relative z-10 flex h-full min-h-0 flex-col">
+              <div className="absolute right-0 top-0 z-20 flex gap-1">
+                {isAdmin && !editing && (
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleEdit()
+                    }}
+                    className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-white/10"
+                    aria-label="Editar verso"
+                  >
+                    <PencilIcon className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-4 text-center sm:px-2 sm:py-6">
                 <span className="mb-3 inline-flex shrink-0 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white/70">
                   Resposta
                 </span>
                 {editing ? (
-                  <div className="w-full space-y-4" onClick={(e) => e.stopPropagation()}>
-                    <textarea
-                      value={editResposta}
-                      onChange={(e) => setEditResposta(e.target.value)}
-                      className="w-full resize-none rounded-2xl border border-white/20 bg-white/10 p-4 text-base text-white"
-                      rows={6}
-                      placeholder="Resposta"
-                    />
-                  </div>
+                  <p className="text-sm text-white/60">Edite frente e verso na face da pergunta</p>
                 ) : (
                   <div className="w-full text-base font-medium leading-relaxed text-white sm:text-xl">
                     {card.resposta}

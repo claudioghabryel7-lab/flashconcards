@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
-import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
+import { collection, doc, getDoc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
 import { useEditalFlashcards } from '../hooks/useEditalFlashcards'
 import {
   buildOrganizedCardsFromEdital,
@@ -26,6 +26,7 @@ import {
   isCardDue,
 } from '../utils/spacedRepetition'
 import { CONTENT_STATUS } from '../utils/contentStatus'
+import AnkiExportService from '../services/ankiExportService'
 import {
   filterOrganizedCardsWithContent,
 } from '../utils/courseAccess'
@@ -676,6 +677,39 @@ const FlashcardView = () => {
     }
   }
 
+  const handleEditFlashcard = async (cardId, newPergunta, newResposta) => {
+    if (!isAdmin || !selectedCourseId) return
+    try {
+      const cardRef = doc(db, 'courses', selectedCourseId, 'flashcards', cardId)
+      await setDoc(
+        cardRef,
+        {
+          pergunta: newPergunta,
+          resposta: newResposta,
+          frente: newPergunta,
+          verso: newResposta,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
+      setCards((prev) =>
+        prev.map((card) =>
+          card.id === cardId
+            ? { ...card, pergunta: newPergunta, resposta: newResposta, frente: newPergunta, verso: newResposta }
+            : card,
+        ),
+      )
+    } catch (error) {
+      console.error('Erro ao editar flashcard:', error)
+      alert('Erro ao editar flashcard. Tente novamente.')
+    }
+  }
+
+  const handleExportAnki = () => {
+    if (!activeCards.length) return
+    AnkiExportService.exportToText(activeCards)
+  }
+
   // Avaliar dificuldade - Sistema Noji/Anki simplificado
   const rateDifficulty = async (cardId, difficulty) => {
     if (!user) return
@@ -1272,6 +1306,13 @@ IMPORTANTE:
                   </span>
                   <button
                     type="button"
+                    onClick={handleExportAnki}
+                    className="hidden rounded-xl border border-cp-border px-3 py-1.5 text-xs font-medium text-cp-muted transition hover:bg-cp-surface hover:text-cp-text sm:inline"
+                  >
+                    Exportar Anki
+                  </button>
+                  <button
+                    type="button"
                     onClick={exitStudySession}
                     className="rounded-xl border border-cp-border px-3 py-1.5 text-xs font-medium text-cp-muted transition hover:bg-cp-surface hover:text-cp-text"
                   >
@@ -1296,6 +1337,7 @@ IMPORTANTE:
                   viewedIds={viewedIds}
                   showRating={needsReview}
                   onDeleteFlashcard={handleDeleteFlashcard}
+                  onEditFlashcard={isAdmin ? handleEditFlashcard : null}
                 />
               </div>
             </div>

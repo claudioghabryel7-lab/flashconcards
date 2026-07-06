@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   collection,
@@ -16,8 +16,10 @@ import { useAuth } from '../hooks/useAuth'
 import FeedHighlightsBar from '../components/feed/FeedHighlightsBar'
 import FeedPost from '../components/feed/FeedPost'
 import FeedPostEditModal from '../components/feed/FeedPostEditModal'
+import StudyPostMedia from '../components/feed/StudyPostMedia'
 import ComunidadeShell from '../components/feed/ComunidadeShell'
 import toast from 'react-hot-toast'
+import { exportFeedPostAsImage } from '../utils/feedShareExport'
 import {
   deleteFeedComment,
   deleteFeedPost,
@@ -51,6 +53,8 @@ export default function ComunidadeTrilha() {
   const [bookmarks, setBookmarks] = useState([])
   const [editingPost, setEditingPost] = useState(null)
   const [savingEdit, setSavingEdit] = useState(false)
+  const [capturePost, setCapturePost] = useState(null)
+  const captureRef = useRef(null)
   const todayKey = dayjs().format('YYYY-MM-DD')
 
   useEffect(() => {
@@ -164,17 +168,32 @@ export default function ComunidadeTrilha() {
   )
 
   const sharePost = useCallback(async (post) => {
-    const text = `${post.authorName} estudou ${post.materia || 'na Trilha'} — ${post.durationMinutes || 0} min no FlashConCards`
-    const url = `${window.location.origin}/comunidade`
+    const url = `${window.location.origin}/comunidade/publicacao/${post.id}`
     try {
-      if (navigator.share) {
-        await navigator.share({ title: 'Comunidade FlashConCards', text, url })
-      } else {
-        await navigator.clipboard.writeText(`${text}\n${url}`)
-        toast.success('Link copiado!')
+      setCapturePost(post)
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve))
+      })
+      if (captureRef.current) {
+        await exportFeedPostAsImage(captureRef.current, `concurseiro-preditivo-${post.id}.png`)
+        toast.success('Imagem salva com marca d\'água!')
+      }
+      try {
+        await navigator.clipboard.writeText(url)
+      } catch {
+        /* ignore */
       }
     } catch (err) {
-      if (err?.name !== 'AbortError') toast.error('Não foi possível compartilhar.')
+      if (err?.name !== 'AbortError') {
+        try {
+          await navigator.clipboard.writeText(url)
+          toast.success('Link copiado!')
+        } catch {
+          toast.error('Não foi possível compartilhar.')
+        }
+      }
+    } finally {
+      setCapturePost(null)
     }
   }, [])
 
@@ -286,6 +305,21 @@ export default function ComunidadeTrilha() {
         onClose={() => setEditingPost(null)}
         onSave={handleSaveEdit}
       />
+
+      {capturePost && (
+        <div ref={captureRef} className="pointer-events-none fixed -left-[9999px] top-0 w-[470px]">
+          <StudyPostMedia
+            materia={capturePost.materia}
+            assunto={capturePost.assunto}
+            modalidade={capturePost.modalidade}
+            durationMinutes={capturePost.durationMinutes}
+            acertos={capturePost.acertos}
+            erros={capturePost.erros}
+            cardTheme={capturePost.cardTheme}
+            exportMode
+          />
+        </div>
+      )}
     </ComunidadeShell>
   )
 }

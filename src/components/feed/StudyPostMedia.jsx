@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { BookOpen, Clock, Target, XCircle } from 'lucide-react'
-import { MODALITY_LABELS, resolveCardFonts, resolveCardGradient } from '../../utils/feedUtils'
+import { MODALITY_LABELS, resolveCardFonts, resolveCardTheme } from '../../utils/feedUtils'
 
 export default function StudyPostMedia({
   materia,
@@ -11,15 +11,17 @@ export default function StudyPostMedia({
   erros,
   cardTheme,
   onDoubleTapLike,
+  exportMode = false,
 }) {
   const [showHeart, setShowHeart] = useState(false)
   const lastTap = useRef(0)
-  const gradientClass = resolveCardGradient({ modalidade, cardTheme })
+  const theme = resolveCardTheme({ modalidade, cardTheme })
   const fonts = resolveCardFonts({ cardTheme })
   const modalityLabel = MODALITY_LABELS[modalidade] || modalidade
   const hasStats = acertos != null
 
   const handleTap = () => {
+    if (exportMode) return
     const now = Date.now()
     if (now - lastTap.current < 300) {
       onDoubleTapLike?.()
@@ -29,13 +31,20 @@ export default function StudyPostMedia({
     lastTap.current = now
   }
 
+  const Wrapper = exportMode ? 'div' : 'button'
+
   return (
-    <button
-      type="button"
-      onClick={handleTap}
-      className={`relative aspect-square w-full text-left outline-none ${gradientClass}`}
-      aria-label="Card de estudo — toque duas vezes para curtir"
+    <Wrapper
+      type={exportMode ? undefined : 'button'}
+      onClick={exportMode ? undefined : handleTap}
+      className={`relative aspect-square w-full text-left outline-none ${exportMode ? '' : 'cursor-pointer'}`}
+      style={{ background: theme.background }}
+      aria-label={exportMode ? undefined : 'Card de estudo — toque duas vezes para curtir'}
     >
+      <div
+        className="absolute inset-0"
+        style={{ backgroundImage: theme.pattern, backgroundSize: 'auto' }}
+      />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.22),transparent_55%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(0,0,0,0.35),transparent_60%)]" />
 
@@ -98,6 +107,6 @@ export default function StudyPostMedia({
           </span>
         </div>
       )}
-    </button>
+    </Wrapper>
   )
 }

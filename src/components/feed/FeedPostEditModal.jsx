@@ -70,7 +70,7 @@ export default function FeedPostEditModal({ post, open, saving, onClose, onSave 
                     color === key ? 'ring-2 ring-cp-accent ring-offset-2 ring-offset-cp-bg' : ''
                   }`}
                 >
-                  <span className={`h-10 w-full rounded-lg ${theme.class}`} />
+                  <span className={`h-10 w-full rounded-lg`} style={{ background: theme.background }} />
                   <span className="text-[9px] text-cp-muted">{theme.label}</span>
                 </button>
               ))}

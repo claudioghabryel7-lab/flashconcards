@@ -1,7 +1,9 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -223,4 +225,63 @@ export function subscribeTrilhaConfig(userId, onData) {
     primaryUnsub()
     fallbackUnsub?.()
   }
+}
+
+export async function deleteTrilhaSession(userId, sessionId) {
+  if (!userId || !sessionId || !db) return
+  try {
+    await deleteDoc(doc(db, 'users', userId, 'trilhaSessions', sessionId))
+  } catch (err) {
+    if (!isPermissionDenied(err)) throw err
+    await deleteDoc(doc(db, 'progress', sessionId))
+  }
+}
+
+export async function deleteTrilhaManualEntry(userId, entryId) {
+  if (!userId || !entryId || !db) return
+  try {
+    await deleteDoc(doc(db, 'users', userId, 'trilhaManualEntries', entryId))
+  } catch (err) {
+    if (!isPermissionDenied(err)) throw err
+    await deleteDoc(doc(db, 'progress', entryId))
+  }
+}
+
+export async function clearTrilhaHistory(userId) {
+  if (!userId || !db) return { sessions: 0, manual: 0 }
+
+  let sessions = 0
+  let manual = 0
+
+  try {
+    const sessSnap = await getDocs(collection(db, 'users', userId, 'trilhaSessions'))
+    await Promise.all(sessSnap.docs.map((d) => deleteDoc(d.ref)))
+    sessions = sessSnap.size
+  } catch (err) {
+    if (!isPermissionDenied(err)) throw err
+  }
+
+  try {
+    const manSnap = await getDocs(collection(db, 'users', userId, 'trilhaManualEntries'))
+    await Promise.all(manSnap.docs.map((d) => deleteDoc(d.ref)))
+    manual = manSnap.size
+  } catch (err) {
+    if (!isPermissionDenied(err)) throw err
+  }
+
+  try {
+    const q = query(collection(db, 'progress'), where('uid', '==', userId))
+    const snap = await getDocs(q)
+    const trilhaDocs = snap.docs.filter((d) => {
+      const t = d.data().type
+      return t === SESSION_TYPE || t === MANUAL_TYPE
+    })
+    await Promise.all(trilhaDocs.map((d) => deleteDoc(d.ref)))
+    sessions += trilhaDocs.filter((d) => d.data().type === SESSION_TYPE).length
+    manual += trilhaDocs.filter((d) => d.data().type === MANUAL_TYPE).length
+  } catch {
+    /* ignore */
+  }
+
+  return { sessions, manual }
 }

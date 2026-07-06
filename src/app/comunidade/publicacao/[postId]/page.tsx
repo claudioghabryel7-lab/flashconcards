@@ -1,15 +1,8 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import LegacyPage from '@/components/next/LegacyPage'
+import ComunidadePublicacao from '@/routes/ComunidadePublicacao'
 
-export default function ComunidadePublicacaoRedirect() {
-  const { postId } = useParams()
-  const router = useRouter()
-
-  useEffect(() => {
-    if (postId) router.replace(`/comunidade?post=${postId}`)
-  }, [postId, router])
-
-  return null
+export default function ComunidadePublicacaoPage() {
+  return <LegacyPage component={ComunidadePublicacao} publicPage skipAutoHeader />
 }

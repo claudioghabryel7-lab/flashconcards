@@ -11,7 +11,9 @@ import {
   hasPurchasedCourse,
   getFreeTopicKeys,
   topicKeysMatch,
+  isTopicPublished,
 } from '../utils/courseAccess'
+import { buildTopicoPublishMapFromSnapshot, resolveTopicPublishStatus } from '../services/topicoPublishService'
 
 /**
  * Carrega edital verticalizado + flashcards do curso (subcoleção) com fallback legado.
@@ -21,8 +23,18 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
   const [edital, setEdital] = useState(null)
   const [loading, setLoading] = useState(true)
   const [editalLoading, setEditalLoading] = useState(true)
+  const [publishMap, setPublishMap] = useState({})
 
   const courseId = selectedCourseId || 'alego-default'
+
+  useEffect(() => {
+    if (!selectedCourseId) {
+      setPublishMap({})
+      return () => {}
+    }
+    const ref = collection(db, 'courses', selectedCourseId, 'topicoStatus')
+    return onSnapshot(ref, (snap) => setPublishMap(buildTopicoPublishMapFromSnapshot(snap)))
+  }, [selectedCourseId])
 
   useEffect(() => {
     let cancelled = false
@@ -74,17 +86,12 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
         return filtered
       }
 
-      if (selectedCourseId && freeTopicKeys.length > 0) {
-        return filtered.filter((card) =>
-          freeTopicKeys.some((key) => topicKeysMatch(key, card.topicKey))
-        )
-      }
-
-      if (selectedCourseId && !ownsCourse) {
-        return []
-      }
-
-      return filtered
+      return filtered.filter((card) => {
+        const topicKey = card.topicKey
+        if (freeTopicKeys.some((key) => topicKeysMatch(key, topicKey))) return true
+        const publishStatus = resolveTopicPublishStatus(publishMap, topicKey)
+        return isTopicPublished(publishStatus)
+      })
     }
 
     const mapDocs = (docs) =>
@@ -160,7 +167,7 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
     )
 
     return () => unsub()
-  }, [user, profile, selectedCourseId, edital])
+  }, [user, profile, selectedCourseId, edital, publishMap])
 
   const organizedModules = useMemo(
     () => buildNavigationFromEdital(edital, cards),

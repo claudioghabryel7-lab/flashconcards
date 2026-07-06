@@ -46,12 +46,29 @@ const FlashcardPIP = () => {
 
   const { dueQueue, stats, bumpNow, requeueCard } = useSRSDeck(allCards, cardProgress)
 
-  // Sessão PIP: fila SRS + cards difíceis desta sessão (sem duplicar)
-  const sessionCards = (() => {
+  const [sessionQueue, setSessionQueue] = useState([])
+  const sessionInitialized = useRef(false)
+
+  useEffect(() => {
+    sessionInitialized.current = false
+    setSessionQueue([])
+    setCurrentIndex(0)
+    setShowAnswer(false)
+    setSessionHard([])
+    setCompleted(false)
+    setErrorCount(0)
+  }, [courseIdParam, disciplina, modulo, topicKey])
+
+  useEffect(() => {
+    if (loading || sessionInitialized.current) return
+    if (dueQueue.length === 0 && allCards.length === 0) return
     const dueIds = new Set(dueQueue.map((c) => c.id))
     const extra = sessionHard.filter((c) => !dueIds.has(c.id))
-    return [...extra, ...dueQueue]
-  })()
+    setSessionQueue([...extra, ...dueQueue])
+    sessionInitialized.current = true
+  }, [loading, dueQueue, sessionHard, allCards.length])
+
+  const sessionCards = sessionQueue
 
   useEffect(() => {
     if (!user) return
@@ -85,10 +102,10 @@ const FlashcardPIP = () => {
   }, [courseIdParam, disciplina, modulo, topicKey])
 
   useEffect(() => {
-    if (currentIndex >= sessionCards.length && sessionCards.length > 0) {
-      setCurrentIndex(0)
+    if (currentIndex >= sessionCards.length && sessionCards.length > 0 && !completed) {
+      setCurrentIndex(Math.max(0, sessionCards.length - 1))
     }
-  }, [sessionCards.length, currentIndex])
+  }, [sessionCards.length, currentIndex, completed])
 
   const currentCard = sessionCards[currentIndex]
   const currentProgress = currentCard ? cardProgress[currentCard.id] : null
@@ -128,6 +145,10 @@ const FlashcardPIP = () => {
       if (difficulty === 'hard') {
         setErrorCount((prev) => prev + 1)
         setSessionHard((prev) => {
+          if (prev.some((c) => c.id === currentCard.id)) return prev
+          return [...prev, currentCard]
+        })
+        setSessionQueue((prev) => {
           if (prev.some((c) => c.id === currentCard.id)) return prev
           return [...prev, currentCard]
         })

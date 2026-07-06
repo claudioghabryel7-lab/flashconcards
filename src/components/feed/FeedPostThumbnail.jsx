@@ -1,18 +1,23 @@
 import { Link } from 'react-router-dom'
 import { Clock } from 'lucide-react'
-import { MODALITY_LABELS, resolveCardGradient } from '../../utils/feedUtils'
+import { MODALITY_LABELS, resolveCardTheme } from '../../utils/feedUtils'
 
 export default function FeedPostThumbnail({ post }) {
-  const gradientClass = resolveCardGradient(post)
+  const theme = resolveCardTheme(post)
   const modality = MODALITY_LABELS[post.modalidade] || post.modalidade
   const likes = post.likesCount || post.likes?.length || 0
   const comments = post.commentsCount || post.comments?.length || 0
 
   return (
     <Link
-      to={`/comunidade?post=${post.id}`}
-      className={`group relative aspect-square overflow-hidden ${gradientClass}`}
+      to={`/comunidade/publicacao/${post.id}`}
+      className="group relative aspect-square overflow-hidden"
+      style={{ background: theme.background }}
     >
+      <div
+        className="absolute inset-0"
+        style={{ backgroundImage: theme.pattern, backgroundSize: 'auto' }}
+      />
       <div className="absolute inset-0 bg-black/15 transition group-hover:bg-black/35" />
       <div className="relative flex h-full flex-col justify-between p-2">
         <span className="w-fit rounded bg-black/35 px-1.5 py-0.5 text-[8px] font-semibold uppercase text-white">

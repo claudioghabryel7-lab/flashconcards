@@ -33,6 +33,7 @@ export default function FeedPost({
   onDeletePost,
   onDeleteComment,
   onEditPost,
+  readOnly = false,
 }) {
   const [likeAnim, setLikeAnim] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -152,24 +153,28 @@ export default function FeedPost({
 
       <div className="flex items-center justify-between px-3 pt-2.5">
         <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={handleLike}
-            className={`transition active:scale-90 ${liked ? 'text-rose-500' : 'text-cp-text hover:text-cp-muted'}`}
-            aria-label={liked ? 'Descurtir' : 'Curtir'}
-          >
-            <Heart
-              className={`h-6 w-6 ${liked || likeAnim ? 'fill-current scale-110' : ''} transition-transform`}
-            />
-          </button>
-          <button
-            type="button"
-            onClick={onToggleComments}
-            className="text-cp-text transition hover:text-cp-muted active:scale-90"
-            aria-label="Comentários"
-          >
-            <MessageCircle className="h-6 w-6" />
-          </button>
+          {!readOnly && (
+            <>
+              <button
+                type="button"
+                onClick={handleLike}
+                className={`transition active:scale-90 ${liked ? 'text-rose-500' : 'text-cp-text hover:text-cp-muted'}`}
+                aria-label={liked ? 'Descurtir' : 'Curtir'}
+              >
+                <Heart
+                  className={`h-6 w-6 ${liked || likeAnim ? 'fill-current scale-110' : ''} transition-transform`}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={onToggleComments}
+                className="text-cp-text transition hover:text-cp-muted active:scale-90"
+                aria-label="Comentários"
+              >
+                <MessageCircle className="h-6 w-6" />
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={onShare}
@@ -179,14 +184,16 @@ export default function FeedPost({
             <Share2 className="h-6 w-6" />
           </button>
         </div>
-        <button
-          type="button"
-          onClick={onToggleBookmark}
-          className={`transition active:scale-90 ${bookmarked ? 'text-cp-accent' : 'text-cp-text hover:text-cp-muted'}`}
-          aria-label={bookmarked ? 'Remover dos salvos' : 'Salvar'}
-        >
-          <Bookmark className={`h-6 w-6 ${bookmarked ? 'fill-current' : ''}`} />
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={onToggleBookmark}
+            className={`transition active:scale-90 ${bookmarked ? 'text-cp-accent' : 'text-cp-text hover:text-cp-muted'}`}
+            aria-label={bookmarked ? 'Remover dos salvos' : 'Salvar'}
+          >
+            <Bookmark className={`h-6 w-6 ${bookmarked ? 'fill-current' : ''}`} />
+          </button>
+        )}
       </div>
 
       {likesCount > 0 && (
@@ -260,29 +267,31 @@ export default function FeedPost({
         ))}
       </div>
 
-      <div className="flex items-center gap-2 border-t border-cp-border/60 px-3 py-3">
-        <UserAvatar
-          photoBase64={profile?.photoBase64}
-          name={profile?.displayName || user?.email}
-          size="xs"
-        />
-        <input
-          value={commentText}
-          onChange={(e) => onCommentChange(e.target.value)}
-          placeholder="Adicione um comentário..."
-          className="min-w-0 flex-1 bg-transparent text-sm text-cp-text outline-none placeholder:text-cp-muted"
-          onKeyDown={(e) => e.key === 'Enter' && commentText.trim() && onAddComment()}
-        />
-        {commentText.trim() && (
-          <button
-            type="button"
-            onClick={onAddComment}
-            className="shrink-0 text-sm font-semibold text-cp-accent transition hover:text-cp-accent/80"
-          >
-            Publicar
-          </button>
-        )}
-      </div>
+      {!readOnly && (
+        <div className="flex items-center gap-2 border-t border-cp-border/60 px-3 py-3">
+          <UserAvatar
+            photoBase64={profile?.photoBase64}
+            name={profile?.displayName || user?.email}
+            size="xs"
+          />
+          <input
+            value={commentText}
+            onChange={(e) => onCommentChange(e.target.value)}
+            placeholder="Adicione um comentário..."
+            className="min-w-0 flex-1 bg-transparent text-sm text-cp-text outline-none placeholder:text-cp-muted"
+            onKeyDown={(e) => e.key === 'Enter' && commentText.trim() && onAddComment()}
+          />
+          {commentText.trim() && (
+            <button
+              type="button"
+              onClick={onAddComment}
+              className="shrink-0 text-sm font-semibold text-cp-accent transition hover:text-cp-accent/80"
+            >
+              Publicar
+            </button>
+          )}
+        </div>
+      )}
     </article>
   )
 }
