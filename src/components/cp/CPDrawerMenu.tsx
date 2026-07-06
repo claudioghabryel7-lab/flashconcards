@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { X, RefreshCw, LogOut, ChevronRight, type LucideIcon } from 'lucide-react'
 import CPLogo from './CPLogo'
 import UserAvatar from '../UserAvatar'
-import TopicNotificationsButton from '../TopicNotificationsButton'
 import type { User } from 'firebase/auth'
 
 type NavItem = {
@@ -123,7 +122,7 @@ function CPDrawerMenu({
         </div>
 
         {user && (
-          <div className="space-y-3 border-b border-cp-border px-5 py-4">
+          <div className="border-b border-cp-border px-5 py-4">
             <button
               type="button"
               onClick={() => goTo('/perfil')}
@@ -143,10 +142,6 @@ function CPDrawerMenu({
                 </p>
               </div>
             </button>
-            <div className="flex items-center justify-between px-1">
-              <span className="text-xs text-cp-muted">Tópicos liberados</span>
-              <TopicNotificationsButton />
-            </div>
           </div>
         )}
 
