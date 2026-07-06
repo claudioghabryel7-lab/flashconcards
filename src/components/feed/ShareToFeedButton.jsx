@@ -16,7 +16,7 @@ export default function ShareToFeedButton({
   shareUrl,
   itemCount,
   prepareShare,
-  label = 'Na comunidade',
+  label = 'Compartilhar na comunidade',
   className = 'cp-btn-ghost !text-xs',
   disabled = false,
 }) {

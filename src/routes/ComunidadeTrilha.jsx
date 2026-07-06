@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   collection,
@@ -17,9 +17,10 @@ import FeedHighlightsBar from '../components/feed/FeedHighlightsBar'
 import FeedPost from '../components/feed/FeedPost'
 import FeedPostEditModal from '../components/feed/FeedPostEditModal'
 import FeedPostMedia from '../components/feed/FeedPostMedia'
+import FeedShareSheet from '../components/feed/FeedShareSheet'
 import ComunidadeShell from '../components/feed/ComunidadeShell'
 import toast from 'react-hot-toast'
-import { exportFeedPostAsImage } from '../utils/feedShareExport'
+import { useFeedPostShare } from '../hooks/useFeedPostShare'
 import {
   deleteFeedComment,
   deleteFeedPost,
@@ -53,9 +54,15 @@ export default function ComunidadeTrilha() {
   const [bookmarks, setBookmarks] = useState([])
   const [editingPost, setEditingPost] = useState(null)
   const [savingEdit, setSavingEdit] = useState(false)
-  const [capturePost, setCapturePost] = useState(null)
-  const captureRef = useRef(null)
   const todayKey = dayjs().format('YYYY-MM-DD')
+  const {
+    sharePost,
+    sharing,
+    capturePost,
+    captureRef,
+    shareSheet,
+    closeShareSheet,
+  } = useFeedPostShare()
 
   useEffect(() => {
     if (!user) return () => {}
@@ -166,36 +173,6 @@ export default function ComunidadeTrilha() {
     },
     [user],
   )
-
-  const sharePost = useCallback(async (post) => {
-    const url = `${window.location.origin}/comunidade/publicacao/${post.id}`
-    try {
-      setCapturePost(post)
-      await new Promise((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(resolve))
-      })
-      if (captureRef.current) {
-        await exportFeedPostAsImage(captureRef.current, `concurseiro-preditivo-${post.id}.png`)
-        toast.success('Imagem salva com marca d\'água!')
-      }
-      try {
-        await navigator.clipboard.writeText(url)
-      } catch {
-        /* ignore */
-      }
-    } catch (err) {
-      if (err?.name !== 'AbortError') {
-        try {
-          await navigator.clipboard.writeText(url)
-          toast.success('Link copiado!')
-        } catch {
-          toast.error('Não foi possível compartilhar.')
-        }
-      }
-    } finally {
-      setCapturePost(null)
-    }
-  }, [])
 
   const handleDeletePost = useCallback(
     async (post) => {
@@ -311,6 +288,8 @@ export default function ComunidadeTrilha() {
           <FeedPostMedia post={capturePost} exportMode />
         </div>
       )}
+
+      {shareSheet && <FeedShareSheet data={shareSheet} onClose={closeShareSheet} />}
     </ComunidadeShell>
   )
 }

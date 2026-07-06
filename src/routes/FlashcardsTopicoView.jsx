@@ -374,14 +374,7 @@ const FlashcardsTopicoView = () => {
                 courseId={courseId}
                 topicKey={topicKey}
                 itemCount={cards.length}
-                prepareShare={async () => {
-                  const token = await generateShareToken({ courseId, disciplina, modulo, topicKey })
-                  return {
-                    shareToken: token,
-                    shareUrl: `/share-flashcards/${token}`,
-                    itemCount: cards.length,
-                  }
-                }}
+                shareUrl={`/flashcards/topico/${courseId}?disciplina=${encodeURIComponent(disciplina)}&modulo=${encodeURIComponent(modulo)}&topicKey=${encodeURIComponent(topicKey)}`}
               />
             )}
             <button type="button" onClick={openPIPMode} className="cp-btn-ghost !text-xs">

@@ -1138,6 +1138,21 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         />
       )}
 
+      {canPractice && questoes?.questoes?.length > 0 && (
+        <div className="flex justify-end">
+          <ShareToFeedButton
+            postType={FEED_POST_TYPES.QUESTOES}
+            materia={courseName || tipoProva}
+            assunto={effectiveTopicNome || resolvedTopicKey}
+            courseId={resolvedCourseId}
+            topicKey={resolvedTopicKey}
+            itemCount={questoes.questoes.length}
+            shareUrl={`/questoes-topic/${resolvedCourseId}/${encodeURIComponent(resolvedTopicKey)}${effectiveTopicNome ? `?nome=${encodeURIComponent(effectiveTopicNome)}` : ''}`}
+            className="cp-btn-ghost !text-xs"
+          />
+        </div>
+      )}
+
       <div className="cp-card p-6 sm:p-8">
           {carregandoNivel ? (
             <div className="py-12 text-center">
@@ -1201,37 +1216,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                                 </svg>
                               </button>
-                              <ShareToFeedButton
-                                postType={FEED_POST_TYPES.QUESTOES}
-                                materia={courseName || tipoProva}
-                                assunto={effectiveTopicNome || resolvedTopicKey}
-                                courseId={resolvedCourseId}
-                                topicKey={resolvedTopicKey}
-                                itemCount={questoes?.questoes?.length || 0}
-                                className="cp-btn-ghost !text-xs"
-                                disabled={!questoes?.questoes?.length}
-                                prepareShare={async () => {
-                                  const sharedQuestaoRef = doc(collection(db, 'sharedQuestoes'))
-                                  const questaoId = sharedQuestaoRef.id
-                                  await setDoc(sharedQuestaoRef, {
-                                    id: questaoId,
-                                    questoes: questoes.questoes,
-                                    tipoProva,
-                                    topico: effectiveTopicNome || resolvedTopicKey,
-                                    courseId: resolvedCourseId,
-                                    nivel: nivelAtual,
-                                    totalQuestoes: questoes.questoes.length,
-                                    sharedBy: profile?.email || 'admin',
-                                    sharedAt: serverTimestamp(),
-                                    status: 'ativo',
-                                  })
-                                  return {
-                                    shareId: questaoId,
-                                    shareUrl: `/share-questao/${questaoId}`,
-                                    itemCount: questoes.questoes.length,
-                                  }
-                                }}
-                              />
                               <button type="button" onClick={handlePesquisarGoogle} className="cp-btn-ghost !p-2" title="Pesquisar no Google">
                                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
