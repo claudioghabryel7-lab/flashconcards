@@ -301,11 +301,11 @@ IMPORTANTE:
       
       // Aumentar limite de tokens para cronogramas longos (até 65536 tokens)
       const response = await callGeminiWithRetry(prompt, {
-        models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+        courseId: selectedCourseId || 'alego-default',
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 65536 // Aumentado para evitar corte em cronogramas longos
-        }
+          temperature: 0.35,
+          maxOutputTokens: 65536,
+        },
       })
       const generatedText = extractGeneratedText(response)
       

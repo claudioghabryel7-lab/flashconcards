@@ -7,11 +7,30 @@
 
 import { performRAG, googleSearch } from './googleSearch.js'
 import { readEnv } from '../lib/env.js'
+import { fetchCourseAiContext, buildPromptWithCourseContext } from './courseAiContext.js'
+import {
+  buildVerificationPrompt,
+  parseVerificationResult,
+  shouldRunVerification,
+  applyVerificationToResponse,
+} from './contentVerification.js'
 
 const MODELS = [
   'gemini-2.5-flash',
   'gemini-2.5-pro',
 ]
+
+const VERIFY_MODELS = ['gemini-2.5-flash']
+
+const DEFAULT_GENERATION_CONFIG = {
+  temperature: 0.35,
+  maxOutputTokens: 32000,
+}
+
+const VERIFY_GENERATION_CONFIG = {
+  temperature: 0,
+  maxOutputTokens: 8192,
+}
 
 const MAX_RETRIES = 1 // Apenas 1 tentativa para economizar quota
 const BASE_DELAY = 2000 // 2 segundos
@@ -183,34 +202,103 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     maxRetries = MAX_RETRIES,
     baseDelay = BASE_DELAY,
     models = MODELS,
-    generationConfig = { temperature: 0.7, maxOutputTokens: 32000 },
-    useGoogleSearch = true, // Ativado por padrão - usa Google Search nativo do Gemini
-    useRAG = false, // Desativado por padrão - usa Google Search nativo em vez disso
+    generationConfig = DEFAULT_GENERATION_CONFIG,
+    useGoogleSearch = true,
+    useRAG = options.isLegalContent !== false,
     ragTopic = null,
     isLegalContent = true,
     useFunctionCalling = false,
     tools = [],
+    courseId = null,
+    courseContext = null,
+    verifyContent = true,
   } = options
 
-  // RAG: Buscar contexto atualizado antes de enviar para IA
-  let enhancedPrompt = prompt
+  let courseData = courseContext
+  if (!courseData && courseId) {
+    courseData = await fetchCourseAiContext(courseId)
+  }
+
+  let enhancedPrompt = buildPromptWithCourseContext(prompt, courseData)
+
   if (useRAG) {
     try {
       const searchTopic = ragTopic || extractSearchTopic(prompt)
-      console.log(`🔍 RAG: Buscando contexto atualizado para: "${searchTopic.substring(0, 100)}..."`)
-      
+      console.log(`🔍 RAG: Buscando contexto em fontes oficiais: "${searchTopic.substring(0, 80)}..."`)
       const ragContext = await performRAG(searchTopic, isLegalContent)
-      
       if (ragContext) {
-        enhancedPrompt = ragContext + '\n\n' + prompt
-        console.log('✅ RAG: Contexto de busca adicionado ao prompt')
+        enhancedPrompt = ragContext + '\n\n' + enhancedPrompt
+        console.log('✅ RAG: contexto oficial adicionado ao prompt')
       }
     } catch (error) {
-      console.warn('⚠️ RAG: Erro ao buscar contexto, continuando sem RAG:', error.message)
+      console.warn('⚠️ RAG: erro na busca, continuando sem RAG:', error.message)
     }
   }
 
-  const finalPrompt = enhancedPrompt
+  const response = await executeGeminiRequest(enhancedPrompt, {
+    maxRetries,
+    baseDelay,
+    models,
+    generationConfig,
+    useGoogleSearch,
+    useFunctionCalling,
+    tools,
+  })
+
+  if (!verifyContent) return response
+
+  let generatedText = ''
+  try {
+    generatedText = extractGeneratedText(response)
+  } catch {
+    return response
+  }
+
+  if (!shouldRunVerification(generatedText, { verifyContent, isLegalContent })) {
+    return response
+  }
+
+  console.log('🔎 Verificação jurídica pós-geração (1 chamada Flash)...')
+  try {
+    const verifyPrompt = buildVerificationPrompt(generatedText, courseData || {})
+    const verifyResponse = await executeGeminiRequest(verifyPrompt, {
+      models: VERIFY_MODELS,
+      generationConfig: VERIFY_GENERATION_CONFIG,
+      useGoogleSearch: true,
+    })
+    const verifyText = extractGeneratedText(verifyResponse)
+    const verification = parseVerificationResult(verifyText)
+
+    if (!verification.aprovado) {
+      console.warn(
+        `⚠️ Verificação encontrou ${verification.problemas?.length || 0} problema(s); aplicando correções.`
+      )
+    } else {
+      console.log('✅ Conteúdo aprovado na verificação jurídica')
+    }
+
+    return applyVerificationToResponse(response, verification, generatedText)
+  } catch (verifyErr) {
+    console.warn('⚠️ Verificação jurídica falhou, mantendo texto original:', verifyErr.message)
+    return response
+  }
+}
+
+/**
+ * Execução bruta da API Gemini (sem contexto de curso nem verificação).
+ */
+async function executeGeminiRequest(prompt, options = {}) {
+  const {
+    maxRetries = MAX_RETRIES,
+    baseDelay = BASE_DELAY,
+    models = MODELS,
+    generationConfig = DEFAULT_GENERATION_CONFIG,
+    useGoogleSearch = true,
+    useFunctionCalling = false,
+    tools = [],
+  } = options
+
+  const finalPrompt = prompt
 
   // Teste silencioso para filtrar apenas API keys disponíveis
   let apiKeys = await getAvailableApiKeys()
@@ -236,9 +324,6 @@ export async function callGeminiWithRetry(prompt, options = {}) {
   console.log(`🔑 API Keys disponíveis: ${apiKeys.length} de ${loadApiKeys().length} totais`)
   if (useGoogleSearch) {
     console.log(`🔍 Google Search Grounding ativado`)
-  }
-  if (useRAG) {
-    console.log(`🔍 RAG ativado (conteúdo jurídico: ${isLegalContent})`)
   }
   if (useFunctionCalling) {
     console.log(`🔧 Function Calling ativado com ${tools.length} ferramentas`)

@@ -1,7 +1,7 @@
 import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { collection, onSnapshot, doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
@@ -215,9 +215,6 @@ const MindMapView = () => {
           
           const basePrompt = await buildMindMapPrompt(courseId, materia, editalText)
           
-          const genAI = new GoogleGenerativeAI(apiKey)
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-          
           const prompt = `${basePrompt}
 
 TAREFA: Analise os flashcards abaixo e organize-os em até 6 temas principais. Para cada tema, crie um título descritivo (máximo 60 caracteres) e liste os flashcards que pertencem a esse tema.
@@ -241,15 +238,15 @@ Retorne APENAS um JSON com esta estrutura:
 
 IMPORTANTE: Use os índices dos cards (1, 2, 3...) conforme numerados acima.`
 
-          const result = await model.generateContent({
-            contents: [{ parts: [{ text: prompt }] }],
+          const result = await callGeminiWithRetry(prompt, {
+            courseId,
             generationConfig: {
-              temperature: 0.7,
+              temperature: 0.35,
               maxOutputTokens: 1000,
             },
           })
           
-          const responseText = result.response.text().trim()
+          const responseText = extractGeneratedText(result).trim()
           let jsonText = responseText
           
           // Extrair JSON

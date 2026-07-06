@@ -298,11 +298,8 @@ O tema deve ser claro e direto.
 CRÍTICO: Retorne APENAS o tema, nada mais.`
 
       const response = await callGeminiWithRetry(themePrompt, {
-        generationConfig: {
-          maxOutputTokens: 1024,
-          temperature: 0.8,
-        },
-        useGoogleSearch: true,
+        courseId: selectedCourseId || 'alego-default',
+        generationConfig: { maxOutputTokens: 1024, temperature: 0.5 },
       })
       let theme = extractGeneratedText(response).trim()
       
@@ -436,11 +433,8 @@ CRÍTICO:
 - Retorne APENAS o JSON, sem markdown, sem explicações.`
 
       const response = await callGeminiWithRetry(analysisPrompt, {
-        generationConfig: {
-          maxOutputTokens: 4096,
-          temperature: 0.3,
-        },
-        useGoogleSearch: true,
+        courseId: selectedCourseId || 'alego-default',
+        generationConfig: { maxOutputTokens: 4096, temperature: 0.2 },
       })
       let responseText = extractGeneratedText(response).trim()
 
@@ -775,11 +769,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.
 
       updateProgress(30)
       const response = await callGeminiWithRetry(analysisPrompt, {
-        generationConfig: {
-          maxOutputTokens: 32000,
-          temperature: 0.7,
-        },
-        useGoogleSearch: true,
+        courseId: selectedCourseId || 'alego-default',
       })
       updateProgress(50)
       const responseText = extractGeneratedText(response).trim()
@@ -1125,11 +1115,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.
 
         try {
           const response = await callGeminiWithRetry(materiaPrompt, {
-            generationConfig: {
-              maxOutputTokens: 32000,
-              temperature: 0.7,
-            },
-            useGoogleSearch: true,
+            courseId: selectedCourseId || 'alego-default',
           })
           const responseText = extractGeneratedText(response).trim()
 
@@ -1389,11 +1375,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.
 - O JSON deve ser 100% válido e parseável`
 
       const response = await callGeminiWithRetry(regeneratePrompt, {
-        generationConfig: {
-          maxOutputTokens: 32000,
-          temperature: 0.7,
-        },
-        useGoogleSearch: true,
+        courseId: selectedCourseId || 'alego-default',
       })
       const responseText = extractGeneratedText(response).trim()
 

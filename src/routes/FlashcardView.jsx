@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
@@ -853,49 +852,19 @@ IMPORTANTE:
 - Retorne APENAS o JSON válido, sem texto adicional
 - Garanta que cada flashcard seja único e contributivo`
 
-      // Chamar a API do Gemini
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
+      // Chamar API com pipeline central (banca, curso, verificação)
+      const response = await callGeminiWithRetry(prompt, {
+        courseId: selectedCourseId || 'alego-default',
+        generationConfig: {
+          temperature: 0.35,
+          maxOutputTokens: 2048,
+        },
+      })
+
+      const text = extractGeneratedText(response)
+      if (!text?.trim()) {
+        throw new Error('A IA não retornou flashcards válidos')
       }
-      
-      const genAI = new GoogleGenerativeAI(apiKey)
-      
-      // 🔥 OTIMIZAÇÃO: Usar modelos mais rápidos primeiro
-      const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
-      let lastError = null
-      let aiResponse = ''
-      
-      for (const modelName of modelNames) {
-        try {
-          const model = genAI.getGenerativeModel({ model: modelName })
-          const result = await model.generateContent({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 2048, // Reduzido para mais velocidade
-            },
-          })
-          
-          const response = await result.response
-          const text = response.text()
-          
-          if (text && text.trim()) {
-            aiResponse = text
-            break
-          }
-        } catch (error) {
-          console.warn(`Modelo ${modelName} falhou:`, error.message)
-          lastError = error
-          continue
-        }
-      }
-      
-      if (!aiResponse) {
-        throw lastError || new Error('Todos os modelos Gemini falharam')
-      }
-      
-      const text = aiResponse
       
       // Extrair JSON da resposta
       let flashcardsData

@@ -7,6 +7,5 @@ Disallow: /simulado
 Disallow: /feed
 Disallow: /profile/
 
-# Sitemap
+# Concurseiro Preditivo
 Sitemap: https://www.flashconcards.com.br/sitemap.xml
-

@@ -474,10 +474,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
 
         try {
           const response = await callGeminiWithRetry(materiaPrompt, {
-            generationConfig: {
-              maxOutputTokens: 32000,
-              temperature: 0.7,
-            }
+            courseId,
           })
           const responseText = extractGeneratedText(response).trim()
 

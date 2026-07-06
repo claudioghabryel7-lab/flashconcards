@@ -19,8 +19,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const {
       prompt,
-      generationConfig = { temperature: 0.7, maxOutputTokens: 32000 },
+      generationConfig = { temperature: 0.35, maxOutputTokens: 32000 },
       useGoogleSearch = true,
+      verifyContent = true,
+      courseId = null,
       useFunctionCalling = false,
       tools = [],
       models = DEFAULT_MODELS,

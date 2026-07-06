@@ -434,12 +434,12 @@ REGRAS:
       
       // Usar callGeminiWithRetry que já tem teste silencioso de API keys
       const response = await callGeminiWithRetry(prompt, {
-        model: 'gemini-2.5-flash',
+        courseId,
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 65536
+          temperature: 0.35,
+          maxOutputTokens: 65536,
         },
-        useGoogleSearch: true
+        useGoogleSearch: true,
       })
       
       setGenerationStatus('Processando resposta da IA...')

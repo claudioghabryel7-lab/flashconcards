@@ -309,10 +309,11 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.
       if (apiKey) {
         try {
           const response = await callGeminiWithRetry(prompt, {
+            courseId: (profile?.selectedCourseId || 'alego-default'),
             generationConfig: {
               maxOutputTokens: 2000,
-              temperature: 0.7,
-            }
+              temperature: 0.35,
+            },
           })
           explanation = extractGeneratedText(response)
         } catch (geminiErr) {

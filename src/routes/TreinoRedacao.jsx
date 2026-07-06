@@ -65,11 +65,11 @@ const TreinoRedacao = () => {
     )
 
     const response = await callGeminiWithRetry(prompt, {
+      courseId: getCourseId(),
       generationConfig: {
         maxOutputTokens: 4096,
-        temperature: 0.85,
+        temperature: 0.5,
       },
-      useGoogleSearch: true,
     })
     return extractGeneratedText(response).trim()
   }
@@ -198,11 +198,11 @@ O tema deve ser claro e direto.
 CRÍTICO: Retorne APENAS o tema, nada mais.`
 
       const response = await callGeminiWithRetry(themePrompt, {
+        courseId: getCourseId(),
         generationConfig: {
           maxOutputTokens: 1024,
-          temperature: 0.8,
+          temperature: 0.5,
         },
-        useGoogleSearch: true,
       })
       let theme = extractGeneratedText(response).trim()
       
@@ -483,12 +483,12 @@ CRÍTICO:
 
       // Usar configuração com temperatura mais alta para variabilidade
       const response = await callGeminiWithRetry(analysisPrompt, {
+        courseId: getCourseId(),
         generationConfig: {
-          temperature: 0.9, // Alta temperatura para mais variabilidade nas avaliações
-          maxOutputTokens: 4000, // Aumentado para caber a redação modelo
+          temperature: 0.35,
+          maxOutputTokens: 4000,
           topP: 0.95,
         },
-        useGoogleSearch: true,
       })
       
       let responseText = extractGeneratedText(response).trim()

@@ -1024,10 +1024,7 @@ REGRAS IMPORTANTES:
 
       // Chamar API da IA com rotação de keys
       const response = await callGeminiWithRetry(prompt, {
-        generationConfig: {
-          maxOutputTokens: 32000,
-          temperature: 0.7,
-        },
+        courseId: courseId || 'alego-default',
       })
 
       setGenerationStatus('Processando resposta da IA...')

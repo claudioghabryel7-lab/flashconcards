@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import Providers from './providers'
 import AppShell from '@/components/cp/AppShell'
+import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_URL } from '@/lib/site'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -16,10 +17,18 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Concurseiro Preditivo | Estudo inteligente para concursos',
-  description:
-    'Plataforma preditiva de estudos para concursos públicos com IA, edital verticalizado, flashcards e questões personalizadas por banca.',
-  applicationName: 'Concurseiro Preditivo',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: `${SITE_NAME} | Estudo inteligente para concursos`,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  keywords: SITE_KEYWORDS,
+  applicationName: SITE_NAME,
+  authors: [{ name: SITE_NAME, url: SITE_URL }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  formatDetection: { email: false, telephone: false },
   icons: {
     icon: [
       { url: '/favicon.png', type: 'image/png', sizes: '32x32' },

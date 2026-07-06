@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { doc, getDoc, setDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import dayjs from 'dayjs'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 
 export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
   const [dailyRecommendation, setDailyRecommendation] = useState(null)
@@ -195,15 +195,6 @@ export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
         throw new Error('VITE_GEMINI_API_KEY não configurada')
       }
 
-      const genAI = new GoogleGenerativeAI(apiKey)
-      console.log('🤖 Inicializando modelo Gemini...')
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-        generationConfig: {
-          maxOutputTokens: 8000,
-          temperature: 0.7,
-        }
-      })
       console.log('📝 Enviando prompt para IA...')
 
       const prompt = `Você é um mentor especializado em concursos públicos e planejamento de estudos.
@@ -267,9 +258,15 @@ FORMATO DE RESPOSTA (JSON OBRIGATÓRIO):
 
 Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
 
-      const result = await model.generateContent(prompt)
+      const result = await callGeminiWithRetry(prompt, {
+        courseId: courseId || 'alego-default',
+        generationConfig: {
+          maxOutputTokens: 8000,
+          temperature: 0.35,
+        },
+      })
       console.log('✅ Resposta recebida da IA')
-      let aiResponse = result.response.text()
+      let aiResponse = extractGeneratedText(result)
       console.log('📄 Resposta bruta:', aiResponse.substring(0, 200) + '...')
 
       // Limpar resposta da IA (remover markdown se houver)

@@ -172,9 +172,7 @@ REGRAS:
 - NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
 
   const response = await callGeminiWithRetry(prompt, {
-    models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
-    useGoogleSearch: true,
+    courseId,
   })
 
   const parsed = await extractJsonFromResponse(response)

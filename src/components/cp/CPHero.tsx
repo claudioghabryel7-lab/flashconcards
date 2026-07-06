@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { ArrowRight, BarChart3, Brain, Layers, Sparkles } from 'lucide-react'
 import CPHeroWatermark from './CPHeroWatermark'
+import { BancaMarquee, LivePipeline } from './CPHomeSections'
 
 const features = [
   {
@@ -62,13 +63,15 @@ export default function CPHero() {
           </div>
 
           <h1 className="relative z-10 cp-headline text-4xl sm:text-6xl lg:text-7xl">
+            <span className="sr-only">Concurseiro Preditivo — </span>
             Estude com
             <span className="block cp-gradient-text">inteligência preditiva.</span>
           </h1>
 
           <p className="relative z-10 mx-auto mt-8 max-w-xl text-base leading-relaxed text-cp-muted sm:text-lg">
-            Concurseiro Preditivo combina análise de edital, padrão de banca e IA generativa
-            numa plataforma refinada — feita para quem exige precisão.
+            <strong className="font-medium text-cp-text">Concurseiro Preditivo</strong> combina edital
+            verticalizado, padrão de banca e IA generativa — questões preditivas, resumos e flashcards
+            calibrados no seu concurso.
           </p>
 
           <div className="relative z-10 mt-12 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -81,30 +84,10 @@ export default function CPHero() {
             </Link>
           </div>
 
-          <div className="cp-glass-panel relative z-10 mx-auto mt-16 max-w-lg overflow-hidden text-left">
-            <div className="flex items-center gap-2 border-b border-cp-border px-5 py-3">
-              <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
-              <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
-              <span className="ml-2 font-mono text-[10px] text-cp-muted">pipeline.init</span>
-            </div>
-            <div className="space-y-2 px-5 py-4 font-mono text-xs leading-relaxed sm:text-[13px]">
-              <p className="text-cp-muted">
-                <span className="text-cp-accent2">→</span> edital.parse()
-                <span className="ml-3 text-cp-success">done</span>
-              </p>
-              <p className="text-cp-muted">
-                <span className="text-cp-accent2">→</span> banca.analyze()
-                <span className="ml-3 text-cp-accent4">847 patterns</span>
-              </p>
-              <p className="text-cp-muted">
-                <span className="text-cp-accent2">→</span> trilha.build()
-                <span className="ml-3 text-cp-accent">awaiting course</span>
-                <span className="cp-cursor" />
-              </p>
-            </div>
-          </div>
+          <LivePipeline />
         </motion.div>
+
+        <BancaMarquee />
 
         <div className="mt-24 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {features.map((item, index) => {

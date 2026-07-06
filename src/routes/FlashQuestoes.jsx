@@ -541,10 +541,7 @@ EXEMPLO DO FORMATO EXATO (COM 10 QUESTÕES):
       // Tentar Gemini primeiro com rotação de API keys
       try {
         const response = await callGeminiWithRetry(prompt, {
-          generationConfig: {
-            maxOutputTokens: 8192,
-            temperature: 0.7,
-          },
+          courseId: selectedCourseId || 'alego-default',
         })
         aiResponse = extractGeneratedText(response)
         console.log('✅ Sucesso com rotação de API keys')
@@ -925,9 +922,10 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão seguin
 
       try {
         const response = await callGeminiWithRetry(prompt, {
+          courseId: selectedCourseId || 'alego-default',
           generationConfig: {
             maxOutputTokens: 4096,
-            temperature: 0.7,
+            temperature: 0.35,
           },
         })
         explanation = extractGeneratedText(response)

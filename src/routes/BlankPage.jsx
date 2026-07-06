@@ -339,10 +339,12 @@ IMPORTANTE:
 - Use apenas informações atualizadas até esta data`
 
       const response = await callGeminiWithRetry(prompt, {
+        verifyContent: false,
+        isLegalContent: false,
         generationConfig: {
           maxOutputTokens: 8000,
-          temperature: 0.7,
-        }
+          temperature: 0.35,
+        },
       })
       const responseText = extractGeneratedText(response)
       
