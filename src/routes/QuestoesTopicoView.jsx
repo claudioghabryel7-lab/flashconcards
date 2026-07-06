@@ -9,7 +9,7 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { incrementQuestoesStats } from '../utils/questoesStats'
-import { isContentAvailable, toggleContentStatus } from '../utils/contentStatus'
+import { isContentAvailable, toggleContentStatus, CONTENT_STATUS } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
 import {
   QuestoesLoading,
@@ -185,6 +185,7 @@ const QuestoesTopicoView = () => {
   const [modoAdminNavegacao, setModoAdminNavegacao] = useState(false)
   const [termoBusca, setTermoBusca] = useState('')
   const [carregandoNivel, setCarregandoNivel] = useState(false)
+  const [topicoPublishStatus, setTopicoPublishStatus] = useState(CONTENT_STATUS.UNAVAILABLE)
   const desempenhoNivelInicial = useRef(false)
 
   const todosNiveis = useMemo(() => Array.from({ length: 10 }, (_, i) => i + 1), [])
@@ -279,6 +280,14 @@ const QuestoesTopicoView = () => {
       try {
         const sanitizedKey = sanitizeTopicKeyForFirestore(trimmedKey)
 
+        const topicoStatusRef = doc(db, 'courses', resolvedCourseId, 'topicoStatus', sanitizedKey)
+        const topicoStatusDoc = await getDoc(topicoStatusRef)
+        if (topicoStatusDoc.exists()) {
+          setTopicoPublishStatus(topicoStatusDoc.data().status || CONTENT_STATUS.UNAVAILABLE)
+        } else {
+          setTopicoPublishStatus(CONTENT_STATUS.UNAVAILABLE)
+        }
+
         if (user && !desempenhoNivelInicial.current) {
           const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoTopico', sanitizedKey)
           const desempenhoDoc = await getDoc(desempenhoRef)
@@ -290,9 +299,13 @@ const QuestoesTopicoView = () => {
 
         const niveisDisponiveis = []
         for (let i = 1; i <= 10; i++) {
-          const nivelDocRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', `${sanitizedKey}_nivel_${i}`)
-          const nivelDoc = await getDoc(nivelDocRef)
-          if (nivelDoc.exists()) niveisDisponiveis.push(i)
+          try {
+            const nivelDocRef = doc(db, 'courses', resolvedCourseId, 'questoesTopico', `${sanitizedKey}_nivel_${i}`)
+            const nivelDoc = await getDoc(nivelDocRef)
+            if (nivelDoc.exists()) niveisDisponiveis.push(i)
+          } catch {
+            /* nível não publicado ou sem permissão */
+          }
         }
         setNiveisDisponiveis(niveisDisponiveis)
 
@@ -355,7 +368,13 @@ const QuestoesTopicoView = () => {
       } catch (err) {
         console.error('Erro ao carregar questões do nível:', err)
         if (!cancelled) {
-          setError('Erro ao carregar questões. Tente novamente.')
+          const msg = err.message || String(err)
+          if (msg.includes('Missing or insufficient permissions')) {
+            setQuestoes(null)
+            setError('')
+          } else {
+            setError('Erro ao carregar questões. Tente novamente.')
+          }
         }
       } finally {
         if (!cancelled) {
@@ -373,6 +392,10 @@ const QuestoesTopicoView = () => {
 
   const handleGenerateQuestoes = async () => {
     if (!resolvedCourseId || !resolvedTopicKey) return false
+    if (profile?.role !== 'admin') {
+      setError('Apenas administradores podem gerar questões.')
+      return false
+    }
     const apiKey = readEnv('VITE_GEMINI_API_KEY')
     if (!apiKey) {
       setError('API Key não configurada.')
@@ -715,6 +738,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
   }
 
   const handleAnswer = (answer) => {
+    if (!canPractice) return
     if (showResult) return
     
     setSelectedAnswer(answer)
@@ -1012,6 +1036,26 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
   const isAdmin = profile?.role === 'admin'
 
+  const canPractice =
+    isAdmin ||
+    (isContentAvailable(topicoPublishStatus, false) &&
+      questoes &&
+      isContentAvailable(questoes.status, false))
+
+  const renderBloqueioAluno = () => (
+    <div className="cp-card p-8 text-center">
+      <QuestionMarkCircleIcon className="h-10 w-10 text-amber-400 mx-auto mb-3" />
+      <p className="font-medium text-cp-text">Questões em preparação</p>
+      <p className="mt-2 text-sm text-cp-muted">
+        O administrador ainda não liberou as questões preditivas deste tópico.
+      </p>
+      <Link to="/edital-verticalizado" className="cp-btn-ghost mt-6 inline-flex justify-center">
+        <ArrowLeftIcon className="h-4 w-4" />
+        Voltar ao edital
+      </Link>
+    </div>
+  )
+
   if (loading) {
     return <QuestoesLoading />
   }
@@ -1027,11 +1071,30 @@ Retorne APENAS o JSON válido, sem texto adicional.`
           <QuestionMarkCircleIcon className="h-12 w-12 text-cp-muted mx-auto" />
           <h1 className="cp-headline text-xl">Questões não disponíveis</h1>
           <p className="text-sm text-cp-muted">{error}</p>
-          <button type="button" onClick={handleGenerateQuestoes} disabled={generating} className="cp-btn-primary w-full justify-center">
-            <FireIcon className="h-5 w-5" />
-            {generating ? 'Gerando questões…' : 'Gerar questões'}
-          </button>
+          {isAdmin && (
+            <button type="button" onClick={handleGenerateQuestoes} disabled={generating} className="cp-btn-primary w-full justify-center">
+              <FireIcon className="h-5 w-5" />
+              {generating ? 'Gerando questões…' : 'Gerar questões'}
+            </button>
+          )}
         </div>
+      </div>
+    )
+  }
+
+  if (!isAdmin && !carregandoNivel && !canPractice && !desempenho) {
+    return (
+      <div className="space-y-6">
+        <Link to="/edital-verticalizado" className="inline-flex items-center gap-2 text-sm text-cp-muted hover:text-cp-accent transition">
+          <ArrowLeftIcon className="h-4 w-4" />
+          Voltar ao edital
+        </Link>
+        <QuestoesHeader
+          badge="Questões preditivas"
+          title={effectiveTopicNome || resolvedTopicKey}
+          subtitle={<>Nível <span className="font-mono text-cp-accent">{nivelAtual}</span>/10</>}
+        />
+        {renderBloqueioAluno()}
       </div>
     )
   }
@@ -1078,6 +1141,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
           ) : !desempenho ? (
             <div className="space-y-6">
               {!questoes ? (
+                isAdmin ? (
                 <div className="space-y-6">
                   {/* Informações sobre a geração */}
                   <div className="cp-card !border-cp-accent/20 p-5 space-y-4">
@@ -1093,28 +1157,23 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                     </button>
                   </div>
                 </div>
+                ) : (
+                  renderBloqueioAluno()
+                )
+              ) : !canPractice ? (
+                renderBloqueioAluno()
               ) : (
                 <div className="space-y-6">
                   {/* Status do conteúdo para usuários */}
                   {profile?.role !== 'admin' && questoes && (
                     <div className="flex items-center gap-2">
-                      <span className={`cp-badge ${questoes.status === 'disponivel' ? 'cp-badge-accent' : ''}`}>
-                        {questoes.status === 'disponivel' ? 'Disponível' : 'Conteúdo pendente'}
+                      <span className={`cp-badge ${canPractice ? 'cp-badge-accent' : ''}`}>
+                        {canPractice ? 'Disponível' : 'Conteúdo pendente'}
                       </span>
                     </div>
                   )}
 
-                  {/* Bloqueio de acesso para conteúdo indisponível */}
-                  {!isAdmin && questoes && !isContentAvailable(questoes.status, isAdmin) ? (
-                    <div className="cp-card p-8 text-center">
-                      <QuestionMarkCircleIcon className="h-10 w-10 text-amber-400 mx-auto mb-3" />
-                      <p className="font-medium text-cp-text">Questões em preparação</p>
-                      <p className="mt-2 text-sm text-cp-muted">O administrador ainda não liberou este nível.</p>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Botão de excluir para admin */}
-                      {isAdmin && (
+                  {isAdmin && (
                         <div className="flex justify-between items-center gap-2 flex-wrap mb-4">
                           <button type="button" onClick={handleToggleModoAdmin} className={`cp-btn-ghost !text-xs ${modoAdminNavegacao ? '!border-cp-accent/40 !text-cp-accent' : ''}`}>
                             {modoAdminNavegacao ? 'Modo prática' : 'Modo navegação'}
@@ -1255,8 +1314,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                           )}
                         </div>
                       )}
-                    </>
-                  )}
                 </div>
               )}
             </div>

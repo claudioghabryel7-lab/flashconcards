@@ -268,7 +268,7 @@ service cloud.firestore {
       }
 
       match /topicoStatus/{docId} {
-        allow read: if isAuthenticated() && isAdmin();
+        allow read: if isAuthenticated();
         allow create, update, delete: if isAdmin();
       }
       

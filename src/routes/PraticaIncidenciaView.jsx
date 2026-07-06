@@ -241,6 +241,10 @@ const PraticaIncidenciaView = () => {
 
   const handleGenerateQuestoes = async () => {
     if (!courseId || !conteudoIncidencia) return
+    if (profile?.role !== 'admin') {
+      setStatus('❌ Apenas administradores podem gerar questões.')
+      return
+    }
 
     const apiKey = readEnv('VITE_GEMINI_API_KEY')
     if (!apiKey) {
@@ -475,6 +479,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
   }
 
   const handleAnswer = (answer) => {
+    if (!canPractice) return
     if (showResult) return
     
     setSelectedAnswer(answer)
@@ -772,6 +777,12 @@ Retorne APENAS o JSON válido, sem texto adicional.`
   }
 
   const isAdmin = profile?.role === 'admin'
+
+  const canPractice =
+    isAdmin ||
+    (isContentAvailable(conteudoIncidencia?.status, false) &&
+      questoes &&
+      isContentAvailable(questoes.status, false))
 
   if (loading) {
     return (

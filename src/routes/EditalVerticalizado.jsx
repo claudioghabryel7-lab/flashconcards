@@ -1366,8 +1366,16 @@ REGRAS IMPORTANTES:
               </Link>
               <Link
                 to={`/questoes-topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
-                className="inline-flex items-center gap-1 rounded-lg border border-cp-accent2/25 bg-cp-accent2/10 px-2 py-1.5 font-mono text-[10px] text-cp-accent2 transition hover:bg-cp-accent2/20"
-                title="Questões preditivas"
+                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 font-mono text-[10px] transition ${
+                  isPublished || isAdmin
+                    ? 'border-cp-accent2/25 bg-cp-accent2/10 text-cp-accent2 hover:bg-cp-accent2/20'
+                    : 'border-cp-border/60 bg-cp-surface/50 text-cp-muted/60 pointer-events-none opacity-60'
+                }`}
+                title={isPublished || isAdmin ? 'Questões preditivas' : 'Questões ainda não liberadas pelo administrador'}
+                aria-disabled={!isPublished && !isAdmin}
+                onClick={(e) => {
+                  if (!isPublished && !isAdmin) e.preventDefault()
+                }}
               >
                 <FireIcon className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Questões</span>
