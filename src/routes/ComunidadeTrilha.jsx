@@ -10,12 +10,12 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 import dayjs from 'dayjs'
-import { Compass, Users } from 'lucide-react'
+import { Compass } from 'lucide-react'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
-import UserAvatar from '../components/UserAvatar'
 import FeedHighlightsBar from '../components/feed/FeedHighlightsBar'
 import FeedPost from '../components/feed/FeedPost'
+import ComunidadeShell from '../components/feed/ComunidadeShell'
 import toast from 'react-hot-toast'
 
 const BOOKMARK_KEY = 'trilhaFeedBookmarks'
@@ -179,39 +179,11 @@ export default function ComunidadeTrilha() {
     : null
 
   return (
-    <div className="mx-auto w-full max-w-[470px] border-x border-cp-border bg-cp-surface pb-16">
-      {/* Sticky feed header */}
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-cp-border bg-cp-surface/95 px-4 py-3 backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <Users className="h-5 w-5 text-cp-accent" />
-          <h1 className="font-display text-lg font-bold tracking-tight text-cp-text">Comunidade</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <Link
-            to="/trilha"
-            className="text-cp-muted transition hover:text-cp-accent"
-            title="Ir para a Trilha"
-          >
-            <Compass className="h-5 w-5" />
-          </Link>
-          {user && (
-            <Link to={`/profile/${user.uid}`}>
-              <UserAvatar
-                photoBase64={profile?.photoBase64}
-                name={profile?.displayName || user.email}
-                size="sm"
-              />
-            </Link>
-          )}
-        </div>
-      </header>
-
-      {/* Stories / destaques */}
+    <ComunidadeShell user={user} profile={profile}>
       {(dailyHighlights.length > 0 || user) && (
         <FeedHighlightsBar highlights={dailyHighlights} currentUser={currentUserHighlight} />
       )}
 
-      {/* Feed */}
       {posts.length === 0 ? (
         <div className="flex flex-col items-center gap-4 px-6 py-16 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-cp-accent/10">
@@ -255,6 +227,6 @@ export default function ComunidadeTrilha() {
           />
         ))
       )}
-    </div>
+    </ComunidadeShell>
   )
 }

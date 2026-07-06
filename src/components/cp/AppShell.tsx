@@ -16,7 +16,8 @@ const FULL_BLEED_PATHS = ['/', '/cursos', '/comunidade']
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || ''
   const minimal = MINIMAL_PATHS.some((p) => pathname.startsWith(p))
-  const fullBleed = FULL_BLEED_PATHS.includes(pathname)
+  const isComunidade = pathname.startsWith('/comunidade')
+  const fullBleed = FULL_BLEED_PATHS.includes(pathname) || isComunidade
 
   if (minimal) {
     return <>{children}</>
@@ -35,7 +36,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       >
         {children}
       </main>
-      <CPFooter fullBleed={fullBleed} />
+      {!isComunidade && <CPFooter fullBleed={fullBleed} />}
       <SupportButton />
       <PopupBanner />
       <OfflineIndicator />

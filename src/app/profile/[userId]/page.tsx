@@ -1,13 +1,15 @@
 'use client'
 
-import LegacyPage from '@/components/next/LegacyPage'
-import UserProfilePageComponent from '@/routes/UserProfile'
+import { useEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 
-export default function UserProfilePage() {
-  return (
-    <LegacyPage
-      component={UserProfilePageComponent}
-      
-    />
-  )
+export default function ProfileRedirectPage() {
+  const { userId } = useParams()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (userId) router.replace(`/comunidade/perfil/${userId}`)
+  }, [userId, router])
+
+  return null
 }

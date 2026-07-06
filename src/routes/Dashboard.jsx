@@ -4,7 +4,7 @@ import {
   LightBulbIcon,
   SparklesIcon,
 } from '@heroicons/react/24/solid'
-import { ArrowRightIcon as ArrowRightOutline, DocumentTextIcon } from '@heroicons/react/24/outline'
+import { ArrowRightIcon as ArrowRightOutline, DocumentTextIcon, UserGroupIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
 import LGPDConsent from '../components/LGPDConsent'
 import OnlineNowBadge from '@/components/cp/OnlineNowBadge'
@@ -16,6 +16,7 @@ const quickLinks = [
   { to: '/vespera-de-prova', title: 'Véspera de Prova', desc: 'Revisão final antes da prova', icon: ClockIcon, accent: 'cp-card-accent-cyan' },
   { to: '/treino-redacao', title: 'Treino de Redação', desc: 'Pratique redações com IA', icon: DocumentTextIcon, accent: 'cp-card-accent-violet' },
   { to: '/trilha', title: 'Trilha', desc: 'Tempo líquido, ciclo e metas de estudo', icon: ClockIcon, accent: 'cp-card-accent-cyan' },
+  { to: '/comunidade', title: 'Comunidade', desc: 'Feed de estudos, seguidores e curtidas', icon: UserGroupIcon, accent: 'cp-card-accent-pink' },
   { to: '/calendario', title: 'Progresso', desc: 'Gráficos, questões e flashcards por matéria', icon: ClockIcon, accent: 'cp-card-accent-pink' },
 ]
 

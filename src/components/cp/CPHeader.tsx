@@ -98,7 +98,8 @@ export default function CPHeader() {
   }, [user, isAdmin])
 
   const hideShell = pathname.startsWith('/flashcards/pip') || pathname.startsWith('/share-flashcards')
-  if (hideShell) return null
+  const isComunidade = pathname.startsWith('/comunidade')
+  if (hideShell || isComunidade) return null
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
 

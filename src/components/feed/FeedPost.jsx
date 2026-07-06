@@ -51,7 +51,7 @@ export default function FeedPost({
     <article className="border-b border-cp-border bg-cp-surface">
       {/* Header */}
       <div className="flex items-center gap-3 px-3 py-2.5">
-        <Link to={`/profile/${post.authorId}`} className="shrink-0">
+        <Link to={`/comunidade/perfil/${post.authorId}`} className="shrink-0">
           <FeedStoryAvatar
             photoBase64={post.authorPhotoBase64}
             name={post.authorName}
@@ -62,7 +62,7 @@ export default function FeedPost({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <Link
-              to={`/profile/${post.authorId}`}
+              to={`/comunidade/perfil/${post.authorId}`}
               className="truncate text-sm font-semibold text-cp-text hover:text-cp-accent"
             >
               {post.authorName}
@@ -146,7 +146,7 @@ export default function FeedPost({
       <div className="px-3 pt-1">
         <p className="text-sm leading-relaxed text-cp-text">
           <Link
-            to={`/profile/${post.authorId}`}
+            to={`/comunidade/perfil/${post.authorId}`}
             className="mr-1 font-semibold hover:text-cp-accent"
           >
             {post.authorName}
@@ -179,13 +179,13 @@ export default function FeedPost({
 
         {previewComments.map((c) => (
           <div key={c.id} className="flex gap-2 text-sm">
-            <Link to={`/profile/${c.authorId}`} className="shrink-0">
+            <Link to={`/comunidade/perfil/${c.authorId}`} className="shrink-0">
               <UserAvatar photoBase64={c.authorPhotoBase64} name={c.authorName} size="xs" />
             </Link>
             <div className="min-w-0 flex-1">
               <p className="leading-snug">
                 <Link
-                  to={`/profile/${c.authorId}`}
+                  to={`/comunidade/perfil/${c.authorId}`}
                   className="mr-1.5 font-semibold text-cp-text hover:text-cp-accent"
                 >
                   {c.authorName}
