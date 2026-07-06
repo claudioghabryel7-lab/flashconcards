@@ -13,6 +13,8 @@ import {
 } from '../services/topicoFlashcardsService'
 import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
 import { generateShareToken } from '../utils/shareToken'
+import ShareToFeedButton from '../components/feed/ShareToFeedButton'
+import { FEED_POST_TYPES } from '../services/trilhaFeedService'
 import { CONTENT_STATUS, isContentAvailable, toggleContentStatus } from '../utils/contentStatus'
 import { persistCardReview } from '../utils/spacedRepetition'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
@@ -361,8 +363,26 @@ const FlashcardsTopicoView = () => {
             {isAdmin && (
               <button type="button" onClick={handleShareFlashcards} className="cp-btn-ghost !text-xs">
                 <ShareIcon className="h-4 w-4" />
-                Compartilhar
+                Link temporário
               </button>
+            )}
+            {(canStudy || isAdmin) && cards.length > 0 && (
+              <ShareToFeedButton
+                postType={FEED_POST_TYPES.FLASHCARDS}
+                materia={disciplina}
+                assunto={modulo}
+                courseId={courseId}
+                topicKey={topicKey}
+                itemCount={cards.length}
+                prepareShare={async () => {
+                  const token = await generateShareToken({ courseId, disciplina, modulo, topicKey })
+                  return {
+                    shareToken: token,
+                    shareUrl: `/share-flashcards/${token}`,
+                    itemCount: cards.length,
+                  }
+                }}
+              />
             )}
             <button type="button" onClick={openPIPMode} className="cp-btn-ghost !text-xs">
               <PhotoIcon className="h-4 w-4" />

@@ -101,6 +101,65 @@ export function getDefaultCardTheme(modalidade) {
   }
 }
 
+export const FEED_POST_TYPES = {
+  TRILHA: 'trilha',
+  FLASHCARDS: 'flashcards',
+  QUESTOES: 'questoes',
+  MATERIAL: 'material',
+}
+
+export const POST_TYPE_LABELS = {
+  trilha: 'Sessão de estudo',
+  flashcards: 'FlashCards',
+  questoes: 'Questões',
+  material: 'Material do tópico',
+}
+
+export function resolvePostType(post) {
+  return post?.postType || FEED_POST_TYPES.TRILHA
+}
+
+export function getPostCaption(post) {
+  const type = resolvePostType(post)
+  const materia = post.materia || 'matéria'
+  const assunto = post.assunto ? ` — ${post.assunto}` : ''
+
+  switch (type) {
+    case FEED_POST_TYPES.FLASHCARDS:
+      return { verb: 'compartilhou flashcards de', materia, assunto, meta: post.itemCount ? `${post.itemCount} cards` : null }
+    case FEED_POST_TYPES.QUESTOES:
+      return { verb: 'compartilhou questões de', materia, assunto, meta: post.itemCount ? `${post.itemCount} questões` : null }
+    case FEED_POST_TYPES.MATERIAL:
+      return { verb: 'compartilhou material de', materia, assunto, meta: 'Material de apoio' }
+    default:
+      return {
+        verb: 'estudou',
+        materia,
+        assunto,
+        meta: `${MODALITY_LABELS[post.modalidade] || post.modalidade || 'Teoria'} · ${post.durationMinutes || 0} min`,
+      }
+  }
+}
+
+export function getPostOpenUrl(post, origin = '') {
+  const base = origin || (typeof window !== 'undefined' ? window.location.origin : '')
+  if (post.shareUrl) {
+    return post.shareUrl.startsWith('http') ? post.shareUrl : `${base}${post.shareUrl}`
+  }
+  const type = resolvePostType(post)
+  if (type === FEED_POST_TYPES.FLASHCARDS && post.shareToken) {
+    return `${base}/share-flashcards/${post.shareToken}`
+  }
+  if (type === FEED_POST_TYPES.QUESTOES && post.shareId) {
+    return `${base}/share-questao/${post.shareId}`
+  }
+  if (type === FEED_POST_TYPES.MATERIAL && post.courseId && post.topicKey) {
+    const nome = post.assunto ? `?nome=${encodeURIComponent(post.assunto)}` : ''
+    return `${base}/conteudo-completo/topic/${post.courseId}/${post.topicKey}${nome}`
+  }
+  return `${base}/comunidade/publicacao/${post.id}`
+}
+
 export const MODALITY_GRADIENT_CLASS = {
   teoria: 'bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-900',
   revisao: 'bg-gradient-to-br from-amber-500 via-orange-500 to-rose-600',

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
-import StudyPostMedia from './StudyPostMedia'
+import FeedPostMedia from './FeedPostMedia'
 import {
   CARD_COLOR_THEMES,
   CARD_FONT_STYLES,
@@ -45,15 +45,7 @@ export default function FeedPostEditModal({ post, open, saving, onClose, onSave 
 
         <div className="p-4 space-y-5">
           <div className="overflow-hidden rounded-xl border border-cp-border">
-            <StudyPostMedia
-              materia={post.materia}
-              assunto={post.assunto}
-              modalidade={post.modalidade}
-              durationMinutes={post.durationMinutes}
-              acertos={post.acertos}
-              erros={post.erros}
-              cardTheme={previewPost.cardTheme}
-            />
+            <FeedPostMedia post={previewPost} exportMode />
           </div>
 
           <div>

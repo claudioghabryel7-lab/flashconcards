@@ -16,7 +16,7 @@ import { useAuth } from '../hooks/useAuth'
 import FeedHighlightsBar from '../components/feed/FeedHighlightsBar'
 import FeedPost from '../components/feed/FeedPost'
 import FeedPostEditModal from '../components/feed/FeedPostEditModal'
-import StudyPostMedia from '../components/feed/StudyPostMedia'
+import FeedPostMedia from '../components/feed/FeedPostMedia'
 import ComunidadeShell from '../components/feed/ComunidadeShell'
 import toast from 'react-hot-toast'
 import { exportFeedPostAsImage } from '../utils/feedShareExport'
@@ -308,16 +308,7 @@ export default function ComunidadeTrilha() {
 
       {capturePost && (
         <div ref={captureRef} className="pointer-events-none fixed -left-[9999px] top-0 w-[470px]">
-          <StudyPostMedia
-            materia={capturePost.materia}
-            assunto={capturePost.assunto}
-            modalidade={capturePost.modalidade}
-            durationMinutes={capturePost.durationMinutes}
-            acertos={capturePost.acertos}
-            erros={capturePost.erros}
-            cardTheme={capturePost.cardTheme}
-            exportMode
-          />
+          <FeedPostMedia post={capturePost} exportMode />
         </div>
       )}
     </ComunidadeShell>

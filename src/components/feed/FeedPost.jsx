@@ -11,8 +11,8 @@ import {
 } from 'lucide-react'
 import UserAvatar from '../UserAvatar'
 import FeedStoryAvatar from './FeedStoryAvatar'
-import StudyPostMedia from './StudyPostMedia'
-import { formatCommentTime, formatFeedTime, MODALITY_LABELS } from '../../utils/feedUtils'
+import FeedPostMedia from './FeedPostMedia'
+import { formatCommentTime, formatFeedTime, getPostCaption, resolvePostType, FEED_POST_TYPES } from '../../utils/feedUtils'
 
 export default function FeedPost({
   post,
@@ -41,7 +41,8 @@ export default function FeedPost({
   const likesCount = post.likesCount || post.likes?.length || 0
   const comments = post.comments || []
   const commentsCount = post.commentsCount || comments.length
-  const modality = MODALITY_LABELS[post.modalidade] || post.modalidade
+  const caption = getPostCaption(post)
+  const isTrilhaPost = resolvePostType(post) === FEED_POST_TYPES.TRILHA
   const previewComments = showAllComments ? comments : comments.slice(0, 2)
   const isAuthor = user?.uid === post.authorId
   const canManagePost = isAuthor || isAdmin
@@ -140,16 +141,7 @@ export default function FeedPost({
         )}
       </div>
 
-      <StudyPostMedia
-        materia={post.materia}
-        assunto={post.assunto}
-        modalidade={post.modalidade}
-        durationMinutes={post.durationMinutes}
-        acertos={post.acertos}
-        erros={post.erros}
-        cardTheme={post.cardTheme}
-        onDoubleTapLike={handleDoubleTapLike}
-      />
+      <FeedPostMedia post={post} onDoubleTapLike={handleDoubleTapLike} />
 
       <div className="flex items-center justify-between px-3 pt-2.5">
         <div className="flex items-center gap-4">
@@ -210,18 +202,16 @@ export default function FeedPost({
           >
             {post.authorName}
           </Link>
-          estudou <span className="font-medium">{post.materia || 'matéria'}</span>
-          {post.assunto ? (
-            <>
-              {' '}
-              — <span className="text-cp-muted">{post.assunto}</span>
-            </>
-          ) : null}
+          {caption.verb}{' '}
+          <span className="font-medium">{caption.materia}</span>
+          {caption.assunto ? <span className="text-cp-muted">{caption.assunto}</span> : null}
         </p>
-        <p className="mt-0.5 text-xs text-cp-muted">
-          {modality} · {post.durationMinutes || 0} min
-          {post.acertos != null ? ` · ${post.acertos}✓ ${post.erros || 0}✗` : ''}
-        </p>
+        {caption.meta && (
+          <p className="mt-0.5 text-xs text-cp-muted">
+            {caption.meta}
+            {isTrilhaPost && post.acertos != null ? ` · ${post.acertos}✓ ${post.erros || 0}✗` : ''}
+          </p>
+        )}
       </div>
 
       <div className="space-y-2 px-3 pt-2 pb-1">

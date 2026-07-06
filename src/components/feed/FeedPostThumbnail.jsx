@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom'
 import { Clock } from 'lucide-react'
-import { MODALITY_LABELS, resolveCardTheme } from '../../utils/feedUtils'
+import { POST_TYPE_LABELS, resolveCardTheme, resolvePostType, FEED_POST_TYPES } from '../../utils/feedUtils'
 
 export default function FeedPostThumbnail({ post }) {
   const theme = resolveCardTheme(post)
-  const modality = MODALITY_LABELS[post.modalidade] || post.modalidade
+  const postType = resolvePostType(post)
+  const typeLabel = POST_TYPE_LABELS[postType] || postType
   const likes = post.likesCount || post.likes?.length || 0
   const comments = post.commentsCount || post.comments?.length || 0
+  const isTrilha = postType === FEED_POST_TYPES.TRILHA
 
   return (
     <Link
@@ -21,16 +23,22 @@ export default function FeedPostThumbnail({ post }) {
       <div className="absolute inset-0 bg-black/15 transition group-hover:bg-black/35" />
       <div className="relative flex h-full flex-col justify-between p-2">
         <span className="w-fit rounded bg-black/35 px-1.5 py-0.5 text-[8px] font-semibold uppercase text-white">
-          {modality}
+          {isTrilha ? (post.modalidade || 'estudo') : typeLabel}
         </span>
         <div>
           <p className="line-clamp-2 text-[10px] font-bold leading-tight text-white drop-shadow">
             {post.materia || 'Estudo'}
           </p>
-          <p className="mt-0.5 inline-flex items-center gap-0.5 text-[9px] text-white/85">
-            <Clock className="h-2.5 w-2.5" />
-            {post.durationMinutes || 0}m
-          </p>
+          {isTrilha ? (
+            <p className="mt-0.5 inline-flex items-center gap-0.5 text-[9px] text-white/85">
+              <Clock className="h-2.5 w-2.5" />
+              {post.durationMinutes || 0}m
+            </p>
+          ) : (
+            <p className="mt-0.5 text-[9px] text-white/85">
+              {post.itemCount ? `${post.itemCount} itens` : 'Abrir'}
+            </p>
+          )}
         </div>
       </div>
       <div className="absolute inset-0 flex items-center justify-center gap-3 bg-black/45 opacity-0 transition group-hover:opacity-100">

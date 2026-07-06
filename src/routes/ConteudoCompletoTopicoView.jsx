@@ -11,6 +11,8 @@ import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { isContentAvailable, CONTENT_STATUS } from '../utils/contentStatus'
 import SimpleMaterialEditor from '../components/SimpleMaterialEditor'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
+import ShareToFeedButton from '../components/feed/ShareToFeedButton'
+import { FEED_POST_TYPES } from '../services/trilhaFeedService'
 import { stripHtml } from '../utils/htmlTextHelpers'
 import ReactMarkdown from 'react-markdown'
 import jsPDF from 'jspdf'
@@ -1209,6 +1211,16 @@ REGRAS:
                 <DocumentArrowDownIcon className="w-4 h-4" />
                 PDF
               </button>
+              {(hasTopicAccess || isAdmin) && conteudo && (
+                <ShareToFeedButton
+                  postType={FEED_POST_TYPES.MATERIAL}
+                  materia={conteudo.materia || conteudo.titulo || 'Material'}
+                  assunto={effectiveTopicNome || resolvedTopicKey}
+                  courseId={resolvedCourseId}
+                  topicKey={resolvedTopicKey}
+                  shareUrl={`/conteudo-completo/topic/${resolvedCourseId}/${encodeURIComponent(resolvedTopicKey)}${effectiveTopicNome ? `?nome=${encodeURIComponent(effectiveTopicNome)}` : ''}`}
+                />
+              )}
               {isAdmin && (
                 <button
                   type="button"
