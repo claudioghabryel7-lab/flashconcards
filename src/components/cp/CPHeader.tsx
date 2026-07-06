@@ -135,9 +135,7 @@ export default function CPHeader() {
                   <span className="hidden lg:inline">Trocar curso</span>
                 </button>
 
-                <div className="hidden md:block">
-                  <TopicNotificationsButton />
-                </div>
+                <TopicNotificationsButton />
 
                 <button
                   type="button"

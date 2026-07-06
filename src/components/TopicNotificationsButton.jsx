@@ -1,8 +1,10 @@
+'use client'
+
 import { useState, useRef, useEffect, memo } from 'react'
-import { Link } from 'react-router-dom'
-import { BellIcon, XMarkIcon } from '@heroicons/react/24/outline'
-import { useAuth } from '../hooks/useAuth'
-import { useTopicNotifications } from '../hooks/useTopicNotifications'
+import Link from 'next/link'
+import { Bell } from 'lucide-react'
+import { useAuth } from '@/hooks/useAuth'
+import { useTopicNotifications } from '@/hooks/useTopicNotifications'
 import dayjs from 'dayjs'
 
 const TopicNotificationsButton = memo(() => {
@@ -11,12 +13,12 @@ const TopicNotificationsButton = memo(() => {
   const { notifications, unreadCount, markAllRead, markRead, clearAll } =
     useTopicNotifications(user?.uid, courseId)
   const [open, setOpen] = useState(false)
-  const panelRef = useRef(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return () => {}
-    const handleClick = (e) => {
-      if (panelRef.current && !panelRef.current.contains(e.target)) {
+    const handleClick = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         setOpen(false)
       }
     }
@@ -34,26 +36,27 @@ const TopicNotificationsButton = memo(() => {
           setOpen((v) => !v)
           if (!open && unreadCount > 0) markAllRead()
         }}
-        className="relative p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-background-card transition-colors"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full border border-cp-border text-cp-muted transition hover:border-cp-accent/30 hover:bg-cp-surface hover:text-cp-text"
         aria-label="Notificações de tópicos liberados"
+        aria-expanded={open}
       >
-        <BellIcon className="h-5 w-5" />
+        <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-orange px-1 text-[10px] font-bold text-background-primary">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-cp-accent px-1 text-[10px] font-bold text-cp-bg">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-border-primary bg-background-card shadow-xl z-[60] overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border-primary px-4 py-3">
-            <p className="text-sm font-semibold text-text-primary">Tópicos liberados</p>
+        <div className="absolute right-0 top-full z-[80] mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-cp-border bg-cp-bg shadow-2xl">
+          <div className="flex items-center justify-between border-b border-cp-border px-4 py-3">
+            <p className="text-sm font-semibold text-cp-text">Tópicos liberados</p>
             {notifications.length > 0 && (
               <button
                 type="button"
                 onClick={clearAll}
-                className="text-xs text-text-muted hover:text-text-secondary"
+                className="text-xs text-cp-muted hover:text-cp-text"
               >
                 Limpar
               </button>
@@ -62,26 +65,24 @@ const TopicNotificationsButton = memo(() => {
 
           <div className="max-h-72 overflow-y-auto">
             {notifications.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-text-muted">
+              <p className="px-4 py-6 text-center text-sm text-cp-muted">
                 Nenhuma novidade por enquanto.
               </p>
             ) : (
               notifications.map((n) => (
                 <Link
                   key={n.id}
-                  to="/edital-verticalizado"
+                  href="/edital-verticalizado"
                   onClick={() => {
                     markRead(n.id)
                     setOpen(false)
                   }}
-                  className={`block border-b border-border-primary/50 px-4 py-3 hover:bg-background-card-hover transition-colors ${
-                    !n.read ? 'bg-accent-orange/5' : ''
+                  className={`block border-b border-cp-border/50 px-4 py-3 transition-colors hover:bg-cp-surface ${
+                    !n.read ? 'bg-cp-accent/5' : ''
                   }`}
                 >
-                  <p className="text-sm font-medium text-text-primary leading-snug">
-                    {n.label}
-                  </p>
-                  <p className="mt-1 text-xs text-text-muted">
+                  <p className="text-sm font-medium leading-snug text-cp-text">{n.label}</p>
+                  <p className="mt-1 text-xs text-cp-muted">
                     Liberado {dayjs(n.createdAt).format('DD/MM HH:mm')}
                   </p>
                 </Link>
