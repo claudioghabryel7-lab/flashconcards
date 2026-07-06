@@ -11,7 +11,7 @@ const PopupBanner = dynamic(() => import('@/components/PopupBanner'), { ssr: fal
 const OfflineIndicator = dynamic(() => import('@/components/OfflineIndicator'), { ssr: false })
 
 const MINIMAL_PATHS = ['/flashcards/pip', '/share-flashcards']
-const FULL_BLEED_PATHS = ['/', '/cursos']
+const FULL_BLEED_PATHS = ['/', '/cursos', '/comunidade']
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || ''
