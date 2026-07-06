@@ -17,6 +17,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
+import UserAvatar from '../components/UserAvatar'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 
 const UserProfile = () => {
@@ -174,27 +175,7 @@ const UserProfile = () => {
         <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
           {/* Avatar/Profile Picture */}
           <div className="flex-shrink-0 mx-auto sm:mx-0">
-            <div className="relative">
-              <div className="h-24 w-24 sm:h-32 sm:w-32 rounded-full bg-black dark:bg-slate-900 border-4 border-black dark:border-slate-800 overflow-hidden">
-                {profileUser.photoURL ? (
-                  <img
-                    src={profileUser.photoURL}
-                    alt={displayName}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                    <span className="text-white font-bold text-3xl sm:text-4xl">
-                      {displayName[0].toUpperCase()}
-                    </span>
-                  </div>
-                )}
-              </div>
-              {/* Indicador de stories ativos */}
-              {stories.length > 0 && (
-                <div className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-gradient-to-br from-yellow-400 to-pink-500 border-4 border-black dark:border-slate-800 animate-pulse"></div>
-              )}
-            </div>
+            <UserAvatar photoBase64={profileUser.photoBase64} name={displayName} size="lg" />
           </div>
 
           {/* Informações do Perfil */}
@@ -206,7 +187,7 @@ const UserProfile = () => {
               </h1>
               {isOwnProfile && (
                 <Link
-                  to="/profile/edit"
+                  to="/perfil"
                   className="px-4 py-1.5 text-sm font-semibold border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition"
                 >
                   Editar perfil
@@ -235,6 +216,11 @@ const UserProfile = () => {
               <p className="font-semibold text-slate-900 dark:text-white">{displayName}</p>
               {profileUser.bio && (
                 <p className="text-slate-900 dark:text-white mt-1">{profileUser.bio}</p>
+              )}
+              {profileUser.oneYearGoal && (
+                <p className="text-slate-600 dark:text-slate-400 mt-2 text-sm">
+                  Meta 1 ano: {profileUser.oneYearGoal}
+                </p>
               )}
             </div>
           </div>

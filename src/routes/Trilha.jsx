@@ -28,6 +28,7 @@ import { db } from '../firebase/config'
 import StudyTimeChart from '../components/StudyTimeChart'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import toast from 'react-hot-toast'
+import { publishTrilhaActivity } from '../services/trilhaFeedService'
 
 const DEFAULT_CONFIG = {
   cycle: ['Português', 'Direito Constitucional', 'Direito Administrativo'],
@@ -322,6 +323,11 @@ export default function Trilha() {
         source: 'timer',
       })
       await incrementDailyProgress(user.uid, courseId, durationMinutes / 60, timerForm.materia)
+      await publishTrilhaActivity({
+        user,
+        profile,
+        payload: { ...timerForm, durationMinutes, courseId, source: 'timer' },
+      })
       toast.success('Sessão salva!')
     } catch (err) {
       console.error('Erro ao salvar sessão da Trilha:', err)
@@ -353,6 +359,11 @@ export default function Trilha() {
         source: 'manual',
       })
       await incrementDailyProgress(user.uid, courseId, manualForm.minutos / 60, manualForm.materia)
+      await publishTrilhaActivity({
+        user,
+        profile,
+        payload: { ...manualForm, durationMinutes: manualForm.minutos, courseId, source: 'manual' },
+      })
       setManualForm(DEFAULT_FORM)
       toast.success('Registro salvo!')
     } catch (err) {

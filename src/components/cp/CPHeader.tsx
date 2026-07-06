@@ -8,7 +8,6 @@ import {
   X,
   BookOpen,
   ShieldCheck,
-  UserCircle,
   LogOut,
   RefreshCw,
   Moon,
@@ -16,6 +15,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import CPLogo from './CPLogo'
+import UserAvatar from '../UserAvatar'
 import { useAuth } from '@/hooks/useAuth'
 import { useDarkMode } from '@/hooks/useDarkMode.jsx'
 import OnlineNowBadge from './OnlineNowBadge'
@@ -45,6 +45,7 @@ const menuCategories: NavCategory[] = [
       { href: '/edital-verticalizado', label: 'Edital Verticalizado', auth: true },
       { href: '/treino-redacao', label: 'Treino Redação', auth: true },
       { href: '/trilha', label: 'Trilha', auth: true },
+      { href: '/comunidade', label: 'Comunidade', auth: true },
       { href: '/calendario', label: 'Progresso', auth: true },
       { href: '/cursos', label: 'Concursos' },
     ],
@@ -133,19 +134,25 @@ export default function CPHeader() {
                   <span className="hidden lg:inline">Trocar curso</span>
                 </button>
 
-                <div className="hidden items-center gap-2.5 rounded-full border border-cp-border bg-cp-surface px-3 py-1.5 md:flex">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-cp-accent/15">
-                    <UserCircle className="h-4 w-4 text-cp-accent" />
-                  </div>
+                <button
+                  type="button"
+                  onClick={() => router.push('/perfil')}
+                  className="hidden items-center gap-2.5 rounded-full border border-cp-border bg-cp-surface px-3 py-1.5 transition hover:border-cp-accent/30 md:flex"
+                >
+                  <UserAvatar
+                    photoBase64={profile?.photoBase64}
+                    name={profile?.displayName || user.displayName || ''}
+                    size="xs"
+                  />
                   <div className="text-left leading-tight">
                     <p className="max-w-[120px] truncate text-xs font-medium text-cp-text">
-                      {user.displayName || user.email?.split('@')[0]}
+                      {profile?.displayName || user.displayName || user.email?.split('@')[0]}
                     </p>
                     <p className="font-mono text-[10px] text-cp-muted">
                       {isAdmin ? 'admin' : 'aluno'}
                     </p>
                   </div>
-                </div>
+                </button>
 
                 <div className="hidden lg:flex">
                   <OnlineNowBadge courseId={profile?.selectedCourseId ?? null} compact />
@@ -209,22 +216,28 @@ export default function CPHeader() {
 
             {user && (
               <div className="border-b border-cp-border px-5 py-4">
-                <div className="cp-card flex items-center gap-3 !rounded-2xl p-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-cp-accent/15">
-                    <UserCircle className="h-5 w-5 text-cp-accent" />
-                  </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    router.push('/perfil')
+                    setDrawerOpen(false)
+                  }}
+                  className="cp-card flex w-full items-center gap-3 !rounded-2xl p-3 text-left transition hover:border-cp-accent/30"
+                >
+                  <UserAvatar
+                    photoBase64={profile?.photoBase64}
+                    name={profile?.displayName || user.displayName || ''}
+                    size="sm"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-cp-text">
-                      {user.displayName || user.email?.split('@')[0]}
+                      {profile?.displayName || user.displayName || user.email?.split('@')[0]}
                     </p>
                     <p className="font-mono text-[10px] text-cp-muted">
-                      {isAdmin ? 'administrador' : 'investigador'}
-                      {profile?.selectedCourseId !== undefined && (
-                        <span> · {profile.selectedCourseId ? 'curso ativo' : 'ALEGO'}</span>
-                      )}
+                      {isAdmin ? 'administrador' : 'investigador'} · editar perfil
                     </p>
                   </div>
-                </div>
+                </button>
               </div>
             )}
 

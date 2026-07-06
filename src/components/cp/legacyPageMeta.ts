@@ -83,6 +83,16 @@ export const LEGACY_PAGE_META: Record<string, LegacyPageMeta> = {
     backHref: '/',
     backLabel: 'Voltar ao início',
   },
+  '/perfil': {
+    badge: 'Conta',
+    title: 'Meu perfil',
+    subtitle: 'Foto, dados pessoais e privacidade na comunidade',
+  },
+  '/comunidade': {
+    badge: 'Comunidade',
+    title: 'Destaques de estudo',
+    subtitle: 'Estudos publicados na Trilha — curta e comente',
+  },
   '/admin': {
     badge: 'Admin',
     title: 'Painel Admin',
