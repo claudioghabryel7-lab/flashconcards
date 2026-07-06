@@ -18,7 +18,8 @@ import { useStudySession } from '../hooks/useStudySession'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder, applyModuleOrder, getModuleOrder } from '../utils/subjectOrder'
 import { ChevronRightIcon, ChevronDownIcon, ClockIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
-import { canAccessMateria, canAccessModulo, isTrialMode } from '../utils/trialLimits'
+import { canAccessMateria, canAccessModulo, isTrialMode, getTrialData, clearTrialData } from '../utils/trialLimits'
+import { hasPurchasedCourse } from '../utils/courseAccess'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import {
@@ -109,6 +110,23 @@ const FlashcardView = () => {
   const [timerActive, setTimerActive] = useState(false) // Timer só inicia quando usuário clicar no relógio
 
   const isAdmin = profile?.role === 'admin'
+  const resolvedCourseId = selectedCourseId || 'alego-default'
+
+  const showTrialBanner = useMemo(() => {
+    if (!isTrialMode()) return false
+    const trial = getTrialData()
+    if (!trial?.courseId) return false
+    if (resolvedCourseId !== trial.courseId) return false
+    if (profile?.trialToken) return true
+    return !hasPurchasedCourse(profile, selectedCourseId)
+  }, [profile, selectedCourseId, resolvedCourseId])
+
+  useEffect(() => {
+    if (!profile || !isTrialMode()) return
+    if (hasPurchasedCourse(profile, selectedCourseId) && !profile.trialToken) {
+      clearTrialData()
+    }
+  }, [profile, selectedCourseId])
 
   const {
     cards,
@@ -1062,12 +1080,12 @@ IMPORTANTE:
       />
 
       {/* Banner de Conversão para Teste */}
-      {isTrialMode() && (
+      {showTrialBanner && (
         <div className="rounded-2xl p-4 bg-gradient-to-r from-alego-600 to-alego-700 text-white shadow-xl">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
               <p className="font-bold text-lg mb-1">🎁 Você está no Teste Gratuito</p>
-              <p className="text-sm text-alego-100">Acesso limitado: 1 matéria e 1 módulo</p>
+              <p className="text-sm text-alego-100">Acesso completo ao curso durante o período de teste</p>
             </div>
             <Link
               to="/pagamento"

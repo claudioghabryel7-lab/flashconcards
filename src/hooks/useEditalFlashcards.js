@@ -5,14 +5,10 @@ import {
   loadEditalVerticalizado,
   normalizeFlashcard,
   buildNavigationFromEdital,
+  resolveTopicKeyFromEdital,
 } from '../utils/editalVerticalizadoLoader'
 import { CONTENT_STATUS } from '../utils/contentStatus'
-import {
-  hasPurchasedCourse,
-  getFreeTopicKeys,
-  topicKeysMatch,
-  isTopicPublished,
-} from '../utils/courseAccess'
+import { canAccessTopicoContent } from '../utils/courseAccess'
 import { buildTopicoPublishMapFromSnapshot, resolveTopicPublishStatus } from '../services/topicoPublishService'
 
 /**
@@ -28,13 +24,9 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
   const courseId = selectedCourseId || 'alego-default'
 
   useEffect(() => {
-    if (!selectedCourseId) {
-      setPublishMap({})
-      return () => {}
-    }
-    const ref = collection(db, 'courses', selectedCourseId, 'topicoStatus')
+    const ref = collection(db, 'courses', courseId, 'topicoStatus')
     return onSnapshot(ref, (snap) => setPublishMap(buildTopicoPublishMapFromSnapshot(snap)))
-  }, [selectedCourseId])
+  }, [courseId])
 
   useEffect(() => {
     let cancelled = false
@@ -69,105 +61,81 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
 
     setLoading(true)
     const isAdmin = profile.role === 'admin'
-    const ownsCourse = hasPurchasedCourse(profile, selectedCourseId)
-    const freeTopicKeys =
-      !isAdmin && !ownsCourse && edital
-        ? getFreeTopicKeys(edital, user.uid, courseId)
-        : []
 
     const applyAccessFilter = (data) => {
       if (isAdmin) return data
 
-      let filtered = data.filter(
-        (card) => !card.status || card.status === CONTENT_STATUS.AVAILABLE
-      )
+      return data.filter((card) => {
+        if (card.status === CONTENT_STATUS.UNAVAILABLE) return false
+        if (card.status === CONTENT_STATUS.AVAILABLE) return true
 
-      if (selectedCourseId && ownsCourse) {
-        return filtered
-      }
+        const topicKey =
+          card.topicKey || resolveTopicKeyFromEdital(edital, card.materia, card.modulo)
+        if (!topicKey) return false
 
-      return filtered.filter((card) => {
-        const topicKey = card.topicKey
-        if (freeTopicKeys.some((key) => topicKeysMatch(key, topicKey))) return true
-        const publishStatus = resolveTopicPublishStatus(publishMap, topicKey)
-        return isTopicPublished(publishStatus)
+        return canAccessTopicoContent({
+          profile,
+          courseId,
+          topicKey,
+          edital,
+          publishStatus: resolveTopicPublishStatus(publishMap, topicKey),
+        })
       })
     }
 
     const mapDocs = (docs) =>
       docs.map((d) => normalizeFlashcard({ id: d.id, ...d.data() }))
 
-    if (selectedCourseId) {
-      const courseCardsRef = collection(db, 'courses', selectedCourseId, 'flashcards')
-      const globalCardsRef = collection(db, 'flashcards')
+    const belongsToCourse = (card) =>
+      card.courseId === courseId ||
+      (!card.courseId && courseId === 'alego-default') ||
+      card.courseId === '' ||
+      card.courseId === 'alego-default'
 
-      let courseData = []
-      let globalData = []
+    const courseCardsRef = collection(db, 'courses', courseId, 'flashcards')
+    const globalCardsRef = collection(db, 'flashcards')
 
-      const mergeAndSet = () => {
-        const byId = new Map()
-        ;[...courseData, ...globalData].forEach((card) => {
-          if (card.id) byId.set(card.id, card)
-        })
-        setCards(applyAccessFilter(Array.from(byId.values())))
-        setLoading(false)
-      }
+    let courseData = []
+    let globalData = []
 
-      const unsubCourse = onSnapshot(
-        courseCardsRef,
-        (snapshot) => {
-          courseData = mapDocs(snapshot.docs)
-          mergeAndSet()
-        },
-        (error) => {
-          console.error('Erro ao carregar flashcards do curso:', error)
-          mergeAndSet()
-        }
-      )
-
-      const unsubGlobal = onSnapshot(
-        globalCardsRef,
-        (snapshot) => {
-          let data = mapDocs(snapshot.docs).filter(
-            (card) => card.courseId === selectedCourseId
-          )
-          globalData = data
-          mergeAndSet()
-        },
-        (error) => {
-          console.error('Erro ao carregar flashcards globais:', error)
-          mergeAndSet()
-        }
-      )
-
-      return () => {
-        unsubCourse()
-        unsubGlobal()
-      }
+    const mergeAndSet = () => {
+      const byId = new Map()
+      ;[...courseData, ...globalData].forEach((card) => {
+        if (card.id) byId.set(card.id, card)
+      })
+      setCards(applyAccessFilter(Array.from(byId.values())))
+      setLoading(false)
     }
 
-    const globalCardsRef = collection(db, 'flashcards')
-    const unsub = onSnapshot(
-      globalCardsRef,
+    const unsubCourse = onSnapshot(
+      courseCardsRef,
       (snapshot) => {
-        let data = mapDocs(snapshot.docs).filter(
-          (card) =>
-            !card.courseId ||
-            card.courseId === '' ||
-            card.courseId === 'alego-default'
-        )
-        setCards(applyAccessFilter(data))
-        setLoading(false)
+        courseData = mapDocs(snapshot.docs)
+        mergeAndSet()
       },
       (error) => {
-        console.error('Erro ao carregar flashcards:', error)
-        setCards([])
-        setLoading(false)
+        console.error('Erro ao carregar flashcards do curso:', error)
+        mergeAndSet()
       }
     )
 
-    return () => unsub()
-  }, [user, profile, selectedCourseId, edital, publishMap])
+    const unsubGlobal = onSnapshot(
+      globalCardsRef,
+      (snapshot) => {
+        globalData = mapDocs(snapshot.docs).filter(belongsToCourse)
+        mergeAndSet()
+      },
+      (error) => {
+        console.error('Erro ao carregar flashcards globais:', error)
+        mergeAndSet()
+      }
+    )
+
+    return () => {
+      unsubCourse()
+      unsubGlobal()
+    }
+  }, [user, profile, courseId, edital, publishMap])
 
   const organizedModules = useMemo(
     () => buildNavigationFromEdital(edital, cards),

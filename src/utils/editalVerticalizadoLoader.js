@@ -202,6 +202,38 @@ export function countCardsInModule(cards, materia, modulo) {
 }
 
 /**
+ * Resolve topicKey a partir do edital quando o card não tem topicKey salvo.
+ */
+export function resolveTopicKeyFromEdital(edital, materia, modulo) {
+  if (!edital?.disciplinas || !materia || !modulo) return null
+
+  const materiaNorm = materia.trim().toLowerCase()
+  const moduloNorm = normalizeModuloKey(modulo)
+
+  for (const disciplina of edital.disciplinas) {
+    const discNorm = disciplina.nome?.trim().toLowerCase() || ''
+    const materiaMatch =
+      discNorm === materiaNorm ||
+      discNorm.includes(materiaNorm) ||
+      materiaNorm.includes(discNorm)
+    if (!materiaMatch) continue
+
+    for (const topico of disciplina.topicos || []) {
+      const label = formatTopicoAsModulo(topico)
+      if (
+        label === modulo ||
+        normalizeModuloKey(label) === moduloNorm ||
+        topico.nome?.trim().toLowerCase() === moduloNorm
+      ) {
+        return makeTopicKey(topico)
+      }
+    }
+  }
+
+  return null
+}
+
+/**
  * Extrai contexto do tópico no edital para prompts de IA.
  */
 export function getTopicoContextFromEdital(edital, materia, modulo) {
