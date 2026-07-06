@@ -45,7 +45,7 @@ const menuCategories: NavCategory[] = [
       { href: '/edital-verticalizado', label: 'Edital Verticalizado', auth: true },
       { href: '/treino-redacao', label: 'Treino Redação', auth: true },
       { href: '/trilha', label: 'Trilha', auth: true },
-      { href: '/dashboard', label: 'Progresso', auth: true },
+      { href: '/calendario', label: 'Progresso', auth: true },
       { href: '/cursos', label: 'Concursos' },
     ],
   },

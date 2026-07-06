@@ -29,12 +29,14 @@ import { processIAContent, isHtmlContent } from '../utils/iaContentProcessor'
 import { formatTopicoAsModulo } from '../utils/editalVerticalizadoLoader'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 import {
-  loadTopicoPublishMap,
   setTopicoPublishStatus,
   toggleTopicoPublishStatus,
   setDisciplinaIncidenciaPublishStatus,
   sanitizeDisciplinaName,
+  buildTopicoPublishMapFromSnapshot,
+  resolveTopicPublishStatus,
 } from '../services/topicoPublishService'
+import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
 
 // Gera uma chave estável e mais específica para cada tópico do edital,
 // combinando numeração + nome. Isso evita colisões entre tópicos diferentes
@@ -458,11 +460,19 @@ const EditalVerticalizado = () => {
   }, [courseId])
 
   useEffect(() => {
-    if (!isAdmin || !courseId) return
-    loadTopicoPublishMap(courseId)
-      .then(setTopicPublishMap)
-      .catch((err) => console.error('Erro ao carregar status dos tópicos:', err))
-  }, [courseId, isAdmin])
+    if (!courseId) return () => {}
+
+    const resolvedId = courseId || 'alego-default'
+    const unsubscribe = onSnapshot(
+      collection(db, 'courses', resolvedId, 'topicoStatus'),
+      (snapshot) => {
+        setTopicPublishMap(buildTopicoPublishMapFromSnapshot(snapshot))
+      },
+      (err) => console.error('Erro ao carregar status dos tópicos:', err),
+    )
+
+    return () => unsubscribe()
+  }, [courseId])
 
   useEffect(() => {
     if (!courseId) return
@@ -480,7 +490,7 @@ const EditalVerticalizado = () => {
   const handleToggleTopicoPublish = async (topicKey, disciplinaNome, moduloLabel) => {
     if (!isAdmin || !courseId || !topicKey || publishingTopicKey) return
 
-    const current = topicPublishMap[topicKey] || CONTENT_STATUS.UNAVAILABLE
+    const current = resolveTopicPublishStatus(topicPublishMap, topicKey)
     const next = toggleTopicoPublishStatus(current)
     const actionLabel = next === CONTENT_STATUS.AVAILABLE ? 'liberar' : 'bloquear'
 
@@ -1302,13 +1312,14 @@ REGRAS IMPORTANTES:
     if (!topico) return null
 
     const topicKey = makeTopicKey(topico)
+    const topicKeyParam = encodeURIComponent(normalizeTopicKeyForStorage(topicKey))
     const isHighlighted =
       highlightedTopico &&
       ((topico.nome || '').toLowerCase().includes(highlightedTopico.toLowerCase()) ||
         highlightedTopico.toLowerCase().includes((topico.nome || '').toLowerCase()))
     const moduloLabel = formatTopicoAsModulo(topico)
     const paddingLeft = getTopicoNivelPadding(topico)
-    const publishStatus = topicPublishMap[topicKey] || CONTENT_STATUS.UNAVAILABLE
+    const publishStatus = resolveTopicPublishStatus(topicPublishMap, topicKey)
     const isPublished = publishStatus === CONTENT_STATUS.AVAILABLE
     const isPublishing = publishingTopicKey === topicKey
 
@@ -1346,7 +1357,7 @@ REGRAS IMPORTANTES:
           ) : (
             <>
               <Link
-                to={`/flashcards/topico/${courseId || 'alego-default'}?disciplina=${encodeURIComponent(disciplina.nome || '')}&modulo=${encodeURIComponent(moduloLabel)}&topicKey=${encodeURIComponent(topicKey)}`}
+                to={`/flashcards/topico/${courseId || 'alego-default'}?disciplina=${encodeURIComponent(disciplina.nome || '')}&modulo=${encodeURIComponent(moduloLabel)}&topicKey=${topicKeyParam}`}
                 className="inline-flex items-center gap-1 rounded-lg border border-cp-accent/25 bg-cp-accent/10 px-2 py-1.5 font-mono text-[10px] text-cp-accent transition hover:bg-cp-accent/20"
                 title="Flashcards"
               >

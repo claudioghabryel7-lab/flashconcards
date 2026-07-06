@@ -28,3 +28,21 @@ export function sanitizeTopicKeyForFirestore(topicKey = '') {
 
   return sanitized
 }
+
+/** Chave canônica do tópico para armazenar/comparar (sempre decodificada: "4 :: Nome do tópico") */
+export function normalizeTopicKeyForStorage(topicKey = '') {
+  if (!topicKey) return ''
+
+  let key = String(topicKey).trim()
+  for (let i = 0; i < 2; i += 1) {
+    try {
+      const decoded = decodeURIComponent(key)
+      if (decoded === key) break
+      key = decoded
+    } catch {
+      break
+    }
+  }
+
+  return key
+}

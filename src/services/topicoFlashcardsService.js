@@ -1,4 +1,4 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
+import { readEnv } from '@/lib/env.js'
 import {
   collection,
   doc,
@@ -15,12 +15,41 @@ import {
   cardMatchesModule,
   formatTopicoAsModulo,
 } from '../utils/editalVerticalizadoLoader'
+import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
 import { callGeminiWithRetry, extractJsonFromResponse } from '../utils/geminiApi'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 
+const MIN_FLASHCARDS = 20
+const MAX_FLASHCARDS = 50
+const BATCH_SIZE = 25
+
+function topicKeyMatches(cardKey, targetKey) {
+  if (!targetKey) return false
+  const normalizedTarget = normalizeTopicKeyForStorage(targetKey)
+  if (!normalizedTarget) return false
+  if (!cardKey) return false
+  return normalizeTopicKeyForStorage(cardKey) === normalizedTarget
+}
+
+function normalizeCardText(value = '') {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function dedupeFlashcards(items = []) {
+  const seen = new Set()
+  return items.filter((item) => {
+    const front = normalizeCardText(item.frente || item.pergunta)
+    if (!front || seen.has(front)) return false
+    seen.add(front)
+    return true
+  })
+}
+
 /**
  * Busca flashcards já salvos para um tópico (compartilhados entre usuários do curso).
- * Alunos: apenas status disponivel (exigido pelas regras do Firestore).
  */
 export async function fetchFlashcardsForTopico(
   courseId,
@@ -31,14 +60,17 @@ export async function fetchFlashcardsForTopico(
 ) {
   const resolvedId = courseId || 'alego-default'
   const flashcardsRef = collection(db, 'courses', resolvedId, 'flashcards')
+  const normalizedTopicKey = normalizeTopicKeyForStorage(topicKey)
 
   const filterClient = (docs) =>
     docs
       .map((d) => normalizeFlashcard({ id: d.id, ...d.data() }))
       .filter((card) => {
-        if (topicKey && card.topicKey === topicKey) return true
-        return cardMatchesModule(card, disciplina, modulo)
+        if (normalizedTopicKey && topicKeyMatches(card.topicKey, normalizedTopicKey)) return true
+        if (disciplina && modulo) return cardMatchesModule(card, disciplina, modulo)
+        return false
       })
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 
   if (includeUnpublished) {
     const snapshot = await getDocs(flashcardsRef)
@@ -48,9 +80,9 @@ export async function fetchFlashcardsForTopico(
   const published = CONTENT_STATUS.AVAILABLE
   let docs = []
 
-  if (topicKey) {
+  if (normalizedTopicKey) {
     const byTopic = await getDocs(
-      query(flashcardsRef, where('status', '==', published), where('topicKey', '==', topicKey))
+      query(flashcardsRef, where('status', '==', published), where('topicKey', '==', normalizedTopicKey))
     )
     docs = byTopic.docs
   }
@@ -67,18 +99,104 @@ export async function fetchFlashcardsForTopico(
     docs = byModule.docs
   }
 
-  if (docs.length === 0 && disciplina) {
-    const byMateria = await getDocs(
-      query(flashcardsRef, where('status', '==', published), where('materia', '==', disciplina))
-    )
-    docs = byMateria.docs.filter((d) => filterClient([d]).length > 0)
-  }
-
   return filterClient(docs)
 }
 
+async function deleteExistingFlashcardsForTopico(courseId, topicKey, disciplina, modulo) {
+  const existing = await fetchFlashcardsForTopico(courseId, disciplina, modulo, topicKey, {
+    includeUnpublished: true,
+  })
+
+  if (!existing.length) return
+
+  const batch = writeBatch(db)
+  existing.forEach((card) => {
+    batch.delete(doc(db, 'courses', courseId || 'alego-default', 'flashcards', card.id))
+  })
+  await batch.commit()
+}
+
+function buildTopicoFlashcardPrompt({
+  courseName,
+  disciplina,
+  topicoNome,
+  topicoNumero,
+  modulo,
+  banca,
+  editalText,
+  batchNumber,
+  totalBatches,
+  cardsInBatch,
+  existingFronts = [],
+}) {
+  const topicoLabel = `${topicoNumero ? `${topicoNumero} - ` : ''}${topicoNome}`
+  const existingList = existingFronts.slice(0, 40).map((f, i) => `${i + 1}. ${f}`).join('\n')
+
+  return `Você é especialista em flashcards para concursos públicos.
+
+═══════════════════════════════════════════════════════════════
+ESCOPO OBRIGATÓRIO — APENAS ESTE TÓPICO
+═══════════════════════════════════════════════════════════════
+CURSO: ${courseName || 'Concurso público'}
+DISCIPLINA: ${disciplina}
+TÓPICO (ÚNICO PERMITIDO): ${topicoLabel}
+MÓDULO: ${modulo}
+
+🚨 REGRA CRÍTICA DE ESCOPO:
+- Gere flashcards SOMENTE sobre "${topicoLabel}"
+- É PROIBIDO incluir conteúdo de outros tópicos da disciplina "${disciplina}"
+- Cada flashcard deve cobrir um conceito, regra, exceção ou pegadinha DENTRO deste tópico
+- Abranje TODO o conteúdo programático deste tópico: definições, classificações, regras, exceções, exemplos e pegadinhas de banca
+
+BANCA: ${banca || 'conforme o curso'}
+DATA: ${new Date().toLocaleDateString('pt-BR')}
+
+${editalText ? `CONTEXTO DO EDITAL (use apenas o que for deste tópico):\n${editalText.substring(0, 10000)}\n\n` : ''}
+
+LOTE ${batchNumber}/${totalBatches} — gere EXATAMENTE ${cardsInBatch} flashcards novos.
+
+${existingFronts.length > 0 ? `NÃO REPITA estas perguntas já criadas:\n${existingList}\n\n` : ''}
+
+DISTRIBUIÇÃO SUGERIDA DO LOTE:
+- Conceitos fundamentais e definições
+- Regras, classificações e distinções importantes
+- Exceções, detalhes e pegadinhas de banca
+- Aplicação prática no estilo da banca ${banca || 'do concurso'}
+
+FORMATO (apenas JSON válido):
+{
+  "flashcards": [
+    {
+      "frente": "pergunta objetiva",
+      "verso": "resposta completa e fiel",
+      "dificuldade": "médio"
+    }
+  ]
+}
+
+REGRAS:
+- Retorne APENAS JSON válido
+- Sem markdown nos textos
+- Respostas completas, nunca superficiais
+- Conteúdo fiel à legislação e ao edital`
+}
+
+async function generateFlashcardBatch(params) {
+  const prompt = buildTopicoFlashcardPrompt(params)
+  const response = await callGeminiWithRetry(prompt, {
+    courseId: params.courseId,
+    generationConfig: {
+      maxOutputTokens: 16000,
+      temperature: 0.35,
+    },
+  })
+
+  const parsed = await extractJsonFromResponse(response)
+  return parsed.flashcards || []
+}
+
 /**
- * Gera e salva flashcards para um único tópico (uma vez — reutilizado por todos os alunos).
+ * Gera e salva flashcards para um único tópico (20–50 cards, cobrindo todo o tópico).
  */
 export async function generateAndSaveFlashcardsForTopico({
   courseId,
@@ -90,121 +208,98 @@ export async function generateAndSaveFlashcardsForTopico({
   courseName,
   editalText = '',
 }) {
-  const apiKey = readEnv('VITE_GEMINI_API_KEY')
-  if (!apiKey) {
+  if (!readEnv('VITE_GEMINI_API_KEY')) {
     throw new Error('VITE_GEMINI_API_KEY não configurada')
   }
 
-  // Carregar dados do curso para obter a banca examinadora
   const resolvedId = courseId || 'alego-default'
-  const courseRef = doc(db, 'courses', resolvedId)
-  const courseDoc = await getDoc(courseRef)
+  const courseDoc = await getDoc(doc(db, 'courses', resolvedId))
   const courseData = courseDoc.exists() ? courseDoc.data() : {}
   const banca = courseData.banca || ''
 
   const modulo = moduloLabel || formatTopicoAsModulo({ numero: topicoNumero, nome: topicoNome })
+  const normalizedTopicKey = normalizeTopicKeyForStorage(topicKey)
 
-  const prompt = `Gere flashcards educacionais de "Véspera de Prova" para ESTE tópico específico de concurso público.
+  await deleteExistingFlashcardsForTopico(resolvedId, normalizedTopicKey, disciplina, modulo)
 
-CURSO/CONCURSO: ${courseName || 'Concurso público'}
-DISCIPLINA: ${disciplina}
-TÓPICO: ${topicoNumero ? `${topicoNumero} - ` : ''}${topicoNome}
-
-DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se há leis, decretos ou regulamentos recentes que possam afetar o conteúdo.
-
-🚨🚨🚨 BANCA EXAMINADORA - OBRIGATÓRIO 🚨🚨🚨
-BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
-- ADAPTE TODO O CONTEÚDO ao estilo da banca "${banca || 'NÃO DEFINIDA'}"
-- Se a banca for INSTITUTO AOCP: foco em artigos de lei na íntegra, questões de múltipla escolha diretas, interpretação literal
-- Se a banca for FGV: foco em interpretação de texto, questões contextualizadas, análise crítica
-- Se a banca for CESPE/CEBRASPE: foco em assertivas C/E, interpretação constitucional
-- Se a banca for FCC: foco em legislação atualizada, questões de múltipla escolha, interpretação direta
-- Se a banca for VUNESP: foco em interpretação de texto, questões contextualizadas, análise crítica
-- SEJA FIEL À BANCA DEFINIDA ACIMA
-
-${editalText ? `CONTEXTO DO EDITAL:\n${editalText.substring(0, 12000)}\n\n` : ''}
-
-**MODO HACKER DOS CONCURSOS**
-
-1. **RAIO-X DE PROBABILIDADE**:
-   - Top Assuntos Quentes: Gere flashcards focados nos tópicos com maior probabilidade de cair NO CONCURSO ${courseName || 'Concurso público'}
-   - O Padrão da Banca: Como a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar este tópico especificamente no concurso
-
-2. **REVISÃO TURBO EM FLASHCARDS**:
-   - Gere EXATAMENTE 50 flashcards para este tópico específico
-   - Foque APENAS nos 50 tópicos/conceitos MAIS IMPORTANTES para a banca ${banca || 'NÃO DEFINIDA'}
-   - Priorize o que tem maior probabilidade de cair no concurso ${courseName || 'Concurso público'}
-   - Cada flashcard deve ser:
-     * Pergunta: Objetiva, direta, focada em um conceito específico IMPORTANTE
-     * Resposta: Clara, completa, explicativa (NADA SUPERFICIAL, QUERO BEM COMPLETO)
-     * Citar exemplos práticos do concurso ${courseName || 'Concurso público'}
-     * Ser específico para o cargo
-     * Incluir dicas de memorização (nada genérico e vago/vago)
-   - 3-4 flashcards de "Pegadinhas":
-     * Erros comuns que a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar
-     * Detalhes que passam despercebidos
-     * Armadilhas específicas do concurso ${courseName || 'Concurso público'}
-
-3. **CONTEÚDO ESPECÍFICO**:
-   - Conteúdo específico para o concurso — nada genérico, LETRA de lei
-   - Não invente nada, seja literal e fiel a matéria com fontes firmes
-   - Se for direito gere os flashcards de acordo com a lei sem inventar nada, seja fiel a lei
-   - Não invente nada, seja direto nos flashcards e com conteúdo fiel
-   - Linguagem formal, nível concurso público
-   - 🚨 BANCA EXAMINADORA: Use EXCLUSIVAMENTE o estilo da banca "${banca || 'NÃO DEFINIDA'}"
-
-FORMATO JSON (apenas JSON válido):
-{
-  "flashcards": [
-    {
-      "frente": "pergunta",
-      "verso": "resposta detalhada",
-      "dificuldade": "médio"
-    }
-  ]
-}
-
-REGRAS:
-- Seja ESPECÍFICO do concurso ${courseName || 'Concurso público'}
-- Cite o nome do concurso nos flashcards
-- Retorne APENAS o JSON válido, sem texto adicional
-- NÃO use caracteres de markdown (como **, *, •, __, ~~, \` etc.) nos textos`
-
-  const response = await callGeminiWithRetry(prompt, {
-    courseId,
-  })
-
-  const parsed = await extractJsonFromResponse(response)
-
-  const items = parsed.flashcards || []
-  if (!items.length) {
-    throw new Error('Nenhum flashcard gerado pela IA')
+  const baseParams = {
+    courseId: resolvedId,
+    courseName: courseName || courseData.name || courseData.competition || '',
+    disciplina,
+    topicoNome,
+    topicoNumero,
+    modulo,
+    banca,
+    editalText,
   }
 
-  console.log(`✅ ${items.length} flashcards gerados para o tópico "${topicKey}"`)
+  let allItems = []
+  const firstBatchCount = Math.min(BATCH_SIZE, MAX_FLASHCARDS)
+
+  const batch1 = await generateFlashcardBatch({
+    ...baseParams,
+    batchNumber: 1,
+    totalBatches: 2,
+    cardsInBatch: firstBatchCount,
+    existingFronts: [],
+  })
+  allItems = dedupeFlashcards(batch1)
+
+  if (allItems.length < MIN_FLASHCARDS) {
+    const remaining = Math.min(MAX_FLASHCARDS - allItems.length, BATCH_SIZE)
+    const batch2 = await generateFlashcardBatch({
+      ...baseParams,
+      batchNumber: 2,
+      totalBatches: 2,
+      cardsInBatch: remaining,
+      existingFronts: allItems.map((item) => item.frente || item.pergunta || ''),
+    })
+    allItems = dedupeFlashcards([...allItems, ...batch2])
+  }
+
+  if (allItems.length < MIN_FLASHCARDS) {
+    const remaining = Math.min(MAX_FLASHCARDS - allItems.length, MIN_FLASHCARDS - allItems.length)
+    const batch3 = await generateFlashcardBatch({
+      ...baseParams,
+      batchNumber: 3,
+      totalBatches: 3,
+      cardsInBatch: Math.max(remaining, 10),
+      existingFronts: allItems.map((item) => item.frente || item.pergunta || ''),
+    })
+    allItems = dedupeFlashcards([...allItems, ...batch3])
+  }
+
+  allItems = allItems.slice(0, MAX_FLASHCARDS)
+
+  if (allItems.length < MIN_FLASHCARDS) {
+    throw new Error(
+      `A IA gerou apenas ${allItems.length} flashcards. São necessários no mínimo ${MIN_FLASHCARDS} para cobrir o tópico. Tente novamente.`
+    )
+  }
 
   const batch = writeBatch(db)
   const flashcardsRef = collection(db, 'courses', resolvedId, 'flashcards')
   const saved = []
 
-  items.forEach((item, index) => {
+  allItems.forEach((item, index) => {
     const docRef = doc(flashcardsRef)
+    const frente = item.frente || item.pergunta || ''
+    const verso = item.verso || item.resposta || ''
     const payload = {
       disciplina,
       materia: disciplina,
       topico: topicoNome,
       topicoNumero: topicoNumero || '',
       modulo,
-      topicKey: topicKey || '',
-      frente: item.frente || item.pergunta || '',
-      verso: item.verso || item.resposta || '',
-      pergunta: item.frente || item.pergunta || '',
-      resposta: item.verso || item.resposta || '',
+      topicKey: normalizedTopicKey,
+      frente,
+      verso,
+      pergunta: frente,
+      resposta: verso,
       dificuldade: item.dificuldade || 'médio',
       courseId: resolvedId,
       shared: true,
-      status: 'indisponivel',
+      status: CONTENT_STATUS.UNAVAILABLE,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       order: index,

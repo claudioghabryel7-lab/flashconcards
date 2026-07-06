@@ -178,9 +178,12 @@ const CalendarioProgresso = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
+      {/* Gráficos de progresso por matéria — principal */}
+      <ProgressChartsPanel user={user} courseId={profile?.selectedCourseId} />
+
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm border border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between">
             <div>
@@ -230,15 +233,8 @@ const CalendarioProgresso = () => {
         </div>
       </div>
 
-      {/* Gráfico de Progresso */}
-      <div className="mb-8">
-        <EditalProgressChart courseId={profile?.selectedCourseId} />
-      </div>
-
-      {/* Gráficos de progresso por matéria */}
-      <div className="mb-8">
-        <ProgressChartsPanel user={user} courseId={profile?.selectedCourseId} />
-      </div>
+      {/* Gráfico do edital */}
+      <EditalProgressChart courseId={profile?.selectedCourseId} />
 
       {/* Calendar */}
       <div className="bg-white dark:bg-slate-800 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm border border-slate-200 dark:border-slate-700">

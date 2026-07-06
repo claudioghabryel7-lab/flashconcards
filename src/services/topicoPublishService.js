@@ -8,7 +8,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { CONTENT_STATUS } from '../utils/contentStatus'
-import { sanitizeTopicKeyForFirestore } from '../utils/topicKeyFirestore'
+import { sanitizeTopicKeyForFirestore, normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
 import { cardMatchesModule } from '../utils/editalVerticalizadoLoader'
 
 const MAX_BATCH = 450
@@ -52,14 +52,34 @@ async function commitBatches(operations) {
 export async function loadTopicoPublishMap(courseId) {
   const resolvedId = courseId || 'alego-default'
   const snap = await getDocs(collection(db, 'courses', resolvedId, 'topicoStatus'))
+  return buildTopicoPublishMapFromSnapshot(snap)
+}
+
+export function buildTopicoPublishMapFromSnapshot(snapshot) {
   const map = {}
-  snap.docs.forEach((d) => {
+  snapshot.docs.forEach((d) => {
     const data = d.data()
+    const status = data.status || CONTENT_STATUS.UNAVAILABLE
     if (data.topicKey) {
-      map[data.topicKey] = data.status || CONTENT_STATUS.UNAVAILABLE
+      map[data.topicKey] = status
     }
+    map[d.id] = status
   })
   return map
+}
+
+export function resolveTopicPublishStatus(map, topicKey) {
+  if (!topicKey || !map) return CONTENT_STATUS.UNAVAILABLE
+  if (map[topicKey]) return map[topicKey]
+
+  const sanitized = sanitizeTopicKeyForFirestore(topicKey)
+  if (map[sanitized]) return map[sanitized]
+
+  for (const [key, status] of Object.entries(map)) {
+    if (topicKeysMatch(key, topicKey)) return status
+  }
+
+  return CONTENT_STATUS.UNAVAILABLE
 }
 
 /**
@@ -77,7 +97,8 @@ export async function setTopicoPublishStatus(
   }
 
   const resolvedId = courseId || 'alego-default'
-  const sanitizedKey = sanitizeTopicKeyForFirestore(topicKey)
+  const normalizedTopicKey = normalizeTopicKeyForStorage(topicKey)
+  const sanitizedKey = sanitizeTopicKeyForFirestore(normalizedTopicKey)
   const operations = []
   const now = serverTimestamp()
 
@@ -85,10 +106,10 @@ export async function setTopicoPublishStatus(
   const flashcardsSnap = await getDocs(collection(db, 'courses', resolvedId, 'flashcards'))
   flashcardsSnap.docs.forEach((d) => {
     const data = d.data()
-    if (cardBelongsToTopic(data, topicKey, disciplinaNome, moduloLabel)) {
+    if (cardBelongsToTopic(data, normalizedTopicKey, disciplinaNome, moduloLabel)) {
       operations.push({
         ref: doc(db, 'courses', resolvedId, 'flashcards', d.id),
-        data: { status, topicKey, updatedAt: now },
+        data: { status, topicKey: normalizedTopicKey, updatedAt: now },
       })
     }
   })
@@ -100,19 +121,19 @@ export async function setTopicoPublishStatus(
     if (questoesDoc.exists()) {
       operations.push({
         ref: questoesRef,
-        data: { status, topicKey, updatedAt: now },
+        data: { status, topicKey: normalizedTopicKey, updatedAt: now },
       })
     }
   }
 
-  for (const legacyId of [sanitizedKey, topicKey, decodeURIComponentSafe(topicKey)]) {
+  for (const legacyId of [sanitizedKey, normalizedTopicKey, topicKey, decodeURIComponentSafe(topicKey)]) {
     if (!legacyId) continue
     const legacyRef = doc(db, 'courses', resolvedId, 'questoesTopico', legacyId)
     const legacyDoc = await getDoc(legacyRef)
     if (legacyDoc.exists()) {
       operations.push({
         ref: legacyRef,
-        data: { status, topicKey, updatedAt: now },
+        data: { status, topicKey: normalizedTopicKey, updatedAt: now },
       })
     }
   }
@@ -167,7 +188,7 @@ export async function setTopicoPublishStatus(
   // Registro central (UI do edital)
   operations.push({
     ref: doc(db, 'courses', resolvedId, 'topicoStatus', sanitizedKey),
-    data: { topicKey, status, disciplinaNome, updatedAt: now },
+    data: { topicKey: normalizedTopicKey, status, disciplinaNome, updatedAt: now },
   })
 
   await commitBatches(operations)

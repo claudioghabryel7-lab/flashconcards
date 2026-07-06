@@ -10,6 +10,7 @@ import {
   fetchFlashcardsForTopico,
   generateAndSaveFlashcardsForTopico,
 } from '../services/topicoFlashcardsService'
+import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
 import { generateShareToken } from '../utils/shareToken'
 import { CONTENT_STATUS, isContentAvailable, toggleContentStatus } from '../utils/contentStatus'
 import dayjs from 'dayjs'
@@ -22,7 +23,7 @@ const FlashcardsTopicoView = () => {
 
   const disciplina = decodeURIComponent(searchParams.get('disciplina') || '')
   const modulo = decodeURIComponent(searchParams.get('modulo') || '')
-  const topicKey = searchParams.get('topicKey') || ''
+  const topicKey = normalizeTopicKeyForStorage(searchParams.get('topicKey') || '')
 
   const courseId = courseIdParam || profile?.selectedCourseId || 'alego-default'
 
@@ -35,6 +36,9 @@ const FlashcardsTopicoView = () => {
   const [cardProgress, setCardProgress] = useState({})
   const [fromCache, setFromCache] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
+
+  const MIN_TOPIC_FLASHCARDS = 20
 
   const publishStatus = useMemo(() => {
     if (cards.length === 0) return CONTENT_STATUS.UNAVAILABLE
@@ -136,6 +140,50 @@ const FlashcardsTopicoView = () => {
     () => cards.filter((c) => cardProgress[c.id]?.reviewCount > 0).map((c) => c.id),
     [cards, cardProgress]
   )
+
+  const handleRegenerate = async () => {
+    if (!isAdmin || regenerating || generating) return
+    if (!window.confirm(`Regenerar flashcards deste tópico? Serão criados de ${MIN_TOPIC_FLASHCARDS} a 50 cards focados apenas neste tópico.`)) {
+      return
+    }
+
+    setRegenerating(true)
+    setError(null)
+    try {
+      const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
+      const editalDoc = await getDoc(editalRef)
+      let editalText = ''
+      if (editalDoc.exists()) {
+        const d = editalDoc.data()
+        editalText = (d.prompt || '') + '\n\n' + (d.pdfText || '')
+      }
+
+      const topicoParts = modulo.match(/^([\d.]+)\s*[-–]\s*(.+)$/)
+      const topicoNumero = topicoParts?.[1]?.trim() || ''
+      const topicoNome = topicoParts?.[2]?.trim() || modulo
+
+      const generated = await generateAndSaveFlashcardsForTopico({
+        courseId,
+        disciplina,
+        topicoNome,
+        topicoNumero,
+        topicKey,
+        moduloLabel: modulo,
+        courseName,
+        editalText,
+      })
+      setCards(generated)
+      setCurrentIndex(0)
+      setFromCache(false)
+      toast.success(`${generated.length} flashcards gerados para este tópico.`)
+    } catch (err) {
+      console.error(err)
+      setError(err.message || 'Erro ao regenerar flashcards')
+      toast.error('Erro ao regenerar flashcards')
+    } finally {
+      setRegenerating(false)
+    }
+  }
 
   const handleTogglePublish = async () => {
     if (!isAdmin || cards.length === 0) return
@@ -270,7 +318,8 @@ const FlashcardsTopicoView = () => {
             <h1 className="text-lg font-semibold text-cp-text">{modulo}</h1>
             {fromCache && cards.length > 0 && (
               <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
-                {cards.length} flashcards no banco
+                {cards.length} flashcards neste tópico
+                {cards.length < MIN_TOPIC_FLASHCARDS && isAdmin ? ' — abaixo do mínimo recomendado (20)' : ''}
               </p>
             )}
           </div>
@@ -281,6 +330,16 @@ const FlashcardsTopicoView = () => {
                 onToggle={handleTogglePublish}
                 disabled={publishing}
               />
+            )}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleRegenerate}
+                disabled={regenerating || generating}
+                className="cp-btn-ghost !text-xs"
+              >
+                {regenerating ? 'Regenerando...' : cards.length < MIN_TOPIC_FLASHCARDS ? 'Completar flashcards' : 'Regenerar'}
+              </button>
             )}
             {isAdmin && (
               <button type="button" onClick={handleShareFlashcards} className="cp-btn-ghost !text-xs">
@@ -296,11 +355,11 @@ const FlashcardsTopicoView = () => {
         </div>
       </div>
 
-      {(loading || generating) && (
+      {(loading || generating || regenerating) && (
         <div className="cp-card flex flex-col items-center py-16">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
           <p className="mt-4 text-sm font-medium text-cp-text">
-            {generating ? 'Gerando flashcards com IA...' : 'Carregando...'}
+            {generating || regenerating ? 'Gerando flashcards com IA (20–50 por tópico)...' : 'Carregando...'}
           </p>
           {generating && isAdmin && (
             <p className="mt-2 text-xs text-cp-muted">Após gerar, clique em Disponibilizar para liberar aos alunos.</p>
@@ -312,7 +371,7 @@ const FlashcardsTopicoView = () => {
         <div className="cp-card border-red-500/30 bg-red-500/5 p-4 text-sm text-red-600">{error}</div>
       )}
 
-      {!loading && !generating && !error && cards.length === 0 && !isAdmin && (
+      {!loading && !generating && !regenerating && !error && cards.length === 0 && !isAdmin && (
         <div className="cp-card p-10 text-center">
           <p className="text-4xl mb-3">⏳</p>
           <p className="font-medium text-cp-text">Flashcards em preparação</p>
@@ -320,7 +379,7 @@ const FlashcardsTopicoView = () => {
         </div>
       )}
 
-      {!loading && !generating && !error && cards.length > 0 && !canStudy && !isAdmin && (
+      {!loading && !generating && !regenerating && !error && cards.length > 0 && !canStudy && !isAdmin && (
         <div className="cp-card p-10 text-center">
           <p className="text-4xl mb-3">🔒</p>
           <p className="font-medium text-cp-text">Conteúdo em preparação</p>
@@ -328,7 +387,7 @@ const FlashcardsTopicoView = () => {
         </div>
       )}
 
-      {!loading && !generating && !error && canStudy && cards.length > 0 && (
+      {!loading && !generating && !regenerating && !error && canStudy && cards.length > 0 && (
         <div className="cp-card p-4 sm:p-6">
           <FlashcardList
             cards={cards}

@@ -85,9 +85,9 @@ export default function SubjectMetricChart({
 }) {
   if (!data.length) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40">
-        <h3 className="mb-2 text-sm font-semibold text-slate-900 dark:text-white">{title}</h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400">{emptyMessage}</p>
+      <div className="rounded-xl border border-cp-border bg-cp-surface/50 p-4">
+        <h3 className="mb-2 text-sm font-semibold text-cp-text">{title}</h3>
+        <p className="text-sm text-cp-muted">{emptyMessage}</p>
       </div>
     )
   }
@@ -95,8 +95,8 @@ export default function SubjectMetricChart({
   const total = data.reduce((sum, item) => sum + item.value, 0)
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/60">
-      <h3 className="mb-4 text-sm font-semibold text-slate-900 dark:text-white">{title}</h3>
+    <div className="rounded-xl border border-cp-border bg-cp-surface/30 p-4">
+      <h3 className="mb-4 text-sm font-semibold text-cp-text">{title}</h3>
 
       {chartType === 'simple' ? (
         <SimpleChart data={data} unit={unit} formatValue={formatValue} />

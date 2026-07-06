@@ -16,6 +16,7 @@ const quickLinks = [
   { to: '/vespera-de-prova', title: 'Véspera de Prova', desc: 'Revisão final antes da prova', icon: ClockIcon, accent: 'cp-card-accent-cyan' },
   { to: '/treino-redacao', title: 'Treino de Redação', desc: 'Pratique redações com IA', icon: DocumentTextIcon, accent: 'cp-card-accent-violet' },
   { to: '/trilha', title: 'Trilha', desc: 'Tempo líquido, ciclo e metas de estudo', icon: ClockIcon, accent: 'cp-card-accent-cyan' },
+  { to: '/calendario', title: 'Progresso', desc: 'Gráficos, questões e flashcards por matéria', icon: ClockIcon, accent: 'cp-card-accent-pink' },
 ]
 
 const Dashboard = () => {
