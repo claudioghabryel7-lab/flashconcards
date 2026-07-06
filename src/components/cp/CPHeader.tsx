@@ -218,7 +218,7 @@ export default function CPHeader() {
             </div>
 
             {user && (
-              <div className="border-b border-cp-border px-5 py-4">
+              <div className="border-b border-cp-border px-5 py-4 space-y-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -241,6 +241,10 @@ export default function CPHeader() {
                     </p>
                   </div>
                 </button>
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs text-cp-muted">Tópicos liberados</span>
+                  <TopicNotificationsButton />
+                </div>
               </div>
             )}
 

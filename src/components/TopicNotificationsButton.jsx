@@ -13,12 +13,12 @@ const TopicNotificationsButton = memo(() => {
   const { notifications, unreadCount, markAllRead, markRead, clearAll } =
     useTopicNotifications(user?.uid, courseId)
   const [open, setOpen] = useState(false)
-  const panelRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef(null)
 
   useEffect(() => {
     if (!open) return () => {}
-    const handleClick = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+    const handleClick = (e) => {
+      if (panelRef.current && !panelRef.current.contains(e.target)) {
         setOpen(false)
       }
     }
