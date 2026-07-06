@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import CPLogo from './CPLogo'
 import UserAvatar from '../UserAvatar'
+import TopicNotificationsButton from '../TopicNotificationsButton'
 import { useAuth } from '@/hooks/useAuth'
 import { useDarkMode } from '@/hooks/useDarkMode.jsx'
 import OnlineNowBadge from './OnlineNowBadge'
@@ -133,6 +134,10 @@ export default function CPHeader() {
                   <RefreshCw className="h-3.5 w-3.5" />
                   <span className="hidden lg:inline">Trocar curso</span>
                 </button>
+
+                <div className="hidden md:block">
+                  <TopicNotificationsButton />
+                </div>
 
                 <button
                   type="button"
