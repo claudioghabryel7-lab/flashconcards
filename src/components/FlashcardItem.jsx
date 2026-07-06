@@ -78,6 +78,13 @@ const FlashcardItem = ({
     setEditing(true)
   }
 
+  const handleSaveEdit = () => {
+    if (onEditFlashcard) {
+      onEditFlashcard(card.id, editPergunta, editResposta)
+    }
+    setEditing(false)
+  }
+
   const editForm = (
     <div className="w-full space-y-4" onClick={(e) => e.stopPropagation()}>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Frente</p>
@@ -114,13 +121,6 @@ const FlashcardItem = ({
       </div>
     </div>
   )
-
-  const handleSaveEdit = () => {
-    if (onEditFlashcard) {
-      onEditFlashcard(card.id, editPergunta, editResposta)
-    }
-    setEditing(false)
-  }
 
   const handleDelete = () => {
     if (onDeleteFlashcard && window.confirm('Tem certeza que deseja excluir este flashcard?')) {

@@ -58,7 +58,12 @@ export default function ContentFeedbackActions({
         setMessage('')
       }, 1200)
     } catch (error) {
-      setMessage(error.message || 'Não foi possível enviar.')
+      const code = error?.code || ''
+      if (code === 'permission-denied') {
+        setMessage('Sem permissão. Peça ao admin para publicar as regras do Firestore (contentFeedback).')
+      } else {
+        setMessage(error.message || 'Não foi possível enviar.')
+      }
     } finally {
       setSending(false)
     }
