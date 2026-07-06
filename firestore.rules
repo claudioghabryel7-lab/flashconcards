@@ -51,6 +51,27 @@ service cloud.firestore {
         allow update: if request.auth.uid == userId;
         allow delete: if request.auth.uid == userId;
       }
+
+      /** Trilha de estudo — progresso individual do aluno */
+      match /trilha/{docId} {
+        allow read, create, update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /trilhaSessions/{sessionId} {
+        allow read, create, update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /trilhaManualEntries/{entryId} {
+        allow read, create, update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /studySessions/{sessionId} {
+        allow read, create, update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
     }
     
     match /flashcards/{cardId} {

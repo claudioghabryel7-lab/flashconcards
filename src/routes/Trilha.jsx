@@ -27,6 +27,7 @@ import { useAuth } from '../hooks/useAuth'
 import { db } from '../firebase/config'
 import StudyTimeChart from '../components/StudyTimeChart'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
+import toast from 'react-hot-toast'
 
 const DEFAULT_CONFIG = {
   cycle: ['Português', 'Direito Constitucional', 'Direito Administrativo'],
@@ -268,16 +269,23 @@ export default function Trilha() {
   }, [config.cycle, manualEntries, sessions])
 
   const saveConfig = async (nextConfig) => {
-    if (!user?.uid) return
-    await setDoc(
-      doc(db, 'users', user.uid, 'trilha', 'config'),
-      {
-        ...nextConfig,
-        courseId,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    )
+    if (!user?.uid) return false
+    try {
+      await setDoc(
+        doc(db, 'users', user.uid, 'trilha', 'config'),
+        {
+          ...nextConfig,
+          courseId,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
+      return true
+    } catch (err) {
+      console.error('Erro ao salvar config da Trilha:', err)
+      toast.error('Não foi possível salvar. Tente novamente.')
+      return false
+    }
   }
 
   const handleStart = () => {
@@ -299,20 +307,27 @@ export default function Trilha() {
     }
 
     const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60))
-    await addDoc(collection(db, 'users', user.uid, 'trilhaSessions'), {
-      ...timerForm,
-      durationMinutes,
-      elapsedSeconds,
-      courseId,
-      source: 'timer',
-      createdAt: serverTimestamp(),
-    })
-    await mirrorStudySession(user.uid, {
-      ...timerForm,
-      durationMinutes,
-      source: 'timer',
-    })
-    await incrementDailyProgress(user.uid, courseId, durationMinutes / 60, timerForm.materia)
+    try {
+      await addDoc(collection(db, 'users', user.uid, 'trilhaSessions'), {
+        ...timerForm,
+        durationMinutes,
+        elapsedSeconds,
+        courseId,
+        source: 'timer',
+        createdAt: serverTimestamp(),
+      })
+      await mirrorStudySession(user.uid, {
+        ...timerForm,
+        durationMinutes,
+        source: 'timer',
+      })
+      await incrementDailyProgress(user.uid, courseId, durationMinutes / 60, timerForm.materia)
+      toast.success('Sessão salva!')
+    } catch (err) {
+      console.error('Erro ao salvar sessão da Trilha:', err)
+      toast.error('Erro ao salvar sessão. Verifique sua conexão.')
+      return
+    }
 
     setTimerActive(false)
     setTimerPaused(false)
@@ -323,21 +338,27 @@ export default function Trilha() {
   const handleManualSave = async () => {
     if (!user?.uid || !manualForm.materia || !manualForm.minutos) return
 
-    await addDoc(collection(db, 'users', user.uid, 'trilhaManualEntries'), {
-      ...manualForm,
-      courseId,
-      source: 'manual',
-      createdAt: serverTimestamp(),
-    })
-    await mirrorStudySession(user.uid, {
-      materia: manualForm.materia,
-      assunto: manualForm.assunto,
-      modalidade: manualForm.modalidade,
-      durationMinutes: manualForm.minutos,
-      source: 'manual',
-    })
-    await incrementDailyProgress(user.uid, courseId, manualForm.minutos / 60, manualForm.materia)
-    setManualForm(DEFAULT_FORM)
+    try {
+      await addDoc(collection(db, 'users', user.uid, 'trilhaManualEntries'), {
+        ...manualForm,
+        courseId,
+        source: 'manual',
+        createdAt: serverTimestamp(),
+      })
+      await mirrorStudySession(user.uid, {
+        materia: manualForm.materia,
+        assunto: manualForm.assunto,
+        modalidade: manualForm.modalidade,
+        durationMinutes: manualForm.minutos,
+        source: 'manual',
+      })
+      await incrementDailyProgress(user.uid, courseId, manualForm.minutos / 60, manualForm.materia)
+      setManualForm(DEFAULT_FORM)
+      toast.success('Registro salvo!')
+    } catch (err) {
+      console.error('Erro ao salvar registro manual:', err)
+      toast.error('Erro ao salvar registro. Verifique sua conexão.')
+    }
   }
 
   const handleSaveCycle = async () => {
@@ -348,7 +369,7 @@ export default function Trilha() {
 
     const nextConfig = { ...config, cycle }
     setConfig(nextConfig)
-    await saveConfig(nextConfig)
+    if (await saveConfig(nextConfig)) toast.success('Ciclo salvo!')
   }
 
   const handleSaveGoals = async (field, value) => {
