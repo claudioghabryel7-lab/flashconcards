@@ -8,12 +8,14 @@ import {
   query,
   where,
 } from 'firebase/firestore'
-import { Grid3X3, Loader2 } from 'lucide-react'
+import { Grid3X3, Loader2, MessageCircle } from 'lucide-react'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import UserAvatar from '../components/UserAvatar'
 import ComunidadeShell from '../components/feed/ComunidadeShell'
 import FeedPostThumbnail from '../components/feed/FeedPostThumbnail'
+import UserPublicCommentsList from '../components/content/UserPublicCommentsList'
+import { subscribeUserComments } from '../services/contentCommentsService'
 import {
   followUser,
   subscribeFollowCounts,
@@ -31,6 +33,9 @@ export default function ComunidadePerfil() {
   const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 })
   const [isFollowingUser, setIsFollowingUser] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
+  const [profileTab, setProfileTab] = useState('posts')
+  const [comments, setComments] = useState([])
+  const [commentsLoading, setCommentsLoading] = useState(true)
 
   const isOwnProfile = userId === currentUser?.uid
 
@@ -93,6 +98,20 @@ export default function ComunidadePerfil() {
     }
     return subscribeIsFollowing(currentUser.uid, userId, setIsFollowingUser)
   }, [currentUser?.uid, userId, isOwnProfile])
+
+  useEffect(() => {
+    if (!userId) return () => {}
+    setCommentsLoading(true)
+    const unsub = subscribeUserComments(
+      userId,
+      (rows) => {
+        setComments(rows)
+        setCommentsLoading(false)
+      },
+      () => setCommentsLoading(false),
+    )
+    return () => unsub?.()
+  }, [userId])
 
   const handleFollowToggle = async () => {
     if (!currentUser?.uid || !userId || isOwnProfile || followLoading) return
@@ -191,34 +210,64 @@ export default function ComunidadePerfil() {
         </div>
       </div>
 
-      {/* Tab */}
-      <div className="flex items-center justify-center gap-1 border-y border-cp-border py-2">
-        <Grid3X3 className="h-4 w-4 text-cp-text" />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-cp-text">
+      {/* Tabs */}
+      <div className="flex border-y border-cp-border">
+        <button
+          type="button"
+          onClick={() => setProfileTab('posts')}
+          className={`flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] font-semibold uppercase tracking-wider transition ${
+            profileTab === 'posts' ? 'border-b-2 border-cp-text text-cp-text' : 'text-cp-muted'
+          }`}
+        >
+          <Grid3X3 className="h-4 w-4" />
           Publicações
-        </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setProfileTab('comments')}
+          className={`flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] font-semibold uppercase tracking-wider transition ${
+            profileTab === 'comments' ? 'border-b-2 border-cp-text text-cp-text' : 'text-cp-muted'
+          }`}
+        >
+          <MessageCircle className="h-4 w-4" />
+          Comentários ({comments.length})
+        </button>
       </div>
 
-      {/* Grid */}
-      {posts.length === 0 ? (
-        <div className="px-6 py-16 text-center">
-          <Grid3X3 className="mx-auto h-10 w-10 text-cp-muted" />
-          <p className="mt-3 text-sm text-cp-muted">Nenhuma publicação na Trilha ainda.</p>
-          {isOwnProfile && (
-            <Link
-              to="/trilha"
-              className="mt-4 inline-block text-sm font-semibold text-cp-accent"
-            >
-              Registrar estudo
-            </Link>
-          )}
+      {profileTab === 'posts' ? (
+        posts.length === 0 ? (
+          <div className="px-6 py-16 text-center">
+            <Grid3X3 className="mx-auto h-10 w-10 text-cp-muted" />
+            <p className="mt-3 text-sm text-cp-muted">Nenhuma publicação na Trilha ainda.</p>
+            {isOwnProfile && (
+              <Link
+                to="/trilha"
+                className="mt-4 inline-block text-sm font-semibold text-cp-accent"
+              >
+                Registrar estudo
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-0.5">
+            {posts.map((post) => (
+              <FeedPostThumbnail key={post.id} post={post} />
+            ))}
+          </div>
+        )
+      ) : commentsLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-cp-accent" />
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-0.5">
-          {posts.map((post) => (
-            <FeedPostThumbnail key={post.id} post={post} />
-          ))}
-        </div>
+        <UserPublicCommentsList
+          comments={comments}
+          emptyMessage={
+            isOwnProfile
+              ? 'Você ainda não comentou em flashcards ou questões.'
+              : 'Este usuário ainda não fez comentários públicos.'
+          }
+        />
       )}
     </ComunidadeShell>
   )

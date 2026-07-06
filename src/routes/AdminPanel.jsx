@@ -36,6 +36,7 @@ import {
   where,
 } from 'firebase/firestore'
 import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager'
+import AdminContentModeration from '../components/admin/AdminContentModeration'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { defaultContentStatus, toggleContentStatus } from '../utils/contentStatus'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
@@ -6929,6 +6930,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     { id: 'simulados', label: '📝 Simulados', icon: '📝' },
     { id: 'shared-links', label: '🔗 Links Compartilhados', icon: '🔗' },
     { id: 'trials', label: '🎁 Testes Gratuitos', icon: '🎁' },
+    { id: 'moderacao', label: '🚩 Moderação', icon: '🚩' },
     { id: 'prompt-test', label: '🧪 Teste de Prompts', icon: '🧪' },
   ]
   
@@ -13229,6 +13231,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                 )}
               </div>
             )}
+
+            {activeTab === 'moderacao' && <AdminContentModeration />}
           </div>
         </div>
 

@@ -56,6 +56,32 @@
         { "fieldPath": "questaoId", "order": "ASCENDING" },
         { "fieldPath": "accessedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "contentComments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "contentComments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "contentType", "order": "ASCENDING" },
+        { "fieldPath": "contentId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "contentFeedback",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "kind", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
