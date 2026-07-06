@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, memo, useRef } from 'react'
 import { HeartIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/solid'
 import { useAuth } from '../hooks/useAuth'
+import ContentFeedbackActions from './content/ContentFeedbackActions'
 
 const FlashcardItem = ({
   card,
@@ -11,6 +12,8 @@ const FlashcardItem = ({
   cardProgress = null,
   onDeleteFlashcard = null,
   onEditFlashcard = null,
+  courseId = null,
+  topicKey = null,
   cardColor = 'bg-white',
   textColor = 'text-slate-900',
   borderColor = 'border-slate-200',
@@ -44,6 +47,7 @@ const FlashcardItem = ({
   }, [card.id])
 
   const toggle = () => {
+    if (editing) return
     setFlipped(!flipped)
   }
 
@@ -70,8 +74,46 @@ const FlashcardItem = ({
   const handleEdit = () => {
     setEditPergunta(card.pergunta)
     setEditResposta(card.resposta)
+    setFlipped(false)
     setEditing(true)
   }
+
+  const editForm = (
+    <div className="w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Frente</p>
+      <textarea
+        value={editPergunta}
+        onChange={(e) => setEditPergunta(e.target.value)}
+        className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-4 text-base font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white sm:text-lg"
+        rows={3}
+        placeholder="Pergunta"
+      />
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Verso</p>
+      <textarea
+        value={editResposta}
+        onChange={(e) => setEditResposta(e.target.value)}
+        className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-4 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+        rows={4}
+        placeholder="Resposta"
+      />
+      <div className="flex justify-center gap-2">
+        <button
+          type="button"
+          onClick={handleSaveEdit}
+          className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+        >
+          Salvar
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  )
 
   const handleSaveEdit = () => {
     if (onEditFlashcard) {
@@ -99,6 +141,7 @@ const FlashcardItem = ({
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
+          if (editing) return
           if (e.code === 'Enter' || e.code === 'Space') {
             e.preventDefault()
             toggle()
@@ -124,6 +167,19 @@ const FlashcardItem = ({
             }}
           >
             <div className="relative z-10 flex h-full min-h-0 flex-col">
+              <div className="absolute left-0 top-0 z-20">
+                {courseId && (
+                  <ContentFeedbackActions
+                    courseId={courseId}
+                    contentType="flashcard"
+                    contentId={card.id}
+                    topicKey={topicKey}
+                    preview={card.pergunta}
+                    contextLabel="este flashcard"
+                    variant="compact"
+                  />
+                )}
+              </div>
               <div className="absolute right-0 top-0 z-20 flex gap-1">
                 <button
                   type="button"
@@ -173,40 +229,7 @@ const FlashcardItem = ({
 
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-6 text-center sm:px-2 sm:py-8">
                 {editing ? (
-                  <div className="w-full space-y-4" onClick={(e) => e.stopPropagation()}>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Frente</p>
-                    <textarea
-                      value={editPergunta}
-                      onChange={(e) => setEditPergunta(e.target.value)}
-                      className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-4 text-base font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white sm:text-lg"
-                      rows={3}
-                      placeholder="Pergunta"
-                    />
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Verso</p>
-                    <textarea
-                      value={editResposta}
-                      onChange={(e) => setEditResposta(e.target.value)}
-                      className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-4 text-base text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                      rows={4}
-                      placeholder="Resposta"
-                    />
-                    <div className="flex justify-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleSaveEdit}
-                        className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-                      >
-                        Salvar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditing(false)}
-                        className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
+                  editForm
                 ) : (
                   <>
                     <span className="mb-3 inline-flex rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
@@ -268,11 +291,13 @@ const FlashcardItem = ({
                 )}
               </div>
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-4 text-center sm:px-2 sm:py-6">
-                <span className="mb-3 inline-flex shrink-0 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white/70">
-                  Resposta
-                </span>
+                {!editing && (
+                  <span className="mb-3 inline-flex shrink-0 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white/70">
+                    Resposta
+                  </span>
+                )}
                 {editing ? (
-                  <p className="text-sm text-white/60">Edite frente e verso na face da pergunta</p>
+                  <div className="w-full text-left">{editForm}</div>
                 ) : (
                   <div className="w-full text-base font-medium leading-relaxed text-white sm:text-xl">
                     {card.resposta}

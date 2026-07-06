@@ -1395,6 +1395,7 @@ IMPORTANTE:
                   showRating={needsReview}
                   onDeleteFlashcard={handleDeleteFlashcard}
                   onEditFlashcard={isAdmin ? handleEditFlashcard : null}
+                  courseId={activeCourseId}
                 />
               </div>
             </div>

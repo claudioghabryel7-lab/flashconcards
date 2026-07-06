@@ -471,6 +471,8 @@ const FlashcardsTopicoView = () => {
             showRating
             onEditFlashcard={handleEditFlashcard}
             onDeleteFlashcard={handleDeleteFlashcard}
+            courseId={courseId}
+            topicKey={topicKey}
             deckTitle={modulo}
             deckSubtitle={disciplina}
           />

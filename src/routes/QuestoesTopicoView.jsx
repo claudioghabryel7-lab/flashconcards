@@ -1258,11 +1258,15 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                       )}
 
                       {questoesParaExibir[currentQuestionIndex] && (
-                        <div className="space-y-4">
+                        <div className="space-y-5">
                           <QuestaoEnunciadoCard
                             assunto={questoesParaExibir[currentQuestionIndex].assunto}
                             probabilidade={questoesParaExibir[currentQuestionIndex].probabilidade}
                             enunciado={questoesParaExibir[currentQuestionIndex].enunciado}
+                            questionNumber={currentQuestionIndex + 1}
+                            courseId={resolvedCourseId}
+                            topicKey={resolvedTopicKey}
+                            contentId={`${sanitizeTopicKeyForFirestore(resolvedTopicKey)}_n${nivelAtual}_q${currentQuestionIndex}`}
                           />
 
                           {!showResult && !modoAdminNavegacao ? (

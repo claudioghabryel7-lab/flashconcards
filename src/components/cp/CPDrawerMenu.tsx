@@ -57,7 +57,7 @@ const DrawerNavLink = memo(function DrawerNavLink({
       className={`group flex items-center justify-between rounded-xl px-4 py-3 text-sm transition ${
         active
           ? 'border border-cp-accent/25 bg-cp-accent/10 font-medium text-cp-accent'
-          : 'text-cp-muted hover:bg-cp-surface hover:text-cp-text'
+          : 'text-cp-text/85 hover:bg-cp-surface hover:text-cp-text'
       }`}
     >
       {label}
@@ -102,12 +102,12 @@ function CPDrawerMenu({
   return (
     <>
       <div
-        className="fixed inset-0 z-[60] bg-black/45"
+        className="fixed inset-0 z-[60] bg-black/65"
         onClick={onClose}
         aria-hidden
       />
       <aside
-        className="fixed inset-y-0 right-0 z-[70] flex w-[min(100vw,360px)] translate-x-0 flex-col border-l border-cp-border bg-cp-bg-elevated shadow-2xl will-change-transform"
+        className="fixed inset-y-0 right-0 z-[70] flex w-[min(100vw,360px)] translate-x-0 flex-col border-l border-cp-border bg-[var(--cp-bg)] shadow-2xl will-change-transform"
         style={{ contain: 'layout style paint' }}
       >
         <div className="flex items-center justify-between border-b border-cp-border px-5 py-4">
@@ -127,7 +127,7 @@ function CPDrawerMenu({
             <button
               type="button"
               onClick={() => goTo('/perfil')}
-              className="cp-card flex w-full items-center gap-3 !rounded-2xl p-3 text-left transition hover:border-cp-accent/30"
+              className="flex w-full items-center gap-3 rounded-2xl border border-cp-border bg-cp-surface p-3 text-left transition hover:border-cp-accent/30"
             >
               <UserAvatar
                 photoBase64={profile?.photoBase64}

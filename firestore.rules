@@ -319,6 +319,15 @@ service cloud.firestore {
                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       }
+
+      match /contentFeedback/{feedbackId} {
+        allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+        allow create: if isAuthenticated() &&
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.kind in ['comment', 'flag'] &&
+                      request.resource.data.contentType in ['flashcard', 'questao'];
+        allow update, delete: if isAdmin();
+      }
       
       match /conteudosIncidencia/{docId} {
         allow read: if canReadPublishedContent();
