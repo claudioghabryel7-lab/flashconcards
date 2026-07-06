@@ -7,6 +7,12 @@ export function useCourseOnlineCount(courseId, options = {}) {
   const { fallbackSeed = courseId || 'global' } = options
   const [realCount, setRealCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(tick)
+  }, [])
 
   useEffect(() => {
     initFirebase()
@@ -41,8 +47,8 @@ export function useCourseOnlineCount(courseId, options = {}) {
   }, [courseId])
 
   const displayCount = useMemo(
-    () => resolveDisplayedOnlineCount(realCount, fallbackSeed),
-    [fallbackSeed, realCount],
+    () => resolveDisplayedOnlineCount(realCount, fallbackSeed, now),
+    [fallbackSeed, realCount, now],
   )
 
   return {

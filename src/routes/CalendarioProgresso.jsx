@@ -1,70 +1,21 @@
 import { useState, useEffect } from 'react'
-import { collection, doc, onSnapshot, query, where, orderBy, getDoc, setDoc, deleteDoc, getDocs } from 'firebase/firestore'
+import { collection, doc, onSnapshot, query, where, getDoc, setDoc, deleteDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
-import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import ProgressCalendar from '../components/ProgressCalendar'
 import EditalProgressChart from '../components/EditalProgressChart'
-import { byMateriaToChartData } from '../utils/questoesStats'
+import ProgressChartsPanel from '../components/ProgressChartsPanel'
 import dayjs from 'dayjs'
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 
 dayjs.locale('pt-br')
 
-// Cores para o gráfico de pizza
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF6B6B', '#4ECDC4', '#45B7D1']
-
-// Componente para exibir métricas
-const MetricCard = ({ title, data, valueKey, unit, emptyMessage }) => {
-  if (!data || data.length === 0) {
-    return (
-      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
-        <h4 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">{title}</h4>
-        <p className="text-xs text-slate-500 dark:text-slate-500">{emptyMessage}</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
-      <h4 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">{title}</h4>
-      <div className="space-y-1">
-        {data.slice(0, 3).map((item, index) => (
-          <div key={index} className="flex items-center justify-between text-xs">
-            <span className="text-slate-700 dark:text-slate-300 truncate flex-1 mr-2">
-              {item.nome}
-            </span>
-            <span className="text-slate-900 dark:text-white font-medium">
-              {item[valueKey]?.toFixed(1)} {unit}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 const CalendarioProgresso = () => {
   const { user, profile } = useAuth()
-  const { darkMode } = useDarkMode()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [studyDates, setStudyDates] = useState([])
   const [currentStreak, setCurrentStreak] = useState(0)
   const [studyBySubject, setStudyBySubject] = useState({})
-  const [courseName, setCourseName] = useState('')
-  const [questoesData, setQuestoesData] = useState({
-    porMateria: [],
-    porTopico: [],
-    metricas: {
-      maisEstuda: [],
-      menosEstuda: [],
-      maisResolveu: [],
-      menosResolveu: [],
-      maisErrou: [],
-      menosErrou: []
-    }
-  })
 
   useEffect(() => {
     if (!user || !profile?.selectedCourseId) {
@@ -141,66 +92,8 @@ const CalendarioProgresso = () => {
       setLoading(false)
     })
 
-    // Carregar dados de desempenho de questões
-    loadQuestoesData(courseId)
-
     return () => unsubscribe()
   }, [user, profile])
-
-  // Carregar dados de desempenho de questões (questoesStats + desempenhoTopico)
-  const loadQuestoesData = async (courseId) => {
-    if (!user || !courseId) return
-
-    try {
-      const courseKey = courseId || 'alego'
-      const statsRef = doc(db, 'questoesStats', `${user.uid}_${courseKey}`)
-      const statsSnap = await getDoc(statsRef)
-
-      const byMateriaFromStats = statsSnap.exists() ? statsSnap.data().byMateria || {} : {}
-      let porMateria = byMateriaToChartData(byMateriaFromStats)
-
-      // Complementar com desempenhoTopico agrupado por disciplina
-      if (porMateria.length === 0) {
-        const desempenhoTopicoRef = collection(db, 'users', user.uid, 'desempenhoTopico')
-        const desempenhoTopicoSnapshot = await getDocs(desempenhoTopicoRef)
-        const materiaStats = {}
-
-        desempenhoTopicoSnapshot.forEach((docSnap) => {
-          if (docSnap.id.includes('_nivel_')) return
-          const data = docSnap.data()
-          const materia = data.disciplina || data.materia || 'Geral'
-          if (!materiaStats[materia]) {
-            materiaStats[materia] = { correct: 0, wrong: 0 }
-          }
-          materiaStats[materia].correct += data.acertos || 0
-          materiaStats[materia].wrong += data.erros || 0
-        })
-
-        porMateria = byMateriaToChartData(materiaStats)
-      }
-
-      setQuestoesData({
-        porMateria,
-        porTopico: [],
-        metricas: {
-          maisEstuda: [],
-          menosEstuda: [],
-          maisResolveu: porMateria.slice(0, 5).map((m) => ({
-            nome: m.name,
-            totalQuestoes: m.value,
-          })),
-          menosResolveu: [],
-          maisErrou: [...porMateria].sort((a, b) => b.erros - a.erros).slice(0, 5).map((m) => ({
-            nome: m.name,
-            erros: m.erros,
-          })),
-          menosErrou: [],
-        },
-      })
-    } catch (error) {
-      console.error('Erro ao carregar dados de questões:', error)
-    }
-  }
 
   // Calcular streak atual (dias consecutivos de estudo)
   const calculateCurrentStreak = (dates) => {
@@ -342,80 +235,9 @@ const CalendarioProgresso = () => {
         <EditalProgressChart courseId={profile?.selectedCourseId} />
       </div>
 
-      {/* Gráficos de Questões por Matéria */}
+      {/* Gráficos de progresso por matéria */}
       <div className="mb-8">
-        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-6">
-            📊 Progresso de Questões por Matéria
-          </h2>
-          
-          {questoesData.porMateria.length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Gráfico de Pizza */}
-              <div className="h-80">
-                <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-4">Distribuição de Questões</h3>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={questoesData.porMateria}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {questoesData.porMateria.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Métricas */}
-              <div className="space-y-4">
-                <MetricCard
-                  title="📚 Mais Estuda"
-                  data={questoesData.metricas.maisEstuda}
-                  valueKey="horasEstudo"
-                  unit="h"
-                  emptyMessage="Nenhum dado de estudo"
-                />
-                <MetricCard
-                  title="📖 Menos Estuda"
-                  data={questoesData.metricas.menosEstuda}
-                  valueKey="horasEstudo"
-                  unit="h"
-                  emptyMessage="Nenhum dado de estudo"
-                />
-                <MetricCard
-                  title="✅ Mais Resolveu"
-                  data={questoesData.metricas.maisResolveu}
-                  valueKey="totalQuestoes"
-                  unit="q"
-                  emptyMessage="Nenhuma questão resolvida"
-                />
-                <MetricCard
-                  title="❌ Mais Errou"
-                  data={questoesData.metricas.maisErrou}
-                  valueKey="erros"
-                  unit="erros"
-                  emptyMessage="Nenhum erro registrado"
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <p className="text-slate-600 dark:text-slate-400">
-                Nenhuma questão respondida ainda. Comece a praticar para ver seu progresso aqui!
-              </p>
-            </div>
-          )}
-        </div>
+        <ProgressChartsPanel user={user} courseId={profile?.selectedCourseId} />
       </div>
 
       {/* Calendar */}

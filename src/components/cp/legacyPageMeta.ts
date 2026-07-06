@@ -52,7 +52,7 @@ export const LEGACY_PAGE_META: Record<string, LegacyPageMeta> = {
   '/calendario': {
     badge: 'Progresso',
     title: 'Calendário de Progresso',
-    subtitle: 'Acompanhe suas horas de estudo dia a dia',
+    subtitle: 'Gráficos por matéria, questões, flashcards e calendário de estudos',
   },
   '/mentoria': {
     badge: 'Mentoria',
