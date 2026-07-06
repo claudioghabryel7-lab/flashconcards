@@ -1,8 +1,7 @@
 import { useEffect, useMemo } from 'react'
-import { X, Share2, Download, Link2 } from 'lucide-react'
+import { X, Share2, Download, Link2, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { retryNativeShare } from '../../utils/feedShareExport'
-import { downloadImageBlob } from '../../utils/imageShareExport'
+import { downloadImageBlob, shareImageBlob } from '../../utils/imageShareExport'
 
 function WhatsAppIcon() {
   return (
@@ -29,7 +28,7 @@ function InstagramIcon() {
   )
 }
 
-export default function FeedShareSheet({ data, onClose }) {
+export default function ItemShareSheet({ data, onClose, onPublishCommunity, publishing = false }) {
   const previewUrl = useMemo(() => (data?.blob ? URL.createObjectURL(data.blob) : null), [data?.blob])
 
   useEffect(() => {
@@ -40,64 +39,51 @@ export default function FeedShareSheet({ data, onClose }) {
 
   if (!data) return null
 
-  const { blob, text, publicUrl, post } = data
+  const { blob, text, url, filename } = data
 
-  const openWhatsApp = async () => {
-    const ok = await retryNativeShare({ blob, post, text, publicUrl })
-    if (ok) {
-      onClose()
-      return
-    }
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+  const nativeShare = async () => {
+    const result = await shareImageBlob({ blob, filename, text, url })
+    if (result.ok && !result.cancelled) onClose()
+    else if (!result.ok) toast.error('Compartilhamento não disponível.')
   }
 
-  const openFacebook = async () => {
-    const ok = await retryNativeShare({ blob, post, text, publicUrl })
-    if (ok) {
+  const openWhatsApp = async () => {
+    const result = await shareImageBlob({ blob, filename, text, url })
+    if (result.ok && !result.cancelled) {
       onClose()
       return
     }
-    window.open(
-      `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(publicUrl)}&quote=${encodeURIComponent(text)}`,
-      '_blank',
-      'noopener,noreferrer,width=600,height=400',
-    )
+    window.open(`https://wa.me/?text=${encodeURIComponent(text || url)}`, '_blank', 'noopener,noreferrer')
   }
 
   const handleInstagram = async () => {
-    const ok = await retryNativeShare({ blob, post, text: '', publicUrl: '' })
-    if (ok) {
+    const result = await shareImageBlob({ blob, filename, text: '', url: '' })
+    if (result.ok && !result.cancelled) {
       onClose()
       return
     }
-    downloadImageBlob(blob, `concurseiro-preditivo-${post.id}.png`)
-    toast.success('Imagem salva — abra o Instagram e publique nos Stories ou Feed.')
+    downloadImageBlob(blob, filename)
+    toast.success('Imagem salva — abra o Instagram e publique.')
   }
 
-  const handleNativeShare = async () => {
-    const ok = await retryNativeShare({ blob, post, text, publicUrl })
-    if (ok) onClose()
-    else toast.error('Compartilhamento não disponível neste dispositivo.')
-  }
-
-  const handleCopyLink = async () => {
+  const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(text)
-      toast.success('Texto e link copiados!')
+      await navigator.clipboard.writeText(text || url)
+      toast.success('Texto copiado!')
     } catch {
       toast.error('Não foi possível copiar.')
     }
   }
 
   const handleDownload = () => {
-    downloadImageBlob(blob, `concurseiro-preditivo-${post.id}.png`)
+    downloadImageBlob(blob, filename)
     toast.success('Imagem salva!')
   }
 
   const apps = [
-    { id: 'native', label: 'Mais apps', icon: Share2, onClick: handleNativeShare, color: 'text-cp-accent' },
+    { id: 'native', label: 'Mais apps', icon: Share2, onClick: nativeShare, color: 'text-cp-accent' },
     { id: 'whatsapp', label: 'WhatsApp', icon: WhatsAppIcon, onClick: openWhatsApp, color: 'text-emerald-500' },
-    { id: 'facebook', label: 'Facebook', icon: FacebookIcon, onClick: openFacebook, color: 'text-blue-500' },
+    { id: 'facebook', label: 'Facebook', icon: FacebookIcon, onClick: nativeShare, color: 'text-blue-500' },
     { id: 'instagram', label: 'Instagram', icon: InstagramIcon, onClick: handleInstagram, color: 'text-pink-500' },
   ]
 
@@ -106,21 +92,21 @@ export default function FeedShareSheet({ data, onClose }) {
       <button type="button" className="absolute inset-0" aria-label="Fechar" onClick={onClose} />
       <div className="relative z-10 w-full max-w-md rounded-t-2xl border border-cp-border bg-cp-bg shadow-2xl sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-cp-border px-4 py-3">
-          <h2 className="font-display text-base font-bold text-cp-text">Compartilhar publicação</h2>
+          <h2 className="font-display text-base font-bold text-cp-text">Compartilhar</h2>
           <button type="button" onClick={onClose} className="rounded-full p-1 text-cp-muted hover:text-cp-text">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="space-y-4 p-4">
           {previewUrl && (
             <div className="mx-auto max-w-[220px] overflow-hidden rounded-xl border border-cp-border shadow-lg">
-              <img src={previewUrl} alt="Preview da publicação" className="w-full" />
+              <img src={previewUrl} alt="Preview" className="w-full" />
             </div>
           )}
 
           <p className="text-center text-xs text-cp-muted">
-            A imagem do post será compartilhada com a marca Concurseiro Preditivo
+            Compartilhe este {data.options?.type === 'questao' ? 'questão' : 'flashcard'} com imagem
           </p>
 
           <div className="grid grid-cols-4 gap-3">
@@ -139,23 +125,36 @@ export default function FeedShareSheet({ data, onClose }) {
             ))}
           </div>
 
-          <div className="flex gap-2 border-t border-cp-border pt-3">
-            <button
-              type="button"
-              onClick={handleCopyLink}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-cp-border py-2.5 text-sm text-cp-text hover:bg-cp-surface"
-            >
-              <Link2 className="h-4 w-4" />
-              Copiar texto
-            </button>
-            <button
-              type="button"
-              onClick={handleDownload}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-cp-border py-2.5 text-sm text-cp-text hover:bg-cp-surface"
-            >
-              <Download className="h-4 w-4" />
-              Salvar imagem
-            </button>
+          <div className="flex flex-col gap-2 border-t border-cp-border pt-3">
+            {onPublishCommunity && (
+              <button
+                type="button"
+                onClick={onPublishCommunity}
+                disabled={publishing}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-cp-accent py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              >
+                <Users className="h-4 w-4" />
+                {publishing ? 'Publicando...' : 'Compartilhar na comunidade'}
+              </button>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-cp-border py-2.5 text-sm text-cp-text hover:bg-cp-surface"
+              >
+                <Link2 className="h-4 w-4" />
+                Copiar texto
+              </button>
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-cp-border py-2.5 text-sm text-cp-text hover:bg-cp-surface"
+              >
+                <Download className="h-4 w-4" />
+                Salvar imagem
+              </button>
+            </div>
           </div>
         </div>
       </div>

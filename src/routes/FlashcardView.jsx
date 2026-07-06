@@ -105,12 +105,22 @@ const FlashcardView = () => {
   const [studyMode, setStudyMode] = useState('module')
   const [miniSimCards, setMiniSimCards] = useState([])
   const [editalPrompt, setEditalPrompt] = useState('')
-  const [selectedCourseId, setSelectedCourseId] = useState(null) // Curso selecionado (null = ALEGO padrão)
-  const [availableCourses, setAvailableCourses] = useState([]) // Cursos disponíveis para o usuário
-  const [timerActive, setTimerActive] = useState(false) // Timer só inicia quando usuário clicar no relógio
+  const [selectedCourseId, setSelectedCourseId] = useState(null)
+  const [availableCourses, setAvailableCourses] = useState([])
+  const [courseName, setCourseName] = useState('')
+  const [timerActive, setTimerActive] = useState(false)
+
+  const activeCourseId = useMemo(() => {
+    const fromUrl = searchParams.get('course')
+    if (fromUrl) return fromUrl
+    if (selectedCourseId) return selectedCourseId
+    if (profile?.selectedCourseId) return profile.selectedCourseId
+    if (profile?.purchasedCourses?.length) return profile.purchasedCourses[0]
+    return 'alego-default'
+  }, [searchParams, selectedCourseId, profile?.selectedCourseId, profile?.purchasedCourses])
 
   const isAdmin = profile?.role === 'admin'
-  const resolvedCourseId = selectedCourseId || 'alego-default'
+  const resolvedCourseId = activeCourseId || 'alego-default'
 
   const showTrialBanner = useMemo(() => {
     if (!isTrialMode()) return false
@@ -118,22 +128,23 @@ const FlashcardView = () => {
     if (!trial?.courseId) return false
     if (resolvedCourseId !== trial.courseId) return false
     if (profile?.trialToken) return true
-    return !hasPurchasedCourse(profile, selectedCourseId)
-  }, [profile, selectedCourseId, resolvedCourseId])
+    return !hasPurchasedCourse(profile, activeCourseId)
+  }, [profile, activeCourseId, resolvedCourseId])
 
   useEffect(() => {
     if (!profile || !isTrialMode()) return
-    if (hasPurchasedCourse(profile, selectedCourseId) && !profile.trialToken) {
+    if (hasPurchasedCourse(profile, activeCourseId) && !profile.trialToken) {
       clearTrialData()
     }
-  }, [profile, selectedCourseId])
+  }, [profile, activeCourseId])
 
   const {
     cards,
     edital,
     loading: cardsLoading,
     hasEdital,
-  } = useEditalFlashcards(selectedCourseId, user, profile)
+    courseId: loadedCourseId,
+  } = useEditalFlashcards(activeCourseId, user, profile)
   const [generatingFlashcards, setGeneratingFlashcards] = useState(false) // Estado para loading de geração
   const [selectedDifficulty, setSelectedDifficulty] = useState('') // Dificuldade selecionada para geração
   const [sidebarSearch, setSidebarSearch] = useState('')
@@ -150,7 +161,7 @@ const FlashcardView = () => {
     if (!user) return
     try {
       console.log('🔍 Carregando flashcards do usuário:', user.uid, 'curso:', selectedCourseId)
-      const userFlashcards = await userFlashcardsService.getUserFlashcards(user.uid, selectedCourseId)
+      const userFlashcards = await userFlashcardsService.getUserFlashcards(user.uid, activeCourseId)
       console.log('📝 Flashcards do usuário carregados:', userFlashcards.length, userFlashcards)
       setUserCards(userFlashcards)
     } catch (error) {
@@ -160,55 +171,67 @@ const FlashcardView = () => {
   
   // Timer de estudo - ativo apenas quando usuário clicar no relógio
   const isStudying = !!selectedMateria && !!selectedModulo
-  const { formattedTime, elapsedSeconds } = useStudyTimer(timerActive && isStudying, user?.uid, selectedCourseId)
-  
-  // Carregar ordem de matérias e módulos
-  const { subjectOrderConfig, moduleOrderConfigs, loadModuleOrder } = useSubjectOrder(selectedCourseId, user?.uid)
+  const { formattedTime, elapsedSeconds } = useStudyTimer(timerActive && isStudying, user?.uid, activeCourseId)
 
-  // Usar curso selecionado do perfil do usuário
+  const { subjectOrderConfig, moduleOrderConfigs, loadModuleOrder } = useSubjectOrder(activeCourseId, user?.uid)
+
+  // Sincronizar curso com perfil / URL (mesma lógica do Edital Verticalizado)
   useEffect(() => {
     if (!profile) return
-    
-    // Usar curso selecionado do perfil (pode ser null para ALEGO padrão)
-    const courseFromProfile = profile.selectedCourseId !== undefined ? profile.selectedCourseId : null
-    setSelectedCourseId(courseFromProfile)
-    
-    // Carregar lista de cursos disponíveis (para mostrar no seletor de troca)
+
+    const courseFromUrl = searchParams.get('course')
+    const courseFromProfile =
+      profile.selectedCourseId !== undefined && profile.selectedCourseId !== null
+        ? profile.selectedCourseId
+        : null
+
+    setSelectedCourseId(courseFromUrl || courseFromProfile || null)
+
     const purchasedCourses = profile.purchasedCourses || []
-    const isAdmin = profile.role === 'admin'
-    
+    const isAdminUser = profile.role === 'admin'
+
     const coursesRef = collection(db, 'courses')
     const unsub = onSnapshot(coursesRef, (snapshot) => {
-      const allCourses = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+      const allCourses = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
       }))
-      
-      // Filtrar cursos: admin vê comprados; aluno vê comprados + curso selecionado (preview)
-      const filtered = isAdmin 
-        ? allCourses.filter(c => c.active !== false)
-        : allCourses.filter(c => {
+
+      const filtered = isAdminUser
+        ? allCourses.filter((c) => c.active !== false)
+        : allCourses.filter((c) => {
             if (c.active === false) return false
             if (purchasedCourses.includes(c.id)) return true
             if (courseFromProfile && c.id === courseFromProfile) return true
+            if (courseFromUrl && c.id === courseFromUrl) return true
             return c.id === 'alego-default'
           })
-      
+
       setAvailableCourses(filtered)
     }, (error) => {
       console.error('Erro ao carregar cursos:', error)
       setAvailableCourses([])
     })
-    
+
     return () => unsub()
-  }, [profile])
+  }, [profile, searchParams])
+
+  useEffect(() => {
+    if (!loadedCourseId) return
+    getDoc(doc(db, 'courses', loadedCourseId)).then((snap) => {
+      if (snap.exists()) {
+        const data = snap.data()
+        setCourseName(data.name || data.competition || loadedCourseId)
+      }
+    })
+  }, [loadedCourseId])
   
   // Carregar flashcards do usuário quando mudar o usuário ou curso
   useEffect(() => {
     if (user && profile) {
       loadUserFlashcards()
     }
-  }, [user, profile, selectedCourseId])
+  }, [user, profile, activeCourseId])
 
   useEffect(() => {
     // Limpar prompt primeiro quando mudar de curso
@@ -217,7 +240,7 @@ const FlashcardView = () => {
     const fetchPrompt = async () => {
       try {
         // Usar courseId do curso selecionado
-        const courseId = selectedCourseId || 'alego-default'
+        const courseId = activeCourseId
         const promptRef = doc(db, 'courses', courseId, 'prompts', 'edital')
         const promptDoc = await getDoc(promptRef)
         
@@ -257,7 +280,7 @@ const FlashcardView = () => {
     }
 
     fetchPrompt()
-  }, [selectedCourseId])
+  }, [activeCourseId])
 
   // Carregar progresso dos cards do usuário - FILTRADO POR CURSO
   useEffect(() => {
@@ -271,7 +294,7 @@ const FlashcardView = () => {
         
         // Filtrar progresso apenas dos cards do curso selecionado
         const filteredProgress = {}
-        const currentCourseId = selectedCourseId || null
+        const currentCourseId = activeCourseId
         
         // Se temos cards carregados, filtrar pelo curso deles
         cards.forEach(card => {
@@ -300,7 +323,7 @@ const FlashcardView = () => {
       }
     })
     return () => unsub()
-  }, [user, selectedCourseId, cards])
+  }, [user, activeCourseId, cards])
 
   // Organizar por edital verticalizado (disciplinas/tópicos) + cards do usuário
   const organizedCards = useMemo(() => {
@@ -696,9 +719,9 @@ const FlashcardView = () => {
   }
 
   const handleEditFlashcard = async (cardId, newPergunta, newResposta) => {
-    if (!isAdmin || !selectedCourseId) return
+    if (!isAdmin || !activeCourseId) return
     try {
-      const cardRef = doc(db, 'courses', selectedCourseId, 'flashcards', cardId)
+      const cardRef = doc(db, 'courses', activeCourseId, 'flashcards', cardId)
       await setDoc(
         cardRef,
         {
@@ -752,7 +775,7 @@ const FlashcardView = () => {
         cardProgress: currentCardProgress,
         updatedAt: new Date().toISOString(),
         // Adicionar metadata do curso para filtragem
-        courseId: selectedCourseId || null,
+        courseId: activeCourseId,
       },
       { merge: true },
     )
@@ -835,7 +858,7 @@ const FlashcardView = () => {
       
       // Construir o prompt base
       const basePrompt = await buildFlashcardPrompt(
-        selectedCourseId || 'alego-default',
+        activeCourseId,
         selectedMateria,
         editalPrompt || ''
       )
@@ -921,7 +944,7 @@ IMPORTANTE:
 
       // Chamar API com pipeline central (banca, curso, verificação)
       const response = await callGeminiWithRetry(prompt, {
-        courseId: selectedCourseId || 'alego-default',
+        courseId: activeCourseId,
         generationConfig: {
           temperature: 0.35,
           maxOutputTokens: 2048,
@@ -985,15 +1008,13 @@ IMPORTANTE:
           dificuldade: flashcard.dificuldade || difficulty,
           explicacao: flashcard.explicacao || '',
           userId: user.uid,
-          courseId: selectedCourseId || 'alego-default',
+          courseId: activeCourseId,
           createdAt: new Date().toISOString(),
           isAIGenerated: true,
           generationDifficulty: difficulty,
         }
 
-        const flashcardsColl = selectedCourseId
-          ? collection(db, 'courses', selectedCourseId, 'flashcards')
-          : collection(db, 'flashcards')
+        const flashcardsColl = collection(db, 'courses', activeCourseId, 'flashcards')
         const cardRef = doc(flashcardsColl)
         batch.push(
           setDoc(cardRef, {
@@ -1035,11 +1056,25 @@ IMPORTANTE:
         subtitle={
           isStudying
             ? `${selectedMateria} › ${selectedModulo}`
-            : 'Biblioteca de decks com repetição espaçada'
+            : courseName
+              ? `${courseName} — biblioteca de decks com repetição espaçada`
+              : 'Biblioteca de decks com repetição espaçada'
         }
         backHref="/dashboard"
         actions={
-          isStudying ? (
+          availableCourses.length > 1 ? (
+            <select
+              value={activeCourseId}
+              onChange={(e) => setSelectedCourseId(e.target.value)}
+              className="rounded-xl border border-cp-border bg-cp-bg px-3 py-2 text-xs font-medium text-cp-text"
+            >
+              {availableCourses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name || c.competition || c.id}
+                </option>
+              ))}
+            </select>
+          ) : isStudying ? (
             <button
               type="button"
               onClick={() => setTimerActive(!timerActive)}
@@ -1079,7 +1114,11 @@ IMPORTANTE:
         }
       />
 
-      {/* Banner de Conversão para Teste */}
+      {!cardsLoading && cards.length === 0 && hasEdital && (
+        <div className="rounded-xl border border-cp-border bg-cp-surface px-4 py-3 text-sm text-cp-muted">
+          Nenhum flashcard liberado neste curso ainda. O administrador precisa disponibilizar os tópicos no Edital Verticalizado.
+        </div>
+      )}
       {showTrialBanner && (
         <div className="rounded-2xl p-4 bg-gradient-to-r from-alego-600 to-alego-700 text-white shadow-xl">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">

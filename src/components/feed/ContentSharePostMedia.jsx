@@ -21,13 +21,17 @@ export default function ContentSharePostMedia({
   const Icon = TYPE_ICONS[postType] || BookOpen
 
   const statLabel =
-    postType === FEED_POST_TYPES.FLASHCARDS
-      ? `${post.itemCount || 0} cards`
-      : postType === FEED_POST_TYPES.QUESTOES
-        ? `${post.itemCount || 0} questões`
-        : postType === FEED_POST_TYPES.MATERIAL
-          ? 'Material de apoio'
-          : null
+    post.itemPreview
+      ? post.itemPreview.type === 'flashcard'
+        ? '1 flashcard'
+        : '1 questão'
+      : postType === FEED_POST_TYPES.FLASHCARDS
+        ? `${post.itemCount || 0} cards`
+        : postType === FEED_POST_TYPES.QUESTOES
+          ? `${post.itemCount || 0} questões`
+          : postType === FEED_POST_TYPES.MATERIAL
+            ? 'Material de apoio'
+            : null
 
   const Wrapper = exportMode ? 'div' : 'a'
   const wrapperProps = exportMode
@@ -79,6 +83,16 @@ export default function ContentSharePostMedia({
           {post.assunto && (
             <p className="line-clamp-2 text-sm leading-relaxed text-white/90 drop-shadow-sm sm:text-base">
               {post.assunto}
+            </p>
+          )}
+          {post.itemPreview?.type === 'flashcard' && post.itemPreview.pergunta && (
+            <p className="line-clamp-3 text-sm leading-relaxed text-white/85 italic">
+              "{post.itemPreview.pergunta}"
+            </p>
+          )}
+          {post.itemPreview?.type === 'questao' && post.itemPreview.enunciado && (
+            <p className="line-clamp-3 text-sm leading-relaxed text-white/85">
+              {post.itemPreview.enunciado}
             </p>
           )}
         </div>

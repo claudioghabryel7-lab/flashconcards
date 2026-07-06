@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy, deleteDoc } from 'firebase/firestore'
 import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, TrashIcon, QuestionMarkCircleIcon, ChartBarIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
-import ShareToFeedButton from '../components/feed/ShareToFeedButton'
+import ShareItemButton from '../components/share/ShareItemButton'
 import { FEED_POST_TYPES } from '../services/trilhaFeedService'
 import ReactMarkdown from 'react-markdown'
 import { db } from '../firebase/config'
@@ -1138,20 +1138,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         />
       )}
 
-      {canPractice && questoes?.questoes?.length > 0 && (
-        <div className="flex justify-end">
-          <ShareToFeedButton
-            postType={FEED_POST_TYPES.QUESTOES}
-            materia={courseName || tipoProva}
-            assunto={effectiveTopicNome || resolvedTopicKey}
-            courseId={resolvedCourseId}
-            topicKey={resolvedTopicKey}
-            itemCount={questoes.questoes.length}
-            shareUrl={`/questoes-topic/${resolvedCourseId}/${encodeURIComponent(resolvedTopicKey)}${effectiveTopicNome ? `?nome=${encodeURIComponent(effectiveTopicNome)}` : ''}`}
-            className="cp-btn-ghost !text-xs"
-          />
-        </div>
-      )}
 
       <div className="cp-card p-6 sm:p-8">
           {carregandoNivel ? (
@@ -1245,11 +1231,30 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                       )}
 
                       {questoesParaExibir.length > 0 && (
-                        <QuestoesProgressBar
-                          current={currentQuestionIndex}
-                          total={questoesParaExibir.length}
-                          extraLabel={termoBusca ? ` (${questoesArray.length} total)` : ''}
-                        />
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex-1">
+                            <QuestoesProgressBar
+                              current={currentQuestionIndex}
+                              total={questoesParaExibir.length}
+                              extraLabel={termoBusca ? ` (${questoesArray.length} total)` : ''}
+                            />
+                          </div>
+                          {questoesParaExibir[currentQuestionIndex] && (
+                            <ShareItemButton
+                              type="questao"
+                              postType={FEED_POST_TYPES.QUESTOES}
+                              materia={courseName || tipoProva}
+                              assunto={effectiveTopicNome || resolvedTopicKey}
+                              courseId={resolvedCourseId}
+                              topicKey={resolvedTopicKey}
+                              itemIndex={currentQuestionIndex}
+                              questao={questoesParaExibir[currentQuestionIndex]}
+                              shareUrl={`/questoes-topic/${resolvedCourseId}/${encodeURIComponent(resolvedTopicKey)}${effectiveTopicNome ? `?nome=${encodeURIComponent(effectiveTopicNome)}` : ''}`}
+                              className="cp-btn-ghost !text-[10px] !py-1 shrink-0"
+                              label="Compartilhar"
+                            />
+                          )}
+                        </div>
                       )}
 
                       {questoesParaExibir[currentQuestionIndex] && (

@@ -157,6 +157,16 @@ export function buildOrganizedCardsFromEdital(edital, cards = []) {
     })
   }
 
+  const findMateriaKey = (organizedRoot, cardMateria) => {
+    if (organizedRoot[cardMateria]) return cardMateria
+    const norm = cardMateria.trim().toLowerCase()
+    const match = Object.keys(organizedRoot).find((k) => {
+      const kn = k.trim().toLowerCase()
+      return kn === norm || kn.includes(norm) || norm.includes(kn)
+    })
+    return match || cardMateria
+  }
+
   const findModuloKey = (materiaMap, cardModulo) => {
     if (materiaMap[cardModulo]) return cardModulo
     const norm = normalizeModuloKey(cardModulo)
@@ -168,11 +178,12 @@ export function buildOrganizedCardsFromEdital(edital, cards = []) {
   normalizedCards.forEach((card) => {
     const { materia, modulo } = card
     if (!materia || !modulo) return
-    if (!organized[materia]) organized[materia] = {}
-    const key = findModuloKey(organized[materia], modulo)
-    if (!organized[materia][key]) organized[materia][key] = []
-    if (!organized[materia][key].some((c) => c.id === card.id)) {
-      organized[materia][key].push(card)
+    const materiaKey = findMateriaKey(organized, materia)
+    if (!organized[materiaKey]) organized[materiaKey] = {}
+    const moduloKey = findModuloKey(organized[materiaKey], modulo)
+    if (!organized[materiaKey][moduloKey]) organized[materiaKey][moduloKey] = []
+    if (!organized[materiaKey][moduloKey].some((c) => c.id === card.id)) {
+      organized[materiaKey][moduloKey].push(card)
     }
   })
 

@@ -126,9 +126,19 @@ export function getPostCaption(post) {
 
   switch (type) {
     case FEED_POST_TYPES.FLASHCARDS:
-      return { verb: 'compartilhou flashcards de', materia, assunto, meta: post.itemCount ? `${post.itemCount} cards` : null }
+      return {
+        verb: 'compartilhou um flashcard de',
+        materia,
+        assunto,
+        meta: post.itemPreview ? '1 card' : post.itemCount ? `${post.itemCount} cards` : null,
+      }
     case FEED_POST_TYPES.QUESTOES:
-      return { verb: 'compartilhou questões de', materia, assunto, meta: post.itemCount ? `${post.itemCount} questões` : null }
+      return {
+        verb: 'compartilhou uma questão de',
+        materia,
+        assunto,
+        meta: post.itemPreview ? '1 questão' : post.itemCount ? `${post.itemCount} questões` : null,
+      }
     case FEED_POST_TYPES.MATERIAL:
       return { verb: 'compartilhou material de', materia, assunto, meta: 'Material de apoio' }
     default:

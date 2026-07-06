@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { collection, onSnapshot } from 'firebase/firestore'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import {
   loadEditalVerticalizado,
@@ -12,7 +12,7 @@ import { canAccessTopicoContent } from '../utils/courseAccess'
 import { buildTopicoPublishMapFromSnapshot, resolveTopicPublishStatus } from '../services/topicoPublishService'
 
 /**
- * Carrega edital verticalizado + flashcards do curso (subcoleção) com fallback legado.
+ * Carrega edital verticalizado + flashcards publicados do curso (subcoleção) com fallback legado.
  */
 export function useEditalFlashcards(selectedCourseId, user, profile) {
   const [cards, setCards] = useState([])
@@ -22,6 +22,7 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
   const [publishMap, setPublishMap] = useState({})
 
   const courseId = selectedCourseId || 'alego-default'
+  const isAdmin = profile?.role === 'admin'
 
   useEffect(() => {
     const ref = collection(db, 'courses', courseId, 'topicoStatus')
@@ -60,7 +61,6 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
     }
 
     setLoading(true)
-    const isAdmin = profile.role === 'admin'
 
     const applyAccessFilter = (data) => {
       if (isAdmin) return data
@@ -95,6 +95,10 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
     const courseCardsRef = collection(db, 'courses', courseId, 'flashcards')
     const globalCardsRef = collection(db, 'flashcards')
 
+    const courseQuery = isAdmin
+      ? courseCardsRef
+      : query(courseCardsRef, where('status', '==', CONTENT_STATUS.AVAILABLE))
+
     let courseData = []
     let globalData = []
 
@@ -108,7 +112,7 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
     }
 
     const unsubCourse = onSnapshot(
-      courseCardsRef,
+      courseQuery,
       (snapshot) => {
         courseData = mapDocs(snapshot.docs)
         mergeAndSet()
@@ -122,7 +126,11 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
     const unsubGlobal = onSnapshot(
       globalCardsRef,
       (snapshot) => {
-        globalData = mapDocs(snapshot.docs).filter(belongsToCourse)
+        globalData = mapDocs(snapshot.docs).filter((card) => {
+          if (!belongsToCourse(card)) return false
+          if (isAdmin) return true
+          return card.status === CONTENT_STATUS.AVAILABLE
+        })
         mergeAndSet()
       },
       (error) => {
@@ -135,7 +143,7 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
       unsubCourse()
       unsubGlobal()
     }
-  }, [user, profile, courseId, edital, publishMap])
+  }, [user, profile, courseId, edital, publishMap, isAdmin])
 
   const organizedModules = useMemo(
     () => buildNavigationFromEdital(edital, cards),
@@ -151,5 +159,6 @@ export function useEditalFlashcards(selectedCourseId, user, profile) {
     loading,
     editalLoading,
     hasEdital,
+    courseId,
   }
 }

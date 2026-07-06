@@ -13,7 +13,7 @@ import {
 } from '../services/topicoFlashcardsService'
 import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
 import { generateShareToken } from '../utils/shareToken'
-import ShareToFeedButton from '../components/feed/ShareToFeedButton'
+import ShareItemButton from '../components/share/ShareItemButton'
 import { FEED_POST_TYPES } from '../services/trilhaFeedService'
 import { CONTENT_STATUS, isContentAvailable, toggleContentStatus } from '../utils/contentStatus'
 import { persistCardReview } from '../utils/spacedRepetition'
@@ -148,6 +148,8 @@ const FlashcardsTopicoView = () => {
 
   const { dueQueue, stats } = useSRSDeck(cards, cardProgress)
   const studyCards = dueQueue
+  const shareCard = studyCards[currentIndex] || cards[currentIndex] || cards[0]
+  const shareIndex = studyCards.length > 0 ? currentIndex : cards.indexOf(shareCard)
 
   const handleRate = useCallback(
     async (cardId, difficulty) => {
@@ -366,14 +368,16 @@ const FlashcardsTopicoView = () => {
                 Link temporário
               </button>
             )}
-            {(canStudy || isAdmin) && cards.length > 0 && (
-              <ShareToFeedButton
+            {(canStudy || isAdmin) && shareCard && studyCards.length === 0 && (
+              <ShareItemButton
+                type="flashcard"
                 postType={FEED_POST_TYPES.FLASHCARDS}
                 materia={disciplina}
                 assunto={modulo}
                 courseId={courseId}
                 topicKey={topicKey}
-                itemCount={cards.length}
+                itemIndex={shareIndex >= 0 ? shareIndex : 0}
+                flashcard={shareCard}
                 shareUrl={`/flashcards/topico/${courseId}?disciplina=${encodeURIComponent(disciplina)}&modulo=${encodeURIComponent(modulo)}&topicKey=${encodeURIComponent(topicKey)}`}
               />
             )}
@@ -433,7 +437,24 @@ const FlashcardsTopicoView = () => {
         <div className="cp-card p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between text-xs text-cp-muted">
             <span>Revisão espaçada · {studyCards.length} para revisar agora</span>
-            <span>{stats.reviewed}/{stats.total} já estudados</span>
+            <div className="flex items-center gap-2">
+              <span>{stats.reviewed}/{stats.total} já estudados</span>
+              {shareCard && (
+                <ShareItemButton
+                  type="flashcard"
+                  postType={FEED_POST_TYPES.FLASHCARDS}
+                  materia={disciplina}
+                  assunto={modulo}
+                  courseId={courseId}
+                  topicKey={topicKey}
+                  itemIndex={shareIndex >= 0 ? shareIndex : currentIndex}
+                  flashcard={shareCard}
+                  shareUrl={`/flashcards/topico/${courseId}?disciplina=${encodeURIComponent(disciplina)}&modulo=${encodeURIComponent(modulo)}&topicKey=${encodeURIComponent(topicKey)}`}
+                  className="cp-btn-ghost !text-[10px] !py-1"
+                  label="Compartilhar"
+                />
+              )}
+            </div>
           </div>
           <FlashcardList
             cards={studyCards}

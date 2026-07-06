@@ -57,6 +57,8 @@ export async function publishFeedPost({ user, profile, data }) {
       shareId: data.shareId || null,
       shareUrl: data.shareUrl || null,
       itemCount: data.itemCount ?? null,
+      itemIndex: data.itemIndex ?? null,
+      itemPreview: data.itemPreview || null,
       source: data.source || postType,
       durationMinutes: data.durationMinutes || data.minutos || 0,
       acertos: data.acertos ?? null,
