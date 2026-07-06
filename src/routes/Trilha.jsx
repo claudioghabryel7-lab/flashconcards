@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
-  getDocs,
   onSnapshot,
   serverTimestamp,
   setDoc,
@@ -28,7 +26,7 @@ import { db } from '../firebase/config'
 import StudyTimeChart from '../components/StudyTimeChart'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import toast from 'react-hot-toast'
-import { publishTrilhaActivity } from '../services/trilhaFeedService'
+import { saveManualEntry, saveTimerSession, firestoreErrorMessage } from '../services/trilhaSaveService'
 
 const DEFAULT_CONFIG = {
   cycle: ['Português', 'Direito Constitucional', 'Direito Administrativo'],
@@ -77,49 +75,6 @@ function playAlarm() {
   oscillator.stop(ctx.currentTime + 0.6)
 }
 
-async function incrementDailyProgress(userId, courseId, hours, materia) {
-  if (!userId || !hours) return
-
-  const todayKey = dayjs().format('YYYY-MM-DD')
-  const courseKey = courseId || 'alego'
-  const progressRef = doc(db, 'progress', `${userId}_${courseKey}_${todayKey}`)
-  const currentDoc = await getDoc(progressRef)
-  const currentHours = currentDoc.exists() ? currentDoc.data().hours || 0 : 0
-
-  await setDoc(
-    progressRef,
-    {
-      uid: userId,
-      date: todayKey,
-      hours: currentHours + hours,
-      courseId: courseId || null,
-      materia: materia || null,
-      lastUpdated: dayjs().format('HH:mm:ss'),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  )
-}
-
-async function mirrorStudySession(userId, payload) {
-  if (!userId) return
-  const endDate = new Date()
-  const startDate = new Date(endDate.getTime() - (payload.durationMinutes || 0) * 60 * 1000)
-
-  await addDoc(collection(db, 'users', userId, 'studySessions'), {
-    userId,
-    materia: payload.materia || 'Geral',
-    modalidade: payload.modalidade || 'teoria',
-    assunto: payload.assunto || '',
-    startTime: startDate,
-    endTime: endDate,
-    isActive: false,
-    source: payload.source || 'trilha',
-    durationMinutes: payload.durationMinutes || 0,
-    createdAt: serverTimestamp(),
-  })
-}
-
 export default function Trilha() {
   const { user, profile } = useAuth()
   const courseId = profile?.selectedCourseId || null
@@ -141,6 +96,7 @@ export default function Trilha() {
   const [sessions, setSessions] = useState([])
   const [manualEntries, setManualEntries] = useState([])
   const [questionStats, setQuestionStats] = useState({ total: 0, correct: 0, wrong: 0 })
+  const [savingSession, setSavingSession] = useState(false)
 
   const intervalRef = useRef(null)
 
@@ -185,25 +141,33 @@ export default function Trilha() {
       setCycleInput((merged.cycle || []).join(', '))
     })
 
-    const unsubSessions = onSnapshot(collection(db, 'users', user.uid, 'trilhaSessions'), (snap) => {
-      const rows = snap.docs.map((item) => ({ id: item.id, ...item.data() }))
-      rows.sort((a, b) => {
-        const aTime = a.createdAt?.toMillis?.() || 0
-        const bTime = b.createdAt?.toMillis?.() || 0
-        return bTime - aTime
-      })
-      setSessions(rows)
-    })
+    const unsubSessions = onSnapshot(
+      collection(db, 'users', user.uid, 'trilhaSessions'),
+      (snap) => {
+        const rows = snap.docs.map((item) => ({ id: item.id, ...item.data() }))
+        rows.sort((a, b) => {
+          const aTime = a.createdAt?.toMillis?.() || 0
+          const bTime = b.createdAt?.toMillis?.() || 0
+          return bTime - aTime
+        })
+        setSessions(rows)
+      },
+      (err) => console.error('Erro ao carregar sessões da Trilha:', err),
+    )
 
-    const unsubManual = onSnapshot(collection(db, 'users', user.uid, 'trilhaManualEntries'), (snap) => {
-      const rows = snap.docs.map((item) => ({ id: item.id, ...item.data() }))
-      rows.sort((a, b) => {
-        const aTime = a.createdAt?.toMillis?.() || 0
-        const bTime = b.createdAt?.toMillis?.() || 0
-        return bTime - aTime
-      })
-      setManualEntries(rows)
-    })
+    const unsubManual = onSnapshot(
+      collection(db, 'users', user.uid, 'trilhaManualEntries'),
+      (snap) => {
+        const rows = snap.docs.map((item) => ({ id: item.id, ...item.data() }))
+        rows.sort((a, b) => {
+          const aTime = a.createdAt?.toMillis?.() || 0
+          const bTime = b.createdAt?.toMillis?.() || 0
+          return bTime - aTime
+        })
+        setManualEntries(rows)
+      },
+      (err) => console.error('Erro ao carregar registros manuais:', err),
+    )
 
     const loadQuestionStats = async () => {
       const courseKey = courseId || 'alego'
@@ -307,68 +271,52 @@ export default function Trilha() {
       return
     }
 
-    const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60))
-    try {
-      await addDoc(collection(db, 'users', user.uid, 'trilhaSessions'), {
-        ...timerForm,
-        durationMinutes,
-        elapsedSeconds,
-        courseId,
-        source: 'timer',
-        createdAt: serverTimestamp(),
-      })
-      await mirrorStudySession(user.uid, {
-        ...timerForm,
-        durationMinutes,
-        source: 'timer',
-      })
-      await incrementDailyProgress(user.uid, courseId, durationMinutes / 60, timerForm.materia)
-      await publishTrilhaActivity({
-        user,
-        profile,
-        payload: { ...timerForm, durationMinutes, courseId, source: 'timer' },
-      })
-      toast.success('Sessão salva!')
-    } catch (err) {
-      console.error('Erro ao salvar sessão da Trilha:', err)
-      toast.error('Erro ao salvar sessão. Verifique sua conexão.')
+    if (!timerForm.materia?.trim()) {
+      toast.error('Informe a matéria antes de encerrar e salvar.')
       return
     }
 
-    setTimerActive(false)
-    setTimerPaused(false)
-    setElapsedSeconds(0)
-    setAlarmTriggered(false)
+    const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60))
+    setSavingSession(true)
+    try {
+      await saveTimerSession({
+        user,
+        profile,
+        courseId,
+        timerForm,
+        durationMinutes,
+        elapsedSeconds,
+      })
+      toast.success('Sessão salva!')
+      setTimerActive(false)
+      setTimerPaused(false)
+      setElapsedSeconds(0)
+      setAlarmTriggered(false)
+    } catch (err) {
+      console.error('Erro ao salvar sessão da Trilha:', err)
+      toast.error(
+        err?.message?.includes('matéria')
+          ? err.message
+          : firestoreErrorMessage(err, 'Erro ao salvar sessão.'),
+      )
+    } finally {
+      setSavingSession(false)
+    }
   }
 
   const handleManualSave = async () => {
     if (!user?.uid || !manualForm.materia || !manualForm.minutos) return
 
+    setSavingSession(true)
     try {
-      await addDoc(collection(db, 'users', user.uid, 'trilhaManualEntries'), {
-        ...manualForm,
-        courseId,
-        source: 'manual',
-        createdAt: serverTimestamp(),
-      })
-      await mirrorStudySession(user.uid, {
-        materia: manualForm.materia,
-        assunto: manualForm.assunto,
-        modalidade: manualForm.modalidade,
-        durationMinutes: manualForm.minutos,
-        source: 'manual',
-      })
-      await incrementDailyProgress(user.uid, courseId, manualForm.minutos / 60, manualForm.materia)
-      await publishTrilhaActivity({
-        user,
-        profile,
-        payload: { ...manualForm, durationMinutes: manualForm.minutos, courseId, source: 'manual' },
-      })
+      await saveManualEntry({ user, profile, courseId, manualForm })
       setManualForm(DEFAULT_FORM)
       toast.success('Registro salvo!')
     } catch (err) {
       console.error('Erro ao salvar registro manual:', err)
-      toast.error('Erro ao salvar registro. Verifique sua conexão.')
+      toast.error(firestoreErrorMessage(err, 'Erro ao salvar registro.'))
+    } finally {
+      setSavingSession(false)
     }
   }
 
@@ -510,9 +458,13 @@ export default function Trilha() {
               <PauseIcon className="h-4 w-4" />
               {timerPaused ? 'Retomar' : 'Pausar'}
             </button>
-            <button onClick={handleStop} disabled={!timerActive && elapsedSeconds === 0} className="cp-btn-ghost disabled:opacity-50">
+            <button
+              onClick={handleStop}
+              disabled={savingSession || (!timerActive && elapsedSeconds === 0)}
+              className="cp-btn-ghost disabled:opacity-50"
+            >
               <StopIcon className="h-4 w-4" />
-              Encerrar e salvar
+              {savingSession ? 'Salvando...' : 'Encerrar e salvar'}
             </button>
           </div>
         </div>
@@ -574,7 +526,7 @@ export default function Trilha() {
                   placeholder="Erros"
                 />
               </div>
-              <button onClick={handleManualSave} className="cp-btn-primary">
+              <button onClick={handleManualSave} disabled={savingSession} className="cp-btn-primary disabled:opacity-50">
                 <PlusIcon className="h-4 w-4" />
                 Salvar registro
               </button>
