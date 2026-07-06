@@ -18,6 +18,7 @@ import {
 import CPLogo from './CPLogo'
 import { useAuth } from '@/hooks/useAuth'
 import { useDarkMode } from '@/hooks/useDarkMode.jsx'
+import OnlineNowBadge from './OnlineNowBadge'
 
 type NavItem = {
   href: string
@@ -43,8 +44,8 @@ const menuCategories: NavCategory[] = [
       { href: '/flashcards', label: 'Flashcards com IA', auth: true },
       { href: '/edital-verticalizado', label: 'Edital Verticalizado', auth: true },
       { href: '/treino-redacao', label: 'Treino Redação', auth: true },
+      { href: '/trilha', label: 'Trilha', auth: true },
       { href: '/dashboard', label: 'Progresso', auth: true },
-      { href: '/materia-revisada', label: 'Matéria Revisada', auth: true },
       { href: '/cursos', label: 'Concursos' },
     ],
   },
@@ -144,6 +145,10 @@ export default function CPHeader() {
                       {isAdmin ? 'admin' : 'aluno'}
                     </p>
                   </div>
+                </div>
+
+                <div className="hidden lg:flex">
+                  <OnlineNowBadge courseId={profile?.selectedCourseId ?? null} compact />
                 </div>
 
                 <button

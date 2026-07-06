@@ -13,8 +13,10 @@ import {
   Loader2,
   PenTool,
   Sparkles,
+  Route,
 } from 'lucide-react'
 import { db, initFirebase, firebaseInitialized } from '@/firebase/config'
+import OnlineNowBadge from '@/components/cp/OnlineNowBadge'
 
 const modules = [
   { href: 'edital-verticalizado', title: 'Edital verticalizado', desc: 'Checklist completo por disciplina e tópico.', icon: FileText, color: 'from-cyan-400 to-blue-500', legacy: '/edital-verticalizado' },
@@ -22,6 +24,7 @@ const modules = [
   { href: 'questoes', title: 'Questões IA', desc: 'Questões no estilo da banca do concurso.', icon: HelpCircle, color: 'from-orange-400 to-amber-500', legacy: '/flashquestoes' },
   { href: 'treino-redacao', title: 'Treino de redação', desc: 'Correção e modelo nota 1000 por tema.', icon: PenTool, color: 'from-violet-400 to-purple-500', legacy: '/treino-redacao' },
   { href: 'mapas-mentais', title: 'Mapas mentais', desc: 'Visualize o edital de forma estratégica.', icon: Brain, color: 'from-pink-400 to-rose-500', legacy: '/dashboard' },
+  { href: 'trilha', title: 'Trilha', desc: 'Cronômetro líquido, ciclo e metas por matéria.', icon: Route, color: 'from-emerald-400 to-lime-500', legacy: '/trilha' },
 ]
 
 export default function CursoHubPage() {
@@ -84,6 +87,9 @@ export default function CursoHubPage() {
           <span className="inline-flex items-center gap-2 rounded-full border border-cp-accent/30 bg-cp-accent/10 px-3 py-1 text-xs font-medium text-cp-accent">
             <Sparkles className="h-3.5 w-3.5" /> Trilha preditiva
           </span>
+          <div className="mt-4">
+            <OnlineNowBadge courseId={courseId} />
+          </div>
           <h1 className="mt-4 text-4xl font-bold sm:text-5xl">{title}</h1>
           {course?.competition && (
             <p className="mt-2 text-cp-accent">{course.competition}</p>

@@ -6,7 +6,7 @@ import { useAuth } from './useAuth'
 
 // Hook para rastrear status online/offline do usuário
 export const useOnlineStatus = () => {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
 
   useEffect(() => {
     initFirebase()
@@ -25,6 +25,7 @@ export const useOnlineStatus = () => {
           uid: userId,
           email: String(user.email || ''),
           displayName: String(user.displayName || user.email || 'Usuário'),
+          courseId: profile?.selectedCourseId || null,
           status: 'online',
           lastSeen: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -47,6 +48,7 @@ export const useOnlineStatus = () => {
     const heartbeatInterval = setInterval(() => {
       setDoc(userPresenceRef, {
         status: 'online',
+        courseId: profile?.selectedCourseId || null,
         lastSeen: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true }).catch(err => {
@@ -64,12 +66,13 @@ export const useOnlineStatus = () => {
       // Marcar como offline ao desmontar
       setDoc(userPresenceRef, {
         status: 'offline',
+        courseId: profile?.selectedCourseId || null,
         lastSeen: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true }).catch(() => {
         // Silenciosamente ignorar erros no cleanup
       })
     }
-  }, [user])
+  }, [user, profile?.selectedCourseId])
 }
 

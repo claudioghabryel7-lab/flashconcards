@@ -11,9 +11,11 @@ import { Toaster } from 'react-hot-toast'
 import { BrowserRouter } from '@/lib/react-router-compat'
 import { initFirebase } from '@/firebase/config'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { cleanupConsole } from '@/lib/consoleCleanup'
 
 function ClientBootstrap() {
   useEffect(() => {
+    cleanupConsole()
     initFirebase()
   }, [])
   useOnlineStatus()

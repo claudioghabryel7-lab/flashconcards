@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { db, initFirebase, firebaseInitialized } from '@/firebase/config'
 import LazyImage from '@/components/LazyImage'
+import OnlineNowBadge from '@/components/cp/OnlineNowBadge'
 
 type Course = {
   id: string
@@ -201,11 +202,14 @@ export default function CursosPage() {
                 </div>
 
                 <div className="space-y-3 p-5">
-                  {course.competition && (
-                    <span className="inline-block rounded-full border border-cp-accent/30 bg-cp-accent/10 px-2.5 py-1 text-xs font-medium text-cp-accent">
-                      {course.competition}
-                    </span>
-                  )}
+                  <div className="flex items-start justify-between gap-3">
+                    {course.competition && (
+                      <span className="inline-block rounded-full border border-cp-accent/30 bg-cp-accent/10 px-2.5 py-1 text-xs font-medium text-cp-accent">
+                        {course.competition}
+                      </span>
+                    )}
+                    <OnlineNowBadge courseId={course.id} compact />
+                  </div>
 
                   <h2 className="text-base font-medium tracking-tight text-zinc-100 group-hover:text-white">
                     {course.name || 'Curso'}

@@ -2,12 +2,12 @@ import { Link } from 'react-router-dom'
 import {
   ClockIcon,
   LightBulbIcon,
-  CheckCircleIcon,
   SparklesIcon,
 } from '@heroicons/react/24/solid'
 import { ArrowRightIcon as ArrowRightOutline, DocumentTextIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
 import LGPDConsent from '../components/LGPDConsent'
+import OnlineNowBadge from '@/components/cp/OnlineNowBadge'
 
 const quickLinks = [
   { to: '/flashcards', title: 'Flashcards com IA', desc: 'Repetição espaçada por tópico', icon: SparklesIcon, accent: 'cp-card-accent-violet' },
@@ -15,11 +15,11 @@ const quickLinks = [
   { to: '/guia-mentorado', title: 'Guia Mentorado', desc: 'Cronograma estratégico', icon: LightBulbIcon, accent: 'cp-card-accent-pink' },
   { to: '/vespera-de-prova', title: 'Véspera de Prova', desc: 'Revisão final antes da prova', icon: ClockIcon, accent: 'cp-card-accent-cyan' },
   { to: '/treino-redacao', title: 'Treino de Redação', desc: 'Pratique redações com IA', icon: DocumentTextIcon, accent: 'cp-card-accent-violet' },
-  { to: '/materia-revisada', title: 'Matéria Revisada', desc: 'Registro do que você revisou', icon: CheckCircleIcon, accent: 'cp-card-accent-amber' },
+  { to: '/trilha', title: 'Trilha', desc: 'Tempo líquido, ciclo e metas de estudo', icon: ClockIcon, accent: 'cp-card-accent-cyan' },
 ]
 
 const Dashboard = () => {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
 
   return (
     <div className="pb-10">
@@ -29,6 +29,9 @@ const Dashboard = () => {
           Olá, <span className="cp-gradient-text">{user?.displayName?.split(' ')[0] || 'estudante'}</span>
         </h1>
         <p className="mt-2 text-cp-muted">Acesso rápido às ferramentas de estudo</p>
+        <div className="mt-4">
+          <OnlineNowBadge courseId={profile?.selectedCourseId ?? null} />
+        </div>
       </div>
 
       <div className="animate-fade-in">

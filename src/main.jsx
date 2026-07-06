@@ -12,6 +12,7 @@ import ErrorBoundary from './components/ErrorBoundary.jsx'
 import FirebaseConfigError from './components/FirebaseConfigError.jsx'
 import { QueryProvider } from './providers/QueryProvider.jsx'
 import { SystemProvider } from './hooks/useSystem.jsx'
+import { cleanupConsole } from './lib/consoleCleanup.js'
 import './index.css'
 import './styles/design-system.css'
 import './styles/stark-design-system.css'
@@ -23,6 +24,7 @@ import { firebaseInitialized } from './firebase/config.js'
 
 // Proteção global contra erros do framer-motion
 if (typeof window !== 'undefined') {
+  cleanupConsole()
   window.addEventListener('error', (event) => {
     if (event.message && event.message.includes('Activity') && event.filename && event.filename.includes('framer-motion')) {
       console.warn('[App] Erro do framer-motion capturado, continuando sem animações...')
