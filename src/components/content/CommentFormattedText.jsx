@@ -1,4 +1,19 @@
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 import { parseCommentBlocks, highlightClass } from '../../utils/commentFormatUtils'
+
+function renderMath(latex, displayMode = false) {
+  try {
+    return katex.renderToString(latex, {
+      displayMode,
+      throwOnError: false,
+      strict: 'ignore',
+      trust: false,
+    })
+  } catch {
+    return displayMode ? `\\[${latex}\\]` : `\\(${latex}\\)`
+  }
+}
 
 function renderToken(token, key) {
   switch (token.type) {
@@ -23,6 +38,14 @@ function renderToken(token, key) {
           {token.text}
         </mark>
       )
+    case 'math-inline':
+      return (
+        <span
+          key={key}
+          className="mx-0.5 inline-block align-middle"
+          dangerouslySetInnerHTML={{ __html: renderMath(token.text, false) }}
+        />
+      )
     default:
       return <span key={key}>{token.text}</span>
   }
@@ -36,14 +59,28 @@ export default function CommentFormattedText({ text, className = '' }) {
   }
 
   return (
-    <div className={`space-y-1.5 break-words text-sm leading-relaxed text-cp-text ${className}`}>
-      {blocks.map((block, blockIdx) => (
-        <p key={blockIdx} className="whitespace-pre-wrap">
-          {block.tokens.map((token, tokenIdx) =>
-            renderToken(token, `${blockIdx}-${tokenIdx}`),
-          )}
-        </p>
-      ))}
+    <div className={`space-y-2 break-words text-sm leading-relaxed text-cp-text ${className}`}>
+      {blocks.map((block, blockIdx) => {
+        if (block.type === 'spacer') {
+          return <div key={blockIdx} className="h-2" aria-hidden />
+        }
+        if (block.type === 'math-display') {
+          return (
+            <div
+              key={blockIdx}
+              className="my-2 overflow-x-auto rounded-lg bg-cp-surface/60 px-3 py-2 text-center"
+              dangerouslySetInnerHTML={{ __html: renderMath(block.latex, true) }}
+            />
+          )
+        }
+        return (
+          <p key={blockIdx} className="whitespace-pre-wrap">
+            {block.tokens.map((token, tokenIdx) =>
+              renderToken(token, `${blockIdx}-${tokenIdx}`),
+            )}
+          </p>
+        )
+      })}
     </div>
   )
 }

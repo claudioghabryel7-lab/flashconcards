@@ -1,5 +1,6 @@
 import StudyPostMedia from './StudyPostMedia'
 import ContentSharePostMedia from './ContentSharePostMedia'
+import ContentCommentPostMedia from './ContentCommentPostMedia'
 import { FEED_POST_TYPES, getPostOpenUrl, resolvePostType } from '../../utils/feedUtils'
 
 export default function FeedPostMedia({ post, onDoubleTapLike, exportMode = false }) {
@@ -19,6 +20,10 @@ export default function FeedPostMedia({ post, onDoubleTapLike, exportMode = fals
         exportMode={exportMode}
       />
     )
+  }
+
+  if (postType === FEED_POST_TYPES.COMENTARIO) {
+    return <ContentCommentPostMedia post={post} exportMode={exportMode} />
   }
 
   return (

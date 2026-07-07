@@ -226,6 +226,8 @@ export default function ContentCommentsSheet({
   contentId,
   topicKey,
   preview,
+  materia = '',
+  assunto = '',
   contextLabel = 'este conteúdo',
 }) {
   const { user, profile, isAdmin } = useAuth()
@@ -264,6 +266,8 @@ export default function ContentCommentsSheet({
         topicKey,
         text,
         preview,
+        materia,
+        assunto,
         user,
         profile,
       })
@@ -278,64 +282,67 @@ export default function ContentCommentsSheet({
   }
 
   return (
-    <PortalOverlay open={open} onClose={onClose} ariaLabel="Comentários públicos">
-      <div className="flex items-center justify-between border-b border-cp-border px-4 py-3">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-wide text-cp-muted">Comentários públicos</p>
-          <h3 className="cp-headline text-base text-cp-text">{contextLabel}</h3>
+    <PortalOverlay open={open} onClose={onClose} ariaLabel="Comentários públicos" size="large">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-center justify-between border-b border-cp-border px-4 py-3">
+          <div className="min-w-0 pr-2">
+            <p className="font-mono text-[10px] uppercase tracking-wide text-cp-muted">Comentários públicos</p>
+            <h3 className="cp-headline truncate text-base text-cp-text">{contextLabel}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-full p-1.5 text-cp-muted hover:bg-cp-surface hover:text-cp-text"
+            aria-label="Fechar"
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full p-1.5 text-cp-muted hover:bg-cp-surface hover:text-cp-text"
-          aria-label="Fechar"
-        >
-          <XMarkIcon className="h-5 w-5" />
-        </button>
-      </div>
 
-      {preview && (
-        <div className="border-b border-cp-border bg-cp-surface/50 px-4 py-3">
-          <p className="line-clamp-3 text-sm text-cp-muted">{preview}</p>
-        </div>
-      )}
-
-      <div className="min-h-[200px] flex-1 overflow-y-auto overscroll-contain">
-        {loading ? (
-          <p className="px-4 py-8 text-center text-sm text-cp-muted">Carregando comentários…</p>
-        ) : comments.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-cp-muted">
-            Nenhum comentário ainda. Seja o primeiro!
-          </p>
-        ) : (
-          comments.map((c) => (
-            <CommentRow
-              key={c.id}
-              comment={c}
-              courseId={courseId}
-              currentUserId={user?.uid}
-              isAdmin={isAdmin}
-            />
-          ))
+        {preview && (
+          <div className="shrink-0 border-b border-cp-border bg-cp-surface/50 px-4 py-3">
+            <p className="line-clamp-4 text-sm leading-relaxed text-cp-muted">{preview}</p>
+          </div>
         )}
-      </div>
 
-      <div className="border-t border-cp-border bg-[var(--cp-bg)] p-4">
-        <CommentComposer
-          value={text}
-          onChange={setText}
-          disabled={!user}
-          placeholder={user ? 'Comentário público (visível no seu perfil)…' : 'Faça login para comentar'}
-        />
-        {message && <p className="mt-2 text-xs text-cp-muted">{message}</p>}
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={sending || !user}
-          className="cp-btn-primary mt-3 w-full !text-sm disabled:opacity-60"
-        >
-          {sending ? 'Publicando…' : 'Publicar comentário'}
-        </button>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          {loading ? (
+            <p className="px-4 py-8 text-center text-sm text-cp-muted">Carregando comentários…</p>
+          ) : comments.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-cp-muted">
+              Nenhum comentário ainda. Seja o primeiro!
+            </p>
+          ) : (
+            comments.map((c) => (
+              <CommentRow
+                key={c.id}
+                comment={c}
+                courseId={courseId}
+                currentUserId={user?.uid}
+                isAdmin={isAdmin}
+              />
+            ))
+          )}
+        </div>
+
+        <div className="shrink-0 border-t border-cp-border bg-[var(--cp-bg)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <CommentComposer
+            value={text}
+            onChange={setText}
+            disabled={!user}
+            rows={4}
+            placeholder={user ? 'Comentário público (aparece no feed da comunidade)…' : 'Faça login para comentar'}
+          />
+          {message && <p className="mt-2 text-xs text-cp-muted">{message}</p>}
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={sending || !user || !text.trim()}
+            className="cp-btn-primary mt-3 w-full !text-sm disabled:opacity-60"
+          >
+            {sending ? 'Publicando…' : 'Publicar comentário'}
+          </button>
+        </div>
       </div>
     </PortalOverlay>
   )

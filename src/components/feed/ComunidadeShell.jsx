@@ -11,7 +11,7 @@ export default function ComunidadeShell({
   children,
 }) {
   return (
-    <div className="mx-auto min-h-screen w-full max-w-[470px] border-x border-cp-border bg-cp-bg pb-16 text-cp-text">
+    <div className="mx-auto min-h-screen w-full max-w-3xl border-x border-cp-border bg-cp-bg pb-16 text-cp-text sm:max-w-[720px]">
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-cp-border bg-cp-bg/95 px-4 py-3 backdrop-blur-md">
         <div className="flex min-w-0 items-center gap-2">
           {backHref && (

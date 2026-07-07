@@ -12,6 +12,7 @@ import {
 import UserAvatar from '../UserAvatar'
 import FeedStoryAvatar from './FeedStoryAvatar'
 import FeedPostMedia from './FeedPostMedia'
+import CommentFormattedText from '../content/CommentFormattedText'
 import { formatCommentTime, formatFeedTime, getPostCaption, resolvePostType, FEED_POST_TYPES } from '../../utils/feedUtils'
 
 export default function FeedPost({
@@ -43,6 +44,7 @@ export default function FeedPost({
   const commentsCount = post.commentsCount || comments.length
   const caption = getPostCaption(post)
   const isTrilhaPost = resolvePostType(post) === FEED_POST_TYPES.TRILHA
+  const isCommentPost = resolvePostType(post) === FEED_POST_TYPES.COMENTARIO
   const previewComments = showAllComments ? comments : comments.slice(0, 2)
   const isAuthor = user?.uid === post.authorId
   const canManagePost = isAuthor || isAdmin
@@ -212,6 +214,11 @@ export default function FeedPost({
             {isTrilhaPost && post.acertos != null ? ` · ${post.acertos}✓ ${post.erros || 0}✗` : ''}
           </p>
         )}
+        {isCommentPost && post.commentText && (
+          <div className="mt-3 rounded-xl border border-cp-border bg-cp-surface/40 px-3 py-3">
+            <CommentFormattedText text={post.commentText} />
+          </div>
+        )}
       </div>
 
       <div className="space-y-2 px-3 pt-2 pb-1">
@@ -231,15 +238,13 @@ export default function FeedPost({
               <UserAvatar photoBase64={c.authorPhotoBase64} name={c.authorName} size="xs" />
             </Link>
             <div className="min-w-0 flex-1">
-              <p className="leading-snug">
-                <Link
-                  to={`/profile/${c.authorId}`}
-                  className="mr-1.5 font-semibold text-cp-text hover:text-cp-accent"
-                >
-                  {c.authorName}
-                </Link>
-                <span className="text-cp-text">{c.text}</span>
-              </p>
+              <Link
+                to={`/profile/${c.authorId}`}
+                className="font-semibold text-cp-text hover:text-cp-accent"
+              >
+                {c.authorName}
+              </Link>
+              <CommentFormattedText text={c.text} className="!text-sm !leading-snug" />
               <div className="mt-0.5 flex items-center gap-2">
                 <p className="text-[10px] text-cp-muted">{formatCommentTime(c.createdAt)}</p>
                 {canDeleteComment(c) && (

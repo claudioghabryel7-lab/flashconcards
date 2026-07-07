@@ -9,6 +9,8 @@ export default function ContentFeedbackActions({
   contentId,
   topicKey = null,
   preview = '',
+  materia = '',
+  assunto = '',
   contextLabel = 'este conteúdo',
   variant = 'compact',
   className = '',
@@ -66,6 +68,8 @@ export default function ContentFeedbackActions({
         contentId={contentId}
         topicKey={topicKey}
         preview={preview}
+        materia={materia}
+        assunto={assunto}
         contextLabel={contextLabel}
       />
 

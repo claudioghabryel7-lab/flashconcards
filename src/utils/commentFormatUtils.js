@@ -1,26 +1,47 @@
 const HIGHLIGHT_COLORS = ['amarelo', 'verde', 'rosa', 'azul']
-const MAX_COMMENT_LENGTH = 4000
+export const MAX_COMMENT_LENGTH = 4000
 
 /** Remove caracteres invisíveis e normaliza quebras de linha (colagem de IA). */
 export function normalizeCommentInput(text = '') {
   return String(text)
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
     .replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '')
     .replace(/\t/g, '  ')
     .replace(/[ \u00A0]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
+    .replace(/\n{4,}/g, '\n\n\n')
+}
+
+/** Insere parágrafos em textos colados sem quebras (comum em respostas de IA). */
+export function smartParagraphize(text = '') {
+  let s = normalizeCommentInput(text)
+  if (!s) return ''
+
+  if (s.includes('\n\n')) {
+    return s.trim()
+  }
+
+  s = s.replace(
+    /([.!?])\s*(?=(Exemplo|Elementos|Critérios|Identidade|Ser |Para |Uma |O texto|A afirmação|\d+\))/gi,
+    '$1\n\n',
+  )
+  s = s.replace(/\.(?=\s*[A-ZÁÉÍÓÚÀÊÔÂÃÕÇ])/g, '.\n\n')
+  s = s.replace(/:(?=\s*[A-ZÁÉÍÓÚÀÊÔÂÃÕÇ])/g, ':\n\n')
+  s = s.replace(/([.!?])\s*(?=- )/g, '$1\n\n')
+  s = s.replace(/\n{3,}/g, '\n\n')
+
+  return s.trim()
 }
 
 export function sanitizeCommentForStorage(text = '') {
-  const normalized = normalizeCommentInput(text)
+  const normalized = smartParagraphize(text)
   if (!normalized) return ''
   return normalized.slice(0, MAX_COMMENT_LENGTH)
 }
 
 const INLINE_TOKEN =
-  /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|==(?:amarelo|verde|rosa|azul):[^=\n]+==|==[^=\n]+==)/g
+  /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|==(?:amarelo|verde|rosa|azul):[^=\n]+==|==[^=\n]+==|\\\([\s\S]*?\\\)|\$[^$\n]+\$)/g
 
 function parseInlineSegment(segment) {
   const tokens = []
@@ -45,6 +66,9 @@ function parseInlineSegment(segment) {
       } else {
         tokens.push({ type: 'mark', color: 'amarelo', text: inner })
       }
+    } else if (raw.startsWith('\\(') || raw.startsWith('$')) {
+      const inner = raw.startsWith('\\(') ? raw.slice(2, -2) : raw.slice(1, -1)
+      tokens.push({ type: 'math-inline', text: inner })
     }
 
     last = match.index + raw.length
@@ -57,22 +81,52 @@ function parseInlineSegment(segment) {
   return tokens.length ? tokens : [{ type: 'plain', text: segment }]
 }
 
-/** Converte texto do comentário em blocos (parágrafos + formatação inline). */
+const DISPLAY_MATH = /\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$/g
+
+/** Converte texto do comentário em blocos (parágrafos + formatação inline + math display). */
 export function parseCommentBlocks(text = '') {
-  const normalized = normalizeCommentInput(text)
+  const normalized = smartParagraphize(text)
   if (!normalized) return []
 
-  return normalized.split('\n').map((line) => ({
-    tokens: line ? parseInlineSegment(line) : [{ type: 'plain', text: '' }],
-  }))
+  const blocks = []
+  let cursor = 0
+
+  for (const match of normalized.matchAll(DISPLAY_MATH)) {
+    if (match.index > cursor) {
+      blocks.push(...paragraphBlocksFromText(normalized.slice(cursor, match.index)))
+    }
+    blocks.push({
+      type: 'math-display',
+      latex: match[1] || match[2] || '',
+    })
+    cursor = match.index + match[0].length
+  }
+
+  if (cursor < normalized.length) {
+    blocks.push(...paragraphBlocksFromText(normalized.slice(cursor)))
+  }
+
+  return blocks
+}
+
+function paragraphBlocksFromText(text) {
+  return text.split('\n').map((line) => {
+    if (!line.trim()) {
+      return { type: 'spacer' }
+    }
+    return {
+      type: 'paragraph',
+      tokens: parseInlineSegment(line),
+    }
+  })
 }
 
 export function wrapSelection(value, selectionStart, selectionEnd, before, after = before) {
-  const selected = value.slice(selectionStart, selectionEnd) || 'texto'
-  const next =
-    value.slice(0, selectionStart) + before + selected + after + value.slice(selectionEnd)
+  const selected = value.slice(selectionStart, selectionEnd)
+  const inner = selected || ''
+  const next = value.slice(0, selectionStart) + before + inner + after + value.slice(selectionEnd)
   const cursorStart = selectionStart + before.length
-  const cursorEnd = cursorStart + selected.length
+  const cursorEnd = cursorStart + inner.length
   return { value: next, selectionStart: cursorStart, selectionEnd: cursorEnd }
 }
 

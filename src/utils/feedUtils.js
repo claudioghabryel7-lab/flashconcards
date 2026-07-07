@@ -106,6 +106,7 @@ export const FEED_POST_TYPES = {
   FLASHCARDS: 'flashcards',
   QUESTOES: 'questoes',
   MATERIAL: 'material',
+  COMENTARIO: 'comentario',
 }
 
 export const POST_TYPE_LABELS = {
@@ -113,6 +114,7 @@ export const POST_TYPE_LABELS = {
   flashcards: 'FlashCards',
   questoes: 'Questões',
   material: 'Material do tópico',
+  comentario: 'Comentário',
 }
 
 export function resolvePostType(post) {
@@ -141,6 +143,13 @@ export function getPostCaption(post) {
       }
     case FEED_POST_TYPES.MATERIAL:
       return { verb: 'compartilhou material de', materia, assunto, meta: 'Material de apoio' }
+    case FEED_POST_TYPES.COMENTARIO:
+      return {
+        verb: post.contentType === 'questao' ? 'comentou uma questão de' : 'comentou um flashcard de',
+        materia,
+        assunto,
+        meta: 'Discussão aberta',
+      }
     default:
       return {
         verb: 'estudou',

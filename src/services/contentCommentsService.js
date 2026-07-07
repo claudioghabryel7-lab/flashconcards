@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { sanitizeCommentForStorage } from '../utils/commentFormatUtils'
+import { publishFeedPost } from './trilhaFeedService'
 
 function commentsRef(courseId) {
   return collection(db, 'courses', courseId || 'alego-default', 'contentComments')
@@ -64,6 +65,8 @@ export async function addContentComment({
   topicKey = null,
   text,
   preview = '',
+  materia = '',
+  assunto = '',
   user,
   profile,
 }) {
@@ -74,13 +77,15 @@ export async function addContentComment({
   const trimmed = sanitizeCommentForStorage(text)
   if (!trimmed) throw new Error('Escreva um comentário antes de enviar.')
 
-  await addDoc(commentsRef(courseId), {
+  const docRef = await addDoc(commentsRef(courseId), {
     courseId,
     contentType,
     contentId: String(contentId),
     topicKey: topicKey || null,
     text: trimmed,
     preview: preview ? String(preview).slice(0, 280) : '',
+    materia: materia || '',
+    assunto: assunto || '',
     userId: user.uid,
     userName:
       profile?.displayName ||
@@ -92,7 +97,42 @@ export async function addContentComment({
     dislikes: 0,
     createdAt: serverTimestamp(),
     editedAt: null,
+    feedPostId: null,
   })
+
+  if (profile?.shareTrilhaToFeed !== false) {
+    try {
+      const feedPostId = await publishFeedPost({
+        user,
+        profile,
+        data: {
+          postType: 'comentario',
+          courseId,
+          topicKey,
+          contentType,
+          contentId: String(contentId),
+          contentCommentId: docRef.id,
+          commentText: trimmed,
+          materia,
+          assunto,
+          modalidade: contentType === 'questao' ? 'questoes' : 'flashcards',
+          itemPreview: {
+            type: contentType === 'questao' ? 'questao' : 'flashcard',
+            enunciado: contentType === 'questao' ? String(preview).slice(0, 280) : undefined,
+            pergunta: contentType === 'flashcard' ? String(preview).slice(0, 280) : undefined,
+            text: String(preview).slice(0, 280),
+          },
+        },
+      })
+      if (feedPostId) {
+        await updateDoc(docRef, { feedPostId })
+      }
+    } catch (error) {
+      console.warn('Não foi possível publicar comentário no feed:', error)
+    }
+  }
+
+  return docRef.id
 }
 
 export async function updateContentComment({ courseId, commentId, text, userId, isAdmin = false }) {
@@ -112,6 +152,16 @@ export async function updateContentComment({ courseId, commentId, text, userId, 
     text: trimmed,
     editedAt: serverTimestamp(),
   })
+
+  if (data.feedPostId) {
+    try {
+      await updateDoc(doc(db, 'trilhaFeed', data.feedPostId), {
+        commentText: trimmed,
+      })
+    } catch (error) {
+      console.warn('Não foi possível atualizar post no feed:', error)
+    }
+  }
 }
 
 export async function deleteContentComment({ courseId, commentId, userId, isAdmin = false }) {

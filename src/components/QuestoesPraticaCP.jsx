@@ -119,6 +119,8 @@ export function QuestaoEnunciadoCard({
                 contentId={contentId}
                 topicKey={topicKey}
                 preview={enunciado}
+                materia={assunto}
+                assunto={assunto}
                 contextLabel="esta questão"
                 variant="inline"
               />

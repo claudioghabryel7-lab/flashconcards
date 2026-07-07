@@ -236,7 +236,7 @@ export default function ComunidadePublicacao() {
       />
 
       {capturePost && (
-        <div ref={captureRef} className="pointer-events-none fixed -left-[9999px] top-0 w-[470px]">
+        <div ref={captureRef} className="pointer-events-none fixed -left-[9999px] top-0 w-full max-w-[720px]">
           <FeedPostMedia post={capturePost} exportMode />
         </div>
       )}

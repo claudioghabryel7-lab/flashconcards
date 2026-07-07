@@ -3,7 +3,7 @@ import {
   wrapSelection,
   wrapHighlight,
   HIGHLIGHT_OPTIONS,
-  normalizeCommentInput,
+  smartParagraphize,
 } from '../../utils/commentFormatUtils'
 
 export default function CommentComposer({
@@ -11,7 +11,7 @@ export default function CommentComposer({
   onChange,
   placeholder = 'Escreva seu comentário…',
   disabled = false,
-  rows = 4,
+  rows = 5,
   id,
 }) {
   const textareaRef = useRef(null)
@@ -54,7 +54,7 @@ export default function CommentComposer({
     e.preventDefault()
     const el = textareaRef.current
     if (!el) return
-    const cleaned = normalizeCommentInput(pasted)
+    const cleaned = smartParagraphize(pasted)
     const start = el.selectionStart ?? 0
     const end = el.selectionEnd ?? 0
     const next = value.slice(0, start) + cleaned + value.slice(end)
@@ -86,7 +86,7 @@ export default function CommentComposer({
         >
           I
         </button>
-        <span className="mx-1 h-4 w-px bg-cp-border" />
+        <span className="mx-1 hidden h-4 w-px bg-cp-border sm:block" />
         {HIGHLIGHT_OPTIONS.map((opt) => (
           <button
             key={opt.id}
@@ -110,11 +110,11 @@ export default function CommentComposer({
         rows={rows}
         disabled={disabled}
         placeholder={placeholder}
-        className="w-full resize-y rounded-xl border border-cp-border bg-cp-surface px-3 py-2.5 font-mono text-sm leading-relaxed text-cp-text focus:border-[var(--cp-accent)] focus:outline-none disabled:opacity-60"
+        className="w-full min-h-[120px] max-h-[40vh] resize-y rounded-xl border border-cp-border bg-cp-surface px-3 py-2.5 text-sm leading-relaxed text-cp-text focus:border-[var(--cp-accent)] focus:outline-none disabled:opacity-60"
       />
 
       <p className="text-[10px] text-cp-muted">
-        Dica: selecione o texto e use B, I ou grifar. Colagens de IA são limpas automaticamente.
+        Selecione o texto e use B, I ou grifar. Fórmulas LaTeX como \(I_n\) são renderizadas automaticamente.
       </p>
     </div>
   )

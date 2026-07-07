@@ -31,7 +31,7 @@ export default function FeedPostEditModal({ post, open, saving, onClose, onSave 
         aria-label="Fechar"
         onClick={onClose}
       />
-      <div className="relative z-10 max-h-[92vh] w-full max-w-[470px] overflow-y-auto rounded-t-2xl border border-cp-border bg-cp-bg shadow-2xl sm:rounded-2xl">
+      <div className="relative z-10 max-h-[92vh] w-full max-w-[720px] overflow-y-auto rounded-t-2xl border border-cp-border bg-cp-bg shadow-2xl sm:rounded-2xl">
         <div className="sticky top-0 flex items-center justify-between border-b border-cp-border bg-cp-bg/95 px-4 py-3 backdrop-blur-md">
           <h2 className="font-display text-base font-bold text-cp-text">Editar publicação</h2>
           <button

@@ -11,6 +11,7 @@ export const FEED_POST_TYPES = {
   FLASHCARDS: 'flashcards',
   QUESTOES: 'questoes',
   MATERIAL: 'material',
+  COMENTARIO: 'comentario',
 }
 
 function safePhoto(photoBase64) {
@@ -59,6 +60,10 @@ export async function publishFeedPost({ user, profile, data }) {
       itemCount: data.itemCount ?? null,
       itemIndex: data.itemIndex ?? null,
       itemPreview: data.itemPreview || null,
+      contentType: data.contentType || null,
+      contentId: data.contentId || null,
+      contentCommentId: data.contentCommentId || null,
+      commentText: data.commentText || null,
       source: data.source || postType,
       durationMinutes: data.durationMinutes || data.minutos || 0,
       acertos: data.acertos ?? null,
