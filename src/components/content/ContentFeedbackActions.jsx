@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { ChatBubbleLeftEllipsisIcon, FlagIcon } from '@heroicons/react/24/outline'
-import ContentCommentsSheet from './ContentCommentsSheet'
-import ContentFlagSheet from './ContentFlagSheet'
+
+const ContentCommentsSheet = lazy(() => import('./ContentCommentsSheet'))
+const ContentFlagSheet = lazy(() => import('./ContentFlagSheet'))
 
 export default function ContentFeedbackActions({
   courseId,
@@ -60,29 +61,37 @@ export default function ContentFeedbackActions({
         </button>
       </div>
 
-      <ContentCommentsSheet
-        open={commentsOpen}
-        onClose={() => setCommentsOpen(false)}
-        courseId={courseId}
-        contentType={contentType}
-        contentId={contentId}
-        topicKey={topicKey}
-        preview={preview}
-        materia={materia}
-        assunto={assunto}
-        contextLabel={contextLabel}
-      />
+      {commentsOpen && (
+        <Suspense fallback={null}>
+          <ContentCommentsSheet
+            open={commentsOpen}
+            onClose={() => setCommentsOpen(false)}
+            courseId={courseId}
+            contentType={contentType}
+            contentId={contentId}
+            topicKey={topicKey}
+            preview={preview}
+            materia={materia}
+            assunto={assunto}
+            contextLabel={contextLabel}
+          />
+        </Suspense>
+      )}
 
-      <ContentFlagSheet
-        open={flagOpen}
-        onClose={() => setFlagOpen(false)}
-        courseId={courseId}
-        contentType={contentType}
-        contentId={contentId}
-        topicKey={topicKey}
-        preview={preview}
-        contextLabel={contextLabel}
-      />
+      {flagOpen && (
+        <Suspense fallback={null}>
+          <ContentFlagSheet
+            open={flagOpen}
+            onClose={() => setFlagOpen(false)}
+            courseId={courseId}
+            contentType={contentType}
+            contentId={contentId}
+            topicKey={topicKey}
+            preview={preview}
+            contextLabel={contextLabel}
+          />
+        </Suspense>
+      )}
     </>
   )
 }

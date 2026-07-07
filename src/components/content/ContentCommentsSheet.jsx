@@ -152,7 +152,7 @@ function CommentRow({ comment, courseId, currentUserId, isAdmin, onVote }) {
 
           {editing ? (
             <div className="mt-2 space-y-2">
-              <CommentComposer value={editText} onChange={setEditText} rows={5} />
+              <CommentComposer value={editText} onChange={setEditText} maxEditorHeight={180} />
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -259,7 +259,7 @@ export default function ContentCommentsSheet({
     try {
       setSending(true)
       setMessage('')
-      await addContentComment({
+      const result = await addContentComment({
         courseId,
         contentType,
         contentId,
@@ -272,7 +272,13 @@ export default function ContentCommentsSheet({
         profile,
       })
       setText('')
-      setMessage('Comentário publicado!')
+      if (result.feedWarning) {
+        setMessage(result.feedWarning)
+      } else if (result.feedPostId) {
+        setMessage('Publicado na comunidade! Confira em /comunidade')
+      } else {
+        setMessage('Comentário publicado!')
+      }
       setTimeout(() => setMessage(''), 2000)
     } catch (error) {
       setMessage(error.message || 'Erro ao publicar comentário.')
@@ -283,7 +289,7 @@ export default function ContentCommentsSheet({
 
   return (
     <PortalOverlay open={open} onClose={onClose} ariaLabel="Comentários públicos" size="large">
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex h-full max-h-[90dvh] min-h-0 flex-col">
         <div className="flex shrink-0 items-center justify-between border-b border-cp-border px-4 py-3">
           <div className="min-w-0 pr-2">
             <p className="font-mono text-[10px] uppercase tracking-wide text-cp-muted">Comentários públicos</p>
@@ -325,20 +331,20 @@ export default function ContentCommentsSheet({
           )}
         </div>
 
-        <div className="shrink-0 border-t border-cp-border bg-[var(--cp-bg)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 border-t border-cp-border bg-[var(--cp-bg)] px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <CommentComposer
             value={text}
             onChange={setText}
             disabled={!user}
-            rows={4}
-            placeholder={user ? 'Comentário público (aparece no feed da comunidade)…' : 'Faça login para comentar'}
+            maxEditorHeight={240}
+            placeholder={user ? 'Escreva ou cole — já aparece formatado…' : 'Faça login para comentar'}
           />
           {message && <p className="mt-2 text-xs text-cp-muted">{message}</p>}
           <button
             type="button"
             onClick={handleSubmit}
             disabled={sending || !user || !text.trim()}
-            className="cp-btn-primary mt-3 w-full !text-sm disabled:opacity-60"
+            className="cp-btn-primary mt-2 w-full shrink-0 !py-2.5 !text-sm disabled:opacity-60"
           >
             {sending ? 'Publicando…' : 'Publicar comentário'}
           </button>

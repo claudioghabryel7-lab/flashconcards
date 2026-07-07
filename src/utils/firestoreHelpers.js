@@ -1,8 +1,25 @@
 import { Timestamp } from 'firebase/firestore'
 
+function isFirestoreFieldValue(value) {
+  return value && typeof value === 'object' && typeof value._methodName === 'string'
+}
+
 export function stripUndefined(obj) {
-  if (!obj || typeof obj !== 'object') return obj
-  return Object.fromEntries(Object.entries(obj).filter(([, value]) => value !== undefined))
+  if (obj === undefined) return undefined
+  if (obj === null || typeof obj !== 'object') return obj
+  if (isFirestoreFieldValue(obj) || obj instanceof Date) return obj
+  if (typeof obj.toDate === 'function') return obj
+
+  if (Array.isArray(obj)) {
+    return obj.map((item) => stripUndefined(item)).filter((item) => item !== undefined)
+  }
+
+  return Object.fromEntries(
+    Object.entries(obj)
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value]) => [key, stripUndefined(value)])
+      .filter(([, value]) => value !== undefined),
+  )
 }
 
 export function firestoreErrorMessage(err, fallback = 'Erro ao salvar. Tente novamente.') {

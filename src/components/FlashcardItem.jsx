@@ -14,6 +14,8 @@ const FlashcardItem = ({
   onEditFlashcard = null,
   courseId = null,
   topicKey = null,
+  materia = '',
+  assunto = '',
   cardColor = 'bg-white',
   textColor = 'text-slate-900',
   borderColor = 'border-slate-200',
@@ -187,6 +189,8 @@ const FlashcardItem = ({
                     contentId={card.id}
                     topicKey={topicKey}
                     preview={card.pergunta}
+                    materia={materia}
+                    assunto={assunto}
                     contextLabel="este flashcard"
                     variant="compact"
                   />

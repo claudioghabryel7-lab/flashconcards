@@ -70,7 +70,7 @@ export default function ComunidadeTrilha() {
   }, [user])
 
   useEffect(() => {
-    if (!user) return () => {}
+    if (!db) return () => {}
 
     const postsRef = collection(db, 'trilhaFeed')
     let unsub = () => {}
@@ -97,7 +97,7 @@ export default function ComunidadeTrilha() {
 
     subscribe(true)
     return () => unsub()
-  }, [user])
+  }, [])
 
   const dailyHighlights = useMemo(() => {
     const todayPosts = posts.filter((p) => p.featuredDate === todayKey)

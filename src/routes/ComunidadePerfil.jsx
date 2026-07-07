@@ -15,7 +15,7 @@ import UserAvatar from '../components/UserAvatar'
 import ComunidadeShell from '../components/feed/ComunidadeShell'
 import FeedPostThumbnail from '../components/feed/FeedPostThumbnail'
 import UserPublicCommentsList from '../components/content/UserPublicCommentsList'
-import { subscribeUserComments } from '../services/contentCommentsService'
+import { subscribeUserComments, backfillUserCommentsToFeed } from '../services/contentCommentsService'
 import {
   followUser,
   subscribeFollowCounts,
@@ -36,6 +36,7 @@ export default function ComunidadePerfil() {
   const [profileTab, setProfileTab] = useState('posts')
   const [comments, setComments] = useState([])
   const [commentsLoading, setCommentsLoading] = useState(true)
+  const [backfillDone, setBackfillDone] = useState(false)
 
   const isOwnProfile = userId === currentUser?.uid
 
@@ -108,10 +109,39 @@ export default function ComunidadePerfil() {
         setComments(rows)
         setCommentsLoading(false)
       },
-      () => setCommentsLoading(false),
+      (err) => {
+        console.error('Erro ao carregar comentários do perfil:', err)
+        setCommentsLoading(false)
+      },
     )
     return () => unsub?.()
   }, [userId])
+
+  useEffect(() => {
+    if (!isOwnProfile || !currentUser || !comments.length || backfillDone || commentsLoading) return
+
+    const missingFeed = comments.filter((c) => !c.feedPostId)
+    if (!missingFeed.length) {
+      setBackfillDone(true)
+      return
+    }
+
+    let cancelled = false
+    backfillUserCommentsToFeed({
+      user: currentUser,
+      profile: currentProfile,
+      comments: missingFeed,
+    }).then(({ published }) => {
+      if (!cancelled && published > 0) {
+        toast.success(`${published} comentário(s) republicado(s) na comunidade.`)
+      }
+      if (!cancelled) setBackfillDone(true)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isOwnProfile, currentUser, currentProfile, comments, backfillDone, commentsLoading])
 
   const handleFollowToggle = async () => {
     if (!currentUser?.uid || !userId || isOwnProfile || followLoading) return

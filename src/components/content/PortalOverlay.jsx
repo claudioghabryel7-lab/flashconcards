@@ -43,6 +43,7 @@ export default function PortalOverlay({
     >
       <div
         className={`flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-cp-border bg-[var(--cp-bg)] shadow-2xl sm:rounded-2xl ${sizeClass}`}
+        style={{ height: size === 'large' ? 'min(90dvh, 720px)' : undefined }}
         onClick={(e) => e.stopPropagation()}
       >
         {children}

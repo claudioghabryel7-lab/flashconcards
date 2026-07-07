@@ -1,4 +1,4 @@
-import { getPostCaption } from './feedUtils'
+import { getPostCaption, resolveContentQuestionText } from './feedUtils'
 import {
   captureElementImage,
   shareImageBlob,
@@ -7,7 +7,16 @@ import {
 } from './imageShareExport'
 
 export function buildFeedShareText(post) {
-  const { verb, materia, assunto, meta } = getPostCaption(post)
+  const caption = getPostCaption(post)
+  if (caption.isCommentPost) {
+    const question = caption.questionText || resolveContentQuestionText(post)
+    const comment = caption.commentText || post.commentText || ''
+    const parts = ['Concurseiro Preditivo — Comentário']
+    if (question) parts.push(question)
+    if (comment) parts.push(comment)
+    return parts.join('\n\n')
+  }
+  const { verb, materia, assunto, meta } = caption
   let line = `Concurseiro Preditivo — ${verb} ${materia}${assunto || ''}`
   if (meta) line += ` (${meta})`
   return line

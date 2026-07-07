@@ -23,7 +23,13 @@ export default function FeedPostMedia({ post, onDoubleTapLike, exportMode = fals
   }
 
   if (postType === FEED_POST_TYPES.COMENTARIO) {
-    return <ContentCommentPostMedia post={post} exportMode={exportMode} />
+    return (
+      <ContentCommentPostMedia
+        post={post}
+        exportMode={exportMode}
+        onDoubleTapLike={onDoubleTapLike}
+      />
+    )
   }
 
   return (

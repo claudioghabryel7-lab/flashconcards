@@ -43,8 +43,8 @@ export default function FeedPost({
   const comments = post.comments || []
   const commentsCount = post.commentsCount || comments.length
   const caption = getPostCaption(post)
+  const isCommentPost = caption.isCommentPost === true
   const isTrilhaPost = resolvePostType(post) === FEED_POST_TYPES.TRILHA
-  const isCommentPost = resolvePostType(post) === FEED_POST_TYPES.COMENTARIO
   const previewComments = showAllComments ? comments : comments.slice(0, 2)
   const isAuthor = user?.uid === post.authorId
   const canManagePost = isAuthor || isAdmin
@@ -197,27 +197,46 @@ export default function FeedPost({
       )}
 
       <div className="px-3 pt-1">
-        <p className="text-sm leading-relaxed text-cp-text">
-          <Link
-            to={`/profile/${post.authorId}`}
-            className="mr-1 font-semibold hover:text-cp-accent"
-          >
-            {post.authorName}
-          </Link>
-          {caption.verb}{' '}
-          <span className="font-medium">{caption.materia}</span>
-          {caption.assunto ? <span className="text-cp-muted">{caption.assunto}</span> : null}
-        </p>
-        {caption.meta && (
-          <p className="mt-0.5 text-xs text-cp-muted">
-            {caption.meta}
-            {isTrilhaPost && post.acertos != null ? ` · ${post.acertos}✓ ${post.erros || 0}✗` : ''}
-          </p>
-        )}
-        {isCommentPost && post.commentText && (
-          <div className="mt-3 rounded-xl border border-cp-border bg-cp-surface/40 px-3 py-3">
-            <CommentFormattedText text={post.commentText} />
+        {isCommentPost ? (
+          <div className="space-y-2">
+            <p className="text-sm leading-relaxed text-cp-text">
+              <Link
+                to={`/profile/${post.authorId}`}
+                className="mr-1 font-semibold hover:text-cp-accent"
+              >
+                {post.authorName}
+              </Link>
+            </p>
+            {caption.questionText ? (
+              <p className="text-sm leading-relaxed text-cp-text">{caption.questionText}</p>
+            ) : null}
+            {caption.commentText ? (
+              <CommentFormattedText
+                text={caption.commentText}
+                className="!text-sm !leading-relaxed [&_.text-cp-text]:text-cp-text"
+              />
+            ) : null}
           </div>
+        ) : (
+          <>
+            <p className="text-sm leading-relaxed text-cp-text">
+              <Link
+                to={`/profile/${post.authorId}`}
+                className="mr-1 font-semibold hover:text-cp-accent"
+              >
+                {post.authorName}
+              </Link>
+              {caption.verb}{' '}
+              <span className="font-medium">{caption.materia}</span>
+              {caption.assunto ? <span className="text-cp-muted">{caption.assunto}</span> : null}
+            </p>
+            {caption.meta && (
+              <p className="mt-0.5 text-xs text-cp-muted">
+                {caption.meta}
+                {isTrilhaPost && post.acertos != null ? ` · ${post.acertos}✓ ${post.erros || 0}✗` : ''}
+              </p>
+            )}
+          </>
         )}
       </div>
 

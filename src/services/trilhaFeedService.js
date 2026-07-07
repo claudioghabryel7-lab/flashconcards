@@ -31,6 +31,58 @@ function defaultModalidade(postType) {
   return 'teoria'
 }
 
+export function buildContentItemPreview(contentType, previewText = '') {
+  const text = previewText ? String(previewText).slice(0, 500) : ''
+  const type = contentType === 'questao' ? 'questao' : 'flashcard'
+  const preview = { type, text }
+  if (type === 'questao') preview.enunciado = text
+  else preview.pergunta = text
+  return preview
+}
+
+/**
+ * Publica comentário de flashcard/questão no feed — sempre, independente de shareTrilhaToFeed.
+ */
+export async function publishContentCommentToFeed({ user, profile, data }) {
+  if (!user?.uid || !db || !data) return null
+
+  const postType = FEED_POST_TYPES.COMENTARIO
+  const modalidade = data.modalidade || (data.contentType === 'questao' ? 'questoes' : 'flashcards')
+  const theme = getDefaultCardTheme(modalidade)
+
+  const docRef = await addDoc(
+    collection(db, 'trilhaFeed'),
+    stripUndefined({
+      postType,
+      authorId: user.uid,
+      authorName: authorNameFrom(user, profile),
+      authorPhotoBase64: safePhoto(profile?.photoBase64),
+      materia: data.materia || '',
+      assunto: data.assunto || '',
+      modalidade,
+      courseId: data.courseId ?? null,
+      topicKey: data.topicKey || null,
+      contentType: data.contentType || null,
+      contentId: data.contentId || null,
+      contentCommentId: data.contentCommentId || null,
+      commentText: data.commentText || null,
+      contentPreview: data.contentPreview || null,
+      shareUrl: data.shareUrl || null,
+      itemPreview: data.itemPreview || null,
+      source: 'comentario',
+      cardTheme: data.cardTheme || theme,
+      featuredDate: dayjs().format('YYYY-MM-DD'),
+      likes: [],
+      likesCount: 0,
+      comments: [],
+      commentsCount: 0,
+      createdAt: serverTimestamp(),
+    }),
+  )
+
+  return docRef.id
+}
+
 /**
  * Publica qualquer tipo de conteúdo no feed da comunidade.
  */

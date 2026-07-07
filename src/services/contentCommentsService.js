@@ -15,7 +15,8 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { sanitizeCommentForStorage } from '../utils/commentFormatUtils'
-import { publishFeedPost } from './trilhaFeedService'
+import { buildContentCommentSharePath } from '../utils/feedUtils'
+import { publishContentCommentToFeed, buildContentItemPreview } from './trilhaFeedService'
 
 function commentsRef(courseId) {
   return collection(db, 'courses', courseId || 'alego-default', 'contentComments')
@@ -35,6 +36,16 @@ function voteRef(courseId, commentId, userId) {
     'votes',
     userId,
   )
+}
+
+function mapCommentDoc(d) {
+  const courseId = d.data().courseId || d.ref.parent?.parent?.id || null
+  return {
+    id: d.id,
+    courseId,
+    _docPath: d.ref.path,
+    ...d.data(),
+  }
 }
 
 function subscribeWithFallback(primaryQuery, fallbackQuery, mapDocs, onData, onError) {
@@ -77,13 +88,15 @@ export async function addContentComment({
   const trimmed = sanitizeCommentForStorage(text)
   if (!trimmed) throw new Error('Escreva um comentário antes de enviar.')
 
+  const previewText = preview ? String(preview).slice(0, 500) : ''
+
   const docRef = await addDoc(commentsRef(courseId), {
     courseId,
     contentType,
     contentId: String(contentId),
     topicKey: topicKey || null,
     text: trimmed,
-    preview: preview ? String(preview).slice(0, 280) : '',
+    preview: previewText.slice(0, 280),
     materia: materia || '',
     assunto: assunto || '',
     userId: user.uid,
@@ -100,39 +113,45 @@ export async function addContentComment({
     feedPostId: null,
   })
 
-  if (profile?.shareTrilhaToFeed !== false) {
-    try {
-      const feedPostId = await publishFeedPost({
-        user,
-        profile,
-        data: {
-          postType: 'comentario',
-          courseId,
-          topicKey,
-          contentType,
-          contentId: String(contentId),
-          contentCommentId: docRef.id,
-          commentText: trimmed,
-          materia,
-          assunto,
-          modalidade: contentType === 'questao' ? 'questoes' : 'flashcards',
-          itemPreview: {
-            type: contentType === 'questao' ? 'questao' : 'flashcard',
-            enunciado: contentType === 'questao' ? String(preview).slice(0, 280) : undefined,
-            pergunta: contentType === 'flashcard' ? String(preview).slice(0, 280) : undefined,
-            text: String(preview).slice(0, 280),
-          },
-        },
-      })
-      if (feedPostId) {
+  let feedPostId = null
+  let feedWarning = null
+
+  try {
+    const shareUrl = buildContentCommentSharePath({ courseId, contentType, topicKey })
+    feedPostId = await publishContentCommentToFeed({
+      user,
+      profile,
+      data: {
+        courseId,
+        topicKey,
+        contentType,
+        contentId: String(contentId),
+        contentCommentId: docRef.id,
+        commentText: trimmed,
+        contentPreview: previewText,
+        materia,
+        assunto,
+        shareUrl,
+        modalidade: contentType === 'questao' ? 'questoes' : 'flashcards',
+        itemPreview: buildContentItemPreview(contentType, previewText),
+      },
+    })
+
+    if (feedPostId) {
+      try {
         await updateDoc(docRef, { feedPostId })
+      } catch (linkError) {
+        console.warn('Comentário publicado no feed, mas link feedPostId falhou:', linkError)
       }
-    } catch (error) {
-      console.warn('Não foi possível publicar comentário no feed:', error)
+    } else {
+      feedWarning = 'Comentário salvo, mas não apareceu no feed da comunidade.'
     }
+  } catch (error) {
+    console.error('Erro ao publicar comentário no feed:', error)
+    feedWarning = 'Comentário salvo no seu perfil. Não foi possível publicar na comunidade agora.'
   }
 
-  return docRef.id
+  return { commentId: docRef.id, feedPostId, feedWarning }
 }
 
 export async function updateContentComment({ courseId, commentId, text, userId, isAdmin = false }) {
@@ -157,6 +176,7 @@ export async function updateContentComment({ courseId, commentId, text, userId, 
     try {
       await updateDoc(doc(db, 'trilhaFeed', data.feedPostId), {
         commentText: trimmed,
+        contentPreview: data.preview || trimmed.slice(0, 500),
       })
     } catch (error) {
       console.warn('Não foi possível atualizar post no feed:', error)
@@ -174,11 +194,19 @@ export async function deleteContentComment({ courseId, commentId, userId, isAdmi
     throw new Error('Você só pode apagar seus próprios comentários.')
   }
 
+  if (data.feedPostId) {
+    try {
+      await deleteDoc(doc(db, 'trilhaFeed', data.feedPostId))
+    } catch (error) {
+      console.warn('Não foi possível apagar post do feed:', error)
+    }
+  }
+
   await deleteDoc(ref)
 }
 
 export function subscribeContentComments({ courseId, contentType, contentId }, onData, onError) {
-  const mapDocs = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const mapDocs = (snap) => snap.docs.map(mapCommentDoc)
 
   return subscribeWithFallback(
     query(
@@ -201,7 +229,7 @@ export function subscribeContentComments({ courseId, contentType, contentId }, o
 export function subscribeUserComments(userId, onData, onError) {
   if (!userId) return () => {}
 
-  const mapDocs = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const mapDocs = (snap) => snap.docs.map(mapCommentDoc)
 
   return subscribeWithFallback(
     query(collectionGroup(db, 'contentComments'), where('userId', '==', userId), orderBy('createdAt', 'desc')),
@@ -245,4 +273,54 @@ export async function getUserVoteOnComment(courseId, commentId, userId) {
   if (!userId) return null
   const snap = await getDoc(voteRef(courseId, commentId, userId))
   return snap.exists() ? snap.data().vote : null
+}
+
+/** Republica comentários antigos que não têm post no feed (só do usuário logado). */
+export async function backfillUserCommentsToFeed({ user, profile, comments = [] }) {
+  if (!user?.uid || !comments.length) return { published: 0, failed: 0 }
+
+  let published = 0
+  let failed = 0
+
+  for (const comment of comments) {
+    if (comment.feedPostId || comment.userId !== user.uid) continue
+    try {
+      const shareUrl = buildContentCommentSharePath({
+        courseId: comment.courseId,
+        contentType: comment.contentType,
+        topicKey: comment.topicKey,
+      })
+      const feedPostId = await publishContentCommentToFeed({
+        user,
+        profile,
+        data: {
+          courseId: comment.courseId,
+          topicKey: comment.topicKey,
+          contentType: comment.contentType,
+          contentId: comment.contentId,
+          contentCommentId: comment.id,
+          commentText: comment.text,
+          contentPreview: comment.preview || comment.text?.slice(0, 500),
+          materia: comment.materia,
+          assunto: comment.assunto,
+          shareUrl,
+          modalidade: comment.contentType === 'questao' ? 'questoes' : 'flashcards',
+          itemPreview: buildContentItemPreview(
+            comment.contentType,
+            comment.preview || comment.text?.slice(0, 500),
+          ),
+        },
+      })
+      if (feedPostId && comment.courseId) {
+        await updateDoc(commentRef(comment.courseId, comment.id), { feedPostId })
+        published += 1
+      } else {
+        failed += 1
+      }
+    } catch {
+      failed += 1
+    }
+  }
+
+  return { published, failed }
 }

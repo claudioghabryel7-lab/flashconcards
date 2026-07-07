@@ -1,24 +1,55 @@
-import { useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   wrapSelection,
   wrapHighlight,
   HIGHLIGHT_OPTIONS,
   smartParagraphize,
 } from '../../utils/commentFormatUtils'
+import CommentFormattedText from './CommentFormattedText'
 
 export default function CommentComposer({
   value,
   onChange,
-  placeholder = 'Escreva seu comentário…',
+  placeholder = 'Escreva ou cole seu comentário…',
   disabled = false,
-  rows = 5,
   id,
+  maxEditorHeight = 240,
 }) {
   const textareaRef = useRef(null)
+  const mirrorRef = useRef(null)
+  const scrollRef = useRef(null)
+  const [innerHeight, setInnerHeight] = useState(120)
+
+  useLayoutEffect(() => {
+    const mirror = mirrorRef.current
+    if (!mirror) return
+    setInnerHeight(Math.max(120, mirror.scrollHeight + 2))
+  }, [value])
+
+  const syncScroll = () => {
+    if (mirrorRef.current && textareaRef.current) {
+      mirrorRef.current.scrollTop = textareaRef.current.scrollTop
+    }
+  }
+
+  useEffect(() => {
+    syncScroll()
+  }, [value, innerHeight])
+
+  const scrollByDelta = (deltaY) => {
+    const scroller = scrollRef.current
+    if (!scroller || scroller.scrollHeight <= scroller.clientHeight) return
+    scroller.scrollTop += deltaY
+  }
+
+  const handleWheel = (e) => {
+    scrollByDelta(e.deltaY)
+    e.preventDefault()
+  }
 
   const applyWrap = (before, after) => {
     const el = textareaRef.current
-    if (!el) return
+    if (!el || disabled) return
     const start = el.selectionStart ?? 0
     const end = el.selectionEnd ?? 0
     const { value: next, selectionStart, selectionEnd } = wrapSelection(
@@ -37,7 +68,7 @@ export default function CommentComposer({
 
   const applyHighlight = (color) => {
     const el = textareaRef.current
-    if (!el) return
+    if (!el || disabled) return
     const start = el.selectionStart ?? 0
     const end = el.selectionEnd ?? 0
     const { value: next, selectionStart, selectionEnd } = wrapHighlight(value, start, end, color)
@@ -62,6 +93,7 @@ export default function CommentComposer({
     const cursor = start + cleaned.length
     requestAnimationFrame(() => {
       el.setSelectionRange(cursor, cursor)
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
     })
   }
 
@@ -101,21 +133,43 @@ export default function CommentComposer({
         ))}
       </div>
 
-      <textarea
-        ref={textareaRef}
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onPaste={handlePaste}
-        rows={rows}
-        disabled={disabled}
-        placeholder={placeholder}
-        className="w-full min-h-[120px] max-h-[40vh] resize-y rounded-xl border border-cp-border bg-cp-surface px-3 py-2.5 text-sm leading-relaxed text-cp-text focus:border-[var(--cp-accent)] focus:outline-none disabled:opacity-60"
-      />
+      <div
+        ref={scrollRef}
+        onWheel={handleWheel}
+        className={`overflow-y-auto overscroll-contain rounded-xl border border-cp-border bg-cp-surface transition focus-within:border-[var(--cp-accent)] ${
+          disabled ? 'opacity-60' : ''
+        }`}
+        style={{ maxHeight: maxEditorHeight, minHeight: 120 }}
+      >
+        <div className="relative" style={{ minHeight: innerHeight }}>
+          <div
+            ref={mirrorRef}
+            aria-hidden
+            className="pointer-events-none px-3 py-2.5 text-sm leading-relaxed"
+          >
+            {value.trim() ? (
+              <CommentFormattedText text={value} />
+            ) : (
+              <p className="whitespace-pre-wrap text-cp-muted">{placeholder}</p>
+            )}
+          </div>
 
-      <p className="text-[10px] text-cp-muted">
-        Selecione o texto e use B, I ou grifar. Fórmulas LaTeX como \(I_n\) são renderizadas automaticamente.
-      </p>
+          <textarea
+            ref={textareaRef}
+            id={id}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onPaste={handlePaste}
+            onScroll={syncScroll}
+            onWheel={handleWheel}
+            disabled={disabled}
+            aria-label={placeholder}
+            spellCheck
+            className="absolute inset-0 z-10 w-full resize-none overflow-hidden bg-transparent px-3 py-2.5 text-sm leading-relaxed text-transparent caret-cp-text outline-none selection:bg-cp-accent/25 disabled:cursor-not-allowed"
+            style={{ height: innerHeight, WebkitTextFillColor: 'transparent' }}
+          />
+        </div>
+      </div>
     </div>
   )
 }

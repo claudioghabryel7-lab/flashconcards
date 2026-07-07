@@ -34,6 +34,10 @@ export default function FeedPostThumbnail({ post }) {
               <Clock className="h-2.5 w-2.5" />
               {post.durationMinutes || 0}m
             </p>
+          ) : postType === FEED_POST_TYPES.COMENTARIO ? (
+            <p className="mt-0.5 text-[9px] text-white/85 line-clamp-2">
+              {(post.contentPreview || post.commentText || 'Comentário').slice(0, 60)}
+            </p>
           ) : (
             <p className="mt-0.5 text-[9px] text-white/85">
               {post.itemCount ? `${post.itemCount} itens` : 'Abrir'}

@@ -121,6 +121,16 @@ export function resolvePostType(post) {
   return post?.postType || FEED_POST_TYPES.TRILHA
 }
 
+export function resolveContentQuestionText(post) {
+  return (
+    post?.contentPreview ||
+    post?.itemPreview?.enunciado ||
+    post?.itemPreview?.pergunta ||
+    post?.itemPreview?.text ||
+    ''
+  )
+}
+
 export function getPostCaption(post) {
   const type = resolvePostType(post)
   const materia = post.materia || 'matéria'
@@ -145,10 +155,11 @@ export function getPostCaption(post) {
       return { verb: 'compartilhou material de', materia, assunto, meta: 'Material de apoio' }
     case FEED_POST_TYPES.COMENTARIO:
       return {
-        verb: post.contentType === 'questao' ? 'comentou uma questão de' : 'comentou um flashcard de',
+        isCommentPost: true,
+        questionText: resolveContentQuestionText(post),
+        commentText: post.commentText || '',
         materia,
         assunto,
-        meta: 'Discussão aberta',
       }
     default:
       return {
@@ -166,6 +177,9 @@ export function getPostOpenUrl(post, origin = '') {
     return post.shareUrl.startsWith('http') ? post.shareUrl : `${base}${post.shareUrl}`
   }
   const type = resolvePostType(post)
+  if (type === FEED_POST_TYPES.COMENTARIO) {
+    return buildContentCommentShareUrl(post, base)
+  }
   if (type === FEED_POST_TYPES.FLASHCARDS && post.shareToken) {
     return `${base}/share-flashcards/${post.shareToken}`
   }
@@ -177,6 +191,26 @@ export function getPostOpenUrl(post, origin = '') {
     return `${base}/conteudo-completo/topic/${post.courseId}/${post.topicKey}${nome}`
   }
   return `${base}/comunidade/publicacao/${post.id}`
+}
+
+export function buildContentCommentSharePath({ courseId, contentType, topicKey }) {
+  if (!courseId) return '/comunidade'
+  if (contentType === 'questao' && topicKey) {
+    return `/questoes-topic/${courseId}/${encodeURIComponent(topicKey)}`
+  }
+  if (contentType === 'flashcard' && topicKey) {
+    return `/flashcards/topico/${courseId}?topicKey=${encodeURIComponent(topicKey)}`
+  }
+  return '/comunidade'
+}
+
+export function buildContentCommentShareUrl(
+  { courseId, contentType, topicKey, shareUrl },
+  origin = '',
+) {
+  const base = origin || (typeof window !== 'undefined' ? window.location.origin : '')
+  const path = shareUrl || buildContentCommentSharePath({ courseId, contentType, topicKey })
+  return path.startsWith('http') ? path : `${base}${path}`
 }
 
 export const MODALITY_GRADIENT_CLASS = {

@@ -20,7 +20,7 @@ export default function UserPublicCommentsList({ comments, emptyMessage }) {
         const typeLabel = comment.contentType === 'questao' ? 'Questão' : 'Flashcard'
 
         return (
-          <div key={comment.id} className="px-4 py-4">
+          <div key={comment._docPath || `${comment.courseId}-${comment.id}`} className="px-4 py-4">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <span className="cp-badge cp-badge-accent !text-[10px]">{typeLabel}</span>
               {when && <span className="font-mono text-[10px] text-cp-muted">{when}</span>}
