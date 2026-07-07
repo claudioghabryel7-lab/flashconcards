@@ -80,7 +80,7 @@ async function loadFlashcardsByMateria(userId, courseId) {
     byMateria[materia] = (byMateria[materia] || 0) + 1
   })
 
-  return assignChartColors(sortDesc(toChartItems(byMateria)))
+  return pickMostStudied(toChartItems(byMateria))
 }
 
 async function loadQuestoesStatsDoc(userId, courseId) {
