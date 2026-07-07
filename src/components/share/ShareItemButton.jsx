@@ -33,11 +33,13 @@ export default function ShareItemButton({
           type: 'flashcard',
           pergunta: flashcard.pergunta || flashcard.frente,
           resposta: flashcard.resposta || flashcard.verso,
+          text: flashcard.pergunta || flashcard.frente || '',
         }
       : type === 'questao' && questao
         ? {
             type: 'questao',
             enunciado: questao.enunciado,
+            text: questao.enunciado || '',
             alternativas: (questao.alternativas || []).slice(0, 5).map((alt, i) => ({
               letra: alt.letra || String.fromCharCode(65 + i),
               texto: alt.texto || alt.text || String(alt),

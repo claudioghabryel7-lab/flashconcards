@@ -205,24 +205,38 @@ export async function deleteContentComment({ courseId, commentId, userId, isAdmi
   await deleteDoc(ref)
 }
 
-export function subscribeContentComments({ courseId, contentType, contentId }, onData, onError) {
-  const mapDocs = (snap) => snap.docs.map(mapCommentDoc)
+function sortCommentsByLikesDesc(rows) {
+  return [...rows].sort((a, b) => {
+    const likeDiff = (b.likes || 0) - (a.likes || 0)
+    if (likeDiff !== 0) return likeDiff
+    return (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)
+  })
+}
 
-  return subscribeWithFallback(
-    query(
-      commentsRef(courseId),
-      where('contentType', '==', contentType),
-      where('contentId', '==', String(contentId)),
-      orderBy('createdAt', 'desc'),
-    ),
-    query(
-      commentsRef(courseId),
-      where('contentType', '==', contentType),
-      where('contentId', '==', String(contentId)),
-    ),
-    mapDocs,
-    onData,
-    onError,
+export function subscribeContentComments({ courseId, contentType, contentId }, onData, onError) {
+  const mapDocs = (snap) => sortCommentsByLikesDesc(snap.docs.map(mapCommentDoc))
+
+  const primary = query(
+    commentsRef(courseId),
+    where('contentType', '==', contentType),
+    where('contentId', '==', String(contentId)),
+    orderBy('createdAt', 'desc'),
+  )
+  const fallback = query(
+    commentsRef(courseId),
+    where('contentType', '==', contentType),
+    where('contentId', '==', String(contentId)),
+  )
+
+  return onSnapshot(
+    primary,
+    (snap) => onData(mapDocs(snap)),
+    (err) => {
+      if (err.code === 'failed-precondition') {
+        return onSnapshot(fallback, (snap) => onData(mapDocs(snap)), onError)
+      }
+      onError?.(err)
+    },
   )
 }
 

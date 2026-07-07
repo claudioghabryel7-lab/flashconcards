@@ -14,10 +14,14 @@ const TrilhaTimerBanner = dynamic(() => import('@/components/TrilhaTimerBanner')
 const MINIMAL_PATHS = ['/flashcards/pip', '/share-flashcards']
 const FULL_BLEED_PATHS = ['/', '/cursos', '/comunidade']
 
+function isCommunityRoute(pathname: string) {
+  return pathname.startsWith('/comunidade') || pathname.startsWith('/profile/')
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || ''
   const minimal = MINIMAL_PATHS.some((p) => pathname.startsWith(p))
-  const isComunidade = pathname.startsWith('/comunidade')
+  const isComunidade = isCommunityRoute(pathname)
   const fullBleed = FULL_BLEED_PATHS.includes(pathname) || isComunidade
 
   if (minimal) {

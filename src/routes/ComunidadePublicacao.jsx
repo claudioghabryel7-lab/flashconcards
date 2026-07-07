@@ -20,7 +20,13 @@ import { useFeedPostShare } from '../hooks/useFeedPostShare'
 import {
   deleteFeedComment,
   deleteFeedPost,
+  deleteFeedReply,
   updateFeedPostTheme,
+  buildFeedComment,
+  buildFeedReply,
+  toggleFeedCommentLike,
+  toggleFeedReplyLike,
+  addFeedCommentReply,
 } from '../services/trilhaFeedMutations'
 
 const BOOKMARK_KEY = 'trilhaFeedBookmarks'
@@ -102,14 +108,11 @@ export default function ComunidadePublicacao() {
       const text = commentInputs[postId]?.trim()
       if (!text || !user || !post) return
       const comments = post.comments || []
-      const newComment = {
-        id: `${Date.now()}`,
+      const newComment = buildFeedComment({
+        user,
+        profile,
         text,
-        authorId: user.uid,
-        authorName: profile?.displayName || user.email?.split('@')[0] || 'Aluno',
-        authorPhotoBase64: profile?.photoBase64 || null,
-        createdAt: new Date().toISOString(),
-      }
+      })
       try {
         await updateDoc(doc(db, 'trilhaFeed', postId), {
           comments: [...comments, newComment],
@@ -155,6 +158,57 @@ export default function ComunidadePublicacao() {
         toast.success('Comentário apagado.')
       } catch {
         toast.error('Erro ao apagar comentário.')
+      }
+    },
+    [post],
+  )
+
+  const handleToggleCommentLike = useCallback(
+    async (commentId) => {
+      if (!user || !post) return
+      try {
+        await toggleFeedCommentLike(post.id, post.comments, commentId, user.uid)
+      } catch {
+        toast.error('Erro ao curtir comentário.')
+      }
+    },
+    [user, post],
+  )
+
+  const handleToggleReplyLike = useCallback(
+    async (commentId, replyId) => {
+      if (!user || !post) return
+      try {
+        await toggleFeedReplyLike(post.id, post.comments, commentId, replyId, user.uid)
+      } catch {
+        toast.error('Erro ao curtir resposta.')
+      }
+    },
+    [user, post],
+  )
+
+  const handleAddReply = useCallback(
+    async (commentId, text) => {
+      if (!user || !post || !text.trim()) return
+      try {
+        const reply = buildFeedReply({ user, profile, text: text.trim() })
+        await addFeedCommentReply(post.id, post.comments, commentId, reply)
+        setExpandedComments((prev) => ({ ...prev, [post.id]: true }))
+      } catch {
+        toast.error('Erro ao responder comentário.')
+      }
+    },
+    [user, profile, post],
+  )
+
+  const handleDeleteReply = useCallback(
+    async (commentId, replyId) => {
+      if (!post) return
+      try {
+        await deleteFeedReply(post.id, post.comments, commentId, replyId)
+        toast.success('Resposta apagada.')
+      } catch {
+        toast.error('Erro ao apagar resposta.')
       }
     },
     [post],
@@ -233,6 +287,10 @@ export default function ComunidadePublicacao() {
         onEditPost={() => setEditingPost(post)}
         onDeletePost={handleDeletePost}
         onDeleteComment={handleDeleteComment}
+        onDeleteReply={handleDeleteReply}
+        onToggleCommentLike={handleToggleCommentLike}
+        onToggleReplyLike={handleToggleReplyLike}
+        onAddReply={handleAddReply}
       />
 
       {capturePost && (

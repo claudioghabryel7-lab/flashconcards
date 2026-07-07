@@ -12,8 +12,10 @@ import {
 import UserAvatar from '../UserAvatar'
 import FeedStoryAvatar from './FeedStoryAvatar'
 import FeedPostMedia from './FeedPostMedia'
+import FeedPostComment from './FeedPostComment'
 import CommentFormattedText from '../content/CommentFormattedText'
-import { formatCommentTime, formatFeedTime, getPostCaption, resolvePostType, FEED_POST_TYPES } from '../../utils/feedUtils'
+import { countFeedComments } from '../../services/trilhaFeedMutations'
+import { formatFeedTime, getPostCaption, resolvePostType, FEED_POST_TYPES } from '../../utils/feedUtils'
 
 export default function FeedPost({
   post,
@@ -33,6 +35,10 @@ export default function FeedPost({
   onShare,
   onDeletePost,
   onDeleteComment,
+  onDeleteReply,
+  onToggleCommentLike,
+  onToggleReplyLike,
+  onAddReply,
   onEditPost,
   readOnly = false,
 }) {
@@ -41,7 +47,7 @@ export default function FeedPost({
   const menuRef = useRef(null)
   const likesCount = post.likesCount || post.likes?.length || 0
   const comments = post.comments || []
-  const commentsCount = post.commentsCount || comments.length
+  const commentsCount = post.commentsCount ?? countFeedComments(comments)
   const caption = getPostCaption(post)
   const isCommentPost = caption.isCommentPost === true
   const isTrilhaPost = resolvePostType(post) === FEED_POST_TYPES.TRILHA
@@ -60,9 +66,6 @@ export default function FeedPost({
   const handleDoubleTapLike = () => {
     if (!liked) onToggleLike()
   }
-
-  const canDeleteComment = (comment) =>
-    user?.uid === comment.authorId || isAuthor || isAdmin
 
   return (
     <article className="border-b border-cp-border bg-cp-bg">
@@ -252,32 +255,19 @@ export default function FeedPost({
         )}
 
         {previewComments.map((c) => (
-          <div key={c.id} className="flex gap-2 text-sm">
-            <Link to={`/profile/${c.authorId}`} className="shrink-0">
-              <UserAvatar photoBase64={c.authorPhotoBase64} name={c.authorName} size="xs" />
-            </Link>
-            <div className="min-w-0 flex-1">
-              <Link
-                to={`/profile/${c.authorId}`}
-                className="font-semibold text-cp-text hover:text-cp-accent"
-              >
-                {c.authorName}
-              </Link>
-              <CommentFormattedText text={c.text} className="!text-sm !leading-snug" />
-              <div className="mt-0.5 flex items-center gap-2">
-                <p className="text-[10px] text-cp-muted">{formatCommentTime(c.createdAt)}</p>
-                {canDeleteComment(c) && (
-                  <button
-                    type="button"
-                    onClick={() => onDeleteComment?.(c.id)}
-                    className="text-[10px] font-medium text-rose-500 hover:text-rose-400"
-                  >
-                    Apagar
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+          <FeedPostComment
+            key={c.id}
+            comment={c}
+            user={user}
+            readOnly={readOnly}
+            isPostAuthor={isAuthor}
+            isAdmin={isAdmin}
+            onToggleLike={() => onToggleCommentLike?.(c.id)}
+            onToggleReplyLike={(replyId) => onToggleReplyLike?.(c.id, replyId)}
+            onReply={(text) => onAddReply?.(c.id, text)}
+            onDeleteComment={() => onDeleteComment?.(c.id)}
+            onDeleteReply={(replyId) => onDeleteReply?.(c.id, replyId)}
+          />
         ))}
       </div>
 

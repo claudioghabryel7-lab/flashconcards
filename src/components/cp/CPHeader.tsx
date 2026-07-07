@@ -107,9 +107,12 @@ export default function CPHeader() {
       .filter((category) => category.items.length > 0)
   }, [user, isAdmin])
 
-  const hideShell = pathname.startsWith('/flashcards/pip') || pathname.startsWith('/share-flashcards')
-  const isComunidade = pathname.startsWith('/comunidade')
-  if (hideShell || isComunidade) return null
+  const hideShell =
+    pathname.startsWith('/flashcards/pip') ||
+    pathname.startsWith('/share-flashcards') ||
+    pathname.startsWith('/comunidade') ||
+    pathname.startsWith('/profile/')
+  if (hideShell) return null
 
   return (
     <>

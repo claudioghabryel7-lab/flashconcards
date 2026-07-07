@@ -1,5 +1,12 @@
 import { BookOpen, Brain, FileText, Layers } from 'lucide-react'
-import { POST_TYPE_LABELS, resolveCardFonts, resolveCardTheme, resolvePostType, FEED_POST_TYPES } from '../../utils/feedUtils'
+import {
+  POST_TYPE_LABELS,
+  resolveCardFonts,
+  resolveCardTheme,
+  resolvePostType,
+  resolveShareQuestionText,
+  FEED_POST_TYPES,
+} from '../../utils/feedUtils'
 
 const TYPE_ICONS = {
   flashcards: Layers,
@@ -19,6 +26,7 @@ export default function ContentSharePostMedia({
   const fonts = resolveCardFonts({ cardTheme: cardTheme || post.cardTheme })
   const label = POST_TYPE_LABELS[postType] || postType
   const Icon = TYPE_ICONS[postType] || BookOpen
+  const questionText = resolveShareQuestionText(post)
 
   const statLabel =
     post.itemPreview
@@ -58,8 +66,8 @@ export default function ContentSharePostMedia({
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.22),transparent_55%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(0,0,0,0.35),transparent_60%)]" />
 
-      <div className={`relative flex h-full flex-col justify-between p-5 sm:p-6 ${fonts.bodyClass}`}>
-        <div className="flex items-start justify-between gap-3">
+      <div className={`relative flex h-full min-h-0 flex-col p-5 sm:p-6 ${fonts.bodyClass}`}>
+        <div className="flex shrink-0 items-start justify-between gap-3">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-black/30 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white backdrop-blur-sm">
             <Icon className="h-3.5 w-3.5" />
             {label}
@@ -71,37 +79,50 @@ export default function ContentSharePostMedia({
           )}
         </div>
 
-        <div className="space-y-2">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/80">
-            Concurseiro Preditivo
-          </p>
-          <h3
-            className={`text-2xl font-bold leading-tight text-white drop-shadow-sm sm:text-3xl ${fonts.titleClass}`}
-          >
-            {post.materia || 'Matéria'}
-          </h3>
-          {post.assunto && (
-            <p className="line-clamp-2 text-sm leading-relaxed text-white/90 drop-shadow-sm sm:text-base">
-              {post.assunto}
-            </p>
-          )}
-          {post.itemPreview?.type === 'flashcard' && post.itemPreview.pergunta && (
-            <p className="line-clamp-3 text-sm leading-relaxed text-white/85 italic">
-              "{post.itemPreview.pergunta}"
-            </p>
-          )}
-          {post.itemPreview?.type === 'questao' && post.itemPreview.enunciado && (
-            <p className="line-clamp-3 text-sm leading-relaxed text-white/85">
-              {post.itemPreview.enunciado}
-            </p>
+        <div className="flex min-h-0 flex-1 flex-col justify-center py-3">
+          {questionText ? (
+            <>
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/75">
+                {post.itemPreview?.type === 'flashcard' ? 'Pergunta' : 'Enunciado'}
+              </p>
+              <p
+                className={`mt-2 line-clamp-[8] text-base font-semibold leading-snug text-white drop-shadow-sm sm:text-lg ${fonts.titleClass}`}
+              >
+                {questionText}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/80">
+                Concurseiro Preditivo
+              </p>
+              <h3
+                className={`mt-2 text-2xl font-bold leading-tight text-white drop-shadow-sm sm:text-3xl ${fonts.titleClass}`}
+              >
+                {post.materia || 'Matéria'}
+              </h3>
+              {post.assunto && (
+                <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-white/90 drop-shadow-sm sm:text-base">
+                  {post.assunto}
+                </p>
+              )}
+            </>
           )}
         </div>
 
-        {!exportMode && (
-          <p className="text-center text-xs font-semibold uppercase tracking-wider text-white/80">
-            Toque para abrir
-          </p>
-        )}
+        <div className="shrink-0 space-y-1">
+          {questionText && (
+            <p className="line-clamp-1 text-xs font-medium text-white/80">
+              {post.materia || 'Matéria'}
+              {post.assunto ? ` · ${post.assunto}` : ''}
+            </p>
+          )}
+          {!exportMode && (
+            <p className="text-center text-xs font-semibold uppercase tracking-wider text-white/70">
+              Toque para abrir
+            </p>
+          )}
+        </div>
       </div>
     </Wrapper>
   )

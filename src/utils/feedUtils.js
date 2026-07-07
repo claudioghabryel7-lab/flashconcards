@@ -131,6 +131,10 @@ export function resolveContentQuestionText(post) {
   )
 }
 
+export function resolveShareQuestionText(post) {
+  return resolveContentQuestionText(post)
+}
+
 export function getPostCaption(post) {
   const type = resolvePostType(post)
   const materia = post.materia || 'matéria'
