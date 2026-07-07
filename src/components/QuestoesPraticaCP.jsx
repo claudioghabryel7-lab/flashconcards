@@ -1,7 +1,49 @@
-import { FireIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
+import { FireIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
 import ReactMarkdown from 'react-markdown'
 import { probabilidadeBadgeClass } from '../utils/htmlTextHelpers'
 import ContentFeedbackActions from './content/ContentFeedbackActions'
+
+export function resolveQuestaoGabarito(questao) {
+  return questao?.respostaCorreta || questao?.correta || questao?.gabarito || ''
+}
+
+export function resolveQuestaoExplicacao(questao) {
+  return (
+    questao?.explicacao ||
+    questao?.gabaritoComentado ||
+    questao?.comentario ||
+    questao?.justificativa ||
+    ''
+  )
+}
+
+function normalizeAlternativas(questao) {
+  const raw = questao?.alternativas
+  if (!raw) return {}
+  if (Array.isArray(raw)) {
+    const letters = ['A', 'B', 'C', 'D', 'E']
+    return Object.fromEntries(
+      raw.map((value, index) => [letters[index] || String(index), String(value)]),
+    )
+  }
+  return raw
+}
+
+function alternativaClassName({ reveal, isCorrect, isSelected, idle }) {
+  if (reveal) {
+    if (isCorrect) {
+      return 'border-emerald-500/60 bg-emerald-500/12 shadow-[0_0_0_1px_rgba(16,185,129,0.2)]'
+    }
+    if (isSelected) {
+      return 'border-red-500/60 bg-red-500/12 shadow-[0_0_0_1px_rgba(239,68,68,0.2)]'
+    }
+    return 'border-cp-border bg-cp-surface/40 opacity-60'
+  }
+  if (idle) {
+    return 'border-cp-border bg-cp-surface hover:-translate-y-0.5 hover:border-cp-accent/40 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]'
+  }
+  return 'border-cp-border bg-cp-surface/50'
+}
 
 export function QuestoesLoading() {
   return (
@@ -140,40 +182,39 @@ export function QuestaoAlternativas({
   questao,
   showResult,
   modoAdminNavegacao,
+  selectedAnswer = null,
   onAnswer,
 }) {
-  const correta = questao.respostaCorreta || questao.correta
+  const correta = resolveQuestaoGabarito(questao)
+  const reveal = showResult || modoAdminNavegacao
 
   if (tipoProva === 'Certo/Errado') {
     return (
       <div className="grid grid-cols-2 gap-3">
         {['C', 'E'].map((key) => {
-          const selected = showResult && key === correta
-          const idle = !showResult && !modoAdminNavegacao
+          const isCorrect = key === correta
+          const isSelected = selectedAnswer === key
+          const idle = !reveal
           return (
             <button
               key={key}
               type="button"
               onClick={() => !modoAdminNavegacao && onAnswer(key)}
-              disabled={showResult || modoAdminNavegacao}
-              className={`rounded-2xl border-2 p-5 transition-all duration-200 ${
-                selected
-                  ? 'border-emerald-500/60 bg-emerald-500/12 shadow-[0_0_0_1px_rgba(16,185,129,0.2)]'
-                  : showResult || modoAdminNavegacao
-                    ? 'border-cp-border bg-cp-surface/40 opacity-50'
-                    : idle
-                      ? 'border-cp-border bg-cp-surface hover:-translate-y-0.5 hover:border-cp-accent/40 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]'
-                      : 'border-cp-border bg-cp-surface/50'
-              }`}
+              disabled={reveal || modoAdminNavegacao}
+              className={`rounded-2xl border-2 p-5 transition-all duration-200 ${alternativaClassName({
+                reveal,
+                isCorrect,
+                isSelected,
+                idle,
+              })}`}
             >
               <div className="flex flex-col items-center gap-1.5">
                 <span className="flex h-10 w-10 items-center justify-center rounded-full border border-cp-border bg-cp-bg font-mono text-lg font-bold text-cp-text">
                   {key}
                 </span>
                 <span className="text-xs font-medium text-cp-muted">{key === 'C' ? 'Certo' : 'Errado'}</span>
-                {(modoAdminNavegacao || showResult) && key === correta && (
-                  <CheckCircleIcon className="h-5 w-5 text-emerald-400" />
-                )}
+                {reveal && isCorrect && <CheckCircleIcon className="h-5 w-5 text-emerald-400" />}
+                {reveal && isSelected && !isCorrect && <XCircleIcon className="h-5 w-5 text-red-400" />}
               </div>
             </button>
           )
@@ -182,34 +223,37 @@ export function QuestaoAlternativas({
     )
   }
 
+  const alternativas = normalizeAlternativas(questao)
+
   return (
     <div className="space-y-2.5">
-      {Object.entries(questao.alternativas || {}).map(([key, value]) => {
-        const selected = (modoAdminNavegacao || showResult) && key === correta
-        const idle = !showResult && !modoAdminNavegacao
+      {Object.entries(alternativas).map(([key, value]) => {
+        const isCorrect = key === correta
+        const isSelected = selectedAnswer === key
+        const idle = !reveal
         return (
           <button
             key={key}
             type="button"
             onClick={() => !modoAdminNavegacao && onAnswer(key)}
-            disabled={showResult || modoAdminNavegacao}
-            className={`w-full rounded-2xl border-2 p-4 text-left transition-all duration-200 ${
-              selected
-                ? 'border-emerald-500/60 bg-emerald-500/12 shadow-[0_0_0_1px_rgba(16,185,129,0.2)]'
-                : showResult || modoAdminNavegacao
-                  ? 'border-cp-border bg-cp-surface/40 opacity-50'
-                  : idle
-                    ? 'border-cp-border bg-cp-surface hover:-translate-y-0.5 hover:border-cp-accent/40 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)]'
-                    : 'border-cp-border bg-cp-surface/50'
-            }`}
+            disabled={reveal || modoAdminNavegacao}
+            className={`w-full rounded-2xl border-2 p-4 text-left transition-all duration-200 ${alternativaClassName({
+              reveal,
+              isCorrect,
+              isSelected,
+              idle,
+            })}`}
           >
             <div className="flex items-start gap-3">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cp-accent/20 bg-cp-accent/10 font-mono text-sm font-bold text-cp-accent">
                 {key}
               </span>
               <span className="pt-1 text-sm leading-relaxed text-cp-text">{value}</span>
-              {(modoAdminNavegacao || showResult) && key === correta && (
+              {reveal && isCorrect && (
                 <CheckCircleIcon className="ml-auto h-5 w-5 shrink-0 text-emerald-400" />
+              )}
+              {reveal && isSelected && !isCorrect && (
+                <XCircleIcon className="ml-auto h-5 w-5 shrink-0 text-red-400" />
               )}
             </div>
           </button>
@@ -220,14 +264,14 @@ export function QuestaoAlternativas({
 }
 
 export function QuestaoExplicacao({ explicacao, editSlot }) {
+  const texto = explicacao?.trim() || 'Explicação não disponível para esta questão.'
   return (
     <div className="rounded-2xl border border-cp-border bg-gradient-to-br from-cp-bg/60 to-cp-surface/80 p-4 sm:p-5">
       <h4 className="mb-3 font-mono text-[10px] uppercase tracking-wider text-cp-muted">Explicação</h4>
-      {editSlot || (
-        <div className="prose prose-sm dark:prose-invert max-w-none text-cp-muted">
-          <ReactMarkdown>{explicacao || 'Explicação não disponível'}</ReactMarkdown>
-        </div>
-      )}
+      {editSlot}
+      <div className="prose prose-sm dark:prose-invert max-w-none text-cp-muted">
+        <ReactMarkdown>{texto}</ReactMarkdown>
+      </div>
     </div>
   )
 }

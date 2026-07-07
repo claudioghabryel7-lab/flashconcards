@@ -22,6 +22,8 @@ import {
   QuestaoAlternativas,
   QuestaoExplicacao,
   ResultadoDesempenho,
+  resolveQuestaoExplicacao,
+  resolveQuestaoGabarito,
 } from '../components/QuestoesPraticaCP'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 
@@ -214,7 +216,7 @@ const QuestoesTopicoView = () => {
     return questoesArray.filter((questao) => {
       const enunciado = (questao.enunciado || '').toLowerCase()
       const assunto = (questao.assunto || '').toLowerCase()
-      const explicacao = (questao.explicacao || questao.gabaritoComentado || '').toLowerCase()
+      const explicacao = resolveQuestaoExplicacao(questao).toLowerCase()
       return enunciado.includes(termo) || assunto.includes(termo) || explicacao.includes(termo)
     })
   }, [questoesArray, termoBusca])
@@ -750,12 +752,12 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     setShowResult(true)
     
     const currentQuestion = questoesArray[currentQuestionIndex]
-    const isCorrect = answer === (currentQuestion?.respostaCorreta || currentQuestion?.correta)
+    const isCorrect = answer === resolveQuestaoGabarito(currentQuestion)
     
     setAnswers([...answers, {
       questionIndex: currentQuestionIndex,
       selectedAnswer: answer,
-      correctAnswer: currentQuestion?.respostaCorreta || currentQuestion?.correta,
+      correctAnswer: resolveQuestaoGabarito(currentQuestion),
       isCorrect,
       assunto: currentQuestion?.assunto || '',
       probabilidade: currentQuestion?.probabilidade || 0
@@ -898,8 +900,8 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
   const handleIniciarEdicao = () => {
     const questaoAtual = questoesArray[currentQuestionIndex]
-    setNovoGabarito(questaoAtual.respostaCorreta || questaoAtual.correta || '')
-    setNovaExplicacao(questaoAtual.explicacao || questaoAtual.gabaritoComentado || '')
+    setNovoGabarito(resolveQuestaoGabarito(questaoAtual))
+    setNovaExplicacao(resolveQuestaoExplicacao(questaoAtual))
     setEditandoQuestao(true)
   }
 
@@ -1047,6 +1049,12 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       isContentAvailable(topicoPublishStatus, false) &&
       questoes &&
       isContentAvailable(questoes.status, false))
+
+  const handleSkipQuestion = () => {
+    if (!canPractice || showResult) return
+    setSelectedAnswer(null)
+    setShowResult(true)
+  }
 
   const renderBloqueioAluno = () => (
     <div className="cp-card p-8 text-center">
@@ -1270,13 +1278,23 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                           />
 
                           {!showResult && !modoAdminNavegacao ? (
-                            <QuestaoAlternativas
-                              tipoProva={tipoProva}
-                              questao={questoesParaExibir[currentQuestionIndex]}
-                              showResult={showResult}
-                              modoAdminNavegacao={modoAdminNavegacao}
-                              onAnswer={handleAnswer}
-                            />
+                            <div className="space-y-3">
+                              <QuestaoAlternativas
+                                tipoProva={tipoProva}
+                                questao={questoesParaExibir[currentQuestionIndex]}
+                                showResult={showResult}
+                                modoAdminNavegacao={modoAdminNavegacao}
+                                selectedAnswer={selectedAnswer}
+                                onAnswer={handleAnswer}
+                              />
+                              <button
+                                type="button"
+                                onClick={handleSkipQuestion}
+                                className="cp-btn-ghost w-full justify-center !text-sm"
+                              >
+                                Pular e ver explicação →
+                              </button>
+                            </div>
                           ) : (
                             <>
                               <QuestaoAlternativas
@@ -1284,16 +1302,14 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                                 questao={questoesParaExibir[currentQuestionIndex]}
                                 showResult
                                 modoAdminNavegacao={modoAdminNavegacao}
+                                selectedAnswer={selectedAnswer}
                                 onAnswer={handleAnswer}
                               />
                               <QuestaoExplicacao
-                                explicacao={
-                                  questoesParaExibir[currentQuestionIndex].explicacao ||
-                                  questoesParaExibir[currentQuestionIndex].gabaritoComentado
-                                }
+                                explicacao={resolveQuestaoExplicacao(questoesParaExibir[currentQuestionIndex])}
                                 editSlot={
                                   editandoQuestao ? (
-                                    <div className="space-y-3">
+                                    <div className="mb-4 space-y-3">
                                       <div>
                                         <label className="block text-xs font-medium text-cp-muted mb-1">Gabarito</label>
                                         <input
@@ -1322,7 +1338,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                                       </div>
                                     </div>
                                   ) : isAdmin && !editandoQuestao ? (
-                                    <button type="button" onClick={handleIniciarEdicao} className="text-xs text-cp-accent hover:underline mb-2">
+                                    <button type="button" onClick={handleIniciarEdicao} className="mb-3 text-xs text-cp-accent hover:underline">
                                       Editar explicação
                                     </button>
                                   ) : null

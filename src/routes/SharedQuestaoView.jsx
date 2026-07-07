@@ -11,6 +11,8 @@ import {
   QuestaoAlternativas,
   QuestaoExplicacao,
   ResultadoDesempenho,
+  resolveQuestaoExplicacao,
+  resolveQuestaoGabarito,
 } from '../components/QuestoesPraticaCP'
 
 export default function SharedQuestaoView() {
@@ -88,7 +90,7 @@ export default function SharedQuestaoView() {
 
   const handleAnswer = (answer) => {
     const questao = questoesData.questoes[currentQuestionIndex]
-    const correta = questao.respostaCorreta || questao.correta
+    const correta = resolveQuestaoGabarito(questao)
     setSelectedAnswer(answer)
     setAnswers((prev) => [
       ...prev,
@@ -98,6 +100,12 @@ export default function SharedQuestaoView() {
         probabilidade: questao.probabilidade || 0,
       },
     ])
+    setShowResult(true)
+  }
+
+  const handleSkipQuestion = () => {
+    if (showResult) return
+    setSelectedAnswer(null)
     setShowResult(true)
   }
 
@@ -223,13 +231,23 @@ export default function SharedQuestaoView() {
             />
 
             {!showResult ? (
-              <QuestaoAlternativas
-                tipoProva={tipoProva}
-                questao={questaoAtual}
-                showResult={showResult}
-                modoAdminNavegacao={false}
-                onAnswer={handleAnswer}
-              />
+              <div className="space-y-3">
+                <QuestaoAlternativas
+                  tipoProva={tipoProva}
+                  questao={questaoAtual}
+                  showResult={showResult}
+                  modoAdminNavegacao={false}
+                  selectedAnswer={selectedAnswer}
+                  onAnswer={handleAnswer}
+                />
+                <button
+                  type="button"
+                  onClick={handleSkipQuestion}
+                  className="cp-btn-ghost w-full justify-center !text-sm"
+                >
+                  Pular e ver explicação →
+                </button>
+              </div>
             ) : (
               <div className="space-y-4">
                 <QuestaoAlternativas
@@ -237,11 +255,10 @@ export default function SharedQuestaoView() {
                   questao={questaoAtual}
                   showResult
                   modoAdminNavegacao={false}
+                  selectedAnswer={selectedAnswer}
                   onAnswer={() => {}}
                 />
-                <QuestaoExplicacao
-                  explicacao={questaoAtual.explicacao || questaoAtual.gabaritoComentado}
-                />
+                <QuestaoExplicacao explicacao={resolveQuestaoExplicacao(questaoAtual)} />
                 <button type="button" onClick={handleNextQuestion} className="cp-btn-primary w-full justify-center">
                   {currentQuestionIndex < total - 1 ? 'Próxima questão →' : 'Ver resultado'}
                 </button>
