@@ -224,6 +224,7 @@ export default function ContentCommentsSheet({
   courseId,
   contentType,
   contentId,
+  alternateContentIds = [],
   topicKey,
   preview,
   materia = '',
@@ -239,9 +240,12 @@ export default function ContentCommentsSheet({
 
   useEffect(() => {
     if (!open || !courseId || !contentId) return undefined
+    setComments([])
     setLoading(true)
+    setText('')
+    setMessage('')
     const unsub = subscribeContentComments(
-      { courseId, contentType, contentId },
+      { courseId, contentType, contentId, alternateContentIds },
       (rows) => {
         setComments(rows)
         setLoading(false)
@@ -249,7 +253,7 @@ export default function ContentCommentsSheet({
       () => setLoading(false),
     )
     return () => unsub?.()
-  }, [open, courseId, contentType, contentId])
+  }, [open, courseId, contentType, contentId, alternateContentIds])
 
   const handleSubmit = async () => {
     if (!user) {

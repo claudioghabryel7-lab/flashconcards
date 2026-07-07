@@ -180,7 +180,10 @@ const CalendarioProgresso = () => {
   return (
     <div className="space-y-6 pb-10">
       {/* Gráficos de progresso por matéria — principal */}
-      <ProgressChartsPanel user={user} courseId={profile?.selectedCourseId} />
+      <ProgressChartsPanel
+        user={user}
+        courseId={profile?.selectedCourseId || 'alego-default'}
+      />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

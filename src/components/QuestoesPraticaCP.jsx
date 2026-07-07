@@ -131,6 +131,7 @@ export function QuestaoEnunciadoCard({
   feedbackSlot,
   courseId,
   contentId,
+  alternateContentIds = [],
   topicKey,
 }) {
   return (
@@ -159,6 +160,7 @@ export function QuestaoEnunciadoCard({
                 courseId={courseId}
                 contentType="questao"
                 contentId={contentId}
+                alternateContentIds={alternateContentIds}
                 topicKey={topicKey}
                 preview={enunciado}
                 materia={assunto}

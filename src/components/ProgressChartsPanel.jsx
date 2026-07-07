@@ -80,6 +80,7 @@ export default function ProgressChartsPanel({ user, courseId }) {
           chartType={chartType}
           unit="h"
           formatValue={formatHours}
+          ascending
           emptyMessage="Registre horas de estudo para ver esta métrica."
         />
         <SubjectMetricChart

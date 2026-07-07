@@ -192,6 +192,7 @@ const FlashcardList = ({
           onEditFlashcard={onEditFlashcard}
           courseId={courseId}
           topicKey={topicKey}
+          cardIndex={currentIndex}
           materia={deckSubtitle}
           assunto={deckTitle}
           cardColor={cardColor}

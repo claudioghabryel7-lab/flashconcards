@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
+import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { incrementQuestoesStats } from '../utils/questoesStats'
 import { isContentAvailable, toggleContentStatus, CONTENT_STATUS } from '../utils/contentStatus'
@@ -25,7 +26,7 @@ import {
   resolveQuestaoExplicacao,
   resolveQuestaoGabarito,
 } from '../components/QuestoesPraticaCP'
-import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
+import { buildQuestaoContentId, buildLegacyQuestaoContentId } from '../utils/contentCommentIds'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -808,6 +809,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       precisaRevisar,
       respostas: answers,
       topicKey: resolvedTopicKey,
+      courseId: resolvedCourseId,
       disciplina,
       nivel: nivelAtual,
       completouNivel,
@@ -1265,16 +1267,40 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         </div>
                       )}
 
-                      {questoesParaExibir[currentQuestionIndex] && (
+                      {questoesParaExibir[currentQuestionIndex] && (() => {
+                        const questaoAtual = questoesParaExibir[currentQuestionIndex]
+                        const questaoIndexNoDeck = questoesArray.indexOf(questaoAtual)
+                        const questionIndex =
+                          questaoIndexNoDeck >= 0 ? questaoIndexNoDeck : currentQuestionIndex
+                        const questaoContentId = buildQuestaoContentId({
+                          topicKey: resolvedTopicKey,
+                          nivel: nivelAtual,
+                          questao: questaoAtual,
+                          questionIndex,
+                          packId: questoes?.id,
+                        })
+                        const legacyQuestaoContentId = buildLegacyQuestaoContentId({
+                          topicKey: resolvedTopicKey,
+                          nivel: nivelAtual,
+                          questionIndex: currentQuestionIndex,
+                          sanitizeTopicKey: sanitizeTopicKeyForFirestore,
+                        })
+
+                        return (
                         <div className="space-y-5">
                           <QuestaoEnunciadoCard
-                            assunto={questoesParaExibir[currentQuestionIndex].assunto}
-                            probabilidade={questoesParaExibir[currentQuestionIndex].probabilidade}
-                            enunciado={questoesParaExibir[currentQuestionIndex].enunciado}
+                            assunto={questaoAtual.assunto}
+                            probabilidade={questaoAtual.probabilidade}
+                            enunciado={questaoAtual.enunciado}
                             questionNumber={currentQuestionIndex + 1}
                             courseId={resolvedCourseId}
                             topicKey={resolvedTopicKey}
-                            contentId={`${sanitizeTopicKeyForFirestore(resolvedTopicKey)}_n${nivelAtual}_q${currentQuestionIndex}`}
+                            contentId={questaoContentId}
+                            alternateContentIds={
+                              legacyQuestaoContentId !== questaoContentId
+                                ? [legacyQuestaoContentId]
+                                : []
+                            }
                           />
 
                           {!showResult && !modoAdminNavegacao ? (
@@ -1359,7 +1385,8 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                             </>
                           )}
                         </div>
-                      )}
+                        )
+                      })()}
                 </div>
               )}
             </div>

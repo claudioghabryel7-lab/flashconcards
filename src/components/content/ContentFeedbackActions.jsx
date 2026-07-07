@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { ChatBubbleLeftEllipsisIcon, FlagIcon } from '@heroicons/react/24/outline'
 
 const ContentCommentsSheet = lazy(() => import('./ContentCommentsSheet'))
@@ -8,6 +8,7 @@ export default function ContentFeedbackActions({
   courseId,
   contentType,
   contentId,
+  alternateContentIds = [],
   topicKey = null,
   preview = '',
   materia = '',
@@ -18,6 +19,11 @@ export default function ContentFeedbackActions({
 }) {
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [flagOpen, setFlagOpen] = useState(false)
+
+  useEffect(() => {
+    setCommentsOpen(false)
+    setFlagOpen(false)
+  }, [contentId, contentType, courseId])
 
   if (!courseId || !contentId) return null
 
@@ -64,11 +70,13 @@ export default function ContentFeedbackActions({
       {commentsOpen && (
         <Suspense fallback={null}>
           <ContentCommentsSheet
+            key={`${courseId}:${contentType}:${contentId}`}
             open={commentsOpen}
             onClose={() => setCommentsOpen(false)}
             courseId={courseId}
             contentType={contentType}
             contentId={contentId}
+            alternateContentIds={alternateContentIds}
             topicKey={topicKey}
             preview={preview}
             materia={materia}

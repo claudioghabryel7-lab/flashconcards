@@ -1,13 +1,18 @@
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 
+export function normalizeQuestoesStatsCourseKey(courseId) {
+  if (!courseId || courseId === 'alego') return 'alego-default'
+  return courseId
+}
+
 /**
  * Incrementa estatísticas globais de questões por matéria (Firestore: questoesStats)
  */
 export async function incrementQuestoesStats(userId, courseId, materia, acertos, erros) {
   if (!userId || !materia) return
 
-  const courseKey = courseId || 'alego'
+  const courseKey = normalizeQuestoesStatsCourseKey(courseId)
   const statsRef = doc(db, 'questoesStats', `${userId}_${courseKey}`)
   const snap = await getDoc(statsRef)
   const prev = snap.exists() ? snap.data() : { correct: 0, wrong: 0, byMateria: {} }

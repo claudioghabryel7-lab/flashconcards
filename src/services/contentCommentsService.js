@@ -213,27 +213,37 @@ function sortCommentsByLikesDesc(rows) {
   })
 }
 
-export function subscribeContentComments({ courseId, contentType, contentId }, onData, onError) {
+export function subscribeContentComments(
+  { courseId, contentType, contentId, alternateContentIds = [] },
+  onData,
+  onError,
+) {
   const mapDocs = (snap) => sortCommentsByLikesDesc(snap.docs.map(mapCommentDoc))
+  const ids = [...new Set([String(contentId), ...alternateContentIds.map(String)].filter(Boolean))]
 
-  const primary = query(
-    commentsRef(courseId),
-    where('contentType', '==', contentType),
-    where('contentId', '==', String(contentId)),
-    orderBy('createdAt', 'desc'),
-  )
-  const fallback = query(
-    commentsRef(courseId),
-    where('contentType', '==', contentType),
-    where('contentId', '==', String(contentId)),
-  )
+  const buildQuery = (useOrder) => {
+    const filters = [
+      where('contentType', '==', contentType),
+      ids.length === 1 ? where('contentId', '==', ids[0]) : where('contentId', 'in', ids.slice(0, 10)),
+    ]
+    if (useOrder) filters.push(orderBy('createdAt', 'desc'))
+    return query(commentsRef(courseId), ...filters)
+  }
+
+  const fallbackQuery = () => {
+    const filters = [
+      where('contentType', '==', contentType),
+      ids.length === 1 ? where('contentId', '==', ids[0]) : where('contentId', 'in', ids.slice(0, 10)),
+    ]
+    return query(commentsRef(courseId), ...filters)
+  }
 
   return onSnapshot(
-    primary,
+    buildQuery(true),
     (snap) => onData(mapDocs(snap)),
     (err) => {
       if (err.code === 'failed-precondition') {
-        return onSnapshot(fallback, (snap) => onData(mapDocs(snap)), onError)
+        return onSnapshot(fallbackQuery(), (snap) => onData(mapDocs(snap)), onError)
       }
       onError?.(err)
     },

@@ -10,6 +10,9 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { assignChartColors, toChartItems } from '../utils/progressChartColors'
+import { normalizeQuestoesStatsCourseKey } from '../utils/questoesStats'
+
+const CHART_TOP_N = 8
 
 const EMPTY_METRICS = {
   studyHoursByMateria: [],
@@ -24,6 +27,24 @@ function sortDesc(items) {
 
 function sortAsc(items) {
   return [...items].sort((a, b) => a.value - b.value)
+}
+
+function pickMostStudied(items, limit = CHART_TOP_N) {
+  const ranked = sortDesc(items)
+  if (ranked.length <= limit) {
+    const count = Math.max(1, Math.ceil(ranked.length / 2))
+    return assignChartColors(ranked.slice(0, count))
+  }
+  return assignChartColors(ranked.slice(0, limit))
+}
+
+function pickLeastStudied(items, limit = CHART_TOP_N) {
+  const ranked = sortAsc(items)
+  if (ranked.length <= limit) {
+    const count = Math.max(1, Math.floor(ranked.length / 2))
+    return assignChartColors(ranked.slice(0, count))
+  }
+  return assignChartColors(ranked.slice(0, limit))
 }
 
 async function loadFlashcardsByMateria(userId, courseId) {
@@ -62,9 +83,23 @@ async function loadFlashcardsByMateria(userId, courseId) {
   return assignChartColors(sortDesc(toChartItems(byMateria)))
 }
 
+async function loadQuestoesStatsDoc(userId, courseId) {
+  const courseKey = normalizeQuestoesStatsCourseKey(courseId)
+  const primaryRef = doc(db, 'questoesStats', `${userId}_${courseKey}`)
+  const primarySnap = await getDoc(primaryRef)
+  if (primarySnap.exists()) return primarySnap
+
+  if (courseKey !== 'alego') {
+    const legacySnap = await getDoc(doc(db, 'questoesStats', `${userId}_alego`))
+    if (legacySnap.exists()) return legacySnap
+  }
+
+  return primarySnap
+}
+
 async function loadQuestoesMetrics(userId, courseId) {
-  const courseKey = courseId || 'alego'
-  const statsSnap = await getDoc(doc(db, 'questoesStats', `${userId}_${courseKey}`))
+  const courseKey = normalizeQuestoesStatsCourseKey(courseId)
+  const statsSnap = await loadQuestoesStatsDoc(userId, courseId)
 
   let byMateria = statsSnap.exists() ? statsSnap.data().byMateria || {} : {}
 
@@ -76,6 +111,7 @@ async function loadQuestoesMetrics(userId, courseId) {
     desempenhoSnap.forEach((docSnap) => {
       if (docSnap.id.includes('_nivel_')) return
       const data = docSnap.data()
+      if (data.courseId && normalizeQuestoesStatsCourseKey(data.courseId) !== courseKey) return
       const materia = data.disciplina || data.materia || 'Geral'
       if (!materiaStats[materia]) {
         materiaStats[materia] = { correct: 0, wrong: 0 }
@@ -86,21 +122,19 @@ async function loadQuestoesMetrics(userId, courseId) {
     byMateria = materiaStats
   }
 
-  const acertos = assignChartColors(
-    sortDesc(
-      Object.entries(byMateria).map(([name, data]) => ({
-        name,
-        value: data?.correct || 0,
-      })).filter((item) => item.value > 0),
+  const acertos = pickMostStudied(
+    toChartItems(
+      Object.fromEntries(
+        Object.entries(byMateria).map(([name, data]) => [name, data?.correct || 0]),
+      ),
     ),
   )
 
-  const erros = assignChartColors(
-    sortDesc(
-      Object.entries(byMateria).map(([name, data]) => ({
-        name,
-        value: data?.wrong || 0,
-      })).filter((item) => item.value > 0),
+  const erros = pickMostStudied(
+    toChartItems(
+      Object.fromEntries(
+        Object.entries(byMateria).map(([name, data]) => [name, data?.wrong || 0]),
+      ),
     ),
   )
 
@@ -203,7 +237,7 @@ export function useProgressMetrics(user, courseId) {
 
   return {
     ...metrics,
-    maisEstudadas: metrics.studyHoursByMateria,
-    menosEstudadas: sortAsc(metrics.studyHoursByMateria),
+    maisEstudadas: pickMostStudied(metrics.studyHoursByMateria),
+    menosEstudadas: pickLeastStudied(metrics.studyHoursByMateria),
   }
 }

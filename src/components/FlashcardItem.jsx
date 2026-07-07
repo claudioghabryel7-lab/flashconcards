@@ -2,6 +2,7 @@
 import { HeartIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/solid'
 import { useAuth } from '../hooks/useAuth'
 import ContentFeedbackActions from './content/ContentFeedbackActions'
+import { buildFlashcardContentId } from '../utils/contentCommentIds'
 
 const FlashcardItem = ({
   card,
@@ -14,6 +15,7 @@ const FlashcardItem = ({
   onEditFlashcard = null,
   courseId = null,
   topicKey = null,
+  cardIndex = 0,
   materia = '',
   assunto = '',
   cardColor = 'bg-white',
@@ -186,7 +188,8 @@ const FlashcardItem = ({
                   <ContentFeedbackActions
                     courseId={courseId}
                     contentType="flashcard"
-                    contentId={card.id}
+                    contentId={buildFlashcardContentId({ courseId, topicKey, card, cardIndex })}
+                    alternateContentIds={card?.id ? [`${card.id}`] : []}
                     topicKey={topicKey}
                     preview={card.pergunta}
                     materia={materia}

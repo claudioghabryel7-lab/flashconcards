@@ -82,6 +82,7 @@ export default function SubjectMetricChart({
   unit = '',
   emptyMessage = 'Nenhum dado disponível ainda.',
   formatValue,
+  ascending = false,
 }) {
   if (!data.length) {
     return (
@@ -104,17 +105,35 @@ export default function SubjectMetricChart({
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             {chartType === 'bar' ? (
-              <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 40 }}>
+              <BarChart
+                data={data}
+                layout={ascending ? 'vertical' : 'horizontal'}
+                margin={{ top: 8, right: 8, left: ascending ? 72 : 0, bottom: ascending ? 8 : 40 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 10 }}
-                  interval={0}
-                  angle={-25}
-                  textAnchor="end"
-                  height={50}
-                />
-                <YAxis tick={{ fontSize: 11 }} allowDecimals={unit === 'h'} />
+                {ascending ? (
+                  <>
+                    <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={unit === 'h'} />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      tick={{ fontSize: 10 }}
+                      width={68}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 10 }}
+                      interval={0}
+                      angle={-25}
+                      textAnchor="end"
+                      height={50}
+                    />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={unit === 'h'} />
+                  </>
+                )}
                 <Tooltip content={<ChartTooltip unit={unit} formatValue={formatValue} />} />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                   {data.map((entry) => (
