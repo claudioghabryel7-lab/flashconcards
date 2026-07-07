@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   collectionGroup,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -13,6 +14,7 @@ import {
   where,
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
+import { sanitizeCommentForStorage } from '../utils/commentFormatUtils'
 
 function commentsRef(courseId) {
   return collection(db, 'courses', courseId || 'alego-default', 'contentComments')
@@ -69,7 +71,7 @@ export async function addContentComment({
     throw new Error('Dados insuficientes para comentar.')
   }
 
-  const trimmed = (text || '').trim()
+  const trimmed = sanitizeCommentForStorage(text)
   if (!trimmed) throw new Error('Escreva um comentário antes de enviar.')
 
   await addDoc(commentsRef(courseId), {
@@ -89,7 +91,40 @@ export async function addContentComment({
     likes: 0,
     dislikes: 0,
     createdAt: serverTimestamp(),
+    editedAt: null,
   })
+}
+
+export async function updateContentComment({ courseId, commentId, text, userId, isAdmin = false }) {
+  const ref = commentRef(courseId, commentId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('Comentário não encontrado.')
+
+  const data = snap.data()
+  if (!isAdmin && data.userId !== userId) {
+    throw new Error('Você só pode editar seus próprios comentários.')
+  }
+
+  const trimmed = sanitizeCommentForStorage(text)
+  if (!trimmed) throw new Error('O comentário não pode ficar vazio.')
+
+  await updateDoc(ref, {
+    text: trimmed,
+    editedAt: serverTimestamp(),
+  })
+}
+
+export async function deleteContentComment({ courseId, commentId, userId, isAdmin = false }) {
+  const ref = commentRef(courseId, commentId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return
+
+  const data = snap.data()
+  if (!isAdmin && data.userId !== userId) {
+    throw new Error('Você só pode apagar seus próprios comentários.')
+  }
+
+  await deleteDoc(ref)
 }
 
 export function subscribeContentComments({ courseId, contentType, contentId }, onData, onError) {

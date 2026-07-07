@@ -339,6 +339,11 @@ service cloud.firestore {
           && request.resource.data.text is string;
         allow update: if isAuthenticated() && (
           isAdmin() ||
+          (
+            resource.data.userId == request.auth.uid &&
+            request.resource.data.userId == resource.data.userId &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
+          ) ||
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'dislikes'])
         );
         allow delete: if isAdmin() || resource.data.userId == request.auth.uid;

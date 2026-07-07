@@ -1,5 +1,6 @@
 import dayjs from 'dayjs'
 import { HandThumbUpIcon, HandThumbDownIcon } from '@heroicons/react/24/outline'
+import CommentFormattedText from './CommentFormattedText'
 
 export default function UserPublicCommentsList({ comments, emptyMessage }) {
   if (!comments.length) {
@@ -29,7 +30,12 @@ export default function UserPublicCommentsList({ comments, emptyMessage }) {
                 {comment.preview}
               </p>
             )}
-            <p className="text-sm leading-relaxed text-cp-text">{comment.text}</p>
+            <CommentFormattedText text={comment.text} />
+            {comment.editedAt?.toDate?.() && (
+              <p className="mt-1 font-mono text-[10px] text-cp-muted">
+                editado em {dayjs(comment.editedAt.toDate()).format('DD/MM/YYYY HH:mm')}
+              </p>
+            )}
             <div className="mt-2 flex items-center gap-4 text-xs text-cp-muted">
               <span className="inline-flex items-center gap-1">
                 <HandThumbUpIcon className="h-3.5 w-3.5" />

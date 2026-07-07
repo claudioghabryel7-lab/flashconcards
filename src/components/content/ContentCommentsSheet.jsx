@@ -1,26 +1,47 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { HandThumbUpIcon, HandThumbDownIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import {
+  HandThumbUpIcon,
+  HandThumbDownIcon,
+  XMarkIcon,
+  PencilIcon,
+  TrashIcon,
+} from '@heroicons/react/24/outline'
 import { HandThumbUpIcon as HandThumbUpSolid, HandThumbDownIcon as HandThumbDownSolid } from '@heroicons/react/24/solid'
 import dayjs from 'dayjs'
 import PortalOverlay from './PortalOverlay'
 import UserAvatar from '../UserAvatar'
+import CommentFormattedText from './CommentFormattedText'
+import CommentComposer from './CommentComposer'
 import { useAuth } from '../../hooks/useAuth'
 import {
   addContentComment,
   subscribeContentComments,
   voteContentComment,
   getUserVoteOnComment,
+  updateContentComment,
+  deleteContentComment,
 } from '../../services/contentCommentsService'
 
-function CommentRow({ comment, courseId, currentUserId, onVote }) {
+function CommentRow({ comment, courseId, currentUserId, isAdmin, onVote }) {
   const [userVote, setUserVote] = useState(null)
   const [voting, setVoting] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editText, setEditText] = useState(comment.text || '')
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const isOwner = currentUserId && comment.userId === currentUserId
+  const canManage = isOwner || isAdmin
 
   useEffect(() => {
     if (!currentUserId || !comment.id) return
     getUserVoteOnComment(courseId, comment.id, currentUserId).then(setUserVote)
   }, [courseId, comment.id, currentUserId, comment.likes, comment.dislikes])
+
+  useEffect(() => {
+    if (!editing) setEditText(comment.text || '')
+  }, [comment.text, editing])
 
   const handleVote = async (type) => {
     if (!currentUserId || voting) return
@@ -40,8 +61,48 @@ function CommentRow({ comment, courseId, currentUserId, onVote }) {
     }
   }
 
+  const handleSaveEdit = async () => {
+    if (!canManage || saving) return
+    setSaving(true)
+    try {
+      await updateContentComment({
+        courseId,
+        commentId: comment.id,
+        text: editText,
+        userId: currentUserId,
+        isAdmin,
+      })
+      setEditing(false)
+    } catch (error) {
+      alert(error.message || 'Erro ao editar comentário.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!canManage || deleting) return
+    if (!window.confirm('Apagar este comentário?')) return
+    setDeleting(true)
+    try {
+      await deleteContentComment({
+        courseId,
+        commentId: comment.id,
+        userId: currentUserId,
+        isAdmin,
+      })
+    } catch (error) {
+      alert(error.message || 'Erro ao apagar comentário.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const created = comment.createdAt?.toDate?.()
     ? dayjs(comment.createdAt.toDate()).format('DD/MM/YY HH:mm')
+    : ''
+  const edited = comment.editedAt?.toDate?.()
+    ? dayjs(comment.editedAt.toDate()).format('DD/MM/YY HH:mm')
     : ''
 
   return (
@@ -63,40 +124,94 @@ function CommentRow({ comment, courseId, currentUserId, onVote }) {
               {comment.userName || 'Usuário'}
             </Link>
             {created && <span className="font-mono text-[10px] text-cp-muted">{created}</span>}
+            {edited && (
+              <span className="font-mono text-[10px] text-cp-muted">· editado {edited}</span>
+            )}
+            {canManage && !editing && (
+              <span className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="rounded-lg p-1 text-cp-muted transition hover:bg-cp-surface hover:text-cp-text"
+                  title="Editar"
+                >
+                  <PencilIcon className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="rounded-lg p-1 text-cp-muted transition hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+                  title="Apagar"
+                >
+                  <TrashIcon className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            )}
           </div>
-          <p className="mt-1 text-sm leading-relaxed text-cp-text">{comment.text}</p>
-          <div className="mt-2 flex items-center gap-3">
-            <button
-              type="button"
-              disabled={!currentUserId || voting}
-              onClick={() => handleVote('like')}
-              className={`inline-flex items-center gap-1 text-xs transition ${
-                userVote === 'like' ? 'text-[var(--cp-success)]' : 'text-cp-muted hover:text-cp-text'
-              }`}
-            >
-              {userVote === 'like' ? (
-                <HandThumbUpSolid className="h-4 w-4" />
-              ) : (
-                <HandThumbUpIcon className="h-4 w-4" />
-              )}
-              {comment.likes || 0}
-            </button>
-            <button
-              type="button"
-              disabled={!currentUserId || voting}
-              onClick={() => handleVote('dislike')}
-              className={`inline-flex items-center gap-1 text-xs transition ${
-                userVote === 'dislike' ? 'text-red-400' : 'text-cp-muted hover:text-cp-text'
-              }`}
-            >
-              {userVote === 'dislike' ? (
-                <HandThumbDownSolid className="h-4 w-4" />
-              ) : (
-                <HandThumbDownIcon className="h-4 w-4" />
-              )}
-              {comment.dislikes || 0}
-            </button>
-          </div>
+
+          {editing ? (
+            <div className="mt-2 space-y-2">
+              <CommentComposer value={editText} onChange={setEditText} rows={5} />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={saving}
+                  className="cp-btn-primary !py-1.5 !text-xs disabled:opacity-60"
+                >
+                  {saving ? 'Salvando…' : 'Salvar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditing(false)}
+                  disabled={saving}
+                  className="cp-btn-ghost !py-1.5 !text-xs"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-1">
+              <CommentFormattedText text={comment.text} />
+            </div>
+          )}
+
+          {!editing && (
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                type="button"
+                disabled={!currentUserId || voting}
+                onClick={() => handleVote('like')}
+                className={`inline-flex items-center gap-1 text-xs transition ${
+                  userVote === 'like' ? 'text-[var(--cp-success)]' : 'text-cp-muted hover:text-cp-text'
+                }`}
+              >
+                {userVote === 'like' ? (
+                  <HandThumbUpSolid className="h-4 w-4" />
+                ) : (
+                  <HandThumbUpIcon className="h-4 w-4" />
+                )}
+                {comment.likes || 0}
+              </button>
+              <button
+                type="button"
+                disabled={!currentUserId || voting}
+                onClick={() => handleVote('dislike')}
+                className={`inline-flex items-center gap-1 text-xs transition ${
+                  userVote === 'dislike' ? 'text-red-400' : 'text-cp-muted hover:text-cp-text'
+                }`}
+              >
+                {userVote === 'dislike' ? (
+                  <HandThumbDownSolid className="h-4 w-4" />
+                ) : (
+                  <HandThumbDownIcon className="h-4 w-4" />
+                )}
+                {comment.dislikes || 0}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -113,7 +228,7 @@ export default function ContentCommentsSheet({
   preview,
   contextLabel = 'este conteúdo',
 }) {
-  const { user, profile } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const [comments, setComments] = useState([])
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
@@ -199,19 +314,18 @@ export default function ContentCommentsSheet({
               comment={c}
               courseId={courseId}
               currentUserId={user?.uid}
+              isAdmin={isAdmin}
             />
           ))
         )}
       </div>
 
       <div className="border-t border-cp-border bg-[var(--cp-bg)] p-4">
-        <textarea
+        <CommentComposer
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={3}
-          placeholder={user ? 'Comentário público (visível no seu perfil)…' : 'Faça login para comentar'}
+          onChange={setText}
           disabled={!user}
-          className="w-full resize-none rounded-xl border border-cp-border bg-cp-surface px-3 py-2.5 text-sm text-cp-text focus:border-[var(--cp-accent)] focus:outline-none disabled:opacity-60"
+          placeholder={user ? 'Comentário público (visível no seu perfil)…' : 'Faça login para comentar'}
         />
         {message && <p className="mt-2 text-xs text-cp-muted">{message}</p>}
         <button
