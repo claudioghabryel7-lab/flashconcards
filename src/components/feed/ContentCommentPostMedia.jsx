@@ -12,7 +12,12 @@ export default function ContentCommentPostMedia({ post, exportMode = false, onDo
   const theme = resolveCardTheme({ modalidade: post.modalidade, cardTheme: post.cardTheme })
   const fonts = resolveCardFonts({ cardTheme: post.cardTheme })
   const modalityLabel = MODALITY_LABELS[post.modalidade] || post.modalidade || 'Comentário'
-  const contentLabel = post.contentType === 'questao' ? 'Questão' : 'Flashcard'
+  const contentLabel =
+    post.contentType === 'questao'
+      ? 'Questão'
+      : post.contentType === 'incidencia'
+        ? 'Incidência'
+        : 'Flashcard'
   const questionText = resolveContentQuestionText(post)
   const openUrl = exportMode ? null : getPostOpenUrl(post)
   const [showHeart, setShowHeart] = useState(false)

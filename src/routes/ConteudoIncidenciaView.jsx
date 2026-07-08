@@ -9,6 +9,8 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
+import ContentFeedbackActions from '../components/content/ContentFeedbackActions'
+import { buildIncidenciaAssuntoContentId } from '../utils/contentCommentIds'
 import { probabilidadeBadgeClass } from '../utils/htmlTextHelpers'
 
 const ConteudoIncidenciaView = () => {
@@ -591,6 +593,25 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                       <span className={`cp-badge !text-[10px] border ${probabilidadeBadgeClass(assunto.probabilidade)}`}>
                         {assunto.probabilidade}% chance
                       </span>
+                      {!editingRevisao && courseId && disciplina && (
+                        <ContentFeedbackActions
+                          courseId={courseId}
+                          contentType="incidencia"
+                          contentId={buildIncidenciaAssuntoContentId({
+                            courseId,
+                            disciplinaKey: getSanitizedDisciplinaKey(disciplina.nome),
+                            section: 'geral',
+                            assuntoIdx: idx,
+                            assuntoName: assunto.assunto,
+                          })}
+                          topicKey={String(disciplinaIdx)}
+                          preview={assunto.revisao || assunto.assunto}
+                          materia={disciplina.nome}
+                          assunto={assunto.assunto}
+                          contextLabel="este assunto"
+                          variant="inline"
+                        />
+                      )}
                     </div>
                     {(assunto.revisao || editingRevisao) && (
                       <div>
@@ -658,6 +679,26 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                             <span className={`font-mono text-[10px] px-2 py-0.5 rounded-full border ${probabilidadeBadgeClass(assunto.probabilidade)}`}>
                               {assunto.probabilidade}%
                             </span>
+                            {!editingRevisao && courseId && disciplina && (
+                              <ContentFeedbackActions
+                                courseId={courseId}
+                                contentType="incidencia"
+                                contentId={buildIncidenciaAssuntoContentId({
+                                  courseId,
+                                  disciplinaKey: getSanitizedDisciplinaKey(disciplina.nome),
+                                  section: 'topico',
+                                  topicIdx: tIdx,
+                                  assuntoIdx: aIdx,
+                                  assuntoName: assunto.assunto,
+                                })}
+                                topicKey={String(disciplinaIdx)}
+                                preview={assunto.revisao || assunto.assunto}
+                                materia={disciplina.nome}
+                                assunto={assunto.assunto}
+                                contextLabel="este assunto"
+                                variant="inline"
+                              />
+                            )}
                           </div>
                           {(assunto.revisao || editingRevisao) && (
                             editingRevisao ? (

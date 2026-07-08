@@ -10,7 +10,12 @@ import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText, parseAiJsonText } from '../utils/geminiApi'
+import {
+  createGenerationJob,
+  updateGenerationJob,
+  GENERATION_JOB_STATUS,
+} from '../services/generationJobService'
 import { incrementQuestoesStats } from '../utils/questoesStats'
 import { isContentAvailable, toggleContentStatus, CONTENT_STATUS } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
@@ -27,6 +32,8 @@ import {
   resolveQuestaoGabarito,
 } from '../components/QuestoesPraticaCP'
 import { buildQuestaoContentId, buildLegacyQuestaoContentId } from '../utils/contentCommentIds'
+import CommentComposer from '../components/content/CommentComposer'
+import { sanitizeCommentForStorage } from '../utils/commentFormatUtils'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -412,10 +419,25 @@ const QuestoesTopicoView = () => {
       return
     }
 
+    let jobId = null
     try {
       setGenerating(true)
       setProgress(5)
       setError('')
+
+      if (user?.uid) {
+        jobId = await createGenerationJob({
+          userId: user.uid,
+          courseId: resolvedCourseId,
+          jobType: 'questoes_topico',
+          topicKey: resolvedTopicKey,
+          metadata: { nivel: nivelAtual },
+        })
+        await updateGenerationJob(user.uid, jobId, {
+          status: GENERATION_JOB_STATUS.RUNNING,
+          message: `Gerando questões (nível ${nivelAtual})…`,
+        })
+      }
 
       // Carregar edital e prompt unificado para contexto
       const editalRef = doc(db, 'courses', resolvedCourseId, 'prompts', 'edital')
@@ -669,37 +691,9 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       console.log('📝 [Questões Tópico] Tamanho da resposta da IA:', aiText.length)
       setProgress(75)
 
-      let jsonText = aiText
-      if (jsonText.startsWith('```json')) {
-        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      } else if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/```\n?/g, '').trim()
-      }
-      const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
-      if (jsonMatch) jsonText = jsonMatch[0]
-
-      let parsed = null
-      try {
-        parsed = JSON.parse(jsonText)
-        console.log('✅ [Questões Tópico] JSON parseado com sucesso')
-        console.log('📊 [Questões Tópico] Número de questões geradas:', parsed.questoes?.length || 0)
-      } catch (parseError) {
-        console.error('Erro ao fazer parse do JSON:', parseError.message)
-        console.error('JSON extraído:', jsonText)
-        
-        let fixedJson = jsonText
-          .replace(/,\s*}/g, '}')
-          .replace(/,\s*]/g, ']')
-          .replace(/\n\s*\}/g, '}')
-          .replace(/\n\s*\]/g, ']')
-        
-        try {
-          parsed = JSON.parse(fixedJson)
-          console.log('JSON corrigido com sucesso')
-        } catch (fixError) {
-          throw new Error(`JSON inválido mesmo após correção: ${fixError.message}`)
-        }
-      }
+      const parsed = await parseAiJsonText(aiText)
+      console.log('✅ [Questões Tópico] JSON parseado com sucesso')
+      console.log('📊 [Questões Tópico] Número de questões geradas:', parsed.questoes?.length || 0)
 
       const payload = {
         ...parsed,
@@ -732,11 +726,24 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       )
       setError('')
       setProgress(100)
+      if (user?.uid && jobId) {
+        await updateGenerationJob(user.uid, jobId, {
+          status: GENERATION_JOB_STATUS.DONE,
+          progress: 100,
+          message: 'Questões geradas com sucesso.',
+        })
+      }
       return true
     } catch (err) {
       console.error('Erro ao gerar questões:', err)
       const message = err instanceof Error ? err.message : String(err)
       setError(message || 'Erro ao gerar questões.')
+      if (user?.uid && jobId) {
+        await updateGenerationJob(user.uid, jobId, {
+          status: GENERATION_JOB_STATUS.ERROR,
+          message,
+        }).catch(() => {})
+      }
       return false
     } finally {
       setGenerating(false)
@@ -921,12 +928,13 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       
       const questaoAtual = questoesArray[currentQuestionIndex]
       const questoesAtualizadas = [...questoesArray]
+      const explicacaoFormatada = sanitizeCommentForStorage(novaExplicacao)
       questoesAtualizadas[currentQuestionIndex] = {
         ...questaoAtual,
         respostaCorreta: novoGabarito,
         correta: novoGabarito,
-        explicacao: novaExplicacao,
-        gabaritoComentado: novaExplicacao
+        explicacao: explicacaoFormatada,
+        gabaritoComentado: explicacaoFormatada,
       }
       
       const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
@@ -1347,11 +1355,10 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                                       </div>
                                       <div>
                                         <label className="block text-xs font-medium text-cp-muted mb-1">Explicação</label>
-                                        <textarea
+                                        <CommentComposer
                                           value={novaExplicacao}
-                                          onChange={(e) => setNovaExplicacao(e.target.value)}
-                                          rows={4}
-                                          className="w-full rounded-lg border border-cp-border bg-cp-bg/60 px-3 py-2 text-sm text-cp-text resize-y"
+                                          onChange={setNovaExplicacao}
+                                          placeholder="Explicação formatada (negrito, grifar, fórmulas)…"
                                         />
                                       </div>
                                       <div className="flex gap-2">

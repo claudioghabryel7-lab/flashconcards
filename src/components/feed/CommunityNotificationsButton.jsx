@@ -1,0 +1,135 @@
+import { useEffect, useMemo, useState } from 'react'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
+import { Link } from 'react-router-dom'
+import { Bell } from 'lucide-react'
+import dayjs from 'dayjs'
+import { db } from '../../firebase/config'
+import { isFeedPostActive } from '../../utils/feedTimeUtils'
+
+const READ_KEY = (uid) => `communityNotifsRead_${uid}`
+
+function loadReadAt(uid) {
+  try {
+    const raw = localStorage.getItem(READ_KEY(uid))
+    return raw ? Number(raw) : 0
+  } catch {
+    return 0
+  }
+}
+
+function saveReadAt(uid) {
+  try {
+    localStorage.setItem(READ_KEY(uid), String(Date.now()))
+  } catch {
+    /* ignore */
+  }
+}
+
+export default function CommunityNotificationsButton({ userId }) {
+  const [followingIds, setFollowingIds] = useState([])
+  const [posts, setPosts] = useState([])
+  const [open, setOpen] = useState(false)
+  const [readAt, setReadAt] = useState(() => (userId ? loadReadAt(userId) : 0))
+
+  useEffect(() => {
+    if (!userId || !db) return () => {}
+    const q = query(collection(db, 'follows'), where('followerId', '==', userId))
+    return onSnapshot(q, (snap) => {
+      setFollowingIds(snap.docs.map((d) => d.data().followingId).filter(Boolean))
+    })
+  }, [userId])
+
+  useEffect(() => {
+    if (!db) return () => {}
+    return onSnapshot(collection(db, 'trilhaFeed'), (snap) => {
+      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      rows.sort((a, b) => {
+        const at = a.createdAt?.toMillis?.() || 0
+        const bt = b.createdAt?.toMillis?.() || 0
+        return bt - at
+      })
+      setPosts(rows)
+    })
+  }, [])
+
+  const notifications = useMemo(() => {
+    if (!followingIds.length) return []
+    const set = new Set(followingIds)
+    return posts
+      .filter((p) => set.has(p.authorId) && isFeedPostActive(p))
+      .slice(0, 20)
+  }, [posts, followingIds])
+
+  const unreadCount = useMemo(
+    () =>
+      notifications.filter((p) => {
+        const ts = p.createdAt?.toMillis?.() || 0
+        return ts > readAt
+      }).length,
+    [notifications, readAt],
+  )
+
+  const handleOpen = () => {
+    setOpen((v) => !v)
+    if (!open && userId) {
+      const now = Date.now()
+      setReadAt(now)
+      saveReadAt(userId)
+    }
+  }
+
+  if (!userId) return null
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="relative rounded-full p-1.5 text-cp-muted transition hover:bg-cp-surface hover:text-cp-text"
+        aria-label="Notificações da comunidade"
+      >
+        <Bell className="h-5 w-5" />
+        {unreadCount > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-cp-border bg-cp-bg shadow-xl">
+          <div className="border-b border-cp-border px-3 py-2">
+            <p className="text-xs font-semibold text-cp-text">Quem você segue</p>
+          </div>
+          <div className="max-h-80 overflow-y-auto">
+            {notifications.length === 0 ? (
+              <p className="px-3 py-6 text-center text-xs text-cp-muted">
+                Nenhuma publicação recente de quem você segue.
+              </p>
+            ) : (
+              notifications.map((post) => (
+                <Link
+                  key={post.id}
+                  to={`/comunidade/publicacao/${post.id}`}
+                  onClick={() => setOpen(false)}
+                  className="block border-b border-cp-border/60 px-3 py-2.5 transition hover:bg-cp-surface"
+                >
+                  <p className="text-xs font-semibold text-cp-text">{post.authorName || 'Aluno'}</p>
+                  <p className="mt-0.5 line-clamp-2 text-[11px] text-cp-muted">
+                    {post.materia || 'Estudo'}
+                    {post.assunto ? ` — ${post.assunto}` : ''}
+                  </p>
+                  <p className="mt-1 text-[10px] text-cp-muted">
+                    {post.createdAt?.toDate
+                      ? dayjs(post.createdAt.toDate()).format('DD/MM HH:mm')
+                      : 'agora'}
+                  </p>
+                </Link>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

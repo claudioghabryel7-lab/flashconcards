@@ -102,6 +102,7 @@ const FlashcardsTopicoView = () => {
             moduloLabel: modulo,
             courseName,
             editalText,
+            userId: user?.uid,
           })
           if (!cancelled) setFromCache(false)
         } else if (!cancelled) {
@@ -209,6 +210,7 @@ const FlashcardsTopicoView = () => {
         moduloLabel: modulo,
         courseName,
         editalText,
+        userId: user?.uid,
       })
       setCards(generated)
       setCurrentIndex(0)

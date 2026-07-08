@@ -1,5 +1,5 @@
 import { FireIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
-import ReactMarkdown from 'react-markdown'
+import CommentFormattedText from './content/CommentFormattedText'
 import { probabilidadeBadgeClass } from '../utils/htmlTextHelpers'
 import ContentFeedbackActions from './content/ContentFeedbackActions'
 
@@ -271,8 +271,8 @@ export function QuestaoExplicacao({ explicacao, editSlot }) {
     <div className="rounded-2xl border border-cp-border bg-gradient-to-br from-cp-bg/60 to-cp-surface/80 p-4 sm:p-5">
       <h4 className="mb-3 font-mono text-[10px] uppercase tracking-wider text-cp-muted">Explicação</h4>
       {editSlot}
-      <div className="prose prose-sm dark:prose-invert max-w-none text-cp-muted">
-        <ReactMarkdown>{texto}</ReactMarkdown>
+      <div className="text-sm leading-relaxed text-cp-muted">
+        <CommentFormattedText text={texto} />
       </div>
     </div>
   )

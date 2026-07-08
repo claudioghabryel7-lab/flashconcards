@@ -1,8 +1,11 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { Timestamp } from 'firebase/firestore'
 import dayjs from 'dayjs'
 import { db } from '../firebase/config'
 import { stripUndefined } from '../utils/firestoreHelpers'
 import { getDefaultCardTheme } from '../utils/feedUtils'
+import { feedExpiresAtTimestamp, normalizeDurationMinutes } from '../utils/feedTimeUtils'
+import { archiveProfilePost } from './profilePostsService'
 
 const MAX_PHOTO_BYTES = 120_000
 
@@ -33,7 +36,7 @@ function defaultModalidade(postType) {
 
 export function buildContentItemPreview(contentType, previewText = '') {
   const text = previewText ? String(previewText).slice(0, 500) : ''
-  const type = contentType === 'questao' ? 'questao' : 'flashcard'
+  const type = contentType === 'questao' ? 'questao' : contentType === 'incidencia' ? 'incidencia' : 'flashcard'
   const preview = { type, text }
   if (type === 'questao') preview.enunciado = text
   else preview.pergunta = text
@@ -72,6 +75,7 @@ export async function publishContentCommentToFeed({ user, profile, data }) {
       source: 'comentario',
       cardTheme: data.cardTheme || theme,
       featuredDate: dayjs().format('YYYY-MM-DD'),
+      expiresAt: Timestamp.fromDate(feedExpiresAtTimestamp()),
       likes: [],
       likesCount: 0,
       comments: [],
@@ -79,6 +83,24 @@ export async function publishContentCommentToFeed({ user, profile, data }) {
       createdAt: serverTimestamp(),
     }),
   )
+
+  try {
+    await archiveProfilePost(user.uid, {
+      postType,
+      materia: data.materia || '',
+      assunto: data.assunto || '',
+      modalidade,
+      courseId: data.courseId ?? null,
+      contentType: data.contentType || null,
+      commentText: data.commentText || null,
+      contentPreview: data.contentPreview || null,
+      cardTheme: data.cardTheme || theme,
+      featuredDate: dayjs().format('YYYY-MM-DD'),
+      createdAt: serverTimestamp(),
+    }, docRef.id)
+  } catch (error) {
+    console.warn('Não foi possível arquivar publicação no perfil:', error)
+  }
 
   return docRef.id
 }
@@ -93,6 +115,8 @@ export async function publishFeedPost({ user, profile, data }) {
   const postType = data.postType || FEED_POST_TYPES.TRILHA
   const modalidade = data.modalidade || defaultModalidade(postType)
   const theme = getDefaultCardTheme(modalidade)
+
+  const durationMinutes = normalizeDurationMinutes(data.durationMinutes || data.minutos || 0)
 
   const docRef = await addDoc(
     collection(db, 'trilhaFeed'),
@@ -117,11 +141,12 @@ export async function publishFeedPost({ user, profile, data }) {
       contentCommentId: data.contentCommentId || null,
       commentText: data.commentText || null,
       source: data.source || postType,
-      durationMinutes: data.durationMinutes || data.minutos || 0,
+      durationMinutes,
       acertos: data.acertos ?? null,
       erros: data.erros ?? null,
       cardTheme: data.cardTheme || theme,
       featuredDate: dayjs().format('YYYY-MM-DD'),
+      expiresAt: Timestamp.fromDate(feedExpiresAtTimestamp()),
       likes: [],
       likesCount: 0,
       comments: [],
@@ -129,6 +154,22 @@ export async function publishFeedPost({ user, profile, data }) {
       createdAt: serverTimestamp(),
     }),
   )
+
+  try {
+    await archiveProfilePost(user.uid, {
+      postType,
+      materia: data.materia || '',
+      assunto: data.assunto || '',
+      modalidade,
+      courseId: data.courseId ?? null,
+      durationMinutes,
+      cardTheme: data.cardTheme || theme,
+      featuredDate: dayjs().format('YYYY-MM-DD'),
+      createdAt: serverTimestamp(),
+    }, docRef.id)
+  } catch (error) {
+    console.warn('Não foi possível arquivar publicação no perfil:', error)
+  }
 
   return docRef.id
 }

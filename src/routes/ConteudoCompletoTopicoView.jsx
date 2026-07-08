@@ -7,7 +7,12 @@ import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText, parseAiJsonText } from '../utils/geminiApi'
+import {
+  createGenerationJob,
+  updateGenerationJob,
+  GENERATION_JOB_STATUS,
+} from '../services/generationJobService'
 import { isContentAvailable, CONTENT_STATUS } from '../utils/contentStatus'
 import SimpleMaterialEditor from '../components/SimpleMaterialEditor'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
@@ -723,10 +728,24 @@ ONDE:
       return
     }
 
+    let jobId = null
     try {
       setGenerating(true)
       setProgress(5)
       setError('')
+
+      if (user?.uid) {
+        jobId = await createGenerationJob({
+          userId: user.uid,
+          courseId: resolvedCourseId,
+          jobType: 'conteudo_completo',
+          topicKey: resolvedTopicKey,
+        })
+        await updateGenerationJob(user.uid, jobId, {
+          status: GENERATION_JOB_STATUS.RUNNING,
+          message: 'Gerando conteúdo completo…',
+        })
+      }
 
       // Carregar edital e prompt unificado para contexto
       const editalRef = doc(db, 'courses', resolvedCourseId, 'prompts', 'edital')
@@ -991,16 +1010,7 @@ REGRAS:
       const aiText = extractGeneratedText(response)
       setProgress(75)
 
-      let jsonText = aiText
-      if (jsonText.startsWith('```json')) {
-        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      } else if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/```\n?/g, '').trim()
-      }
-      const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
-      if (jsonMatch) jsonText = jsonMatch[0]
-
-      const parsed = JSON.parse(jsonText)
+      const parsed = await parseAiJsonText(aiText)
       const payload = {
         ...parsed,
         materia: parsed.materia || parsed.titulo || resolvedTopicKey,
@@ -1020,11 +1030,24 @@ REGRAS:
       setConteudo({ id: sanitizedKey, ...payload })
       setError('')
       setProgress(100)
+      if (user?.uid && jobId) {
+        await updateGenerationJob(user.uid, jobId, {
+          status: GENERATION_JOB_STATUS.DONE,
+          progress: 100,
+          message: 'Conteúdo gerado com sucesso.',
+        })
+      }
       return true
     } catch (err) {
       console.error('Erro ao gerar conteúdo:', err)
       const message = err instanceof Error ? err.message : String(err)
       setError(message || 'Erro ao gerar conteúdo.')
+      if (user?.uid && jobId) {
+        await updateGenerationJob(user.uid, jobId, {
+          status: GENERATION_JOB_STATUS.ERROR,
+          message,
+        }).catch(() => {})
+      }
       return false
     } finally {
       setGenerating(false)

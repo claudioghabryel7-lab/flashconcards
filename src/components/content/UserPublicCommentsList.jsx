@@ -17,7 +17,12 @@ export default function UserPublicCommentsList({ comments, emptyMessage }) {
         const when = comment.createdAt?.toDate?.()
           ? dayjs(comment.createdAt.toDate()).format('DD/MM/YYYY HH:mm')
           : ''
-        const typeLabel = comment.contentType === 'questao' ? 'Questão' : 'Flashcard'
+        const typeLabel =
+          comment.contentType === 'questao'
+            ? 'Questão'
+            : comment.contentType === 'incidencia'
+              ? 'Incidência'
+              : 'Flashcard'
 
         return (
           <div key={comment._docPath || `${comment.courseId}-${comment.id}`} className="px-4 py-4">

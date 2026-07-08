@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import FeedStoryAvatar from './FeedStoryAvatar'
+import { formatStudyMinutes } from '../../utils/feedTimeUtils'
 
 export default function FeedHighlightsBar({ highlights, currentUser }) {
   return (
@@ -53,7 +54,9 @@ export default function FeedHighlightsBar({ highlights, currentUser }) {
             <span className="max-w-[72px] truncate text-center text-[11px] text-cp-text">
               {h.authorName?.split(' ')[0] || 'Aluno'}
             </span>
-            <span className="font-mono text-[10px] text-cp-accent">{h.totalMinutes}m</span>
+            <span className="font-mono text-[10px] text-cp-accent">
+              {formatStudyMinutes(h.totalMinutes)}
+            </span>
           </Link>
         ))}
       </div>

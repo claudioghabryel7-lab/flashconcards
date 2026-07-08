@@ -14,6 +14,7 @@ import { Compass } from 'lucide-react'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import FeedHighlightsBar from '../components/feed/FeedHighlightsBar'
+import CoursePeopleSuggestions from '../components/feed/CoursePeopleSuggestions'
 import FeedPost from '../components/feed/FeedPost'
 import FeedPostEditModal from '../components/feed/FeedPostEditModal'
 import FeedPostMedia from '../components/feed/FeedPostMedia'
@@ -32,6 +33,7 @@ import {
   toggleFeedReplyLike,
   addFeedCommentReply,
 } from '../services/trilhaFeedMutations'
+import { isFeedPostActive, normalizeDurationMinutes } from '../utils/feedTimeUtils'
 
 const BOOKMARK_KEY = 'trilhaFeedBookmarks'
 
@@ -105,10 +107,11 @@ export default function ComunidadeTrilha() {
     return () => unsub()
   }, [])
 
+  const activePosts = useMemo(() => posts.filter((p) => isFeedPostActive(p)), [posts])
+
   const dailyHighlights = useMemo(() => {
-    const todayPosts = posts.filter((p) => p.featuredDate === todayKey)
     const byUser = new Map()
-    todayPosts.forEach((p) => {
+    activePosts.forEach((p) => {
       const prev = byUser.get(p.authorId) || {
         authorId: p.authorId,
         authorName: p.authorName,
@@ -116,13 +119,13 @@ export default function ComunidadeTrilha() {
         totalMinutes: 0,
         sessions: 0,
       }
-      prev.totalMinutes += p.durationMinutes || 0
+      prev.totalMinutes += normalizeDurationMinutes(p.durationMinutes || 0)
       prev.sessions += 1
       if (p.authorPhotoBase64) prev.authorPhotoBase64 = p.authorPhotoBase64
       byUser.set(p.authorId, prev)
     })
     return [...byUser.values()].sort((a, b) => b.totalMinutes - a.totalMinutes).slice(0, 10)
-  }, [posts, todayKey])
+  }, [activePosts])
 
   const toggleLike = useCallback(
     async (postId, likes = []) => {
@@ -277,7 +280,12 @@ export default function ComunidadeTrilha() {
         <FeedHighlightsBar highlights={dailyHighlights} currentUser={currentUserHighlight} />
       )}
 
-      {posts.length === 0 ? (
+      <CoursePeopleSuggestions
+        courseId={profile?.selectedCourseId || 'alego-default'}
+        currentUserId={user?.uid}
+      />
+
+      {activePosts.length === 0 ? (
         <div className="flex flex-col items-center gap-4 px-6 py-16 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-cp-accent/10">
             <Compass className="h-10 w-10 text-cp-accent" />
@@ -296,7 +304,7 @@ export default function ComunidadeTrilha() {
           </Link>
         </div>
       ) : (
-        posts.map((post) => (
+        activePosts.map((post) => (
           <FeedPost
             key={post.id}
             post={post}

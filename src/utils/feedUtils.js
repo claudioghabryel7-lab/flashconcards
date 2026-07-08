@@ -205,6 +205,12 @@ export function buildContentCommentSharePath({ courseId, contentType, topicKey }
   if (contentType === 'flashcard' && topicKey) {
     return `/flashcards/topico/${courseId}?topicKey=${encodeURIComponent(topicKey)}`
   }
+  if (contentType === 'incidencia' && courseId) {
+    const idx = topicKey?.replace?.(/^d/, '') || topicKey
+    if (idx != null && idx !== '') {
+      return `/conteudo-incidencia/${courseId}/${idx}`
+    }
+  }
   return '/comunidade'
 }
 

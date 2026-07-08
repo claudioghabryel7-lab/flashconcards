@@ -22,6 +22,7 @@ import {
   subscribeIsFollowing,
   unfollowUser,
 } from '../services/followService'
+import { subscribeProfilePosts, profilePostToFeedShape } from '../services/profilePostsService'
 import toast from 'react-hot-toast'
 
 export default function ComunidadePerfil() {
@@ -57,34 +58,60 @@ export default function ComunidadePerfil() {
   useEffect(() => {
     if (!userId) return () => {}
 
-    const postsRef = collection(db, 'trilhaFeed')
-    let unsub = () => {}
+    let legacyPosts = []
+    let archivedPosts = []
 
-    const subscribe = (useOrder = true) => {
+    const mergePosts = () => {
+      const archivedIds = new Set(archivedPosts.map((p) => p.feedPostId).filter(Boolean))
+      const legacyOnly = legacyPosts
+        .filter((p) => !archivedIds.has(p.id))
+        .map((p) => profilePostToFeedShape({ ...p, feedPostId: p.id }))
+      const merged = [
+        ...archivedPosts.map(profilePostToFeedShape),
+        ...legacyOnly,
+      ]
+      merged.sort((a, b) => {
+        const at = a.createdAt?.toMillis?.() || 0
+        const bt = b.createdAt?.toMillis?.() || 0
+        return bt - at
+      })
+      setPosts(merged)
+    }
+
+    const unsubArchive = subscribeProfilePosts(
+      userId,
+      (rows) => {
+        archivedPosts = rows
+        mergePosts()
+      },
+      console.error,
+    )
+
+    const postsRef = collection(db, 'trilhaFeed')
+    let unsubLegacy = () => {}
+    const subscribeLegacy = (useOrder = true) => {
       const q = useOrder
         ? query(postsRef, where('authorId', '==', userId), orderBy('createdAt', 'desc'))
         : query(postsRef, where('authorId', '==', userId))
 
-      unsub = onSnapshot(
+      unsubLegacy = onSnapshot(
         q,
         (snap) => {
-          const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-          data.sort((a, b) => {
-            const at = a.createdAt?.toMillis?.() || 0
-            const bt = b.createdAt?.toMillis?.() || 0
-            return bt - at
-          })
-          setPosts(data)
+          legacyPosts = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+          mergePosts()
         },
         (err) => {
-          if (err.code === 'failed-precondition' && useOrder) subscribe(false)
+          if (err.code === 'failed-precondition' && useOrder) subscribeLegacy(false)
           else console.error(err)
         },
       )
     }
+    subscribeLegacy(true)
 
-    subscribe(true)
-    return () => unsub()
+    return () => {
+      unsubArchive?.()
+      unsubLegacy()
+    }
   }, [userId])
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Clock } from 'lucide-react'
 import { POST_TYPE_LABELS, resolveCardTheme, resolvePostType, FEED_POST_TYPES } from '../../utils/feedUtils'
+import { formatStudyMinutes } from '../../utils/feedTimeUtils'
 
 export default function FeedPostThumbnail({ post }) {
   const theme = resolveCardTheme(post)
@@ -32,7 +33,7 @@ export default function FeedPostThumbnail({ post }) {
           {isTrilha ? (
             <p className="mt-0.5 inline-flex items-center gap-0.5 text-[9px] text-white/85">
               <Clock className="h-2.5 w-2.5" />
-              {post.durationMinutes || 0}m
+              {formatStudyMinutes(post.durationMinutes || 0)}
             </p>
           ) : postType === FEED_POST_TYPES.COMENTARIO ? (
             <p className="mt-0.5 text-[9px] text-white/85 line-clamp-2">

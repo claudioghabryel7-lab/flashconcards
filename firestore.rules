@@ -68,6 +68,17 @@ service cloud.firestore {
         allow delete: if isOwner(userId) || isAdmin();
       }
 
+      match /profilePosts/{postId} {
+        allow read: if isAuthenticated();
+        allow create: if isOwner(userId);
+        allow update, delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /generationJobs/{jobId} {
+        allow read, create, update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
       match /studySessions/{sessionId} {
         allow read, create, update: if isOwner(userId);
         allow delete: if isOwner(userId) || isAdmin();

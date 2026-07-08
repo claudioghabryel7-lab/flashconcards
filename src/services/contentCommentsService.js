@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { sanitizeCommentForStorage } from '../utils/commentFormatUtils'
+import { deleteProfilePostByFeedId } from './profilePostsService'
 import { buildContentCommentSharePath } from '../utils/feedUtils'
 import { publishContentCommentToFeed, buildContentItemPreview } from './trilhaFeedService'
 
@@ -132,7 +133,12 @@ export async function addContentComment({
         materia,
         assunto,
         shareUrl,
-        modalidade: contentType === 'questao' ? 'questoes' : 'flashcards',
+        modalidade:
+          contentType === 'questao'
+            ? 'questoes'
+            : contentType === 'incidencia'
+              ? 'revisao'
+              : 'flashcards',
         itemPreview: buildContentItemPreview(contentType, previewText),
       },
     })
@@ -199,6 +205,11 @@ export async function deleteContentComment({ courseId, commentId, userId, isAdmi
       await deleteDoc(doc(db, 'trilhaFeed', data.feedPostId))
     } catch (error) {
       console.warn('Não foi possível apagar post do feed:', error)
+    }
+    try {
+      await deleteProfilePostByFeedId(data.userId, data.feedPostId)
+    } catch (error) {
+      console.warn('Não foi possível apagar post do perfil:', error)
     }
   }
 
@@ -328,7 +339,12 @@ export async function backfillUserCommentsToFeed({ user, profile, comments = [] 
           materia: comment.materia,
           assunto: comment.assunto,
           shareUrl,
-          modalidade: comment.contentType === 'questao' ? 'questoes' : 'flashcards',
+          modalidade:
+            comment.contentType === 'questao'
+              ? 'questoes'
+              : comment.contentType === 'incidencia'
+                ? 'revisao'
+                : 'flashcards',
           itemPreview: buildContentItemPreview(
             comment.contentType,
             comment.preview || comment.text?.slice(0, 500),

@@ -436,6 +436,28 @@ export function extractGeneratedText(response) {
   return generatedText
 }
 
+export async function parseAiJsonText(generatedText) {
+  if (!generatedText || typeof generatedText !== 'string') {
+    throw new Error('Texto da IA inválido')
+  }
+
+  const cleaned = generatedText
+    .replace(/```json\s*/gi, '')
+    .replace(/```/g, '')
+    .trim()
+
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/)
+  if (!jsonMatch) {
+    throw new Error('Nenhum JSON válido encontrado na resposta')
+  }
+
+  try {
+    return JSON.parse(jsonMatch[0])
+  } catch {
+    return repairJsonText(jsonMatch[0])
+  }
+}
+
 /**
  * Extrai e parseia JSON da resposta da API
  * @param {Object} response - Resposta da API Gemini
