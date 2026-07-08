@@ -348,6 +348,7 @@ const FlashcardsTopicoView = () => {
                 status={publishStatus}
                 onToggle={handleTogglePublish}
                 disabled={publishing}
+                hint="Use Liberar no edital para publicar tudo de uma vez."
               />
             )}
             {isAdmin && (

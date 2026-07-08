@@ -10,7 +10,7 @@ import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
-import { callGeminiWithRetry, extractGeneratedText, parseAiJsonText } from '../utils/geminiApi'
+import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import {
   createGenerationJob,
   updateGenerationJob,
@@ -683,15 +683,11 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
       setProgress((prev) => Math.min(prev + 15, 70))
       console.log('🤖 [Questões Tópico] Iniciando geração com IA...')
-      const response = await callGeminiWithRetry(prompt, {
+      const parsed = await generateAiJson(prompt, {
         courseId: resolvedCourseId,
+        isLegalContent: true,
+        useRAG: true,
       })
-
-      const aiText = extractGeneratedText(response)
-      console.log('📝 [Questões Tópico] Tamanho da resposta da IA:', aiText.length)
-      setProgress(75)
-
-      const parsed = await parseAiJsonText(aiText)
       console.log('✅ [Questões Tópico] JSON parseado com sucesso')
       console.log('📊 [Questões Tópico] Número de questões geradas:', parsed.questoes?.length || 0)
 
@@ -699,7 +695,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         ...parsed,
         topico: parsed.topico || effectiveTopicNome || resolvedTopicKey,
         nivel: nivelAtual,
-        status: 'indisponivel',
+        status: topicoPublishStatus === CONTENT_STATUS.AVAILABLE ? CONTENT_STATUS.AVAILABLE : CONTENT_STATUS.UNAVAILABLE,
         updatedAt: serverTimestamp(),
         generatedAt: serverTimestamp(),
       }
@@ -1240,7 +1236,11 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                               </button>
                             </div>
                           )}
-                          <ContentPublishButton status={questoes?.status} onToggle={handleToggleStatus} />
+                          <ContentPublishButton
+                            status={questoes?.status}
+                            onToggle={handleToggleStatus}
+                            hint="Use Liberar no edital para publicar tudo de uma vez."
+                          />
                           <button type="button" onClick={handleDeleteQuestoes} disabled={deleting} className="cp-btn-ghost !text-xs !text-red-400">
                             <TrashIcon className="h-4 w-4" />
                             {deleting ? 'Apagando…' : 'Apagar'}
@@ -1258,19 +1258,29 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                             />
                           </div>
                           {questoesParaExibir[currentQuestionIndex] && (
-                            <ShareItemButton
-                              type="questao"
-                              postType={FEED_POST_TYPES.QUESTOES}
-                              materia={courseName || tipoProva}
-                              assunto={effectiveTopicNome || resolvedTopicKey}
-                              courseId={resolvedCourseId}
-                              topicKey={resolvedTopicKey}
-                              itemIndex={currentQuestionIndex}
-                              questao={questoesParaExibir[currentQuestionIndex]}
-                              shareUrl={`/questoes-topic/${resolvedCourseId}/${encodeURIComponent(resolvedTopicKey)}${effectiveTopicNome ? `?nome=${encodeURIComponent(effectiveTopicNome)}` : ''}`}
-                              className="cp-btn-ghost !text-[10px] !py-1 shrink-0"
-                              label="Compartilhar"
-                            />
+                            <div className="flex shrink-0 items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={handlePesquisarGoogle}
+                                className="noji-tool-btn"
+                                title="Pesquisar no Google"
+                              >
+                                <MagnifyingGlassIcon className="h-4 w-4" />
+                              </button>
+                              <ShareItemButton
+                                type="questao"
+                                postType={FEED_POST_TYPES.QUESTOES}
+                                materia={courseName || tipoProva}
+                                assunto={effectiveTopicNome || resolvedTopicKey}
+                                courseId={resolvedCourseId}
+                                topicKey={resolvedTopicKey}
+                                itemIndex={currentQuestionIndex}
+                                questao={questoesParaExibir[currentQuestionIndex]}
+                                shareUrl={`/questoes-topic/${resolvedCourseId}/${encodeURIComponent(resolvedTopicKey)}${effectiveTopicNome ? `?nome=${encodeURIComponent(effectiveTopicNome)}` : ''}`}
+                                className="cp-btn-ghost !text-[10px] !py-1 shrink-0"
+                                label="Compartilhar"
+                              />
+                            </div>
                           )}
                         </div>
                       )}

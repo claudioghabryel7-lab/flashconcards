@@ -1,5 +1,5 @@
 import { readEnv, isDevEnv } from '@/lib/env.js'
-import { checkGeminiApiKeysStatus } from '../utils/geminiApi'
+import { checkGeminiApiKeysStatus, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import {
   DndContext,

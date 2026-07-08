@@ -23,7 +23,7 @@ import {
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import AudioReader from '../components/AudioReader'
 import { processIAContent, isHtmlContent } from '../utils/iaContentProcessor'
 import { formatTopicoAsModulo } from '../utils/editalVerticalizadoLoader'
@@ -116,7 +116,7 @@ const processContentForDisplay = (content, contexto = null) => {
 }
 
 const EditalVerticalizado = () => {
-  const { user, profile } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { darkMode } = useDarkMode()
   const [searchParams] = useSearchParams()
   const [editalVerticalizado, setEditalVerticalizado] = useState(null)
@@ -156,7 +156,11 @@ const EditalVerticalizado = () => {
   const [disciplinaIncidenciaMap, setDisciplinaIncidenciaMap] = useState({})
   const [publishingDisciplinaIdx, setPublishingDisciplinaIdx] = useState(null)
 
-  const isAdmin = profile?.role === 'admin'
+  const expandedStorageKey = useMemo(
+    () => `edital-expanded-disciplinas-${courseId || 'default'}`,
+    [courseId]
+  )
+
   const ownsCourse = hasPurchasedCourse(profile, courseId)
   const freeTopicKeys = useMemo(
     () => (profile?.uid && editalVerticalizadoBase ? getFreeTopicKeys(editalVerticalizadoBase, profile.uid, courseId) : []),
@@ -233,6 +237,29 @@ const EditalVerticalizado = () => {
       return next
     })
   }, [])
+
+  useEffect(() => {
+    if (!courseId) return
+    try {
+      const saved = localStorage.getItem(expandedStorageKey)
+      if (!saved) return
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed)) {
+        setExpandedDisciplinas(new Set(parsed.filter((n) => Number.isInteger(n))))
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [courseId, expandedStorageKey])
+
+  useEffect(() => {
+    if (!courseId) return
+    try {
+      localStorage.setItem(expandedStorageKey, JSON.stringify([...expandedDisciplinas]))
+    } catch {
+      /* ignore */
+    }
+  }, [expandedDisciplinas, courseId, expandedStorageKey])
 
   const expandAllDisciplinas = useCallback(() => {
     if (!editalVerticalizado?.disciplinas) return
@@ -515,7 +542,7 @@ const EditalVerticalizado = () => {
 
     if (
       !window.confirm(
-        `${next === CONTENT_STATUS.AVAILABLE ? 'Liberar' : 'Bloquear'} todos os recursos deste tópico (flashcards, estudar, questões preditivas e revisão por incidência)?${incidenciaNote}`
+        `${next === CONTENT_STATUS.AVAILABLE ? 'Liberar' : 'Bloquear'} todos os recursos deste tópico (flashcards, estudar, questões preditivas e revisão por incidência)?${incidenciaNote}\n\nNão é necessário clicar em "Disponibilizar" em cada tela — tudo será atualizado automaticamente.`
       )
     ) {
       return
@@ -1045,55 +1072,11 @@ REGRAS IMPORTANTES:
 - Não gere conteúdo genérico ou flashcards óbvios
 - Gere conteúdos atualizados e relevantes para o concurso`
 
-      setGenerationStatus('Enviando solicitação para a IA...')
+      setGenerationStatus('Gerando flashcards com IA…')
 
-      // Chamar API da IA com rotação de keys
-      const response = await callGeminiWithRetry(prompt, {
+      const flashcardsData = await generateAiJson(prompt, {
         courseId: courseId || 'alego-default',
       })
-
-      setGenerationStatus('Processando resposta da IA...')
-      
-      const generatedText = extractGeneratedText(data)
-      
-      // Encontrar o início e fim do array flashcards
-      const flashcardsStart = generatedText.indexOf('"flashcards"')
-      const arrayStart = generatedText.indexOf('[', flashcardsStart)
-      const arrayEnd = generatedText.lastIndexOf(']')
-      
-      if (flashcardsStart === -1 || arrayStart === -1 || arrayEnd === -1) {
-        console.error('Texto gerado pela IA:', generatedText)
-        throw new Error('Não foi possível encontrar o array de flashcards na resposta')
-      }
-      
-      // Extrair apenas o array flashcards
-      const flashcardsJson = '{"flashcards":' + generatedText.substring(arrayStart, arrayEnd + 1) + '}'
-      
-      setGenerationStatus('Validando estrutura dos flashcards...')
-      
-      let flashcardsData = null
-      
-      try {
-        // Tentar fazer o parse direto
-        flashcardsData = JSON.parse(flashcardsJson)
-      } catch (parseError) {
-        console.error('Erro ao fazer parse do JSON:', parseError.message)
-        console.error('JSON extraído:', flashcardsJson)
-        
-        // Tentar corrigir problemas comuns de formatação
-        let fixedJson = flashcardsJson
-          .replace(/,\s*}/g, '}')  // Vírgula antes de fechar objeto
-          .replace(/,\s*]/g, ']')  // Vírgula antes de fechar array
-          .replace(/\n\s*\}/g, '}')  // Nova linha antes de fechar objeto
-          .replace(/\n\s*\]/g, ']')  // Nova linha antes de fechar array
-        
-        try {
-          flashcardsData = JSON.parse(fixedJson)
-          console.log('JSON corrigido com sucesso')
-        } catch (fixError) {
-          throw new Error(`JSON inválido mesmo após correção: ${fixError.message}`)
-        }
-      }
       
       if (!flashcardsData.flashcards || !Array.isArray(flashcardsData.flashcards)) {
         console.error('Estrutura recebida:', flashcardsData)
@@ -1659,18 +1642,10 @@ REGRAS IMPORTANTES:
                                 <Link
                                   to={`/conteudo-incidencia/${courseId || 'alego-default'}/${idx}`}
                                   className="rounded-lg border border-red-500/25 bg-red-500/10 p-2 text-red-400 transition hover:bg-red-500/20"
-                                  title="Conteúdo de revisão por incidência"
+                                  title="Conteúdo e prática por incidência"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <FireIcon className="h-4 w-4" />
-                                </Link>
-                                <Link
-                                  to={`/pratica-incidencia/${courseId || 'alego-default'}/${idx}`}
-                                  className="rounded-lg border border-cp-accent2/25 bg-cp-accent2/10 p-2 text-cp-accent2 transition hover:bg-cp-accent2/20"
-                                  title="Questões por incidência"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <QuestionMarkCircleIcon className="h-4 w-4" />
                                 </Link>
                                 {isAdmin && (
                                   <button

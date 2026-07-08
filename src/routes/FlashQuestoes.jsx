@@ -15,7 +15,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder, applyModuleOrder } from '../utils/subjectOrder'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import { FolderIcon, ChevronRightIcon, ChevronDownIcon, LightBulbIcon, CheckCircleIcon, XCircleIcon, HandThumbUpIcon, HandThumbDownIcon, ChartBarIcon, BookOpenIcon, XMarkIcon, CheckIcon } from '@heroicons/react/24/outline'
 import { 
   getOrCreateQuestionsCache, 

@@ -16,13 +16,14 @@ import {
   formatTopicoAsModulo,
 } from '../utils/editalVerticalizadoLoader'
 import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
-import { callGeminiWithRetry, extractJsonFromResponse } from '../utils/geminiApi'
+import { generateAiJson } from '../utils/geminiApi'
 import {
   createGenerationJob,
   updateGenerationJob,
   GENERATION_JOB_STATUS,
 } from './generationJobService'
 import { CONTENT_STATUS } from '../utils/contentStatus'
+import { fetchTopicoPublishStatus } from './topicoPublishService'
 
 const MIN_FLASHCARDS = 20
 const MAX_FLASHCARDS = 50
@@ -167,15 +168,13 @@ REGRAS:
 
 async function generateFlashcardBatch(params) {
   const prompt = buildTopicoFlashcardPrompt(params)
-  const response = await callGeminiWithRetry(prompt, {
+  const parsed = await generateAiJson(prompt, {
     courseId: params.courseId,
     generationConfig: {
       maxOutputTokens: 16000,
       temperature: 0.35,
     },
   })
-
-  const parsed = await extractJsonFromResponse(response)
   return parsed.flashcards || []
 }
 
@@ -289,6 +288,8 @@ export async function generateAndSaveFlashcardsForTopico({
     const flashcardsRef = collection(db, 'courses', resolvedId, 'flashcards')
     const saved = []
 
+    const initialStatus = await fetchTopicoPublishStatus(resolvedId, normalizedTopicKey)
+
     allItems.forEach((item, index) => {
       const docRef = doc(flashcardsRef)
       const frente = item.frente || item.pergunta || ''
@@ -307,7 +308,7 @@ export async function generateAndSaveFlashcardsForTopico({
         dificuldade: item.dificuldade || 'médio',
         courseId: resolvedId,
         shared: true,
-        status: CONTENT_STATUS.UNAVAILABLE,
+        status: initialStatus,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         order: index,

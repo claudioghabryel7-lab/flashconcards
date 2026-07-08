@@ -82,6 +82,18 @@ export function resolveTopicPublishStatus(map, topicKey) {
   return CONTENT_STATUS.UNAVAILABLE
 }
 
+/** Lê status de publicação do tópico no Firestore (topicoStatus). */
+export async function fetchTopicoPublishStatus(courseId, topicKey) {
+  if (!topicKey?.trim()) return CONTENT_STATUS.UNAVAILABLE
+  const resolvedId = courseId || 'alego-default'
+  const sanitizedKey = sanitizeTopicKeyForFirestore(normalizeTopicKeyForStorage(topicKey))
+  const snap = await getDoc(doc(db, 'courses', resolvedId, 'topicoStatus', sanitizedKey))
+  if (!snap.exists()) return CONTENT_STATUS.UNAVAILABLE
+  return snap.data().status === CONTENT_STATUS.AVAILABLE
+    ? CONTENT_STATUS.AVAILABLE
+    : CONTENT_STATUS.UNAVAILABLE
+}
+
 /**
  * Disponibiliza ou bloqueia todos os recursos de um tópico:
  * flashcards, questões preditivas, material de apoio e incidência da disciplina.

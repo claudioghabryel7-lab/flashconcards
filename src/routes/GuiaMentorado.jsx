@@ -8,7 +8,7 @@ import {
   XMarkIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import { loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'

@@ -200,6 +200,10 @@ export function getPostOpenUrl(post, origin = '') {
 export function buildContentCommentSharePath({ courseId, contentType, topicKey }) {
   if (!courseId) return '/comunidade'
   if (contentType === 'questao' && topicKey) {
+    if (String(topicKey).startsWith('incidencia_')) {
+      const idx = String(topicKey).replace('incidencia_', '')
+      return `/pratica-incidencia/${courseId}/${idx}`
+    }
     return `/questoes-topic/${courseId}/${encodeURIComponent(topicKey)}`
   }
   if (contentType === 'flashcard' && topicKey) {

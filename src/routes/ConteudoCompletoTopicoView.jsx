@@ -7,7 +7,7 @@ import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { callGeminiWithRetry, extractGeneratedText, parseAiJsonText } from '../utils/geminiApi'
+import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import {
   createGenerationJob,
   updateGenerationJob,
@@ -169,7 +169,7 @@ const ConteudoCompletoTopicoView = () => {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { darkMode } = useDarkMode()
-  const { user, profile } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const [conteudo, setConteudo] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -235,8 +235,6 @@ const ConteudoCompletoTopicoView = () => {
   )
 
   const effectiveTopicNome = topicNomeFromQuery || topicNomeFromKey
-  const isAdmin = profile?.role === 'admin'
-
   // Carregar nome do curso
   useEffect(() => {
     const loadCourseName = async () => {
@@ -1003,14 +1001,12 @@ REGRAS:
 - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
 
       setProgress((prev) => Math.min(prev + 15, 70))
-      const response = await callGeminiWithRetry(prompt, {
+      const parsed = await generateAiJson(prompt, {
         courseId: resolvedCourseId,
+        isLegalContent: true,
+        useRAG: true,
       })
-
-      const aiText = extractGeneratedText(response)
       setProgress(75)
-
-      const parsed = await parseAiJsonText(aiText)
       const payload = {
         ...parsed,
         materia: parsed.materia || parsed.titulo || resolvedTopicKey,

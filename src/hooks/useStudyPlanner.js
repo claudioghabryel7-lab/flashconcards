@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { doc, getDoc, setDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import dayjs from 'dayjs'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 
 export const useStudyPlanner = (userId, courseId, editalVerticalizado) => {
   const [dailyRecommendation, setDailyRecommendation] = useState(null)
@@ -258,33 +258,13 @@ FORMATO DE RESPOSTA (JSON OBRIGATÓRIO):
 
 Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
 
-      const result = await callGeminiWithRetry(prompt, {
+      const recommendation = await generateAiJson(prompt, {
         courseId: courseId || 'alego-default',
         generationConfig: {
           maxOutputTokens: 8000,
           temperature: 0.35,
         },
       })
-      console.log('✅ Resposta recebida da IA')
-      let aiResponse = extractGeneratedText(result)
-      console.log('📄 Resposta bruta:', aiResponse.substring(0, 200) + '...')
-
-      // Limpar resposta da IA (remover markdown se houver)
-      aiResponse = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-
-      // Tentar fazer parse do JSON
-      let recommendation
-      try {
-        recommendation = JSON.parse(aiResponse)
-      } catch (parseError) {
-        // Tentar extrair JSON da resposta
-        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          recommendation = JSON.parse(jsonMatch[0])
-        } else {
-          throw new Error('Resposta da IA não contém JSON válido')
-        }
-      }
 
       // Validar e corrigir nomes de disciplinas e tópicos
       if (recommendation.atividades) {

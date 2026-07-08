@@ -7,15 +7,20 @@ import ReactMarkdown from 'react-markdown'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { startBackgroundGeneration } from '../services/aiGenerationRunner'
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
-import { probabilidadeBadgeClass } from '../utils/htmlTextHelpers'
+import { QuestaoEnunciadoCard } from '../components/QuestoesPraticaCP'
+import {
+  buildIncidenciaQuestaoContentId,
+  buildLegacyIncidenciaQuestaoContentId,
+} from '../utils/contentCommentIds'
 
 const PraticaIncidenciaView = () => {
   const { courseId, disciplinaIdx } = useParams()
   const navigate = useNavigate()
-  const { user, profile } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { darkMode } = useDarkMode()
   
   const [loading, setLoading] = useState(true)
@@ -103,15 +108,16 @@ const PraticaIncidenciaView = () => {
         }
 
         const editalData = editalDoc.data()
-        
+        let todasDisciplinas = editalData.disciplinas || []
+
         // Verificar se o edital está dividido em partes
         if (editalData.temPartes && editalData.totalPartes > 1) {
           const partesRef = collection(db, 'courses', courseId, 'editalVerticalizado', 'principal', 'partes')
           const partesSnapshot = await getDocs(query(partesRef, orderBy('parte')))
 
-          const todasDisciplinas = [...(editalData.disciplinas || [])]
-          partesSnapshot.forEach((doc) => {
-            const parteData = doc.data()
+          todasDisciplinas = [...(editalData.disciplinas || [])]
+          partesSnapshot.forEach((parteDoc) => {
+            const parteData = parteDoc.data()
             if (parteData.disciplinas && Array.isArray(parteData.disciplinas)) {
               todasDisciplinas.push(...parteData.disciplinas)
             }
@@ -126,9 +132,7 @@ const PraticaIncidenciaView = () => {
         }
 
         // Carregar conteúdo de incidência
-        const disciplinas = editalData.temPartes && editalData.totalPartes > 1 
-          ? [...(editalData.disciplinas || []), ...todasDisciplinas.slice(editalData.disciplinas?.length || 0)]
-          : editalData.disciplinas
+        const disciplinas = todasDisciplinas
         
         const disciplina = disciplinas[disciplinaIndex]
         let sanitizedDisciplinaNome = ''
@@ -149,13 +153,12 @@ const PraticaIncidenciaView = () => {
           }
         }
 
-        // Carregar desempenho do usuário (nível inicial — apenas na primeira carga)
+        // Restaurar apenas o nível salvo — não bloquear a tela de prática com resultado antigo
         if (user && sanitizedDisciplinaNome && !desempenhoNivelInicial.current) {
           const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoIncidencia', sanitizedDisciplinaNome)
           const desempenhoDoc = await getDoc(desempenhoRef)
           if (desempenhoDoc.exists()) {
             const desempenhoData = desempenhoDoc.data()
-            setDesempenho(desempenhoData)
             setNivelAtual(desempenhoData.nivel || 1)
           }
           desempenhoNivelInicial.current = true
@@ -407,70 +410,67 @@ REGRAS IMPORTANTES:
 Retorne APENAS o JSON válido, sem texto adicional.`
 
       setProgress(50)
-      setStatus('A IA está gerando as questões...')
+      setStatus('Gerando em segundo plano… Você pode sair desta tela.')
 
-      // Chamar API da IA
-      const response = await callGeminiWithRetry(prompt, {
+      const { promise } = await startBackgroundGeneration({
+        userId: user?.uid,
         courseId,
+        jobType: 'questoes_incidencia',
+        topicKey: String(disciplinaIdx),
+        metadata: { nivel: nivelAtual, disciplina: sanitizedDisciplinaNome },
+        task: async ({ updateProgress }) => {
+          await updateProgress(50, 'Gerando questões com IA…')
+          const parsed = await generateAiJson(prompt, { courseId, isLegalContent: true, useRAG: true })
+
+          await updateProgress(90, 'Salvando questões…')
+
+          const disciplinaLocal = editalVerticalizado?.disciplinas[disciplinaIndex]
+          const discKey = disciplinaLocal?.nome
+            ?.replace(/[^a-zA-Z0-9]/g, '_')
+            .substring(0, 100)
+          const docId = `${discKey}_nivel_${nivelAtual}`
+          const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', docId)
+
+          const initialStatus = isContentAvailable(conteudoIncidencia?.status, true)
+            ? CONTENT_STATUS.AVAILABLE
+            : CONTENT_STATUS.UNAVAILABLE
+
+          await setDoc(questoesRef, {
+            ...parsed,
+            disciplinaIdx: disciplinaIndex,
+            nivel: nivelAtual,
+            status: initialStatus,
+            updatedAt: serverTimestamp(),
+            generatedAt: serverTimestamp(),
+          }, { merge: true })
+
+          return parsed
+        },
       })
 
-      setProgress(75)
-      setStatus('Processando questões...')
+      promise
+        .then((parsed) => {
+          setQuestoes(parsed)
+          setNiveisDisponiveis((prev) =>
+            prev.includes(nivelAtual) ? prev : [...prev, nivelAtual].sort((a, b) => a - b)
+          )
+          setProgress(100)
+          setStatus('✅ Questões geradas com sucesso!')
+        })
+        .catch((error) => {
+          console.error('Erro ao gerar questões:', error)
+          setStatus(`❌ ${formatAiErrorForUser(error)}`)
+        })
+        .finally(() => {
+          setGenerating(false)
+          setTimeout(() => setProgress(0), 800)
+        })
 
-      const aiText = extractGeneratedText(response)
-
-      let jsonText = aiText
-      if (jsonText.startsWith('```json')) {
-        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      } else if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/```\n?/g, '').trim()
-      }
-      const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
-      if (jsonMatch) jsonText = jsonMatch[0]
-
-      const parsed = JSON.parse(jsonText)
-
-      setProgress(90)
-      setStatus('Salvando questões...')
-
-      // Salvar no Firestore (compartilhado para todos, por nível)
-      const disciplina = editalVerticalizado?.disciplinas[disciplinaIndex]
-      const sanitizedDisciplinaNome = disciplina?.nome
-        .replace(/[^a-zA-Z0-9]/g, '_')
-        .substring(0, 100)
-
-      const docId = `${sanitizedDisciplinaNome}_nivel_${nivelAtual}`
-
-      const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', docId)
-      
-      try {
-        await setDoc(questoesRef, {
-          ...parsed,
-          disciplinaIdx: disciplinaIndex,
-          nivel: nivelAtual,
-          status: 'indisponivel',
-          updatedAt: serverTimestamp(),
-          generatedAt: serverTimestamp(),
-        }, { merge: true })
-      } catch (saveError) {
-        console.error('Erro ao salvar questões:', saveError)
-        if (saveError.message?.includes('Missing or insufficient permissions')) {
-          throw new Error('Erro de permissão ao salvar questões. Verifique as regras do Firebase.')
-        }
-        throw saveError
-      }
-
-      setQuestoes(parsed)
-      setNiveisDisponiveis((prev) =>
-        prev.includes(nivelAtual) ? prev : [...prev, nivelAtual].sort((a, b) => a - b)
-      )
-      setProgress(100)
-      setStatus('✅ Questões geradas com sucesso!')
+      return
 
     } catch (error) {
       console.error('Erro ao gerar questões:', error)
-      setStatus(`❌ Erro: ${error.message || 'Erro desconhecido'}`)
-    } finally {
+      setStatus(`❌ ${formatAiErrorForUser(error)}`)
       setGenerating(false)
       setTimeout(() => setProgress(0), 800)
     }
@@ -774,8 +774,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
     }
   }
 
-  const isAdmin = profile?.role === 'admin'
-
   const canPractice =
     isAdmin ||
     (isContentAvailable(conteudoIncidencia?.status, false) &&
@@ -1012,16 +1010,47 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   </p>
 
                   {questoesParaExibir[currentQuestionIndex] && (
+                    <div className="mb-3 flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={handlePesquisarGoogle}
+                        className="noji-tool-btn"
+                        title="Pesquisar no Google"
+                      >
+                        <MagnifyingGlassIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  {questoesParaExibir[currentQuestionIndex] && (() => {
+                    const questaoAtual = questoesParaExibir[currentQuestionIndex]
+                    const questaoContentId = buildIncidenciaQuestaoContentId({
+                      courseId,
+                      disciplinaKey: sanitizedDisciplinaNome,
+                      nivel: nivelAtual,
+                      questao: questaoAtual,
+                      questionIndex: currentQuestionIndex,
+                    })
+                    const legacyQuestaoContentId = buildLegacyIncidenciaQuestaoContentId({
+                      disciplinaKey: sanitizedDisciplinaNome,
+                      nivel: nivelAtual,
+                      questionIndex: currentQuestionIndex,
+                    })
+
+                    return (
                     <div className="space-y-4">
-                      <div className="rounded-xl border border-cp-border p-4 space-y-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="text-xs font-mono text-cp-muted">{questoesParaExibir[currentQuestionIndex].assunto}</span>
-                          <span className={`font-mono text-[10px] px-2 py-0.5 rounded-full border ${probabilidadeBadgeClass(questoesParaExibir[currentQuestionIndex].probabilidade)}`}>
-                            {questoesParaExibir[currentQuestionIndex].probabilidade}% chance
-                          </span>
-                        </div>
-                        <p className="text-sm text-cp-text font-medium">{questoesParaExibir[currentQuestionIndex].enunciado}</p>
-                      </div>
+                      <QuestaoEnunciadoCard
+                        assunto={questaoAtual.assunto}
+                        probabilidade={questaoAtual.probabilidade}
+                        enunciado={questaoAtual.enunciado}
+                        questionNumber={currentQuestionIndex + 1}
+                        courseId={courseId}
+                        topicKey={`incidencia_${disciplinaIdx}`}
+                        contentId={questaoContentId}
+                        alternateContentIds={
+                          legacyQuestaoContentId !== questaoContentId ? [legacyQuestaoContentId] : []
+                        }
+                      />
 
                       {/* Alternativas - Certo/Errado ou Múltipla */}
                       {questoes.tipoProva === 'Certo/Errado' ? (
@@ -1083,7 +1112,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                             <h4 className="font-semibold text-blue-900 dark:text-blue-100">
                               💡 Explicação:
                             </h4>
-                            {profile?.role === 'admin' && !editandoQuestao && (
+                            {isAdmin && !editandoQuestao && (
                               <button
                                 onClick={handleIniciarEdicao}
                                 className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
@@ -1163,7 +1192,8 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         </div>
                       ) : null}
                     </div>
-                  )}
+                    )
+                  })()}
                 </div>
               )}
             </div>
@@ -1267,7 +1297,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   Praticar Novamente
                 </button>
                 
-                {profile?.role === 'admin' && (
+                {isAdmin && (
                   <button
                     onClick={handleDeleteQuestoes}
                     disabled={deleting}

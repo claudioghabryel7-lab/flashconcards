@@ -1,7 +1,7 @@
 import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { collection, onSnapshot, doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'

@@ -9,7 +9,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { formatTopicoAsModulo } from '../utils/editalVerticalizadoLoader'
-import { callGeminiWithRetry, extractJsonFromResponse } from '../utils/geminiApi'
+import { generateAiJson } from '../utils/geminiApi'
 
 /**
  * Busca questões já salvas para um tópico (compartilhadas entre usuários do curso).
@@ -131,11 +131,7 @@ REGRAS:
 - Retorne APENAS o JSON válido, sem texto adicional
 - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
 
-    const response = await callGeminiWithRetry(prompt, {
-      courseId,
-    })
-
-    const parsed = await extractJsonFromResponse(response)
+    const parsed = await generateAiJson(prompt, { courseId })
     const items = parsed.questoes || []
     
     if (!items.length) {

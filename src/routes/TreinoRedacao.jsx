@@ -5,7 +5,7 @@ import { canAccessRedacao, isTrialMode } from '../utils/trialLimits'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { isContentAvailable, toggleContentStatus, defaultContentStatus, CONTENT_STATUS } from '../utils/contentStatus'
 import {

@@ -12,6 +12,7 @@ import { BrowserRouter } from '@/lib/react-router-compat'
 import { initFirebase } from '@/firebase/config'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { cleanupConsole } from '@/lib/consoleCleanup'
+import BackgroundGenerationBanner from '@/components/BackgroundGenerationBanner'
 
 function ClientBootstrap() {
   useEffect(() => {
@@ -32,6 +33,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
               <SystemProvider>
                 <ClientBootstrap />
                 {children}
+                <BackgroundGenerationBanner />
                 <Toaster position="top-right" />
               </SystemProvider>
             </AuthProvider>

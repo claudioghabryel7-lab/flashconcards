@@ -21,7 +21,7 @@ import { applySubjectOrder, applyModuleOrder, getModuleOrder } from '../utils/su
 import { ChevronRightIcon, ChevronDownIcon, ClockIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { canAccessMateria, canAccessModulo, isTrialMode, getTrialData, clearTrialData } from '../utils/trialLimits'
 import { hasPurchasedCourse } from '../utils/courseAccess'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import {
   calculateNextReview,
@@ -934,34 +934,13 @@ IMPORTANTE:
 - Retorne APENAS o JSON válido, sem texto adicional
 - Garanta que cada flashcard seja único e contributivo`
 
-      // Chamar API com pipeline central (banca, curso, verificação)
-      const response = await callGeminiWithRetry(prompt, {
+      const flashcardsData = await generateAiJson(prompt, {
         courseId: activeCourseId,
         generationConfig: {
           temperature: 0.35,
           maxOutputTokens: 2048,
         },
       })
-
-      const text = extractGeneratedText(response)
-      if (!text?.trim()) {
-        throw new Error('A IA não retornou flashcards válidos')
-      }
-      
-      // Extrair JSON da resposta
-      let flashcardsData
-      try {
-        // Tentar encontrar JSON na resposta
-        const jsonMatch = text.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          flashcardsData = JSON.parse(jsonMatch[0])
-        } else {
-          throw new Error('JSON não encontrado na resposta')
-        }
-      } catch (error) {
-        console.error('Erro ao parsear JSON:', error)
-        throw new Error('Erro ao processar resposta da IA')
-      }
 
       // Salvar flashcards gerados
       const flashcards = flashcardsData.flashcards || []

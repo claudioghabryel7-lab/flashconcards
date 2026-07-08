@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { collection, onSnapshot, query, where, orderBy, doc, getDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, limit, Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
-import { callGeminiWithRetry, extractGeneratedText, extractJsonFromResponse } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText, extractJsonFromResponse, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 
 const BlankPage = () => {

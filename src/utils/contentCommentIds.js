@@ -56,6 +56,27 @@ export function buildQuestaoContentId({
 /**
  * ID único por flashcard (Firestore doc id ou hash da pergunta).
  */
+export function buildIncidenciaQuestaoContentId({
+  courseId,
+  disciplinaKey,
+  nivel = 1,
+  questao,
+  questionIndex = 0,
+}) {
+  const topicKey = `incidencia::${disciplinaKey || 'disciplina'}`
+  return buildQuestaoContentId({
+    topicKey,
+    nivel,
+    questao,
+    questionIndex,
+    packId: courseId,
+  })
+}
+
+export function buildLegacyIncidenciaQuestaoContentId({ disciplinaKey, nivel = 1, questionIndex = 0 }) {
+  return `${disciplinaKey || 'disciplina'}_inc_n${nivel}_q${questionIndex}`
+}
+
 export function buildIncidenciaAssuntoContentId({
   courseId,
   disciplinaKey,

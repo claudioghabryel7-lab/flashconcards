@@ -4,7 +4,7 @@ import { doc, getDoc, setDoc, serverTimestamp, writeBatch, collection } from 'fi
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { callGeminiWithRetry } from '../utils/geminiApi'
+import { callGeminiWithRetry, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import {
   SparklesIcon,
   ArrowLeftIcon,

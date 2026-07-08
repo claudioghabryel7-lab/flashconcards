@@ -14,6 +14,7 @@ import {
   shouldRunVerification,
   applyVerificationToResponse,
 } from './contentVerification.js'
+import { appendSilentJsonRules } from './aiPromptUtils.js'
 
 const MODELS = [
   'gemini-2.5-flash',
@@ -34,6 +35,39 @@ const VERIFY_GENERATION_CONFIG = {
 
 const MAX_RETRIES = 1 // Apenas 1 tentativa para economizar quota
 const BASE_DELAY = 2000 // 2 segundos
+
+/** Erros aceitáveis para exibir ao usuário (cota / limite gratuito). */
+export function isGeminiQuotaError(error) {
+  const msg = String(error?.message || error || '').toLowerCase()
+  const code = String(error?.code || '').toLowerCase()
+  return (
+    code.includes('429') ||
+    code.includes('quota') ||
+    code.includes('resource_exhausted') ||
+    msg.includes('quota') ||
+    msg.includes('rate limit') ||
+    msg.includes('rate_limit') ||
+    msg.includes('exceeded') ||
+    msg.includes('esgotad') ||
+    msg.includes('limite') ||
+    msg.includes('too many requests') ||
+    msg.includes('resource has been exhausted')
+  )
+}
+
+export function formatAiErrorForUser(error) {
+  if (isGeminiQuotaError(error)) {
+    return 'Cota da API Gemini esgotada ou limite gratuito atingido. Tente novamente mais tarde ou configure outra chave.'
+  }
+  return 'Falha na geração com IA. Tente novamente.'
+}
+
+function stripConversationalWrapper(text = '') {
+  const cleaned = String(text).trim()
+  const start = cleaned.search(/[\[{]/)
+  if (start > 0) return cleaned.slice(start)
+  return cleaned
+}
 
 /**
  * Extrai um tópico de busca do prompt para RAG
@@ -212,26 +246,34 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     courseId = null,
     courseContext = null,
     verifyContent = true,
+    silent = false,
   } = options
+
+  const effectiveVerify = silent ? false : verifyContent
+  const effectiveRAG = silent ? Boolean(options.useRAG) : useRAG
+  const effectiveGoogleSearch = silent ? Boolean(options.useGoogleSearch) : useGoogleSearch
 
   let courseData = courseContext
   if (!courseData && courseId) {
     courseData = await fetchCourseAiContext(courseId)
   }
 
-  let enhancedPrompt = buildPromptWithCourseContext(prompt, courseData)
+  const promptBase = silent ? appendSilentJsonRules(prompt) : prompt
+  let enhancedPrompt = buildPromptWithCourseContext(promptBase, courseData)
 
-  if (useRAG) {
+  if (effectiveRAG) {
     try {
       const searchTopic = ragTopic || extractSearchTopic(prompt)
-      console.log(`🔍 RAG: Buscando contexto em fontes oficiais: "${searchTopic.substring(0, 80)}..."`)
+      if (!silent) {
+        console.log(`🔍 RAG: Buscando contexto em fontes oficiais: "${searchTopic.substring(0, 80)}..."`)
+      }
       const ragContext = await performRAG(searchTopic, isLegalContent)
       if (ragContext) {
         enhancedPrompt = ragContext + '\n\n' + enhancedPrompt
-        console.log('✅ RAG: contexto oficial adicionado ao prompt')
+        if (!silent) console.log('✅ RAG: contexto oficial adicionado ao prompt')
       }
     } catch (error) {
-      console.warn('⚠️ RAG: erro na busca, continuando sem RAG:', error.message)
+      if (!silent) console.warn('⚠️ RAG: erro na busca, continuando sem RAG:', error.message)
     }
   }
 
@@ -240,12 +282,13 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     baseDelay,
     models,
     generationConfig,
-    useGoogleSearch,
+    useGoogleSearch: effectiveGoogleSearch,
     useFunctionCalling,
     tools,
+    silent,
   })
 
-  if (!verifyContent) return response
+  if (!effectiveVerify) return response
 
   let generatedText = ''
   try {
@@ -296,6 +339,7 @@ async function executeGeminiRequest(prompt, options = {}) {
     useGoogleSearch = true,
     useFunctionCalling = false,
     tools = [],
+    silent = false,
   } = options
 
   const finalPrompt = prompt
@@ -305,13 +349,14 @@ async function executeGeminiRequest(prompt, options = {}) {
 
   // Sem keys no cliente (comum no Next/Vercel) → proxy server-side
   if (apiKeys.length === 0 && typeof window !== 'undefined') {
-    console.log('🔑 Nenhuma key no cliente — usando /api/gemini/generate')
+    if (!silent) console.log('🔑 Nenhuma key no cliente — usando /api/gemini/generate')
     return callGeminiViaServer(finalPrompt, {
       generationConfig,
       useGoogleSearch,
       useFunctionCalling,
       tools,
       models,
+      silent,
     })
   }
 
@@ -321,24 +366,20 @@ async function executeGeminiRequest(prompt, options = {}) {
     )
   }
 
-  console.log(`🔑 API Keys disponíveis: ${apiKeys.length} de ${loadApiKeys().length} totais`)
-  if (useGoogleSearch) {
-    console.log(`🔍 Google Search Grounding ativado`)
-  }
-  if (useFunctionCalling) {
-    console.log(`🔧 Function Calling ativado com ${tools.length} ferramentas`)
+  if (!silent) {
+    console.log(`🔑 API Keys disponíveis: ${apiKeys.length} de ${loadApiKeys().length} totais`)
+    if (useGoogleSearch) console.log(`🔍 Google Search Grounding ativado`)
+    if (useFunctionCalling) console.log(`🔧 Function Calling ativado com ${tools.length} ferramentas`)
   }
 
   let lastError = null
 
-  // Tentar cada modelo na lista (sem retry, apenas 1 tentativa por modelo/key)
   for (const model of models) {
-    console.log(`🔄 Tentando modelo: ${model}`)
+    if (!silent) console.log(`🔄 Tentando modelo: ${model}`)
 
-    // Tentar cada API key disponível
     for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex++) {
       const apiKey = apiKeys[keyIndex]
-      console.log(`🔑 Tentando API key ${keyIndex + 1}/${apiKeys.length}`)
+      if (!silent) console.log(`🔑 Tentando API key ${keyIndex + 1}/${apiKeys.length}`)
 
       try {
         const requestBody = {
@@ -377,20 +418,21 @@ async function executeGeminiRequest(prompt, options = {}) {
           
           // Se for erro 429 (quota) ou 503 (alta demanda), tentar próxima key
           if (response.status === 429 || response.status === 503) {
-            console.log(`⚠️ API key ${keyIndex + 1} com erro (${response.status}), tentando próxima...`)
+            if (!silent) console.log(`⚠️ API key ${keyIndex + 1} com erro (${response.status}), tentando próxima...`)
             continue
           }
           
-          throw new Error(errorMessage)
+          const err = new Error(errorMessage)
+          if (response.status === 429) err.code = 'quota_exceeded'
+          throw err
         }
 
-        // Sucesso!
-        console.log(`✅ Sucesso com modelo ${model} e API key ${keyIndex + 1}`)
+        if (!silent) console.log(`✅ Sucesso com modelo ${model} e API key ${keyIndex + 1}`)
         return data
 
       } catch (error) {
         lastError = error
-        console.error(`❌ Erro com modelo ${model} e key ${keyIndex + 1}:`, error.message)
+        if (!silent) console.error(`❌ Erro com modelo ${model} e key ${keyIndex + 1}:`, error.message)
         // Não fazer retry, tentar próxima key/modelo
       }
     }
@@ -399,22 +441,25 @@ async function executeGeminiRequest(prompt, options = {}) {
   // Se chegou aqui, todos os modelos e keys falharam
   if (typeof window !== 'undefined') {
     try {
-      console.log('🔄 Tentando proxy server-side /api/gemini/generate...')
+      if (!silent) console.log('🔄 Tentando proxy server-side /api/gemini/generate...')
       return await callGeminiViaServer(finalPrompt, {
         generationConfig,
         useGoogleSearch,
         useFunctionCalling,
         tools,
         models,
+        silent,
       })
     } catch (serverErr) {
       lastError = serverErr
     }
   }
 
-  throw new Error(
+  const finalErr = new Error(
     `Todos os modelos e API keys falharam. Último erro: ${lastError?.message || 'Erro desconhecido'}`
   )
+  if (isGeminiQuotaError(lastError)) finalErr.code = 'quota_exceeded'
+  throw finalErr
 }
 
 /**
@@ -425,15 +470,43 @@ async function executeGeminiRequest(prompt, options = {}) {
 export function extractGeneratedText(response) {
   const generatedText = response.candidates?.[0]?.content?.parts?.[0]?.text || ''
   
-  if (!generatedText) {
-    throw new Error('A IA não retornou nenhum texto')
+  if (!generatedText || typeof generatedText !== 'string' || !generatedText.trim()) {
+    const err = new Error('A IA não retornou texto')
+    err.code = 'ai_empty_response'
+    throw err
   }
 
-  if (typeof generatedText !== 'string') {
-    throw new Error('A IA retornou um texto inválido')
-  }
+  return generatedText.trim()
+}
 
-  return generatedText
+/**
+ * Chamada silenciosa + parse JSON robusto (uso padrão em todas as gerações).
+ */
+export async function generateAiJson(prompt, options = {}) {
+  const response = await callGeminiWithRetry(prompt, {
+    silent: true,
+    verifyContent: false,
+    useRAG: options.useRAG ?? false,
+    useGoogleSearch: options.useGoogleSearch ?? false,
+    ...options,
+  })
+
+  try {
+    const text = extractGeneratedText(response)
+    const parsed = await parseAiJsonText(text)
+    if (parsed?.erro) {
+      const err = new Error(String(parsed.erro))
+      err.code = 'ai_generation_error'
+      throw err
+    }
+    return parsed
+  } catch (error) {
+    if (isGeminiQuotaError(error)) throw error
+    const err = new Error(formatAiErrorForUser(error))
+    err.code = error.code || 'ai_json_parse_error'
+    err.cause = error
+    throw err
+  }
 }
 
 export async function parseAiJsonText(generatedText) {
@@ -441,10 +514,12 @@ export async function parseAiJsonText(generatedText) {
     throw new Error('Texto da IA inválido')
   }
 
-  const cleaned = generatedText
-    .replace(/```json\s*/gi, '')
-    .replace(/```/g, '')
-    .trim()
+  const cleaned = stripConversationalWrapper(
+    generatedText
+      .replace(/```json\s*/gi, '')
+      .replace(/```/g, '')
+      .trim()
+  )
 
   const jsonMatch = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/)
   if (!jsonMatch) {
@@ -454,7 +529,7 @@ export async function parseAiJsonText(generatedText) {
   try {
     return JSON.parse(jsonMatch[0])
   } catch {
-    return repairJsonText(jsonMatch[0])
+    return await repairJsonText(jsonMatch[0])
   }
 }
 
@@ -465,21 +540,7 @@ export async function parseAiJsonText(generatedText) {
  */
 export async function extractJsonFromResponse(response) {
   const generatedText = extractGeneratedText(response)
-  
-  // Procurar por JSON
-  const jsonMatch = generatedText.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
-    throw new Error('Nenhum JSON válido encontrado na resposta')
-  }
-
-  let parsed
-  try {
-    parsed = JSON.parse(jsonMatch[0])
-  } catch {
-    parsed = await repairJsonText(jsonMatch[0])
-  }
-
-  return parsed
+  return parseAiJsonText(generatedText)
 }
 
 /**

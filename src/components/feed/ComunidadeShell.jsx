@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Compass, Users } from 'lucide-react'
 import UserAvatar from '../UserAvatar'
-import TopicNotificationsButton from '../TopicNotificationsButton'
 import CommunityNotificationsButton from './CommunityNotificationsButton'
 
 export default function ComunidadeShell({
@@ -31,7 +30,6 @@ export default function ComunidadeShell({
         </div>
         <div className="flex shrink-0 items-center gap-2.5">
           {user && <CommunityNotificationsButton userId={user.uid} />}
-          {user && <TopicNotificationsButton />}
           <Link
             to="/trilha"
             className="text-cp-muted transition hover:text-cp-accent"

@@ -7,7 +7,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import CourseAdScreen from '../components/CourseAdScreen'
 import {
   ClockIcon,

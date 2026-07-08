@@ -18,11 +18,20 @@ service cloud.firestore {
 
     /** Conteúdo liberado pelo admin (status ausente = bloqueado para alunos) */
     function isPublishedContent() {
-      return resource.data.status == 'disponivel';
+      return resource != null && resource.data.get('status', 'indisponivel') == 'disponivel';
     }
 
     function canReadPublishedContent() {
-      return isAuthenticated() && (isPublishedContent() || isAdmin());
+      return isAuthenticated() && (isAdmin() || isPublishedContent());
+    }
+
+    /** Permite get em documento inexistente (ex.: antes da primeira geração) */
+    function canGetPublishedContent() {
+      return isAuthenticated() && (
+        resource == null ||
+        isAdmin() ||
+        isPublishedContent()
+      );
     }
     
     match /users/{userId} {
@@ -280,7 +289,8 @@ service cloud.firestore {
       }
       
       match /materiasRevisadas/{docId} {
-        allow read: if canReadPublishedContent();
+        allow get: if canGetPublishedContent();
+        allow list: if canReadPublishedContent();
         allow create: if isAuthenticated() && 
                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
@@ -293,7 +303,8 @@ service cloud.firestore {
       }
       
       match /conteudosCompletos/{docId} {
-        allow read: if canReadPublishedContent();
+        allow get: if canGetPublishedContent();
+        allow list: if canReadPublishedContent();
         allow create: if isAuthenticated();
         allow update: if isAuthenticated();
         allow delete: if isAdmin();
@@ -305,7 +316,8 @@ service cloud.firestore {
       }
       
       match /questoesTopico/{docId} {
-        allow read: if canReadPublishedContent();
+        allow get: if canGetPublishedContent();
+        allow list: if canReadPublishedContent();
         allow create: if isAdmin();
         allow update: if isAdmin();
         allow delete: if isAdmin();
@@ -319,7 +331,8 @@ service cloud.firestore {
       }
       
       match /flashcards/{flashcardId} {
-        allow read: if canReadPublishedContent();
+        allow get: if canGetPublishedContent();
+        allow list: if canReadPublishedContent();
         allow create: if isAuthenticated() && 
                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
@@ -367,16 +380,17 @@ service cloud.firestore {
       }
       
       match /conteudosIncidencia/{docId} {
-        allow read: if canReadPublishedContent();
+        allow get: if canGetPublishedContent();
+        allow list: if canReadPublishedContent();
         allow create: if isAuthenticated();
         allow update: if isAuthenticated();
         allow delete: if isAdmin();
       }
       
       match /questoesIncidencia/{docId} {
-        allow read: if canReadPublishedContent();
-        allow create: if isAdmin();
-        allow update: if isAdmin();
+        allow get: if canGetPublishedContent();
+        allow list: if canReadPublishedContent();
+        allow create, update: if isAdmin() || isAuthenticated();
         allow delete: if isAdmin();
       }
       

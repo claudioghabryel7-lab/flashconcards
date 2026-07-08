@@ -6,17 +6,16 @@ import { ArrowLeftIcon, FireIcon, TrashIcon, PencilIcon } from '@heroicons/react
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { startBackgroundGeneration } from '../services/aiGenerationRunner'
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
-import ContentFeedbackActions from '../components/content/ContentFeedbackActions'
-import { buildIncidenciaAssuntoContentId } from '../utils/contentCommentIds'
 import { probabilidadeBadgeClass } from '../utils/htmlTextHelpers'
 
 const ConteudoIncidenciaView = () => {
   const { courseId, disciplinaIdx } = useParams()
   const navigate = useNavigate()
-  const { user, profile } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { darkMode } = useDarkMode()
   
   const [loading, setLoading] = useState(true)
@@ -268,54 +267,61 @@ REGRAS IMPORTANTES:
 Retorne APENAS o JSON válido, sem texto adicional.`
 
       setProgress(50)
-      setStatus('A IA está analisando os tópicos...')
+      setStatus('Gerando em segundo plano… Você pode sair desta tela.')
 
-      // Chamar API da IA
-      const response = await callGeminiWithRetry(prompt, {
+      const { promise } = await startBackgroundGeneration({
+        userId: user?.uid,
         courseId,
+        jobType: 'conteudo_incidencia',
+        topicKey: String(disciplinaIdx),
+        metadata: { disciplina: disciplina.nome },
+        task: async ({ updateProgress }) => {
+          await updateProgress(50, 'Gerando com IA…')
+          const parsed = await generateAiJson(prompt, {
+            courseId,
+            isLegalContent: true,
+            useRAG: true,
+          })
+
+          await updateProgress(90, 'Salvando conteúdo…')
+
+          const sanitizedDisciplinaNome = disciplina.nome
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .substring(0, 100)
+
+          const incidenciaRef = doc(db, 'courses', courseId, 'conteudosIncidencia', sanitizedDisciplinaNome)
+          await setDoc(incidenciaRef, {
+            ...parsed,
+            disciplinaIdx: disciplinaIndex,
+            status: 'indisponivel',
+            updatedAt: serverTimestamp(),
+            generatedAt: serverTimestamp(),
+          }, { merge: true })
+
+          return parsed
+        },
       })
 
-      setProgress(75)
-      setStatus('Processando resposta da IA...')
+      promise
+        .then((parsed) => {
+          setConteudoGerado(parsed)
+          setProgress(100)
+          setStatus('✅ Conteúdo gerado com sucesso!')
+        })
+        .catch((error) => {
+          console.error('Erro ao gerar conteúdo de incidência:', error)
+          setStatus(`❌ ${formatAiErrorForUser(error)}`)
+        })
+        .finally(() => {
+          setGenerating(false)
+          setTimeout(() => setProgress(0), 800)
+        })
 
-      const aiText = extractGeneratedText(response)
-
-      let jsonText = aiText
-      if (jsonText.startsWith('```json')) {
-        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      } else if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/```\n?/g, '').trim()
-      }
-      const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
-      if (jsonMatch) jsonText = jsonMatch[0]
-
-      const parsed = JSON.parse(jsonText)
-
-      setProgress(90)
-      setStatus('Salvando conteúdo...')
-
-      // Salvar no Firestore
-      const sanitizedDisciplinaNome = disciplina.nome
-        .replace(/[^a-zA-Z0-9]/g, '_')
-        .substring(0, 100)
-
-      const incidenciaRef = doc(db, 'courses', courseId, 'conteudosIncidencia', sanitizedDisciplinaNome)
-      await setDoc(incidenciaRef, {
-        ...parsed,
-        disciplinaIdx: disciplinaIndex,
-        status: 'indisponivel',
-        updatedAt: serverTimestamp(),
-        generatedAt: serverTimestamp(),
-      }, { merge: true })
-
-      setConteudoGerado(parsed)
-      setProgress(100)
-      setStatus('✅ Conteúdo gerado com sucesso!')
+      return
 
     } catch (error) {
       console.error('Erro ao gerar conteúdo de incidência:', error)
-      setStatus(`❌ Erro: ${error.message || 'Erro desconhecido'}`)
-    } finally {
+      setStatus(`❌ ${formatAiErrorForUser(error)}`)
       setGenerating(false)
       setTimeout(() => setProgress(0), 800)
     }
@@ -418,8 +424,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
   }
 
   const disciplina = editalVerticalizado.disciplinas[disciplinaIndex]
-  const isAdmin = profile?.role === 'admin'
-
   if (conteudoGerado && !isContentAvailable(conteudoGerado.status, isAdmin)) {
     return (
       <div className="max-w-lg mx-auto p-8">
@@ -593,25 +597,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                       <span className={`cp-badge !text-[10px] border ${probabilidadeBadgeClass(assunto.probabilidade)}`}>
                         {assunto.probabilidade}% chance
                       </span>
-                      {!editingRevisao && courseId && disciplina && (
-                        <ContentFeedbackActions
-                          courseId={courseId}
-                          contentType="incidencia"
-                          contentId={buildIncidenciaAssuntoContentId({
-                            courseId,
-                            disciplinaKey: getSanitizedDisciplinaKey(disciplina.nome),
-                            section: 'geral',
-                            assuntoIdx: idx,
-                            assuntoName: assunto.assunto,
-                          })}
-                          topicKey={String(disciplinaIdx)}
-                          preview={assunto.revisao || assunto.assunto}
-                          materia={disciplina.nome}
-                          assunto={assunto.assunto}
-                          contextLabel="este assunto"
-                          variant="inline"
-                        />
-                      )}
                     </div>
                     {(assunto.revisao || editingRevisao) && (
                       <div>
@@ -679,26 +664,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                             <span className={`font-mono text-[10px] px-2 py-0.5 rounded-full border ${probabilidadeBadgeClass(assunto.probabilidade)}`}>
                               {assunto.probabilidade}%
                             </span>
-                            {!editingRevisao && courseId && disciplina && (
-                              <ContentFeedbackActions
-                                courseId={courseId}
-                                contentType="incidencia"
-                                contentId={buildIncidenciaAssuntoContentId({
-                                  courseId,
-                                  disciplinaKey: getSanitizedDisciplinaKey(disciplina.nome),
-                                  section: 'topico',
-                                  topicIdx: tIdx,
-                                  assuntoIdx: aIdx,
-                                  assuntoName: assunto.assunto,
-                                })}
-                                topicKey={String(disciplinaIdx)}
-                                preview={assunto.revisao || assunto.assunto}
-                                materia={disciplina.nome}
-                                assunto={assunto.assunto}
-                                contextLabel="este assunto"
-                                variant="inline"
-                              />
-                            )}
                           </div>
                           {(assunto.revisao || editingRevisao) && (
                             editingRevisao ? (

@@ -82,10 +82,12 @@ export const AuthProvider = ({ children }) => {
           const cachedProfile = getCachedProfile(firebaseUser.uid)
           if (cachedProfile) {
             setProfile(cachedProfile)
-            setLoading(false) // Não bloquear renderização se tiver cache
           }
 
-          // Carregar perfil do Firestore (não bloquear renderização)
+          // Não bloquear a UI esperando o Firestore (evita "Carregando..." infinito)
+          setLoading(false)
+
+          // Carregar perfil do Firestore em background
           const userRef = doc(db, 'users', firebaseUser.uid)
           
           // Verificar se é email do admin
@@ -273,7 +275,7 @@ export const AuthProvider = ({ children }) => {
               console.log('Perfil não encontrado, mas usuário não foi deletado. Aguardando recriação...')
               // Em desenvolvimento, manter perfil do cache para evitar logout
               if (isDevEnv()) {
-                const cachedProfile = getCachedProfile(firebaseUser.uid)
+                const cachedProfile = getCachedProfile(user.uid)
                 if (cachedProfile) {
                   console.log('Mantendo perfil do cache em desenvolvimento')
                   setProfile(cachedProfile)
