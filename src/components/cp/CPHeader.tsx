@@ -42,6 +42,7 @@ const menuCategories: NavCategory[] = [
       { href: '/guia-mentorado', label: 'Guia Mentorado', auth: true },
       { href: '/vespera-de-prova', label: 'Revisão', auth: true },
       { href: '/flashcards', label: 'Flashcards com IA', auth: true },
+      { href: '/resolver-questoes', label: 'Resolver Questões', auth: true },
       { href: '/edital-verticalizado', label: 'Edital Verticalizado', auth: true },
       { href: '/treino-redacao', label: 'Treino Redação', auth: true },
       { href: '/trilha', label: 'Trilha', auth: true },

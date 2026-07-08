@@ -4,13 +4,14 @@ import {
   LightBulbIcon,
   SparklesIcon,
 } from '@heroicons/react/24/solid'
-import { ArrowRightIcon as ArrowRightOutline, DocumentTextIcon, UserGroupIcon } from '@heroicons/react/24/outline'
+import { ArrowRightIcon as ArrowRightOutline, DocumentTextIcon, UserGroupIcon, ChartBarIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
 import LGPDConsent from '../components/LGPDConsent'
 import OnlineNowBadge from '@/components/cp/OnlineNowBadge'
 
 const quickLinks = [
   { to: '/flashcards', title: 'Flashcards com IA', desc: 'Repetição espaçada por tópico', icon: SparklesIcon, accent: 'cp-card-accent-violet' },
+  { to: '/resolver-questoes', title: 'Resolver Questões', desc: 'Questões liberadas com gráficos de acertos', icon: ChartBarIcon, accent: 'cp-card-accent-cyan' },
   { to: '/edital-verticalizado', title: 'Edital Verticalizado', desc: 'Conteúdo organizado do edital', icon: DocumentTextIcon, accent: 'cp-card-accent-cyan' },
   { to: '/guia-mentorado', title: 'Guia Mentorado', desc: 'Cronograma estratégico', icon: LightBulbIcon, accent: 'cp-card-accent-pink' },
   { to: '/vespera-de-prova', title: 'Véspera de Prova', desc: 'Revisão final antes da prova', icon: ClockIcon, accent: 'cp-card-accent-cyan' },

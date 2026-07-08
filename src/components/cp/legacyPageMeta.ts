@@ -28,6 +28,13 @@ export const LEGACY_PAGE_META: Record<string, LegacyPageMeta> = {
     title: 'FlashQuestões com IA',
     subtitle: 'Questões por tópico do edital verticalizado',
   },
+  '/resolver-questoes': {
+    badge: 'Questões',
+    title: 'Resolver Questões',
+    subtitle: 'Todas as questões liberadas pelo admin com gráficos de acertos e erros',
+    backHref: '/dashboard',
+    backLabel: 'Voltar ao Dashboard',
+  },
   '/edital-verticalizado': {
     badge: 'Edital',
     title: 'Edital Verticalizado',

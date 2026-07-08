@@ -51,6 +51,7 @@ const FlashcardView = lazy(() => import('./routes/FlashcardView'))
 const FlashcardsTopicoView = lazy(() => import('./routes/FlashcardsTopicoView'))
 const FlashcardPIP = lazy(() => import('./routes/FlashcardPIP'))
 const FlashQuestoes = lazy(() => import('./routes/FlashQuestoes'))
+const ResolverQuestoesView = lazy(() => import('./routes/ResolverQuestoesView'))
 const SharedQuestaoView = lazy(() => import('./routes/SharedQuestaoView'))
 const Cursos = lazy(() => import('./routes/Cursos'))
 const Demo = lazy(() => import('./routes/Demo'))
@@ -260,6 +261,14 @@ function App() {
             element={
               <ProtectedRoute requireCourseSelection>
                 <FlashQuestoes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/resolver-questoes"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <ResolverQuestoesView />
               </ProtectedRoute>
             }
           />
