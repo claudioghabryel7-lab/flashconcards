@@ -30,7 +30,7 @@ import {
 } from '../components/QuestoesPraticaCP'
 import { buildQuestaoContentId, buildLegacyQuestaoContentId } from '../utils/contentCommentIds'
 import CommentComposer from '../components/content/CommentComposer'
-import FloatingCommentsShell from '../components/content/ContentFloatingComments'
+import QuestaoFloatingComments from '../components/QuestaoFloatingComments'
 import { sanitizeCommentForStorage } from '../utils/commentFormatUtils'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
@@ -1310,11 +1310,10 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         })
 
                         return (
-                        <FloatingCommentsShell
+                        <QuestaoFloatingComments
                           enabled={floatingCommentsEnabled}
                           onToggle={() => setFloatingCommentsEnabled((v) => !v)}
                           courseId={resolvedCourseId}
-                          contentType="questao"
                           contentId={questaoContentId}
                           alternateContentIds={
                             legacyQuestaoContentId !== questaoContentId
@@ -1322,7 +1321,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                               : []
                           }
                           topicKey={resolvedTopicKey}
-                          label="comentários nesta questão"
                         >
                         <div className="space-y-5">
                           <QuestaoEnunciadoCard
@@ -1421,7 +1419,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                             </>
                           )}
                         </div>
-                        </FloatingCommentsShell>
+                        </QuestaoFloatingComments>
                         )
                       })()}
                 </div>

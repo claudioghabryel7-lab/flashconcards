@@ -13,7 +13,7 @@ import { buildQuestoesIncidenciaPayload } from '../utils/serverGenerationPayload
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { QuestaoEnunciadoCard } from '../components/QuestoesPraticaCP'
-import FloatingCommentsShell from '../components/content/ContentFloatingComments'
+import QuestaoFloatingComments from '../components/QuestaoFloatingComments'
 import {
   buildIncidenciaQuestaoContentId,
   buildLegacyIncidenciaQuestaoContentId,
@@ -1032,17 +1032,15 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                     })
 
                     return (
-                    <FloatingCommentsShell
+                    <QuestaoFloatingComments
                       enabled={floatingCommentsEnabled}
                       onToggle={() => setFloatingCommentsEnabled((v) => !v)}
                       courseId={courseId}
-                      contentType="questao"
                       contentId={questaoContentId}
                       alternateContentIds={
                         legacyQuestaoContentId !== questaoContentId ? [legacyQuestaoContentId] : []
                       }
                       topicKey={`incidencia_${disciplinaIdx}`}
-                      label="comentários nesta questão"
                     >
                     <div className="space-y-4">
                       <QuestaoEnunciadoCard
@@ -1198,7 +1196,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         </div>
                       ) : null}
                     </div>
-                    </FloatingCommentsShell>
+                    </QuestaoFloatingComments>
                     )
                   })()}
                 </div>

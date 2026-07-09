@@ -19,6 +19,7 @@ const STUDY_PATH_PREFIXES = [
   '/questoes-topic',
   '/pratica-incidencia',
   '/resolver-questoes',
+  '/resolver-questoes/praticar',
   '/conteudo-incidencia',
   '/conteudo-completo/topic',
 ]

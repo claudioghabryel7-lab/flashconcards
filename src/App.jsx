@@ -281,6 +281,14 @@ function App() {
             }
           />
           <Route
+            path="/resolver-questoes/praticar"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <ResolverQuestoesView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/flashquestoes/responder"
             element={
               <ProtectedRoute>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -22,7 +22,7 @@ import {
   resolveQuestaoExplicacao,
   resolveQuestaoGabarito,
 } from '../components/QuestoesPraticaCP'
-import FloatingCommentsShell from '../components/content/ContentFloatingComments'
+import QuestaoFloatingComments from '../components/QuestaoFloatingComments'
 import { buildQuestaoContentId } from '../utils/contentCommentIds'
 
 const CHART_TYPES = [
@@ -34,6 +34,10 @@ const CHART_TYPES = [
 const ResolverQuestoesView = () => {
   const { user, profile } = useAuth()
   const courseId = profile?.selectedCourseId || 'alego-default'
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const isPracticeRoute = location.pathname.includes('/resolver-questoes/praticar')
 
   const {
     organized,
@@ -62,7 +66,7 @@ const ResolverQuestoesView = () => {
 
   const materias = useMemo(() => Object.keys(organized).sort(), [organized])
 
-  const selectDeck = useCallback((materia, modulo, items) => {
+  const loadPracticeDeck = useCallback((materia, modulo, items) => {
     setSelectedMateria(materia)
     setSelectedModulo(modulo)
     setDeckItems(items)
@@ -72,19 +76,39 @@ const ResolverQuestoesView = () => {
     setSessionStats({ correct: 0, wrong: 0 })
   }, [])
 
-  const selectAllQuestoes = useCallback(() => {
-    selectDeck('Todas', 'Todas as questões', allItems)
-  }, [allItems, selectDeck])
+  const goToPractice = useCallback(
+    (materia, modulo) => {
+      const params = new URLSearchParams()
+      if (courseId) params.set('course', courseId)
+      params.set('materia', materia)
+      params.set('modulo', modulo)
+      navigate(`/resolver-questoes/praticar?${params.toString()}`)
+    },
+    [courseId, navigate],
+  )
+
+  const exitPractice = useCallback(() => {
+    navigate('/resolver-questoes')
+  }, [navigate])
 
   useEffect(() => {
-    if (!selectedMateria && allItems.length > 0 && materias.length > 0) {
-      const firstMateria = materias[0]
-      const firstModulo = Object.keys(organized[firstMateria] || {})[0]
-      if (firstModulo) {
-        selectDeck(firstMateria, firstModulo, organized[firstMateria][firstModulo])
-      }
+    if (!isPracticeRoute || loading) return
+
+    const materia = searchParams.get('materia')
+    const modulo = searchParams.get('modulo')
+    if (!materia || !modulo) return
+
+    if (materia === 'Todas' && modulo === 'Todas as questões') {
+      loadPracticeDeck('Todas', 'Todas as questões', allItems)
+      return
     }
-  }, [allItems.length, materias, organized, selectDeck, selectedMateria])
+
+    const items = organized[materia]?.[modulo]
+    if (items?.length) {
+      loadPracticeDeck(materia, modulo, items)
+      setExpandedMaterias((prev) => ({ ...prev, [materia]: true }))
+    }
+  }, [isPracticeRoute, loading, searchParams, organized, allItems, loadPracticeDeck])
 
   const currentItem = deckItems[currentIndex]
   const currentQuestao = currentItem?.questao
@@ -177,6 +201,186 @@ const ResolverQuestoesView = () => {
     })
   }, [materias, organized, sidebarSearch])
 
+  const sidebarPanel = (
+    <div className="cp-study-sidebar noji-deck-panel cp-card flex flex-col overflow-hidden max-h-[calc(100vh-10rem)] lg:max-h-[calc(100vh-12rem)]">
+      <div className="border-b border-cp-border p-4">
+        <p className="text-sm font-semibold text-cp-text">Questões por matéria</p>
+        <p className="mb-3 text-[11px] text-cp-muted">Escolha um grupo para praticar</p>
+        <div className="relative">
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cp-muted" />
+          <input
+            type="search"
+            value={sidebarSearch}
+            onChange={(e) => setSidebarSearch(e.target.value)}
+            placeholder="Buscar matéria..."
+            className="w-full rounded-xl border border-cp-border bg-cp-bg/60 py-2.5 pl-9 pr-3 text-sm text-cp-text placeholder:text-cp-muted focus:border-cp-accent/50 focus:outline-none focus:ring-2 focus:ring-cp-accent/20"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => goToPractice('Todas', 'Todas as questões')}
+          className="mt-3 w-full rounded-xl border border-cp-border bg-cp-bg/40 px-3 py-2.5 text-left text-xs font-medium text-cp-text transition hover:border-cp-accent/30"
+        >
+          Todas as questões ({allItems.length})
+        </button>
+      </div>
+
+      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+        {filteredMaterias.map((materia) => {
+          const modulos = Object.keys(organized[materia] || {})
+          const isExpanded = expandedMaterias[materia]
+          const totalInMateria = modulos.reduce(
+            (acc, mod) => acc + (organized[materia][mod]?.length || 0),
+            0,
+          )
+          const deckHue = [...materia].reduce((a, c) => a + c.charCodeAt(0), 0) % 360
+
+          return (
+            <div
+              key={materia}
+              className="overflow-hidden rounded-2xl border border-cp-border/80 bg-cp-bg/20"
+            >
+              <button
+                type="button"
+                onClick={() => toggleMateria(materia)}
+                className="flex w-full items-center gap-2.5 px-3 py-3 text-left text-sm transition hover:bg-cp-surface/50"
+              >
+                <span
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm"
+                  style={{ background: `hsl(${deckHue}, 65%, 52%)` }}
+                >
+                  {materia.charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-cp-text">{materia}</span>
+                  <span className="text-[10px] text-cp-muted">
+                    {modulos.length} grupos · {totalInMateria} questões
+                  </span>
+                </span>
+                <span className="shrink-0 font-mono text-[10px] text-cp-muted">{totalInMateria}</span>
+                {isExpanded ? (
+                  <ChevronDownIcon className="h-4 w-4 shrink-0 text-cp-muted" />
+                ) : (
+                  <ChevronRightIcon className="h-4 w-4 shrink-0 text-cp-muted" />
+                )}
+              </button>
+
+              {isExpanded && (
+                <div className="space-y-0.5 border-t border-cp-border/50 px-2 py-2">
+                  {modulos.map((modulo) => {
+                    const items = organized[materia][modulo] || []
+                    return (
+                      <button
+                        key={modulo}
+                        type="button"
+                        onClick={() => goToPractice(materia, modulo)}
+                        className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs text-cp-text transition hover:bg-cp-accent/10"
+                      >
+                        <span className="min-w-0 flex-1 truncate pr-2">{modulo}</span>
+                        <span className="shrink-0 rounded-full bg-cp-border/60 px-2 py-0.5 font-mono text-[10px] text-cp-muted">
+                          {items.length}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+
+  const practiceContent = currentQuestao ? (
+    <QuestaoFloatingComments
+      enabled={floatingCommentsEnabled}
+      onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+      courseId={courseId}
+      contentId={questaoContentId}
+      topicKey={currentItem.topicKey || undefined}
+    >
+      <div className="mx-auto w-full max-w-2xl space-y-5">
+        <div className="h-1.5 overflow-hidden rounded-full bg-cp-border/60">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-cp-accent to-cp-accent2 transition-all"
+            style={{ width: `${((currentIndex + 1) / deckItems.length) * 100}%` }}
+          />
+        </div>
+
+        {(sessionStats.correct > 0 || sessionStats.wrong > 0) && (
+          <div className="flex flex-wrap gap-3 text-xs">
+            <span className="inline-flex items-center gap-1 text-emerald-500">
+              <CheckCircleIcon className="h-4 w-4" />
+              {sessionStats.correct} acertos nesta sessão
+            </span>
+            <span className="inline-flex items-center gap-1 text-red-500">
+              <XCircleIcon className="h-4 w-4" />
+              {sessionStats.wrong} erros nesta sessão
+            </span>
+          </div>
+        )}
+
+        <QuestaoEnunciadoCard
+          assunto={currentQuestao.assunto || undefined}
+          probabilidade={currentQuestao.probabilidade}
+          enunciado={currentQuestao.enunciado}
+          questionNumber={currentIndex + 1}
+          courseId={courseId}
+          contentId={questaoContentId}
+          topicKey={currentItem.topicKey || undefined}
+        />
+
+        {!showResult ? (
+          <QuestaoAlternativas
+            tipoProva={currentItem.tipoProva}
+            questao={currentQuestao}
+            showResult={false}
+            modoAdminNavegacao={false}
+            selectedAnswer={selectedAnswer}
+            onAnswer={handleAnswer}
+          />
+        ) : (
+          <>
+            <QuestaoAlternativas
+              tipoProva={currentItem.tipoProva}
+              questao={currentQuestao}
+              showResult
+              modoAdminNavegacao={false}
+              selectedAnswer={selectedAnswer}
+              onAnswer={handleAnswer}
+            />
+            <QuestaoExplicacao explicacao={resolveQuestaoExplicacao(currentQuestao)} />
+            <div className="flex gap-3">
+              {currentIndex > 0 && (
+                <button type="button" onClick={handlePrev} className="cp-btn-ghost flex-1 justify-center">
+                  ← Anterior
+                </button>
+              )}
+              {currentIndex < deckItems.length - 1 ? (
+                <button type="button" onClick={handleNext} className="cp-btn-primary flex-1 justify-center">
+                  Próxima →
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentIndex(0)
+                    setSelectedAnswer(null)
+                    setShowResult(false)
+                  }}
+                  className="cp-btn-primary flex-1 justify-center"
+                >
+                  Recomeçar deck
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </QuestaoFloatingComments>
+  ) : null
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -188,9 +392,72 @@ const ResolverQuestoesView = () => {
     )
   }
 
+  if (isPracticeRoute) {
+    return (
+      <div className="space-y-6 pb-8">
+        <div className="cp-study-main min-h-[520px] overflow-visible lg:min-h-[calc(100vh-12rem)]">
+          {!selectedMateria || deckItems.length === 0 ? (
+            <div className="cp-card flex min-h-[480px] flex-col items-center justify-center p-10 text-center">
+              <p className="text-lg font-semibold text-cp-text">Carregando sessão…</p>
+              <p className="mt-2 max-w-sm text-sm text-cp-muted">
+                Se não abrir automaticamente, volte e escolha um grupo de questões.
+              </p>
+              <button
+                type="button"
+                onClick={exitPractice}
+                className="mt-6 rounded-xl border border-cp-border px-5 py-2.5 text-sm font-medium text-cp-text transition hover:bg-cp-surface"
+              >
+                ← Voltar à biblioteca
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="noji-study-header mb-4 flex shrink-0 items-center justify-between gap-3 rounded-2xl border border-cp-border bg-cp-surface px-4 py-3 sm:px-6">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-cp-accent">
+                    {selectedMateria}
+                  </p>
+                  <p className="truncate text-base font-semibold text-cp-text">{selectedModulo}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="font-mono text-xs text-cp-muted">
+                    {currentIndex + 1}/{deckItems.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handlePesquisarGoogle}
+                    className="noji-tool-btn"
+                    title="Pesquisar no Google"
+                  >
+                    <MagnifyingGlassIcon className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleShuffle}
+                    className="noji-tool-btn"
+                    title="Embaralhar"
+                  >
+                    <ArrowPathIcon className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exitPractice}
+                    className="rounded-xl border border-cp-border px-3 py-1.5 text-xs font-medium text-cp-muted transition hover:bg-cp-surface hover:text-cp-text"
+                  >
+                    Sair
+                  </button>
+                </div>
+              </div>
+              {practiceContent}
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 pb-10">
-      {/* Resumo + gráficos */}
       <section className="cp-card p-4 sm:p-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -269,254 +536,7 @@ const ResolverQuestoesView = () => {
       )}
 
       {totalQuestoes > 0 && (
-        <div className="cp-study-layout grid gap-4 lg:grid-cols-[minmax(260px,320px)_1fr]">
-          {/* Sidebar */}
-          <div className="cp-study-sidebar noji-deck-panel cp-card flex flex-col overflow-hidden lg:max-h-[calc(100vh-12rem)]">
-            <div className="border-b border-cp-border p-4">
-              <p className="text-sm font-semibold text-cp-text">Questões por matéria</p>
-              <p className="mb-3 text-[11px] text-cp-muted">Tópicos e incidência liberados</p>
-              <div className="relative">
-                <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cp-muted" />
-                <input
-                  type="search"
-                  value={sidebarSearch}
-                  onChange={(e) => setSidebarSearch(e.target.value)}
-                  placeholder="Buscar matéria..."
-                  className="w-full rounded-xl border border-cp-border bg-cp-bg/60 py-2.5 pl-9 pr-3 text-sm text-cp-text placeholder:text-cp-muted focus:border-cp-accent/50 focus:outline-none focus:ring-2 focus:ring-cp-accent/20"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={selectAllQuestoes}
-                className={`mt-3 w-full rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition ${
-                  selectedMateria === 'Todas'
-                    ? 'border-cp-accent/40 bg-cp-accent/15 text-cp-accent'
-                    : 'border-cp-border bg-cp-bg/40 text-cp-text hover:border-cp-accent/30'
-                }`}
-              >
-                Todas as questões ({allItems.length})
-              </button>
-            </div>
-
-            <div className="flex-1 space-y-2 overflow-y-auto p-3">
-              {filteredMaterias.map((materia) => {
-                const modulos = Object.keys(organized[materia] || {})
-                const isExpanded = expandedMaterias[materia]
-                const totalInMateria = modulos.reduce(
-                  (acc, mod) => acc + (organized[materia][mod]?.length || 0),
-                  0,
-                )
-                const deckHue = [...materia].reduce((a, c) => a + c.charCodeAt(0), 0) % 360
-
-                return (
-                  <div
-                    key={materia}
-                    className="overflow-hidden rounded-2xl border border-cp-border/80 bg-cp-bg/20"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleMateria(materia)}
-                      className="flex w-full items-center gap-2.5 px-3 py-3 text-left text-sm transition hover:bg-cp-surface/50"
-                    >
-                      <span
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm"
-                        style={{ background: `hsl(${deckHue}, 65%, 52%)` }}
-                      >
-                        {materia.charAt(0).toUpperCase()}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium text-cp-text">{materia}</span>
-                        <span className="text-[10px] text-cp-muted">
-                          {modulos.length} grupos · {totalInMateria} questões
-                        </span>
-                      </span>
-                      <span className="shrink-0 font-mono text-[10px] text-cp-muted">
-                        {totalInMateria}
-                      </span>
-                      {isExpanded ? (
-                        <ChevronDownIcon className="h-4 w-4 shrink-0 text-cp-muted" />
-                      ) : (
-                        <ChevronRightIcon className="h-4 w-4 shrink-0 text-cp-muted" />
-                      )}
-                    </button>
-
-                    {isExpanded && (
-                      <div className="space-y-0.5 border-t border-cp-border/50 px-2 py-2">
-                        {modulos.map((modulo) => {
-                          const items = organized[materia][modulo] || []
-                          const isSelected =
-                            selectedMateria === materia && selectedModulo === modulo
-
-                          return (
-                            <button
-                              key={modulo}
-                              type="button"
-                              onClick={() => selectDeck(materia, modulo, items)}
-                              className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs transition ${
-                                isSelected
-                                  ? 'bg-cp-accent text-white shadow-md'
-                                  : 'text-cp-text hover:bg-cp-accent/10'
-                              }`}
-                            >
-                              <span className="min-w-0 flex-1 truncate pr-2">{modulo}</span>
-                              <span
-                                className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] ${
-                                  isSelected ? 'bg-white/20' : 'bg-cp-border/60 text-cp-muted'
-                                }`}
-                              >
-                                {items.length}
-                              </span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Área de prática */}
-          <div className="cp-study-main cp-card overflow-visible p-4 sm:p-6">
-            {deckItems.length === 0 ? (
-              <p className="py-12 text-center text-sm text-cp-muted">
-                Selecione uma matéria para começar.
-              </p>
-            ) : currentQuestao ? (
-              <div className="space-y-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-cp-accent">
-                      {selectedMateria}
-                    </p>
-                    <p className="text-sm font-semibold text-cp-text">{selectedModulo}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-cp-muted">
-                      {currentIndex + 1}/{deckItems.length}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handlePesquisarGoogle}
-                      className="noji-tool-btn"
-                      title="Pesquisar no Google"
-                    >
-                      <MagnifyingGlassIcon className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleShuffle}
-                      className="noji-tool-btn"
-                      title="Embaralhar"
-                    >
-                      <ArrowPathIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="h-1.5 overflow-hidden rounded-full bg-cp-border/60">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-cp-accent to-cp-accent2 transition-all"
-                    style={{
-                      width: `${((currentIndex + 1) / deckItems.length) * 100}%`,
-                    }}
-                  />
-                </div>
-
-                {(sessionStats.correct > 0 || sessionStats.wrong > 0) && (
-                  <div className="flex flex-wrap gap-3 text-xs">
-                    <span className="inline-flex items-center gap-1 text-emerald-500">
-                      <CheckCircleIcon className="h-4 w-4" />
-                      {sessionStats.correct} acertos nesta sessão
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-red-500">
-                      <XCircleIcon className="h-4 w-4" />
-                      {sessionStats.wrong} erros nesta sessão
-                    </span>
-                  </div>
-                )}
-
-                <FloatingCommentsShell
-                  enabled={floatingCommentsEnabled}
-                  onToggle={() => setFloatingCommentsEnabled((v) => !v)}
-                  courseId={courseId}
-                  contentType="questao"
-                  contentId={questaoContentId}
-                  topicKey={currentItem.topicKey || undefined}
-                  label="comentários nesta questão"
-                >
-                <QuestaoEnunciadoCard
-                  assunto={currentQuestao.assunto || undefined}
-                  probabilidade={currentQuestao.probabilidade}
-                  enunciado={currentQuestao.enunciado}
-                  questionNumber={currentIndex + 1}
-                  courseId={courseId}
-                  contentId={questaoContentId}
-                  topicKey={currentItem.topicKey || undefined}
-                />
-
-                {!showResult ? (
-                  <QuestaoAlternativas
-                    tipoProva={currentItem.tipoProva}
-                    questao={currentQuestao}
-                    showResult={false}
-                    modoAdminNavegacao={false}
-                    selectedAnswer={selectedAnswer}
-                    onAnswer={handleAnswer}
-                  />
-                ) : (
-                  <>
-                    <QuestaoAlternativas
-                      tipoProva={currentItem.tipoProva}
-                      questao={currentQuestao}
-                      showResult
-                      modoAdminNavegacao={false}
-                      selectedAnswer={selectedAnswer}
-                      onAnswer={handleAnswer}
-                    />
-                    <QuestaoExplicacao
-                      explicacao={resolveQuestaoExplicacao(currentQuestao)}
-                    />
-                    <div className="flex gap-3">
-                      {currentIndex > 0 && (
-                        <button
-                          type="button"
-                          onClick={handlePrev}
-                          className="cp-btn-ghost flex-1 justify-center"
-                        >
-                          ← Anterior
-                        </button>
-                      )}
-                      {currentIndex < deckItems.length - 1 ? (
-                        <button
-                          type="button"
-                          onClick={handleNext}
-                          className="cp-btn-primary flex-1 justify-center"
-                        >
-                          Próxima →
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCurrentIndex(0)
-                            setSelectedAnswer(null)
-                            setShowResult(false)
-                          }}
-                          className="cp-btn-primary flex-1 justify-center"
-                        >
-                          Recomeçar deck
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )}
-                </FloatingCommentsShell>
-              </div>
-            ) : null}
-          </div>
-        </div>
+        <div className="mx-auto w-full max-w-2xl">{sidebarPanel}</div>
       )}
 
       {!hasEdital && totalQuestoes > 0 && (
