@@ -6,7 +6,6 @@ import CPHeader from '@/components/cp/CPHeader'
 import CPFooter from '@/components/cp/CPFooter'
 import TechBackground from '@/components/cp/TechBackground'
 
-const SupportButton = dynamic(() => import('@/components/SupportButton'), { ssr: false })
 const PopupBanner = dynamic(() => import('@/components/PopupBanner'), { ssr: false })
 const OfflineIndicator = dynamic(() => import('@/components/OfflineIndicator'), { ssr: false })
 const TrilhaTimerBanner = dynamic(() => import('@/components/TrilhaTimerBanner'), { ssr: false })
@@ -60,7 +59,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       {!isComunidade && <CPFooter fullBleed={fullBleed} />}
-      <SupportButton />
       <PopupBanner />
       <OfflineIndicator />
       <TrilhaTimerBanner />

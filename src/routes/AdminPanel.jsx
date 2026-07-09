@@ -7385,10 +7385,6 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                           }
                           
                           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
-                          const apiKey = readEnv('VITE_GEMINI_API_KEY')
-                          if (!apiKey) {
-                            throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
-                          }
                           
                           // Dividir o edital em partes inteligentes baseado no tamanho
                           // Isso garante que a resposta da IA não seja truncada
@@ -7645,6 +7641,10 @@ REGRAS CRÍTICAS E OBRIGATÓRIAS - LEIA COM ATENÇÃO:
                             const verticalizadoResponse = await callGeminiWithRetry(verticalizadoPrompt, {
                               courseId,
                               models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+                              silent: true,
+                              verifyContent: false,
+                              useRAG: false,
+                              useGoogleSearch: false,
                               generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                             })
                             let verticalizadoText = extractGeneratedText(verticalizadoResponse).trim()
@@ -7997,6 +7997,10 @@ IMPORTANTE: Retorne APENAS o JSON válido, sem markdown, sem explicações, sem 
                           const unifiedResponse = await callGeminiWithRetry(unifiedPrompt, {
                             courseId,
                             models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+                            silent: true,
+                            verifyContent: false,
+                            useRAG: false,
+                            useGoogleSearch: false,
                             generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                           })
                           let unifiedText = extractGeneratedText(unifiedResponse).trim()
@@ -9130,12 +9134,6 @@ ESTRUTURA SUGERIDA:
               try {
                           const courseId = selectedCourseForPrompts || 'alego-default'
                           
-                          // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
-                          const apiKey = readEnv('VITE_GEMINI_API_KEY')
-                          if (!apiKey) {
-                            throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
-                          }
-                          
                           // Aumentar limite para 1 milhão de caracteres
                           const maxTextLength = 1000000
                           const editalTextToProcess = editalVerticalizadoText.length > maxTextLength 
@@ -9181,6 +9179,10 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                 const response = await callGeminiWithRetry(prompt, {
                   courseId,
                   models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+                  silent: true,
+                  verifyContent: false,
+                  useRAG: false,
+                  useGoogleSearch: false,
                   generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
                 })
                 const text = extractGeneratedText(response)

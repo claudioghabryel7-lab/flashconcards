@@ -3,6 +3,17 @@ import { readEnv } from '@/lib/env.js'
 
 const DEFAULT_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro']
 
+function isInvalidApiKeyError(status: number, message = '') {
+  const msg = String(message).toLowerCase()
+  return (
+    status === 400 ||
+    status === 403 ||
+    msg.includes('api key not valid') ||
+    msg.includes('api_key_invalid') ||
+    msg.includes('invalid api key')
+  )
+}
+
 function loadServerApiKeys(): string[] {
   const keys: string[] = []
   const main = readEnv('VITE_GEMINI_API_KEY') || readEnv('VITE_GOOGLE_AI_API_KEY')
@@ -76,6 +87,9 @@ export async function POST(request: NextRequest) {
 
         lastError = data.error?.message || `HTTP ${response.status}`
         if (response.status === 429 || response.status === 503) {
+          continue
+        }
+        if (isInvalidApiKeyError(response.status, lastError)) {
           continue
         }
       }

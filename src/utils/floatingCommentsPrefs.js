@@ -1,4 +1,5 @@
 const DISMISSED_KEY = 'cp:floating-comments-dismissed'
+const ENABLED_KEY = 'cp:floating-comments-enabled'
 
 function contentKey(courseId, contentType, contentId) {
   return `${courseId || ''}|${contentType || ''}|${contentId || ''}`
@@ -53,4 +54,20 @@ export function restoreFloatingComment(courseId, contentType, contentId, comment
 export function restoreAllFloatingComments(courseId, contentType, contentId) {
   persistDismissedCommentIds(courseId, contentType, contentId, new Set())
   return new Set()
+}
+
+export function loadFloatingCommentsEnabled() {
+  try {
+    return localStorage.getItem(ENABLED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function saveFloatingCommentsEnabled(enabled) {
+  try {
+    localStorage.setItem(ENABLED_KEY, enabled ? '1' : '0')
+  } catch {
+    // ignore quota errors
+  }
 }

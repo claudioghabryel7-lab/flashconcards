@@ -120,19 +120,47 @@ function extractSearchTopic(prompt) {
 function loadApiKeys() {
   const apiKeys = []
 
+  const isValidKey = (key) => {
+    if (!key || typeof key !== 'string') return false
+    const trimmed = key.trim()
+    if (trimmed.length < 20) return false
+    const lower = trimmed.toLowerCase()
+    if (
+      lower.includes('your-api') ||
+      lower.includes('sua-chave') ||
+      lower.includes('placeholder') ||
+      lower === 'undefined' ||
+      lower === 'null'
+    ) {
+      return false
+    }
+    return true
+  }
+
   const mainKey = readEnv('VITE_GEMINI_API_KEY') || readEnv('VITE_GOOGLE_AI_API_KEY')
-  if (mainKey) {
-    apiKeys.push(mainKey)
+  if (isValidKey(mainKey)) {
+    apiKeys.push(mainKey.trim())
   }
 
   for (let i = 1; i <= 10; i++) {
     const key = readEnv(`VITE_GEMINI_API_KEY_${i}`)
-    if (key && !apiKeys.includes(key)) {
-      apiKeys.push(key)
+    if (isValidKey(key) && !apiKeys.includes(key.trim())) {
+      apiKeys.push(key.trim())
     }
   }
 
   return apiKeys
+}
+
+function isInvalidApiKeyError(status, message = '') {
+  const msg = String(message).toLowerCase()
+  return (
+    status === 400 ||
+    status === 403 ||
+    msg.includes('api key not valid') ||
+    msg.includes('api_key_invalid') ||
+    msg.includes('invalid api key')
+  )
 }
 
 async function callGeminiViaServer(prompt, options = {}) {
@@ -415,13 +443,19 @@ async function executeGeminiRequest(prompt, options = {}) {
 
         if (!response.ok) {
           const errorMessage = data.error?.message || 'Erro na API da IA'
-          
-          // Se for erro 429 (quota) ou 503 (alta demanda), tentar próxima key
-          if (response.status === 429 || response.status === 503) {
-            if (!silent) console.log(`⚠️ API key ${keyIndex + 1} com erro (${response.status}), tentando próxima...`)
+
+          if (
+            response.status === 429 ||
+            response.status === 503 ||
+            isInvalidApiKeyError(response.status, errorMessage)
+          ) {
+            if (!silent) {
+              console.log(`⚠️ API key ${keyIndex + 1} indisponível (${response.status}), tentando próxima...`)
+            }
+            lastError = new Error(errorMessage)
             continue
           }
-          
+
           const err = new Error(errorMessage)
           if (response.status === 429) err.code = 'quota_exceeded'
           throw err

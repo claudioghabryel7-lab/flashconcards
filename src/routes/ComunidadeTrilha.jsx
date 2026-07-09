@@ -19,6 +19,7 @@ import FeedPost from '../components/feed/FeedPost'
 import FeedPostEditModal from '../components/feed/FeedPostEditModal'
 import FeedPostMedia from '../components/feed/FeedPostMedia'
 import FeedShareSheet from '../components/feed/FeedShareSheet'
+import FeedPostComposer from '../components/feed/FeedPostComposer'
 import ComunidadeShell from '../components/feed/ComunidadeShell'
 import toast from 'react-hot-toast'
 import { useFeedPostShare } from '../hooks/useFeedPostShare'
@@ -32,8 +33,12 @@ import {
   toggleFeedCommentLike,
   toggleFeedReplyLike,
   addFeedCommentReply,
+  pinFeedPost,
+  unpinFeedPost,
+  reportFeedPost,
 } from '../services/trilhaFeedMutations'
 import { isFeedPostActive, normalizeDurationMinutes } from '../utils/feedTimeUtils'
+import { sortFeedPosts } from '../utils/feedSortUtils'
 import {
   useCommunityAuthors,
   resolveCommunityAuthor,
@@ -132,7 +137,7 @@ export default function ComunidadeTrilha() {
   const { authorsMap } = useCommunityAuthors(authorIds)
 
   const visiblePosts = useMemo(
-    () => activePosts.filter((post) => isAuthorVisible(post.authorId, authorsMap)),
+    () => sortFeedPosts(activePosts.filter((post) => isAuthorVisible(post.authorId, authorsMap))),
     [activePosts, authorsMap],
   )
 
@@ -309,6 +314,49 @@ export default function ComunidadeTrilha() {
     [editingPost],
   )
 
+  const handlePinPost = useCallback(
+    async (post) => {
+      if (!user?.uid) return
+      try {
+        await pinFeedPost(post.id, user.uid)
+        toast.success('Publicação fixada no topo por 24 horas.')
+      } catch {
+        toast.error('Erro ao fixar publicação.')
+      }
+    },
+    [user],
+  )
+
+  const handleUnpinPost = useCallback(async (post) => {
+    try {
+      await unpinFeedPost(post.id)
+      toast.success('Fixação removida.')
+    } catch {
+      toast.error('Erro ao remover fixação.')
+    }
+  }, [])
+
+  const handleReportPost = useCallback(
+    async (post) => {
+      if (!user) {
+        toast.error('Faça login para denunciar.')
+        return
+      }
+      if (!window.confirm('Denunciar esta publicação? Nossa equipe irá analisar.')) return
+      try {
+        await reportFeedPost({
+          postId: post.id,
+          reporterId: user.uid,
+          postAuthorId: post.authorId,
+        })
+        toast.success('Denúncia enviada. Obrigado!')
+      } catch {
+        toast.error('Erro ao enviar denúncia.')
+      }
+    },
+    [user],
+  )
+
   const currentUserHighlight = user
     ? {
         uid: user.uid,
@@ -328,6 +376,8 @@ export default function ComunidadeTrilha() {
         currentUserId={user?.uid}
       />
 
+      <FeedPostComposer user={user} profile={profile} />
+
       {visiblePosts.length === 0 ? (
         <div className="flex flex-col items-center gap-4 px-6 py-16 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-cp-accent/10">
@@ -336,7 +386,7 @@ export default function ComunidadeTrilha() {
           <div>
             <p className="font-semibold text-cp-text">Nenhuma publicação ainda</p>
             <p className="mt-1 text-sm text-cp-muted">
-              Registre um bloco na Trilha e apareça no feed da comunidade.
+              Publique uma dúvida acima ou registre um bloco na Trilha.
             </p>
           </div>
           <Link
@@ -372,6 +422,9 @@ export default function ComunidadeTrilha() {
             onShare={() => sharePost(post)}
             onEditPost={() => setEditingPost(post)}
             onDeletePost={() => handleDeletePost(post)}
+            onPinPost={() => handlePinPost(post)}
+            onUnpinPost={() => handleUnpinPost(post)}
+            onReportPost={() => handleReportPost(post)}
             onDeleteComment={(commentId) => handleDeleteComment(post, commentId)}
             onDeleteReply={(commentId, replyId) => handleDeleteReply(post, commentId, replyId)}
             onToggleCommentLike={(commentId) => handleToggleCommentLike(post, commentId)}

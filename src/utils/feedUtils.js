@@ -107,6 +107,7 @@ export const FEED_POST_TYPES = {
   QUESTOES: 'questoes',
   MATERIAL: 'material',
   COMENTARIO: 'comentario',
+  DUVIDA: 'duvida',
 }
 
 export const POST_TYPE_LABELS = {
@@ -115,6 +116,7 @@ export const POST_TYPE_LABELS = {
   questoes: 'Questões',
   material: 'Material do tópico',
   comentario: 'Comentário',
+  duvida: 'Dúvida',
 }
 
 export function resolvePostType(post) {
@@ -164,6 +166,12 @@ export function getPostCaption(post) {
         commentText: post.commentText || '',
         materia,
         assunto,
+      }
+    case FEED_POST_TYPES.DUVIDA:
+      return {
+        isDuvidaPost: true,
+        questionText: post.questionText || '',
+        meta: 'Dúvida na comunidade',
       }
     default:
       return {

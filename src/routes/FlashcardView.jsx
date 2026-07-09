@@ -14,6 +14,7 @@ import FlashcardFloatingComments from '../components/FlashcardFloatingComments'
 import { userFlashcardsService } from '../services/userFlashcardsService'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
+import { useFloatingCommentsEnabled } from '../hooks/useFloatingCommentsEnabled'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useStudyTimer } from '../hooks/useStudyTimer'
 import { useStudySession } from '../hooks/useStudySession'
@@ -152,7 +153,7 @@ const FlashcardView = () => {
   const [generatingFlashcards, setGeneratingFlashcards] = useState(false) // Estado para loading de geração
   const [selectedDifficulty, setSelectedDifficulty] = useState('') // Dificuldade selecionada para geração
   const [sidebarSearch, setSidebarSearch] = useState('')
-  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
+  const { enabled: floatingCommentsEnabled, toggle: toggleFloatingComments } = useFloatingCommentsEnabled()
   const [shuffledCardIds, setShuffledCardIds] = useState(null)
   const [srsNow, setSrsNow] = useState(() => dayjs())
   
@@ -1421,7 +1422,7 @@ IMPORTANTE:
               {activeCards[currentIndex] && (
                 <FlashcardFloatingComments
                   enabled={floatingCommentsEnabled}
-                  onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+                  onToggle={toggleFloatingComments}
                   courseId={activeCourseId}
                   card={activeCards[currentIndex]}
                   topicKey={activeCards[currentIndex]?.topicKey || null}

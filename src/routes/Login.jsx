@@ -358,50 +358,57 @@ const Login = () => {
 
       {/* Modal de Esqueci a Senha */}
       {showForgotPassword && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowForgotPassword(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 sm:p-8 relative" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setShowForgotPassword(false)}
+        >
+          <div
+            className="relative w-full max-w-md rounded-2xl border border-cp-border bg-cp-surface p-6 shadow-2xl sm:p-8"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
+              type="button"
               onClick={() => {
                 setShowForgotPassword(false)
                 setForgotPasswordEmail('')
                 setForgotPasswordMessage('')
               }}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition"
+              className="absolute right-4 top-4 text-cp-muted transition hover:text-cp-text"
             >
               <XMarkIcon className="h-6 w-6" />
             </button>
 
-            <div className="text-center mb-6">
-              <LockClosedIcon className="h-12 w-12 text-alego-600 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-alego-700 mb-2">
-                Esqueci minha senha
-              </h2>
-              <p className="text-sm text-slate-600">
+            <div className="mb-6 text-center">
+              <LockClosedIcon className="mx-auto mb-4 h-12 w-12 text-cp-accent" />
+              <h2 className="mb-2 text-2xl font-bold text-cp-text">Esqueci minha senha</h2>
+              <p className="text-sm text-cp-muted">
                 Digite seu email e enviaremos um link para redefinir sua senha
               </p>
             </div>
 
             {forgotPasswordMessage && (
-              <div className={`mb-4 rounded-lg p-3 text-sm ${
-                forgotPasswordMessage.startsWith('✅') 
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : 'bg-rose-50 text-rose-700'
-              }`}>
+              <div
+                className={`mb-4 rounded-lg border p-3 text-sm ${
+                  forgotPasswordMessage.startsWith('✅')
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                    : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                }`}
+              >
                 {forgotPasswordMessage}
               </div>
             )}
 
             <form onSubmit={handleForgotPassword} className="space-y-4">
-              <label className="block text-sm font-semibold text-slate-600">
+              <label className="block text-sm font-semibold text-cp-text">
                 Email
-                <div className="mt-1 flex items-center rounded-full border border-slate-200 px-4">
-                  <EnvelopeIcon className="h-4 w-4 text-alego-500 flex-shrink-0" />
+                <div className="mt-1 flex items-center rounded-xl border border-cp-border bg-cp-bg px-4">
+                  <EnvelopeIcon className="h-4 w-4 shrink-0 text-cp-accent" />
                   <input
                     type="email"
                     value={forgotPasswordEmail}
                     onChange={(e) => setForgotPasswordEmail(e.target.value)}
                     required
-                    className="w-full border-none bg-transparent px-3 py-3 text-sm focus:outline-none"
+                    className="w-full border-none bg-transparent px-3 py-3 text-sm text-cp-text outline-none placeholder:text-cp-muted"
                     placeholder="seuemail@email.com"
                     disabled={forgotPasswordLoading}
                   />
@@ -411,11 +418,11 @@ const Login = () => {
               <button
                 type="submit"
                 disabled={forgotPasswordLoading}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent-orange px-4 py-3 text-sm font-semibold text-background-primary transition hover:bg-accent-orange-dim disabled:opacity-50 min-h-[44px]"
+                className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-accent-orange px-4 py-3 text-sm font-semibold text-background-primary transition hover:bg-accent-orange-dim disabled:opacity-50"
               >
                 {forgotPasswordLoading ? (
                   <>
-                    <div className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    <div className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                     Enviando...
                   </>
                 ) : (
@@ -433,7 +440,7 @@ const Login = () => {
                   setForgotPasswordEmail('')
                   setForgotPasswordMessage('')
                 }}
-                className="w-full text-sm text-slate-600 hover:text-slate-700 font-medium"
+                className="w-full text-sm font-medium text-cp-muted transition hover:text-cp-text"
               >
                 Cancelar
               </button>

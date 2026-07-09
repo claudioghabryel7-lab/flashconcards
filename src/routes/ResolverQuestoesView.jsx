@@ -12,6 +12,7 @@ import {
   ArrowPathIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
+import { useFloatingCommentsEnabled } from '../hooks/useFloatingCommentsEnabled'
 import { useResolverQuestoes } from '../hooks/useResolverQuestoes'
 import { incrementQuestoesStats } from '../utils/questoesStats'
 import SubjectMetricChart from '../components/SubjectMetricChart'
@@ -62,7 +63,7 @@ const ResolverQuestoesView = () => {
   const [selectedAnswer, setSelectedAnswer] = useState(null)
   const [showResult, setShowResult] = useState(false)
   const [sessionStats, setSessionStats] = useState({ correct: 0, wrong: 0 })
-  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
+  const { enabled: floatingCommentsEnabled, toggle: toggleFloatingComments } = useFloatingCommentsEnabled()
 
   const materias = useMemo(() => Object.keys(organized).sort(), [organized])
 
@@ -295,7 +296,7 @@ const ResolverQuestoesView = () => {
   const practiceContent = currentQuestao ? (
     <QuestaoFloatingComments
       enabled={floatingCommentsEnabled}
-      onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+      onToggle={toggleFloatingComments}
       courseId={courseId}
       contentId={questaoContentId}
       topicKey={currentItem.topicKey || undefined}

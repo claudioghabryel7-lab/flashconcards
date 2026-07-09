@@ -19,31 +19,27 @@ function stripCommentPreview(text = '') {
     .trim()
 }
 
-const CORNER_SNAPS = [
-  { id: 'tl', leftPct: 1, topPct: 4 },
-  { id: 'tr', rightPct: 1, topPct: 4 },
-  { id: 'bl', leftPct: 1, bottomPct: 6 },
-  { id: 'br', rightPct: 1, bottomPct: 6 },
+const CORNER_SNAPS_LEFT = [
+  { id: 'tl', leftPct: 0, topPct: 2 },
+  { id: 'bl', leftPct: 0, bottomPct: 4 },
+]
+
+const CORNER_SNAPS_RIGHT = [
+  { id: 'tr', rightPct: 0, topPct: 2 },
+  { id: 'br', rightPct: 0, bottomPct: 4 },
 ]
 
 function defaultPosition(index, side) {
-  const topPct = 6 + (index % 5) * 15
-  if (side === 'left') return { leftPct: 0.5, topPct }
-  return { rightPct: 0.5, topPct }
+  const topPct = 4 + (index % 5) * 16
+  if (side === 'left') return { leftPct: 0, topPct }
+  return { rightPct: 0, topPct }
 }
 
-function snapToNearestCorner(stageRect, bubbleRect) {
-  const cx = bubbleRect.left + bubbleRect.width / 2 - stageRect.left
-  const cy = bubbleRect.top + bubbleRect.height / 2 - stageRect.top
-  const xRatio = cx / stageRect.width
-  const yRatio = cy / stageRect.height
-  const threshold = 0.28
-
-  if (xRatio < threshold && yRatio < threshold) return CORNER_SNAPS[0]
-  if (xRatio > 1 - threshold && yRatio < threshold) return CORNER_SNAPS[1]
-  if (xRatio < threshold && yRatio > 1 - threshold) return CORNER_SNAPS[2]
-  if (xRatio > 1 - threshold && yRatio > 1 - threshold) return CORNER_SNAPS[3]
-  return null
+function snapToNearestCorner(laneRect, bubbleRect, side) {
+  const cy = bubbleRect.top + bubbleRect.height / 2 - laneRect.top
+  const yRatio = cy / laneRect.height
+  const snaps = side === 'right' ? CORNER_SNAPS_RIGHT : CORNER_SNAPS_LEFT
+  return yRatio > 0.5 ? snaps[1] : snaps[0]
 }
 
 function positionToStyle(pos) {
@@ -69,14 +65,16 @@ function DraggableFloatingBubble({
   comment,
   index,
   side,
-  stageRef,
+  laneRef,
   position,
   onPositionChange,
   onDismiss,
+  layoutMode = 'lane',
 }) {
   const bubbleRef = useRef(null)
   const dragRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
+  const isLaneLayout = layoutMode === 'lane'
   const duration = 26 + (index % 5) * 4
   const delay = (index % 7) * 2.8
   const enterDelay = index * 0.14
@@ -84,39 +82,48 @@ function DraggableFloatingBubble({
   const finishDrag = useCallback(
     (pointerId) => {
       if (!dragRef.current || dragRef.current.pointerId !== pointerId) return
-      const stage = stageRef.current
+      if (!isLaneLayout) {
+        dragRef.current = null
+        setIsDragging(false)
+        return
+      }
+      const lane = laneRef.current
       const bubble = bubbleRef.current
-      if (stage && bubble) {
-        const snap = snapToNearestCorner(stage.getBoundingClientRect(), bubble.getBoundingClientRect())
+      if (lane && bubble) {
+        const snap = snapToNearestCorner(
+          lane.getBoundingClientRect(),
+          bubble.getBoundingClientRect(),
+          side,
+        )
         if (snap) onPositionChange(comment.id, { ...snap })
       }
       dragRef.current = null
       setIsDragging(false)
     },
-    [comment.id, onPositionChange, stageRef],
+    [comment.id, isLaneLayout, laneRef, onPositionChange, side],
   )
 
   useEffect(() => {
-    if (!isDragging) return undefined
+    if (!isDragging || !isLaneLayout) return undefined
 
     const onMove = (e) => {
       if (!dragRef.current || dragRef.current.pointerId !== e.pointerId) return
-      const stage = stageRef.current
+      const lane = laneRef.current
       const bubble = bubbleRef.current
-      if (!stage || !bubble) return
+      if (!lane || !bubble) return
 
-      const stageRect = stage.getBoundingClientRect()
+      const laneRect = lane.getBoundingClientRect()
       const { offsetX, offsetY } = dragRef.current
       const bubbleW = bubble.offsetWidth
       const bubbleH = bubble.offsetHeight
-      const maxLeft = Math.max(stageRect.width - bubbleW, 0)
-      const maxTop = Math.max(stageRect.height - bubbleH, 0)
-      const leftPx = Math.min(Math.max(e.clientX - stageRect.left - offsetX, 0), maxLeft)
-      const topPx = Math.min(Math.max(e.clientY - stageRect.top - offsetY, 0), maxTop)
+      const maxLeft = Math.max(laneRect.width - bubbleW, 0)
+      const maxTop = Math.max(laneRect.height - bubbleH, 0)
+      const leftPx = Math.min(Math.max(e.clientX - laneRect.left - offsetX, 0), maxLeft)
+      const topPx = Math.min(Math.max(e.clientY - laneRect.top - offsetY, 0), maxTop)
 
       onPositionChange(comment.id, {
-        leftPct: (leftPx / stageRect.width) * 100,
-        topPct: (topPx / stageRect.height) * 100,
+        leftPct: (leftPx / laneRect.width) * 100,
+        topPct: (topPx / laneRect.height) * 100,
       })
     }
 
@@ -130,20 +137,21 @@ function DraggableFloatingBubble({
       document.removeEventListener('pointerup', onUp)
       document.removeEventListener('pointercancel', onUp)
     }
-  }, [isDragging, comment.id, finishDrag, onPositionChange, stageRef])
+  }, [isDragging, comment.id, finishDrag, isLaneLayout, laneRef, onPositionChange])
 
   const handlePointerDown = (e) => {
+    if (!isLaneLayout) return
     if (e.button !== 0) return
     if (e.target.closest('.floating-mini-bubble__close, a')) return
-    const stage = stageRef.current
+    const lane = laneRef.current
     const bubble = bubbleRef.current
-    if (!stage || !bubble) return
+    if (!lane || !bubble) return
 
     e.preventDefault()
     e.stopPropagation()
-    const stageRect = stage.getBoundingClientRect()
+    const laneRect = lane.getBoundingClientRect()
     const bubbleRect = bubble.getBoundingClientRect()
-    onPositionChange(comment.id, rectToPosition(stageRect, bubbleRect))
+    onPositionChange(comment.id, rectToPosition(laneRect, bubbleRect))
     dragRef.current = {
       pointerId: e.pointerId,
       offsetX: e.clientX - bubbleRect.left,
@@ -152,19 +160,25 @@ function DraggableFloatingBubble({
     setIsDragging(true)
   }
 
-  const style = {
-    ...positionToStyle(position || defaultPosition(index, side)),
-    '--float-duration': `${duration}s`,
-    '--float-delay': `${delay}s`,
-    '--enter-delay': `${enterDelay}s`,
-  }
+  const style = isLaneLayout
+    ? {
+        ...positionToStyle(position || defaultPosition(index, side)),
+        '--float-duration': `${duration}s`,
+        '--float-delay': `${delay}s`,
+        '--enter-delay': `${enterDelay}s`,
+      }
+    : {
+        '--float-duration': `${duration}s`,
+        '--float-delay': `${delay}s`,
+        '--enter-delay': `${enterDelay}s`,
+      }
 
   return (
     <div
       ref={bubbleRef}
-      className={`floating-mini-bubble ${isDragging ? 'floating-mini-bubble--dragging' : ''} ${
-        side === 'right' ? 'floating-mini-bubble--right' : ''
-      }`}
+      className={`floating-mini-bubble ${isLaneLayout ? '' : 'floating-mini-bubble--stacked'} ${
+        isDragging ? 'floating-mini-bubble--dragging' : ''
+      } ${side === 'right' ? 'floating-mini-bubble--right' : ''}`}
       style={style}
       onPointerDown={handlePointerDown}
     >
@@ -219,7 +233,18 @@ export default function FloatingCommentsShell({
   const [dismissedIds, setDismissedIds] = useState(() => new Set())
   const [positions, setPositions] = useState({})
   const [showHiddenPanel, setShowHiddenPanel] = useState(false)
+  const [layoutMode, setLayoutMode] = useState('lane')
   const stageRef = useRef(null)
+  const leftLaneRef = useRef(null)
+  const rightLaneRef = useRef(null)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const sync = () => setLayoutMode(mq.matches ? 'stacked' : 'lane')
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
 
   useEffect(() => {
     setPositions({})
@@ -287,6 +312,22 @@ export default function FloatingCommentsShell({
   }, [])
 
   const showBubbles = enabled && !loading && visibleComments.length > 0
+  const leftComments = visibleComments.filter((_, i) => i % 2 === 0)
+  const rightComments = visibleComments.filter((_, i) => i % 2 === 1)
+
+  const renderBubble = (comment, index, side, laneRef) => (
+    <DraggableFloatingBubble
+      key={comment.id}
+      comment={comment}
+      index={index}
+      side={side}
+      laneRef={laneRef}
+      position={positions[comment.id]}
+      onPositionChange={handlePositionChange}
+      onDismiss={handleDismiss}
+      layoutMode={layoutMode}
+    />
+  )
 
   return (
     <div className="floating-comments-root">
@@ -364,21 +405,28 @@ export default function FloatingCommentsShell({
 
       <div
         ref={stageRef}
-        className={`floating-comments-stage ${enabled ? 'floating-comments-stage--active' : ''}`}
+        className={`floating-comments-stage ${enabled ? 'floating-comments-stage--active' : ''} ${
+          showBubbles && layoutMode === 'stacked' ? 'floating-comments-stage--stacked' : ''
+        }`}
       >
-        {showBubbles &&
-          visibleComments.map((c, i) => (
-            <DraggableFloatingBubble
-              key={c.id}
-              comment={c}
-              index={i}
-              side={i % 2 === 0 ? 'left' : 'right'}
-              stageRef={stageRef}
-              position={positions[c.id]}
-              onPositionChange={handlePositionChange}
-              onDismiss={handleDismiss}
-            />
-          ))}
+        {showBubbles && layoutMode === 'stacked' && (
+          <div className="floating-comments-mobile-strip" aria-hidden={false}>
+            {visibleComments.map((c, i) =>
+              renderBubble(c, i, i % 2 === 0 ? 'left' : 'right', stageRef),
+            )}
+          </div>
+        )}
+
+        {showBubbles && layoutMode === 'lane' && (
+          <>
+            <div ref={leftLaneRef} className="floating-comments-lane floating-comments-lane--left">
+              {leftComments.map((c, i) => renderBubble(c, i, 'left', leftLaneRef))}
+            </div>
+            <div ref={rightLaneRef} className="floating-comments-lane floating-comments-lane--right">
+              {rightComments.map((c, i) => renderBubble(c, i, 'right', rightLaneRef))}
+            </div>
+          </>
+        )}
 
         <div className="floating-comments-content">{children}</div>
       </div>

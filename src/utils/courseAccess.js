@@ -3,7 +3,11 @@ import { sanitizeTopicKeyForFirestore } from './topicKeyFirestore'
 
 export const FREE_TOPIC_COUNT = 3
 
-const WHATSAPP_NUMBER = '5562981841878'
+export const WHATSAPP_NUMBER = '5562981841878'
+
+export function buildWhatsAppSupportUrl(message = 'Olá! Preciso de ajuda com a plataforma ConCursos2.5.') {
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`
+}
 
 /** Gera chave estável para um tópico do edital (mesma lógica do EditalVerticalizado). */
 export function makeTopicKey(topico) {

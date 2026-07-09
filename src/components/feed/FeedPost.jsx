@@ -2,10 +2,13 @@ import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Bookmark,
+  Flag,
   Heart,
   MessageCircle,
   MoreHorizontal,
   Pencil,
+  Pin,
+  PinOff,
   Share2,
   Trash2,
 } from 'lucide-react'
@@ -16,6 +19,7 @@ import FeedPostComment from './FeedPostComment'
 import CommentFormattedText from '../content/CommentFormattedText'
 import { countFeedComments } from '../../services/trilhaFeedMutations'
 import { formatFeedTime, getPostCaption, resolvePostType, FEED_POST_TYPES } from '../../utils/feedUtils'
+import { isPostPinned } from '../../utils/feedSortUtils'
 import { resolveCommunityAuthor } from '../../hooks/useCommunityAuthors'
 
 export default function FeedPost({
@@ -42,6 +46,9 @@ export default function FeedPost({
   onToggleReplyLike,
   onAddReply,
   onEditPost,
+  onPinPost,
+  onUnpinPost,
+  onReportPost,
   readOnly = false,
 }) {
   const [likeAnim, setLikeAnim] = useState(false)
@@ -52,10 +59,13 @@ export default function FeedPost({
   const commentsCount = post.commentsCount ?? countFeedComments(comments)
   const caption = getPostCaption(post)
   const isCommentPost = caption.isCommentPost === true
+  const isDuvidaPost = caption.isDuvidaPost === true
   const isTrilhaPost = resolvePostType(post) === FEED_POST_TYPES.TRILHA
+  const pinned = isPostPinned(post)
   const previewComments = showAllComments ? comments : comments.slice(0, 2)
   const isAuthor = user?.uid === post.authorId
   const canManagePost = isAuthor || isAdmin
+  const showMenu = canManagePost || isAdmin || (user && !isAuthor)
   const author = resolveCommunityAuthor(post.authorId, authorsMap, post)
   if (!author) return null
 
@@ -90,6 +100,11 @@ export default function FeedPost({
             >
               {author.displayName}
             </Link>
+            {pinned && (
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-amber-400">
+                fixado
+              </span>
+            )}
             {isToday && (
               <span className="rounded-full bg-cp-accent/15 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-cp-accent">
                 destaque
@@ -98,7 +113,7 @@ export default function FeedPost({
           </div>
           <p className="text-[11px] text-cp-muted">{formatFeedTime(post.createdAt)}</p>
         </div>
-        {canManagePost && (
+        {showMenu && (
           <div className="relative shrink-0" ref={menuRef}>
             <button
               type="button"
@@ -116,7 +131,21 @@ export default function FeedPost({
                   aria-label="Fechar menu"
                   onClick={() => setMenuOpen(false)}
                 />
-                <div className="absolute right-0 top-full z-40 mt-1 min-w-[180px] overflow-hidden rounded-xl border border-cp-border bg-cp-bg-elevated shadow-xl">
+                <div className="absolute right-0 top-full z-40 mt-1 min-w-[200px] overflow-hidden rounded-xl border border-cp-border bg-cp-bg-elevated shadow-xl">
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        if (pinned) onUnpinPost?.()
+                        else onPinPost?.()
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-3 text-sm text-cp-text transition hover:bg-cp-surface"
+                    >
+                      {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                      {pinned ? 'Remover fixação' : 'Fixar no topo (24h)'}
+                    </button>
+                  )}
                   {isAuthor && (
                     <button
                       type="button"
@@ -141,6 +170,19 @@ export default function FeedPost({
                     >
                       <Trash2 className="h-4 w-4" />
                       Apagar publicação
+                    </button>
+                  )}
+                  {user && !isAuthor && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onReportPost?.()
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-3 text-sm text-amber-500 transition hover:bg-cp-surface"
+                    >
+                      <Flag className="h-4 w-4" />
+                      Denunciar publicação
                     </button>
                   )}
                 </div>
@@ -184,6 +226,17 @@ export default function FeedPost({
           >
             <Share2 className="h-6 w-6" />
           </button>
+          {!readOnly && user && !isAuthor && (
+            <button
+              type="button"
+              onClick={onReportPost}
+              className="text-cp-muted transition hover:text-amber-500 active:scale-90"
+              aria-label="Denunciar publicação"
+              title="Denunciar"
+            >
+              <Flag className="h-5 w-5" />
+            </button>
+          )}
         </div>
         {!readOnly && (
           <button
@@ -224,6 +277,17 @@ export default function FeedPost({
               />
             ) : null}
           </div>
+        ) : isDuvidaPost ? (
+          <p className="text-sm leading-relaxed text-cp-text">
+            <Link
+              to={`/profile/${post.authorId}`}
+              className="mr-1 font-semibold hover:text-cp-accent"
+            >
+              {author.displayName}
+            </Link>
+            publicou uma dúvida na comunidade
+            {caption.meta ? <span className="mt-0.5 block text-xs text-cp-muted">{caption.meta}</span> : null}
+          </p>
         ) : (
           <>
             <p className="text-sm leading-relaxed text-cp-text">

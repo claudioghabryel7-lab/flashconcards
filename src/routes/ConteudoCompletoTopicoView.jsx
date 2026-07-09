@@ -6,6 +6,7 @@ import { ArrowLeftIcon, PencilIcon, FireIcon, LightBulbIcon, ExclamationTriangle
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
+import { useFloatingCommentsEnabled } from '../hooks/useFloatingCommentsEnabled'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
@@ -174,7 +175,7 @@ const ConteudoCompletoTopicoView = () => {
   const [error, setError] = useState('')
   const [courseName, setCourseName] = useState('')
   const [generating, setGenerating] = useState(false)
-  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
+  const { enabled: floatingCommentsEnabled, toggle: toggleFloatingComments } = useFloatingCommentsEnabled()
   const [progress, setProgress] = useState(0)
   const [validating, setValidating] = useState(false)
   const [validationMessage, setValidationMessage] = useState('')

@@ -15,6 +15,7 @@ export const FEED_POST_TYPES = {
   QUESTOES: 'questoes',
   MATERIAL: 'material',
   COMENTARIO: 'comentario',
+  DUVIDA: 'duvida',
 }
 
 function safePhoto(photoBase64) {
@@ -185,4 +186,55 @@ export async function publishTrilhaActivity({ user, profile, payload }) {
       source: payload.source || 'manual',
     },
   })
+}
+
+/** Publicação livre na comunidade — dúvidas com texto e mídia opcional. */
+export async function publishCommunityQuestion({ user, profile, data }) {
+  if (!user?.uid || !db || !data?.questionText?.trim()) return null
+
+  const postType = FEED_POST_TYPES.DUVIDA
+  const theme = getDefaultCardTheme('teoria')
+
+  const docRef = await addDoc(
+    collection(db, 'trilhaFeed'),
+    stripUndefined({
+      postType,
+      authorId: user.uid,
+      authorName: authorNameFrom(user, profile),
+      authorPhotoBase64: safePhoto(profile?.photoBase64),
+      questionText: data.questionText.trim(),
+      mediaType: data.mediaType || null,
+      mediaBase64: data.mediaBase64 || null,
+      mediaMimeType: data.mediaMimeType || null,
+      modalidade: 'duvida',
+      source: 'comunidade',
+      cardTheme: data.cardTheme || theme,
+      featuredDate: dayjs().format('YYYY-MM-DD'),
+      expiresAt: Timestamp.fromDate(feedExpiresAtTimestamp()),
+      likes: [],
+      likesCount: 0,
+      comments: [],
+      commentsCount: 0,
+      createdAt: serverTimestamp(),
+    }),
+  )
+
+  try {
+    await archiveProfilePost(
+      user.uid,
+      {
+        postType,
+        questionText: data.questionText.trim(),
+        modalidade: 'duvida',
+        cardTheme: data.cardTheme || theme,
+        featuredDate: dayjs().format('YYYY-MM-DD'),
+        createdAt: serverTimestamp(),
+      },
+      docRef.id,
+    )
+  } catch (error) {
+    console.warn('Não foi possível arquivar publicação no perfil:', error)
+  }
+
+  return docRef.id
 }

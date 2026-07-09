@@ -6,6 +6,7 @@ import { ArrowLeftIcon, FireIcon, CheckCircleIcon, XCircleIcon, ChartBarIcon, Tr
 import ReactMarkdown from 'react-markdown'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
+import { useFloatingCommentsEnabled } from '../hooks/useFloatingCommentsEnabled'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { formatAiErrorForUser } from '../utils/geminiApi'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
@@ -51,7 +52,7 @@ const PraticaIncidenciaView = () => {
   const [modoAdminNavegacao, setModoAdminNavegacao] = useState(false)
   const [termoBusca, setTermoBusca] = useState('')
   const [carregandoNivel, setCarregandoNivel] = useState(false)
-  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
+  const { enabled: floatingCommentsEnabled, toggle: toggleFloatingComments } = useFloatingCommentsEnabled()
   const desempenhoNivelInicial = useRef(false)
 
   const disciplinaIndex = parseInt(disciplinaIdx)
@@ -1034,7 +1035,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                     return (
                     <QuestaoFloatingComments
                       enabled={floatingCommentsEnabled}
-                      onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+                      onToggle={toggleFloatingComments}
                       courseId={courseId}
                       contentId={questaoContentId}
                       alternateContentIds={

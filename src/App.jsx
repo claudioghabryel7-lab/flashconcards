@@ -5,7 +5,6 @@ import { useAuth } from './hooks/useAuth'
 import { useDarkMode } from './hooks/useDarkMode.jsx'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
 import Header from './components/Header'
-import SupportButton from './components/SupportButton'
 import PopupBanner from './components/PopupBanner'
 import OfflineIndicator from './components/OfflineIndicator'
 import CourseOnboarding from './components/onboarding/CourseOnboarding'
@@ -480,7 +479,6 @@ function App() {
           </div>
         </footer>
       )}
-      {!isPIPPage && <SupportButton />}
       {!isPIPPage && <PopupBanner />}
       {!isPIPPage && <OfflineIndicator />}
       {!isPIPPage && !isBlankPage && <CourseOnboarding />}

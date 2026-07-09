@@ -27,6 +27,9 @@ import {
   toggleFeedCommentLike,
   toggleFeedReplyLike,
   addFeedCommentReply,
+  pinFeedPost,
+  unpinFeedPost,
+  reportFeedPost,
 } from '../services/trilhaFeedMutations'
 import { useCommunityAuthors, resolveCommunityAuthor } from '../hooks/useCommunityAuthors'
 
@@ -248,6 +251,44 @@ export default function ComunidadePublicacao() {
     [editingPost],
   )
 
+  const handlePinPost = useCallback(async () => {
+    if (!user?.uid || !post) return
+    try {
+      await pinFeedPost(post.id, user.uid)
+      toast.success('Publicação fixada no topo por 24 horas.')
+    } catch {
+      toast.error('Erro ao fixar publicação.')
+    }
+  }, [user, post])
+
+  const handleUnpinPost = useCallback(async () => {
+    if (!post) return
+    try {
+      await unpinFeedPost(post.id)
+      toast.success('Fixação removida.')
+    } catch {
+      toast.error('Erro ao remover fixação.')
+    }
+  }, [post])
+
+  const handleReportPost = useCallback(async () => {
+    if (!user || !post) {
+      toast.error('Faça login para denunciar.')
+      return
+    }
+    if (!window.confirm('Denunciar esta publicação? Nossa equipe irá analisar.')) return
+    try {
+      await reportFeedPost({
+        postId: post.id,
+        reporterId: user.uid,
+        postAuthorId: post.authorId,
+      })
+      toast.success('Denúncia enviada. Obrigado!')
+    } catch {
+      toast.error('Erro ao enviar denúncia.')
+    }
+  }, [user, post])
+
   if (loading) {
     return (
       <ComunidadeShell title="Publicação" backHref="/comunidade" user={user} profile={profile}>
@@ -304,6 +345,9 @@ export default function ComunidadePublicacao() {
         onShare={() => sharePost(post)}
         onEditPost={() => setEditingPost(post)}
         onDeletePost={handleDeletePost}
+        onPinPost={handlePinPost}
+        onUnpinPost={handleUnpinPost}
+        onReportPost={handleReportPost}
         onDeleteComment={handleDeleteComment}
         onDeleteReply={handleDeleteReply}
         onToggleCommentLike={handleToggleCommentLike}

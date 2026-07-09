@@ -1,10 +1,15 @@
 import StudyPostMedia from './StudyPostMedia'
 import ContentSharePostMedia from './ContentSharePostMedia'
 import ContentCommentPostMedia from './ContentCommentPostMedia'
+import QuestionPostMedia from './QuestionPostMedia'
 import { FEED_POST_TYPES, getPostOpenUrl, resolvePostType } from '../../utils/feedUtils'
 
 export default function FeedPostMedia({ post, onDoubleTapLike, exportMode = false }) {
   const postType = resolvePostType(post)
+
+  if (postType === FEED_POST_TYPES.DUVIDA) {
+    return <QuestionPostMedia post={post} exportMode={exportMode} />
+  }
 
   if (postType === FEED_POST_TYPES.TRILHA) {
     return (

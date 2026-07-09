@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
 import { Link } from 'react-router-dom'
 import { Bell } from 'lucide-react'
 import dayjs from 'dayjs'
@@ -9,6 +9,7 @@ import { useTopicNotifications } from '../../hooks/useTopicNotifications'
 import { isFeedPostActive } from '../../utils/feedTimeUtils'
 
 const READ_KEY = (uid) => `communityNotifsRead_${uid}`
+const POLL_MS = 60000
 
 function loadReadAt(uid) {
   try {
@@ -27,6 +28,31 @@ function saveReadAt(uid) {
   }
 }
 
+async function fetchFollowingIds(userId) {
+  if (!db || !userId) return []
+  const q = query(collection(db, 'follows'), where('followerId', '==', userId))
+  const snap = await getDocs(q)
+  return snap.docs.map((d) => d.data().followingId).filter(Boolean)
+}
+
+async function fetchRecentPosts() {
+  if (!db) return []
+  try {
+    const q = query(collection(db, 'trilhaFeed'), orderBy('createdAt', 'desc'), limit(40))
+    const snap = await getDocs(q)
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  } catch {
+    const snap = await getDocs(collection(db, 'trilhaFeed'))
+    const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    rows.sort((a, b) => {
+      const at = a.createdAt?.toMillis?.() || 0
+      const bt = b.createdAt?.toMillis?.() || 0
+      return bt - at
+    })
+    return rows.slice(0, 40)
+  }
+}
+
 export default function CommunityNotificationsButton({ userId }) {
   const { profile } = useAuth()
   const courseId = profile?.selectedCourseId || 'alego-default'
@@ -38,30 +64,27 @@ export default function CommunityNotificationsButton({ userId }) {
   const [open, setOpen] = useState(false)
   const [readAt, setReadAt] = useState(() => (userId ? loadReadAt(userId) : 0))
   const panelRef = useRef(null)
+  const intervalRef = useRef(null)
 
-  useEffect(() => {
-    if (!userId || !db) return () => {}
-    const q = query(collection(db, 'follows'), where('followerId', '==', userId))
-    return onSnapshot(q, (snap) => {
-      setFollowingIds(snap.docs.map((d) => d.data().followingId).filter(Boolean))
-    })
+  const refreshFeedData = useCallback(async () => {
+    if (!userId) return
+    const [ids, feedPosts] = await Promise.all([fetchFollowingIds(userId), fetchRecentPosts()])
+    setFollowingIds(ids)
+    setPosts(feedPosts)
   }, [userId])
 
   useEffect(() => {
-    if (!db) return () => {}
-    return onSnapshot(collection(db, 'trilhaFeed'), (snap) => {
-      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-      rows.sort((a, b) => {
-        const at = a.createdAt?.toMillis?.() || 0
-        const bt = b.createdAt?.toMillis?.() || 0
-        return bt - at
-      })
-      setPosts(rows)
-    })
-  }, [])
+    if (!userId) return undefined
+    refreshFeedData()
+    intervalRef.current = window.setInterval(refreshFeedData, POLL_MS)
+    return () => {
+      if (intervalRef.current) window.clearInterval(intervalRef.current)
+    }
+  }, [userId, refreshFeedData])
 
   useEffect(() => {
     if (!open) return () => {}
+    refreshFeedData()
     const handleClick = (e) => {
       if (panelRef.current && !panelRef.current.contains(e.target)) {
         setOpen(false)
@@ -69,7 +92,7 @@ export default function CommunityNotificationsButton({ userId }) {
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [open])
+  }, [open, refreshFeedData])
 
   const feedNotifications = useMemo(() => {
     if (!followingIds.length) return []
@@ -98,6 +121,7 @@ export default function CommunityNotificationsButton({ userId }) {
       setReadAt(now)
       saveReadAt(userId)
       if (topicUnread > 0) markAllRead()
+      refreshFeedData()
     }
   }
 
@@ -141,7 +165,7 @@ export default function CommunityNotificationsButton({ userId }) {
                 >
                   <p className="text-xs font-semibold text-cp-text">{post.authorName || 'Aluno'}</p>
                   <p className="mt-0.5 line-clamp-2 text-[11px] text-cp-muted">
-                    {post.materia || 'Estudo'}
+                    {post.questionText || post.materia || 'Estudo'}
                     {post.assunto ? ` — ${post.assunto}` : ''}
                   </p>
                 </Link>

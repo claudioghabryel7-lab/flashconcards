@@ -7,6 +7,7 @@ import {
 import { ArrowRightIcon as ArrowRightOutline, DocumentTextIcon, UserGroupIcon, ChartBarIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
 import OnlineNowBadge from '@/components/cp/OnlineNowBadge'
+import FloatingWhatsAppButton from '@/components/FloatingWhatsAppButton'
 
 const quickLinks = [
   { to: '/flashcards', title: 'Flashcards com IA', desc: 'Repetição espaçada por tópico', icon: SparklesIcon, accent: 'cp-card-accent-violet' },
@@ -60,6 +61,7 @@ const Dashboard = () => {
           })}
         </div>
       </div>
+      <FloatingWhatsAppButton />
     </div>
   )
 }

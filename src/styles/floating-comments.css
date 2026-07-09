@@ -23,9 +23,38 @@
   min-height: min(420px, 58vh);
 }
 
+.floating-comments-stage--active {
+  display: grid;
+  grid-template-columns: minmax(11.5rem, 20%) minmax(0, 1fr) minmax(11.5rem, 20%);
+  align-items: start;
+  gap: 0.5rem;
+}
+
+.floating-comments-lane {
+  position: relative;
+  grid-row: 1;
+  min-height: 100%;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.floating-comments-lane--left {
+  grid-column: 1;
+}
+
+.floating-comments-lane--right {
+  grid-column: 3;
+}
+
+.floating-comments-lane .floating-mini-bubble {
+  pointer-events: auto;
+}
+
 .floating-comments-content {
   position: relative;
   z-index: 10;
+  grid-column: 2;
+  grid-row: 1;
   width: 100%;
   min-width: 0;
 }
@@ -73,6 +102,28 @@
   cursor: grabbing;
   z-index: 40;
   animation: none !important;
+}
+
+.floating-mini-bubble--stacked {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: none;
+  cursor: default;
+  animation: floating-bubble-enter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.floating-comments-mobile-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.floating-comments-stage--stacked {
+  display: flex;
+  flex-direction: column;
+  min-height: auto;
 }
 
 .floating-mini-bubble--dragging .floating-mini-bubble__inner {

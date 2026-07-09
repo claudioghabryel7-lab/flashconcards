@@ -1,4 +1,5 @@
-import { deleteDoc, doc, increment, updateDoc } from 'firebase/firestore'
+import { deleteDoc, doc, increment, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { Timestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 
 export function buildFeedComment({ user, profile, text }) {
@@ -118,4 +119,35 @@ export async function deleteFeedReply(postId, comments, commentId, replyId) {
 
 export function countFeedComments(comments = []) {
   return comments.reduce((total, comment) => total + 1 + (comment.replies?.length || 0), 0)
+}
+
+export async function pinFeedPost(postId, adminId) {
+  if (!db || !postId || !adminId) return
+  const until = new Date(Date.now() + 24 * 60 * 60 * 1000)
+  await updateDoc(doc(db, 'trilhaFeed', postId), {
+    pinnedAt: new Date().toISOString(),
+    pinnedUntil: Timestamp.fromDate(until),
+    pinnedBy: adminId,
+  })
+}
+
+export async function unpinFeedPost(postId) {
+  if (!db || !postId) return
+  await updateDoc(doc(db, 'trilhaFeed', postId), {
+    pinnedAt: null,
+    pinnedUntil: null,
+    pinnedBy: null,
+  })
+}
+
+export async function reportFeedPost({ postId, reporterId, postAuthorId, reason = 'inappropriate' }) {
+  if (!db || !postId || !reporterId) return
+  await addDoc(collection(db, 'feedReports'), {
+    postId,
+    reporterId,
+    postAuthorId: postAuthorId || null,
+    reason,
+    status: 'pending',
+    createdAt: serverTimestamp(),
+  })
 }

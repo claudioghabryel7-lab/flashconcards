@@ -5,6 +5,7 @@ import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firest
 import { ArrowLeftIcon, FireIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
+import { useFloatingCommentsEnabled } from '../hooks/useFloatingCommentsEnabled'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { formatAiErrorForUser } from '../utils/geminiApi'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
@@ -33,7 +34,7 @@ const ConteudoIncidenciaView = () => {
   const [editDraft, setEditDraft] = useState(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const [togglingStatus, setTogglingStatus] = useState(false)
-  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
+  const { enabled: floatingCommentsEnabled, toggle: toggleFloatingComments } = useFloatingCommentsEnabled()
 
   const disciplinaIndex = parseInt(disciplinaIdx)
 

@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
+import { useFloatingCommentsEnabled } from '../hooks/useFloatingCommentsEnabled'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
@@ -197,7 +198,7 @@ const QuestoesTopicoView = () => {
   const [termoBusca, setTermoBusca] = useState('')
   const [carregandoNivel, setCarregandoNivel] = useState(false)
   const [topicoPublishStatus, setTopicoPublishStatus] = useState(CONTENT_STATUS.UNAVAILABLE)
-  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
+  const { enabled: floatingCommentsEnabled, toggle: toggleFloatingComments } = useFloatingCommentsEnabled()
   const desempenhoNivelInicial = useRef(false)
 
   const todosNiveis = useMemo(() => Array.from({ length: 10 }, (_, i) => i + 1), [])
@@ -1312,7 +1313,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         return (
                         <QuestaoFloatingComments
                           enabled={floatingCommentsEnabled}
-                          onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+                          onToggle={toggleFloatingComments}
                           courseId={resolvedCourseId}
                           contentId={questaoContentId}
                           alternateContentIds={

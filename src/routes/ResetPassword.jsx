@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { LockClosedIcon } from '@heroicons/react/24/solid'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
@@ -18,7 +18,6 @@ const ResetPassword = () => {
   const [message, setMessage] = useState('')
   const [userEmail, setUserEmail] = useState('')
 
-  // Verificar se o token é válido
   useEffect(() => {
     const checkToken = async () => {
       if (!token) {
@@ -41,16 +40,13 @@ const ResetPassword = () => {
         const now = new Date()
         const expiresAt = tokenData.expiresAt?.toDate?.() || new Date(0)
 
-        // Verificar se o token expirou (24 horas)
         if (now > expiresAt) {
           setValid(false)
           setLoading(false)
-          // Deletar token expirado
           await deleteDoc(tokenRef)
           return
         }
 
-        // Verificar se já foi usado
         if (tokenData.used === true) {
           setValid(false)
           setLoading(false)
@@ -87,17 +83,18 @@ const ResetPassword = () => {
     setSubmitting(true)
 
     try {
-      // Chamar a função Cloud Function para atualizar a senha
-      const response = await fetch(FIREBASE_FUNCTIONS.updateUserPassword || 'https://us-central1-plegi-d84c2.cloudfunctions.net/updateUserPassword', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        FIREBASE_FUNCTIONS.updateUserPassword ||
+          'https://us-central1-plegi-d84c2.cloudfunctions.net/updateUserPassword',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token,
+            newPassword: formData.newPassword,
+          }),
         },
-        body: JSON.stringify({
-          token: token,
-          newPassword: formData.newPassword,
-        }),
-      })
+      )
 
       const data = await response.json()
 
@@ -106,12 +103,7 @@ const ResetPassword = () => {
       }
 
       setMessage('✅ Senha redefinida com sucesso! Você pode fazer login agora com sua nova senha.')
-      
-      // Redirecionar após 3 segundos
-      setTimeout(() => {
-        navigate('/login')
-      }, 3000)
-
+      setTimeout(() => navigate('/login'), 3000)
     } catch (err) {
       console.error('Erro ao redefinir senha:', err)
       setMessage(`❌ Erro ao processar: ${err.message}`)
@@ -122,28 +114,27 @@ const ResetPassword = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-lg font-semibold text-alego-600">Verificando link...</p>
+      <div className="flex min-h-[70vh] items-center justify-center bg-cp-bg px-4">
+        <p className="text-lg font-semibold text-cp-text">Verificando link...</p>
       </div>
     )
   }
 
   if (!valid) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="rounded-2xl bg-white dark:bg-slate-800 p-8 shadow-sm max-w-md w-full mx-4 text-center">
-          <LockClosedIcon className="h-16 w-16 text-rose-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-alego-700 dark:text-alego-300 mb-2">
-            Link Inválido ou Expirado
-          </h2>
-          <p className="text-slate-600 dark:text-slate-400 mb-6">
+      <div className="flex min-h-[70vh] items-center justify-center bg-cp-bg px-4">
+        <div className="cp-card w-full max-w-md border border-cp-border bg-cp-surface p-8 text-center shadow-xl">
+          <LockClosedIcon className="mx-auto mb-4 h-16 w-16 text-rose-500" />
+          <h2 className="mb-2 text-2xl font-bold text-cp-text">Link inválido ou expirado</h2>
+          <p className="mb-6 text-sm text-cp-muted">
             Este link de redefinição de senha não é válido ou já expirou. Links expiram após 24 horas.
           </p>
           <button
+            type="button"
             onClick={() => navigate('/login')}
-            className="rounded-full bg-alego-600 px-6 py-2 text-sm font-semibold text-white hover:bg-alego-700"
+            className="rounded-full bg-cp-accent px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90"
           >
-            Voltar para Login
+            Voltar para login
           </button>
         </div>
       </div>
@@ -151,38 +142,34 @@ const ResetPassword = () => {
   }
 
   return (
-    <div className="flex min-h-[60vh] items-center justify-center px-4">
-      <div className="rounded-2xl bg-white dark:bg-slate-800 p-8 shadow-sm max-w-md w-full">
-        <div className="text-center mb-6">
-          <LockClosedIcon className="h-16 w-16 text-alego-600 dark:text-alego-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-alego-700 dark:text-alego-300 mb-2">
-            Redefinir Senha
-          </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Para: {userEmail}
-          </p>
+    <div className="flex min-h-[70vh] items-center justify-center bg-cp-bg px-4 py-10">
+      <div className="cp-card w-full max-w-md border border-cp-border bg-cp-surface p-8 shadow-xl">
+        <div className="mb-6 text-center">
+          <LockClosedIcon className="mx-auto mb-4 h-16 w-16 text-cp-accent" />
+          <h2 className="mb-2 text-2xl font-bold text-cp-text">Redefinir senha</h2>
+          <p className="text-sm text-cp-muted">Para: {userEmail}</p>
         </div>
 
         {message && (
-          <div className={`mb-4 rounded-lg p-3 text-sm ${
-            message.startsWith('✅') 
-              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-              : 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
-          }`}>
+          <div
+            className={`mb-4 rounded-lg border p-3 text-sm ${
+              message.startsWith('✅')
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+            }`}
+          >
             {message}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              Nova Senha
-            </label>
+            <label className="mb-2 block text-sm font-semibold text-cp-text">Nova senha</label>
             <input
               type="password"
               value={formData.newPassword}
-              onChange={(e) => setFormData(prev => ({ ...prev, newPassword: e.target.value }))}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 p-3 text-sm focus:border-alego-500 focus:outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+              onChange={(e) => setFormData((prev) => ({ ...prev, newPassword: e.target.value }))}
+              className="w-full rounded-xl border border-cp-border bg-cp-bg px-4 py-3 text-sm text-cp-text outline-none focus:border-cp-accent"
               placeholder="Mínimo 6 caracteres"
               required
               disabled={submitting}
@@ -190,14 +177,14 @@ const ResetPassword = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              Confirmar Nova Senha
+            <label className="mb-2 block text-sm font-semibold text-cp-text">
+              Confirmar nova senha
             </label>
             <input
               type="password"
               value={formData.confirmPassword}
-              onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 p-3 text-sm focus:border-alego-500 focus:outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+              onChange={(e) => setFormData((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+              className="w-full rounded-xl border border-cp-border bg-cp-bg px-4 py-3 text-sm text-cp-text outline-none focus:border-cp-accent"
               placeholder="Digite a senha novamente"
               required
               disabled={submitting}
@@ -207,9 +194,9 @@ const ResetPassword = () => {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-full bg-alego-600 px-6 py-3 text-sm font-semibold text-white hover:bg-alego-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-full bg-cp-accent px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting ? 'Processando...' : 'Redefinir Senha'}
+            {submitting ? 'Processando...' : 'Redefinir senha'}
           </button>
         </form>
       </div>
@@ -218,4 +205,3 @@ const ResetPassword = () => {
 }
 
 export default ResetPassword
-

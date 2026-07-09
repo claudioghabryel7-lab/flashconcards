@@ -8,6 +8,7 @@ import FlashcardFloatingComments from '../components/FlashcardFloatingComments'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
+import { useFloatingCommentsEnabled } from '../hooks/useFloatingCommentsEnabled'
 import { useSRSDeck } from '../hooks/useSRSDeck'
 import {
   fetchFlashcardsForTopico,
@@ -40,7 +41,7 @@ const FlashcardsTopicoView = () => {
   const [error, setError] = useState(null)
   const [courseName, setCourseName] = useState('')
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
+  const { enabled: floatingCommentsEnabled, toggle: toggleFloatingComments } = useFloatingCommentsEnabled()
   const [cardProgress, setCardProgress] = useState({})
   const [fromCache, setFromCache] = useState(false)
   const [publishing, setPublishing] = useState(false)
