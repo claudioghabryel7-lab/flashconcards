@@ -11,6 +11,7 @@ import { startBackgroundGeneration } from '../services/aiGenerationRunner'
 import { buildConteudoIncidenciaPayload } from '../utils/serverGenerationPayload'
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
+import MaterialFloatingComments from '../components/MaterialFloatingComments'
 import { probabilidadeBadgeClass } from '../utils/htmlTextHelpers'
 
 const ConteudoIncidenciaView = () => {
@@ -32,6 +33,7 @@ const ConteudoIncidenciaView = () => {
   const [editDraft, setEditDraft] = useState(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const [togglingStatus, setTogglingStatus] = useState(false)
+  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
 
   const disciplinaIndex = parseInt(disciplinaIdx)
 
@@ -542,6 +544,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
           </div>
         </div>
       ) : (
+        <MaterialFloatingComments
+          enabled={floatingCommentsEnabled}
+          onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+          courseId={courseId}
+          topicKey={String(disciplinaIdx)}
+          disciplinaKey={String(disciplinaIdx)}
+          kind="incidencia"
+          preview={disciplina?.nome || ''}
+          materia={disciplina?.nome || ''}
+          assunto={disciplina?.nome || ''}
+        >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="cp-card p-4">
@@ -696,6 +709,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
             )}
           </div>
         </div>
+        </MaterialFloatingComments>
       )}
     </div>
   )

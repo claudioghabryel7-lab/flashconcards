@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { useSearchParams, Link, useNavigate } from 'react-router-dom'
+import { useSearchParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { collection, doc, getDoc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
 import { saveFlashcardContent, deleteFlashcardContent } from '../utils/flashcardPersistence'
 import { useEditalFlashcards } from '../hooks/useEditalFlashcards'
@@ -93,6 +93,8 @@ const SRS_INTERVALS = {
 
 const FlashcardView = () => {
   const navigate = useNavigate()
+  const location = useLocation()
+  const isStudyRoute = location.pathname.includes('/flashcards/estudar')
   const { user, favorites, updateFavorites, profile } = useAuth()
   const { darkMode } = useDarkMode()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -174,7 +176,7 @@ const FlashcardView = () => {
   }
   
   // Timer de estudo - ativo apenas quando usuário clicar no relógio
-  const isStudying = !!selectedMateria && !!selectedModulo
+  const isStudying = isStudyRoute && !!selectedMateria && !!selectedModulo
   const { formattedTime, elapsedSeconds } = useStudyTimer(timerActive && isStudying, user?.uid, activeCourseId)
 
   const { subjectOrderConfig, moduleOrderConfigs, loadModuleOrder } = useSubjectOrder(activeCourseId, user?.uid)
@@ -351,8 +353,20 @@ const FlashcardView = () => {
     })
   }, [organizedCards, subjectOrderConfig, moduleOrderConfigs, loadModuleOrder])
 
-  // Selecionar matéria e módulo baseado em query params
+  // Biblioteca: redireciona params de estudo para rota dedicada
   useEffect(() => {
+    if (isStudyRoute) return
+    const materiaParam = searchParams.get('materia') || searchParams.get('disciplina')
+    const moduloParam = searchParams.get('modulo')
+    const modeParam = searchParams.get('mode')
+    if ((materiaParam && moduloParam) || (modeParam === 'miniSim' && materiaParam)) {
+      navigate(`/flashcards/estudar?${searchParams.toString()}`, { replace: true })
+    }
+  }, [isStudyRoute, searchParams, navigate])
+
+  // Selecionar matéria e módulo baseado em query params (rota de estudo)
+  useEffect(() => {
+    if (!isStudyRoute) return
     const materiaParam = searchParams.get('materia') || searchParams.get('disciplina')
     const moduloParam = searchParams.get('modulo')
     
@@ -507,10 +521,11 @@ const FlashcardView = () => {
         }
       }
     }
-  }, [searchParams, organizedCards, selectedMateria, selectedModulo, cards.length])
+  }, [isStudyRoute, searchParams, organizedCards, selectedMateria, selectedModulo, cards.length])
   
   // Forçar tentativa novamente quando cards mudarem (retry mechanism)
   useEffect(() => {
+    if (!isStudyRoute) return
     const materiaParam = searchParams.get('materia') || searchParams.get('disciplina')
     const moduloParam = searchParams.get('modulo')
     
@@ -566,7 +581,40 @@ const FlashcardView = () => {
     }, 500) // Tentar novamente após 500ms
     
     return () => clearTimeout(retryTimeout)
-  }, [cards.length, organizedCards, searchParams, selectedMateria, selectedModulo])
+  }, [isStudyRoute, cards.length, organizedCards, searchParams, selectedMateria, selectedModulo])
+
+  // Mini simulado via URL (?mode=miniSim&materia=...)
+  useEffect(() => {
+    if (!isStudyRoute || cardsLoading) return
+    if (searchParams.get('mode') !== 'miniSim') return
+    if (studyMode === 'miniSim' && selectedMateria) return
+
+    const materiaParam = searchParams.get('materia') || searchParams.get('disciplina')
+    if (!materiaParam || Object.keys(organizedCards).length === 0) return
+
+    const decodedMateria = decodeURIComponent(materiaParam)
+    const materiaMatch =
+      Object.keys(organizedCards).find((m) => m.trim().toLowerCase() === decodedMateria.trim().toLowerCase()) ||
+      Object.keys(organizedCards).find((m) => {
+        const mLower = m.trim().toLowerCase()
+        const searchLower = decodedMateria.trim().toLowerCase()
+        return mLower.includes(searchLower) || searchLower.includes(mLower)
+      })
+
+    if (!materiaMatch) return
+
+    const cardsByModulo = organizedCards[materiaMatch] || {}
+    const allCards = Object.values(cardsByModulo).flat()
+    if (allCards.length === 0) return
+
+    const shuffled = [...allCards].sort(() => Math.random() - 0.5)
+    const selected = shuffled.slice(0, Math.min(10, shuffled.length))
+    setStudyMode('miniSim')
+    setMiniSimCards(selected)
+    setSelectedMateria(materiaMatch)
+    setSelectedModulo('Mini simulado')
+    setCurrentIndex(0)
+  }, [isStudyRoute, cardsLoading, organizedCards, searchParams, studyMode, selectedMateria])
 
   // Cards do módulo — SRS: só exibe cards novos ou com revisão vencida
   const moduleAllCards = useMemo(() => {
@@ -652,7 +700,12 @@ const FlashcardView = () => {
     setStudyMode('module')
     setCurrentIndex(0)
     setExpandedMaterias((prev) => ({ ...prev, [materia]: true }))
-    setSearchParams({ materia, modulo })
+
+    const params = new URLSearchParams()
+    if (activeCourseId) params.set('course', activeCourseId)
+    params.set('materia', materia)
+    params.set('modulo', modulo)
+    navigate(`/flashcards/estudar?${params.toString()}`)
   }
 
   const startMiniSim = (materia) => {
@@ -666,6 +719,12 @@ const FlashcardView = () => {
     setSelectedMateria(materia)
     setSelectedModulo('Mini simulado')
     setCurrentIndex(0)
+
+    const params = new URLSearchParams()
+    if (activeCourseId) params.set('course', activeCourseId)
+    params.set('materia', materia)
+    params.set('mode', 'miniSim')
+    navigate(`/flashcards/estudar?${params.toString()}`)
   }
 
   const goNext = () => {
@@ -804,13 +863,20 @@ const FlashcardView = () => {
     resetModuleSession()
   }
 
+  const goToFlashcardLibrary = () => {
+    const params = new URLSearchParams()
+    if (activeCourseId) params.set('course', activeCourseId)
+    const qs = params.toString()
+    navigate(qs ? `/flashcards?${qs}` : '/flashcards')
+  }
+
   const handleExitModule = () => {
     resetModuleSession()
     setStudyMode('module')
     setMiniSimCards([])
     setSelectedMateria(null)
     setSelectedModulo(null)
-    setSearchParams({})
+    goToFlashcardLibrary()
   }
 
   const exitStudySession = () => {
@@ -1126,9 +1192,9 @@ IMPORTANTE:
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(260px,320px)_1fr]">
-        {/* Biblioteca de decks — estilo Noji */}
-        <div className="noji-deck-panel cp-card flex flex-col overflow-hidden lg:max-h-[calc(100vh-12rem)]">
+      {!isStudyRoute ? (
+        <div className="mx-auto w-full max-w-2xl">
+        <div className="cp-study-sidebar noji-deck-panel cp-card flex flex-col overflow-hidden max-h-[calc(100vh-10rem)]">
           <div className="border-b border-cp-border p-4">
             <div className="mb-1 flex items-center justify-between">
               <p className="text-sm font-semibold text-cp-text">Meus decks</p>
@@ -1283,23 +1349,25 @@ IMPORTANTE:
             )}
           </div>
         </div>
-
-        {/* Sessão de estudo — estilo Noji */}
-        <div className="min-h-[520px] lg:min-h-[calc(100vh-12rem)]">
+        </div>
+      ) : (
+        <div className="cp-study-main min-h-[520px] overflow-visible lg:min-h-[calc(100vh-12rem)]">
           {!selectedMateria || !selectedModulo ? (
             <div className="noji-empty cp-card flex h-full min-h-[480px] flex-col items-center justify-center p-12 text-center">
               <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-indigo-500 to-violet-600 text-3xl shadow-lg shadow-indigo-500/25">
                 📚
               </div>
-              <p className="text-xl font-semibold text-cp-text">Escolha um deck</p>
+              <p className="text-xl font-semibold text-cp-text">Carregando sessão…</p>
               <p className="mt-2 max-w-sm text-sm text-cp-muted">
-                Selecione uma matéria e um tópico na biblioteca para iniciar a revisão com repetição espaçada
+                Se não abrir automaticamente, volte e escolha um deck na biblioteca.
               </p>
-              <div className="mt-8 flex flex-wrap justify-center gap-3 text-[11px] text-cp-muted">
-                <span className="rounded-full border border-cp-border px-3 py-1">Toque para virar</span>
-                <span className="rounded-full border border-cp-border px-3 py-1">Difícil · 1 min</span>
-                <span className="rounded-full border border-cp-border px-3 py-1">Fácil · SRS progressivo</span>
-              </div>
+              <button
+                type="button"
+                onClick={goToFlashcardLibrary}
+                className="mt-6 rounded-xl border border-cp-border px-5 py-2.5 text-sm font-medium text-cp-text transition hover:bg-cp-surface"
+              >
+                ← Voltar aos decks
+              </button>
             </div>
           ) : activeCards.length === 0 ? (
             <div className="noji-empty cp-card flex h-full min-h-[480px] flex-col items-center justify-center p-10 text-center">
@@ -1321,9 +1389,8 @@ IMPORTANTE:
               </button>
             </div>
           ) : (
-            <div className="noji-session cp-card flex h-full min-h-[520px] flex-col overflow-hidden lg:min-h-[calc(100vh-12rem)]">
-              {/* Header da sessão */}
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-cp-border px-4 py-3 sm:px-6">
+            <>
+              <div className="noji-study-header mb-4 flex shrink-0 items-center justify-between gap-3 rounded-2xl border border-cp-border bg-cp-surface px-4 py-3 sm:px-6">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
                     {selectedMateria}
@@ -1351,65 +1418,41 @@ IMPORTANTE:
                 </div>
               </div>
 
-              {/* Área do card */}
-              <div className="flex flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6">
-                <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(200px,260px)_1fr]">
-                  <div className="order-2 lg:order-1 hidden sm:block">
-                    {activeCards[currentIndex] && (
-                      <FlashcardFloatingComments
-                        enabled={floatingCommentsEnabled}
-                        onToggle={() => setFloatingCommentsEnabled((v) => !v)}
-                        courseId={activeCourseId}
-                        card={activeCards[currentIndex]}
-                        topicKey={activeCards[currentIndex]?.topicKey || null}
-                        cardIndex={currentIndex}
-                        materia={selectedMateria || ''}
-                        assunto={selectedModulo || ''}
-                      />
-                    )}
-                  </div>
-                  <div className="order-1 lg:order-2 min-w-0">
-                    <div className="mb-3 sm:hidden">
-                      {activeCards[currentIndex] && (
-                        <FlashcardFloatingComments
-                          enabled={floatingCommentsEnabled}
-                          onToggle={() => setFloatingCommentsEnabled((v) => !v)}
-                          courseId={activeCourseId}
-                          card={activeCards[currentIndex]}
-                          topicKey={activeCards[currentIndex]?.topicKey || null}
-                          cardIndex={currentIndex}
-                          materia={selectedMateria || ''}
-                          assunto={selectedModulo || ''}
-                        />
-                      )}
-                    </div>
-                    <FlashcardList
-                      cards={activeCards}
-                      currentIndex={currentIndex}
-                      onSelect={setCurrentIndex}
-                      onToggleFavorite={toggleFavorite}
-                      onRateDifficulty={rateDifficulty}
-                      favorites={favorites}
-                      cardProgress={cardProgress}
-                      onPrev={goPrev}
-                      onNext={goNext}
-                      onShuffle={shuffle}
-                      viewedIds={viewedIds}
-                      showRating={needsReview}
-                      onDeleteFlashcard={handleDeleteFlashcard}
-                      onEditFlashcard={isAdmin ? handleEditFlashcard : null}
-                      courseId={activeCourseId}
-                      topicKey={activeCards[currentIndex]?.topicKey || null}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
+              {activeCards[currentIndex] && (
+                <FlashcardFloatingComments
+                  enabled={floatingCommentsEnabled}
+                  onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+                  courseId={activeCourseId}
+                  card={activeCards[currentIndex]}
+                  topicKey={activeCards[currentIndex]?.topicKey || null}
+                  cardIndex={currentIndex}
+                >
+                  <FlashcardList
+                    cards={activeCards}
+                    currentIndex={currentIndex}
+                    onSelect={setCurrentIndex}
+                    onToggleFavorite={toggleFavorite}
+                    onRateDifficulty={rateDifficulty}
+                    favorites={favorites}
+                    cardProgress={cardProgress}
+                    onPrev={goPrev}
+                    onNext={goNext}
+                    onShuffle={shuffle}
+                    viewedIds={viewedIds}
+                    showRating={needsReview}
+                    onDeleteFlashcard={handleDeleteFlashcard}
+                    onEditFlashcard={isAdmin ? handleEditFlashcard : null}
+                    courseId={activeCourseId}
+                    topicKey={activeCards[currentIndex]?.topicKey || null}
+                  />
+                </FlashcardFloatingComments>
+              )}
+            </>
           )}
         </div>
-      </div>
+      )}
 
-      {studyMode === 'module' && moduleCompleted && (
+      {isStudyRoute && studyMode === 'module' && moduleCompleted && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="relative max-w-md w-full rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             {/* Background decorativo */}

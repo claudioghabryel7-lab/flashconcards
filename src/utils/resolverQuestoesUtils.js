@@ -1,5 +1,83 @@
 import { makeTopicKey } from './editalVerticalizadoLoader'
-import { topicKeysMatch } from './courseAccess'
+import { normalizeTopicKeyForStorage } from './topicKeyFirestore'
+import { topicKeysMatch, isTopicPublished, canAccessTopicoContent } from './courseAccess'
+import { CONTENT_STATUS } from './contentStatus'
+import { resolveTopicPublishStatus } from '../services/topicoPublishService'
+
+export function normalizeMateriaLabel(name = '') {
+  if (!name?.trim()) return 'Geral'
+  return name.trim().replace(/\s+/g, ' ')
+}
+
+export function formatModuloLabel(ctx, pack) {
+  if (ctx?.topico) {
+    const nome = String(ctx.topico).trim()
+    const numero = String(ctx.topicoNumero || '').trim()
+    if (numero && (nome.startsWith(`${numero} -`) || nome.startsWith(`${numero}.`))) {
+      return nome
+    }
+    if (numero) return `${numero} - ${nome}`
+    return nome
+  }
+
+  const raw = pack?.topico || 'Tópico'
+  try {
+    const decoded = decodeURIComponent(String(raw))
+    if (decoded.includes(' :: ')) {
+      const [num, ...rest] = decoded.split(' :: ')
+      const nome = rest.join(' :: ').trim()
+      return nome ? `${num} - ${nome}` : decoded
+    }
+    return decoded
+  } catch {
+    return raw
+  }
+}
+
+export function dedupeTopicoPacks(packs = []) {
+  const byKey = new Map()
+
+  packs.forEach((pack) => {
+    const topicKey = normalizeTopicKeyForStorage(pack.topicKey || pack.topico || pack.id)
+    const nivelMatch = pack.id?.match(/_nivel_(\d+)$/)
+    const nivel = pack.nivel || (nivelMatch ? parseInt(nivelMatch[1], 10) : 1)
+    const key = `${topicKey}::${nivel}`
+
+    const existing = byKey.get(key)
+    if (!existing) {
+      byKey.set(key, pack)
+      return
+    }
+
+    const existingHasNivel = /_nivel_\d+$/.test(existing.id || '')
+    const candidateHasNivel = /_nivel_\d+$/.test(pack.id || '')
+    const count = (p) => (Array.isArray(p.questoes) ? p.questoes.length : 0)
+
+    if (candidateHasNivel && !existingHasNivel) {
+      byKey.set(key, pack)
+    } else if (!candidateHasNivel && existingHasNivel) {
+      // keep existing
+    } else if (count(pack) > count(existing)) {
+      byKey.set(key, pack)
+    }
+  })
+
+  return [...byKey.values()]
+}
+
+export function isPackAccessible({ pack, profile, courseId, topicKey, edital, publishMap, isAdmin }) {
+  if (isAdmin) return true
+
+  const packPublished = pack.status === CONTENT_STATUS.AVAILABLE || pack.status === 'disponivel'
+  if (packPublished) return true
+
+  if (!topicKey) return false
+
+  const publishStatus = resolveTopicPublishStatus(publishMap, topicKey)
+  if (!isTopicPublished(publishStatus)) return false
+
+  return canAccessTopicoContent({ profile, courseId, topicKey, edital, publishStatus })
+}
 
 export function extractContextFromEdital(editalData, topicoKey) {
   if (!editalData?.disciplinas || !topicoKey) return null

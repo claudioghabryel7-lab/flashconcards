@@ -15,6 +15,7 @@ import { isContentAvailable, CONTENT_STATUS } from '../utils/contentStatus'
 import SimpleMaterialEditor from '../components/SimpleMaterialEditor'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import ShareToFeedButton from '../components/feed/ShareToFeedButton'
+import MaterialFloatingComments from '../components/MaterialFloatingComments'
 import { FEED_POST_TYPES } from '../services/trilhaFeedService'
 import { stripHtml } from '../utils/htmlTextHelpers'
 import ReactMarkdown from 'react-markdown'
@@ -173,6 +174,7 @@ const ConteudoCompletoTopicoView = () => {
   const [error, setError] = useState('')
   const [courseName, setCourseName] = useState('')
   const [generating, setGenerating] = useState(false)
+  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
   const [progress, setProgress] = useState(0)
   const [validating, setValidating] = useState(false)
   const [validationMessage, setValidationMessage] = useState('')
@@ -1210,7 +1212,7 @@ REGRAS:
         Voltar ao edital
       </Link>
 
-      <div className="cp-card p-6 sm:p-8">
+      <div className="cp-study-practice-card cp-card overflow-visible p-4 sm:p-6 lg:p-8">
         <div className="mb-8 pb-6 border-b border-cp-border">
           <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted mb-1">Material de apoio</p>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -1264,6 +1266,16 @@ REGRAS:
           )}
         </div>
 
+        <MaterialFloatingComments
+          enabled={floatingCommentsEnabled}
+          onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+          courseId={resolvedCourseId}
+          topicKey={resolvedTopicKey}
+          kind="completo"
+          preview={conteudo?.materia || conteudo?.titulo || effectiveTopicNome || ''}
+          materia={conteudo?.materia || conteudo?.titulo || ''}
+          assunto={effectiveTopicNome || resolvedTopicKey}
+        >
         <div className="max-w-none">
           {courseName && (
             <div className="mb-6 cp-card !border-cp-accent/30 p-4">
@@ -1474,6 +1486,7 @@ REGRAS:
             </>
           )}
         </div>
+        </MaterialFloatingComments>
       </div>
     </div>
   )

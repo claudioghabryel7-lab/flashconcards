@@ -1,0 +1,115 @@
+/**
+ * Ajustes de responsividade — mobile e desktop.
+ * Tablet (768px–1279px) mantém layout atual.
+ */
+
+/* ── Mobile ── */
+@media (max-width: 767px) {
+  .cp-container,
+  .cp-container-wide {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .cp-legacy-root {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  .cp-study-layout {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
+
+  .cp-study-sidebar {
+    max-height: min(42vh, 300px) !important;
+    min-height: 0 !important;
+  }
+
+  .cp-study-main {
+    min-height: min(68vh, 520px) !important;
+    overflow: visible !important;
+  }
+
+  .cp-study-practice-card {
+    padding: 1rem !important;
+    overflow: visible !important;
+  }
+
+  .noji-study-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .noji-study-header .truncate.text-base {
+    font-size: 0.875rem;
+  }
+
+  .cp-legacy-root .cp-page-header,
+  .cp-legacy-root h1 {
+    font-size: clamp(1.25rem, 5vw, 1.5rem);
+  }
+}
+
+/* ── Desktop largo ── */
+@media (min-width: 1280px) {
+  .cp-container {
+    max-width: 1280px;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  .cp-container-wide {
+    max-width: 1440px;
+    padding-left: 1.75rem;
+    padding-right: 1.75rem;
+  }
+
+  .cp-study-layout {
+    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) !important;
+    gap: 1.25rem !important;
+  }
+
+  .cp-study-sidebar {
+    max-height: calc(100vh - 10rem) !important;
+  }
+
+  .cp-study-main {
+    min-height: calc(100vh - 12rem) !important;
+    overflow: visible !important;
+  }
+
+  .cp-study-practice-card {
+    padding: 1.75rem 2rem !important;
+    overflow: visible !important;
+  }
+}
+
+/* ── Desktop médio (1024–1279) — tablet range, sem mudanças fortes ── */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .cp-study-layout {
+    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) !important;
+  }
+}
+
+/* Evita overflow horizontal global, mas permite balões nas laterais */
+html,
+body {
+  overflow-x: hidden;
+}
+
+.cp-study-layout,
+.cp-study-main,
+.cp-study-practice-card,
+.floating-comments-stage,
+.floating-comments-root {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.cp-study-main,
+.cp-study-practice-card {
+  overflow: visible;
+}

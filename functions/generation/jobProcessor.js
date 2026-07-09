@@ -32,7 +32,7 @@ async function resolveTopicoPublishStatus(courseId, topicKey) {
   const sanitized = sanitizeTopicKeyForFirestore(topicKey)
   if (!sanitized) return CONTENT_STATUS.UNAVAILABLE
 
-  const snap = await getDb().doc(`courses/${courseId}/topicoPublish/${sanitized}`).get()
+  const snap = await getDb().doc(`courses/${courseId}/topicoStatus/${sanitized}`).get()
   if (snap.exists() && snap.data().status === CONTENT_STATUS.AVAILABLE) {
     return CONTENT_STATUS.AVAILABLE
   }
@@ -372,16 +372,17 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
   }
 }
 
-/**
- * Processa um job de geração server-side.
- */
+const { processAdminEditalVerticalizado } = require('./adminEditalProcessor')
 async function processGenerationJob(userId, jobId, jobData) {
   const { courseId, jobType, serverPayload } = jobData
-  if (!serverPayload?.prompt && jobType !== 'flashcards_topico') {
+  if (!serverPayload?.prompt && jobType !== 'flashcards_topico' && jobType !== 'admin_edital_verticalizado') {
     throw new Error('Payload de geração inválido.')
   }
   if (jobType === 'flashcards_topico' && !serverPayload?.savePlan?.flashcardMeta) {
     throw new Error('Metadados de flashcards ausentes.')
+  }
+  if (jobType === 'admin_edital_verticalizado' && !serverPayload?.editalText) {
+    throw new Error('Texto do edital ausente.')
   }
   if (!courseId) {
     throw new Error('courseId ausente no job.')
@@ -412,6 +413,25 @@ async function processGenerationJob(userId, jobId, jobData) {
     case 'flashcards_topico':
       outcome = await processFlashcardsTopico(userId, jobId, courseId, serverPayload)
       break
+    case 'admin_edital_verticalizado':
+      outcome = await processAdminEditalVerticalizado(userId, jobId, courseId, serverPayload)
+      break
+    case 'admin_materia_revisada': {
+      const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
+      await updateJob(userId, jobId, { progress: 20, message: 'Gerando matéria revisada…' })
+      const parsed = await generateAiJson(prompt, {
+        useRAG: aiOptions.useRAG ?? true,
+        generationConfig: aiOptions.generationConfig || { maxOutputTokens: 16000, temperature: 0.7 },
+      })
+      await updateJob(userId, jobId, { progress: 85, message: 'Salvando matéria…' })
+      const docId = savePlan.docId || savePlan.materia?.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100)
+      const resultRef = await saveMergeDoc(courseId, 'materiasRevisadas', docId, parsed, {
+        materia: savePlan.materia,
+        status: savePlan.status || 'indisponivel',
+      })
+      outcome = { resultRef, parsed }
+      break
+    }
     default:
       throw new Error(`Tipo de job não suportado no servidor: ${jobType}`)
   }

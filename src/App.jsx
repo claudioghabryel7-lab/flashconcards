@@ -241,6 +241,14 @@ function App() {
             }
           />
           <Route
+            path="/flashcards/estudar"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <FlashcardView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/flashcards/topico/:courseId"
             element={
               <ProtectedRoute requireCourseSelection>

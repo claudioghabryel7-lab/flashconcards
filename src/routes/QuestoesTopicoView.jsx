@@ -30,6 +30,7 @@ import {
 } from '../components/QuestoesPraticaCP'
 import { buildQuestaoContentId, buildLegacyQuestaoContentId } from '../utils/contentCommentIds'
 import CommentComposer from '../components/content/CommentComposer'
+import FloatingCommentsShell from '../components/content/ContentFloatingComments'
 import { sanitizeCommentForStorage } from '../utils/commentFormatUtils'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
@@ -196,6 +197,7 @@ const QuestoesTopicoView = () => {
   const [termoBusca, setTermoBusca] = useState('')
   const [carregandoNivel, setCarregandoNivel] = useState(false)
   const [topicoPublishStatus, setTopicoPublishStatus] = useState(CONTENT_STATUS.UNAVAILABLE)
+  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
   const desempenhoNivelInicial = useRef(false)
 
   const todosNiveis = useMemo(() => Array.from({ length: 10 }, (_, i) => i + 1), [])
@@ -1156,7 +1158,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       )}
 
 
-      <div className="cp-card p-6 sm:p-8">
+      <div className="cp-study-practice-card cp-card overflow-visible p-4 sm:p-6 lg:p-8">
           {carregandoNivel ? (
             <div className="py-12 text-center">
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
@@ -1308,6 +1310,20 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         })
 
                         return (
+                        <FloatingCommentsShell
+                          enabled={floatingCommentsEnabled}
+                          onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+                          courseId={resolvedCourseId}
+                          contentType="questao"
+                          contentId={questaoContentId}
+                          alternateContentIds={
+                            legacyQuestaoContentId !== questaoContentId
+                              ? [legacyQuestaoContentId]
+                              : []
+                          }
+                          topicKey={resolvedTopicKey}
+                          label="comentários nesta questão"
+                        >
                         <div className="space-y-5">
                           <QuestaoEnunciadoCard
                             assunto={questaoAtual.assunto}
@@ -1405,6 +1421,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                             </>
                           )}
                         </div>
+                        </FloatingCommentsShell>
                         )
                       })()}
                 </div>

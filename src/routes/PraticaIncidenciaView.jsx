@@ -13,6 +13,7 @@ import { buildQuestoesIncidenciaPayload } from '../utils/serverGenerationPayload
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { QuestaoEnunciadoCard } from '../components/QuestoesPraticaCP'
+import FloatingCommentsShell from '../components/content/ContentFloatingComments'
 import {
   buildIncidenciaQuestaoContentId,
   buildLegacyIncidenciaQuestaoContentId,
@@ -50,6 +51,7 @@ const PraticaIncidenciaView = () => {
   const [modoAdminNavegacao, setModoAdminNavegacao] = useState(false)
   const [termoBusca, setTermoBusca] = useState('')
   const [carregandoNivel, setCarregandoNivel] = useState(false)
+  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
   const desempenhoNivelInicial = useRef(false)
 
   const disciplinaIndex = parseInt(disciplinaIdx)
@@ -852,7 +854,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         </div>
       )}
 
-      <div className="cp-card p-6 sm:p-8">
+      <div className="cp-study-practice-card cp-card overflow-visible p-4 sm:p-6 lg:p-8">
           {carregandoNivel ? (
             <div className="py-12 text-center">
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
@@ -1030,6 +1032,18 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                     })
 
                     return (
+                    <FloatingCommentsShell
+                      enabled={floatingCommentsEnabled}
+                      onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+                      courseId={courseId}
+                      contentType="questao"
+                      contentId={questaoContentId}
+                      alternateContentIds={
+                        legacyQuestaoContentId !== questaoContentId ? [legacyQuestaoContentId] : []
+                      }
+                      topicKey={`incidencia_${disciplinaIdx}`}
+                      label="comentários nesta questão"
+                    >
                     <div className="space-y-4">
                       <QuestaoEnunciadoCard
                         assunto={questaoAtual.assunto}
@@ -1184,6 +1198,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         </div>
                       ) : null}
                     </div>
+                    </FloatingCommentsShell>
                     )
                   })()}
                 </div>

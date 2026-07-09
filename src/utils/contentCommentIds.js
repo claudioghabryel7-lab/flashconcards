@@ -96,6 +96,16 @@ export function buildLegacyQuestaoContentId({ topicKey, nivel = 1, questionIndex
   return `${topic}_n${nivel}_q${questionIndex}`
 }
 
+export function buildMateriaContentId({ courseId, topicKey, kind = 'completo' }) {
+  const topic = sanitizeTopicKeyForContentId(topicKey)
+  return `${courseId || 'course'}_mat_${kind}_${topic}`.slice(0, 500)
+}
+
+export function buildIncidenciaMateriaContentId({ courseId, disciplinaKey }) {
+  const disc = (disciplinaKey || 'disciplina').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80)
+  return `${courseId || 'course'}_inc_mat_${disc}`.slice(0, 500)
+}
+
 export function buildFlashcardContentId({ courseId, topicKey, card, cardIndex = 0 }) {
   if (card?.id) {
     return `${courseId || 'course'}_fc_${card.id}`

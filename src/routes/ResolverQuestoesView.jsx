@@ -15,7 +15,6 @@ import { useAuth } from '../hooks/useAuth'
 import { useResolverQuestoes } from '../hooks/useResolverQuestoes'
 import { incrementQuestoesStats } from '../utils/questoesStats'
 import SubjectMetricChart from '../components/SubjectMetricChart'
-import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import {
   QuestaoEnunciadoCard,
   QuestaoAlternativas,
@@ -23,6 +22,8 @@ import {
   resolveQuestaoExplicacao,
   resolveQuestaoGabarito,
 } from '../components/QuestoesPraticaCP'
+import FloatingCommentsShell from '../components/content/ContentFloatingComments'
+import { buildQuestaoContentId } from '../utils/contentCommentIds'
 
 const CHART_TYPES = [
   { id: 'pie', label: 'Pizza', icon: ChartPieIcon },
@@ -57,6 +58,7 @@ const ResolverQuestoesView = () => {
   const [selectedAnswer, setSelectedAnswer] = useState(null)
   const [showResult, setShowResult] = useState(false)
   const [sessionStats, setSessionStats] = useState({ correct: 0, wrong: 0 })
+  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
 
   const materias = useMemo(() => Object.keys(organized).sort(), [organized])
 
@@ -86,6 +88,26 @@ const ResolverQuestoesView = () => {
 
   const currentItem = deckItems[currentIndex]
   const currentQuestao = currentItem?.questao
+
+  const questaoContentId = useMemo(() => {
+    if (!currentQuestao || !currentItem) return null
+    if (currentItem.source === 'incidencia') {
+      return buildQuestaoContentId({
+        topicKey: `incidencia_${currentItem.packId}`,
+        nivel: currentItem.nivel,
+        questao: currentQuestao,
+        questionIndex: currentIndex,
+        packId: currentItem.packId,
+      })
+    }
+    return buildQuestaoContentId({
+      topicKey: currentItem.topicKey,
+      nivel: currentItem.nivel,
+      questao: currentQuestao,
+      questionIndex: currentIndex,
+      packId: currentItem.packId,
+    })
+  }, [currentQuestao, currentItem, currentIndex])
 
   const handleAnswer = async (answer) => {
     if (showResult || !currentQuestao || !currentItem) return
@@ -168,14 +190,6 @@ const ResolverQuestoesView = () => {
 
   return (
     <div className="space-y-6 pb-10">
-      <CPPageHeader
-        badge="Questões"
-        title="Resolver Questões"
-        subtitle="Todas as questões liberadas pelo admin — pratique e acompanhe acertos e erros"
-        backHref="/dashboard"
-        backLabel="Voltar ao Dashboard"
-      />
-
       {/* Resumo + gráficos */}
       <section className="cp-card p-4 sm:p-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -255,9 +269,9 @@ const ResolverQuestoesView = () => {
       )}
 
       {totalQuestoes > 0 && (
-        <div className="grid gap-4 lg:grid-cols-[minmax(260px,320px)_1fr]">
+        <div className="cp-study-layout grid gap-4 lg:grid-cols-[minmax(260px,320px)_1fr]">
           {/* Sidebar */}
-          <div className="noji-deck-panel cp-card flex flex-col overflow-hidden lg:max-h-[calc(100vh-12rem)]">
+          <div className="cp-study-sidebar noji-deck-panel cp-card flex flex-col overflow-hidden lg:max-h-[calc(100vh-12rem)]">
             <div className="border-b border-cp-border p-4">
               <p className="text-sm font-semibold text-cp-text">Questões por matéria</p>
               <p className="mb-3 text-[11px] text-cp-muted">Tópicos e incidência liberados</p>
@@ -364,7 +378,7 @@ const ResolverQuestoesView = () => {
           </div>
 
           {/* Área de prática */}
-          <div className="cp-card p-4 sm:p-6">
+          <div className="cp-study-main cp-card overflow-visible p-4 sm:p-6">
             {deckItems.length === 0 ? (
               <p className="py-12 text-center text-sm text-cp-muted">
                 Selecione uma matéria para começar.
@@ -423,11 +437,23 @@ const ResolverQuestoesView = () => {
                   </div>
                 )}
 
+                <FloatingCommentsShell
+                  enabled={floatingCommentsEnabled}
+                  onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+                  courseId={courseId}
+                  contentType="questao"
+                  contentId={questaoContentId}
+                  topicKey={currentItem.topicKey || undefined}
+                  label="comentários nesta questão"
+                >
                 <QuestaoEnunciadoCard
-                  assunto={currentQuestao.assunto || currentItem.materia}
+                  assunto={currentQuestao.assunto || undefined}
                   probabilidade={currentQuestao.probabilidade}
                   enunciado={currentQuestao.enunciado}
                   questionNumber={currentIndex + 1}
+                  courseId={courseId}
+                  contentId={questaoContentId}
+                  topicKey={currentItem.topicKey || undefined}
                 />
 
                 {!showResult ? (
@@ -486,6 +512,7 @@ const ResolverQuestoesView = () => {
                     </div>
                   </>
                 )}
+                </FloatingCommentsShell>
               </div>
             ) : null}
           </div>

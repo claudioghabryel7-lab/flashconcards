@@ -55,6 +55,7 @@ import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import LawDetector from '../utils/lawDetector'
 import LawDownloader from '../utils/lawDownloader'
 import { generateShareToken } from '../utils/shareToken'
+import { enqueueAdminEditalProcessing } from '../services/adminServerGeneration'
 
 const MATERIAS = [
   'Português',
@@ -7360,9 +7361,30 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                         try {
                           const courseId = selectedCourseForPrompts || 'alego-default'
                           console.log('💾 AdminPanel: Salvando edital no courseId:', courseId)
-                          console.log('💾 AdminPanel: selectedCourseForPrompts:', selectedCourseForPrompts)
-                          console.log('💾 AdminPanel: courseId final:', courseId)
+
+                          if (currentAdminUser?.uid) {
+                            setMessage('🚀 Processando edital no servidor… Você pode sair desta tela.')
+                            const { promise } = await enqueueAdminEditalProcessing({
+                              userId: currentAdminUser.uid,
+                              courseId,
+                              editalText: editalVerticalizadoText,
+                            })
+                            await promise
+
+                            const editalSnap = await getDoc(
+                              doc(db, 'courses', courseId, 'editalVerticalizado', 'principal'),
+                            )
+                            if (editalSnap.exists()) setEditalVerticalizadoData(editalSnap.data())
+
+                            setEditalVerticalizadoText('')
+                            setEditalVerticalizadoFile(null)
+                            setExtractingEditalVerticalizado(false)
+                            setSavingEditalVerticalizado(false)
+                            setMessage('✅ Edital processado no servidor! Você pode gerar conteúdos nas seções abaixo.')
+                            return
+                          }
                           
+                          // Fallback: processamento no navegador (sem usuário ou CF indisponível)
                           // LIMPAR EDITAL VERTICALIZADO ANTIGO ANTES DE SALVAR O NOVO
                           console.log('Limpando edital verticalizado antigo...')
                           const editalRef = doc(db, 'courses', courseId, 'editalVerticalizado', 'principal')

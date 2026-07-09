@@ -1,6 +1,7 @@
 @import '@fontsource/syne/600.css';
 @import '@fontsource/syne/700.css';
 @import '../styles/cp-legacy-bridge.css';
+@import '../styles/responsive-layout.css';
 
 @tailwind base;
 @tailwind components;

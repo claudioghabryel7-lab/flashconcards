@@ -100,7 +100,7 @@ const FlashcardList = ({
   const easyLabel = getRatingButtonLabel('easy', cardProg)
 
   return (
-    <div className="noji-study mx-auto flex w-full max-w-2xl flex-col pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div className="noji-study mx-auto flex w-full max-w-2xl flex-col overflow-x-hidden pb-[max(1rem,env(safe-area-inset-bottom))]">
       {/* Barra de progresso — estilo Noji */}
       <div className="mb-4 space-y-2">
         <div className="flex items-center justify-between text-xs font-medium text-cp-muted">
@@ -202,45 +202,47 @@ const FlashcardList = ({
         />
       </div>
 
-      {/* Avaliação SRS — abaixo do card (Noji) */}
-      {showRating && flipped ? (
-        <div className="noji-rating mt-4 space-y-3">
-          <p className="text-center text-sm font-medium text-cp-muted">
-            Quão bem você lembrou?
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => handleRate('hard')}
-              className="noji-rate-hard group flex flex-col items-center rounded-2xl px-4 py-4 transition active:scale-[0.98]"
-              style={{ touchAction: 'manipulation' }}
-            >
-              <span className="text-base font-bold">Difícil</span>
-              <span className="mt-0.5 text-[11px] opacity-80">Repetir em {hardLabel}</span>
-              <span className="mt-1 text-[10px] opacity-50">Tecla 1</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleRate('easy')}
-              className="noji-rate-easy group flex flex-col items-center rounded-2xl px-4 py-4 transition active:scale-[0.98]"
-              style={{ touchAction: 'manipulation' }}
-            >
-              <span className="text-base font-bold">Fácil</span>
-              <span className="mt-0.5 text-[11px] opacity-80">Próximo em {easyLabel}</span>
-              <span className="mt-1 text-[10px] opacity-50">Tecla 2</span>
-            </button>
+      {/* Avaliação SRS — altura reservada evita “pulo” da página ao virar */}
+      <div className="noji-card-actions mt-4 min-h-[10.5rem]">
+        {showRating && flipped ? (
+          <div className="noji-rating space-y-3">
+            <p className="text-center text-sm font-medium text-cp-muted">
+              Quão bem você lembrou?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => handleRate('hard')}
+                className="noji-rate-hard group flex flex-col items-center rounded-2xl px-4 py-4 transition active:scale-[0.98]"
+                style={{ touchAction: 'manipulation' }}
+              >
+                <span className="text-base font-bold">Difícil</span>
+                <span className="mt-0.5 text-[11px] opacity-80">Repetir em {hardLabel}</span>
+                <span className="mt-1 text-[10px] opacity-50">Tecla 1</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRate('easy')}
+                className="noji-rate-easy group flex flex-col items-center rounded-2xl px-4 py-4 transition active:scale-[0.98]"
+                style={{ touchAction: 'manipulation' }}
+              >
+                <span className="text-base font-bold">Fácil</span>
+                <span className="mt-0.5 text-[11px] opacity-80">Próximo em {easyLabel}</span>
+                <span className="mt-1 text-[10px] opacity-50">Tecla 2</span>
+              </button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <p className="mt-4 text-center text-xs text-cp-muted">
-          <kbd className="rounded border border-cp-border bg-cp-bg px-1.5 py-0.5 font-mono text-[10px]">Espaço</kbd>
-          {' '}para virar ·{' '}
-          <kbd className="rounded border border-cp-border bg-cp-bg px-1.5 py-0.5 font-mono text-[10px]">←</kbd>
-          {' '}
-          <kbd className="rounded border border-cp-border bg-cp-bg px-1.5 py-0.5 font-mono text-[10px]">→</kbd>
-          {' '}navegar
-        </p>
-      )}
+        ) : (
+          <p className="pt-10 text-center text-xs text-cp-muted">
+            <kbd className="rounded border border-cp-border bg-cp-bg px-1.5 py-0.5 font-mono text-[10px]">Espaço</kbd>
+            {' '}para virar ·{' '}
+            <kbd className="rounded border border-cp-border bg-cp-bg px-1.5 py-0.5 font-mono text-[10px]">←</kbd>
+            {' '}
+            <kbd className="rounded border border-cp-border bg-cp-bg px-1.5 py-0.5 font-mono text-[10px]">→</kbd>
+            {' '}navegar
+          </p>
+        )}
+      </div>
 
       {/* Navegação lateral */}
       <div className="mt-4 flex items-center justify-center gap-4">

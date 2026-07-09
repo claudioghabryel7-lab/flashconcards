@@ -3,20 +3,18 @@ import { collection, doc, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
 import { isContentAvailable } from '../utils/contentStatus'
-import {
-  canAccessTopicoContent,
-  hasPurchasedCourse,
-} from '../utils/courseAccess'
-import {
-  buildTopicoPublishMapFromSnapshot,
-  resolveTopicPublishStatus,
-} from '../services/topicoPublishService'
+import { hasPurchasedCourse } from '../utils/courseAccess'
+import { buildTopicoPublishMapFromSnapshot } from '../services/topicoPublishService'
 import {
   extractContextFromEdital,
   flattenQuestoesFromPack,
   organizeQuestoesByMateria,
   filterOrganizedQuestoesWithContent,
   statsToChartData,
+  normalizeMateriaLabel,
+  formatModuloLabel,
+  dedupeTopicoPacks,
+  isPackAccessible,
 } from '../utils/resolverQuestoesUtils'
 import { assignChartColors } from '../utils/progressChartColors'
 import { normalizeQuestoesStatsCourseKey } from '../utils/questoesStats'
@@ -27,11 +25,15 @@ function parseNivelFromDocId(docId, data) {
   return match ? parseInt(match[1], 10) : 1
 }
 
-function parseIncidenciaMateria(docId, data) {
-  if (data?.disciplina) return data.disciplina
+function parseIncidenciaMateria(docId, data, edital) {
+  const idx = data?.disciplinaIdx
+  if (Number.isInteger(idx) && edital?.disciplinas?.[idx]?.nome) {
+    return normalizeMateriaLabel(edital.disciplinas[idx].nome)
+  }
+  if (data?.disciplina) return normalizeMateriaLabel(data.disciplina)
   const base = docId.split('_nivel_')[0] || ''
   if (!base) return 'Incidência'
-  return base.replace(/_/g, ' ')
+  return normalizeMateriaLabel(base.replace(/_/g, ' '))
 }
 
 export function useResolverQuestoes(courseId, user, profile) {
@@ -129,38 +131,35 @@ export function useResolverQuestoes(courseId, user, profile) {
     if (!profile) return []
 
     const items = []
+    const dedupedTopico = dedupeTopicoPacks(topicoPacks)
 
-    topicoPacks.forEach((pack) => {
-      if (!isAdmin && !isContentAvailable(pack.status, false)) return
-
+    dedupedTopico.forEach((pack) => {
       const topicKey = pack.topicKey || pack.topico || ''
       const ctx = extractContextFromEdital(edital, topicKey)
-      const materia = ctx?.disciplina || pack.disciplina || 'Geral'
-      const moduloLabel = ctx?.topico
-        ? `${ctx.topicoNumero ? `${ctx.topicoNumero} - ` : ''}${ctx.topico}`
-        : pack.topico || 'Tópico'
+      const materia = normalizeMateriaLabel(ctx?.disciplina || pack.disciplina || 'Geral')
+      const moduloBase = formatModuloLabel(ctx, pack)
       const nivel = parseNivelFromDocId(pack.id, pack)
+      const modulo = `${moduloBase} · Nv.${nivel}`
 
-      if (!isAdmin && topicKey) {
-        const publishStatus = resolveTopicPublishStatus(publishMap, topicKey)
-        if (
-          !canAccessTopicoContent({
-            profile,
-            courseId: resolvedId,
-            topicKey,
-            edital,
-            publishStatus,
-          })
-        ) {
-          return
-        }
+      if (
+        !isPackAccessible({
+          pack,
+          profile,
+          courseId: resolvedId,
+          topicKey,
+          edital,
+          publishMap,
+          isAdmin,
+        })
+      ) {
+        return
       }
 
       items.push(
         ...flattenQuestoesFromPack(pack, {
           packId: pack.id,
           materia,
-          modulo: `${moduloLabel} · Nv.${nivel}`,
+          modulo,
           topicKey,
           source: 'topico',
           nivel,
@@ -172,7 +171,7 @@ export function useResolverQuestoes(courseId, user, profile) {
       if (!isAdmin && !isContentAvailable(pack.status, false)) return
       if (!isAdmin && !hasPurchasedCourse(profile, resolvedId)) return
 
-      const materia = parseIncidenciaMateria(pack.id, pack)
+      const materia = parseIncidenciaMateria(pack.id, pack, edital)
       const nivel = parseNivelFromDocId(pack.id, pack)
 
       items.push(

@@ -4,6 +4,7 @@ import { doc, getDoc, onSnapshot, serverTimestamp, writeBatch } from 'firebase/f
 import { saveFlashcardContent, deleteFlashcardContent } from '../utils/flashcardPersistence'
 import { ChevronLeftIcon, PhotoIcon, ShareIcon } from '@heroicons/react/24/outline'
 import FlashcardList from '../components/FlashcardList'
+import FlashcardFloatingComments from '../components/FlashcardFloatingComments'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -39,6 +40,7 @@ const FlashcardsTopicoView = () => {
   const [error, setError] = useState(null)
   const [courseName, setCourseName] = useState('')
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
   const [cardProgress, setCardProgress] = useState({})
   const [fromCache, setFromCache] = useState(false)
   const [publishing, setPublishing] = useState(false)
@@ -433,7 +435,7 @@ const FlashcardsTopicoView = () => {
       )}
 
       {!loading && !generating && !regenerating && !error && canStudy && studyCards.length > 0 && (
-        <div className="cp-card p-4 sm:p-6">
+        <div className="cp-study-practice-card cp-card overflow-visible p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between text-xs text-cp-muted">
             <span>Revisão espaçada · {studyCards.length} para revisar agora</span>
             <div className="flex items-center gap-2">
@@ -455,6 +457,14 @@ const FlashcardsTopicoView = () => {
               )}
             </div>
           </div>
+          <FlashcardFloatingComments
+            enabled={floatingCommentsEnabled}
+            onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+            courseId={courseId}
+            card={studyCards[currentIndex]}
+            topicKey={topicKey}
+            cardIndex={currentIndex}
+          >
           <FlashcardList
             cards={studyCards}
             currentIndex={currentIndex}
@@ -475,6 +485,7 @@ const FlashcardsTopicoView = () => {
             deckTitle={modulo}
             deckSubtitle={disciplina}
           />
+          </FlashcardFloatingComments>
         </div>
       )}
     </div>

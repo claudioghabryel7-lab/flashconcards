@@ -13,9 +13,22 @@ const TrilhaTimerBanner = dynamic(() => import('@/components/TrilhaTimerBanner')
 
 const MINIMAL_PATHS = ['/flashcards/pip', '/share-flashcards']
 const FULL_BLEED_PATHS = ['/', '/cursos', '/comunidade']
+const STUDY_PATH_PREFIXES = [
+  '/flashcards',
+  '/flashcards/estudar',
+  '/questoes-topic',
+  '/pratica-incidencia',
+  '/resolver-questoes',
+  '/conteudo-incidencia',
+  '/conteudo-completo/topic',
+]
 
 function isCommunityRoute(pathname: string) {
   return pathname.startsWith('/comunidade') || pathname.startsWith('/profile/')
+}
+
+function isStudyRoute(pathname: string) {
+  return STUDY_PATH_PREFIXES.some((p) => pathname.startsWith(p))
 }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -23,6 +36,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const minimal = MINIMAL_PATHS.some((p) => pathname.startsWith(p))
   const isComunidade = isCommunityRoute(pathname)
   const fullBleed = FULL_BLEED_PATHS.includes(pathname) || isComunidade
+  const studyLayout = isStudyRoute(pathname)
 
   if (minimal) {
     return <>{children}</>
@@ -36,7 +50,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         className={
           fullBleed
             ? 'relative z-10 w-full'
-            : 'cp-container relative z-10 py-4 sm:py-6'
+            : studyLayout
+              ? 'cp-container-wide relative z-10 py-4 sm:py-6'
+              : 'cp-container relative z-10 py-4 sm:py-6'
         }
       >
         {children}
