@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   AcademicCapIcon,
   ArrowDownTrayIcon,
-  ClockIcon,
   DocumentTextIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline'
@@ -11,10 +10,7 @@ import {
   buildConcursoDifficultyPrompt,
   buildConcursoMaterialPrompt,
 } from '../../utils/concursoMaterialPrompt'
-import { downloadElementAsPdf } from '../../utils/materialPdfExport'
-
-const TEMP_MATERIAL_TTL_MS = 15 * 60 * 1000
-const SESSION_STORAGE_KEY = 'admin_temp_concurso_material'
+import { downloadConcursoMaterialPdf } from '../../utils/materialPdfExport'
 
 function renderMaterialPreview(material) {
   if (!material) return null
@@ -22,12 +18,12 @@ function renderMaterialPreview(material) {
   return (
     <div className="space-y-6 text-slate-800">
       <header>
-        <h2 className="text-2xl font-black">{material.titulo}</h2>
+        <h2 className="text-2xl font-black text-emerald-900">{material.titulo}</h2>
         <p className="mt-2 text-sm text-slate-600">
           {material.concurso} · {material.cargo} · Banca {material.banca}
         </p>
         {material.analiseDificuldade?.justificativa && (
-          <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
             <strong>Dificuldade ({material.analiseDificuldade.nivelDificuldade}):</strong>{' '}
             {material.analiseDificuldade.justificativa}
           </p>
@@ -36,23 +32,25 @@ function renderMaterialPreview(material) {
 
       {material.raioXProbabilidade && (
         <section>
-          <h3 className="mb-2 text-lg font-bold">Raio-X de Probabilidade</h3>
+          <h3 className="mb-2 border-b border-emerald-200 pb-1 text-lg font-bold text-emerald-800">
+            Raio-X de Probabilidade
+          </h3>
           <ul className="list-disc space-y-1 pl-5 text-sm">
             {(material.raioXProbabilidade.topicosQuentes || []).map((t) => (
               <li key={t}>{t}</li>
             ))}
           </ul>
           {material.raioXProbabilidade.padraoBanca && (
-            <p className="mt-3 text-sm">{material.raioXProbabilidade.padraoBanca}</p>
+            <p className="mt-3 text-sm leading-relaxed">{material.raioXProbabilidade.padraoBanca}</p>
           )}
         </section>
       )}
 
       {(material.revisaoTurbo || []).map((item, idx) => (
         <section key={`${item.titulo}-${idx}`}>
-          <h3 className="mb-2 text-lg font-bold">{item.titulo}</h3>
+          <h3 className="mb-2 text-base font-bold text-teal-800">{item.titulo}</h3>
           <div
-            className="prose prose-sm max-w-none text-slate-700"
+            className="prose prose-sm max-w-none leading-relaxed text-slate-700"
             dangerouslySetInnerHTML={{ __html: item.conteudo || '' }}
           />
         </section>
@@ -62,66 +60,31 @@ function renderMaterialPreview(material) {
         <section key={`peg-${idx}`} className="rounded-xl border border-rose-200 bg-rose-50 p-4">
           <h3 className="mb-2 font-bold text-rose-800">{item.titulo}</h3>
           <div
-            className="prose prose-sm max-w-none text-rose-900"
+            className="prose prose-sm max-w-none leading-relaxed text-rose-900"
             dangerouslySetInnerHTML={{ __html: item.conteudo || '' }}
           />
         </section>
       ))}
 
       {(material.questoesPreditivas || []).map((q, idx) => (
-        <section key={`q-${idx}`} className="rounded-xl border border-slate-200 p-4">
-          <p className="font-semibold">
+        <section key={`q-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="font-semibold text-slate-900">
             {idx + 1}. {q.enunciado}
           </p>
-          <ul className="mt-2 space-y-1 text-sm">
+          <ul className="mt-2 space-y-1 text-sm text-slate-700">
             {Object.entries(q.alternativas || {}).map(([letter, text]) => (
               <li key={letter}>
                 <strong>{letter})</strong> {text}
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-sm">
+          <p className="mt-3 border-t border-dashed border-slate-300 pt-3 text-sm text-slate-700">
             <strong>Gabarito {q.correta}:</strong> {q.gabaritoComentado}
           </p>
         </section>
       ))}
     </div>
   )
-}
-
-function formatRemainingTime(expiresAt) {
-  const remainingMs = Math.max(0, expiresAt - Date.now())
-  const minutes = Math.floor(remainingMs / 60000)
-  const seconds = Math.floor((remainingMs % 60000) / 1000)
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-}
-
-function readStoredMaterial() {
-  try {
-    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    if (!parsed?.material || !parsed?.expiresAt) return null
-    if (Date.now() >= parsed.expiresAt) {
-      sessionStorage.removeItem(SESSION_STORAGE_KEY)
-      return null
-    }
-    return parsed
-  } catch {
-    sessionStorage.removeItem(SESSION_STORAGE_KEY)
-    return null
-  }
-}
-
-function persistMaterial(material, expiresAt) {
-  sessionStorage.setItem(
-    SESSION_STORAGE_KEY,
-    JSON.stringify({ material, expiresAt }),
-  )
-}
-
-function clearStoredMaterial() {
-  sessionStorage.removeItem(SESSION_STORAGE_KEY)
 }
 
 export default function AdminConcursoMaterial() {
@@ -132,65 +95,11 @@ export default function AdminConcursoMaterial() {
     focoMateria: '',
   })
   const [generating, setGenerating] = useState(false)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [progress, setProgress] = useState('')
   const [feedback, setFeedback] = useState('')
   const [preview, setPreview] = useState(null)
-  const [expiresAt, setExpiresAt] = useState(null)
-  const [remainingLabel, setRemainingLabel] = useState('')
   const previewRef = useRef(null)
-  const expiryTimerRef = useRef(null)
-
-  const clearTemporaryMaterial = useCallback((message = '') => {
-    if (expiryTimerRef.current) {
-      clearTimeout(expiryTimerRef.current)
-      expiryTimerRef.current = null
-    }
-    clearStoredMaterial()
-    setPreview(null)
-    setExpiresAt(null)
-    setRemainingLabel('')
-    if (message) setFeedback(message)
-  }, [])
-
-  const scheduleExpiry = useCallback(
-    (targetExpiresAt) => {
-      if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current)
-
-      const remainingMs = Math.max(0, targetExpiresAt - Date.now())
-      expiryTimerRef.current = setTimeout(() => {
-        clearTemporaryMaterial(
-          '⏱️ O material expirou e foi removido do sistema. Gere novamente se precisar.',
-        )
-      }, remainingMs)
-    },
-    [clearTemporaryMaterial],
-  )
-
-  useEffect(() => {
-    const stored = readStoredMaterial()
-    if (!stored) return
-
-    setPreview(stored.material)
-    setExpiresAt(stored.expiresAt)
-    setFeedback('Material temporário restaurado. Baixe o PDF antes que expire.')
-    scheduleExpiry(stored.expiresAt)
-  }, [scheduleExpiry])
-
-  useEffect(() => {
-    if (!expiresAt) return undefined
-
-    const tick = () => setRemainingLabel(formatRemainingTime(expiresAt))
-    tick()
-    const interval = setInterval(tick, 1000)
-    return () => clearInterval(interval)
-  }, [expiresAt])
-
-  useEffect(
-    () => () => {
-      if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current)
-    },
-    [],
-  )
 
   const canGenerate = useMemo(
     () => form.concurso.trim() && form.cargo.trim() && form.banca.trim() && !generating,
@@ -200,10 +109,10 @@ export default function AdminConcursoMaterial() {
   const handleGenerate = async () => {
     if (!canGenerate) return
 
-    clearTemporaryMaterial()
     setGenerating(true)
     setProgress('')
     setFeedback('')
+    setPreview(null)
 
     try {
       setProgress('🧠 Analisando dificuldade do concurso, cargo e banca...')
@@ -241,17 +150,10 @@ export default function AdminConcursoMaterial() {
         banca: form.banca.trim(),
         focoMateria: form.focoMateria.trim() || null,
         analiseDificuldade: material.analiseDificuldade || analise,
-        generatedAt: Date.now(),
       }
 
-      const nextExpiresAt = Date.now() + TEMP_MATERIAL_TTL_MS
-      persistMaterial(payload, nextExpiresAt)
       setPreview(payload)
-      setExpiresAt(nextExpiresAt)
-      scheduleExpiry(nextExpiresAt)
-      setFeedback(
-        '✅ Material gerado! Baixe o PDF em até 15 minutos — depois disso será apagado automaticamente.',
-      )
+      setFeedback('✅ Material gerado! Confira na pré-visualização e baixe o PDF quando quiser.')
       setProgress('')
     } catch (err) {
       console.error(err)
@@ -263,9 +165,21 @@ export default function AdminConcursoMaterial() {
   }
 
   const handleDownloadPdf = async () => {
-    if (!previewRef.current || !preview) return
-    const fileName = `${preview.concurso || 'material'}-${preview.cargo || 'cargo'}.pdf`
-    await downloadElementAsPdf(previewRef.current, fileName)
+    if (!preview) return
+
+    setDownloadingPdf(true)
+    setFeedback('')
+
+    try {
+      const fileName = `${preview.concurso || 'material'}-${preview.cargo || 'cargo'}.pdf`
+      await downloadConcursoMaterialPdf(preview, fileName)
+      setFeedback('✅ PDF baixado com o conteúdo completo.')
+    } catch (err) {
+      console.error(err)
+      setFeedback(`❌ Erro ao gerar PDF: ${err.message}`)
+    } finally {
+      setDownloadingPdf(false)
+    }
   }
 
   return (
@@ -281,7 +195,7 @@ export default function AdminConcursoMaterial() {
             </h2>
             <p className="text-sm text-slate-600 dark:text-slate-400">
               Informe concurso, cargo e banca. A IA analisa a dificuldade, gera o material na
-              pré-visualização e você baixa o PDF. O conteúdo expira em 15 minutos.
+              pré-visualização e você baixa o PDF formatado.
             </p>
           </div>
         </div>
@@ -374,24 +288,17 @@ export default function AdminConcursoMaterial() {
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-lg font-bold">Pré-visualização</h3>
-            <div className="flex items-center gap-2">
-              {preview && expiresAt && (
-                <span className="inline-flex items-center gap-1 rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                  <ClockIcon className="h-4 w-4" />
-                  Expira em {remainingLabel}
-                </span>
-              )}
-              {preview && (
-                <button
-                  type="button"
-                  onClick={handleDownloadPdf}
-                  className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white dark:bg-slate-600"
-                >
-                  <ArrowDownTrayIcon className="h-4 w-4" />
-                  Baixar PDF
-                </button>
-              )}
-            </div>
+            {preview && (
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={downloadingPdf}
+                className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                <ArrowDownTrayIcon className="h-4 w-4" />
+                {downloadingPdf ? 'Gerando PDF...' : 'Baixar PDF completo'}
+              </button>
+            )}
           </div>
 
           <div
@@ -402,7 +309,8 @@ export default function AdminConcursoMaterial() {
               renderMaterialPreview(preview)
             ) : (
               <p className="text-sm text-slate-500">
-                O material gerado aparecerá aqui por 15 minutos. Baixe o PDF antes que expire.
+                O material gerado aparecerá aqui. Use o botão acima para baixar o PDF formatado com
+                todo o conteúdo.
               </p>
             )}
           </div>
