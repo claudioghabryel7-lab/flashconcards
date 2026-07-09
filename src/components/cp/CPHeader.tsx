@@ -171,7 +171,7 @@ export default function CPHeader() {
                 </button>
 
                 <div className="hidden lg:flex">
-                  <OnlineNowBadge courseId={profile?.selectedCourseId ?? null} compact />
+                  <OnlineNowBadge platformWide compact />
                 </div>
 
                 <button

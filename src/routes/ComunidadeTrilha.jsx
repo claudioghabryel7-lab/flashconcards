@@ -34,6 +34,12 @@ import {
   addFeedCommentReply,
 } from '../services/trilhaFeedMutations'
 import { isFeedPostActive, normalizeDurationMinutes } from '../utils/feedTimeUtils'
+import {
+  useCommunityAuthors,
+  resolveCommunityAuthor,
+  isAuthorVisible,
+} from '../hooks/useCommunityAuthors'
+import { cleanupOrphanCommunityData } from '../services/communityUserService'
 
 const BOOKMARK_KEY = 'trilhaFeedBookmarks'
 
@@ -109,23 +115,60 @@ export default function ComunidadeTrilha() {
 
   const activePosts = useMemo(() => posts.filter((p) => isFeedPostActive(p)), [posts])
 
+  const authorIds = useMemo(() => {
+    const ids = new Set()
+    activePosts.forEach((post) => {
+      if (post.authorId) ids.add(post.authorId)
+      ;(post.comments || []).forEach((comment) => {
+        if (comment.authorId) ids.add(comment.authorId)
+        ;(comment.replies || []).forEach((reply) => {
+          if (reply.authorId) ids.add(reply.authorId)
+        })
+      })
+    })
+    return [...ids]
+  }, [activePosts])
+
+  const { authorsMap } = useCommunityAuthors(authorIds)
+
+  const visiblePosts = useMemo(
+    () => activePosts.filter((post) => isAuthorVisible(post.authorId, authorsMap)),
+    [activePosts, authorsMap],
+  )
+
+  useEffect(() => {
+    if (!isAdmin) return () => {}
+    let cancelled = false
+    cleanupOrphanCommunityData().then((result) => {
+      if (!cancelled && result.removedPosts > 0) {
+        toast.success(`${result.removedPosts} publicação(ões) de contas removidas foram limpas.`)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isAdmin])
+
   const dailyHighlights = useMemo(() => {
     const byUser = new Map()
-    activePosts.forEach((p) => {
+    visiblePosts.forEach((p) => {
+      const live = resolveCommunityAuthor(p.authorId, authorsMap, p)
+      if (!live) return
       const prev = byUser.get(p.authorId) || {
         authorId: p.authorId,
-        authorName: p.authorName,
-        authorPhotoBase64: p.authorPhotoBase64,
+        authorName: live.displayName,
+        authorPhotoBase64: live.photoBase64,
         totalMinutes: 0,
         sessions: 0,
       }
       prev.totalMinutes += normalizeDurationMinutes(p.durationMinutes || 0)
       prev.sessions += 1
-      if (p.authorPhotoBase64) prev.authorPhotoBase64 = p.authorPhotoBase64
+      prev.authorName = live.displayName
+      if (live.photoBase64) prev.authorPhotoBase64 = live.photoBase64
       byUser.set(p.authorId, prev)
     })
     return [...byUser.values()].sort((a, b) => b.totalMinutes - a.totalMinutes).slice(0, 10)
-  }, [activePosts])
+  }, [visiblePosts, authorsMap])
 
   const toggleLike = useCallback(
     async (postId, likes = []) => {
@@ -285,7 +328,7 @@ export default function ComunidadeTrilha() {
         currentUserId={user?.uid}
       />
 
-      {activePosts.length === 0 ? (
+      {visiblePosts.length === 0 ? (
         <div className="flex flex-col items-center gap-4 px-6 py-16 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-cp-accent/10">
             <Compass className="h-10 w-10 text-cp-accent" />
@@ -304,10 +347,11 @@ export default function ComunidadeTrilha() {
           </Link>
         </div>
       ) : (
-        activePosts.map((post) => (
+        visiblePosts.map((post) => (
           <FeedPost
             key={post.id}
             post={post}
+            authorsMap={authorsMap}
             user={user}
             profile={profile}
             isAdmin={isAdmin}

@@ -4,29 +4,33 @@ import { Heart } from 'lucide-react'
 import UserAvatar from '../UserAvatar'
 import CommentFormattedText from '../content/CommentFormattedText'
 import { formatCommentTime } from '../../utils/feedUtils'
+import { resolveCommunityAuthor } from '../../hooks/useCommunityAuthors'
 
 function FeedReplyRow({
   reply,
   user,
   readOnly,
   canDelete,
+  authorsMap,
   onToggleLike,
   onDelete,
 }) {
   const liked = user?.uid && (reply.likes || []).includes(user.uid)
   const likesCount = reply.likesCount ?? reply.likes?.length ?? 0
+  const author = resolveCommunityAuthor(reply.authorId, authorsMap, reply)
+  if (!author) return null
 
   return (
     <div className="flex gap-2 text-sm">
       <Link to={`/profile/${reply.authorId}`} className="shrink-0">
-        <UserAvatar photoBase64={reply.authorPhotoBase64} name={reply.authorName} size="xs" />
+        <UserAvatar photoBase64={author.photoBase64} name={author.displayName} size="xs" />
       </Link>
       <div className="min-w-0 flex-1">
         <Link
           to={`/profile/${reply.authorId}`}
           className="font-semibold text-cp-text hover:text-cp-accent"
         >
-          {reply.authorName}
+          {author.displayName}
         </Link>
         <CommentFormattedText text={reply.text} className="!text-sm !leading-snug" />
         <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -70,6 +74,7 @@ export default function FeedPostComment({
   readOnly,
   isPostAuthor,
   isAdmin,
+  authorsMap = {},
   onToggleLike,
   onToggleReplyLike,
   onReply,
@@ -84,6 +89,8 @@ export default function FeedPostComment({
   const canDeleteComment =
     user?.uid === comment.authorId || isPostAuthor || isAdmin
   const canReply = !readOnly && user
+  const author = resolveCommunityAuthor(comment.authorId, authorsMap, comment)
+  if (!author) return null
 
   const handleSubmitReply = () => {
     const text = replyText.trim()
@@ -97,14 +104,14 @@ export default function FeedPostComment({
     <div className="space-y-2">
       <div className="flex gap-2 text-sm">
         <Link to={`/profile/${comment.authorId}`} className="shrink-0">
-          <UserAvatar photoBase64={comment.authorPhotoBase64} name={comment.authorName} size="xs" />
+          <UserAvatar photoBase64={author.photoBase64} name={author.displayName} size="xs" />
         </Link>
         <div className="min-w-0 flex-1">
           <Link
             to={`/profile/${comment.authorId}`}
             className="font-semibold text-cp-text hover:text-cp-accent"
           >
-            {comment.authorName}
+            {author.displayName}
           </Link>
           <CommentFormattedText text={comment.text} className="!text-sm !leading-snug" />
           <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -157,6 +164,7 @@ export default function FeedPostComment({
               reply={reply}
               user={user}
               readOnly={readOnly}
+              authorsMap={authorsMap}
               canDelete={user?.uid === reply.authorId || isPostAuthor || isAdmin}
               onToggleLike={() => onToggleReplyLike?.(reply.id)}
               onDelete={() => onDeleteReply?.(reply.id)}
@@ -170,7 +178,7 @@ export default function FeedPostComment({
           <input
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
-            placeholder={`Responder ${comment.authorName}…`}
+            placeholder={`Responder ${author.displayName}…`}
             className="min-w-0 flex-1 bg-transparent text-sm text-cp-text outline-none placeholder:text-cp-muted"
             onKeyDown={(e) => e.key === 'Enter' && handleSubmitReply()}
             autoFocus

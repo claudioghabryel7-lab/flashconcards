@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { updateProfile } from 'firebase/auth'
 import { Camera, Save } from 'lucide-react'
-import { db } from '../firebase/config'
+import { auth, db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import UserAvatar from '../components/UserAvatar'
 import { readImageAsBase64 } from '../utils/imageBase64'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
+import { syncUserCommunityIdentity } from '../services/communityUserService'
+import { invalidateCommunityAuthorCache } from '../hooks/useCommunityAuthors'
 import toast from 'react-hot-toast'
 
 export default function PerfilConfiguracoes() {
@@ -52,10 +55,11 @@ export default function PerfilConfiguracoes() {
     if (!user?.uid) return
     setSaving(true)
     try {
+      const displayName = form.displayName.trim() || user.email?.split('@')[0] || 'Aluno'
       await setDoc(
         doc(db, 'users', user.uid),
         {
-          displayName: form.displayName.trim() || user.email?.split('@')[0],
+          displayName,
           photoBase64: form.photoBase64 || null,
           birthDate: form.birthDate || null,
           phone: form.phone.trim() || null,
@@ -66,6 +70,17 @@ export default function PerfilConfiguracoes() {
         },
         { merge: true },
       )
+
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, { displayName })
+      }
+
+      await syncUserCommunityIdentity(user.uid, {
+        displayName,
+        photoBase64: form.photoBase64 || null,
+      })
+      invalidateCommunityAuthorCache(user.uid)
+
       toast.success('Perfil salvo!')
     } catch (err) {
       console.error(err)

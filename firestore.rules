@@ -366,7 +366,7 @@ service cloud.firestore {
           (
             resource.data.userId == request.auth.uid &&
             request.resource.data.userId == resource.data.userId &&
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'feedPostId'])
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt', 'feedPostId', 'userName', 'userPhotoBase64'])
           ) ||
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'dislikes'])
         );
@@ -714,7 +714,7 @@ service cloud.firestore {
     match /follows/{followId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.followerId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.followerId == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource.data.followerId == request.auth.uid || isAdmin());
     }
 
     match /{document=**} {

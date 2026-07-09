@@ -32,7 +32,7 @@ const Dashboard = () => {
         </h1>
         <p className="mt-2 text-cp-muted">Acesso rápido às ferramentas de estudo</p>
         <div className="mt-4">
-          <OnlineNowBadge courseId={profile?.selectedCourseId ?? null} />
+          <OnlineNowBadge platformWide />
         </div>
       </div>
 

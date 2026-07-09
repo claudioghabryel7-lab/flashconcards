@@ -27,6 +27,8 @@ import {
   getMinorConsentRules,
   validateOnboardingProfile,
 } from '../../utils/minorConsent'
+import { syncUserCommunityIdentity } from '../../services/communityUserService'
+import { invalidateCommunityAuthorCache } from '../../hooks/useCommunityAuthors'
 import '../../styles/course-onboarding.css'
 
 const HIDDEN_PATHS = ['/login', '/select-course', '/setup']
@@ -276,6 +278,12 @@ export default function CourseOnboarding() {
         },
         { merge: true },
       )
+
+      await syncUserCommunityIdentity(user.uid, {
+        displayName,
+        photoBase64: profile?.photoBase64 || null,
+      })
+      invalidateCommunityAuthorCache(user.uid)
 
       toast.success('Tudo pronto! Bora estudar! 🚀', {
         duration: 4000,

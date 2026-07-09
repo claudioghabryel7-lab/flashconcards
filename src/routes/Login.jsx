@@ -10,7 +10,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
-import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
+import { requestPasswordResetEmail } from '../utils/adminApi'
 
 const Login = () => {
   const { login, register, user } = useAuth()
@@ -212,22 +212,7 @@ const Login = () => {
     setForgotPasswordLoading(true)
 
     try {
-      const response = await fetch(FIREBASE_FUNCTIONS.sendPasswordResetEmail, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: forgotPasswordEmail.toLowerCase().trim(),
-          baseUrl: window.location.origin,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao enviar email de redefinição')
-      }
+      await requestPasswordResetEmail(forgotPasswordEmail)
 
       setForgotPasswordMessage('✅ Email de redefinição enviado! Verifique sua caixa de entrada (e spam) para redefinir sua senha.')
       setForgotPasswordEmail('')

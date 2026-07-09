@@ -3,6 +3,21 @@ import { useEffect } from 'react'
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db, firebaseInitialized, initFirebase } from '../firebase/config'
 import { useAuth } from './useAuth'
+import { PRESENCE_HEARTBEAT_MS } from '../utils/onlineNow'
+
+function buildPresencePayload(user, profile, status) {
+  return {
+    uid: String(user.uid),
+    email: String(user.email || ''),
+    displayName: String(
+      profile?.displayName || user.displayName || user.email || 'Usuário',
+    ),
+    courseId: profile?.selectedCourseId ?? null,
+    status,
+    lastSeen: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }
+}
 
 // Hook para rastrear status online/offline do usuário
 export const useOnlineStatus = () => {
@@ -10,69 +25,69 @@ export const useOnlineStatus = () => {
 
   useEffect(() => {
     initFirebase()
-    if (!firebaseInitialized || !db || !user || !user.uid) return
+    if (!firebaseInitialized || !db || !user || !user.uid) return () => {}
 
-    // Garantir que uid é uma string
     const userId = String(user.uid)
-    if (!userId) return
+    if (!userId) return () => {}
 
     const userPresenceRef = doc(db, 'presence', userId)
+    let heartbeatInterval = null
 
-    // Marcar como online imediatamente
-    const setOnline = async () => {
+    const writePresence = async (status) => {
       try {
-        await setDoc(userPresenceRef, {
-          uid: userId,
-          email: String(user.email || ''),
-          displayName: String(user.displayName || user.email || 'Usuário'),
-          courseId: profile?.selectedCourseId || null,
-          status: 'online',
-          lastSeen: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }, { merge: true })
-        
-        // Log removido para limpar o console
+        await setDoc(
+          userPresenceRef,
+          buildPresencePayload(user, profile, status),
+          { merge: true },
+        )
       } catch (err) {
-        // Garantir que o erro seja convertido para string antes de logar
         const errorMessage = err instanceof Error ? err.message : String(err)
         if (isDevEnv()) {
-          console.error('Erro ao atualizar status online:', errorMessage)
+          console.error('Erro ao atualizar presença:', errorMessage)
         }
       }
     }
 
-    // Atualizar imediatamente
-    setOnline()
-    
-    // Atualizar heartbeat a cada 15 segundos (mais frequente para melhor sincronização)
-    const heartbeatInterval = setInterval(() => {
-      setDoc(userPresenceRef, {
-        status: 'online',
-        courseId: profile?.selectedCourseId || null,
-        lastSeen: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }, { merge: true }).catch(err => {
-        // Garantir que o erro seja convertido para string antes de logar
-        const errorMessage = err instanceof Error ? err.message : String(err)
-        if (isDevEnv()) {
-          console.error('Erro no heartbeat:', errorMessage)
-        }
-      })
-    }, 15000) // 15 segundos
+    const markOnline = () => writePresence('online')
+    const markOffline = () => writePresence('offline')
 
-    // Cleanup - marcar como offline ao desmontar
-    return () => {
-      clearInterval(heartbeatInterval)
-      // Marcar como offline ao desmontar
-      setDoc(userPresenceRef, {
-        status: 'offline',
-        courseId: profile?.selectedCourseId || null,
-        lastSeen: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }, { merge: true }).catch(() => {
-        // Silenciosamente ignorar erros no cleanup
-      })
+    const startHeartbeat = () => {
+      if (heartbeatInterval) return
+      heartbeatInterval = setInterval(markOnline, PRESENCE_HEARTBEAT_MS)
     }
-  }, [user, profile?.selectedCourseId])
-}
 
+    const stopHeartbeat = () => {
+      if (!heartbeatInterval) return
+      clearInterval(heartbeatInterval)
+      heartbeatInterval = null
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        markOnline()
+        startHeartbeat()
+      } else {
+        stopHeartbeat()
+        markOffline()
+      }
+    }
+
+    const onPageHide = () => {
+      stopHeartbeat()
+      markOffline()
+    }
+
+    markOnline()
+    startHeartbeat()
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('pagehide', onPageHide)
+
+    return () => {
+      stopHeartbeat()
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('pagehide', onPageHide)
+      markOffline()
+    }
+  }, [user, profile?.selectedCourseId, profile?.displayName])
+}

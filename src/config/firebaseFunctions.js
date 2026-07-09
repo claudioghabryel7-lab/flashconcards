@@ -27,6 +27,9 @@ export const FIREBASE_FUNCTIONS = {
   
   // Função para atualizar senha do usuário usando token de reset
   updateUserPassword: `${FIREBASE_FUNCTIONS_BASE_URL}/updateUserPassword`,
+
+  // Envio de email formatado pelo admin
+  sendAdminBroadcastEmail: `${FIREBASE_FUNCTIONS_BASE_URL}/sendAdminBroadcastEmail`,
   
   // Função para gerar notícias de concursos automaticamente com IA
   generateConcursoNews: `${FIREBASE_FUNCTIONS_BASE_URL}/generateConcursoNews`,

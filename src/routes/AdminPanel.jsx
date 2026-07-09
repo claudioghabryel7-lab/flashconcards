@@ -37,17 +37,21 @@ import {
 } from 'firebase/firestore'
 import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager'
 import AdminContentModeration from '../components/admin/AdminContentModeration'
+import AdminEmailBroadcast from '../components/admin/AdminEmailBroadcast'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { defaultContentStatus, toggleContentStatus } from '../utils/contentStatus'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
 import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { auth, db, storage } from '../firebase/config'
+import { requestPasswordResetEmail } from '../utils/adminApi'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { createSlug } from '../utils/slug'
+import { purgeUserCommunityData } from '../services/communityUserService'
+import { isPresenceOnline, PRESENCE_HEARTBEAT_MS, countOnlineFromEntries } from '../utils/onlineNow'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import * as pdfjsLib from 'pdfjs-dist'
 import { jsonrepair } from 'jsonrepair'
@@ -74,6 +78,7 @@ const AdminPanel = () => {
   const [cards, setCards] = useState([])
   const [users, setUsers] = useState([])
   const [presence, setPresence] = useState({}) // { uid: { status, lastSeen } }
+  const [presenceNow, setPresenceNow] = useState(() => Date.now())
   const [jsonInput, setJsonInput] = useState('')
   const [message, setMessage] = useState('')
   const [userForm, setUserForm] = useState({ email: '', password: '', name: '', role: 'student' })
@@ -866,6 +871,11 @@ const AdminPanel = () => {
     loadEditalVerticalizado()
   }, [selectedCourseForFullGeneration])
 
+  useEffect(() => {
+    const tick = setInterval(() => setPresenceNow(Date.now()), PRESENCE_HEARTBEAT_MS)
+    return () => clearInterval(tick)
+  }, [])
+
   // Carregar usuários, banners, etc.
   useEffect(() => {
     const usersRef = collection(db, 'users')
@@ -894,12 +904,11 @@ const AdminPanel = () => {
             }
           }
         })
-        console.log('Presence data atualizado:', presenceData)
         setPresence(presenceData)
       },
       (error) => {
         console.error('Erro ao carregar presence:', error)
-      }
+      },
     )
 
     // Carregar banners
@@ -2539,6 +2548,9 @@ REGRAS CRÍTICAS:
       // 5. Deletar dados relacionados do usuário
       console.log('🗑️ Deletando dados relacionados...')
       try {
+        const communityResult = await purgeUserCommunityData(userUid)
+        console.log('✅ Comunidade limpa:', communityResult)
+
         // Deletar progresso do usuário
         const progressRef = doc(db, 'userProgress', userUid)
         await deleteDoc(progressRef).catch(() => {
@@ -4529,25 +4541,9 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     setResetPasswordError(null)
 
     try {
-      // Chamar a função Cloud Function que envia email personalizado
-      const response = await fetch(FIREBASE_FUNCTIONS.sendPasswordResetEmail, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: resetEmail.toLowerCase().trim(),
-          baseUrl: window.location.origin,
-        }),
-      })
+      await requestPasswordResetEmail(resetEmail)
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao enviar email')
-      }
-
-      setGeneratedLink('') // Não precisamos mais do link, o email foi enviado
+      setGeneratedLink('')
       setMessage('✅ Email de redefinição de senha enviado com sucesso! Verifique a caixa de entrada (e spam) do usuário.')
       setResetPasswordError(null)
     } catch (err) {
@@ -4597,23 +4593,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     setResetPasswordError(null)
 
     try {
-      // Chamar a função Cloud Function que envia email personalizado
-      const response = await fetch(FIREBASE_FUNCTIONS.sendPasswordResetEmail, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: userEmail.toLowerCase().trim(),
-          baseUrl: window.location.origin,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao enviar email')
-      }
+      await requestPasswordResetEmail(userEmail)
 
       setMessage(`✅ Email de redefinição de senha enviado com sucesso para ${userEmail}! Verifique a caixa de entrada (e spam) do usuário.`)
       setResetPasswordError(null)
@@ -10700,10 +10680,10 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                   <div className="relative">
                     <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-4">
                       <LockClosedIcon className="h-5 w-5" />
-                      Gerar Link de Redefinição de Senha
+                      Redefinição de Senha por Email
                     </p>
                     <p className="text-xs text-slate-500 mb-6">
-                      Gere um link seguro e oculto para usuários redefinirem suas senhas. O link expira em 24 horas.
+                      Envia um email formatado com link seguro para o usuário redefinir a senha. O link expira em 24 horas.
                     </p>
 
                     <div className="space-y-4">
@@ -10725,7 +10705,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                 disabled={generatingLink || !resetEmail.trim()}
                 className="rounded-lg bg-alego-600 px-4 py-2 text-sm font-semibold text-white hover:bg-alego-700 disabled:opacity-50"
               >
-                {generatingLink ? 'Gerando...' : 'Gerar Link'}
+                {generatingLink ? 'Enviando...' : 'Enviar Email'}
               </button>
             </div>
           </div>
@@ -10761,6 +10741,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                     </div>
                   </div>
                 </div>
+
+                <AdminEmailBroadcast users={users} />
 
                 {/* Gerenciamento de usuários */}
                 <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
@@ -10829,13 +10811,14 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                   <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>
                   <div className="relative">
                     <p className="text-sm font-semibold text-alego-600 mb-4">
-                      {users.length} usuários cadastrados
+                      {users.length} usuários cadastrados ·{' '}
+                      {countOnlineFromEntries(presence, { now: presenceNow })} online agora (tempo real)
                     </p>
                     <div className="mt-4 divide-y divide-slate-100">
                       {users.map((user) => {
-                        const userPresence = presence[user.uid] || { status: 'offline' }
-                        const isOnline = userPresence.status === 'online'
-                        const hasPresenceData = presence[user.uid] !== undefined
+                        const userPresence = presence[user.uid]
+                        const isOnline = isPresenceOnline(userPresence, presenceNow)
+                        const hasPresenceData = userPresence !== undefined
                         
                         return (
                           <div

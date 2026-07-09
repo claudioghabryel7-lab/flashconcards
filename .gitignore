@@ -21,6 +21,7 @@ build/
 # Environment variables
 .env
 .env.local
+functions/.env
 .env.production
 .env.example
 .env.example.template

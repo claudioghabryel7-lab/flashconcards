@@ -3,6 +3,7 @@ import { db } from '../firebase/config'
 
 function publicUserFields(docSnap) {
   const data = docSnap.data()
+  if (data.deleted === true) return null
   return {
     uid: docSnap.id,
     displayName: data.displayName || data.email?.split('@')[0] || 'Aluno',
@@ -34,8 +35,10 @@ export async function fetchCoursePeopleSuggestions({
     snap.forEach((docSnap) => {
       if (results.length >= max) return
       if (followingSet.has(docSnap.id) || seen.has(docSnap.id)) return
+      const fields = publicUserFields(docSnap)
+      if (!fields) return
       seen.add(docSnap.id)
-      results.push(publicUserFields(docSnap))
+      results.push(fields)
     })
   }
 

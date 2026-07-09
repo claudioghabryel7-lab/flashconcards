@@ -48,7 +48,11 @@ export default function ComunidadePerfil() {
     }
 
     const unsub = onSnapshot(doc(db, 'users', userId), (snap) => {
-      setProfileUser(snap.exists() ? { uid: snap.id, ...snap.data() } : null)
+      setProfileUser(
+        snap.exists() && snap.data()?.deleted !== true
+          ? { uid: snap.id, ...snap.data() }
+          : null,
+      )
       setLoading(false)
     })
 

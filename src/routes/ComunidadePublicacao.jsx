@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   doc,
@@ -28,6 +28,7 @@ import {
   toggleFeedReplyLike,
   addFeedCommentReply,
 } from '../services/trilhaFeedMutations'
+import { useCommunityAuthors, resolveCommunityAuthor } from '../hooks/useCommunityAuthors'
 
 const BOOKMARK_KEY = 'trilhaFeedBookmarks'
 
@@ -86,6 +87,22 @@ export default function ComunidadePublicacao() {
 
     return () => unsub()
   }, [postId])
+
+  const authorIds = useMemo(() => {
+    if (!post) return []
+    const ids = new Set()
+    if (post.authorId) ids.add(post.authorId)
+    ;(post.comments || []).forEach((comment) => {
+      if (comment.authorId) ids.add(comment.authorId)
+      ;(comment.replies || []).forEach((reply) => {
+        if (reply.authorId) ids.add(reply.authorId)
+      })
+    })
+    return [...ids]
+  }, [post])
+
+  const { authorsMap } = useCommunityAuthors(authorIds)
+  const postAuthor = post ? resolveCommunityAuthor(post.authorId, authorsMap, post) : null
 
   const toggleLike = useCallback(
     async (likes = []) => {
@@ -241,7 +258,7 @@ export default function ComunidadePublicacao() {
     )
   }
 
-  if (!post) {
+  if (!post || !postAuthor) {
     return (
       <ComunidadeShell title="Publicação" backHref="/comunidade" user={user} profile={profile}>
         <div className="px-6 py-24 text-center text-sm text-cp-muted">Publicação não encontrada.</div>
@@ -251,7 +268,7 @@ export default function ComunidadePublicacao() {
 
   return (
     <ComunidadeShell
-      title={post.authorName || 'Publicação'}
+      title={postAuthor.displayName || 'Publicação'}
       backHref="/comunidade"
       user={user}
       profile={profile}
@@ -267,6 +284,7 @@ export default function ComunidadePublicacao() {
       )}
       <FeedPost
         post={post}
+        authorsMap={authorsMap}
         user={user}
         profile={profile}
         isAdmin={isAdmin}

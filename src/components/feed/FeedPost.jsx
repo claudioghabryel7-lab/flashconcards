@@ -16,12 +16,14 @@ import FeedPostComment from './FeedPostComment'
 import CommentFormattedText from '../content/CommentFormattedText'
 import { countFeedComments } from '../../services/trilhaFeedMutations'
 import { formatFeedTime, getPostCaption, resolvePostType, FEED_POST_TYPES } from '../../utils/feedUtils'
+import { resolveCommunityAuthor } from '../../hooks/useCommunityAuthors'
 
 export default function FeedPost({
   post,
   user,
   profile,
   isAdmin,
+  authorsMap = {},
   liked,
   bookmarked,
   isToday,
@@ -54,6 +56,8 @@ export default function FeedPost({
   const previewComments = showAllComments ? comments : comments.slice(0, 2)
   const isAuthor = user?.uid === post.authorId
   const canManagePost = isAuthor || isAdmin
+  const author = resolveCommunityAuthor(post.authorId, authorsMap, post)
+  if (!author) return null
 
   const handleLike = () => {
     onToggleLike()
@@ -72,8 +76,8 @@ export default function FeedPost({
       <div className="flex items-center gap-3 px-3 py-2.5">
         <Link to={`/profile/${post.authorId}`} className="shrink-0">
           <FeedStoryAvatar
-            photoBase64={post.authorPhotoBase64}
-            name={post.authorName}
+            photoBase64={author.photoBase64}
+            name={author.displayName}
             size="sm"
             hasStory={isToday}
           />
@@ -84,7 +88,7 @@ export default function FeedPost({
               to={`/profile/${post.authorId}`}
               className="truncate text-sm font-semibold text-cp-text hover:text-cp-accent"
             >
-              {post.authorName}
+              {author.displayName}
             </Link>
             {isToday && (
               <span className="rounded-full bg-cp-accent/15 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-cp-accent">
@@ -207,7 +211,7 @@ export default function FeedPost({
                 to={`/profile/${post.authorId}`}
                 className="mr-1 font-semibold hover:text-cp-accent"
               >
-                {post.authorName}
+                {author.displayName}
               </Link>
             </p>
             {caption.questionText ? (
@@ -227,7 +231,7 @@ export default function FeedPost({
                 to={`/profile/${post.authorId}`}
                 className="mr-1 font-semibold hover:text-cp-accent"
               >
-                {post.authorName}
+                {author.displayName}
               </Link>
               {caption.verb}{' '}
               <span className="font-medium">{caption.materia}</span>
@@ -259,6 +263,7 @@ export default function FeedPost({
             key={c.id}
             comment={c}
             user={user}
+            authorsMap={authorsMap}
             readOnly={readOnly}
             isPostAuthor={isAuthor}
             isAdmin={isAdmin}

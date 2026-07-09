@@ -325,7 +325,8 @@ export const AuthProvider = ({ children }) => {
       throw new Error('Firebase não está configurado. Verifique as variáveis de ambiente VITE_FIREBASE_*.')
     }
     try {
-      const emailLower = email.toLowerCase().trim()
+      const emailLower = (email || '').toLowerCase().trim()
+      if (!emailLower) throw new Error('Email inválido.')
       const userCredential = await signInWithEmailAndPassword(auth, emailLower, password)
       
       // Verificar se o usuário foi deletado ANTES de permitir login
@@ -374,7 +375,8 @@ export const AuthProvider = ({ children }) => {
       throw new Error('Firebase não está configurado. Verifique as variáveis de ambiente VITE_FIREBASE_*.')
     }
     try {
-      const emailLower = email.toLowerCase().trim()
+      const emailLower = (email || '').toLowerCase().trim()
+      if (!emailLower) throw new Error('Email inválido.')
       const userCredential = await createUserWithEmailAndPassword(auth, emailLower, password)
       
       // Atualizar displayName se fornecido
