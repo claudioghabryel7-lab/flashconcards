@@ -672,6 +672,10 @@ service cloud.firestore {
       allow create, update: if isAdmin();
       allow delete: if isAdmin();
     }
+
+    match /adminMateriaisConcurso/{materialId} {
+      allow read, create, update, delete: if isAdmin();
+    }
     
     // Progresso Individual do Edital Verticalizado
     match /userEditalProgress/{userId} {

@@ -1,16 +1,42 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AcademicCapIcon,
   ArrowDownTrayIcon,
   DocumentTextIcon,
+  PrinterIcon,
   SparklesIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline'
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+} from 'firebase/firestore'
+import { db } from '../../firebase/config'
+import { useAuth } from '../../hooks/useAuth'
 import { generateAiJson } from '../../utils/geminiApi'
 import {
   buildConcursoDifficultyPrompt,
   buildConcursoMaterialPrompt,
 } from '../../utils/concursoMaterialPrompt'
-import { downloadConcursoMaterialPdf } from '../../utils/materialPdfExport'
+import { downloadConcursoMaterialPdf, printConcursoMaterial } from '../../utils/materialPdfExport'
+
+function formatSavedDate(timestamp) {
+  if (!timestamp) return ''
+  const date = timestamp?.toDate?.() || new Date(timestamp)
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 
 function renderMaterialPreview(material) {
   if (!material) return null
@@ -88,6 +114,7 @@ function renderMaterialPreview(material) {
 }
 
 export default function AdminConcursoMaterial() {
+  const { user } = useAuth()
   const [form, setForm] = useState({
     concurso: '',
     cargo: '',
@@ -96,10 +123,21 @@ export default function AdminConcursoMaterial() {
   })
   const [generating, setGenerating] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
   const [progress, setProgress] = useState('')
   const [feedback, setFeedback] = useState('')
   const [preview, setPreview] = useState(null)
+  const [selectedId, setSelectedId] = useState(null)
+  const [savedMaterials, setSavedMaterials] = useState([])
   const previewRef = useRef(null)
+
+  useEffect(() => {
+    const q = query(collection(db, 'adminMateriaisConcurso'), orderBy('createdAt', 'desc'))
+    const unsub = onSnapshot(q, (snap) => {
+      setSavedMaterials(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    })
+    return () => unsub()
+  }, [])
 
   const canGenerate = useMemo(
     () => form.concurso.trim() && form.cargo.trim() && form.banca.trim() && !generating,
@@ -113,6 +151,7 @@ export default function AdminConcursoMaterial() {
     setProgress('')
     setFeedback('')
     setPreview(null)
+    setSelectedId(null)
 
     try {
       setProgress('🧠 Analisando dificuldade do concurso, cargo e banca...')
@@ -150,10 +189,17 @@ export default function AdminConcursoMaterial() {
         banca: form.banca.trim(),
         focoMateria: form.focoMateria.trim() || null,
         analiseDificuldade: material.analiseDificuldade || analise,
+        createdBy: user?.uid || null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       }
 
-      setPreview(payload)
-      setFeedback('✅ Material gerado! Confira na pré-visualização e baixe o PDF quando quiser.')
+      setProgress('💾 Salvando material no Firebase...')
+      const docRef = await addDoc(collection(db, 'adminMateriaisConcurso'), payload)
+
+      setPreview({ id: docRef.id, ...payload })
+      setSelectedId(docRef.id)
+      setFeedback('✅ Material gerado e salvo! Fica disponível até você excluir.')
       setProgress('')
     } catch (err) {
       console.error(err)
@@ -161,6 +207,33 @@ export default function AdminConcursoMaterial() {
       setProgress('')
     } finally {
       setGenerating(false)
+    }
+  }
+
+  const handleSelectSaved = (item) => {
+    setPreview(item)
+    setSelectedId(item.id)
+    setFeedback('')
+  }
+
+  const handleDelete = async (item) => {
+    if (!item?.id) return
+    const label = item.titulo || `${item.concurso} — ${item.cargo}`
+    if (!window.confirm(`Excluir o material "${label}"? Esta ação não pode ser desfeita.`)) return
+
+    setDeletingId(item.id)
+    try {
+      await deleteDoc(doc(db, 'adminMateriaisConcurso', item.id))
+      if (selectedId === item.id) {
+        setPreview(null)
+        setSelectedId(null)
+      }
+      setFeedback('🗑️ Material excluído.')
+    } catch (err) {
+      console.error(err)
+      setFeedback(`❌ Erro ao excluir: ${err.message}`)
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -173,12 +246,24 @@ export default function AdminConcursoMaterial() {
     try {
       const fileName = `${preview.concurso || 'material'}-${preview.cargo || 'cargo'}.pdf`
       await downloadConcursoMaterialPdf(preview, fileName)
-      setFeedback('✅ PDF baixado com o conteúdo completo.')
+      setFeedback('✅ PDF baixado com todo o conteúdo.')
     } catch (err) {
       console.error(err)
       setFeedback(`❌ Erro ao gerar PDF: ${err.message}`)
     } finally {
       setDownloadingPdf(false)
+    }
+  }
+
+  const handlePrintPdf = () => {
+    if (!preview) return
+
+    try {
+      printConcursoMaterial(preview)
+      setFeedback('🖨️ Na janela de impressão, escolha "Salvar como PDF" para versão formatada.')
+    } catch (err) {
+      console.error(err)
+      setFeedback(`❌ Erro ao imprimir: ${err.message}`)
     }
   }
 
@@ -194,93 +279,140 @@ export default function AdminConcursoMaterial() {
               Material por Concurso
             </h2>
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              Informe concurso, cargo e banca. A IA analisa a dificuldade, gera o material na
-              pré-visualização e você baixa o PDF formatado.
+              Informe concurso, cargo e banca. A IA gera o material, salva no Firebase e fica
+              disponível nesta lista até você excluir. Não vai para cursos nem para alunos.
             </p>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-          <h3 className="mb-4 flex items-center gap-2 text-lg font-bold">
-            <SparklesIcon className="h-5 w-5 text-emerald-600" />
-            Configuração
-          </h3>
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <h3 className="mb-4 flex items-center gap-2 text-lg font-bold">
+              <SparklesIcon className="h-5 w-5 text-emerald-600" />
+              Configuração
+            </h3>
 
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Concurso</label>
-              <input
-                value={form.concurso}
-                onChange={(e) => setForm({ ...form, concurso: e.target.value })}
-                placeholder="Ex: PM-GO 2026"
-                className="w-full rounded-xl border-2 border-slate-200 p-3 text-sm dark:border-slate-600 dark:bg-slate-700"
-                disabled={generating}
-              />
-            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Concurso</label>
+                <input
+                  value={form.concurso}
+                  onChange={(e) => setForm({ ...form, concurso: e.target.value })}
+                  placeholder="Ex: PM-GO 2026"
+                  className="w-full rounded-xl border-2 border-slate-200 p-3 text-sm dark:border-slate-600 dark:bg-slate-700"
+                  disabled={generating}
+                />
+              </div>
 
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Cargo</label>
-              <input
-                value={form.cargo}
-                onChange={(e) => setForm({ ...form, cargo: e.target.value })}
-                placeholder="Ex: Soldado PM"
-                className="w-full rounded-xl border-2 border-slate-200 p-3 text-sm dark:border-slate-600 dark:bg-slate-700"
-                disabled={generating}
-              />
-            </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Cargo</label>
+                <input
+                  value={form.cargo}
+                  onChange={(e) => setForm({ ...form, cargo: e.target.value })}
+                  placeholder="Ex: Soldado PM"
+                  className="w-full rounded-xl border-2 border-slate-200 p-3 text-sm dark:border-slate-600 dark:bg-slate-700"
+                  disabled={generating}
+                />
+              </div>
 
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Banca</label>
-              <input
-                value={form.banca}
-                onChange={(e) => setForm({ ...form, banca: e.target.value })}
-                placeholder="Ex: Instituto AOCP, FGV, CEBRASPE..."
-                className="w-full rounded-xl border-2 border-slate-200 p-3 text-sm dark:border-slate-600 dark:bg-slate-700"
-                disabled={generating}
-              />
-            </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Banca</label>
+                <input
+                  value={form.banca}
+                  onChange={(e) => setForm({ ...form, banca: e.target.value })}
+                  placeholder="Ex: Instituto AOCP, FGV, CEBRASPE..."
+                  className="w-full rounded-xl border-2 border-slate-200 p-3 text-sm dark:border-slate-600 dark:bg-slate-700"
+                  disabled={generating}
+                />
+              </div>
 
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">
-                Foco opcional (matéria/disciplina)
-              </label>
-              <input
-                value={form.focoMateria}
-                onChange={(e) => setForm({ ...form, focoMateria: e.target.value })}
-                placeholder="Ex: Direito Constitucional — deixe vazio para visão geral"
-                className="w-full rounded-xl border-2 border-slate-200 p-3 text-sm dark:border-slate-600 dark:bg-slate-700"
-                disabled={generating}
-              />
-            </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">
+                  Foco opcional (matéria/disciplina)
+                </label>
+                <input
+                  value={form.focoMateria}
+                  onChange={(e) => setForm({ ...form, focoMateria: e.target.value })}
+                  placeholder="Ex: Direito Constitucional — deixe vazio para visão geral"
+                  className="w-full rounded-xl border-2 border-slate-200 p-3 text-sm dark:border-slate-600 dark:bg-slate-700"
+                  disabled={generating}
+                />
+              </div>
 
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={!canGenerate}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3 font-bold text-white disabled:opacity-50"
-            >
-              {generating ? (
-                <>
-                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Gerando...
-                </>
-              ) : (
-                <>
-                  <DocumentTextIcon className="h-5 w-5" />
-                  Gerar material com IA
-                </>
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={!canGenerate}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3 font-bold text-white disabled:opacity-50"
+              >
+                {generating ? (
+                  <>
+                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <DocumentTextIcon className="h-5 w-5" />
+                    Gerar e salvar material
+                  </>
+                )}
+              </button>
+
+              {progress && (
+                <p className="whitespace-pre-line rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200">
+                  {progress}
+                </p>
               )}
-            </button>
+              {feedback && (
+                <p className="rounded-lg bg-slate-100 p-3 text-sm dark:bg-slate-700">{feedback}</p>
+              )}
+            </div>
+          </div>
 
-            {progress && (
-              <p className="whitespace-pre-line rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200">
-                {progress}
-              </p>
-            )}
-            {feedback && (
-              <p className="rounded-lg bg-slate-100 p-3 text-sm dark:bg-slate-700">{feedback}</p>
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <h3 className="mb-4 text-lg font-bold">Materiais salvos ({savedMaterials.length})</h3>
+            {savedMaterials.length === 0 ? (
+              <p className="text-sm text-slate-500">Nenhum material salvo ainda.</p>
+            ) : (
+              <div className="max-h-80 space-y-2 overflow-y-auto">
+                {savedMaterials.map((item) => {
+                  const isSelected = selectedId === item.id
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex items-start justify-between gap-2 rounded-xl border p-3 ${
+                        isSelected
+                          ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-900/20'
+                          : 'border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-900'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleSelectSaved(item)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                          {item.titulo || `${item.concurso} — ${item.cargo}`}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {item.concurso} · {item.banca} · {formatSavedDate(item.createdAt)}
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(item)}
+                        disabled={deletingId === item.id}
+                        className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-900/20"
+                        title="Excluir material"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -289,15 +421,25 @@ export default function AdminConcursoMaterial() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-lg font-bold">Pré-visualização</h3>
             {preview && (
-              <button
-                type="button"
-                onClick={handleDownloadPdf}
-                disabled={downloadingPdf}
-                className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-              >
-                <ArrowDownTrayIcon className="h-4 w-4" />
-                {downloadingPdf ? 'Gerando PDF...' : 'Baixar PDF completo'}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadPdf}
+                  disabled={downloadingPdf}
+                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  <ArrowDownTrayIcon className="h-4 w-4" />
+                  {downloadingPdf ? 'Gerando...' : 'Baixar PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrintPdf}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 dark:border-slate-500 dark:bg-slate-700 dark:text-slate-100"
+                >
+                  <PrinterIcon className="h-4 w-4" />
+                  Imprimir formatado
+                </button>
+              </div>
             )}
           </div>
 
@@ -309,8 +451,7 @@ export default function AdminConcursoMaterial() {
               renderMaterialPreview(preview)
             ) : (
               <p className="text-sm text-slate-500">
-                O material gerado aparecerá aqui. Use o botão acima para baixar o PDF formatado com
-                todo o conteúdo.
+                Gere um material ou selecione um item da lista ao lado para visualizar e baixar.
               </p>
             )}
           </div>
