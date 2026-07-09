@@ -1,18 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { db, firebaseInitialized, initFirebase } from '../firebase/config'
-import { isPresenceFresh, resolveDisplayedOnlineCount, REAL_THRESHOLD } from '../utils/onlineNow'
+import { isPresenceFresh } from '../utils/onlineNow'
 
-export function useCourseOnlineCount(courseId, options = {}) {
-  const { fallbackSeed = courseId || 'global' } = options
-  const [realCount, setRealCount] = useState(0)
+export function useCourseOnlineCount(courseId) {
+  const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [now, setNow] = useState(() => new Date())
-
-  useEffect(() => {
-    const tick = setInterval(() => setNow(new Date()), 30_000)
-    return () => clearInterval(tick)
-  }, [])
 
   useEffect(() => {
     initFirebase()
@@ -25,17 +18,17 @@ export function useCourseOnlineCount(courseId, options = {}) {
       collection(db, 'presence'),
       (snapshot) => {
         const now = Date.now()
-        let count = 0
+        let online = 0
 
         snapshot.forEach((docSnap) => {
           const data = docSnap.data()
           if (courseId && data.courseId !== courseId) return
           if (data.status !== 'online') return
           if (!isPresenceFresh(data.lastSeen || data.updatedAt, now)) return
-          count += 1
+          online += 1
         })
 
-        setRealCount(count)
+        setCount(online)
         setLoading(false)
       },
       () => {
@@ -46,15 +39,5 @@ export function useCourseOnlineCount(courseId, options = {}) {
     return () => unsubscribe()
   }, [courseId])
 
-  const displayCount = useMemo(
-    () => resolveDisplayedOnlineCount(realCount, fallbackSeed, now),
-    [fallbackSeed, realCount, now],
-  )
-
-  return {
-    realCount,
-    displayCount,
-    loading,
-    usesRealCount: realCount >= REAL_THRESHOLD,
-  }
+  return { count, loading }
 }

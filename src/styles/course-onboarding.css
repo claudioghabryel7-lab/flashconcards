@@ -1,0 +1,418 @@
+.course-onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: co-fade-in 0.35s ease-out;
+}
+
+.course-onboarding-shell {
+  position: relative;
+  width: min(100%, 42rem);
+  max-height: min(92vh, 720px);
+  overflow: hidden;
+  border-radius: 1.5rem;
+  border: 1px solid color-mix(in srgb, var(--cp-accent, #7c3aed) 35%, var(--cp-border, #e4e4e7));
+  background: color-mix(in srgb, var(--cp-bg-elevated, #0f0f12) 94%, transparent);
+  box-shadow:
+    0 0 0 1px rgba(124, 58, 237, 0.08),
+    0 24px 80px rgba(0, 0, 0, 0.45),
+    0 0 60px var(--cp-glow, rgba(124, 58, 237, 0.15));
+}
+
+.course-onboarding-aurora {
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(
+    120deg,
+    var(--cp-accent, #7c3aed),
+    var(--cp-accent-2, #0891b2),
+    var(--cp-accent-3, #db2777),
+    var(--cp-accent, #7c3aed)
+  );
+  background-size: 300% 300%;
+  animation: co-aurora-shift 6s ease infinite;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.55;
+  z-index: 0;
+}
+
+.course-onboarding-shell::before {
+  content: '';
+  position: absolute;
+  inset: -40% -20% auto;
+  height: 55%;
+  background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.22), transparent 70%);
+  pointer-events: none;
+}
+
+.course-onboarding-shell::after {
+  content: '';
+  position: absolute;
+  right: -10%;
+  bottom: -20%;
+  width: 45%;
+  height: 45%;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.12), transparent 70%);
+  pointer-events: none;
+}
+
+.course-onboarding-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.12;
+  background-image:
+    linear-gradient(rgba(99, 102, 241, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.35) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, black, transparent 85%);
+}
+
+.course-onboarding-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  max-height: min(92vh, 720px);
+}
+
+.course-onboarding-header {
+  flex-shrink: 0;
+  padding: 1.25rem 1.5rem 0.75rem;
+  border-bottom: 1px solid var(--cp-border, #e4e4e7);
+}
+
+.course-onboarding-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+}
+
+.course-onboarding-footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 1.25rem;
+  border-top: 1px solid var(--cp-border, #e4e4e7);
+  background: color-mix(in srgb, var(--cp-bg, #09090b) 40%, transparent);
+}
+
+.course-onboarding-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  min-width: 5.5rem;
+}
+
+.course-onboarding-progress-bar {
+  width: 5.5rem;
+  height: 0.35rem;
+  border-radius: 9999px;
+  background: var(--cp-border, #e4e4e7);
+  overflow: hidden;
+}
+
+.course-onboarding-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--cp-accent, #7c3aed), var(--cp-accent-2, #0891b2));
+  box-shadow: 0 0 12px var(--cp-glow, rgba(124, 58, 237, 0.35));
+}
+
+.course-onboarding-progress-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-accent, #7c3aed);
+  font-variant-numeric: tabular-nums;
+}
+
+.course-onboarding-progress {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.course-onboarding-progress-dot {
+  height: 0.35rem;
+  width: 0.75rem;
+  border-radius: 9999px;
+  background: var(--cp-border, #e4e4e7);
+  transition: width 0.35s ease, background 0.35s ease;
+}
+
+.course-onboarding-progress-dot.is-active {
+  width: 1.75rem;
+  background: linear-gradient(90deg, var(--cp-accent, #6366f1), var(--cp-accent2, #8b5cf6));
+}
+
+.course-onboarding-progress-dot.is-done {
+  background: color-mix(in srgb, var(--cp-accent, #6366f1) 55%, transparent);
+}
+
+.course-onboarding-tour-card.is-accent-violet {
+  border-color: color-mix(in srgb, var(--cp-accent, #7c3aed) 30%, var(--cp-border));
+}
+.course-onboarding-tour-card.is-accent-cyan {
+  border-color: color-mix(in srgb, var(--cp-accent-2, #0891b2) 30%, var(--cp-border));
+}
+.course-onboarding-tour-card.is-accent-emerald {
+  border-color: color-mix(in srgb, var(--cp-success, #059669) 30%, var(--cp-border));
+}
+.course-onboarding-tour-card.is-accent-pink {
+  border-color: color-mix(in srgb, var(--cp-accent-3, #db2777) 30%, var(--cp-border));
+}
+.course-onboarding-tour-card.is-accent-amber {
+  border-color: color-mix(in srgb, var(--cp-accent-4, #d97706) 30%, var(--cp-border));
+}
+
+.course-onboarding-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.85rem;
+}
+
+.course-onboarding-chip {
+  padding: 0.25rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--cp-accent, #7c3aed);
+  background: color-mix(in srgb, var(--cp-accent, #7c3aed) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cp-accent, #7c3aed) 22%, transparent);
+}
+
+.course-onboarding-tour-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--cp-accent, #6366f1) 25%, var(--cp-border, #e4e4e7));
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--cp-accent, #6366f1) 12%, var(--cp-surface, #18181b)),
+    var(--cp-surface, #18181b)
+  );
+  padding: 1.5rem;
+  animation: co-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.course-onboarding-tour-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--cp-accent, #6366f1) 18%, transparent);
+  color: var(--cp-accent, #6366f1);
+  box-shadow: 0 0 24px rgba(99, 102, 241, 0.25);
+  animation: co-pulse-glow 2.4s ease-in-out infinite;
+}
+
+.course-onboarding-tour-title {
+  margin-top: 1rem;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, var(--cp-text, #fafafa), var(--cp-accent, #6366f1));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.course-onboarding-tour-desc {
+  margin-top: 0.65rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--cp-muted, #a1a1aa);
+}
+
+.course-onboarding-tour-link {
+  display: inline-flex;
+  margin-top: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--cp-accent, #6366f1);
+}
+
+.course-onboarding-field {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--cp-muted, #a1a1aa);
+}
+
+.course-onboarding-input {
+  margin-top: 0.35rem;
+  width: 100%;
+  border-radius: 0.85rem;
+  border: 1px solid var(--cp-border, #e4e4e7);
+  background: var(--cp-bg, #09090b);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+  color: var(--cp-text, #fafafa);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.course-onboarding-input:focus {
+  border-color: color-mix(in srgb, var(--cp-accent, #6366f1) 50%, var(--cp-border, #e4e4e7));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cp-accent, #6366f1) 18%, transparent);
+}
+
+.course-onboarding-input.is-error {
+  border-color: #f87171;
+}
+
+.course-onboarding-error {
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  color: #f87171;
+}
+
+.course-onboarding-minor-box {
+  margin-top: 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid color-mix(in srgb, #f59e0b 40%, var(--cp-border, #e4e4e7));
+  background: color-mix(in srgb, #f59e0b 8%, var(--cp-surface, #18181b));
+  padding: 0.85rem 1rem;
+}
+
+.course-onboarding-minor-box p {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--cp-text, #fafafa);
+}
+
+.course-onboarding-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--cp-muted, #a1a1aa);
+}
+
+.course-onboarding-check input {
+  margin-top: 0.15rem;
+  accent-color: var(--cp-accent, #6366f1);
+}
+
+.course-onboarding-spark {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cp-accent, #6366f1);
+  opacity: 0.6;
+  animation: co-float-spark 4s ease-in-out infinite;
+}
+
+.course-onboarding-spark:nth-child(2) {
+  top: 18%;
+  right: 12%;
+  animation-delay: 0.8s;
+}
+
+.course-onboarding-spark:nth-child(3) {
+  bottom: 22%;
+  left: 8%;
+  animation-delay: 1.6s;
+  background: #10b981;
+}
+
+.course-onboarding-spark:nth-child(4) {
+  top: 42%;
+  right: 6%;
+  animation-delay: 2.4s;
+  background: var(--cp-accent-3, #db2777);
+}
+
+@keyframes co-aurora-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes co-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes co-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes co-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes co-pulse-glow {
+  0%, 100% { box-shadow: 0 0 16px rgba(99, 102, 241, 0.2); }
+  50% { box-shadow: 0 0 28px rgba(99, 102, 241, 0.45); }
+}
+
+@keyframes co-float-spark {
+  0%, 100% { transform: translateY(0); opacity: 0.35; }
+  50% { transform: translateY(-10px); opacity: 0.9; }
+}
+
+@media (max-width: 640px) {
+  .course-onboarding-overlay {
+    padding: 0.5rem;
+    align-items: flex-end;
+  }
+
+  .course-onboarding-shell {
+    max-height: 94vh;
+    border-radius: 1.25rem 1.25rem 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .course-onboarding-overlay,
+  .course-onboarding-shell,
+  .course-onboarding-tour-card,
+  .course-onboarding-tour-icon,
+  .course-onboarding-spark,
+  .course-onboarding-aurora {
+    animation: none !important;
+  }
+}

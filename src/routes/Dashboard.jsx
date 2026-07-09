@@ -6,7 +6,6 @@ import {
 } from '@heroicons/react/24/solid'
 import { ArrowRightIcon as ArrowRightOutline, DocumentTextIcon, UserGroupIcon, ChartBarIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
-import LGPDConsent from '../components/LGPDConsent'
 import OnlineNowBadge from '@/components/cp/OnlineNowBadge'
 
 const quickLinks = [
@@ -61,8 +60,6 @@ const Dashboard = () => {
           })}
         </div>
       </div>
-
-      <LGPDConsent />
     </div>
   )
 }

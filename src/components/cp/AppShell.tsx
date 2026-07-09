@@ -10,6 +10,7 @@ const SupportButton = dynamic(() => import('@/components/SupportButton'), { ssr:
 const PopupBanner = dynamic(() => import('@/components/PopupBanner'), { ssr: false })
 const OfflineIndicator = dynamic(() => import('@/components/OfflineIndicator'), { ssr: false })
 const TrilhaTimerBanner = dynamic(() => import('@/components/TrilhaTimerBanner'), { ssr: false })
+const CourseOnboarding = dynamic(() => import('@/components/onboarding/CourseOnboarding'), { ssr: false })
 
 const MINIMAL_PATHS = ['/flashcards/pip', '/share-flashcards']
 const FULL_BLEED_PATHS = ['/', '/cursos', '/comunidade']
@@ -63,6 +64,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <PopupBanner />
       <OfflineIndicator />
       <TrilhaTimerBanner />
+      <CourseOnboarding />
     </div>
   )
 }

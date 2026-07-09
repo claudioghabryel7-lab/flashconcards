@@ -2,6 +2,7 @@
 @import '@fontsource/syne/700.css';
 @import '../styles/cp-legacy-bridge.css';
 @import '../styles/responsive-layout.css';
+@import '../styles/course-onboarding.css';
 
 @tailwind base;
 @tailwind components;

@@ -495,8 +495,8 @@ service cloud.firestore {
     }
     
     match /presence/{userId} {
-      allow read, create, update: if isAuthenticated() && isOwner(userId);
-      allow read: if isAdmin();
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isOwner(userId);
       allow delete: if false;
     }
     

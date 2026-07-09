@@ -8,6 +8,7 @@ import Header from './components/Header'
 import SupportButton from './components/SupportButton'
 import PopupBanner from './components/PopupBanner'
 import OfflineIndicator from './components/OfflineIndicator'
+import CourseOnboarding from './components/onboarding/CourseOnboarding'
 import Logo from './components/Logo.jsx'
 // PublicHome importado diretamente (sem lazy loading) para melhor performance na página inicial
 import PublicHome from './routes/PublicHome'
@@ -482,6 +483,7 @@ function App() {
       {!isPIPPage && <SupportButton />}
       {!isPIPPage && <PopupBanner />}
       {!isPIPPage && <OfflineIndicator />}
+      {!isPIPPage && !isBlankPage && <CourseOnboarding />}
     </div>
     )
   } catch (error) {
