@@ -717,6 +717,11 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (resource.data.followerId == request.auth.uid || isAdmin());
     }
 
+    match /siteSettings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

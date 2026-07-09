@@ -38,6 +38,7 @@ import {
 import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager'
 import AdminContentModeration from '../components/admin/AdminContentModeration'
 import AdminEmailBroadcast from '../components/admin/AdminEmailBroadcast'
+import AdminCacheReset from '../components/admin/AdminCacheReset'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { defaultContentStatus, toggleContentStatus } from '../utils/contentStatus'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
@@ -53,7 +54,7 @@ import { createSlug } from '../utils/slug'
 import { purgeUserCommunityData } from '../services/communityUserService'
 import { isPresenceOnline, PRESENCE_HEARTBEAT_MS, countOnlineFromEntries } from '../utils/onlineNow'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import * as pdfjsLib from 'pdfjs-dist'
+import { loadPdfjs } from '../utils/pdfjsClient'
 import { jsonrepair } from 'jsonrepair'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import LawDetector from '../utils/lawDetector'
@@ -316,16 +317,11 @@ const AdminPanel = () => {
 
   // Configurar PDF.js worker
   useEffect(() => {
-    try {
-      // Tentar usar worker local primeiro
-      if (typeof window !== 'undefined') {
-        // Usar CDN do unpkg que é mais confiável
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
-        console.log('✅ PDF.js configurado:', pdfjsLib.version)
-      }
-    } catch (err) {
-      console.error('❌ Erro ao configurar PDF.js:', err)
-    }
+    loadPdfjs()
+      .then((pdfjsLib) => {
+        if (pdfjsLib) console.log('✅ PDF.js configurado:', pdfjsLib.version)
+      })
+      .catch((err) => console.error('❌ Erro ao configurar PDF.js:', err))
   }, [])
 
   // Carregar notícias quando a aba 'news' for ativada
@@ -586,10 +582,10 @@ const AdminPanel = () => {
       const arrayBuffer = await file.arrayBuffer()
       
       setMessage('📄 Processando PDF (pode demorar para arquivos grandes)...')
-      
-      // Configurar worker antes de processar (com fallback)
-      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+
+      const pdfjsLib = await loadPdfjs()
+      if (!pdfjsLib?.getDocument) {
+        throw new Error('Biblioteca PDF.js não está carregada. Recarregue a página.')
       }
       
       let pdf
@@ -4404,10 +4400,10 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       new Uint8Array(bufferCopy).set(uint8Array)
       
       setMessage('📄 Processando PDF (pode demorar para arquivos grandes)...')
-      
-      // Configurar worker antes de processar
-      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+
+      const pdfjsLib = await loadPdfjs()
+      if (!pdfjsLib?.getDocument) {
+        throw new Error('Biblioteca PDF.js não está carregada. Recarregue a página.')
       }
 
       let pdf
@@ -6902,20 +6898,20 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
   }
 
   const tabs = [
-    { id: 'config', label: '⚙️ Configurações', icon: '⚙️' },
-    { id: 'flashcards', label: '📚 Flashcards', icon: '📚' },
-    { id: 'users', label: '👥 Usuários', icon: '👥' },
-    { id: 'edital', label: '📋 Edital Verticalizado', icon: '📋' },
-    { id: 'banners', label: '🖼️ Banners', icon: '🖼️' },
-    { id: 'popup', label: '🔔 Popup Banner', icon: '🔔' },
-    { id: 'courses', label: '🎓 Cursos', icon: '🎓' },
-    { id: 'reviews', label: '⭐ Avaliações', icon: '⭐' },
-    { id: 'news', label: '📰 Notícias de Concursos', icon: '📰' },
-    { id: 'simulados', label: '📝 Simulados', icon: '📝' },
-    { id: 'shared-links', label: '🔗 Links Compartilhados', icon: '🔗' },
-    { id: 'trials', label: '🎁 Testes Gratuitos', icon: '🎁' },
-    { id: 'moderacao', label: '🚩 Moderação', icon: '🚩' },
-    { id: 'prompt-test', label: '🧪 Teste de Prompts', icon: '🧪' },
+    { id: 'config', label: 'Configurações', icon: '⚙️' },
+    { id: 'flashcards', label: 'Flashcards', icon: '📚' },
+    { id: 'users', label: 'Usuários', icon: '👥' },
+    { id: 'edital', label: 'Edital Verticalizado', icon: '📋' },
+    { id: 'banners', label: 'Banners', icon: '🖼️' },
+    { id: 'popup', label: 'Popup Banner', icon: '🔔' },
+    { id: 'courses', label: 'Cursos', icon: '🎓' },
+    { id: 'reviews', label: 'Avaliações', icon: '⭐' },
+    { id: 'news', label: 'Notícias', icon: '📰' },
+    { id: 'simulados', label: 'Simulados', icon: '📝' },
+    { id: 'shared-links', label: 'Links Compartilhados', icon: '🔗' },
+    { id: 'trials', label: 'Testes Gratuitos', icon: '🎁' },
+    { id: 'moderacao', label: 'Moderação', icon: '🚩' },
+    { id: 'prompt-test', label: 'Teste de Prompts', icon: '🧪' },
   ]
   
   // Estado para gerenciar simulados compartilhados
@@ -7041,25 +7037,28 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
 
         {/* Tabs Navigation */}
         <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 mb-6">
-          <div className="flex flex-wrap gap-2 p-2 border-b border-slate-200 dark:border-slate-700">
+          <div className="overflow-x-auto border-b border-slate-200 dark:border-slate-700">
+            <div className="flex min-w-max flex-nowrap gap-2 p-2 lg:flex-wrap lg:min-w-0">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`group relative flex items-center gap-2 px-4 sm:px-6 py-3 rounded-xl font-bold text-sm transition-all overflow-hidden ${
+                title={tab.label}
+                className={`group relative flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:py-3 sm:text-sm ${
                   activeTab === tab.id
                     ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
               >
                 {activeTab === tab.id && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                  <div className="absolute inset-0 translate-x-[-100%] bg-gradient-to-r from-white/0 via-white/20 to-white/0 transition-transform duration-1000 group-hover:translate-x-[100%]"></div>
                 )}
-                <span className="relative z-10">{tab.icon}</span>
-                <span className="relative z-10 hidden sm:inline">{tab.label.replace(/^[^\s]+\s/, '')}</span>
+                <span className="relative z-10" aria-hidden="true">{tab.icon}</span>
+                <span className="relative z-10 whitespace-nowrap">{tab.label}</span>
               </button>
             ))}
+            </div>
           </div>
 
           {/* Conteúdo das Tabs */}
@@ -7067,6 +7066,8 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
             {/* Tab: Configurações Unificadas */}
             {activeTab === 'config' && (
               <div className="space-y-6">
+                <AdminCacheReset />
+
                 {/* Header */}
                 <div className="rounded-2xl bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 p-6 shadow-lg border-2 border-blue-200 dark:border-blue-800">
                   <div className="flex items-center justify-between mb-4">
@@ -7206,12 +7207,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                           setMessage('📄 Processando PDF...')
                           try {
                             setExtractingEditalVerticalizado(true)
-                            
-                            // Verificar se pdfjs está disponível
-                            if (!pdfjsLib || !pdfjsLib.getDocument) {
-                              throw new Error('Biblioteca PDF.js não está carregada. Recarregue a página.')
-                            }
-                            
+
                             const extractedText = await extractTextFromPDF(file)
                             
                             // Validar se o texto foi extraído

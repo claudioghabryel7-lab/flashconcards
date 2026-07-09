@@ -11,6 +11,7 @@ import { Toaster } from 'react-hot-toast'
 import { BrowserRouter } from '@/lib/react-router-compat'
 import { initFirebase } from '@/firebase/config'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import useSiteCacheSync from '@/hooks/useSiteCacheSync'
 import { cleanupConsole } from '@/lib/consoleCleanup'
 import BackgroundGenerationBanner from '@/components/BackgroundGenerationBanner'
 
@@ -20,6 +21,7 @@ function ClientBootstrap() {
     initFirebase()
   }, [])
   useOnlineStatus()
+  useSiteCacheSync()
   return null
 }
 
