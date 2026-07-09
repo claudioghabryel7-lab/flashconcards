@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   HandThumbUpIcon,
@@ -237,13 +237,24 @@ export default function ContentCommentsSheet({
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const wasOpenRef = useRef(false)
+  const alternateKey = useMemo(
+    () => (alternateContentIds || []).join('|'),
+    [alternateContentIds],
+  )
+
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      setText('')
+      setMessage('')
+    }
+    wasOpenRef.current = open
+  }, [open])
 
   useEffect(() => {
     if (!open || !courseId || !contentId) return undefined
     setComments([])
     setLoading(true)
-    setText('')
-    setMessage('')
     const unsub = subscribeContentComments(
       { courseId, contentType, contentId, alternateContentIds },
       (rows) => {
@@ -253,7 +264,7 @@ export default function ContentCommentsSheet({
       () => setLoading(false),
     )
     return () => unsub?.()
-  }, [open, courseId, contentType, contentId, alternateContentIds])
+  }, [open, courseId, contentType, contentId, alternateKey])
 
   const handleSubmit = async () => {
     if (!user) {

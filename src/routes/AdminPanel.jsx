@@ -2886,9 +2886,9 @@ REGRAS CRÍTICAS:
       // Gerar slug do nome do curso
       const slug = createSlug(courseForm.name)
       
-      await addDoc(collection(db, 'courses'), {
+      const ref = await addDoc(collection(db, 'courses'), {
         name: courseForm.name,
-        slug: slug, // Slug para URLs amigáveis
+        slug: slug,
         description: courseForm.description || '',
         price: parseFloat(courseForm.price) || 99.90,
         originalPrice: parseFloat(courseForm.originalPrice) || 149.99,
@@ -2897,13 +2897,16 @@ REGRAS CRÍTICAS:
         imageBase64: courseForm.imageBase64 || '',
         imageUrl: courseForm.imageUrl || '',
         active: courseForm.active !== false,
-        featured: courseForm.featured === true, // Curso em destaque
-        referenceLink: courseForm.referenceLink?.trim() || '', // Link de referência
-        banca: courseForm.banca?.trim() || '', // Banca examinadora
+        featured: courseForm.featured === true,
+        referenceLink: courseForm.referenceLink?.trim() || '',
+        banca: courseForm.banca?.trim() || '',
         createdAt: serverTimestamp(),
       })
 
-      setMessage('✅ Curso adicionado com sucesso!')
+      setSelectedCourseForPrompts(ref.id)
+      setSelectedCourseForFullGeneration(ref.id)
+      setSelectedCourseForFlashcards(ref.id)
+      setMessage('✅ Curso adicionado e selecionado automaticamente! Configure o edital neste curso.')
       setCourseForm({
         name: '',
         description: '',
@@ -7343,6 +7346,11 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                       onClick={async () => {
                         if (!editalVerticalizadoText.trim()) {
                           setMessage('❌ Por favor, faça upload e processe um PDF primeiro.')
+                          return
+                        }
+
+                        if (!selectedCourseForPrompts) {
+                          setMessage('❌ Selecione o curso no menu antes de processar o edital.')
                           return
                         }
                         

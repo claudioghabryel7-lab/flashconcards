@@ -8,7 +8,11 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { CONTENT_STATUS } from '../utils/contentStatus'
-import { sanitizeTopicKeyForFirestore, normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
+import {
+  sanitizeTopicKeyForFirestore,
+  normalizeTopicKeyForStorage,
+  toSafeFirestoreDocId,
+} from '../utils/topicKeyFirestore'
 import { cardMatchesModule } from '../utils/editalVerticalizadoLoader'
 
 const MAX_BATCH = 450
@@ -138,8 +142,13 @@ export async function setTopicoPublishStatus(
     }
   }
 
-  for (const legacyId of [sanitizedKey, normalizedTopicKey, topicKey, decodeURIComponentSafe(topicKey)]) {
-    if (!legacyId) continue
+  const legacyIds = new Set()
+  for (const raw of [sanitizedKey, normalizedTopicKey, topicKey, decodeURIComponentSafe(topicKey)]) {
+    const safe = toSafeFirestoreDocId(raw)
+    if (safe) legacyIds.add(safe)
+  }
+
+  for (const legacyId of legacyIds) {
     const legacyRef = doc(db, 'courses', resolvedId, 'questoesTopico', legacyId)
     const legacyDoc = await getDoc(legacyRef)
     if (legacyDoc.exists()) {
@@ -149,6 +158,19 @@ export async function setTopicoPublishStatus(
       })
     }
   }
+
+  // Documentos legados cujo ID não é seguro (ex.: contém "/") — busca por topicKey no campo
+  const questoesSnap = await getDocs(collection(db, 'courses', resolvedId, 'questoesTopico'))
+  questoesSnap.docs.forEach((d) => {
+    if (legacyIds.has(d.id)) return
+    const data = d.data()
+    const packTopic = data.topicKey || data.topico || ''
+    if (!topicKeysMatch(packTopic, normalizedTopicKey)) return
+    operations.push({
+      ref: doc(db, 'courses', resolvedId, 'questoesTopico', d.id),
+      data: { status, topicKey: normalizedTopicKey, updatedAt: now },
+    })
+  })
 
   // Material de apoio (Estudar)
   const conteudoRef = doc(db, 'courses', resolvedId, 'conteudosCompletos', sanitizedKey)

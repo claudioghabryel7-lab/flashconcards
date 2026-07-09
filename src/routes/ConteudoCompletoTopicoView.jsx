@@ -13,6 +13,7 @@ import {
   updateGenerationJob,
   GENERATION_JOB_STATUS,
 } from '../services/generationJobService'
+import { fetchTopicoPublishStatus } from '../services/topicoPublishService'
 import { isContentAvailable, CONTENT_STATUS } from '../utils/contentStatus'
 import SimpleMaterialEditor from '../components/SimpleMaterialEditor'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
@@ -1007,12 +1008,13 @@ REGRAS:
         useRAG: true,
       })
       setProgress(75)
+      const initialStatus = await fetchTopicoPublishStatus(resolvedCourseId, resolvedTopicKey)
       const payload = {
         ...parsed,
         materia: parsed.materia || parsed.titulo || resolvedTopicKey,
         numero: parsed.numero || resolvedTopicKey,
         topicKey: resolvedTopicKey,
-        status: CONTENT_STATUS.UNAVAILABLE,
+        status: initialStatus,
         updatedAt: serverTimestamp(),
         generatedAt: serverTimestamp(),
       }

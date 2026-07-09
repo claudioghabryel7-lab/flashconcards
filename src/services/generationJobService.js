@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -55,6 +56,50 @@ export async function updateGenerationJob(userId, jobId, patch) {
   await updateDoc(doc(db, 'users', userId, 'generationJobs', jobId), {
     ...patch,
     updatedAt: serverTimestamp(),
+  })
+}
+
+const STALE_JOB_MS = 45 * 60 * 1000
+
+/** Marca jobs travados (ex.: aba fechada) como erro para não ficar banner infinito. */
+export async function reconcileStaleGenerationJobs(userId) {
+  if (!userId || !db) return
+
+  const snap = await getDocs(
+    query(
+      jobsRef(userId),
+      where('status', 'in', [GENERATION_JOB_STATUS.PENDING, GENERATION_JOB_STATUS.RUNNING]),
+    ),
+  )
+
+  const now = Date.now()
+  const updates = []
+
+  snap.docs.forEach((d) => {
+    const data = d.data()
+    const updatedAt = data.updatedAt?.toDate?.() || data.createdAt?.toDate?.()
+    if (!updatedAt) return
+    if (now - updatedAt.getTime() < STALE_JOB_MS) return
+
+    updates.push(
+      updateDoc(d.ref, {
+        status: GENERATION_JOB_STATUS.ERROR,
+        progress: 100,
+        message: 'Geração interrompida. Tente novamente.',
+        updatedAt: serverTimestamp(),
+      }),
+    )
+  })
+
+  if (updates.length) await Promise.all(updates)
+}
+
+export async function dismissGenerationJob(userId, jobId) {
+  if (!userId || !jobId) return
+  await updateGenerationJob(userId, jobId, {
+    status: GENERATION_JOB_STATUS.CANCELLED,
+    progress: 100,
+    message: 'Dispensado',
   })
 }
 

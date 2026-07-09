@@ -290,10 +290,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
             .substring(0, 100)
 
           const incidenciaRef = doc(db, 'courses', courseId, 'conteudosIncidencia', sanitizedDisciplinaNome)
+          const existingSnap = await getDoc(incidenciaRef)
+          const prevStatus = existingSnap.exists() ? existingSnap.data().status : null
+          const initialStatus =
+            prevStatus === 'disponivel' || prevStatus === CONTENT_STATUS.AVAILABLE
+              ? CONTENT_STATUS.AVAILABLE
+              : CONTENT_STATUS.UNAVAILABLE
+
           await setDoc(incidenciaRef, {
             ...parsed,
             disciplinaIdx: disciplinaIndex,
-            status: 'indisponivel',
+            status: initialStatus,
             updatedAt: serverTimestamp(),
             generatedAt: serverTimestamp(),
           }, { merge: true })

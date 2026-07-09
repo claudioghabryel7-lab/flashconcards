@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { ChatBubbleLeftEllipsisIcon, FlagIcon } from '@heroicons/react/24/outline'
 
 const ContentCommentsSheet = lazy(() => import('./ContentCommentsSheet'))
@@ -19,6 +19,7 @@ export default function ContentFeedbackActions({
 }) {
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [flagOpen, setFlagOpen] = useState(false)
+  const alternateKey = useMemo(() => alternateContentIds.join('|'), [alternateContentIds])
 
   useEffect(() => {
     setCommentsOpen(false)

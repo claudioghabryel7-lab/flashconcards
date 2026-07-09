@@ -165,8 +165,8 @@ export default function CommentComposer({
             disabled={disabled}
             aria-label={placeholder}
             spellCheck
-            className="absolute inset-0 z-10 w-full resize-none overflow-hidden bg-transparent px-3 py-2.5 text-sm leading-relaxed text-transparent caret-cp-text outline-none selection:bg-cp-accent/25 disabled:cursor-not-allowed"
-            style={{ height: innerHeight, WebkitTextFillColor: 'transparent' }}
+            className="absolute inset-0 z-10 w-full resize-none overflow-y-auto bg-transparent px-3 py-2.5 text-sm leading-relaxed text-transparent caret-cp-text outline-none selection:bg-cp-accent/25 disabled:cursor-not-allowed"
+            style={{ height: innerHeight, minHeight: 120, WebkitTextFillColor: 'transparent' }}
           />
         </div>
       </div>

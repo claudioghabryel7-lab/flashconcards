@@ -1,3 +1,12 @@
+/** Garante ID seguro para referência Firestore (sem barras nem segmentos inválidos). */
+export function toSafeFirestoreDocId(rawId = '') {
+  if (!rawId?.trim()) return ''
+  const sanitized = sanitizeTopicKeyForFirestore(normalizeTopicKeyForStorage(rawId))
+  if (!sanitized) return ''
+  if (sanitized.includes('/') || sanitized.includes('\\')) return ''
+  return sanitized
+}
+
 /** Sanitiza topicKey para uso como ID de documento no Firestore */
 export function sanitizeTopicKeyForFirestore(topicKey = '') {
   if (!topicKey) return ''

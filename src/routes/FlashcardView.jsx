@@ -10,6 +10,7 @@ import {
 } from '../utils/editalVerticalizadoLoader'
 import dayjs from 'dayjs'
 import FlashcardList from '../components/FlashcardList'
+import FlashcardFloatingComments from '../components/FlashcardFloatingComments'
 import { userFlashcardsService } from '../services/userFlashcardsService'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -149,6 +150,7 @@ const FlashcardView = () => {
   const [generatingFlashcards, setGeneratingFlashcards] = useState(false) // Estado para loading de geração
   const [selectedDifficulty, setSelectedDifficulty] = useState('') // Dificuldade selecionada para geração
   const [sidebarSearch, setSidebarSearch] = useState('')
+  const [floatingCommentsEnabled, setFloatingCommentsEnabled] = useState(false)
   const [shuffledCardIds, setShuffledCardIds] = useState(null)
   const [srsNow, setSrsNow] = useState(() => dayjs())
   
@@ -1351,23 +1353,56 @@ IMPORTANTE:
 
               {/* Área do card */}
               <div className="flex flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6">
-                <FlashcardList
-                  cards={activeCards}
-                  currentIndex={currentIndex}
-                  onSelect={setCurrentIndex}
-                  onToggleFavorite={toggleFavorite}
-                  onRateDifficulty={rateDifficulty}
-                  favorites={favorites}
-                  cardProgress={cardProgress}
-                  onPrev={goPrev}
-                  onNext={goNext}
-                  onShuffle={shuffle}
-                  viewedIds={viewedIds}
-                  showRating={needsReview}
-                  onDeleteFlashcard={handleDeleteFlashcard}
-                  onEditFlashcard={isAdmin ? handleEditFlashcard : null}
-                  courseId={activeCourseId}
-                />
+                <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(200px,260px)_1fr]">
+                  <div className="order-2 lg:order-1 hidden sm:block">
+                    {activeCards[currentIndex] && (
+                      <FlashcardFloatingComments
+                        enabled={floatingCommentsEnabled}
+                        onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+                        courseId={activeCourseId}
+                        card={activeCards[currentIndex]}
+                        topicKey={activeCards[currentIndex]?.topicKey || null}
+                        cardIndex={currentIndex}
+                        materia={selectedMateria || ''}
+                        assunto={selectedModulo || ''}
+                      />
+                    )}
+                  </div>
+                  <div className="order-1 lg:order-2 min-w-0">
+                    <div className="mb-3 sm:hidden">
+                      {activeCards[currentIndex] && (
+                        <FlashcardFloatingComments
+                          enabled={floatingCommentsEnabled}
+                          onToggle={() => setFloatingCommentsEnabled((v) => !v)}
+                          courseId={activeCourseId}
+                          card={activeCards[currentIndex]}
+                          topicKey={activeCards[currentIndex]?.topicKey || null}
+                          cardIndex={currentIndex}
+                          materia={selectedMateria || ''}
+                          assunto={selectedModulo || ''}
+                        />
+                      )}
+                    </div>
+                    <FlashcardList
+                      cards={activeCards}
+                      currentIndex={currentIndex}
+                      onSelect={setCurrentIndex}
+                      onToggleFavorite={toggleFavorite}
+                      onRateDifficulty={rateDifficulty}
+                      favorites={favorites}
+                      cardProgress={cardProgress}
+                      onPrev={goPrev}
+                      onNext={goNext}
+                      onShuffle={shuffle}
+                      viewedIds={viewedIds}
+                      showRating={needsReview}
+                      onDeleteFlashcard={handleDeleteFlashcard}
+                      onEditFlashcard={isAdmin ? handleEditFlashcard : null}
+                      courseId={activeCourseId}
+                      topicKey={activeCards[currentIndex]?.topicKey || null}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}

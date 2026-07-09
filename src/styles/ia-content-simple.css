@@ -4,6 +4,22 @@
 .ia-content-enhanced {
   @apply prose prose-slate dark:prose-invert max-w-none;
   @apply prose-lg;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: normal;
+  hyphens: none;
+  -webkit-hyphens: none;
+}
+
+.ia-content-enhanced p,
+.ia-content-enhanced li,
+.ia-content-enhanced td,
+.ia-content-enhanced span,
+.ia-content-enhanced div {
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: none;
+  -webkit-hyphens: none;
 }
 
 /* Estilos para parágrafos com espaçamento adequado */

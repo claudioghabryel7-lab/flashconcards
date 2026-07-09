@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from './useAuth'
-import { subscribeActiveGenerationJobs } from '../services/generationJobService'
+import {
+  subscribeActiveGenerationJobs,
+  reconcileStaleGenerationJobs,
+} from '../services/generationJobService'
 
 /** Observa jobs de geração ativos do usuário (segundo plano). */
 export function useBackgroundGeneration() {
@@ -13,7 +16,17 @@ export function useBackgroundGeneration() {
       return () => {}
     }
 
-    return subscribeActiveGenerationJobs(user.uid, setJobs)
+    reconcileStaleGenerationJobs(user.uid).catch(() => {})
+
+    const interval = setInterval(() => {
+      reconcileStaleGenerationJobs(user.uid).catch(() => {})
+    }, 5 * 60 * 1000)
+
+    const unsub = subscribeActiveGenerationJobs(user.uid, setJobs)
+    return () => {
+      clearInterval(interval)
+      unsub?.()
+    }
   }, [user?.uid])
 
   return { jobs, hasActiveJobs: jobs.length > 0 }
