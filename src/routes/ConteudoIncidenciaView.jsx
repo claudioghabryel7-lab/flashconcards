@@ -5,14 +5,12 @@ import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firest
 import { ArrowLeftIcon, FireIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
-import { useFloatingCommentsEnabled } from '../hooks/useFloatingCommentsEnabled'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { formatAiErrorForUser } from '../utils/geminiApi'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
 import { buildConteudoIncidenciaPayload } from '../utils/serverGenerationPayload'
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
-import MaterialFloatingComments from '../components/MaterialFloatingComments'
 import { probabilidadeBadgeClass } from '../utils/htmlTextHelpers'
 
 const ConteudoIncidenciaView = () => {
@@ -34,7 +32,6 @@ const ConteudoIncidenciaView = () => {
   const [editDraft, setEditDraft] = useState(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const [togglingStatus, setTogglingStatus] = useState(false)
-  const { enabled: floatingCommentsEnabled, toggle: toggleFloatingComments } = useFloatingCommentsEnabled()
 
   const disciplinaIndex = parseInt(disciplinaIdx)
 
@@ -545,17 +542,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
           </div>
         </div>
       ) : (
-        <MaterialFloatingComments
-          enabled={floatingCommentsEnabled}
-          onToggle={() => setFloatingCommentsEnabled((v) => !v)}
-          courseId={courseId}
-          topicKey={String(disciplinaIdx)}
-          disciplinaKey={String(disciplinaIdx)}
-          kind="incidencia"
-          preview={disciplina?.nome || ''}
-          materia={disciplina?.nome || ''}
-          assunto={disciplina?.nome || ''}
-        >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="cp-card p-4">
@@ -710,7 +696,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
             )}
           </div>
         </div>
-        </MaterialFloatingComments>
       )}
     </div>
   )

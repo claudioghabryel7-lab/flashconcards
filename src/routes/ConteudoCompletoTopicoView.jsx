@@ -1,12 +1,11 @@
 import { readEnv, isDevEnv } from '@/lib/env.js'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy } from 'firebase/firestore'
 import { ArrowLeftIcon, PencilIcon, FireIcon, LightBulbIcon, ExclamationTriangleIcon, BookOpenIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
-import { useFloatingCommentsEnabled } from '../hooks/useFloatingCommentsEnabled'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
@@ -16,11 +15,10 @@ import { isContentAvailable, CONTENT_STATUS } from '../utils/contentStatus'
 import SimpleMaterialEditor from '../components/SimpleMaterialEditor'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import ShareToFeedButton from '../components/feed/ShareToFeedButton'
-import MaterialFloatingComments from '../components/MaterialFloatingComments'
 import { FEED_POST_TYPES } from '../services/trilhaFeedService'
 import { stripHtml } from '../utils/htmlTextHelpers'
+import { downloadElementAsPdf } from '../utils/materialPdfExport'
 import ReactMarkdown from 'react-markdown'
-import jsPDF from 'jspdf'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -175,7 +173,8 @@ const ConteudoCompletoTopicoView = () => {
   const [error, setError] = useState('')
   const [courseName, setCourseName] = useState('')
   const [generating, setGenerating] = useState(false)
-  const { enabled: floatingCommentsEnabled, toggle: toggleFloatingComments } = useFloatingCommentsEnabled()
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const materialExportRef = useRef(null)
   const [progress, setProgress] = useState(0)
   const [validating, setValidating] = useState(false)
   const [validationMessage, setValidationMessage] = useState('')
@@ -511,211 +510,17 @@ ONDE:
   }
 
   const handleDownloadPDF = async () => {
-    if (!conteudo) return
+    if (!conteudo || !materialExportRef.current) return
 
+    setDownloadingPdf(true)
     try {
-      const pdf = new jsPDF('p', 'mm', 'a4')
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const pageHeight = pdf.internal.pageSize.getHeight()
-      const margin = 20
-      const maxWidth = pageWidth - (margin * 2)
-      let yPosition = margin
-
-      // Função para adicionar texto com quebra de linha
-      const addText = (text, x, y, maxWidth, fontSize = 12, isBold = false, color = '#000000') => {
-        pdf.setFontSize(fontSize)
-        if (isBold) pdf.setFont('helvetica', 'bold')
-        else pdf.setFont('helvetica', 'normal')
-        
-        // Converter cor hex para RGB
-        const r = parseInt(color.slice(1, 3), 16)
-        const g = parseInt(color.slice(3, 5), 16)
-        const b = parseInt(color.slice(5, 7), 16)
-        pdf.setTextColor(r, g, b)
-        
-        const lines = pdf.splitTextToSize(text, maxWidth)
-        lines.forEach((line, index) => {
-          if (y + (index * (fontSize * 0.5)) > pageHeight - margin) {
-            pdf.addPage()
-            y = margin
-          }
-          pdf.text(line, x, y + (index * (fontSize * 0.5)))
-        })
-        return y + (lines.length * (fontSize * 0.5))
-      }
-
-      // Cabeçalho com gradiente (simulado com cor sólida)
-      pdf.setFillColor(255, 140, 0)
-      pdf.rect(margin, yPosition, maxWidth, 25, 'F')
-      pdf.setTextColor(255, 255, 255)
-      pdf.setFontSize(20)
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('ConCursos 2.5', pageWidth / 2, yPosition + 10, { align: 'center' })
-      pdf.setFontSize(12)
-      pdf.setFont('helvetica', 'normal')
-      pdf.text('Material de Apoio', pageWidth / 2, yPosition + 18, { align: 'center' })
-      yPosition += 35
-
-      // Título
-      if (conteudo.titulo) {
-        yPosition = addText(conteudo.titulo, margin, yPosition, maxWidth, 18, true, '#000000')
-        yPosition += 10
-      }
-
-      // Subtítulo
-      if (conteudo.subtitulo) {
-        yPosition = addText(conteudo.subtitulo, margin, yPosition, maxWidth, 12, false, '#71717a')
-        yPosition += 15
-      }
-
-      // Matéria
-      if (conteudo.materia) {
-        pdf.setFillColor(244, 244, 245)
-        pdf.rect(margin, yPosition, maxWidth, 15, 'F')
-        yPosition = addText(`Matéria: ${conteudo.materia}`, margin + 5, yPosition + 10, maxWidth - 10, 12, true, '#000000')
-        yPosition += 20
-      }
-
-      // Raio-X de Probabilidade
-      if (conteudo.raioXProbabilidade) {
-        pdf.setFillColor(255, 200, 100)
-        pdf.rect(margin, yPosition, maxWidth, 20, 'F')
-        yPosition = addText('🔥 Raio-X de Probabilidade', margin + 5, yPosition + 12, maxWidth - 10, 14, true, '#000000')
-        yPosition += 25
-
-        if (conteudo.raioXProbabilidade.topicosQuentes) {
-          yPosition = addText('Top Assuntos Quentes:', margin + 5, yPosition, maxWidth - 10, 12, true, '#000000')
-          yPosition += 5
-          conteudo.raioXProbabilidade.topicosQuentes.forEach((assunto) => {
-            yPosition = addText(`• ${assunto}`, margin + 10, yPosition, maxWidth - 15, 11, false, '#000000')
-          })
-          yPosition += 5
-        }
-
-        if (conteudo.raioXProbabilidade.padraoBanca) {
-          yPosition = addText(`Padrão da Banca: ${conteudo.raioXProbabilidade.padraoBanca}`, margin + 5, yPosition, maxWidth - 10, 12, false, '#000000')
-          yPosition += 10
-        }
-      }
-
-      // Revisão Turbo
-      if (conteudo.revisaoTurbo) {
-        pdf.setFillColor(100, 150, 255)
-        pdf.rect(margin, yPosition, maxWidth, 20, 'F')
-        yPosition = addText('⚡ Revisão Turbo', margin + 5, yPosition + 12, maxWidth - 10, 14, true, '#FFFFFF')
-        yPosition += 25
-
-        if (conteudo.revisaoTurbo.resumos && Array.isArray(conteudo.revisaoTurbo.resumos)) {
-          yPosition = addText('Resumos:', margin + 5, yPosition, maxWidth - 10, 12, true, '#FFFFFF')
-          yPosition += 5
-          conteudo.revisaoTurbo.resumos.forEach((resumo, idx) => {
-            yPosition = addText(`${idx + 1}. ${resumo}`, margin + 10, yPosition, maxWidth - 15, 11, false, '#FFFFFF')
-          })
-          yPosition += 10
-        }
-
-        if (conteudo.revisaoTurbo.pegadinhas && Array.isArray(conteudo.revisaoTurbo.pegadinhas)) {
-          pdf.setFillColor(255, 220, 220)
-          pdf.rect(margin, yPosition, maxWidth, 15, 'F')
-          yPosition = addText('⚠️ Cuidado, Caçapa!', margin + 5, yPosition + 10, maxWidth - 10, 12, true, '#DC2626')
-          yPosition += 20
-          conteudo.revisaoTurbo.pegadinhas.forEach((pegadinha, idx) => {
-            const titulo = typeof pegadinha === 'string' ? pegadinha : (pegadinha.titulo || pegadinha)
-            const conteudoPegadinha = typeof pegadinha === 'object' ? pegadinha.conteudo : ''
-            yPosition = addText(`${idx + 1}. ${titulo}`, margin + 10, yPosition, maxWidth - 15, 11, true, '#DC2626')
-            if (conteudoPegadinha) {
-              yPosition = addText(conteudoPegadinha, margin + 15, yPosition, maxWidth - 20, 10, false, '#991B1B')
-            }
-          })
-          yPosition += 10
-        }
-      }
-
-      // Questões Preditivas
-      if (conteudo.questoesPreditivas && Array.isArray(conteudo.questoesPreditivas)) {
-        pdf.setFillColor(100, 200, 100)
-        pdf.rect(margin, yPosition, maxWidth, 20, 'F')
-        yPosition = addText('📚 Questões Preditivas', margin + 5, yPosition + 12, maxWidth - 10, 14, true, '#FFFFFF')
-        yPosition += 25
-
-        conteudo.questoesPreditivas.forEach((questao, idx) => {
-          pdf.setFillColor(244, 244, 245)
-          pdf.rect(margin, yPosition, maxWidth, 10, 'F')
-          yPosition = addText(`Questão ${idx + 1} de ${conteudo.questoesPreditivas.length}`, margin + 5, yPosition + 7, maxWidth - 10, 12, true, '#000000')
-          yPosition += 15
-          yPosition = addText(questao.enunciado, margin + 5, yPosition, maxWidth - 10, 11, false, '#000000')
-          yPosition += 10
-
-          if (questao.alternativas) {
-            Object.entries(questao.alternativas).forEach(([letra, alt]) => {
-              const isCorrect = letra === questao.correta
-              yPosition = addText(`${letra}) ${alt}`, margin + 10, yPosition, maxWidth - 15, 10, isCorrect, isCorrect ? '#16A34A' : '#71717A')
-            })
-            yPosition += 10
-          }
-
-          if (questao.gabaritoComentado) {
-            pdf.setFillColor(220, 230, 255)
-            pdf.rect(margin, yPosition, maxWidth, 10, 'F')
-            yPosition = addText('💡 Gabarito Comentado:', margin + 5, yPosition + 7, maxWidth - 10, 11, true, '#2563EB')
-            yPosition += 15
-            yPosition = addText(questao.gabaritoComentado, margin + 5, yPosition, maxWidth - 10, 10, false, '#1E40AF')
-            yPosition += 15
-          }
-        })
-      }
-
-      // Conteúdo original
-      if (conteudo.content) {
-        pdf.setFillColor(228, 228, 231)
-        pdf.rect(margin, yPosition, maxWidth, 15, 'F')
-        yPosition = addText('📖 Conteúdo Completo', margin + 5, yPosition + 10, maxWidth - 10, 14, true, '#000000')
-        yPosition += 20
-        
-        // Remover tags HTML do conteúdo
-        const tempDiv = document.createElement('div')
-        tempDiv.innerHTML = conteudo.content
-        const textContent = tempDiv.textContent || tempDiv.innerText || ''
-        yPosition = addText(textContent, margin + 5, yPosition, maxWidth - 10, 11, false, '#000000')
-        yPosition += 15
-      }
-
-      // Seções
-      if (conteudo.secoes && Array.isArray(conteudo.secoes)) {
-        pdf.setFillColor(228, 228, 231)
-        pdf.rect(margin, yPosition, maxWidth, 15, 'F')
-        yPosition = addText('Seções do Conteúdo', margin + 5, yPosition + 10, maxWidth - 10, 14, true, '#000000')
-        yPosition += 20
-
-        conteudo.secoes.forEach((secao, idx) => {
-          yPosition = addText(`${idx + 1}. ${secao.titulo || 'Seção ' + (idx + 1)}`, margin + 5, yPosition, maxWidth - 10, 13, true, '#000000')
-          yPosition += 5
-          if (secao.conteudo) {
-            yPosition = addText(secao.conteudo, margin + 5, yPosition, maxWidth - 10, 11, false, '#000000')
-            yPosition += 5
-          }
-          if (secao.itens && Array.isArray(secao.itens)) {
-            secao.itens.forEach((item) => {
-              yPosition = addText(`• ${item}`, margin + 10, yPosition, maxWidth - 15, 10, false, '#000000')
-            })
-            yPosition += 10
-          }
-        })
-      }
-
-      // Rodapé
-      pdf.setDrawColor(212, 212, 216)
-      pdf.line(margin, pageHeight - 30, pageWidth - margin, pageHeight - 30)
-      pdf.setTextColor(113, 113, 122)
-      pdf.setFontSize(9)
-      pdf.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')} | ConCursos 2.5`, pageWidth / 2, pageHeight - 20, { align: 'center' })
-
-      // Salvar PDF
-      const fileName = `${conteudo.materia || 'material'}-${conteudo.titulo || 'topico'}.pdf`.replace(/[^a-zA-Z0-9\-_.]/g, '_')
-      pdf.save(fileName)
+      const fileName = `${conteudo.materia || 'material'}-${conteudo.titulo || 'topico'}.pdf`
+      await downloadElementAsPdf(materialExportRef.current, fileName)
     } catch (error) {
       console.error('Erro ao gerar PDF:', error)
       alert('Erro ao gerar PDF. Tente novamente.')
+    } finally {
+      setDownloadingPdf(false)
     }
   }
 
@@ -1227,9 +1032,14 @@ REGRAS:
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={handleDownloadPDF} className="cp-btn-ghost !text-xs">
+              <button
+                type="button"
+                onClick={handleDownloadPDF}
+                disabled={downloadingPdf || editingContent}
+                className="cp-btn-ghost !text-xs"
+              >
                 <DocumentArrowDownIcon className="w-4 h-4" />
-                PDF
+                {downloadingPdf ? 'Gerando PDF…' : 'PDF'}
               </button>
               {(hasTopicAccess || isAdmin) && conteudo && (
                 <ShareToFeedButton
@@ -1267,24 +1077,27 @@ REGRAS:
           )}
         </div>
 
-        <MaterialFloatingComments
-          enabled={floatingCommentsEnabled}
-          onToggle={() => setFloatingCommentsEnabled((v) => !v)}
-          courseId={resolvedCourseId}
-          topicKey={resolvedTopicKey}
-          kind="completo"
-          preview={conteudo?.materia || conteudo?.titulo || effectiveTopicNome || ''}
-          materia={conteudo?.materia || conteudo?.titulo || ''}
-          assunto={effectiveTopicNome || resolvedTopicKey}
+        <div
+          ref={materialExportRef}
+          id="material-pdf-export"
+          className="max-w-none material-pdf-export"
         >
-        <div className="max-w-none">
-          {courseName && (
-            <div className="mb-6 cp-card !border-cp-accent/30 p-4">
-              <p className="text-sm text-cp-text">
-                Material elaborado para <span className="text-cp-accent font-medium">{courseName}</span>.
+          <div className="mb-6 border-b border-slate-200 pb-4">
+            <p className="text-xs font-mono uppercase tracking-wider text-slate-500">Material de apoio</p>
+            <h2 className="mt-1 text-2xl font-bold text-slate-900">
+              {conteudo.materia || conteudo.titulo || resolvedTopicKey}
+            </h2>
+            {conteudo.subtitulo && (
+              <p className="mt-2 text-sm italic text-slate-600">
+                {replaceConcursoWithCourse(conteudo.subtitulo)}
               </p>
-            </div>
-          )}
+            )}
+            {courseName && (
+              <p className="mt-2 text-sm text-slate-700">
+                Material elaborado para <strong>{courseName}</strong>.
+              </p>
+            )}
+          </div>
 
           {editingContent && isAdmin && editDraft ? (
             <SimpleMaterialEditor
@@ -1487,7 +1300,6 @@ REGRAS:
             </>
           )}
         </div>
-        </MaterialFloatingComments>
       </div>
     </div>
   )
