@@ -1,31 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AcademicCapIcon,
   ArrowDownTrayIcon,
+  ClockIcon,
   DocumentTextIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline'
-import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-} from 'firebase/firestore'
-import { db } from '../../firebase/config'
 import { generateAiJson } from '../../utils/geminiApi'
 import {
   buildConcursoDifficultyPrompt,
   buildConcursoMaterialPrompt,
 } from '../../utils/concursoMaterialPrompt'
 import { downloadElementAsPdf } from '../../utils/materialPdfExport'
-import ContentPublishButton from '../ContentPublishButton'
-import { defaultContentStatus, toggleContentStatus } from '../../utils/contentStatus'
+
+const TEMP_MATERIAL_TTL_MS = 15 * 60 * 1000
+const SESSION_STORAGE_KEY = 'admin_temp_concurso_material'
 
 function renderMaterialPreview(material) {
   if (!material) return null
@@ -100,9 +89,43 @@ function renderMaterialPreview(material) {
   )
 }
 
-export default function AdminConcursoMaterial({ courses = [] }) {
+function formatRemainingTime(expiresAt) {
+  const remainingMs = Math.max(0, expiresAt - Date.now())
+  const minutes = Math.floor(remainingMs / 60000)
+  const seconds = Math.floor((remainingMs % 60000) / 1000)
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
+function readStoredMaterial() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed?.material || !parsed?.expiresAt) return null
+    if (Date.now() >= parsed.expiresAt) {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY)
+      return null
+    }
+    return parsed
+  } catch {
+    sessionStorage.removeItem(SESSION_STORAGE_KEY)
+    return null
+  }
+}
+
+function persistMaterial(material, expiresAt) {
+  sessionStorage.setItem(
+    SESSION_STORAGE_KEY,
+    JSON.stringify({ material, expiresAt }),
+  )
+}
+
+function clearStoredMaterial() {
+  sessionStorage.removeItem(SESSION_STORAGE_KEY)
+}
+
+export default function AdminConcursoMaterial() {
   const [form, setForm] = useState({
-    courseId: courses[0]?.id || 'alego-default',
     concurso: '',
     cargo: '',
     banca: '',
@@ -112,79 +135,85 @@ export default function AdminConcursoMaterial({ courses = [] }) {
   const [progress, setProgress] = useState('')
   const [feedback, setFeedback] = useState('')
   const [preview, setPreview] = useState(null)
-  const [savedMaterials, setSavedMaterials] = useState([])
+  const [expiresAt, setExpiresAt] = useState(null)
+  const [remainingLabel, setRemainingLabel] = useState('')
   const previewRef = useRef(null)
+  const expiryTimerRef = useRef(null)
 
-  const courseId = form.courseId || 'alego-default'
+  const clearTemporaryMaterial = useCallback((message = '') => {
+    if (expiryTimerRef.current) {
+      clearTimeout(expiryTimerRef.current)
+      expiryTimerRef.current = null
+    }
+    clearStoredMaterial()
+    setPreview(null)
+    setExpiresAt(null)
+    setRemainingLabel('')
+    if (message) setFeedback(message)
+  }, [])
 
-  useEffect(() => {
-    if (!courseId) return
+  const scheduleExpiry = useCallback(
+    (targetExpiresAt) => {
+      if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current)
 
-    const q = query(
-      collection(db, 'courses', courseId, 'materiaisConcurso'),
-      orderBy('createdAt', 'desc'),
-    )
-
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setSavedMaterials(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-      },
-      () => {
-        getDocs(collection(db, 'courses', courseId, 'materiaisConcurso')).then((snap) => {
-          const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-          items.sort((a, b) => {
-            const da = a.createdAt?.toDate?.() || new Date(0)
-            const dbDate = b.createdAt?.toDate?.() || new Date(0)
-            return dbDate - da
-          })
-          setSavedMaterials(items)
-        })
-      },
-    )
-
-    return () => unsub()
-  }, [courseId])
-
-  const canGenerate = useMemo(
-    () =>
-      form.concurso.trim() &&
-      form.cargo.trim() &&
-      form.banca.trim() &&
-      !generating,
-    [form, generating],
+      const remainingMs = Math.max(0, targetExpiresAt - Date.now())
+      expiryTimerRef.current = setTimeout(() => {
+        clearTemporaryMaterial(
+          '⏱️ O material expirou e foi removido do sistema. Gere novamente se precisar.',
+        )
+      }, remainingMs)
+    },
+    [clearTemporaryMaterial],
   )
 
-  const loadEditalExcerpt = async (selectedCourseId) => {
-    const editalRef = doc(db, 'courses', selectedCourseId, 'prompts', 'edital')
-    const editalDoc = await getDoc(editalRef)
-    if (!editalDoc.exists()) return ''
-    const data = editalDoc.data()
-    return `${data.prompt || ''}\n\n${data.pdfText || ''}`.trim()
-  }
+  useEffect(() => {
+    const stored = readStoredMaterial()
+    if (!stored) return
+
+    setPreview(stored.material)
+    setExpiresAt(stored.expiresAt)
+    setFeedback('Material temporário restaurado. Baixe o PDF antes que expire.')
+    scheduleExpiry(stored.expiresAt)
+  }, [scheduleExpiry])
+
+  useEffect(() => {
+    if (!expiresAt) return undefined
+
+    const tick = () => setRemainingLabel(formatRemainingTime(expiresAt))
+    tick()
+    const interval = setInterval(tick, 1000)
+    return () => clearInterval(interval)
+  }, [expiresAt])
+
+  useEffect(
+    () => () => {
+      if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current)
+    },
+    [],
+  )
+
+  const canGenerate = useMemo(
+    () => form.concurso.trim() && form.cargo.trim() && form.banca.trim() && !generating,
+    [form, generating],
+  )
 
   const handleGenerate = async () => {
     if (!canGenerate) return
 
+    clearTemporaryMaterial()
     setGenerating(true)
     setProgress('')
     setFeedback('')
-    setPreview(null)
 
     try {
-      setProgress('📖 Buscando edital do curso (se houver)...')
-      const editalExcerpt = await loadEditalExcerpt(courseId)
-
       setProgress('🧠 Analisando dificuldade do concurso, cargo e banca...')
       const analise = await generateAiJson(
         buildConcursoDifficultyPrompt({
           concurso: form.concurso.trim(),
           cargo: form.cargo.trim(),
           banca: form.banca.trim(),
-          editalExcerpt,
         }),
         {
-          courseId,
           generationConfig: { maxOutputTokens: 8000, temperature: 0.3 },
         },
       )
@@ -196,11 +225,9 @@ export default function AdminConcursoMaterial({ courses = [] }) {
           cargo: form.cargo.trim(),
           banca: form.banca.trim(),
           analiseDificuldade: analise,
-          editalExcerpt,
           focoMateria: form.focoMateria.trim(),
         }),
         {
-          courseId,
           isLegalContent: true,
           useRAG: true,
           generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
@@ -214,16 +241,17 @@ export default function AdminConcursoMaterial({ courses = [] }) {
         banca: form.banca.trim(),
         focoMateria: form.focoMateria.trim() || null,
         analiseDificuldade: material.analiseDificuldade || analise,
-        status: defaultContentStatus(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        generatedAt: Date.now(),
       }
 
-      setProgress('💾 Salvando material no curso...')
-      await addDoc(collection(db, 'courses', courseId, 'materiaisConcurso'), payload)
-
+      const nextExpiresAt = Date.now() + TEMP_MATERIAL_TTL_MS
+      persistMaterial(payload, nextExpiresAt)
       setPreview(payload)
-      setFeedback('✅ Material gerado e salvo com sucesso!')
+      setExpiresAt(nextExpiresAt)
+      scheduleExpiry(nextExpiresAt)
+      setFeedback(
+        '✅ Material gerado! Baixe o PDF em até 15 minutos — depois disso será apagado automaticamente.',
+      )
       setProgress('')
     } catch (err) {
       console.error(err)
@@ -232,14 +260,6 @@ export default function AdminConcursoMaterial({ courses = [] }) {
     } finally {
       setGenerating(false)
     }
-  }
-
-  const handleToggleStatus = async (item) => {
-    const next = toggleContentStatus(item.status)
-    await updateDoc(doc(db, 'courses', courseId, 'materiaisConcurso', item.id), {
-      status: next,
-      updatedAt: serverTimestamp(),
-    })
   }
 
   const handleDownloadPdf = async () => {
@@ -260,7 +280,8 @@ export default function AdminConcursoMaterial({ courses = [] }) {
               Material por Concurso
             </h2>
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              Informe concurso, cargo e banca. A IA analisa a dificuldade e gera material completo e fiel.
+              Informe concurso, cargo e banca. A IA analisa a dificuldade, gera o material na
+              pré-visualização e você baixa o PDF. O conteúdo expira em 15 minutos.
             </p>
           </div>
         </div>
@@ -274,22 +295,6 @@ export default function AdminConcursoMaterial({ courses = [] }) {
           </h3>
 
           <div className="space-y-4">
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Curso destino</label>
-              <select
-                value={form.courseId}
-                onChange={(e) => setForm({ ...form, courseId: e.target.value })}
-                className="w-full rounded-xl border-2 border-slate-200 p-3 text-sm dark:border-slate-600 dark:bg-slate-700"
-                disabled={generating}
-              >
-                {courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Concurso</label>
               <input
@@ -367,57 +372,42 @@ export default function AdminConcursoMaterial({ courses = [] }) {
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-          <div className="mb-4 flex items-center justify-between gap-2">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-lg font-bold">Pré-visualização</h3>
-            {preview && (
-              <button
-                type="button"
-                onClick={handleDownloadPdf}
-                className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white dark:bg-slate-600"
-              >
-                <ArrowDownTrayIcon className="h-4 w-4" />
-                PDF
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {preview && expiresAt && (
+                <span className="inline-flex items-center gap-1 rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                  <ClockIcon className="h-4 w-4" />
+                  Expira em {remainingLabel}
+                </span>
+              )}
+              {preview && (
+                <button
+                  type="button"
+                  onClick={handleDownloadPdf}
+                  className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white dark:bg-slate-600"
+                >
+                  <ArrowDownTrayIcon className="h-4 w-4" />
+                  Baixar PDF
+                </button>
+              )}
+            </div>
           </div>
 
           <div
             ref={previewRef}
             className="max-h-[70vh] overflow-y-auto rounded-xl border border-slate-100 bg-white p-4 dark:border-slate-600 dark:bg-slate-900"
           >
-            {preview ? renderMaterialPreview(preview) : (
-              <p className="text-sm text-slate-500">O material gerado aparecerá aqui.</p>
+            {preview ? (
+              renderMaterialPreview(preview)
+            ) : (
+              <p className="text-sm text-slate-500">
+                O material gerado aparecerá aqui por 15 minutos. Baixe o PDF antes que expire.
+              </p>
             )}
           </div>
         </div>
       </div>
-
-      {savedMaterials.length > 0 && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
-          <h3 className="mb-4 text-lg font-bold">Materiais salvos neste curso</h3>
-          <div className="space-y-2">
-            {savedMaterials.map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-600"
-              >
-                <button
-                  type="button"
-                  onClick={() => setPreview(item)}
-                  className="text-left text-sm font-medium text-slate-700 hover:text-emerald-700 dark:text-slate-200"
-                >
-                  {item.titulo || `${item.concurso} — ${item.cargo}`}
-                </button>
-                <ContentPublishButton
-                  status={item.status}
-                  onToggle={() => handleToggleStatus(item)}
-                  size="xs"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

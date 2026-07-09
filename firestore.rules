@@ -301,12 +301,6 @@ service cloud.firestore {
                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       }
-
-      match /materiaisConcurso/{docId} {
-        allow get: if canGetPublishedContent();
-        allow list: if canReadPublishedContent();
-        allow create, update, delete: if isAdmin();
-      }
       
       match /conteudosCompletos/{docId} {
         allow get: if canGetPublishedContent();

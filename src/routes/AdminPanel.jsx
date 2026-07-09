@@ -12915,7 +12915,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
 
             {/* Tab: Material por Concurso */}
             {activeTab === 'material-concurso' && (
-              <AdminConcursoMaterial courses={courses} />
+              <AdminConcursoMaterial />
             )}
 
             {/* Tab: Teste de Prompts */}
