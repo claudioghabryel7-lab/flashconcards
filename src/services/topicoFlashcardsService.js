@@ -21,10 +21,11 @@ import { startBackgroundGeneration } from './aiGenerationRunner'
 import { buildFlashcardsTopicoPayload } from '../utils/serverGenerationPayload'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 import { fetchTopicoPublishStatus } from './topicoPublishService'
-
-const MIN_FLASHCARDS = 20
-const MAX_FLASHCARDS = 50
-const BATCH_SIZE = 25
+import {
+  MIN_TOPIC_FLASHCARDS as MIN_FLASHCARDS,
+  MAX_TOPIC_FLASHCARDS as MAX_FLASHCARDS,
+  FLASHCARD_BATCH_SIZE as BATCH_SIZE,
+} from '../constants/topicFlashcards'
 
 function topicKeyMatches(cardKey, targetKey) {
   if (!targetKey) return false
@@ -159,7 +160,8 @@ FORMATO JSON OBRIGATÓRIO:
 REGRAS:
 - Retorne APENAS JSON válido
 - Sem markdown nos textos
-- Respostas completas, nunca superficiais
+- Respostas completas e detalhadas (mínimo 2-4 frases no verso), nunca superficiais
+- Cubra TODO o tópico do edital — o curso precisa de ${MIN_FLASHCARDS} a ${MAX_FLASHCARDS} cards no total
 - Conteúdo fiel à legislação e ao edital`
 }
 
@@ -168,7 +170,7 @@ async function generateFlashcardBatch(params) {
   const parsed = await generateAiJson(prompt, {
     courseId: params.courseId,
     generationConfig: {
-      maxOutputTokens: 16000,
+      maxOutputTokens: 24000,
       temperature: 0.35,
     },
   })
@@ -176,7 +178,7 @@ async function generateFlashcardBatch(params) {
 }
 
 /**
- * Gera e salva flashcards para um único tópico (20–50 cards, cobrindo todo o tópico).
+ * Gera e salva flashcards para um único tópico (40–60 cards, cobrindo todo o tópico).
  */
 export async function generateAndSaveFlashcardsForTopico({
   courseId,

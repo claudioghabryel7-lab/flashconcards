@@ -11,9 +11,9 @@ const CONTENT_STATUS = {
   UNAVAILABLE: 'indisponivel',
 }
 
-const MIN_FLASHCARDS = 20
-const MAX_FLASHCARDS = 50
-const BATCH_SIZE = 25
+const MIN_FLASHCARDS = 40
+const MAX_FLASHCARDS = 60
+const BATCH_SIZE = 30
 
 function getDb() {
   return admin.firestore()
@@ -96,7 +96,8 @@ FORMATO JSON OBRIGATÓRIO:
 REGRAS:
 - Retorne APENAS JSON válido
 - Sem markdown nos textos
-- Respostas completas, nunca superficiais
+- Respostas completas e detalhadas (mínimo 2-4 frases no verso), nunca superficiais
+- Cubra TODO o tópico — são necessários ${MIN_FLASHCARDS} a ${MAX_FLASHCARDS} cards no total
 - Conteúdo fiel à legislação e ao edital`
 }
 
@@ -147,7 +148,11 @@ async function processConteudoCompleto(userId, jobId, courseId, serverPayload) {
   const parsed = await generateAiJson(prompt, {
     useRAG: aiOptions.useRAG ?? true,
     useGoogleSearch: aiOptions.useGoogleSearch ?? true,
-    generationConfig: aiOptions.generationConfig,
+    generationConfig: {
+      maxOutputTokens: 32000,
+      temperature: 0.35,
+      ...(aiOptions.generationConfig || {}),
+    },
   })
 
   await updateJob(userId, jobId, { progress: 85, message: 'Salvando conteúdo…' })
@@ -276,7 +281,7 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
 
   const batch1Prompt = buildFlashcardPrompt(baseMeta, 1, 2, firstBatchCount, [])
   const batch1 = await generateAiJson(batch1Prompt, {
-    generationConfig: { maxOutputTokens: 16000, temperature: 0.35, ...(aiOptions.generationConfig || {}) },
+    generationConfig: { maxOutputTokens: 24000, temperature: 0.35, ...(aiOptions.generationConfig || {}) },
   })
   allItems = dedupeFlashcards(batch1.flashcards || [])
 
@@ -291,7 +296,7 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
       allItems.map((c) => c.frente || c.pergunta),
     )
     const batch2 = await generateAiJson(batch2Prompt, {
-      generationConfig: { maxOutputTokens: 16000, temperature: 0.35 },
+      generationConfig: { maxOutputTokens: 24000, temperature: 0.35 },
     })
     allItems = dedupeFlashcards([...allItems, ...(batch2.flashcards || [])])
   }
@@ -307,7 +312,7 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
       allItems.map((c) => c.frente || c.pergunta),
     )
     const batch3 = await generateAiJson(batch3Prompt, {
-      generationConfig: { maxOutputTokens: 16000, temperature: 0.35 },
+      generationConfig: { maxOutputTokens: 24000, temperature: 0.35 },
     })
     allItems = dedupeFlashcards([...allItems, ...(batch3.flashcards || [])])
   }

@@ -13,7 +13,9 @@ export function buildAiOptions(courseId, overrides = {}) {
 export function buildConteudoCompletoPayload({ prompt, courseId, topicKey, status }) {
   return {
     prompt,
-    aiOptions: buildAiOptions(courseId),
+    aiOptions: buildAiOptions(courseId, {
+      generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
+    }),
     savePlan: {
       topicKey,
       status: status || null,
@@ -68,7 +70,7 @@ export function buildQuestoesIncidenciaPayload({
 
 export function buildFlashcardsTopicoPayload({ courseId, flashcardMeta, status }) {
   return {
-    aiOptions: buildAiOptions(courseId, { generationConfig: { maxOutputTokens: 16000, temperature: 0.35 } }),
+    aiOptions: buildAiOptions(courseId, { generationConfig: { maxOutputTokens: 24000, temperature: 0.35 } }),
     savePlan: {
       flashcardMeta,
       status: status || null,

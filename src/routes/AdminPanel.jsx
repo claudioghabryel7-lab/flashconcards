@@ -39,6 +39,7 @@ import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager
 import AdminContentModeration from '../components/admin/AdminContentModeration'
 import AdminEmailBroadcast from '../components/admin/AdminEmailBroadcast'
 import AdminCacheReset from '../components/admin/AdminCacheReset'
+import AdminConcursoMaterial from '../components/admin/AdminConcursoMaterial'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { defaultContentStatus, toggleContentStatus } from '../utils/contentStatus'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
@@ -6911,6 +6912,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     { id: 'shared-links', label: 'Links Compartilhados', icon: '🔗' },
     { id: 'trials', label: 'Testes Gratuitos', icon: '🎁' },
     { id: 'moderacao', label: 'Moderação', icon: '🚩' },
+    { id: 'material-concurso', label: 'Material Concurso', icon: '📘' },
     { id: 'prompt-test', label: 'Teste de Prompts', icon: '🧪' },
   ]
   
@@ -12909,6 +12911,11 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Tab: Material por Concurso */}
+            {activeTab === 'material-concurso' && (
+              <AdminConcursoMaterial courses={courses} />
             )}
 
             {/* Tab: Teste de Prompts */}

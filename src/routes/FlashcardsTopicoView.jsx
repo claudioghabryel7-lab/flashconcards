@@ -14,6 +14,10 @@ import {
   fetchFlashcardsForTopico,
   generateAndSaveFlashcardsForTopico,
 } from '../services/topicoFlashcardsService'
+import {
+  MIN_TOPIC_FLASHCARDS,
+  MAX_TOPIC_FLASHCARDS,
+} from '../constants/topicFlashcards'
 import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
 import { generateShareToken } from '../utils/shareToken'
 import ShareItemButton from '../components/share/ShareItemButton'
@@ -46,8 +50,6 @@ const FlashcardsTopicoView = () => {
   const [fromCache, setFromCache] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
-
-  const MIN_TOPIC_FLASHCARDS = 20
 
   const publishStatus = useMemo(() => {
     if (cards.length === 0) return CONTENT_STATUS.UNAVAILABLE
@@ -185,7 +187,7 @@ const FlashcardsTopicoView = () => {
 
   const handleRegenerate = async () => {
     if (!isAdmin || regenerating || generating) return
-    if (!window.confirm(`Regenerar flashcards deste tópico? Serão criados de ${MIN_TOPIC_FLASHCARDS} a 50 cards focados apenas neste tópico.`)) {
+    if (!window.confirm(`Regenerar flashcards deste tópico? Serão criados de ${MIN_TOPIC_FLASHCARDS} a ${MAX_TOPIC_FLASHCARDS} cards focados apenas neste tópico.`)) {
       return
     }
 
@@ -341,7 +343,7 @@ const FlashcardsTopicoView = () => {
             {fromCache && cards.length > 0 && (
               <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
                 {cards.length} flashcards neste tópico
-                {cards.length < MIN_TOPIC_FLASHCARDS && isAdmin ? ' — abaixo do mínimo recomendado (20)' : ''}
+                {cards.length < MIN_TOPIC_FLASHCARDS && isAdmin ? ` — abaixo do mínimo recomendado (${MIN_TOPIC_FLASHCARDS})` : ''}
               </p>
             )}
           </div>
@@ -395,7 +397,7 @@ const FlashcardsTopicoView = () => {
         <div className="cp-card flex flex-col items-center py-16">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
           <p className="mt-4 text-sm font-medium text-cp-text">
-            {generating || regenerating ? 'Gerando flashcards com IA (20–50 por tópico)...' : 'Carregando...'}
+            {generating || regenerating ? `Gerando flashcards com IA (${MIN_TOPIC_FLASHCARDS}–${MAX_TOPIC_FLASHCARDS} por tópico)...` : 'Carregando...'}
           </p>
           {generating && isAdmin && (
             <p className="mt-2 text-xs text-cp-muted">Após gerar, clique em Disponibilizar para liberar aos alunos.</p>

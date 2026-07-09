@@ -1,0 +1,3 @@
+export const MIN_TOPIC_FLASHCARDS = 40
+export const MAX_TOPIC_FLASHCARDS = 60
+export const FLASHCARD_BATCH_SIZE = 30

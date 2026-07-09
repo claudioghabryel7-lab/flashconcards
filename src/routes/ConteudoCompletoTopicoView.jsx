@@ -18,6 +18,7 @@ import ShareToFeedButton from '../components/feed/ShareToFeedButton'
 import { FEED_POST_TYPES } from '../services/trilhaFeedService'
 import { stripHtml } from '../utils/htmlTextHelpers'
 import { downloadElementAsPdf } from '../utils/materialPdfExport'
+import { getConteudoCompletoDepthInstructions, CONTEUDO_COMPLETO_DEPTH } from '../utils/contentDepthRules'
 import ReactMarkdown from 'react-markdown'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
@@ -659,10 +660,12 @@ SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A G
 
 [DIRETRIZES DE SAÍDA - O QUE EXIBIR]
 Gere o conteúdo estruturado com:
-- Raio-X de Probabilidade (Foco na banca ${banca || 'NÃO DEFINIDA'})
-- Revisão Turbo (Cronologia real e precisa, sem alucinações de numeração)
-- Cuidado, Caçapa! (Pegadinhas reais da banca)
-- 5 Questões Preditivas inéditas com gabarito comentado fundamentado estritamente na lei real vigente
+- Raio-X de Probabilidade (Foco na banca ${banca || 'NÃO DEFINIDA'}) — entre ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} e ${CONTEUDO_COMPLETO_DEPTH.MAX_TOPICOS_QUENTES} assuntos quentes
+- Revisão Turbo (Cronologia real e precisa, sem alucinações de numeração) — um resumo COMPLETO para cada assunto quente (mínimo ${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_POR_RESUMO} palavras cada)
+- Cuidado, Caçapa! (Pegadinhas reais da banca) — 4 a 6 itens detalhados
+- ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} Questões Preditivas inéditas com gabarito comentado fundamentado estritamente na lei real vigente
+
+${getConteudoCompletoDepthInstructions({ banca, concursoName, courseName: courseName || concursoName })}
 
 Seja cirúrgico, técnico e focado na literalidade e jurisprudência pacificada. Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto.
 
@@ -706,7 +709,7 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
      * Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
 
 3. **QUESTÕES PREDITIVAS**:
-   - Gere EXATAMENTE 5 questões para este tópico
+   - Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} questões para este tópico
    - No estilo da banca ${banca || 'NÃO DEFINIDA'} (A, B, C, D, E ou Certo/Errado)
    - Contextualizadas com o concurso ${concursoName || 'mencionado'} e cargo ${courseName || 'mencionado'}
    - Gabarito Comentado: explique o porquê das outras estarem erradas
