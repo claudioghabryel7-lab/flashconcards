@@ -30,6 +30,8 @@ export async function createGenerationJob({
   jobType,
   topicKey = null,
   metadata = {},
+  serverPayload = null,
+  runOnServer = false,
 }) {
   if (!userId || !db) throw new Error('Usuário não autenticado.')
 
@@ -41,9 +43,11 @@ export async function createGenerationJob({
       jobType,
       topicKey,
       metadata,
+      runOnServer: Boolean(runOnServer && serverPayload),
+      serverPayload: runOnServer && serverPayload ? serverPayload : null,
       status: GENERATION_JOB_STATUS.PENDING,
       progress: 0,
-      message: 'Aguardando início…',
+      message: runOnServer && serverPayload ? 'Enviado ao servidor…' : 'Aguardando início…',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }),
@@ -60,6 +64,7 @@ export async function updateGenerationJob(userId, jobId, patch) {
 }
 
 const STALE_JOB_MS = 45 * 60 * 1000
+const STALE_SERVER_JOB_MS = 90 * 60 * 1000
 
 /** Marca jobs travados (ex.: aba fechada) como erro para não ficar banner infinito. */
 export async function reconcileStaleGenerationJobs(userId) {
@@ -79,13 +84,17 @@ export async function reconcileStaleGenerationJobs(userId) {
     const data = d.data()
     const updatedAt = data.updatedAt?.toDate?.() || data.createdAt?.toDate?.()
     if (!updatedAt) return
-    if (now - updatedAt.getTime() < STALE_JOB_MS) return
+
+    const staleMs = data.runOnServer ? STALE_SERVER_JOB_MS : STALE_JOB_MS
+    if (now - updatedAt.getTime() < staleMs) return
 
     updates.push(
       updateDoc(d.ref, {
         status: GENERATION_JOB_STATUS.ERROR,
         progress: 100,
-        message: 'Geração interrompida. Tente novamente.',
+        message: data.runOnServer
+          ? 'Geração no servidor expirou. Tente novamente.'
+          : 'Geração interrompida. Tente novamente.',
         updatedAt: serverTimestamp(),
       }),
     )
@@ -125,5 +134,41 @@ export function subscribeGenerationJob(userId, jobId, onData) {
   if (!userId || !jobId || !db) return () => {}
   return onSnapshot(doc(db, 'users', userId, 'generationJobs', jobId), (snap) => {
     onData(snap.exists() ? { id: snap.id, ...snap.data() } : null)
+  })
+}
+
+export function waitForGenerationJob(userId, jobId, { timeoutMs = 90 * 60 * 1000 } = {}) {
+  return new Promise((resolve, reject) => {
+    if (!userId || !jobId) {
+      reject(new Error('Job de geração inválido.'))
+      return
+    }
+
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      unsub()
+      reject(new Error('Tempo esgotado aguardando geração.'))
+    }, timeoutMs)
+
+    const unsub = subscribeGenerationJob(userId, jobId, (job) => {
+      if (!job || settled) return
+
+      if (job.status === GENERATION_JOB_STATUS.DONE) {
+        settled = true
+        clearTimeout(timer)
+        unsub()
+        resolve(job)
+      } else if (
+        job.status === GENERATION_JOB_STATUS.ERROR ||
+        job.status === GENERATION_JOB_STATUS.CANCELLED
+      ) {
+        settled = true
+        clearTimeout(timer)
+        unsub()
+        reject(new Error(job.message || 'Erro na geração.'))
+      }
+    })
   })
 }

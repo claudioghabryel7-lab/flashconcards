@@ -17,11 +17,8 @@ import {
 } from '../utils/editalVerticalizadoLoader'
 import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
 import { generateAiJson } from '../utils/geminiApi'
-import {
-  createGenerationJob,
-  updateGenerationJob,
-  GENERATION_JOB_STATUS,
-} from './generationJobService'
+import { startBackgroundGeneration } from './aiGenerationRunner'
+import { buildFlashcardsTopicoPayload } from '../utils/serverGenerationPayload'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 import { fetchTopicoPublishStatus } from './topicoPublishService'
 
@@ -204,34 +201,43 @@ export async function generateAndSaveFlashcardsForTopico({
   const modulo = moduloLabel || formatTopicoAsModulo({ numero: topicoNumero, nome: topicoNome })
   const normalizedTopicKey = normalizeTopicKeyForStorage(topicKey)
 
-  let jobId = null
+  const baseParams = {
+    courseId: resolvedId,
+    courseName: courseName || courseData.name || courseData.competition || '',
+    disciplina,
+    topicoNome,
+    topicoNumero,
+    modulo,
+    banca,
+    editalText,
+  }
+
   if (userId) {
-    jobId = await createGenerationJob({
+    const initialStatus = await fetchTopicoPublishStatus(resolvedId, normalizedTopicKey)
+    const { promise } = await startBackgroundGeneration({
       userId,
       courseId: resolvedId,
       jobType: 'flashcards_topico',
       topicKey: normalizedTopicKey,
+      runOnServer: true,
+      serverPayload: buildFlashcardsTopicoPayload({
+        courseId: resolvedId,
+        status: initialStatus,
+        flashcardMeta: {
+          ...baseParams,
+          topicKey: normalizedTopicKey,
+        },
+      }),
     })
-    await updateGenerationJob(userId, jobId, {
-      status: GENERATION_JOB_STATUS.RUNNING,
-      message: 'Gerando flashcards (lote 1)…',
-      progress: 10,
+
+    await promise
+    return fetchFlashcardsForTopico(resolvedId, disciplina, modulo, normalizedTopicKey, {
+      includeUnpublished: true,
     })
   }
 
   try {
     await deleteExistingFlashcardsForTopico(resolvedId, normalizedTopicKey, disciplina, modulo)
-
-    const baseParams = {
-      courseId: resolvedId,
-      courseName: courseName || courseData.name || courseData.competition || '',
-      disciplina,
-      topicoNome,
-      topicoNumero,
-      modulo,
-      banca,
-      editalText,
-    }
 
     let allItems = []
     const firstBatchCount = Math.min(BATCH_SIZE, MAX_FLASHCARDS)
@@ -244,13 +250,6 @@ export async function generateAndSaveFlashcardsForTopico({
       existingFronts: [],
     })
     allItems = dedupeFlashcards(batch1)
-
-    if (userId && jobId) {
-      await updateGenerationJob(userId, jobId, {
-        message: 'Gerando flashcards (lote 2)…',
-        progress: 45,
-      })
-    }
 
     if (allItems.length < MIN_FLASHCARDS) {
       const remaining = Math.min(MAX_FLASHCARDS - allItems.length, BATCH_SIZE)
@@ -319,22 +318,8 @@ export async function generateAndSaveFlashcardsForTopico({
 
     await batch.commit()
 
-    if (userId && jobId) {
-      await updateGenerationJob(userId, jobId, {
-        status: GENERATION_JOB_STATUS.DONE,
-        progress: 100,
-        message: `${saved.length} flashcards gerados.`,
-      })
-    }
-
     return saved.map((c) => normalizeFlashcard(c))
   } catch (error) {
-    if (userId && jobId) {
-      await updateGenerationJob(userId, jobId, {
-        status: GENERATION_JOB_STATUS.ERROR,
-        message: error?.message || 'Erro na geração de flashcards',
-      }).catch(() => {})
-    }
     throw error
   }
 }

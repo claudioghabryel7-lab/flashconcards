@@ -1,11 +1,12 @@
 import {
   createGenerationJob,
   updateGenerationJob,
+  waitForGenerationJob,
   GENERATION_JOB_STATUS,
 } from './generationJobService'
 import { formatAiErrorForUser } from '../utils/geminiApi'
 
-/** Promessas ativas — sobrevivem a desmontagem de componentes React. */
+/** Promessas ativas — sobrevivem a desmontagem de componentes React (modo cliente). */
 const activeTasks = new Map()
 
 async function executeJob(userId, jobId, task) {
@@ -47,7 +48,7 @@ async function executeJob(userId, jobId, task) {
 
 /**
  * Inicia geração em segundo plano (retorna jobId imediatamente).
- * A promise continua mesmo se o componente desmontar.
+ * Com `serverPayload`, a Cloud Function processa mesmo com aba fechada.
  */
 export async function startBackgroundGeneration({
   userId,
@@ -56,9 +57,17 @@ export async function startBackgroundGeneration({
   topicKey = null,
   metadata = {},
   task,
+  serverPayload = null,
+  runOnServer = false,
 }) {
-  if (!userId || typeof task !== 'function') {
+  if (!userId) {
     throw new Error('Usuário não autenticado para geração em segundo plano.')
+  }
+
+  const useServer = Boolean(runOnServer && serverPayload)
+
+  if (!useServer && typeof task !== 'function') {
+    throw new Error('Task ou serverPayload é obrigatório.')
   }
 
   const jobId = await createGenerationJob({
@@ -67,7 +76,16 @@ export async function startBackgroundGeneration({
     jobType,
     topicKey,
     metadata,
+    serverPayload: useServer ? serverPayload : null,
+    runOnServer: useServer,
   })
+
+  if (useServer) {
+    const promise = waitForGenerationJob(userId, jobId).then((job) => job?.resultRef ?? job)
+    activeTasks.set(jobId, promise)
+    promise.finally(() => activeTasks.delete(jobId))
+    return { jobId, promise }
+  }
 
   const promise = executeJob(userId, jobId, task)
   activeTasks.set(jobId, promise)

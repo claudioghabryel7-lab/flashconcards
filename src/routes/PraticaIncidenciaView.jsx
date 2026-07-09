@@ -7,8 +7,9 @@ import ReactMarkdown from 'react-markdown'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { formatAiErrorForUser } from '../utils/geminiApi'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
+import { buildQuestoesIncidenciaPayload } from '../utils/serverGenerationPayload'
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { QuestaoEnunciadoCard } from '../components/QuestoesPraticaCP'
@@ -412,45 +413,36 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       setProgress(50)
       setStatus('Gerando em segundo plano… Você pode sair desta tela.')
 
+      const disciplinaLocal = editalVerticalizado?.disciplinas[disciplinaIndex]
+      const discKey = disciplinaLocal?.nome
+        ?.replace(/[^a-zA-Z0-9]/g, '_')
+        .substring(0, 100)
+      const docId = `${discKey}_nivel_${nivelAtual}`
+
       const { promise } = await startBackgroundGeneration({
         userId: user?.uid,
         courseId,
         jobType: 'questoes_incidencia',
         topicKey: String(disciplinaIdx),
         metadata: { nivel: nivelAtual, disciplina: sanitizedDisciplinaNome },
-        task: async ({ updateProgress }) => {
-          await updateProgress(50, 'Gerando questões com IA…')
-          const parsed = await generateAiJson(prompt, { courseId, isLegalContent: true, useRAG: true })
-
-          await updateProgress(90, 'Salvando questões…')
-
-          const disciplinaLocal = editalVerticalizado?.disciplinas[disciplinaIndex]
-          const discKey = disciplinaLocal?.nome
-            ?.replace(/[^a-zA-Z0-9]/g, '_')
-            .substring(0, 100)
-          const docId = `${discKey}_nivel_${nivelAtual}`
-          const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', docId)
-
-          const initialStatus = isContentAvailable(conteudoIncidencia?.status, true)
+        runOnServer: true,
+        serverPayload: buildQuestoesIncidenciaPayload({
+          prompt,
+          courseId,
+          disciplinaNome: disciplinaLocal?.nome,
+          disciplinaIdx: disciplinaIndex,
+          nivel: nivelAtual,
+          status: isContentAvailable(conteudoIncidencia?.status, true)
             ? CONTENT_STATUS.AVAILABLE
-            : CONTENT_STATUS.UNAVAILABLE
-
-          await setDoc(questoesRef, {
-            ...parsed,
-            disciplinaIdx: disciplinaIndex,
-            nivel: nivelAtual,
-            status: initialStatus,
-            updatedAt: serverTimestamp(),
-            generatedAt: serverTimestamp(),
-          }, { merge: true })
-
-          return parsed
-        },
+            : CONTENT_STATUS.UNAVAILABLE,
+        }),
       })
 
       promise
-        .then((parsed) => {
-          setQuestoes(parsed)
+        .then(async () => {
+          const questoesRef = doc(db, 'courses', courseId, 'questoesIncidencia', docId)
+          const snap = await getDoc(questoesRef)
+          if (snap.exists()) setQuestoes({ id: docId, ...snap.data() })
           setNiveisDisponiveis((prev) =>
             prev.includes(nivelAtual) ? prev : [...prev, nivelAtual].sort((a, b) => a - b)
           )

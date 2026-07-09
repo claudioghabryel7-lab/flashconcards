@@ -11,11 +11,8 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
-import {
-  createGenerationJob,
-  updateGenerationJob,
-  GENERATION_JOB_STATUS,
-} from '../services/generationJobService'
+import { startBackgroundGeneration } from '../services/aiGenerationRunner'
+import { buildQuestoesTopicoPayload } from '../utils/serverGenerationPayload'
 import { incrementQuestoesStats } from '../utils/questoesStats'
 import { isContentAvailable, toggleContentStatus, CONTENT_STATUS } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
@@ -419,25 +416,10 @@ const QuestoesTopicoView = () => {
       return
     }
 
-    let jobId = null
     try {
       setGenerating(true)
       setProgress(5)
       setError('')
-
-      if (user?.uid) {
-        jobId = await createGenerationJob({
-          userId: user.uid,
-          courseId: resolvedCourseId,
-          jobType: 'questoes_topico',
-          topicKey: resolvedTopicKey,
-          metadata: { nivel: nivelAtual },
-        })
-        await updateGenerationJob(user.uid, jobId, {
-          status: GENERATION_JOB_STATUS.RUNNING,
-          message: `Gerando questões (nível ${nivelAtual})…`,
-        })
-      }
 
       // Carregar edital e prompt unificado para contexto
       const editalRef = doc(db, 'courses', resolvedCourseId, 'prompts', 'edital')
@@ -682,6 +664,44 @@ REGRAS IMPORTANTES:
 Retorne APENAS o JSON válido, sem texto adicional.`
 
       setProgress((prev) => Math.min(prev + 15, 70))
+      const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
+      const docId = `${sanitizedKey}_nivel_${nivelAtual}`
+
+      if (user?.uid) {
+        console.log('🤖 [Questões Tópico] Enviando geração ao servidor…')
+        const { promise } = await startBackgroundGeneration({
+          userId: user.uid,
+          courseId: resolvedCourseId,
+          jobType: 'questoes_topico',
+          topicKey: resolvedTopicKey,
+          metadata: { nivel: nivelAtual },
+          runOnServer: true,
+          serverPayload: buildQuestoesTopicoPayload({
+            prompt,
+            courseId: resolvedCourseId,
+            topicKey: resolvedTopicKey,
+            topicoNome: effectiveTopicNome || resolvedTopicKey,
+            nivel: nivelAtual,
+            status:
+              topicoPublishStatus === CONTENT_STATUS.AVAILABLE
+                ? CONTENT_STATUS.AVAILABLE
+                : CONTENT_STATUS.UNAVAILABLE,
+          }),
+        })
+
+        await promise
+        const snap = await getDoc(doc(db, 'courses', resolvedCourseId, 'questoesTopico', docId))
+        if (snap.exists()) {
+          setQuestoes({ id: docId, ...snap.data() })
+        }
+        setNiveisDisponiveis((prev) =>
+          prev.includes(nivelAtual) ? prev : [...prev, nivelAtual].sort((a, b) => a - b)
+        )
+        setError('')
+        setProgress(100)
+        return true
+      }
+
       console.log('🤖 [Questões Tópico] Iniciando geração com IA...')
       const parsed = await generateAiJson(prompt, {
         courseId: resolvedCourseId,
@@ -699,10 +719,6 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         updatedAt: serverTimestamp(),
         generatedAt: serverTimestamp(),
       }
-
-      const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
-      
-      const docId = `${sanitizedKey}_nivel_${nivelAtual}`
 
       try {
         await setDoc(doc(db, 'courses', resolvedCourseId, 'questoesTopico', docId), payload, {
@@ -722,24 +738,11 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       )
       setError('')
       setProgress(100)
-      if (user?.uid && jobId) {
-        await updateGenerationJob(user.uid, jobId, {
-          status: GENERATION_JOB_STATUS.DONE,
-          progress: 100,
-          message: 'Questões geradas com sucesso.',
-        })
-      }
       return true
     } catch (err) {
       console.error('Erro ao gerar questões:', err)
       const message = err instanceof Error ? err.message : String(err)
       setError(message || 'Erro ao gerar questões.')
-      if (user?.uid && jobId) {
-        await updateGenerationJob(user.uid, jobId, {
-          status: GENERATION_JOB_STATUS.ERROR,
-          message,
-        }).catch(() => {})
-      }
       return false
     } finally {
       setGenerating(false)

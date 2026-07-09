@@ -11,6 +11,37 @@ const axios = require('axios')
 
 admin.initializeApp()
 
+const { processGenerationJob } = require('./generation/jobProcessor')
+
+/** Processa jobs de geração IA no servidor — continua mesmo com aba/dispositivo fechado. */
+exports.onGenerationJobCreated = functions
+  .runWith({ timeoutSeconds: 540, memory: '1GB' })
+  .firestore.document('users/{userId}/generationJobs/{jobId}')
+  .onCreate(async (snap, context) => {
+    const data = snap.data() || {}
+    if (!data.runOnServer || data.status !== 'pending') {
+      return null
+    }
+
+    const { userId, jobId } = context.params
+
+    try {
+      await processGenerationJob(userId, jobId, data)
+      return null
+    } catch (error) {
+      console.error(`[onGenerationJobCreated] job ${jobId}:`, error)
+      await snap.ref.update({
+        status: 'error',
+        progress: 100,
+        message: error?.message || 'Falha na geração com IA. Tente novamente.',
+        errorCode: error?.code || null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      return null
+    }
+  })
+
 // Configurar transporte de email (usando Gmail)
 const createEmailTransporter = () => {
   // Pegar credenciais do Firebase Config ou variáveis de ambiente ou valores padrão

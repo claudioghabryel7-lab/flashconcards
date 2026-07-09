@@ -6,8 +6,9 @@ import { ArrowLeftIcon, FireIcon, TrashIcon, PencilIcon } from '@heroicons/react
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { formatAiErrorForUser } from '../utils/geminiApi'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
+import { buildConteudoIncidenciaPayload } from '../utils/serverGenerationPayload'
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { probabilidadeBadgeClass } from '../utils/htmlTextHelpers'
@@ -266,6 +267,10 @@ REGRAS IMPORTANTES:
 
 Retorne APENAS o JSON válido, sem texto adicional.`
 
+      const sanitizedDisciplinaNome = disciplina.nome
+        .replace(/[^a-zA-Z0-9]/g, '_')
+        .substring(0, 100)
+
       setProgress(50)
       setStatus('Gerando em segundo plano… Você pode sair desta tela.')
 
@@ -275,43 +280,20 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         jobType: 'conteudo_incidencia',
         topicKey: String(disciplinaIdx),
         metadata: { disciplina: disciplina.nome },
-        task: async ({ updateProgress }) => {
-          await updateProgress(50, 'Gerando com IA…')
-          const parsed = await generateAiJson(prompt, {
-            courseId,
-            isLegalContent: true,
-            useRAG: true,
-          })
-
-          await updateProgress(90, 'Salvando conteúdo…')
-
-          const sanitizedDisciplinaNome = disciplina.nome
-            .replace(/[^a-zA-Z0-9]/g, '_')
-            .substring(0, 100)
-
-          const incidenciaRef = doc(db, 'courses', courseId, 'conteudosIncidencia', sanitizedDisciplinaNome)
-          const existingSnap = await getDoc(incidenciaRef)
-          const prevStatus = existingSnap.exists() ? existingSnap.data().status : null
-          const initialStatus =
-            prevStatus === 'disponivel' || prevStatus === CONTENT_STATUS.AVAILABLE
-              ? CONTENT_STATUS.AVAILABLE
-              : CONTENT_STATUS.UNAVAILABLE
-
-          await setDoc(incidenciaRef, {
-            ...parsed,
-            disciplinaIdx: disciplinaIndex,
-            status: initialStatus,
-            updatedAt: serverTimestamp(),
-            generatedAt: serverTimestamp(),
-          }, { merge: true })
-
-          return parsed
-        },
+        runOnServer: true,
+        serverPayload: buildConteudoIncidenciaPayload({
+          prompt,
+          courseId,
+          disciplinaNome: disciplina.nome,
+          disciplinaIdx: disciplinaIndex,
+        }),
       })
 
       promise
-        .then((parsed) => {
-          setConteudoGerado(parsed)
+        .then(async () => {
+          const incidenciaRef = doc(db, 'courses', courseId, 'conteudosIncidencia', sanitizedDisciplinaNome)
+          const snap = await getDoc(incidenciaRef)
+          if (snap.exists()) setConteudoGerado(snap.data())
           setProgress(100)
           setStatus('✅ Conteúdo gerado com sucesso!')
         })

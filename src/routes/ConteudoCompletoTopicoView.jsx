@@ -8,11 +8,8 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
-import {
-  createGenerationJob,
-  updateGenerationJob,
-  GENERATION_JOB_STATUS,
-} from '../services/generationJobService'
+import { startBackgroundGeneration } from '../services/aiGenerationRunner'
+import { buildConteudoCompletoPayload } from '../utils/serverGenerationPayload'
 import { fetchTopicoPublishStatus } from '../services/topicoPublishService'
 import { isContentAvailable, CONTENT_STATUS } from '../utils/contentStatus'
 import SimpleMaterialEditor from '../components/SimpleMaterialEditor'
@@ -727,24 +724,10 @@ ONDE:
       return
     }
 
-    let jobId = null
     try {
       setGenerating(true)
       setProgress(5)
       setError('')
-
-      if (user?.uid) {
-        jobId = await createGenerationJob({
-          userId: user.uid,
-          courseId: resolvedCourseId,
-          jobType: 'conteudo_completo',
-          topicKey: resolvedTopicKey,
-        })
-        await updateGenerationJob(user.uid, jobId, {
-          status: GENERATION_JOB_STATUS.RUNNING,
-          message: 'Gerando conteúdo completo…',
-        })
-      }
 
       // Carregar edital e prompt unificado para contexto
       const editalRef = doc(db, 'courses', resolvedCourseId, 'prompts', 'edital')
@@ -1002,13 +985,42 @@ REGRAS:
 - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
 
       setProgress((prev) => Math.min(prev + 15, 70))
+      const initialStatus = await fetchTopicoPublishStatus(resolvedCourseId, resolvedTopicKey)
+      const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
+
+      if (user?.uid) {
+        setProgress(75)
+        setError('')
+        const { promise } = await startBackgroundGeneration({
+          userId: user.uid,
+          courseId: resolvedCourseId,
+          jobType: 'conteudo_completo',
+          topicKey: resolvedTopicKey,
+          runOnServer: true,
+          serverPayload: buildConteudoCompletoPayload({
+            prompt,
+            courseId: resolvedCourseId,
+            topicKey: resolvedTopicKey,
+            status: initialStatus,
+          }),
+        })
+
+        await promise
+        const contentRef = doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', sanitizedKey)
+        const snap = await getDoc(contentRef)
+        if (snap.exists()) {
+          setConteudo({ id: sanitizedKey, ...snap.data() })
+        }
+        setProgress(100)
+        return true
+      }
+
       const parsed = await generateAiJson(prompt, {
         courseId: resolvedCourseId,
         isLegalContent: true,
         useRAG: true,
       })
       setProgress(75)
-      const initialStatus = await fetchTopicoPublishStatus(resolvedCourseId, resolvedTopicKey)
       const payload = {
         ...parsed,
         materia: parsed.materia || parsed.titulo || resolvedTopicKey,
@@ -1019,33 +1031,17 @@ REGRAS:
         generatedAt: serverTimestamp(),
       }
 
-      // Sanitizar o topicKey para usar como ID de documento no Firestore
-      const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
-      
       await setDoc(doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', sanitizedKey), payload, {
         merge: true,
       })
       setConteudo({ id: sanitizedKey, ...payload })
       setError('')
       setProgress(100)
-      if (user?.uid && jobId) {
-        await updateGenerationJob(user.uid, jobId, {
-          status: GENERATION_JOB_STATUS.DONE,
-          progress: 100,
-          message: 'Conteúdo gerado com sucesso.',
-        })
-      }
       return true
     } catch (err) {
       console.error('Erro ao gerar conteúdo:', err)
       const message = err instanceof Error ? err.message : String(err)
       setError(message || 'Erro ao gerar conteúdo.')
-      if (user?.uid && jobId) {
-        await updateGenerationJob(user.uid, jobId, {
-          status: GENERATION_JOB_STATUS.ERROR,
-          message,
-        }).catch(() => {})
-      }
       return false
     } finally {
       setGenerating(false)

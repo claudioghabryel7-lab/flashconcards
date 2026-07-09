@@ -53,7 +53,7 @@ export default function CoursePeopleSuggestions({ courseId, currentUserId }) {
   return (
     <div className="border-b border-cp-border bg-cp-surface/40 px-4 py-4">
       <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-cp-muted">
-        Sugestões do curso
+        Motiva-se e mantenha-se motivado(a)
       </p>
       <div className="flex gap-3 overflow-x-auto scrollbar-hide">
         {people.map((person) => (

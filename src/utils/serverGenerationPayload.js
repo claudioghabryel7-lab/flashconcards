@@ -1,0 +1,77 @@
+/** Monta payload serializável para geração server-side (Cloud Functions). */
+
+export function buildAiOptions(courseId, overrides = {}) {
+  return {
+    courseId: courseId || null,
+    isLegalContent: true,
+    useRAG: true,
+    useGoogleSearch: true,
+    ...overrides,
+  }
+}
+
+export function buildConteudoCompletoPayload({ prompt, courseId, topicKey, status }) {
+  return {
+    prompt,
+    aiOptions: buildAiOptions(courseId),
+    savePlan: {
+      topicKey,
+      status: status || null,
+    },
+  }
+}
+
+export function buildQuestoesTopicoPayload({ prompt, courseId, topicKey, topicoNome, nivel, status }) {
+  return {
+    prompt,
+    aiOptions: buildAiOptions(courseId),
+    savePlan: {
+      topicKey,
+      topicoNome,
+      nivel,
+      status: status || null,
+    },
+  }
+}
+
+export function buildConteudoIncidenciaPayload({ prompt, courseId, disciplinaNome, disciplinaIdx, status }) {
+  return {
+    prompt,
+    aiOptions: buildAiOptions(courseId),
+    savePlan: {
+      disciplinaNome,
+      disciplinaIdx,
+      status: status || null,
+    },
+  }
+}
+
+export function buildQuestoesIncidenciaPayload({
+  prompt,
+  courseId,
+  disciplinaNome,
+  disciplinaIdx,
+  nivel,
+  status,
+}) {
+  return {
+    prompt,
+    aiOptions: buildAiOptions(courseId),
+    savePlan: {
+      disciplinaNome,
+      disciplinaIdx,
+      nivel,
+      status: status || null,
+    },
+  }
+}
+
+export function buildFlashcardsTopicoPayload({ courseId, flashcardMeta, status }) {
+  return {
+    aiOptions: buildAiOptions(courseId, { generationConfig: { maxOutputTokens: 16000, temperature: 0.35 } }),
+    savePlan: {
+      flashcardMeta,
+      status: status || null,
+    },
+  }
+}
