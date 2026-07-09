@@ -12,7 +12,8 @@
     "build:vite": "vite build",
     "preview": "vite preview",
     "generate:pages": "node scripts/generate-next-pages.mjs",
-    "deploy:rules": "firebase deploy --only firestore:rules --project plegi-d84c2"
+    "deploy:rules": "firebase deploy --only firestore:rules --project plegi-d84c2",
+    "sync:gemini-env": "node scripts/sync-gemini-env.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

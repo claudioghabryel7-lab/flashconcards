@@ -1,9 +1,9 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { readEnv } from './env.js'
+import { geminiFetch } from '../utils/geminiHttp.js'
 
 const MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro']
 
-function getApiKey() {
+function loadApiKeys() {
   const keys = []
   const main = readEnv('VITE_GEMINI_API_KEY') || readEnv('VITE_GOOGLE_AI_API_KEY')
   if (main) keys.push(main)
@@ -11,49 +11,43 @@ function getApiKey() {
     const k = readEnv(`VITE_GEMINI_API_KEY_${i}`)
     if (k && !keys.includes(k)) keys.push(k)
   }
-  return keys[0] || ''
-}
-
-let genAI: GoogleGenerativeAI | null = null
-
-function getGenAI() {
-  if (!genAI) {
-    const apiKey = getApiKey()
-    if (!apiKey) {
-      throw new Error('Chave Gemini não configurada no .env')
-    }
-    genAI = new GoogleGenerativeAI(apiKey)
-  }
-  return genAI
-}
-
-export const geminiModel = {
-  async generateContent(prompt: string) {
-    const model = getGenAI().getGenerativeModel({ model: 'gemini-2.5-flash' })
-    return model.generateContent(prompt)
-  },
+  return keys
 }
 
 export async function callGeminiWithFallback(
-  prompt: string,
-  options?: { temperature?: number; maxOutputTokens?: number },
+  prompt,
+  options = {},
 ) {
-  const { temperature = 0.7, maxOutputTokens = 32000 } = options || {}
+  const { temperature = 0.7, maxOutputTokens = 32000 } = options
+  const apiKeys = loadApiKeys()
+  if (!apiKeys.length) {
+    throw new Error('Chave Gemini não configurada no .env')
+  }
+
+  let lastError = null
 
   for (const modelName of MODELS) {
-    try {
-      const model = getGenAI().getGenerativeModel({
-        model: modelName,
-        generationConfig: { temperature, maxOutputTokens },
-      })
-      const result = await model.generateContent(prompt)
-      return result.response.text()
-    } catch (error) {
-      console.error(`Erro com modelo ${modelName}:`, error)
+    for (const apiKey of apiKeys) {
+      try {
+        const response = await geminiFetch(modelName, apiKey, {
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature, maxOutputTokens },
+        })
+        const data = await response.json()
+        if (!response.ok) {
+          lastError = new Error(data.error?.message || `HTTP ${response.status}`)
+          continue
+        }
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+        if (!text.trim()) throw new Error('Resposta vazia da IA')
+        return text.trim()
+      } catch (error) {
+        lastError = error
+      }
     }
   }
 
-  throw new Error('Todos os modelos Gemini falharam')
+  throw lastError || new Error('Todos os modelos Gemini falharam')
 }
 
 export async function testGeminiAPI() {
@@ -65,4 +59,10 @@ export async function testGeminiAPI() {
   }
 }
 
-export { getGenAI as genAI }
+/** @deprecated Use callGeminiWithFallback — mantido para compatibilidade */
+export const geminiModel = {
+  async generateContent(prompt) {
+    const text = await callGeminiWithFallback(prompt)
+    return { response: { text: () => text } }
+  },
+}

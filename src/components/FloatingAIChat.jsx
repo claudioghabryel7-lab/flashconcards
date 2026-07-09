@@ -13,7 +13,8 @@ import {
   serverTimestamp,
   where,
 } from 'firebase/firestore'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { geminiFetch, buildGeminiHeaders } from '../utils/geminiHttp'
 import {
   PaperAirplaneIcon,
   XMarkIcon,
@@ -299,39 +300,40 @@ const FloatingAIChat = () => {
       console.log('🔍 Procurando modelo disponível...')
       
       // Tentar modelos conhecidos diretamente (mais rápido) - apenas os que funcionam
-      const knownModels = ['gemini-2.5-flash', 'gemini-2.5-pro-latest', 'gemini-2.5-pro', 'gemini-2.5-pro']
-      const genAI = new GoogleGenerativeAI(apiKey)
+      const knownModels = ['gemini-2.5-flash', 'gemini-2.5-pro']
       
       for (const modelName of knownModels) {
         try {
           console.log(`🧪 Testando modelo: ${modelName}`)
-          const model = genAI.getGenerativeModel({ model: modelName })
-          await model.generateContent({
+          const response = await geminiFetch(modelName, apiKey, {
             contents: [{ parts: [{ text: 'test' }] }],
+            generationConfig: { maxOutputTokens: 10 },
           })
-          console.log(`✅ Modelo encontrado: ${modelName}`)
-          setAvailableModel(modelName)
-          return
+          if (response.ok) {
+            console.log(`✅ Modelo encontrado: ${modelName}`)
+            setAvailableModel(modelName)
+            return
+          }
         } catch (err) {
           console.log(`❌ Modelo ${modelName} não disponível:`, err.message)
-          continue
         }
       }
       
       // Se nenhum modelo conhecido funcionou, tentar listar da API
       console.log('🔍 Listando modelos da API...')
       try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-        )
+        const listUrl = apiKey.startsWith('AQ.')
+          ? 'https://generativelanguage.googleapis.com/v1beta/models'
+          : `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`
+        const listResponse = await fetch(listUrl, { headers: buildGeminiHeaders(apiKey) })
         
-        if (!response.ok) {
-          console.error('❌ Erro ao listar modelos:', response.status)
+        if (!listResponse.ok) {
+          console.error('❌ Erro ao listar modelos:', listResponse.status)
           setModelError('Erro ao conectar com a API do Gemini')
           return
         }
 
-        const data = await response.json()
+        const data = await listResponse.json()
         const models = data.models || []
         const generateModels = models.filter((model) => {
           return (model.supportedGenerationMethods || []).includes('generateContent')
@@ -343,17 +345,18 @@ const FloatingAIChat = () => {
           return
         }
 
-        // Tentar cada modelo da lista
         for (const modelData of generateModels) {
+          const testModelName = modelData.name.replace('models/', '')
           try {
-            const testModelName = modelData.name.replace('models/', '')
-            const testModel = genAI.getGenerativeModel({ model: testModelName })
-            await testModel.generateContent({
+            const testResponse = await geminiFetch(testModelName, apiKey, {
               contents: [{ parts: [{ text: 'test' }] }],
+              generationConfig: { maxOutputTokens: 10 },
             })
-            console.log(`✅ Modelo encontrado: ${testModelName}`)
-            setAvailableModel(testModelName)
-            return
+            if (testResponse.ok) {
+              console.log(`✅ Modelo encontrado: ${testModelName}`)
+              setAvailableModel(testModelName)
+              return
+            }
           } catch {
             continue
           }
@@ -554,10 +557,6 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
     setSending(true)
 
     try {
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: availableModel })
-
-      // Carregar prompt do admin e texto do PDF (por curso)
       let editalPrompt = null
       let pdfText = null
       let courseName = 'o concurso'
@@ -710,12 +709,16 @@ Pergunta do aluno: ${userMessage}
 ⚠️ Lembre-se: Leia o edital/PDF acima ANTES de responder!`
 
       // Tentar gerar resposta com Gemini primeiro
-      let result = null
+      let text = ''
       let useGroqFallback = false
       
       try {
-        result = await model.generateContent({
-          contents: [{ parts: [{ text: mentorPrompt }] }],
+        const geminiResponse = await callGeminiWithRetry(mentorPrompt, {
+          silent: true,
+          verifyContent: false,
+          useRAG: false,
+          useGoogleSearch: false,
+          models: [availableModel],
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 800,
@@ -723,6 +726,7 @@ Pergunta do aluno: ${userMessage}
             topK: 40,
           },
         })
+        text = extractGeneratedText(geminiResponse)
       } catch (apiErr) {
         // Capturar erro de forma mais robusta
         const errorMessage = apiErr.message || String(apiErr) || ''
@@ -798,78 +802,11 @@ Pergunta do aluno: ${userMessage}
         }
       }
 
-      if (!result) {
+      if (!text) {
         throw new Error('Quota da API excedida. Aguarde alguns minutos antes de tentar novamente.')
       }
 
-      const response = result.response
-      
-      // Extrair texto completo da resposta
-      let text = ''
-      try {
-        // Método mais confiável: usar candidates diretamente
-        if (response.candidates && response.candidates.length > 0) {
-          const candidate = response.candidates[0]
-          
-          // Verificar se há bloqueio de conteúdo
-          if (candidate.finishReason && candidate.finishReason !== 'STOP') {
-            console.warn('⚠️ Finish reason:', candidate.finishReason)
-            if (candidate.finishReason === 'SAFETY') {
-              throw new Error('Resposta bloqueada por segurança. Tente reformular a pergunta.')
-            }
-          }
-          
-          if (candidate.content && candidate.content.parts) {
-            text = candidate.content.parts
-              .map(part => part.text || '')
-              .join('')
-              .trim()
-          }
-        }
-        
-        // Se candidates não funcionou, tentar response.text() como fallback
-        if (!text || text.trim().length === 0) {
-          try {
-            const textMethod = response.text
-            if (typeof textMethod === 'function') {
-              text = await textMethod()
-            } else {
-              text = String(textMethod || '')
-            }
-          } catch (textErr) {
-            console.warn('⚠️ response.text() falhou, usando candidates:', textErr)
-          }
-        }
-        
-        // Verificar se temos texto válido
-        if (!text || text.trim().length === 0) {
-          throw new Error('Resposta vazia da API')
-        }
-        
-        text = text.trim()
-        console.log('✅ Texto extraído da resposta:', text.substring(0, 100) + '...')
-        
-      } catch (textErr) {
-        console.error('❌ Erro ao extrair texto:', textErr)
-        // Última tentativa: verificar candidates manualmente
-        try {
-          if (response.candidates && response.candidates.length > 0) {
-            const candidate = response.candidates[0]
-            if (candidate.content && candidate.content.parts) {
-              text = candidate.content.parts
-                .map(part => part.text || '')
-                .join('')
-                .trim()
-            }
-          }
-          
-          if (!text || text.trim().length === 0) {
-            throw new Error('Não foi possível extrair texto da resposta')
-          }
-        } catch {
-          text = 'Desculpe, não consegui gerar uma resposta completa. Tente novamente.'
-        }
-      }
+      console.log('✅ Texto extraído da resposta:', text.substring(0, 100) + '...')
 
       // Garantir que o texto não está vazio antes de salvar
       if (!text || text.trim().length === 0) {

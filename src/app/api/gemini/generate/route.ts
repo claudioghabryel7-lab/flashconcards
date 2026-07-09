@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { readEnv } from '@/lib/env.js'
+import { geminiFetch } from '@/utils/geminiHttp.js'
 
 const DEFAULT_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro']
 
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     const {
       prompt,
       generationConfig = { temperature: 0.35, maxOutputTokens: 32000 },
-      useGoogleSearch = true,
+      useGoogleSearch = false,
       verifyContent = true,
       courseId = null,
       useFunctionCalling = false,
@@ -70,14 +71,7 @@ export async function POST(request: NextRequest) {
           requestBody.tools = [...((requestBody.tools as unknown[]) || []), ...tools]
         }
 
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
-          }
-        )
+        const response = await geminiFetch(model, apiKey, requestBody)
 
         const data = await response.json()
 

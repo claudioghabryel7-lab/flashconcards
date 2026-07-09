@@ -15,6 +15,7 @@ import {
   applyVerificationToResponse,
 } from './contentVerification.js'
 import { appendSilentJsonRules } from './aiPromptUtils.js'
+import { geminiFetch } from './geminiHttp.js'
 
 const MODELS = [
   'gemini-2.5-flash',
@@ -185,17 +186,10 @@ async function callGeminiViaServer(prompt, options = {}) {
  */
 async function silentTestApiKey(apiKey) {
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'test' }] }],
-          generationConfig: { maxOutputTokens: 10 }
-        })
-      }
-    )
+    const response = await geminiFetch('gemini-2.5-flash', apiKey, {
+      contents: [{ parts: [{ text: 'test' }] }],
+      generationConfig: { maxOutputTokens: 10 },
+    })
 
     const data = await response.json()
 
@@ -265,7 +259,7 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     baseDelay = BASE_DELAY,
     models = MODELS,
     generationConfig = DEFAULT_GENERATION_CONFIG,
-    useGoogleSearch = true,
+    useGoogleSearch = false,
     useRAG = options.isLegalContent !== false,
     ragTopic = null,
     isLegalContent = true,
@@ -335,7 +329,7 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     const verifyResponse = await executeGeminiRequest(verifyPrompt, {
       models: VERIFY_MODELS,
       generationConfig: VERIFY_GENERATION_CONFIG,
-      useGoogleSearch: true,
+      useGoogleSearch: false,
     })
     const verifyText = extractGeneratedText(verifyResponse)
     const verification = parseVerificationResult(verifyText)
@@ -364,7 +358,7 @@ async function executeGeminiRequest(prompt, options = {}) {
     baseDelay = BASE_DELAY,
     models = MODELS,
     generationConfig = DEFAULT_GENERATION_CONFIG,
-    useGoogleSearch = true,
+    useGoogleSearch = false,
     useFunctionCalling = false,
     tools = [],
     silent = false,
@@ -430,14 +424,7 @@ async function executeGeminiRequest(prompt, options = {}) {
           requestBody.tools.push(...tools)
         }
 
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
-          }
-        )
+        const response = await geminiFetch(model, apiKey, requestBody)
 
         const data = await response.json()
 
@@ -611,17 +598,10 @@ export async function repairJsonText(raw) {
  */
 async function testApiKey(apiKey) {
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'test' }] }],
-          generationConfig: { maxOutputTokens: 10 }
-        })
-      }
-    )
+    const response = await geminiFetch('gemini-2.5-flash', apiKey, {
+      contents: [{ parts: [{ text: 'test' }] }],
+      generationConfig: { maxOutputTokens: 10 },
+    })
 
     const data = await response.json()
 
