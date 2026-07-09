@@ -53,6 +53,11 @@ import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { createSlug } from '../utils/slug'
 import { purgeUserCommunityData } from '../services/communityUserService'
 import { isPresenceOnline, PRESENCE_HEARTBEAT_MS, countOnlineFromEntries } from '../utils/onlineNow'
+import {
+  buildOnlineDisplayPayload,
+  getOnlineDisplayLabel,
+  ONLINE_DISPLAY_INTERVALS,
+} from '../utils/simulatedOnline'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { loadPdfjs } from '../utils/pdfjsClient'
 import { jsonrepair } from 'jsonrepair'
@@ -276,6 +281,10 @@ const AdminPanel = () => {
   // Estado para gerenciar cursos de usuários
   const [selectedUserForCourse, setSelectedUserForCourse] = useState(null) // Usuário selecionado para adicionar curso
   const [addingCourseToUser, setAddingCourseToUser] = useState(false) // Se está adicionando curso
+
+  // Controle de exibição "online" por curso (real vs simulado)
+  const [onlineDisplayCourseId, setOnlineDisplayCourseId] = useState('')
+  const [savingOnlineDisplay, setSavingOnlineDisplay] = useState(false)
   
   // Estados para organização de matérias
   const [organizingSubjects, setOrganizingSubjects] = useState(false) // Se está organizando com IA
@@ -2948,6 +2957,31 @@ REGRAS CRÍTICAS:
     } catch (err) {
       console.error('Erro ao atualizar curso:', err)
       setMessage(`❌ Erro ao atualizar curso: ${err.message}`)
+    }
+  }
+
+  const setCourseOnlineDisplay = async (courseId, mode, intervalMinutes = 9) => {
+    if (!courseId) {
+      setMessage('❌ Selecione um curso.')
+      return
+    }
+
+    setSavingOnlineDisplay(true)
+    try {
+      await updateDoc(doc(db, 'courses', courseId), {
+        onlineDisplay: buildOnlineDisplayPayload(mode, intervalMinutes),
+        updatedAt: serverTimestamp(),
+      })
+      setMessage(
+        mode === 'simulated'
+          ? `✅ Online simulado ativo neste curso — ${14} a ${35} alunos, atualiza a cada ${intervalMinutes} min.`
+          : '✅ Online em tempo real ativo neste curso.',
+      )
+    } catch (err) {
+      console.error('Erro ao configurar online do curso:', err)
+      setMessage(`❌ Erro ao configurar online: ${err.message}`)
+    } finally {
+      setSavingOnlineDisplay(false)
     }
   }
 
@@ -9670,6 +9704,69 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                       Adicione cursos preparatórios para concursos específicos. Cada curso aparecerá na página inicial como um card clicável.
                     </p>
 
+                    {/* Controle de alunos online por curso */}
+                    <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                      <h3 className="text-sm font-semibold text-emerald-800 mb-1">
+                        👥 Controle de Alunos Online
+                      </h3>
+                      <p className="text-xs text-emerald-700/80 mb-4">
+                        Escolha por curso: contagem <strong>real</strong> (tempo real) ou <strong>simulada</strong> (14 a 35 alunos, número muda a cada 4, 9 ou 12 minutos).
+                      </p>
+
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                        <div className="flex-1">
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">
+                            Curso
+                          </label>
+                          <select
+                            value={onlineDisplayCourseId}
+                            onChange={(e) => setOnlineDisplayCourseId(e.target.value)}
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                          >
+                            <option value="">Selecione um curso…</option>
+                            {courses.map((course) => (
+                              <option key={course.id} value={course.id}>
+                                {course.name} — {getOnlineDisplayLabel(course.onlineDisplay)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={!onlineDisplayCourseId || savingOnlineDisplay}
+                            onClick={() => setCourseOnlineDisplay(onlineDisplayCourseId, 'real')}
+                            className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            🟢 Online reais
+                          </button>
+                          {ONLINE_DISPLAY_INTERVALS.map((interval) => (
+                            <button
+                              key={interval}
+                              type="button"
+                              disabled={!onlineDisplayCourseId || savingOnlineDisplay}
+                              onClick={() => setCourseOnlineDisplay(onlineDisplayCourseId, 'simulated', interval)}
+                              className="rounded-lg border border-emerald-400 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+                            >
+                              🎲 Simulado {interval} min
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {onlineDisplayCourseId && (
+                        <p className="mt-3 text-[11px] text-slate-600">
+                          Atual:{' '}
+                          <strong>
+                            {getOnlineDisplayLabel(
+                              courses.find((c) => c.id === onlineDisplayCourseId)?.onlineDisplay,
+                            )}
+                          </strong>
+                        </p>
+                      )}
+                    </div>
+
                     {/* Formulário para adicionar curso */}
                     <div className="mb-6 rounded-xl border border-slate-200 p-4">
                       <h3 className="text-sm font-semibold text-alego-700 mb-4">Adicionar Novo Curso</h3>
@@ -10180,6 +10277,33 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                         }`}>
                                           {course.active !== false ? 'Ativo' : 'Inativo'}
                                         </span>
+                                        <span className="rounded-full bg-sky-100 px-2 py-1 text-[10px] font-semibold text-sky-700">
+                                          {getOnlineDisplayLabel(course.onlineDisplay)}
+                                        </span>
+                                      </div>
+                                      <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                        <p className="text-[10px] font-semibold text-slate-600 mb-1.5">👥 Online no card do curso</p>
+                                        <div className="flex flex-wrap gap-1">
+                                          <button
+                                            type="button"
+                                            disabled={savingOnlineDisplay}
+                                            onClick={() => setCourseOnlineDisplay(course.id, 'real')}
+                                            className="rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                          >
+                                            Reais
+                                          </button>
+                                          {ONLINE_DISPLAY_INTERVALS.map((interval) => (
+                                            <button
+                                              key={interval}
+                                              type="button"
+                                              disabled={savingOnlineDisplay}
+                                              onClick={() => setCourseOnlineDisplay(course.id, 'simulated', interval)}
+                                              className="rounded-md border border-emerald-300 bg-white px-2 py-1 text-[10px] font-semibold text-emerald-800 hover:bg-emerald-50 disabled:opacity-50"
+                                            >
+                                              Sim. {interval}m
+                                            </button>
+                                          ))}
+                                        </div>
                                       </div>
                                     </div>
                                     <div className="flex gap-2 flex-wrap">
