@@ -11,7 +11,7 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { useFloatingCommentsEnabled } from '../hooks/useFloatingCommentsEnabled'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
-import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { generateAiJson, formatAiErrorForUser, hasGeminiApiKeys } from '../utils/geminiApi'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
 import { buildQuestoesTopicoPayload } from '../utils/serverGenerationPayload'
 import { incrementQuestoesStats } from '../utils/questoesStats'
@@ -413,9 +413,8 @@ const QuestoesTopicoView = () => {
       setError('Apenas administradores podem gerar questões.')
       return false
     }
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
-      setError('API Key não configurada.')
+    if (!hasGeminiApiKeys()) {
+      setError('Nenhuma API Key Gemini configurada.')
       return
     }
 

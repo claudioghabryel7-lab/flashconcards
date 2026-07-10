@@ -6,8 +6,7 @@ import { ArrowLeftIcon, PencilIcon, FireIcon, LightBulbIcon, ExclamationTriangle
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
-import { GoogleGenerativeAI } from '@google/generative-ai'
-import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { generateAiJson, hasGeminiApiKeys } from '../utils/geminiApi'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
 import { buildConteudoCompletoPayload } from '../utils/serverGenerationPayload'
 import { fetchTopicoPublishStatus } from '../services/topicoPublishService'
@@ -17,7 +16,7 @@ import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import ShareToFeedButton from '../components/feed/ShareToFeedButton'
 import { FEED_POST_TYPES } from '../services/trilhaFeedService'
 import { stripHtml } from '../utils/htmlTextHelpers'
-import { downloadElementAsPdf } from '../utils/materialPdfExport'
+import { downloadMaterialPdf } from '../utils/materialPdfExport'
 import { getConteudoCompletoDepthInstructions, CONTEUDO_COMPLETO_DEPTH } from '../utils/contentDepthRules'
 import ReactMarkdown from 'react-markdown'
 
@@ -417,18 +416,14 @@ const ConteudoCompletoTopicoView = () => {
   const handleValidateTopic = async () => {
     if (!resolvedCourseId || !resolvedTopicKey || !conteudo) return
 
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
-      setError('API Key não configurada.')
+    if (!hasGeminiApiKeys()) {
+      setError('Nenhuma API Key Gemini configurada.')
       return
     }
 
     try {
       setValidating(true)
       setValidationMessage('')
-
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       const resumoConteudo = [
         conteudo.materia || '',
@@ -467,17 +462,7 @@ ONDE:
 - "match" deve ser false quando o conteúdo não estiver alinhado ao tópico.
 - "action" deve ser "keep" quando estiver adequado e "regenerate" quando estiver inadequado.`
 
-      const result = await model.generateContent(validatorPrompt)
-      let text = result.response.text().trim()
-      if (text.startsWith('```json')) {
-        text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      } else if (text.startsWith('```')) {
-        text = text.replace(/```\n?/g, '').trim()
-      }
-      const jsonMatch = text.match(/\{[\s\S]*\}/)
-      if (jsonMatch) text = jsonMatch[0]
-
-      const parsed = JSON.parse(text)
+      const parsed = await generateAiJson(validatorPrompt, { courseId: resolvedCourseId })
       const match = !!parsed.match
       const action = parsed.action === 'regenerate' ? 'regenerate' : 'keep'
       const reason = parsed.reason || ''
@@ -511,12 +496,12 @@ ONDE:
   }
 
   const handleDownloadPDF = async () => {
-    if (!conteudo || !materialExportRef.current) return
+    if (!conteudo) return
 
     setDownloadingPdf(true)
     try {
       const fileName = `${conteudo.materia || 'material'}-${conteudo.titulo || 'topico'}.pdf`
-      await downloadElementAsPdf(materialExportRef.current, fileName)
+      await downloadMaterialPdf(conteudo, fileName)
     } catch (error) {
       console.error('Erro ao gerar PDF:', error)
       alert('Erro ao gerar PDF. Tente novamente.')
@@ -527,9 +512,8 @@ ONDE:
 
   const handleGenerateContent = async () => {
     if (!resolvedCourseId || !resolvedTopicKey) return false
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
-      setError('API Key não configurada.')
+    if (!hasGeminiApiKeys()) {
+      setError('Nenhuma API Key Gemini configurada.')
       return
     }
 

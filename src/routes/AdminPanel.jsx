@@ -1,5 +1,5 @@
 import { readEnv, isDevEnv } from '@/lib/env.js'
-import { checkGeminiApiKeysStatus, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { checkGeminiApiKeysStatus, generateAiJson, formatAiErrorForUser, hasGeminiApiKeys } from '../utils/geminiApi'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import {
   DndContext,
@@ -1912,28 +1912,15 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
 
       setFlashcardGenProgress('Enviando para IA...')
 
-      // Chamar API
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + readEnv('VITE_GEMINI_API_KEY'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 32000
-          }
-        })
+      const response = await callGeminiWithRetry(prompt, {
+        silent: true,
+        verifyContent: false,
+        generationConfig: { temperature: 0.7, maxOutputTokens: 32000 },
       })
-
-      const data = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(data.error?.message || 'Erro na API')
-      }
 
       setFlashcardGenProgress('Processando resposta...')
 
-      const generatedText = data.candidates[0]?.content?.parts[0]?.text
+      const generatedText = extractGeneratedText(response)
 
       if (!generatedText) {
         throw new Error('A IA não retornou nenhum texto')

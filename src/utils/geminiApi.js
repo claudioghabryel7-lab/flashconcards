@@ -6,7 +6,6 @@
  */
 
 import { performRAG, googleSearch } from './googleSearch.js'
-import { readEnv } from '../lib/env.js'
 import { fetchCourseAiContext, buildPromptWithCourseContext } from './courseAiContext.js'
 import {
   buildVerificationPrompt,
@@ -16,6 +15,14 @@ import {
 } from './contentVerification.js'
 import { appendSilentJsonRules } from './aiPromptUtils.js'
 import { geminiFetch } from './geminiHttp.js'
+import {
+  collectGeminiApiKeys,
+  geminiRequestWithKeyFallback,
+  hasGeminiApiKeys,
+  isGeminiQuotaOrUnavailable,
+} from './geminiKeyPool.js'
+
+export { hasGeminiApiKeys, collectGeminiApiKeys as getGeminiApiKeys } from './geminiKeyPool.js'
 
 const MODELS = [
   'gemini-2.5-flash',
@@ -45,14 +52,9 @@ export function isGeminiQuotaError(error) {
     code.includes('429') ||
     code.includes('quota') ||
     code.includes('resource_exhausted') ||
-    msg.includes('quota') ||
-    msg.includes('rate limit') ||
-    msg.includes('rate_limit') ||
-    msg.includes('exceeded') ||
+    isGeminiQuotaOrUnavailable(429, msg) ||
     msg.includes('esgotad') ||
-    msg.includes('limite') ||
-    msg.includes('too many requests') ||
-    msg.includes('resource has been exhausted')
+    msg.includes('limite')
   )
 }
 
@@ -114,54 +116,15 @@ function extractSearchTopic(prompt) {
 }
 
 /**
- * Carrega múltiplas API keys do Gemini
- * Prioriza VITE_GEMINI_API_KEY, depois tenta numbered keys
- * @returns {Array<string>} - Lista de API keys disponíveis
+ * @deprecated use collectGeminiApiKeys from geminiKeyPool
  */
 function loadApiKeys() {
-  const apiKeys = []
-
-  const isValidKey = (key) => {
-    if (!key || typeof key !== 'string') return false
-    const trimmed = key.trim()
-    if (trimmed.length < 20) return false
-    const lower = trimmed.toLowerCase()
-    if (
-      lower.includes('your-api') ||
-      lower.includes('sua-chave') ||
-      lower.includes('placeholder') ||
-      lower === 'undefined' ||
-      lower === 'null'
-    ) {
-      return false
-    }
-    return true
-  }
-
-  const mainKey = readEnv('VITE_GEMINI_API_KEY') || readEnv('VITE_GOOGLE_AI_API_KEY')
-  if (isValidKey(mainKey)) {
-    apiKeys.push(mainKey.trim())
-  }
-
-  for (let i = 1; i <= 10; i++) {
-    const key = readEnv(`VITE_GEMINI_API_KEY_${i}`)
-    if (isValidKey(key) && !apiKeys.includes(key.trim())) {
-      apiKeys.push(key.trim())
-    }
-  }
-
-  return apiKeys
+  return collectGeminiApiKeys()
 }
 
-function isInvalidApiKeyError(status, message = '') {
-  const msg = String(message).toLowerCase()
-  return (
-    status === 400 ||
-    status === 403 ||
-    msg.includes('api key not valid') ||
-    msg.includes('api_key_invalid') ||
-    msg.includes('invalid api key')
-  )
+async function silentTestApiKey(apiKey) {
+  const { silentProbeGeminiKey } = await import('./geminiKeyPool.js')
+  return silentProbeGeminiKey(apiKey)
 }
 
 async function callGeminiViaServer(prompt, options = {}) {
@@ -176,65 +139,6 @@ async function callGeminiViaServer(prompt, options = {}) {
     throw new Error(data.error || `Erro na API Gemini (${response.status})`)
   }
   return data
-}
-
-/**
- * Teste silencioso de API key para verificar se está disponível
- * Usa a mesma lógica robusta de testApiKey
- * @param {string} apiKey - A API key para testar
- * @returns {Promise<boolean>} - True se a key está disponível
- */
-async function silentTestApiKey(apiKey) {
-  try {
-    const response = await geminiFetch('gemini-2.5-flash', apiKey, {
-      contents: [{ parts: [{ text: 'test' }] }],
-      generationConfig: { maxOutputTokens: 10 },
-    })
-
-    const data = await response.json()
-
-    // Se for 429 (quota), não está disponível
-    if (response.status === 429) {
-      return false
-    }
-    
-    // Se for 503 (alta demanda), não está disponível
-    if (response.status === 503) {
-      return false
-    }
-    
-    // Se for 403 (forbidden), não está disponível
-    if (response.status === 403) {
-      return false
-    }
-    
-    // Se for 400 (invalid), não está disponível
-    if (response.status === 400) {
-      return false
-    }
-    
-    return response.ok
-  } catch (error) {
-    return false
-  }
-}
-
-/**
- * Filtra API keys disponíveis fazendo teste silencioso
- * @returns {Promise<Array<string>>} - Lista de API keys disponíveis
- */
-async function getAvailableApiKeys() {
-  const allApiKeys = loadApiKeys()
-  const availableKeys = []
-  
-  for (const apiKey of allApiKeys) {
-    const isAvailable = await silentTestApiKey(apiKey)
-    if (isAvailable) {
-      availableKeys.push(apiKey)
-    }
-  }
-  
-  return availableKeys
 }
 
 /**
@@ -354,8 +258,6 @@ export async function callGeminiWithRetry(prompt, options = {}) {
  */
 async function executeGeminiRequest(prompt, options = {}) {
   const {
-    maxRetries = MAX_RETRIES,
-    baseDelay = BASE_DELAY,
     models = MODELS,
     generationConfig = DEFAULT_GENERATION_CONFIG,
     useGoogleSearch = false,
@@ -366,11 +268,7 @@ async function executeGeminiRequest(prompt, options = {}) {
 
   const finalPrompt = prompt
 
-  // Teste silencioso para filtrar apenas API keys disponíveis
-  let apiKeys = await getAvailableApiKeys()
-
-  // Sem keys no cliente (comum no Next/Vercel) → proxy server-side
-  if (apiKeys.length === 0 && typeof window !== 'undefined') {
+  if (!hasGeminiApiKeys() && typeof window !== 'undefined') {
     if (!silent) console.log('🔑 Nenhuma key no cliente — usando /api/gemini/generate')
     return callGeminiViaServer(finalPrompt, {
       generationConfig,
@@ -382,105 +280,71 @@ async function executeGeminiRequest(prompt, options = {}) {
     })
   }
 
-  if (apiKeys.length === 0) {
+  if (!hasGeminiApiKeys()) {
     throw new Error(
-      'Nenhuma API key do Gemini configurada. Defina VITE_GEMINI_API_KEY no .env.local (local) ou nas variáveis do Vercel.'
+      'Nenhuma API key do Gemini configurada. Defina VITE_GEMINI_API_KEY no .env.local (local) ou nas variáveis do Vercel.',
     )
   }
 
   if (!silent) {
-    console.log(`🔑 API Keys disponíveis: ${apiKeys.length} de ${loadApiKeys().length} totais`)
-    if (useGoogleSearch) console.log(`🔍 Google Search Grounding ativado`)
+    console.log(`🔑 ${loadApiKeys().length} API key(s) Gemini configurada(s)`)
+    if (useGoogleSearch) console.log('🔍 Google Search Grounding ativado')
     if (useFunctionCalling) console.log(`🔧 Function Calling ativado com ${tools.length} ferramentas`)
   }
 
-  let lastError = null
-
-  for (const model of models) {
-    if (!silent) console.log(`🔄 Tentando modelo: ${model}`)
-
-    for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex++) {
-      const apiKey = apiKeys[keyIndex]
-      if (!silent) console.log(`🔑 Tentando API key ${keyIndex + 1}/${apiKeys.length}`)
-
-      try {
+  try {
+    const { data } = await geminiRequestWithKeyFallback({
+      models,
+      silent,
+      buildBody: (model) => {
         const requestBody = {
           contents: [{ parts: [{ text: finalPrompt }] }],
           generationConfig,
         }
 
-        // Adicionar Google Search Grounding se solicitado
         if (useGoogleSearch) {
-          requestBody.tools = [
-            {
-              googleSearch: {}
-            }
-          ]
+          requestBody.tools = [{ googleSearch: {} }]
         }
 
-        // Adicionar Function Calling se solicitado
         if (useFunctionCalling && tools.length > 0) {
           requestBody.tools = requestBody.tools || []
           requestBody.tools.push(...tools)
         }
 
-        const response = await geminiFetch(model, apiKey, requestBody)
+        return requestBody
+      },
+    })
 
-        const data = await response.json()
-
-        if (!response.ok) {
-          const errorMessage = data.error?.message || 'Erro na API da IA'
-
-          if (
-            response.status === 429 ||
-            response.status === 503 ||
-            isInvalidApiKeyError(response.status, errorMessage)
-          ) {
-            if (!silent) {
-              console.log(`⚠️ API key ${keyIndex + 1} indisponível (${response.status}), tentando próxima...`)
-            }
-            lastError = new Error(errorMessage)
-            continue
-          }
-
-          const err = new Error(errorMessage)
-          if (response.status === 429) err.code = 'quota_exceeded'
-          throw err
+    return data
+  } catch (clientErr) {
+    if (typeof window !== 'undefined') {
+      try {
+        if (!silent) console.log('🔄 Tentando proxy server-side /api/gemini/generate...')
+        return await callGeminiViaServer(finalPrompt, {
+          generationConfig,
+          useGoogleSearch,
+          useFunctionCalling,
+          tools,
+          models,
+          silent,
+        })
+      } catch (serverErr) {
+        const finalErr = new Error(
+          `Todas as API keys falharam. Último erro: ${serverErr?.message || clientErr?.message || 'Erro desconhecido'}`,
+        )
+        if (isGeminiQuotaError(serverErr) || isGeminiQuotaError(clientErr)) {
+          finalErr.code = 'quota_exceeded'
         }
-
-        if (!silent) console.log(`✅ Sucesso com modelo ${model} e API key ${keyIndex + 1}`)
-        return data
-
-      } catch (error) {
-        lastError = error
-        if (!silent) console.error(`❌ Erro com modelo ${model} e key ${keyIndex + 1}:`, error.message)
-        // Não fazer retry, tentar próxima key/modelo
+        throw finalErr
       }
     }
-  }
 
-  // Se chegou aqui, todos os modelos e keys falharam
-  if (typeof window !== 'undefined') {
-    try {
-      if (!silent) console.log('🔄 Tentando proxy server-side /api/gemini/generate...')
-      return await callGeminiViaServer(finalPrompt, {
-        generationConfig,
-        useGoogleSearch,
-        useFunctionCalling,
-        tools,
-        models,
-        silent,
-      })
-    } catch (serverErr) {
-      lastError = serverErr
-    }
+    const finalErr = new Error(
+      `Todas as API keys falharam. Último erro: ${clientErr?.message || 'Erro desconhecido'}`,
+    )
+    if (isGeminiQuotaError(clientErr)) finalErr.code = 'quota_exceeded'
+    throw finalErr
   }
-
-  const finalErr = new Error(
-    `Todos os modelos e API keys falharam. Último erro: ${lastError?.message || 'Erro desconhecido'}`
-  )
-  if (isGeminiQuotaError(lastError)) finalErr.code = 'quota_exceeded'
-  throw finalErr
 }
 
 /**

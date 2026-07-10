@@ -2,7 +2,7 @@ const functions = require('firebase-functions')
 const path = require('path')
 const fs = require('fs')
 const { jsonrepair } = require('jsonrepair')
-const { geminiFetch } = require('./geminiHttp')
+const { geminiRequestWithKeyFallback, collectGeminiApiKeys } = require('./geminiKeyPool')
 
 const MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro']
 
@@ -151,7 +151,7 @@ async function parseAiJsonText(generatedText) {
 }
 
 async function callGemini(prompt, options = {}) {
-  const apiKeys = loadApiKeys()
+  const apiKeys = collectGeminiApiKeys()
   if (!apiKeys.length) {
     throw new Error(
       'GEMINI_API_KEY não configurada nas Cloud Functions. Rode `npm run sync:gemini-env` e faça deploy das functions.',
@@ -164,38 +164,21 @@ async function callGemini(prompt, options = {}) {
   }
 
   const useGoogleSearch = options.useGoogleSearch ?? options.useRAG ?? false
-  let lastError = 'Erro desconhecido'
 
-  for (const model of MODELS) {
-    for (const apiKey of apiKeys) {
+  const { data } = await geminiRequestWithKeyFallback({
+    buildBody: (model) => {
       const requestBody = {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig,
       }
-
       if (useGoogleSearch) {
         requestBody.tools = [{ googleSearch: {} }]
       }
+      return requestBody
+    },
+  })
 
-      const response = await geminiFetch(model, apiKey, requestBody)
-      const data = await response.json()
-
-      if (response.ok) {
-        return data
-      }
-
-      lastError = data.error?.message || `HTTP ${response.status}`
-      if (
-        response.status === 429 ||
-        response.status === 503 ||
-        isInvalidApiKeyError(response.status, lastError)
-      ) {
-        continue
-      }
-    }
-  }
-
-  throw new Error(lastError)
+  return data
 }
 
 async function generateAiJson(prompt, options = {}) {
@@ -213,5 +196,5 @@ async function generateAiJson(prompt, options = {}) {
 module.exports = {
   generateAiJson,
   parseAiJsonText,
-  loadApiKeys,
+  loadApiKeys: collectGeminiApiKeys,
 }

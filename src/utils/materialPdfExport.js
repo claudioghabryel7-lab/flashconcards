@@ -104,11 +104,26 @@ class TextPdfWriter {
   }
 }
 
-function buildConcursoMaterialPlainDocument(material = {}) {
+function buildMaterialPlainDocument(material = {}) {
   const writer = new TextPdfWriter()
 
-  writer.writeTitle(material.titulo || `${material.concurso || 'Material'} — ${material.cargo || ''}`)
-  writer.writeMeta(`${material.concurso || ''} · ${material.cargo || ''} · Banca ${material.banca || ''}`)
+  const title =
+    material.titulo ||
+    material.materia ||
+    `${material.concurso || 'Material'}${material.cargo ? ` — ${material.cargo}` : ''}`
+
+  const metaParts = [
+    material.subtitulo,
+    material.materia && material.materia !== title ? material.materia : null,
+    material.concurso,
+    material.cargo,
+    material.banca ? `Banca ${material.banca}` : null,
+  ].filter(Boolean)
+
+  writer.writeTitle(title)
+  if (metaParts.length) {
+    writer.writeMeta(metaParts.join(' · '))
+  }
 
   if (material.analiseDificuldade?.justificativa) {
     writer.writeParagraph(
@@ -156,7 +171,25 @@ function buildConcursoMaterialPlainDocument(material = {}) {
     })
   }
 
+  if (material.content) {
+    writer.writeHeading('Conteúdo')
+    writer.writeParagraph(material.content)
+  }
+
+  if ((material.secoes || []).length > 0) {
+    writer.writeHeading('Seções')
+    material.secoes.forEach((secao, index) => {
+      const label = secao.titulo || `Seção ${index + 1}`
+      writer.writeSubheading(secao.tipo ? `${label} (${secao.tipo})` : label)
+      writer.writeParagraph(secao.conteudo || '')
+    })
+  }
+
   return writer
+}
+
+function buildConcursoMaterialPlainDocument(material = {}) {
+  return buildMaterialPlainDocument(material)
 }
 
 const PRINT_STYLES = `
@@ -287,10 +320,15 @@ export function buildConcursoMaterialPrintHtml(material = {}) {
 }
 
 /** PDF leve em texto — recomendado (KB, não MB). */
-export async function downloadConcursoMaterialPdf(material, filename = 'material.pdf') {
+export async function downloadMaterialPdf(material, filename = 'material.pdf') {
   if (!material) throw new Error('Nenhum material para exportar.')
-  const writer = buildConcursoMaterialPlainDocument(material)
+  const writer = buildMaterialPlainDocument(material)
   writer.save(filename)
+}
+
+/** @deprecated use downloadMaterialPdf */
+export async function downloadConcursoMaterialPdf(material, filename = 'material.pdf') {
+  return downloadMaterialPdf(material, filename)
 }
 
 /** Abre diálogo de impressão do navegador (Destino: Salvar como PDF). */

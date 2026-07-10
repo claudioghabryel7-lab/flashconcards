@@ -3,11 +3,10 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { canDoSimulado, incrementSimuladoCount, canAccessRedacao, isTrialMode } from '../utils/trialLimits'
 import { doc, getDoc, setDoc, serverTimestamp, collection, onSnapshot, addDoc, getDocs, query, where } from 'firebase/firestore'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser, hasGeminiApiKeys } from '../utils/geminiApi'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import CourseAdScreen from '../components/CourseAdScreen'
 import {
   ClockIcon,
@@ -920,20 +919,9 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.
         // Continuar mesmo se não conseguir buscar flashcards
       }
 
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
-        throw new Error('VITE_GEMINI_API_KEY não configurada')
+      if (!hasGeminiApiKeys()) {
+        throw new Error('Nenhuma API key Gemini configurada')
       }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
-      // 🔥 OTIMIZAÇÃO: Usar modelo mais rápido para simulado
-      const model = genAI.getGenerativeModel({ 
-        model: 'gemini-2.5-flash',
-        generationConfig: {
-          maxOutputTokens: 8192, // Reduzido para mais velocidade
-          temperature: 0.7,
-        }
-      })
 
       // Filtrar matérias - APENAS as que estão no curso
       const validMaterias = simuladoInfo.materias.filter(m => 

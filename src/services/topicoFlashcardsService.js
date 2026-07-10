@@ -16,7 +16,7 @@ import {
   formatTopicoAsModulo,
 } from '../utils/editalVerticalizadoLoader'
 import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
-import { generateAiJson } from '../utils/geminiApi'
+import { generateAiJson, hasGeminiApiKeys } from '../utils/geminiApi'
 import { startBackgroundGeneration } from './aiGenerationRunner'
 import { buildFlashcardsTopicoPayload } from '../utils/serverGenerationPayload'
 import { CONTENT_STATUS } from '../utils/contentStatus'
@@ -191,8 +191,8 @@ export async function generateAndSaveFlashcardsForTopico({
   editalText = '',
   userId = null,
 }) {
-  if (!readEnv('VITE_GEMINI_API_KEY')) {
-    throw new Error('VITE_GEMINI_API_KEY não configurada')
+  if (!hasGeminiApiKeys()) {
+    throw new Error('Nenhuma API key Gemini configurada (VITE_GEMINI_API_KEY ou backups)')
   }
 
   const resolvedId = courseId || 'alego-default'

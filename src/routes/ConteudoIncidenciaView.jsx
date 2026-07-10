@@ -6,7 +6,7 @@ import { ArrowLeftIcon, FireIcon, TrashIcon, PencilIcon } from '@heroicons/react
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { formatAiErrorForUser } from '../utils/geminiApi'
+import { formatAiErrorForUser, hasGeminiApiKeys } from '../utils/geminiApi'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
 import { buildConteudoIncidenciaPayload } from '../utils/serverGenerationPayload'
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
@@ -130,9 +130,8 @@ const ConteudoIncidenciaView = () => {
       return
     }
 
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
-      setStatus('❌ API Key não configurada.')
+    if (!hasGeminiApiKeys()) {
+      setStatus('❌ Nenhuma API Key Gemini configurada.')
       return
     }
 

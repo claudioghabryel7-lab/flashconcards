@@ -24,7 +24,7 @@ import {
   buildConcursoDifficultyPrompt,
   buildConcursoMaterialPrompt,
 } from '../../utils/concursoMaterialPrompt'
-import { downloadConcursoMaterialPdf, printConcursoMaterial } from '../../utils/materialPdfExport'
+import { downloadMaterialPdf, printConcursoMaterial } from '../../utils/materialPdfExport'
 
 function formatSavedDate(timestamp) {
   if (!timestamp) return ''
@@ -245,7 +245,7 @@ export default function AdminConcursoMaterial() {
 
     try {
       const fileName = `${preview.concurso || 'material'}-${preview.cargo || 'cargo'}.pdf`
-      await downloadConcursoMaterialPdf(preview, fileName)
+      await downloadMaterialPdf(preview, fileName)
       setFeedback('✅ PDF baixado com todo o conteúdo.')
     } catch (err) {
       console.error(err)

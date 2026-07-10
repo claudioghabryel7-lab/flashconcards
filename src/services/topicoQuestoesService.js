@@ -9,7 +9,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { formatTopicoAsModulo } from '../utils/editalVerticalizadoLoader'
-import { generateAiJson } from '../utils/geminiApi'
+import { generateAiJson, hasGeminiApiKeys } from '../utils/geminiApi'
 
 /**
  * Busca questões já salvas para um tópico (compartilhadas entre usuários do curso).
@@ -44,9 +44,8 @@ export async function generateAndSaveQuestoesForTopico({
   courseName,
   editalText = '',
 }) {
-  const apiKey = readEnv('VITE_GEMINI_API_KEY')
-  if (!apiKey) {
-    throw new Error('VITE_GEMINI_API_KEY não configurada')
+  if (!hasGeminiApiKeys()) {
+    throw new Error('Nenhuma API key Gemini configurada (VITE_GEMINI_API_KEY ou backups)')
   }
 
   // Carregar dados do curso para obter a banca examinadora

@@ -8,7 +8,7 @@ import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useFloatingCommentsEnabled } from '../hooks/useFloatingCommentsEnabled'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { formatAiErrorForUser } from '../utils/geminiApi'
+import { formatAiErrorForUser, hasGeminiApiKeys } from '../utils/geminiApi'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
 import { buildQuestoesIncidenciaPayload } from '../utils/serverGenerationPayload'
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
@@ -253,9 +253,8 @@ const PraticaIncidenciaView = () => {
       return
     }
 
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
-      setStatus('❌ API Key não configurada.')
+    if (!hasGeminiApiKeys()) {
+      setStatus('❌ Nenhuma API Key Gemini configurada.')
       return
     }
 
