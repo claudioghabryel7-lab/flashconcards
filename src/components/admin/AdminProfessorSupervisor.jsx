@@ -1,19 +1,45 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import dayjs from 'dayjs'
-import { AcademicCapIcon, ClockIcon, QueueListIcon } from '@heroicons/react/24/outline'
+import duration from 'dayjs/plugin/duration'
+import {
+  AcademicCapIcon,
+  ClockIcon,
+  QueueListIcon,
+  SignalIcon,
+} from '@heroicons/react/24/outline'
 import { useAuth } from '../../hooks/useAuth'
 import {
   subscribeProfessorSupervisorConfig,
   setProfessorSupervisorEnabled,
   fetchSupervisorHistory,
+  SUPERVISOR_PHASE_LABELS,
+  PROFESSOR_STEP_LABELS,
 } from '../../services/professorSupervisorService'
+import { subscribeGenerationJob } from '../../services/generationJobService'
+
+dayjs.extend(duration)
+
+const SESSION_HOURS = 8
+
+function formatRemaining(sessionEndsAt) {
+  const ends = sessionEndsAt?.toDate?.()
+  if (!ends) return '—'
+  const diff = ends.getTime() - Date.now()
+  if (diff <= 0) return 'Encerrada'
+  const d = dayjs.duration(diff)
+  const h = Math.floor(d.asHours())
+  const m = d.minutes()
+  return `${h}h ${m}min restantes`
+}
 
 export default function AdminProfessorSupervisor() {
   const { user } = useAuth()
   const [config, setConfig] = useState({ enabled: false })
+  const [liveJob, setLiveJob] = useState(null)
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState(false)
+  const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
     const unsub = subscribeProfessorSupervisorConfig((data) => {
@@ -23,11 +49,28 @@ export default function AdminProfessorSupervisor() {
     return () => unsub?.()
   }, [])
 
+  const jobUserId = config.automationUserId || user?.uid
+  const jobId = config.currentActivity?.jobId
+
+  useEffect(() => {
+    if (!jobUserId || !jobId) {
+      setLiveJob(null)
+      return undefined
+    }
+    return subscribeGenerationJob(jobUserId, jobId, setLiveJob)
+  }, [jobUserId, jobId])
+
+  useEffect(() => {
+    if (!config.enabled) return undefined
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [config.enabled])
+
   useEffect(() => {
     fetchSupervisorHistory({ max: 15 })
       .then(setHistory)
       .catch(() => setHistory([]))
-  }, [config.lastRunAt])
+  }, [config.lastRunAt, liveJob?.status])
 
   const handleToggle = async () => {
     if (!user?.uid || toggling) return
@@ -42,9 +85,28 @@ export default function AdminProfessorSupervisor() {
     }
   }
 
-  const lastRun = config.lastRunAt?.toDate?.()
-    ? dayjs(config.lastRunAt.toDate()).format('DD/MM/YYYY HH:mm')
-    : '—'
+  const activity = config.currentActivity || {}
+  const phase = config.phase || 'idle'
+  const phaseLabel = SUPERVISOR_PHASE_LABELS[phase] || phase
+  const stepLabel = PROFESSOR_STEP_LABELS[activity.professorStep] || activity.professorStep || '—'
+
+  const displayMessage = liveJob?.message || activity.message || config.lastMessage || '—'
+  const displayProgress =
+    typeof liveJob?.progress === 'number' ? liveJob.progress : activity.progress ?? null
+
+  const nextRunLabel = useMemo(() => {
+    const next = config.nextRunAt?.toDate?.()
+    if (!next || phase !== 'waiting_next') return null
+    const diff = next.getTime() - now
+    if (diff <= 0) return 'Próximo item: em instantes'
+    const m = Math.ceil(diff / 60000)
+    const s = Math.ceil((diff % 60000) / 1000)
+    return m > 0 ? `Próximo item em ~${m} min` : `Próximo item em ~${s}s`
+  }, [config.nextRunAt, phase, now])
+
+  const sessionRemaining = formatRemaining(config.sessionEndsAt)
+  const isSessionLive =
+    config.enabled && config.sessionEndsAt?.toDate?.() && config.sessionEndsAt.toDate().getTime() > now
 
   return (
     <div className="space-y-4">
@@ -55,10 +117,11 @@ export default function AdminProfessorSupervisor() {
               <AcademicCapIcon className="h-6 w-6 text-indigo-600" />
             </div>
             <div>
-              <h2 className="cp-headline text-lg text-cp-text">Professor fiscalizador (3 professores)</h2>
+              <h2 className="cp-headline text-lg text-cp-text">Professor fiscalizador + digitação</h2>
               <p className="mt-1 max-w-xl text-sm text-cp-muted">
-                Fiscaliza na nuvem — um item por vez, só com API disponível. Script primeiro; IA só se
-                necessário. Máx. {config.maxItemsPerDay || 20} itens/dia.
+                Sessão de <strong>{SESSION_HOURS}h</strong> ao ativar — cronograma do dia primeiro, depois
+                tópicos liberados em ordem aleatória. Inclui <strong>Professor de digitação</strong> (script,
+                sem IA) nos materiais. Itens com IA: a cada <strong>5 min</strong>; digitação: na sequência.
               </p>
             </div>
           </div>
@@ -72,14 +135,51 @@ export default function AdminProfessorSupervisor() {
                 : 'cp-btn-primary'
             }`}
           >
-            {toggling ? 'Salvando…' : config.enabled ? 'Desativar' : 'Ativar'}
+            {toggling ? 'Salvando…' : config.enabled ? 'Desativar' : 'Ativar sessão (8h)'}
           </button>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="mt-4 rounded-2xl border border-indigo-500/25 bg-indigo-500/5 p-4">
+          <div className="flex items-center gap-2">
+            <SignalIcon
+              className={`h-5 w-5 ${phase === 'running' || phase === 'starting' ? 'animate-pulse text-indigo-600' : 'text-cp-muted'}`}
+            />
+            <p className="text-sm font-semibold text-cp-text">Ao vivo — {phaseLabel}</p>
+          </div>
+          <p className="mt-2 text-sm text-cp-text">{displayMessage}</p>
+          {activity.label && (
+            <p className="mt-1 text-xs text-cp-muted">
+              Item: <span className="font-medium text-cp-text">{activity.label}</span>
+              {activity.courseId && ` · Curso: ${activity.courseId}`}
+            </p>
+          )}
+          {stepLabel !== '—' && (
+            <p className="mt-1 text-xs text-indigo-700 dark:text-indigo-300">{stepLabel}</p>
+          )}
+          {displayProgress != null && displayProgress > 0 && (
+            <div className="mt-3">
+              <div className="h-2 overflow-hidden rounded-full bg-cp-border">
+                <div
+                  className="h-full rounded-full bg-indigo-500 transition-all"
+                  style={{ width: `${Math.min(displayProgress, 100)}%` }}
+                />
+              </div>
+              <p className="mt-1 text-[10px] text-cp-muted">{displayProgress}%</p>
+            </div>
+          )}
+          {nextRunLabel && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{nextRunLabel}</p>}
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <div className="rounded-xl border border-cp-border bg-cp-surface/50 px-3 py-2 text-xs">
+            <p className="text-cp-muted">Sessão</p>
+            <p className="font-semibold text-cp-text">
+              {isSessionLive ? sessionRemaining : config.enabled ? 'Encerrada' : 'Desativada'}
+            </p>
+          </div>
           <div className="rounded-xl border border-cp-border bg-cp-surface/50 px-3 py-2 text-xs">
             <p className="text-cp-muted">Status</p>
-            <p className="font-semibold text-cp-text">{config.enabled ? 'Ativo na nuvem' : 'Desativado'}</p>
+            <p className="font-semibold text-cp-text">{phaseLabel}</p>
           </div>
           <div className="rounded-xl border border-cp-border bg-cp-surface/50 px-3 py-2 text-xs">
             <p className="flex items-center gap-1 text-cp-muted">
@@ -89,17 +189,11 @@ export default function AdminProfessorSupervisor() {
           </div>
           <div className="rounded-xl border border-cp-border bg-cp-surface/50 px-3 py-2 text-xs">
             <p className="flex items-center gap-1 text-cp-muted">
-              <ClockIcon className="h-3.5 w-3.5" /> Hoje / última rodada
+              <ClockIcon className="h-3.5 w-3.5" /> Sessão atual
             </p>
-            <p className="font-semibold text-cp-text">
-              {config.itemsProcessedToday ?? 0} item(ns) — {lastRun}
-            </p>
+            <p className="font-semibold text-cp-text">{config.itemsProcessedSession ?? 0} item(ns)</p>
           </div>
         </div>
-
-        {config.lastMessage && (
-          <p className="mt-3 text-xs text-cp-muted">{config.lastMessage}</p>
-        )}
       </div>
 
       {history.length > 0 && (

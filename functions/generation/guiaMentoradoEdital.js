@@ -277,11 +277,38 @@ Retorne APENAS JSON válido.`
   }
 }
 
+function resolveTopicFromEdital(edital, topicKey = '') {
+  const normalized = normalizeTopicKeyForStorage(topicKey)
+  if (!normalized) return null
+
+  for (const disciplina of edital?.disciplinas || []) {
+    for (const topico of disciplina.topicos || []) {
+      const key = normalizeTopicKeyForStorage(makeTopicKey(topico))
+      if (key === normalized) {
+        return {
+          topicKey: key,
+          topicoNome: topico.nome || key,
+          disciplina: disciplina.nome,
+          modulo: formatTopicoAsModulo(topico),
+        }
+      }
+    }
+  }
+
+  return {
+    topicKey: normalized,
+    topicoNome: normalized,
+    disciplina: '',
+    modulo: normalized,
+  }
+}
+
 module.exports = {
   loadEditalVerticalizado,
   loadMentoradoAutomationContext,
   extractTopicsFromCronogramaDay,
   buildTopicPayloads,
   resolveCronogramaMateria,
+  resolveTopicFromEdital,
   buildEditalTextFromVerticalizado,
 }

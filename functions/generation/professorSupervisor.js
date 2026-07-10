@@ -1,19 +1,26 @@
 const admin = require('firebase-admin')
 const { generateAiJson } = require('./geminiServer')
-const { sanitizeTopicKeyForFirestore } = require('./topicKeyUtils')
 const { loadMentoradoAutomationContext } = require('./guiaMentoradoEdital')
 const {
   PROFESSOR_ROLES,
   REVIEW_JSON_SCHEMA,
-  MIN_CONFIDENCE_AUTO_APPLY,
 } = require('./professorSupervisorShared')
 const {
-  scriptCheckTopicContent,
+  scriptCheckTopicStep,
   loadTopicBundle,
   scriptCheckVespera,
   scriptCheckRedacao,
 } = require('./professorSupervisorScripts')
-const { finishQueueItem } = require('./professorSupervisorQueue')
+const {
+  applyCorrectionsWithSnapshot,
+  buildDiffSummary,
+} = require('./professorSupervisorPatches')
+const { finishQueueItem, updateSupervisorActivity, scheduleNextRunForItem } = require('./professorSupervisorQueue')
+const {
+  scanMaterialTypos,
+  buildDigitacaoVerdict,
+  applyDigitacaoFixes,
+} = require('./professorDigitacao')
 const {
   isJobCancelled,
   isJobCancelledError,
@@ -102,147 +109,211 @@ async function saveAdminReview(entry) {
   return ref.id
 }
 
-async function applyCorrections(courseId, itemType, payload, corrections = []) {
-  const db = getDb()
-  const ts = admin.firestore.FieldValue.serverTimestamp()
-  let applied = 0
-
-  for (const fix of corrections) {
-    if ((fix.confidence || 0) < MIN_CONFIDENCE_AUTO_APPLY) continue
-
-    if (fix.target === 'flashcard' && fix.refId) {
-      await db.doc(`courses/${courseId}/flashcards/${fix.refId}`).set(
-        { verso: fix.newText, resposta: fix.newText, updatedAt: ts, supervisorReviewed: true },
-        { merge: true },
-      )
-      applied += 1
-    }
-
-    if (fix.target === 'material' && itemType === 'topico') {
-      const key = sanitizeTopicKeyForFirestore(payload.topicKey)
-      const field = fix.field || 'resumo'
-      await db.doc(`courses/${courseId}/conteudosCompletos/${key}`).set(
-        { [field]: fix.newText, updatedAt: ts, supervisorReviewed: true },
-        { merge: true },
-      )
-      applied += 1
-    }
-
-    if (fix.target === 'redacao') {
-      await db.doc(`courses/${courseId}/config/redacao`).set(
-        { tema: fix.newText, status: 'disponivel', updatedAt: ts, supervisorReviewed: true },
-        { merge: true },
-      )
-      applied += 1
-    }
-
-    if (fix.target === 'vespera' && fix.refId != null) {
-      const snap = await db.doc(`courses/${courseId}/vesperaDeProva/material`).get()
-      if (!snap.exists) continue
-      const material = [...(snap.data().material || [])]
-      const idx = Number(fix.refId)
-      if (material[idx] && fix.field === 'resumo') {
-        const resumos = [...(material[idx].revisaoTurbo?.resumos || [])]
-        if (resumos.length) resumos[0] = fix.newText
-        material[idx] = {
-          ...material[idx],
-          revisaoTurbo: { ...material[idx].revisaoTurbo, resumos },
-        }
-        await snap.ref.set({ material, updatedAt: ts, supervisorReviewed: true }, { merge: true })
-        applied += 1
-      }
-    }
-  }
-
-  return applied
+const TOPIC_STEP_MAP = {
+  topico_flashcards: 'flashcards',
+  topico_material: 'material',
+  topico_questoes: 'questoes',
 }
 
-async function processTopicoItem(courseId, payload, updateJob, userId, jobId) {
-  const bundle = await loadTopicBundle(
-    courseId,
-    payload.topicKey,
-    payload.disciplina,
-    payload.modulo,
-  )
-  const script = scriptCheckTopicContent(bundle)
+function filterCorrectionsForStep(corrections = [], step) {
+  if (step === 'flashcards') return corrections.filter((c) => c.target === 'flashcard')
+  if (step === 'material') return corrections.filter((c) => c.target === 'material')
+  if (step === 'questoes') return corrections.filter((c) => c.target === 'questao')
+  return corrections
+}
 
-  if (!script.needsReview && script.severity === 'low') {
-    return {
-      skipped: true,
-      reason: 'script_ok',
-      script,
-      summary: 'Tópico passou na checagem estrutural — IA não necessária.',
-    }
-  }
-
-  const context = await loadMentoradoAutomationContext(courseId)
-  const sampleCards = bundle.flashcards.slice(0, 8).map((c) => ({
-    id: c.id,
-    frente: c.frente,
-    verso: (c.verso || '').slice(0, 500),
-  }))
-
-  const contextBlock = `TIPO: tópico do dia
-CURSO: ${context.courseName || courseId}
+function buildTopicStepContext(step, bundle, payload, context, script) {
+  const header = `TIPO: tópico — etapa ${step}
+CURSO: ${context.courseName || payload.courseId || ''}
 DISCIPLINA: ${payload.disciplina}
 TÓPICO: ${payload.topicoNome}
 DATA: ${payload.targetDate || ''}
 
 PROBLEMAS DO SCRIPT:
 ${JSON.stringify(script.issues, null, 2)}
+`
 
-AMOSTRA FLASHCARDS (${bundle.flashcards.length} total):
-${JSON.stringify(sampleCards, null, 2)}
-
-MATERIAL (trecho):
-${JSON.stringify(bundle.material || {}, null, 2).slice(0, 10000)}
-
-QUESTÕES (trecho):
-${JSON.stringify(bundle.questoes || {}, null, 2).slice(0, 8000)}
+  if (step === 'flashcards') {
+    const cards = bundle.flashcards.map((c) => ({
+      id: c.id,
+      frente: (c.frente || c.pergunta || '').slice(0, 250),
+      verso: (c.verso || c.resposta || '').slice(0, 500),
+    }))
+    return `${header}
+FLASHCARDS (${cards.length} total):
+${JSON.stringify(cards, null, 2).slice(0, 28000)}
 
 EDITAL (trecho):
 ${(context.editalText || '').slice(0, 6000)}`
-
-  const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
-  const final = chain.final
-  const dedupeKey = `${courseId}:topico:${payload.topicKey}`
-
-  const needsAdmin =
-    final.needsAdminReview ||
-    (final.confidence || 0) < MIN_CONFIDENCE_AUTO_APPLY ||
-    (final.issues?.length > 0 && !(final.corrections?.length > 0))
-
-  let reviewId = null
-  let applied = 0
-
-  if (needsAdmin) {
-    reviewId = await saveAdminReview({
-      courseId,
-      itemType: 'topico',
-      payload,
-      dedupeKey,
-      scriptIssues: script.issues,
-      verdict: final,
-      professorsUsed: chain.professorsUsed,
-    })
-  } else {
-    applied = await applyCorrections(courseId, 'topico', payload, final.corrections || [])
   }
+
+  if (step === 'material') {
+    return `${header}
+MATERIAL COMPLETO:
+${JSON.stringify(bundle.material || {}, null, 2).slice(0, 28000)}
+
+EDITAL (trecho):
+${(context.editalText || '').slice(0, 6000)}`
+  }
+
+  const questoesList = bundle.questoes?.questoes || bundle.questoes?.questions || []
+  return `${header}
+QUESTÕES (${questoesList.length} total):
+${JSON.stringify(bundle.questoes || {}, null, 2).slice(0, 28000)}
+
+EDITAL (trecho):
+${(context.editalText || '').slice(0, 6000)}`
+}
+
+async function finalizeWithSnapshot(courseId, itemType, payload, final, chain, script, dedupeKey) {
+  const corrections = final.corrections || []
+  const { applied, patches } = await applyCorrectionsWithSnapshot(
+    courseId,
+    itemType,
+    payload,
+    corrections,
+  )
+  const diffSummary = buildDiffSummary(patches, corrections)
+
+  const reviewId = await saveAdminReview({
+    courseId,
+    itemType,
+    step: payload.step || TOPIC_STEP_MAP[itemType] || null,
+    payload,
+    dedupeKey,
+    scriptIssues: script?.issues || [],
+    verdict: final,
+    professorsUsed: chain.professorsUsed,
+    patches,
+    diffSummary,
+    appliedCount: applied,
+  })
 
   await saveHistory({
     courseId,
-    itemType: 'topico',
+    itemType,
     dedupeKey,
     payload,
-    scriptIssues: script.issues,
+    scriptIssues: script?.issues || [],
     verdict: final,
     professorsUsed: chain.professorsUsed,
     appliedCount: applied,
     reviewId,
-    autoApplied: !needsAdmin,
+    autoApplied: true,
   })
 
-  return { summary: final.summary, applied, needsAdmin, reviewId, professorsUsed: chain.professorsUsed }
+  return { summary: final.summary, applied, needsAdmin: true, reviewId, professorsUsed: chain.professorsUsed }
+}
+
+async function processTopicoStepItem(courseId, payload, itemType, updateJob, userId, jobId) {
+  const step = payload.step || TOPIC_STEP_MAP[itemType] || 'flashcards'
+  const bundle = await loadTopicBundle(
+    courseId,
+    payload.topicKey,
+    payload.disciplina,
+    payload.modulo,
+  )
+  const script = scriptCheckTopicStep(bundle, step)
+
+  if (!script.needsReview && script.severity === 'low') {
+    return {
+      skipped: true,
+      reason: 'script_ok',
+      script,
+      summary: `Etapa ${step} passou na checagem estrutural — IA não necessária.`,
+    }
+  }
+
+  const context = await loadMentoradoAutomationContext(courseId)
+  const contextBlock = buildTopicStepContext(step, bundle, { ...payload, courseId }, context, script)
+  const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
+  const final = {
+    ...chain.final,
+    corrections: filterCorrectionsForStep(chain.final.corrections || [], step),
+  }
+  const dedupeKey = `${courseId}:${itemType}:${payload.topicKey}`
+
+  return finalizeWithSnapshot(courseId, itemType, { ...payload, step }, final, chain, script, dedupeKey)
+}
+
+async function processDigitacaoItem(courseId, payload, updateJob, userId, jobId) {
+  const bundle = await loadTopicBundle(
+    courseId,
+    payload.topicKey,
+    payload.disciplina,
+    payload.modulo,
+  )
+  const material = bundle.material
+  if (!material) {
+    return { skipped: true, reason: 'no_material', summary: 'Material ausente — digitação ignorada.' }
+  }
+
+  await updateJob(userId, jobId, {
+    progress: 40,
+    message: 'Professor de digitação — corrigindo material (script)…',
+  })
+
+  const fixes = scanMaterialTypos(material)
+  if (!fixes.length) {
+    const dedupeKey = `${courseId}:topico_digitacao:${payload.topicKey}`
+    await saveHistory({
+      courseId,
+      itemType: 'topico_digitacao',
+      dedupeKey,
+      payload,
+      verdict: buildDigitacaoVerdict([]),
+      professorsUsed: 0,
+      appliedCount: 0,
+      reviewId: null,
+      autoApplied: false,
+      digitacaoOnly: true,
+    })
+    return {
+      skipped: true,
+      reason: 'digitacao_ok',
+      summary: 'Nenhum erro de digitação detectado no material.',
+    }
+  }
+
+  const verdict = buildDigitacaoVerdict(fixes)
+  const { applied, patches, diffSummary } = await applyDigitacaoFixes(courseId, payload.topicKey, fixes)
+  const dedupeKey = `${courseId}:topico_digitacao:${payload.topicKey}`
+
+  const reviewId = await saveAdminReview({
+    courseId,
+    itemType: 'topico_digitacao',
+    step: 'digitacao',
+    payload,
+    dedupeKey,
+    verdict,
+    professorsUsed: 0,
+    patches,
+    diffSummary,
+    appliedCount: applied,
+    digitacaoOnly: true,
+  })
+
+  await saveHistory({
+    courseId,
+    itemType: 'topico_digitacao',
+    dedupeKey,
+    payload,
+    verdict,
+    professorsUsed: 0,
+    appliedCount: applied,
+    reviewId,
+    autoApplied: true,
+    digitacaoOnly: true,
+  })
+
+  return {
+    summary: verdict.summary,
+    applied,
+    needsAdmin: true,
+    reviewId,
+    professorsUsed: 0,
+    digitacaoOnly: true,
+  }
 }
 
 async function processFlagItem(courseId, payload, updateJob, userId, jobId) {
@@ -256,27 +327,40 @@ RELATO DO ALUNO: ${payload.reportText || ''}`
 
   const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
   const final = chain.final
+  const dedupeKey = `${courseId}:flag:${payload.flagId}`
+  const { applied, patches } = await applyCorrectionsWithSnapshot(
+    courseId,
+    'flag',
+    payload,
+    final.corrections || [],
+  )
+  const diffSummary = buildDiffSummary(patches, final.corrections || [])
+
   const reviewId = await saveAdminReview({
     courseId,
     itemType: 'flag',
     payload,
-    dedupeKey: `${courseId}:flag:${payload.flagId}`,
+    dedupeKey,
     verdict: final,
     professorsUsed: chain.professorsUsed,
+    patches,
+    diffSummary,
+    appliedCount: applied,
   })
 
   await saveHistory({
     courseId,
     itemType: 'flag',
-    dedupeKey: `${courseId}:flag:${payload.flagId}`,
+    dedupeKey,
     payload,
     verdict: final,
     professorsUsed: chain.professorsUsed,
+    appliedCount: applied,
     reviewId,
-    autoApplied: false,
+    autoApplied: true,
   })
 
-  return { summary: final.summary, needsAdmin: true, reviewId, professorsUsed: chain.professorsUsed }
+  return { summary: final.summary, applied, needsAdmin: true, reviewId, professorsUsed: chain.professorsUsed }
 }
 
 async function processVesperaItem(courseId, updateJob, userId, jobId) {
@@ -296,35 +380,39 @@ MATERIAL: ${JSON.stringify(materialDoc, null, 2).slice(0, 14000)}`
 
   const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
   const final = chain.final
-  const needsAdmin = final.needsAdminReview || (final.confidence || 0) < MIN_CONFIDENCE_AUTO_APPLY
-  let applied = 0
-  let reviewId = null
-
-  if (needsAdmin) {
-    reviewId = await saveAdminReview({
-      courseId,
-      itemType: 'vespera',
-      payload: { scope: 'material' },
-      dedupeKey: `${courseId}:vespera:material`,
-      verdict: final,
-      professorsUsed: chain.professorsUsed,
-    })
-  } else {
-    applied = await applyCorrections(courseId, 'vespera', {}, final.corrections || [])
-  }
+  const dedupeKey = `${courseId}:vespera:material`
+  const { applied, patches } = await applyCorrectionsWithSnapshot(
+    courseId,
+    'vespera',
+    {},
+    final.corrections || [],
+  )
+  const diffSummary = buildDiffSummary(patches, final.corrections || [])
+  const reviewId = await saveAdminReview({
+    courseId,
+    itemType: 'vespera',
+    payload: { scope: 'material' },
+    dedupeKey,
+    scriptIssues: script.issues,
+    verdict: final,
+    professorsUsed: chain.professorsUsed,
+    patches,
+    diffSummary,
+    appliedCount: applied,
+  })
 
   await saveHistory({
     courseId,
     itemType: 'vespera',
-    dedupeKey: `${courseId}:vespera:material`,
+    dedupeKey,
     verdict: final,
     professorsUsed: chain.professorsUsed,
     appliedCount: applied,
     reviewId,
-    autoApplied: !needsAdmin,
+    autoApplied: true,
   })
 
-  return { summary: final.summary, applied, needsAdmin, reviewId, professorsUsed: chain.professorsUsed }
+  return { summary: final.summary, applied, needsAdmin: true, reviewId, professorsUsed: chain.professorsUsed }
 }
 
 async function processRedacaoItem(courseId, payload, updateJob, userId, jobId) {
@@ -344,64 +432,111 @@ PROBLEMAS SCRIPT: ${JSON.stringify(script.issues)}`
 
   const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
   const final = chain.final
-  const needsAdmin = final.needsAdminReview || payload.rotateTheme && (final.confidence || 0) < 0.85
-  let applied = 0
-  let reviewId = null
-
-  if (needsAdmin) {
-    reviewId = await saveAdminReview({
-      courseId,
-      itemType: 'redacao',
-      payload,
-      dedupeKey: `${courseId}:redacao:${payload.targetDate || 'rotate'}`,
-      verdict: final,
-      professorsUsed: chain.professorsUsed,
-    })
-  } else {
-    applied = await applyCorrections(courseId, 'redacao', payload, final.corrections || [])
-  }
+  const dedupeKey = `${courseId}:redacao:${payload.targetDate || 'rotate'}`
+  const { applied, patches } = await applyCorrectionsWithSnapshot(
+    courseId,
+    'redacao',
+    payload,
+    final.corrections || [],
+  )
+  const diffSummary = buildDiffSummary(patches, final.corrections || [])
+  const reviewId = await saveAdminReview({
+    courseId,
+    itemType: 'redacao',
+    payload,
+    dedupeKey,
+    scriptIssues: script.issues,
+    verdict: final,
+    professorsUsed: chain.professorsUsed,
+    patches,
+    diffSummary,
+    appliedCount: applied,
+  })
 
   await saveHistory({
     courseId,
     itemType: 'redacao',
-    dedupeKey: `${courseId}:redacao:${payload.targetDate || 'rotate'}`,
+    dedupeKey,
     verdict: final,
     professorsUsed: chain.professorsUsed,
     appliedCount: applied,
     reviewId,
-    autoApplied: !needsAdmin,
+    autoApplied: true,
   })
 
-  return { summary: final.summary, applied, needsAdmin, reviewId, professorsUsed: chain.professorsUsed }
+  return { summary: final.summary, applied, needsAdmin: true, reviewId, professorsUsed: chain.professorsUsed }
 }
 
 async function processProfessorSupervisor(userId, jobId, courseId, serverPayload, updateJob) {
   const { queueItemId, itemType, payload = {} } = serverPayload || {}
+  const label =
+    payload.topicoNome ||
+    payload.topicKey ||
+    (itemType === 'vespera' ? 'Véspera de prova' : itemType === 'redacao' ? 'Redação' : itemType)
+
+  const syncJob = async (uid, jid, patch) => {
+    await updateJob(uid, jid, patch)
+    await updateSupervisorActivity({
+      phase: 'running',
+      jobId: jid,
+      itemType,
+      courseId,
+      label,
+      message: patch.message || '',
+      progress: patch.progress ?? null,
+      professorStep: patch.message?.includes('digitação')
+        ? 'digitacao'
+        : patch.message?.includes('Professor 1')
+        ? 'professor_1'
+        : patch.message?.includes('Professor 2')
+          ? 'professor_2'
+          : patch.message?.includes('Professor 3')
+            ? 'professor_3'
+            : 'processando',
+    })
+  }
 
   await throwIfCancelled(userId, jobId)
   await touchActiveJob(userId, jobId, { jobType: 'professor_supervisor', courseId, status: 'running' })
 
-  await updateJob(userId, jobId, {
+  await updateSupervisorActivity({
+    phase: 'running',
+    jobId,
+    itemType,
+    courseId,
+    label,
+    professorStep: 'iniciando',
+    message: `Professor fiscalizador — ${itemType}…`,
+    progress: 10,
+  })
+
+  await syncJob(userId, jobId, {
     status: 'running',
     progress: 10,
-    message: `Professor fiscalizador — ${itemType}…`,
+    message: `Professor fiscalizador — ${label}…`,
   })
 
   let outcome
 
   try {
     switch (itemType) {
+      case 'topico_digitacao':
+        outcome = await processDigitacaoItem(courseId, payload, syncJob, userId, jobId)
+        break
       case 'topico':
-        outcome = await processTopicoItem(courseId, payload, updateJob, userId, jobId)
+      case 'topico_flashcards':
+      case 'topico_material':
+      case 'topico_questoes':
+        outcome = await processTopicoStepItem(courseId, payload, itemType, syncJob, userId, jobId)
         break
       case 'flag':
-        outcome = await processFlagItem(courseId, payload, updateJob, userId, jobId)
+        outcome = await processFlagItem(courseId, payload, syncJob, userId, jobId)
         break
       case 'vespera':
-        outcome = await processVesperaItem(courseId, updateJob, userId, jobId)
+        outcome = await processVesperaItem(courseId, syncJob, userId, jobId)
         break
       case 'redacao':
-        outcome = await processRedacaoItem(courseId, payload, updateJob, userId, jobId)
+        outcome = await processRedacaoItem(courseId, payload, syncJob, userId, jobId)
         break
       default:
         throw new Error(`Tipo de fiscalização não suportado: ${itemType}`)
@@ -414,17 +549,21 @@ async function processProfessorSupervisor(userId, jobId, courseId, serverPayload
     await clearActiveJob(jobId)
 
     const msg = outcome.skipped
-      ? `Checagem OK — ${outcome.reason || 'sem IA'}`
-      : outcome.needsAdmin
-        ? `Veredito pronto — aguardando admin (${outcome.professorsUsed} professor(es))`
-        : `Concluído — ${outcome.applied || 0} correção(ões) aplicada(s)`
+      ? outcome.digitacaoOnly || outcome.reason === 'digitacao_ok'
+        ? outcome.summary || 'Digitação OK'
+        : `Checagem OK — ${outcome.reason || 'sem IA'}`
+      : outcome.digitacaoOnly
+        ? `Digitação corrigida — aguardando moderação (${outcome.applied || 0} campo(s))`
+        : `Correções aplicadas — aguardando moderação (${outcome.applied || 0} alteração(ões), ${outcome.professorsUsed} professor(es))`
 
-    await updateJob(userId, jobId, {
+    await syncJob(userId, jobId, {
       status: 'done',
       progress: 100,
       message: msg,
       finishedAt: admin.firestore.FieldValue.serverTimestamp(),
     })
+
+    await scheduleNextRunForItem(itemType)
 
     return outcome
   } catch (err) {
@@ -434,17 +573,22 @@ async function processProfessorSupervisor(userId, jobId, courseId, serverPayload
     await clearActiveJob(jobId)
 
     if (isJobCancelledError(err) || (await isJobCancelled(userId, jobId))) {
+      await updateSupervisorActivity({ phase: 'idle', message: 'Cancelado pelo admin' })
       return { cancelled: true }
     }
 
     if (isApiQuotaError(err)) {
+      await updateSupervisorActivity({
+        phase: 'waiting_api',
+        message: 'API expirada — aguardando para retomar…',
+      })
       await pauseJobForResume({
         userId,
         jobId,
         courseId,
         jobType: 'professor_supervisor',
         serverPayload,
-        updateJob,
+        updateJob: syncJob,
         status: 'waiting_api',
         waitReason: 'api',
         message: 'API expirada — fiscalizador aguardando…',
@@ -452,13 +596,17 @@ async function processProfessorSupervisor(userId, jobId, courseId, serverPayload
       return { paused: true }
     }
 
+    await updateSupervisorActivity({
+      phase: 'waiting_api',
+      message: `Erro temporário — tentando de novo… (${err.message || 'erro'})`,
+    })
     await pauseJobForResume({
       userId,
       jobId,
       courseId,
       jobType: 'professor_supervisor',
       serverPayload,
-      updateJob,
+      updateJob: syncJob,
       status: 'waiting_retry',
       waitReason: 'error',
       message: `Erro temporário — tentando de novo… (${err.message || 'erro'})`,

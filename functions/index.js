@@ -1226,7 +1226,7 @@ exports.resumeWaitingGenerationJobs = functions.pubsub
 
 /** Professor fiscalizador — 1 item por vez, só se API disponível e ativado pelo admin. */
 exports.professorSupervisorTick = functions.pubsub
-  .schedule('every 10 minutes')
+  .schedule('every 5 minutes')
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
     try {
@@ -1237,6 +1237,23 @@ exports.professorSupervisorTick = functions.pubsub
       }
     } catch (err) {
       console.error('[professorSupervisorTick]', err)
+    }
+    return null
+  })
+
+/** Ao ativar, dispara fiscalização imediata. */
+exports.onProfessorFiscalizadorConfigUpdated = functions.firestore
+  .document('config/professorFiscalizador')
+  .onUpdate(async (change) => {
+    const before = change.before.data() || {}
+    const after = change.after.data() || {}
+    if (!after.enabled || before.enabled === after.enabled) return null
+    try {
+      const { tickProfessorSupervisor } = getSupervisorQueueModule()
+      const result = await tickProfessorSupervisor({ force: true })
+      console.log('[onProfessorFiscalizadorConfigUpdated]', result)
+    } catch (err) {
+      console.error('[onProfessorFiscalizadorConfigUpdated]', err)
     }
     return null
   })

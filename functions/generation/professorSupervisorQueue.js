@@ -1,10 +1,15 @@
 const admin = require('firebase-admin')
 const { getTodayKeyInSaoPaulo } = require('./guiaMentoradoShared')
 const { loadCronogramaDay } = require('./guiaMentoradoDaily')
-const { loadEditalVerticalizado, extractTopicsFromCronogramaDay } = require('./guiaMentoradoEdital')
+const { loadEditalVerticalizado, extractTopicsFromCronogramaDay, resolveTopicFromEdital } = require('./guiaMentoradoEdital')
 const { isTopicContentComplete } = require('./guiaMentoradoAutomation')
 const { sanitizeTopicKeyForFirestore } = require('./topicKeyUtils')
-const { MAX_ITEMS_PER_DAY, REVIEW_COOLDOWN_DAYS } = require('./professorSupervisorShared')
+const { SESSION_HOURS, INTERVAL_MINUTES, REVIEW_COOLDOWN_DAYS } = require('./professorSupervisorShared')
+
+const INTERVAL_MS = INTERVAL_MINUTES * 60 * 1000
+const SESSION_MS = SESSION_HOURS * 60 * 60 * 1000
+const BACKLOG_TOPICS_PER_COURSE = 5
+const DIGITACAO_INTERVAL_MINUTES = 0
 
 function getDb() {
   return admin.firestore()
@@ -14,23 +19,29 @@ function configRef() {
   return getDb().doc('config/professorFiscalizador')
 }
 
+function isSessionActive(data = {}) {
+  if (!data.enabled) return false
+  const ends = data.sessionEndsAt?.toDate?.()
+  if (!ends) return false
+  return Date.now() < ends.getTime()
+}
+
 async function loadSupervisorConfig() {
   const snap = await configRef().get()
   const data = snap.exists ? snap.data() : {}
-  const todayKey = getTodayKeyInSaoPaulo()
-  let itemsProcessedToday = data.itemsProcessedToday || 0
-  if (data.counterDate !== todayKey) {
-    itemsProcessedToday = 0
-  }
   return {
     enabled: Boolean(data.enabled),
     automationUserId: data.automationUserId || null,
-    maxItemsPerDay: data.maxItemsPerDay || MAX_ITEMS_PER_DAY,
-    itemsProcessedToday,
-    counterDate: todayKey,
+    sessionStartedAt: data.sessionStartedAt || null,
+    sessionEndsAt: data.sessionEndsAt || null,
+    nextRunAt: data.nextRunAt || null,
+    phase: data.phase || 'idle',
+    currentActivity: data.currentActivity || null,
+    itemsProcessedSession: data.itemsProcessedSession || 0,
     lastRunAt: data.lastRunAt || null,
     lastMessage: data.lastMessage || '',
     queueSize: data.queueSize || 0,
+    sessionActive: isSessionActive(data),
   }
 }
 
@@ -44,11 +55,39 @@ async function patchSupervisorConfig(patch) {
   )
 }
 
-async function incrementDailyCounter() {
+async function updateSupervisorActivity(activityPatch = {}) {
+  const ts = admin.firestore.FieldValue.serverTimestamp()
+  await patchSupervisorConfig({
+    phase: activityPatch.phase || 'running',
+    currentActivity: {
+      ...activityPatch,
+      updatedAt: ts,
+    },
+    lastMessage: activityPatch.message || undefined,
+  })
+}
+
+async function scheduleNextRun(minutes = INTERVAL_MINUTES) {
+  const delayMs = minutes <= 0 ? 15000 : minutes * 60 * 1000
+  const nextRunAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + delayMs))
+  const waitLabel =
+    minutes <= 0 ? 'em instantes' : `~${minutes} min`
+  await patchSupervisorConfig({
+    nextRunAt,
+    phase: 'waiting_next',
+    currentActivity: {
+      phase: 'waiting_next',
+      message: `Aguardando próximo item (${waitLabel})…`,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    lastMessage: `Próximo item ${waitLabel}`,
+  })
+}
+
+async function incrementSessionCounter() {
   const cfg = await loadSupervisorConfig()
   await patchSupervisorConfig({
-    itemsProcessedToday: cfg.itemsProcessedToday + 1,
-    counterDate: cfg.counterDate,
+    itemsProcessedSession: (cfg.itemsProcessedSession || 0) + 1,
   })
 }
 
@@ -100,11 +139,95 @@ async function wasRecentlyReviewed(courseId, dedupeKey) {
   return reviewedAt && reviewedAt.getTime() > cutoff
 }
 
+function shuffleInPlace(arr = []) {
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
+}
+
+const TOPIC_QUEUE_STEPS = [
+  { itemType: 'topico_flashcards', step: 'flashcards', offset: 2 },
+  { itemType: 'topico_digitacao', step: 'digitacao', offset: 1 },
+  { itemType: 'topico_material', step: 'material', offset: 0 },
+  { itemType: 'topico_questoes', step: 'questoes', offset: -1 },
+]
+
+async function enqueueTopicPipeline(courseId, topic, { priorityBase, targetDate, source }) {
+  let added = 0
+  const basePayload = {
+    topicKey: topic.topicKey,
+    topicoNome: topic.topicoNome,
+    disciplina: topic.disciplina,
+    modulo: topic.modulo,
+    targetDate,
+    source,
+  }
+
+  for (const { itemType, step, offset } of TOPIC_QUEUE_STEPS) {
+    const dedupeKey = `${courseId}:${itemType}:${topic.topicKey}`
+    if (await wasRecentlyReviewed(courseId, dedupeKey)) continue
+    const id = await enqueueItem({
+      courseId,
+      itemType,
+      priority: priorityBase + offset,
+      payload: { ...basePayload, step },
+    })
+    if (id) added += 1
+  }
+
+  return added
+}
+
+async function enqueueBacklogTopics(courseId, todayTopicKeys, edital, todayKey) {
+  const db = getDb()
+  const statusSnap = await db
+    .collection(`courses/${courseId}/topicoStatus`)
+    .where('status', '==', 'disponivel')
+    .limit(80)
+    .get()
+
+  const candidates = []
+  for (const doc of statusSnap.docs) {
+    const data = doc.data()
+    const topicKey = data.topicKey || doc.id
+    if (!topicKey || todayTopicKeys.has(topicKey)) continue
+
+    const resolved = resolveTopicFromEdital(edital, topicKey) || {
+      topicKey,
+      topicoNome: topicKey,
+      disciplina: data.disciplinaNome || '',
+      modulo: topicKey,
+    }
+
+    const readiness = await isTopicContentComplete(courseId, resolved)
+    if (!readiness.complete) continue
+    candidates.push(resolved)
+  }
+
+  shuffleInPlace(candidates)
+  let added = 0
+  for (const topic of candidates.slice(0, BACKLOG_TOPICS_PER_COURSE)) {
+    added += await enqueueTopicPipeline(courseId, topic, {
+      priorityBase: 40,
+      targetDate: todayKey,
+      source: 'backlog',
+    })
+  }
+  return added
+}
+
 async function buildQueueItems() {
   const db = getDb()
   const todayKey = getTodayKeyInSaoPaulo()
   const isMonday = new Date().getDay() === 1
   let added = 0
+
+  await updateSupervisorActivity({
+    phase: 'building_queue',
+    message: 'Montando fila de fiscalização…',
+  })
 
   const coursesSnap = await db.collection('courses').where('active', '!=', false).limit(40).get()
 
@@ -146,6 +269,7 @@ async function buildQueueItems() {
             { data: todayKey, tipo, materias: dayEntry.materias || [] },
             edital,
           )
+          const todayTopicKeys = new Set(topics.map((t) => t.topicKey))
           for (const topic of topics) {
             const readiness = await isTopicContentComplete(courseId, topic)
             const statusSnap = await db
@@ -155,24 +279,19 @@ async function buildQueueItems() {
               statusSnap.exists && statusSnap.data().status === 'disponivel' && readiness.complete
             if (!published) continue
 
-            const dedupeKey = `${courseId}:topico:${topic.topicKey}`
-            if (await wasRecentlyReviewed(courseId, dedupeKey)) continue
-            const id = await enqueueItem({
-              courseId,
-              itemType: 'topico',
-              priority: 50,
-              payload: {
-                topicKey: topic.topicKey,
-                topicoNome: topic.topicoNome,
-                disciplina: topic.disciplina,
-                modulo: topic.modulo,
-                targetDate: todayKey,
-              },
+            added += await enqueueTopicPipeline(courseId, topic, {
+              priorityBase: 50,
+              targetDate: todayKey,
+              source: 'cronograma',
             })
-            if (id) added += 1
           }
+
+          added += await enqueueBacklogTopics(courseId, todayTopicKeys, edital, todayKey)
         }
       }
+    } else if (mentoradoSnap.exists) {
+      const edital = await loadEditalVerticalizado(courseId)
+      added += await enqueueBacklogTopics(courseId, new Set(), edital, todayKey)
     }
 
     const vesperaSnap = await db.doc(`courses/${courseId}/vesperaDeProva/material`).get()
@@ -196,9 +315,9 @@ async function buildQueueItems() {
         const id = await enqueueItem({
           courseId,
           itemType: 'redacao',
-          priority: isMonday ? 60 : 20,
+          priority: 60,
           payload: {
-            rotateTheme: isMonday,
+            rotateTheme: true,
             targetDate: todayKey,
             currentTema: redacaoSnap.exists ? redacaoSnap.data().tema || '' : '',
           },
@@ -279,20 +398,72 @@ async function spawnSupervisorJob(userId, courseId, queueItem) {
   return ref.id
 }
 
-async function tickProfessorSupervisor() {
-  const cfg = await loadSupervisorConfig()
-  if (!cfg.enabled || !cfg.automationUserId) {
+function itemLabel(item) {
+  const nome = item.payload?.topicoNome || item.payload?.topicKey
+  if (item.itemType === 'topico_flashcards') return `${nome} — flashcards`
+  if (item.itemType === 'topico_digitacao') return `${nome} — digitação (script)`
+  if (item.itemType === 'topico_material') return `${nome} — material`
+  if (item.itemType === 'topico_questoes') return `${nome} — questões`
+  if (item.itemType === 'topico') return nome || 'tópico'
+  if (item.itemType === 'flag') return `Sinalização (${item.payload?.contentType || 'conteúdo'})`
+  if (item.itemType === 'vespera') return 'Véspera de prova'
+  if (item.itemType === 'redacao') return 'Redação'
+  return item.itemType
+}
+
+async function tickProfessorSupervisor({ force = false } = {}) {
+  const snap = await configRef().get()
+  const data = snap.exists ? snap.data() : {}
+
+  if (!data.enabled || !data.automationUserId) {
     return { skipped: true, reason: 'disabled' }
   }
-  if (cfg.itemsProcessedToday >= cfg.maxItemsPerDay) {
-    return { skipped: true, reason: 'daily_limit' }
+
+  if (!isSessionActive(data)) {
+    await patchSupervisorConfig({
+      phase: 'session_expired',
+      lastMessage: 'Sessão de 8h encerrada — clique Ativar para nova sessão.',
+      currentActivity: {
+        phase: 'session_expired',
+        message: 'Sessão de 8h encerrada',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    })
+    return { skipped: true, reason: 'session_expired' }
+  }
+
+  if (!force) {
+    const nextRun = data.nextRunAt?.toDate?.()
+    if (nextRun && nextRun.getTime() > Date.now()) {
+      const waitMin = Math.ceil((nextRun.getTime() - Date.now()) / 60000)
+      await patchSupervisorConfig({
+        phase: 'waiting_next',
+        lastMessage: `Próximo item em ~${waitMin} min`,
+      })
+      return { skipped: true, reason: 'waiting_interval', waitMin }
+    }
   }
 
   const { hasAvailableGeminiKey } = require('./generationJobResume')
-  const apiReady = await hasAvailableGeminiKey()
-  if (!apiReady) {
-    await patchSupervisorConfig({ lastMessage: 'API indisponível — aguardando chaves…' })
-    return { skipped: true, reason: 'api_unavailable' }
+  const itemPeek = await getDb()
+    .collection('professorSupervisorQueue')
+    .where('status', '==', 'pending')
+    .orderBy('priority', 'desc')
+    .orderBy('createdAt', 'asc')
+    .limit(1)
+    .get()
+  const nextItemType = itemPeek.empty ? null : itemPeek.docs[0].data().itemType
+  const needsApi = nextItemType !== 'topico_digitacao'
+
+  if (needsApi) {
+    const apiReady = await hasAvailableGeminiKey()
+    if (!apiReady) {
+      await updateSupervisorActivity({
+        phase: 'waiting_api',
+        message: 'API indisponível — aguardando chaves…',
+      })
+      return { skipped: true, reason: 'api_unavailable' }
+    }
   }
 
   const activeSnap = await getDb()
@@ -320,26 +491,56 @@ async function tickProfessorSupervisor() {
   }
 
   if (pendingSnap.empty) {
-    await patchSupervisorConfig({ lastMessage: 'Fila vazia — nada a fiscalizar agora.' })
+    await updateSupervisorActivity({
+      phase: 'idle',
+      message: 'Fila vazia — nada a fiscalizar agora.',
+    })
+    await scheduleNextRun(INTERVAL_MINUTES)
     return { skipped: true, reason: 'empty_queue' }
   }
 
   const item = await popNextQueueItem()
   if (!item) return { skipped: true, reason: 'pop_failed' }
 
-  const jobId = await spawnSupervisorJob(cfg.automationUserId, item.courseId, item)
-  await incrementDailyCounter()
-  await patchSupervisorConfig({
-    lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
-    lastMessage: `Fiscalizando ${item.itemType} — ${item.courseId}`,
+  const label = itemLabel(item)
+  const jobId = await spawnSupervisorJob(data.automationUserId, item.courseId, item)
+  await incrementSessionCounter()
+
+  await updateSupervisorActivity({
+    phase: 'running',
+    jobId,
+    itemType: item.itemType,
+    courseId: item.courseId,
+    label,
+    professorStep: 'iniciando',
+    message: `Fiscalizando: ${label}`,
+    progress: 5,
   })
 
-  return { started: true, jobId, itemId: item.id, itemType: item.itemType }
+  await patchSupervisorConfig({
+    lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastMessage: `Fiscalizando ${item.itemType} — ${label}`,
+  })
+
+  return { started: true, jobId, itemId: item.id, itemType: item.itemType, label }
+}
+
+function scheduleNextRunForItem(itemType) {
+  if (itemType === 'topico_digitacao') {
+    return scheduleNextRun(DIGITACAO_INTERVAL_MINUTES)
+  }
+  return scheduleNextRun(INTERVAL_MINUTES)
 }
 
 module.exports = {
+  SESSION_MS,
+  INTERVAL_MS,
+  isSessionActive,
   loadSupervisorConfig,
   patchSupervisorConfig,
+  updateSupervisorActivity,
+  scheduleNextRun,
+  scheduleNextRunForItem,
   buildQueueItems,
   popNextQueueItem,
   finishQueueItem,

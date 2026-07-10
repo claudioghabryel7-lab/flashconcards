@@ -113,8 +113,39 @@ function scriptCheckRedacao(config) {
   return { needsReview: issues.length > 0, issues, severity: 'low' }
 }
 
+function scriptCheckTopicStep(bundle, step) {
+  const full = scriptCheckTopicContent(bundle)
+  if (step === 'flashcards') {
+    const issues = full.issues.filter((i) => i.target === 'flashcards')
+    return {
+      needsReview: issues.length > 0 || (bundle.flashcards || []).length < 40,
+      issues,
+      severity: issues.some((i) => i.type === 'incomplete' || i.type === 'structure') ? 'high' : 'low',
+    }
+  }
+  if (step === 'material') {
+    const issues = full.issues.filter((i) => i.target === 'material')
+    return {
+      needsReview: issues.length > 0 || !bundle.material,
+      issues,
+      severity: !bundle.material ? 'high' : 'low',
+    }
+  }
+  if (step === 'questoes') {
+    const issues = full.issues.filter((i) => i.target === 'questoes')
+    const questoesList = bundle.questoes?.questoes || bundle.questoes?.questions || []
+    return {
+      needsReview: issues.length > 0 || !questoesList.length,
+      issues,
+      severity: !questoesList.length ? 'high' : 'low',
+    }
+  }
+  return full
+}
+
 module.exports = {
   scriptCheckTopicContent,
+  scriptCheckTopicStep,
   loadTopicBundle,
   scriptCheckVespera,
   scriptCheckRedacao,
