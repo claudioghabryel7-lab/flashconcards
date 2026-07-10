@@ -15,7 +15,7 @@ export default function CPFooter({ fullBleed = false }: CPFooterProps) {
           <CPLogo />
           <p className="mt-5 max-w-xs text-sm leading-relaxed text-cp-muted">
             <strong className="font-medium text-cp-text">Concurseiro Preditivo</strong> — plataforma
-            preditiva de estudos para concursos. IA calibrada no edital, na banca e no que cai na prova.
+            preditiva de estudos para concursos. I.A calibrada no edital, na banca e no que cai na prova.
           </p>
         </div>
 
