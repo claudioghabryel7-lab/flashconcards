@@ -6,9 +6,11 @@ const { corsMiddleware: cors } = require('./corsConfig')
 const {
   createEmailTransporter,
   buildBrandedEmailHtml,
+  buildEmailVerificationHtml,
   paragraphsToHtml,
   escapeHtml,
   verifyAdminRequest,
+  verifyAuthRequest,
   sendBrandedEmail,
   getEmailCredentials,
   DEFAULT_FROM_NAME,
@@ -134,88 +136,40 @@ exports.createUserAndSendEmail = functions.https.onRequest((req, res) => {
         hasActiveSubscription: true,
         subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        emailVerified: false,
       })
 
-      // Enviar email com credenciais
-      const transporter = createEmailTransporter()
-      
-      if (transporter) {
-        const mailOptions = {
-          from: `"Plegimentoria ALEGO" <${functions.config().email?.user || process.env.EMAIL_USER || 'flashconcards@gmail.com'}>`,
-          to: emailLower,
-          subject: '✅ Pagamento Confirmado - Suas Credenciais de Acesso',
-          html: `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="utf-8">
-              <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-                .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-                .credentials { background: white; border: 2px solid #667eea; border-radius: 8px; padding: 20px; margin: 20px 0; }
-                .credential-item { margin: 15px 0; }
-                .label { font-weight: bold; color: #667eea; }
-                .value { font-family: monospace; font-size: 16px; color: #333; background: #f5f5f5; padding: 10px; border-radius: 4px; margin-top: 5px; }
-                .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-                .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="header">
-                  <h1>🎉 Pagamento Confirmado!</h1>
-                  <p>Sua compra foi processada com sucesso</p>
-                </div>
-                <div class="content">
-                  <p>Olá, <strong>${name || emailLower.split('@')[0]}</strong>!</p>
-                  
-                  <p>Seu pagamento foi confirmado e sua conta foi criada automaticamente. Abaixo estão suas credenciais de acesso:</p>
-                  
-                  <div class="credentials">
-                    <div class="credential-item">
-                      <div class="label">📧 Email de Acesso:</div>
-                      <div class="value">${emailLower}</div>
-                    </div>
-                    <div class="credential-item">
-                      <div class="label">🔑 Senha:</div>
-                      <div class="value">${password}</div>
-                    </div>
-                  </div>
+      const displayName = name || emailLower.split('@')[0]
+      const loginUrl = 'https://www.flashconcards.com.br/login'
+      const html = buildBrandedEmailHtml({
+        title: 'Pagamento confirmado!',
+        subtitle: 'Sua conta foi criada — verifique o email no primeiro acesso',
+        bodyHtml: paragraphsToHtml([
+          `Olá, ${displayName}!`,
+          'Seu pagamento foi confirmado e sua conta foi criada automaticamente.',
+          `Email de acesso: ${emailLower}`,
+          `Senha temporária: ${password}`,
+          'No primeiro login, você precisará confirmar seu email com um código de 6 dígitos. Se não receber, verifique spam ou lixeira.',
+        ]),
+        highlight: 'Guarde suas credenciais com segurança. Você pode alterar a senha após o primeiro acesso.',
+        bullets: [
+          'Flashcards inteligentes de todas as matérias',
+          'FlashQuestões geradas por IA',
+          'Flash Mentor — assistente personalizado',
+          'Dashboard de progresso e ranking',
+        ],
+        ctaLabel: 'Acessar plataforma',
+        ctaUrl: loginUrl,
+        footerNote: 'Por segurança, não compartilhe sua senha com ninguém.',
+      })
 
-                  <div class="warning">
-                    <strong>⚠️ Importante:</strong> Guarde essas informações com segurança! Você pode alterar sua senha após o primeiro login.
-                  </div>
-
-                  <div style="text-align: center;">
-                    <a href="https://flashconcards.vercel.app/login" class="button">Acessar Plataforma Agora</a>
-                  </div>
-
-                  <p>Com sua conta, você terá acesso a:</p>
-                  <ul>
-                    <li>📚 Flashcards Inteligentes de todas as matérias</li>
-                    <li>❓ FlashQuestões geradas por IA</li>
-                    <li>🤖 Flash Mentor - Assistente de IA personalizado</li>
-                    <li>📊 Dashboard de progresso</li>
-                    <li>🏆 Ranking de alunos</li>
-                  </ul>
-
-                  <p>Se tiver dúvidas, entre em contato conosco!</p>
-                  
-                  <p>Atenciosamente,<br><strong>Equipe Plegimentoria ALEGO</strong></p>
-                </div>
-              </div>
-            </body>
-            </html>
-          `
-        }
-
-        await transporter.sendMail(mailOptions)
-        console.log(`Email enviado para ${emailLower}`)
-      } else {
-        console.warn('Transporter não configurado - email não enviado')
-      }
+      await sendBrandedEmail({
+        to: emailLower,
+        subject: 'Pagamento confirmado — suas credenciais de acesso',
+        html,
+        text: `Olá, ${displayName}! Pagamento confirmado. Email: ${emailLower} Senha: ${password}. Acesse: ${loginUrl}`,
+      })
+      console.log(`Email enviado para ${emailLower}`)
 
       // Retornar sucesso
       return res.status(200).json({
@@ -991,6 +945,129 @@ exports.sendPasswordResetEmail = functions.https.onRequest((req, res) => {
         error: error.message || 'Erro ao enviar email',
         details: error.message,
       })
+    }
+  })
+})
+
+exports.sendEmailVerificationCode = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method === 'OPTIONS') return res.status(204).send('')
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
+
+    try {
+      const decoded = await verifyAuthRequest(req)
+      const uid = decoded.uid
+      const email = (decoded.email || '').toLowerCase().trim()
+      if (!email) return res.status(400).json({ error: 'Email não encontrado na conta.' })
+
+      const userRecord = await admin.auth().getUser(uid)
+      if (userRecord.emailVerified) {
+        await admin.firestore().collection('users').doc(uid).set(
+          { emailVerified: true, email: email },
+          { merge: true },
+        )
+        return res.status(200).json({ success: true, alreadyVerified: true })
+      }
+
+      const codeRef = admin.firestore().collection('emailVerificationCodes').doc(uid)
+      const existing = await codeRef.get()
+      if (existing.exists) {
+        const lastSent = existing.data().lastSentAt?.toDate?.()
+        if (lastSent && Date.now() - lastSent.getTime() < 60 * 1000) {
+          return res.status(429).json({ error: 'Aguarde 1 minuto antes de reenviar o código.' })
+        }
+      }
+
+      const code = String(Math.floor(100000 + Math.random() * 900000))
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000)
+
+      await codeRef.set({
+        email,
+        code,
+        expiresAt,
+        attempts: 0,
+        lastSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+
+      const userDoc = await admin.firestore().collection('users').doc(uid).get()
+      const displayName = userDoc.data()?.displayName || email.split('@')[0]
+
+      const html = buildEmailVerificationHtml({ code, displayName, email })
+      await sendBrandedEmail({
+        to: email,
+        subject: `${code} — Confirme seu email | ${DEFAULT_FROM_NAME}`,
+        html,
+        text: `Seu código de verificação é ${code}. Válido por 30 minutos. Verifique também spam e lixeira.`,
+      })
+
+      await admin.firestore().collection('users').doc(uid).set(
+        { emailVerified: false, email },
+        { merge: true },
+      )
+
+      return res.status(200).json({ success: true, message: 'Código de verificação enviado.' })
+    } catch (error) {
+      console.error('Erro ao enviar código de verificação:', error)
+      const status = error.status || 500
+      return res.status(status).json({ error: error.message || 'Erro ao enviar código.' })
+    }
+  })
+})
+
+exports.verifyEmailCode = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method === 'OPTIONS') return res.status(204).send('')
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
+
+    try {
+      const decoded = await verifyAuthRequest(req)
+      const uid = decoded.uid
+      const code = String(req.body?.code || '').trim()
+      if (!/^\d{6}$/.test(code)) {
+        return res.status(400).json({ error: 'Informe o código de 6 dígitos.' })
+      }
+
+      const codeRef = admin.firestore().collection('emailVerificationCodes').doc(uid)
+      const snap = await codeRef.get()
+      if (!snap.exists) {
+        return res.status(404).json({ error: 'Nenhum código pendente. Solicite um novo envio.' })
+      }
+
+      const data = snap.data()
+      const expiresAt = data.expiresAt?.toDate?.() || data.expiresAt
+      if (!expiresAt || expiresAt.getTime() < Date.now()) {
+        await codeRef.delete().catch(() => {})
+        return res.status(400).json({ error: 'Código expirado. Solicite um novo envio.' })
+      }
+
+      if ((data.attempts || 0) >= 8) {
+        return res.status(429).json({ error: 'Muitas tentativas. Solicite um novo código.' })
+      }
+
+      if (data.code !== code) {
+        await codeRef.set(
+          { attempts: (data.attempts || 0) + 1 },
+          { merge: true },
+        )
+        return res.status(400).json({ error: 'Código incorreto. Tente novamente.' })
+      }
+
+      await admin.auth().updateUser(uid, { emailVerified: true })
+      await admin.firestore().collection('users').doc(uid).set(
+        {
+          emailVerified: true,
+          emailVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      )
+      await codeRef.delete()
+
+      return res.status(200).json({ success: true, message: 'Email verificado com sucesso!' })
+    } catch (error) {
+      console.error('Erro ao verificar código:', error)
+      const status = error.status || 500
+      return res.status(status).json({ error: error.message || 'Erro ao verificar código.' })
     }
   })
 })

@@ -18,6 +18,7 @@ import SharedFlashcardPIP from './components/SharedFlashcardPIP'
 const AdminPanel = lazy(() => import('./routes/AdminPanel'))
 const Dashboard = lazy(() => import('./routes/Dashboard'))
 const Login = lazy(() => import('./routes/Login'))
+const VerifyEmail = lazy(() => import('./routes/VerifyEmail'))
 const SetupUser = lazy(() => import('./routes/SetupUser'))
 const QuestionView = lazy(() => import('./routes/QuestionView'))
 const ResetPassword = lazy(() => import('./routes/ResetPassword'))
@@ -64,8 +65,9 @@ const BlankLayout = lazy(() => import('./components/blog/BlankLayout'))
 const ListaArtigos = lazy(() => import('./routes/ListaArtigos'))
 const PoliticaPrivacidade = lazy(() => import('./routes/PoliticaPrivacidade'))
 
-const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false }) => {
-  const { user, profile, loading, isAdmin } = useAuth()
+const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = false, skipEmailVerification = false }) => {
+  const { user, profile, loading, isAdmin, isEmailVerified } = useAuth()
+  const location = useLocation()
 
   if (loading) {
     return (
@@ -77,6 +79,10 @@ const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = 
 
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+
+  if (!skipEmailVerification && !isEmailVerified && !isAdmin && location.pathname !== '/verify-email') {
+    return <Navigate to="/verify-email" replace />
   }
 
   if (adminOnly && !isAdmin) {
@@ -92,7 +98,7 @@ const ProtectedRoute = ({ children, adminOnly = false, requireCourseSelection = 
 }
 
 const GuestOnlyRoute = ({ children }) => {
-  const { user, loading } = useAuth()
+  const { user, loading, isEmailVerified, isAdmin } = useAuth()
   const location = useLocation()
   const searchParams = new URLSearchParams(location.search)
   const trialToken = searchParams.get('trial')
@@ -108,6 +114,9 @@ const GuestOnlyRoute = ({ children }) => {
   // Se há token de trial, permitir acesso mesmo se usuário estiver autenticado
   // (para permitir que usuários já autenticados se registrem no trial)
   if (user && !trialToken) {
+    if (!isEmailVerified && !isAdmin) {
+      return <Navigate to="/verify-email" replace />
+    }
     return <Navigate to="/dashboard" replace />
   }
 
@@ -214,6 +223,14 @@ function App() {
               <GuestOnlyRoute>
                 <Login />
               </GuestOnlyRoute>
+            }
+          />
+          <Route
+            path="/verify-email"
+            element={
+              <ProtectedRoute skipEmailVerification>
+                <VerifyEmail />
+              </ProtectedRoute>
             }
           />
           <Route

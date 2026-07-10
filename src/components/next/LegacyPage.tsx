@@ -13,6 +13,7 @@ type LegacyPageProps = {
   guestOnly?: boolean
   publicPage?: boolean
   skipAutoHeader?: boolean
+  skipEmailVerification?: boolean
 }
 
 function Loading() {
@@ -30,8 +31,9 @@ export default function LegacyPage({
   guestOnly = false,
   publicPage = false,
   skipAutoHeader = false,
+  skipEmailVerification = false,
 }: LegacyPageProps) {
-  const { user, profile, loading, isAdmin } = useAuth()
+  const { user, profile, loading, isAdmin, isEmailVerified } = useAuth()
   const router = useRouter()
   const pathname = usePathname() || ''
   const meta = !skipAutoHeader ? getLegacyPageMeta(pathname) : null
@@ -40,12 +42,29 @@ export default function LegacyPage({
     if (loading) return
 
     if (guestOnly && user) {
-      router.replace('/dashboard')
+      if (!isEmailVerified && !isAdmin) {
+        router.replace('/verify-email')
+      } else {
+        router.replace('/dashboard')
+      }
       return
     }
 
     if (!publicPage && !guestOnly && !user) {
       router.replace('/login')
+      return
+    }
+
+    if (
+      !skipEmailVerification &&
+      !publicPage &&
+      !guestOnly &&
+      user &&
+      !isAdmin &&
+      !isEmailVerified &&
+      !pathname.startsWith('/verify-email')
+    ) {
+      router.replace('/verify-email')
       return
     }
 
@@ -57,12 +76,23 @@ export default function LegacyPage({
     if (requireCourseSelection && profile && profile.selectedCourseId === undefined) {
       router.replace('/select-course')
     }
-  }, [loading, user, isAdmin, profile, adminOnly, requireCourseSelection, guestOnly, publicPage, router])
+  }, [loading, user, isAdmin, isEmailVerified, profile, adminOnly, requireCourseSelection, guestOnly, publicPage, skipEmailVerification, pathname, router])
 
   if (loading) return <Loading />
 
   if (guestOnly && user) return null
   if (!publicPage && !guestOnly && !user) return null
+  if (
+    !skipEmailVerification &&
+    !publicPage &&
+    !guestOnly &&
+    user &&
+    !isAdmin &&
+    !isEmailVerified &&
+    !pathname.startsWith('/verify-email')
+  ) {
+    return null
+  }
   if (adminOnly && !isAdmin) return null
   if (requireCourseSelection && profile && profile.selectedCourseId === undefined) return null
 

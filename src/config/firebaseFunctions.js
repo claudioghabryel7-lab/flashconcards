@@ -30,6 +30,9 @@ export const FIREBASE_FUNCTIONS = {
 
   // Envio de email formatado pelo admin
   sendAdminBroadcastEmail: `${FIREBASE_FUNCTIONS_BASE_URL}/sendAdminBroadcastEmail`,
+
+  sendEmailVerificationCode: `${FIREBASE_FUNCTIONS_BASE_URL}/sendEmailVerificationCode`,
+  verifyEmailCode: `${FIREBASE_FUNCTIONS_BASE_URL}/verifyEmailCode`,
   
   // Função para gerar notícias de concursos automaticamente com IA
   generateConcursoNews: `${FIREBASE_FUNCTIONS_BASE_URL}/generateConcursoNews`,

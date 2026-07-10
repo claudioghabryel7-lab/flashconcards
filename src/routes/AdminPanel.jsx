@@ -76,6 +76,27 @@ const MATERIAS = [
 ]
 
 
+function isUserEmailVerified(user) {
+  return user.role === 'admin' || user.emailVerified === true
+}
+
+function formatUserLastAccess(user, userPresence) {
+  const ts = user.lastAccessAt || userPresence?.lastSeen
+  if (!ts) return 'Sem registro'
+  try {
+    const date = ts?.toDate
+      ? ts.toDate()
+      : ts?.seconds
+        ? new Date(ts.seconds * 1000)
+        : new Date(ts)
+    if (Number.isNaN(date.getTime())) return 'Sem registro'
+    return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+  } catch {
+    return 'Sem registro'
+  }
+}
+
+
 const AdminPanel = () => {
   const { isAdmin, user: currentAdminUser, profile } = useAuth()
   const [cards, setCards] = useState([])
@@ -2303,6 +2324,7 @@ REGRAS CRÍTICAS:
             favorites: [],
             createdAt: serverTimestamp(),
             deleted: false,
+            emailVerified: false,
           })
           
           // Fazer logout do usuário temporário
@@ -2340,12 +2362,12 @@ REGRAS CRÍTICAS:
         role: userForm.role || 'student',
         favorites: [],
         createdAt: serverTimestamp(),
-        // Garantir que deleted não existe ou está false
         deleted: false,
+        emailVerified: false,
       })
 
       setUserForm({ email: '', password: '', name: '', role: 'student' })
-      setMessage('✅ Usuário criado com sucesso! O novo aluno já pode fazer login.')
+      setMessage('✅ Usuário criado com sucesso! O aluno precisará verificar o email no primeiro login.')
     } catch (err) {
       console.error('Erro ao criar usuário:', err)
       if (err.code === 'auth/email-already-in-use') {
@@ -10830,6 +10852,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                   <div className="relative">
                     <p className="text-sm font-semibold text-alego-600 mb-4">
                       {users.length} usuários cadastrados ·{' '}
+                      {users.filter(isUserEmailVerified).length} com email verificado ·{' '}
+                      {users.filter((u) => !isUserEmailVerified(u)).length} pendentes ·{' '}
                       {countOnlineFromEntries(presence, { now: presenceNow })} online agora (tempo real)
                     </p>
                     <div className="mt-4 divide-y divide-slate-100">
@@ -10837,6 +10861,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                         const userPresence = presence[user.uid]
                         const isOnline = isPresenceOnline(userPresence, presenceNow)
                         const hasPresenceData = userPresence !== undefined
+                        const emailVerified = isUserEmailVerified(user)
+                        const lastAccessLabel = formatUserLastAccess(user, userPresence)
                         
                         return (
                           <div
@@ -10856,9 +10882,19 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                 {user.phone && (
                                   <p className="text-sm text-slate-600">📱 {user.phone}</p>
                                 )}
+                                <p className="mt-1 text-xs text-slate-500">
+                                  Último acesso: <span className="font-medium text-slate-600">{lastAccessLabel}</span>
+                                </p>
                                 <div className="mt-1 flex gap-2 flex-wrap">
                                   <span className="inline-block rounded-full bg-alego-100 px-2 py-1 text-xs font-semibold text-alego-600">
                                     {user.role === 'admin' ? 'Admin' : 'Aluno'}
+                                  </span>
+                                  <span className={`inline-block rounded-full px-2 py-1 text-xs font-semibold ${
+                                    emailVerified
+                                      ? 'bg-emerald-100 text-emerald-700'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {emailVerified ? '✓ Email verificado' : '⏳ Verificação pendente'}
                                   </span>
                                   <span className={`inline-block rounded-full px-2 py-1 text-xs font-semibold ${
                                     isOnline && hasPresenceData

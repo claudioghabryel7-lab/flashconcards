@@ -12,6 +12,7 @@ import {
   signOut,
   onAuthStateChanged,
   updateProfile,
+  reload,
 } from 'firebase/auth'
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
 import { auth, db, firebaseInitialized, initFirebase } from '../firebase/config'
@@ -22,6 +23,16 @@ const AuthContext = createContext(null)
 // Cache para perfil do usuário (TTL: 24 horas para melhor persistência)
 const PROFILE_CACHE_KEY = 'auth_profile_cache'
 const PROFILE_CACHE_TTL = 24 * 60 * 60 * 1000 // 24 horas
+
+function normalizeProfileData(data, firebaseUser) {
+  const isAdminEmail = firebaseUser.email?.toLowerCase() === 'claudioghabryel.cg@gmail.com'
+  const role = data.role || (isAdminEmail ? 'admin' : 'student')
+  const emailVerified =
+    role === 'admin' || isAdminEmail
+      ? true
+      : data.emailVerified === true || firebaseUser.emailVerified === true
+  return { ...data, role, emailVerified }
+}
 
 const getCachedProfile = (uid) => {
   try {
@@ -97,7 +108,10 @@ export const AuthProvider = ({ children }) => {
             const snap = await getDoc(userRef)
             
             if (snap.exists()) {
-              const data = { uid: firebaseUser.uid, email: firebaseUser.email, ...snap.data() }
+              const data = normalizeProfileData(
+                { uid: firebaseUser.uid, email: firebaseUser.email, ...snap.data() },
+                firebaseUser,
+              )
               
               // Verificar se o usuário foi deletado
               if (data.deleted === true) {
@@ -126,7 +140,8 @@ export const AuthProvider = ({ children }) => {
               }
               
               setProfile(data)
-              setCachedProfile(firebaseUser.uid, data) // Salvar no cache
+              setCachedProfile(firebaseUser.uid, data)
+              setDoc(userRef, { lastAccessAt: serverTimestamp() }, { merge: true }).catch(() => {})
             } else {
               // Verificar se o usuário foi deletado antes de recriar
               const deletedUserRef = doc(db, 'deletedUsers', firebaseUser.uid)
@@ -149,14 +164,18 @@ export const AuthProvider = ({ children }) => {
               }
               
               // Criar perfil se não existir e não foi deletado
-              const newProfile = {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email,
-                displayName: firebaseUser.displayName || firebaseUser.email,
-                role: isAdminEmail ? 'admin' : 'student',
-                favorites: [],
-                createdAt: serverTimestamp(),
-              }
+              const newProfile = normalizeProfileData(
+                {
+                  uid: firebaseUser.uid,
+                  email: firebaseUser.email,
+                  displayName: firebaseUser.displayName || firebaseUser.email,
+                  role: isAdminEmail ? 'admin' : 'student',
+                  favorites: [],
+                  emailVerified: isAdminEmail,
+                  createdAt: serverTimestamp(),
+                },
+                firebaseUser,
+              )
               try {
                 await setDoc(userRef, newProfile)
                 setProfile(newProfile)
@@ -210,7 +229,11 @@ export const AuthProvider = ({ children }) => {
       userRef, 
       async (snap) => {
         if (snap.exists()) {
-          let data = { uid: user.uid, email: user.email, ...snap.data() }
+          const fbUser = auth?.currentUser
+          let data = normalizeProfileData(
+            { uid: user.uid, email: user.email, ...snap.data() },
+            fbUser || { email: user.email },
+          )
           
           // Verificar se o usuário foi deletado
           if (data.deleted === true) {
@@ -392,6 +415,7 @@ export const AuthProvider = ({ children }) => {
         displayName: displayName || emailLower,
         role: 'student',
         favorites: [],
+        emailVerified: false,
         createdAt: serverTimestamp(),
       })
 
@@ -451,16 +475,44 @@ export const AuthProvider = ({ children }) => {
     return role === 'admin'
   }, [profile?.role, user?.email])
 
+  const isEmailVerified = useMemo(() => {
+    if (isAdmin) return true
+    return profile?.emailVerified === true
+  }, [isAdmin, profile?.emailVerified])
+
+  const refreshProfile = async () => {
+    if (!auth?.currentUser || !db) return null
+    try {
+      await reload(auth.currentUser)
+      const userRef = doc(db, 'users', auth.currentUser.uid)
+      const snap = await getDoc(userRef)
+      if (snap.exists()) {
+        const data = normalizeProfileData(
+          { uid: auth.currentUser.uid, email: auth.currentUser.email, ...snap.data() },
+          auth.currentUser,
+        )
+        setProfile(data)
+        setCachedProfile(auth.currentUser.uid, data)
+        return data
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar perfil:', err)
+    }
+    return null
+  }
+
   const value = {
     user,
     profile,
     isAdmin,
+    isEmailVerified,
     favorites: profile?.favorites || [],
     loading,
     login,
     register,
     logout,
     updateFavorites,
+    refreshProfile,
   }
 
   return createElement(AuthContext.Provider, { value }, children)

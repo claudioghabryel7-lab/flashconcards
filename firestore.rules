@@ -757,6 +757,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /emailVerificationCodes/{uid} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

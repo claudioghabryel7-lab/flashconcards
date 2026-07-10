@@ -138,8 +138,7 @@ const Login = () => {
           }
         }
 
-        // Redirecionar para dashboard
-        navigate('/dashboard')
+        navigate('/verify-email')
       } else {
         // Login
         const loggedInUser = await login(form.email, form.password)
@@ -189,8 +188,7 @@ const Login = () => {
           }
         }
 
-        // Redirecionar para seleção de curso ou flashcards
-      navigate('/select-course')
+        navigate('/verify-email')
       }
     } catch (err) {
       console.error('Erro no login/cadastro:', err)
