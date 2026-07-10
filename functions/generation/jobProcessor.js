@@ -378,9 +378,16 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
 }
 
 const { processAdminEditalVerticalizado } = require('./adminEditalProcessor')
+const { processGuiaMentoradoAutomation } = require('./guiaMentoradoAutomation')
+
 async function processGenerationJob(userId, jobId, jobData) {
   const { courseId, jobType, serverPayload } = jobData
-  if (!serverPayload?.prompt && jobType !== 'flashcards_topico' && jobType !== 'admin_edital_verticalizado') {
+  const noPromptJobs = [
+    'flashcards_topico',
+    'admin_edital_verticalizado',
+    'guia_mentorado_automation',
+  ]
+  if (!serverPayload?.prompt && !noPromptJobs.includes(jobType)) {
     throw new Error('Payload de geração inválido.')
   }
   if (jobType === 'flashcards_topico' && !serverPayload?.savePlan?.flashcardMeta) {
@@ -388,6 +395,9 @@ async function processGenerationJob(userId, jobId, jobData) {
   }
   if (jobType === 'admin_edital_verticalizado' && !serverPayload?.editalText) {
     throw new Error('Texto do edital ausente.')
+  }
+  if (jobType === 'guia_mentorado_automation' && !serverPayload?.topics?.length) {
+    throw new Error('Lista de tópicos ausente para automação do Guia Mentorado.')
   }
   if (!courseId) {
     throw new Error('courseId ausente no job.')
@@ -421,6 +431,25 @@ async function processGenerationJob(userId, jobId, jobData) {
     case 'admin_edital_verticalizado':
       outcome = await processAdminEditalVerticalizado(userId, jobId, courseId, serverPayload)
       break
+    case 'guia_mentorado_automation':
+      outcome = await processGuiaMentoradoAutomation(
+        userId,
+        jobId,
+        courseId,
+        serverPayload,
+        (uid, jid, patch) => updateJob(uid, jid, patch),
+      )
+      await updateJob(userId, jobId, {
+        status: 'done',
+        progress: 100,
+        message:
+          outcome.errors?.length > 0
+            ? `Concluído com ${outcome.errors.length} aviso(s) em alguns tópicos`
+            : `Automação concluída — ${outcome.totalTopics} tópico(s) processado(s)`,
+        resultRef: null,
+        finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      return outcome
     case 'admin_materia_revisada': {
       const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
       await updateJob(userId, jobId, { progress: 20, message: 'Gerando matéria revisada…' })

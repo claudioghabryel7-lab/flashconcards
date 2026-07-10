@@ -15,9 +15,15 @@ import { useAuth } from '../hooks/useAuth'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import { hasPurchasedCourse } from '../utils/courseAccess'
 import MentoradoCalendar from '../components/guiaMentorado/MentoradoCalendar'
+import { DEFAULT_PLANNING_DAYS } from '../constants/guiaMentorado'
+import {
+  isUsingDefaultPlanningWindow,
+  resolvePlanningEndDate,
+  startMentoradoContentAutomation,
+} from '../services/guiaMentoradoAutomationService'
 
 const GuiaMentorado = () => {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const navigate = useNavigate()
   
   const [currentMonth, setCurrentMonth] = useState(dayjs())
@@ -30,6 +36,7 @@ const GuiaMentorado = () => {
     hasTAF: false,
     tafExercicios: [],
     hasRedacao: false,
+    autoGerarConteudo: false,
   })
   const [isAdmin, setIsAdmin] = useState(false)
   const [showConfigModal, setShowConfigModal] = useState(false)
@@ -100,7 +107,14 @@ const GuiaMentorado = () => {
         const configDoc = await getDoc(configRef)
         
         if (configDoc.exists()) {
-          setConfig(configDoc.data())
+          const data = configDoc.data()
+          setConfig({
+            dataProva: data.dataProva || null,
+            hasTAF: Boolean(data.hasTAF),
+            tafExercicios: data.tafExercicios || [],
+            hasRedacao: Boolean(data.hasRedacao),
+            autoGerarConteudo: Boolean(data.autoGerarConteudo),
+          })
         }
       } catch (error) {
         console.error('Erro ao carregar configuração:', error)
@@ -171,25 +185,30 @@ const GuiaMentorado = () => {
   
   // Gerar cronograma estratégico com IA
   const generateCronograma = async () => {
-    if (!config.dataProva || !editalVerticalizado) {
-      alert('Configure a data da prova e tenha um edital verticalizado.')
+    if (!editalVerticalizado) {
+      alert('É necessário ter um edital verticalizado para gerar o cronograma.')
       return
     }
+
+    const planningEnd = resolvePlanningEndDate(config)
+    const today = dayjs().startOf('day')
+    const daysUntilProva = planningEnd.diff(today, 'day')
+
+    if (daysUntilProva <= 0) {
+      alert('O período de planejamento deve ser no futuro.')
+      return
+    }
+
+    const usingDefaultWindow = isUsingDefaultPlanningWindow(config)
     
     setGenerating(true)
     
     try {
-      const provaDate = dayjs(config.dataProva)
-      const today = dayjs()
-      const daysUntilProva = provaDate.diff(today, 'day')
-      
-      if (daysUntilProva <= 0) {
-        alert('A data da prova deve ser no futuro.')
-        setGenerating(false)
-        return
-      }
-      
-      setMessage('🤖 Gerando cronograma estratégico com IA...')
+      setMessage(
+        usingDefaultWindow
+          ? `🤖 Gerando cronograma para ${DEFAULT_PLANNING_DAYS} dias (sem data da prova definida)…`
+          : '🤖 Gerando cronograma estratégico com IA…',
+      )
       
       // Preparar dados do edital para a IA
       const disciplinas = editalVerticalizado.disciplinas || []
@@ -203,8 +222,9 @@ const GuiaMentorado = () => {
       
       // Prompt para a IA gerar cronograma estratégico
       const prompt = `DATA ATUAL: ${today.format('DD/MM/YYYY')}
-DATA DA PROVA: ${provaDate.format('DD/MM/YYYY')}
-DIAS ATÉ A PROVA: ${daysUntilProva}
+DATA FINAL DO PLANEJAMENTO: ${planningEnd.format('DD/MM/YYYY')}
+${config.dataProva && !usingDefaultWindow ? `DATA DA PROVA: ${dayjs(config.dataProva).format('DD/MM/YYYY')}` : `MODO SEM DATA DA PROVA: planeje exatamente ${DEFAULT_PLANNING_DAYS} dias de estudo a partir de hoje`}
+DIAS DE PLANEJAMENTO: ${daysUntilProva}
 TEM TAF: ${config.hasTAF ? 'Sim' : 'Não'}
 TEM REDAÇÃO: ${config.hasRedacao ? 'Sim' : 'Não'}
 EXERCÍCIOS TAF: ${config.tafExercicios?.join(', ') || 'Nenhum'}
@@ -274,7 +294,7 @@ CRÍTICO - NÃO CORTAR O JSON:
 
 IMPORTANTE:
 - Comece em ${today.format('DD/MM/YYYY')}
-- Termine em ${provaDate.format('DD/MM/YYYY')}
+- Termine em ${planningEnd.format('DD/MM/YYYY')}
 - JSON deve ser válido e completo
 - Use aspas duplas
 - Não adicione comentários no JSON
@@ -429,8 +449,35 @@ IMPORTANTE:
       }
       
       setMessage(`✅ Cronograma gerado com sucesso! ${monthsToSave.size} meses planejados.`)
+
+      if (config.autoGerarConteudo) {
+        if (!user?.uid) {
+          setMessage(
+            '✅ Cronograma salvo. Faça login como admin para disparar a geração automática de conteúdos.',
+          )
+        } else {
+          setMessage('🚀 Cronograma salvo. Iniciando geração automática de flashcards, material e questões…')
+          try {
+            const { topicCount } = await startMentoradoContentAutomation({
+              userId: user.uid,
+              courseId: selectedCourseId,
+              cronogramaEntries: cronogramaIA.cronograma,
+              editalVerticalizado,
+              autoPublish: true,
+            })
+            setMessage(
+              `✅ Cronograma pronto! Automação iniciada para ${topicCount} tópico(s). Acompanhe o banner de geração.`,
+            )
+          } catch (autoErr) {
+            console.error('Erro na automação do Guia Mentorado:', autoErr)
+            setMessage(
+              `✅ Cronograma salvo, mas a automação falhou: ${autoErr.message || 'erro desconhecido'}`,
+            )
+          }
+        }
+      }
       
-      setTimeout(() => setMessage(''), 3000)
+      setTimeout(() => setMessage(''), 8000)
     } catch (error) {
       console.error('Erro ao gerar cronograma:', error)
       alert('Erro ao gerar cronograma: ' + error.message)
@@ -459,7 +506,7 @@ IMPORTANTE:
               </button>
               <button
                 onClick={generateCronograma}
-                disabled={generating || !config.dataProva || !editalVerticalizado}
+                disabled={generating || !editalVerticalizado}
                 className="cp-btn-primary !text-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <SparklesIcon className="h-4 w-4" />
@@ -493,7 +540,7 @@ IMPORTANTE:
         </select>
       </div>
 
-      {config.dataProva && (
+      {config.dataProva ? (
         <div className="cp-card flex items-center gap-4 !rounded-2xl p-4">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-cp-border bg-cp-surface">
             <CalendarIcon className="h-5 w-5 text-[var(--cp-accent-4)]" />
@@ -510,12 +557,31 @@ IMPORTANTE:
             </p>
           </div>
         </div>
+      ) : (
+        <div className="cp-card flex items-center gap-4 !rounded-2xl border-dashed p-4">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-cp-border bg-cp-surface">
+            <CalendarIcon className="h-5 w-5 text-cp-muted" />
+          </div>
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-wide text-cp-muted">Planejamento padrão</p>
+            <p className="text-sm text-cp-text">
+              Sem data da prova — o cronograma usará <strong>{DEFAULT_PLANNING_DAYS} dias</strong> a partir de hoje.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isAdmin && config.autoGerarConteudo && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
+          Automação ativa: ao gerar o cronograma, o sistema cria e libera flashcards, material (Estudar) e questões
+          de cada tópico automaticamente no servidor.
+        </div>
       )}
 
       <MentoradoCalendar
         currentMonth={currentMonth}
         cronograma={cronograma}
-        examDate={config.dataProva}
+        examDate={config.dataProva || resolvePlanningEndDate(config).format('YYYY-MM-DD')}
         loading={calendarLoading}
         onPreviousMonth={previousMonth}
         onNextMonth={nextMonth}
@@ -539,14 +605,39 @@ IMPORTANTE:
               <div className="space-y-4">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-cp-muted">
-                    Data da Prova *
+                    Data da Prova (opcional)
                   </label>
                   <input
                     type="date"
                     value={config.dataProva || ''}
-                    onChange={(e) => setConfig({ ...config, dataProva: e.target.value })}
+                    onChange={(e) => setConfig({ ...config, dataProva: e.target.value || null })}
                     className="w-full rounded-lg border border-cp-border bg-cp-surface px-4 py-2 text-cp-text focus:border-[var(--cp-accent)] focus:outline-none"
                   />
+                  <p className="mt-1 text-xs text-cp-muted">
+                    Se vazio, o cronograma usa {DEFAULT_PLANNING_DAYS} dias a partir de hoje.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-cp-border bg-cp-surface/60 p-4">
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(config.autoGerarConteudo)}
+                      onChange={(e) =>
+                        setConfig({ ...config, autoGerarConteudo: e.target.checked })
+                      }
+                      className="mt-1 rounded"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-cp-text">
+                        Gerar e liberar conteúdos automaticamente
+                      </span>
+                      <span className="mt-1 block text-xs text-cp-muted">
+                        Para cada tópico do cronograma, gera flashcards, material de estudo e questões (nível 1)
+                        e publica como disponível — sem clicar tópico por tópico no admin.
+                      </span>
+                    </span>
+                  </label>
                 </div>
                 
                 <div className="flex items-center gap-2">
