@@ -383,7 +383,7 @@ SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A G
 Gere conteúdo de véspera de prova com:
 - Raio-X de Probabilidade específico
 - Revisão Turbo com cronologia real e precisa
-- Pegadinhas reais da banca
+- Pegadinhas reais da banca.
 - Questões preditivas fundamentadas estritamente na lei real vigente
 - Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
 
