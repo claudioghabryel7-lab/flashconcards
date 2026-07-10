@@ -1,0 +1,148 @@
+/**
+ * Estilos para exportação PDF — força tema claro e layout estável
+ * (igual ao que o usuário vê no site em modo claro).
+ */
+
+.material-pdf-capture-root {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.material-pdf-capture-root * {
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+/* Neutraliza dark mode no clone de exportação */
+.material-pdf-capture-root .dark\:bg-slate-900,
+.material-pdf-capture-root .dark\:bg-slate-800,
+.material-pdf-capture-root .dark\:bg-slate-700,
+.material-pdf-capture-root .dark\:bg-slate-700\/50,
+.material-pdf-capture-root .dark\:from-orange-900\/20,
+.material-pdf-capture-root .dark\:to-amber-900\/20,
+.material-pdf-capture-root .dark\:from-blue-900\/20,
+.material-pdf-capture-root .dark\:to-indigo-900\/20,
+.material-pdf-capture-root .dark\:bg-red-900\/20,
+.material-pdf-capture-root .dark\:bg-blue-900\/20,
+.material-pdf-capture-root .dark\:bg-green-900\/30 {
+  background-color: inherit !important;
+}
+
+.material-pdf-capture-root .text-slate-900,
+.material-pdf-capture-root .dark\:text-slate-100,
+.material-pdf-capture-root h1,
+.material-pdf-capture-root h2,
+.material-pdf-capture-root h3,
+.material-pdf-capture-root h4,
+.material-pdf-capture-root h5 {
+  color: #0f172a !important;
+}
+
+.material-pdf-capture-root .text-slate-700,
+.material-pdf-capture-root .text-slate-600,
+.material-pdf-capture-root .dark\:text-slate-300,
+.material-pdf-capture-root .dark\:text-slate-400 {
+  color: #334155 !important;
+}
+
+.material-pdf-capture-root .bg-gradient-to-r.from-orange-50 {
+  background: linear-gradient(to right, #fff7ed, #fef3c7) !important;
+}
+
+.material-pdf-capture-root .from-orange-50.to-amber-50,
+.material-pdf-capture-root [class*='from-orange-50'] {
+  background: linear-gradient(to right, #fff7ed, #fef3c7) !important;
+  border-radius: 12px;
+}
+
+.material-pdf-capture-root [class*='from-blue-50'] {
+  background: linear-gradient(to right, #eff6ff, #e0e7ff) !important;
+  border-radius: 12px;
+}
+
+.material-pdf-capture-root .bg-red-50,
+.material-pdf-capture-root [class*='bg-red-50'] {
+  background: #fff1f2 !important;
+  border-radius: 12px;
+}
+
+.material-pdf-capture-root .bg-slate-50,
+.material-pdf-capture-root [class*='bg-slate-50'] {
+  background: #f8fafc !important;
+}
+
+.material-pdf-capture-root .bg-green-100,
+.material-pdf-capture-root [class*='bg-green-100'] {
+  background: #dcfce7 !important;
+  border: 2px solid #22c55e !important;
+}
+
+.material-pdf-capture-root .bg-white,
+.material-pdf-capture-root [class*='bg-white'] {
+  background: #ffffff !important;
+}
+
+.material-pdf-capture-root .ia-content-enhanced strong,
+.material-pdf-capture-root .ia-content-enhanced b {
+  background: linear-gradient(to right, #eff6ff, #e0e7ff) !important;
+  border-left: 4px solid #3b82f6 !important;
+  color: #0f172a !important;
+}
+
+.material-pdf-capture-root .ia-content-enhanced h2 {
+  background: #f8fafc !important;
+  border-left: 4px solid #3b82f6 !important;
+  color: #0f172a !important;
+}
+
+.material-pdf-capture-root .ia-content-enhanced thead {
+  background: linear-gradient(to right, #2563eb, #4f46e5) !important;
+}
+
+.material-pdf-capture-root .ia-content-enhanced th {
+  color: #ffffff !important;
+}
+
+.material-pdf-capture-root .ia-content-enhanced td {
+  color: #334155 !important;
+  background: #ffffff !important;
+}
+
+.material-pdf-capture-root .text-red-600,
+.material-pdf-capture-root .dark\:text-red-400 {
+  color: #be123c !important;
+}
+
+.material-pdf-capture-root .text-blue-600,
+.material-pdf-capture-root .dark\:text-blue-300,
+.material-pdf-capture-root .text-blue-700,
+.material-pdf-capture-root .dark\:text-blue-400 {
+  color: #1d4ed8 !important;
+}
+
+.material-pdf-capture-root .text-orange-600 {
+  color: #ea580c !important;
+}
+
+.material-pdf-capture-root .text-alego-600 {
+  color: #7c3aed !important;
+}
+
+.material-pdf-capture-root .border-alego-500 {
+  border-color: #7c3aed !important;
+}
+
+@media print {
+  .material-pdf-export,
+  .material-pdf-capture-root {
+    background: #fff !important;
+    max-width: 100% !important;
+  }
+
+  .material-pdf-export [data-pdf-ignore],
+  .material-pdf-capture-root [data-pdf-ignore] {
+    display: none !important;
+  }
+}

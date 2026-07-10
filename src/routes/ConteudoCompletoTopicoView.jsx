@@ -501,7 +501,10 @@ ONDE:
     setDownloadingPdf(true)
     try {
       const fileName = `${conteudo.materia || 'material'}-${conteudo.titulo || 'topico'}.pdf`
-      await downloadMaterialPdf(conteudo, fileName, { courseName })
+      await downloadMaterialPdf(conteudo, fileName, {
+        courseName,
+        element: materialExportRef.current,
+      })
     } catch (error) {
       console.error('Erro ao gerar PDF:', error)
       alert('Erro ao gerar PDF. Tente novamente.')

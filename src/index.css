@@ -1,6 +1,7 @@
 @import './styles/design-system.css';
 @import './styles/stark-design-system.css';
 @import './styles/responsive-layout.css';
+@import './styles/material-pdf-export.css';
 
 @tailwind base;
 @tailwind components;

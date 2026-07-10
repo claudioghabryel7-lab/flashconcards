@@ -42,7 +42,7 @@ function renderMaterialPreview(material) {
   if (!material) return null
 
   return (
-    <div className="space-y-6 text-slate-800">
+    <div className="material-pdf-export space-y-6 text-slate-800">
       <header>
         <h2 className="text-2xl font-black text-emerald-900">{material.titulo}</h2>
         <p className="mt-2 text-sm text-slate-600">
@@ -130,6 +130,7 @@ export default function AdminConcursoMaterial() {
   const [selectedId, setSelectedId] = useState(null)
   const [savedMaterials, setSavedMaterials] = useState([])
   const previewRef = useRef(null)
+  const previewContentRef = useRef(null)
 
   useEffect(() => {
     const q = query(collection(db, 'adminMateriaisConcurso'), orderBy('createdAt', 'desc'))
@@ -245,7 +246,9 @@ export default function AdminConcursoMaterial() {
 
     try {
       const fileName = `${preview.concurso || 'material'}-${preview.cargo || 'cargo'}.pdf`
-      await downloadMaterialPdf(preview, fileName)
+      await downloadMaterialPdf(preview, fileName, {
+        element: previewContentRef.current,
+      })
       setFeedback('✅ PDF baixado com todo o conteúdo.')
     } catch (err) {
       console.error(err)
@@ -259,7 +262,7 @@ export default function AdminConcursoMaterial() {
     if (!preview) return
 
     try {
-      printConcursoMaterial(preview)
+      printConcursoMaterial(preview, { element: previewContentRef.current })
       setFeedback('🖨️ Na janela de impressão, escolha "Salvar como PDF" para versão formatada.')
     } catch (err) {
       console.error(err)
@@ -448,7 +451,7 @@ export default function AdminConcursoMaterial() {
             className="max-h-[70vh] overflow-y-auto rounded-xl border border-slate-100 bg-white p-4 dark:border-slate-600 dark:bg-slate-900"
           >
             {preview ? (
-              renderMaterialPreview(preview)
+              <div ref={previewContentRef}>{renderMaterialPreview(preview)}</div>
             ) : (
               <p className="text-sm text-slate-500">
                 Gere um material ou selecione um item da lista ao lado para visualizar e baixar.
