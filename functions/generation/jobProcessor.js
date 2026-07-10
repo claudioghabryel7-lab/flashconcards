@@ -379,6 +379,7 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
 
 const { processAdminEditalVerticalizado } = require('./adminEditalProcessor')
 const { processGuiaMentoradoAutomation } = require('./guiaMentoradoAutomation')
+const { processGuiaMentoradoCronograma } = require('./guiaMentoradoCronograma')
 
 async function processGenerationJob(userId, jobId, jobData) {
   const { courseId, jobType, serverPayload } = jobData
@@ -386,6 +387,7 @@ async function processGenerationJob(userId, jobId, jobData) {
     'flashcards_topico',
     'admin_edital_verticalizado',
     'guia_mentorado_automation',
+    'guia_mentorado_cronograma',
   ]
   if (!serverPayload?.prompt && !noPromptJobs.includes(jobType)) {
     throw new Error('Payload de geração inválido.')
@@ -395,6 +397,9 @@ async function processGenerationJob(userId, jobId, jobData) {
   }
   if (jobType === 'admin_edital_verticalizado' && !serverPayload?.editalText) {
     throw new Error('Texto do edital ausente.')
+  }
+  if (jobType === 'guia_mentorado_cronograma' && !serverPayload?.config) {
+    throw new Error('Configuração ausente para gerar cronograma do Guia Mentorado.')
   }
   if (jobType === 'guia_mentorado_automation' && !serverPayload?.topics?.length) {
     throw new Error('Lista de tópicos ausente para automação do Guia Mentorado.')
@@ -446,6 +451,24 @@ async function processGenerationJob(userId, jobId, jobData) {
           outcome.errors?.length > 0
             ? `Concluído com ${outcome.errors.length} aviso(s) em alguns tópicos`
             : `Automação concluída — ${outcome.totalTopics} tópico(s) processado(s)`,
+        resultRef: null,
+        finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      return outcome
+    case 'guia_mentorado_cronograma':
+      outcome = await processGuiaMentoradoCronograma(
+        userId,
+        jobId,
+        courseId,
+        serverPayload,
+        (uid, jid, patch) => updateJob(uid, jid, patch),
+      )
+      await updateJob(userId, jobId, {
+        status: 'done',
+        progress: 100,
+        message: outcome.autoGerarConteudo
+          ? `Cronograma pronto (${outcome.totalDays} dias). Conteúdos do dia iniciados.`
+          : `Cronograma gerado — ${outcome.totalDays} dias em ${outcome.monthsCount} mês(es).`,
         resultRef: null,
         finishedAt: admin.firestore.FieldValue.serverTimestamp(),
       })

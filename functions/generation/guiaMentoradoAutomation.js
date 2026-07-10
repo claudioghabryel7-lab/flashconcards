@@ -313,9 +313,12 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
   const total = topics.length
   const errors = []
 
+  const targetDate = serverPayload?.targetDate || null
+  const dateLabel = targetDate ? ` (${targetDate})` : ''
+
   await updateJob(userId, jobId, {
     progress: 2,
-    message: `Automação iniciada — ${total} tópico(s)`,
+    message: `Automação do dia${dateLabel} — ${total} tópico(s)`,
   })
 
   for (let i = 0; i < topics.length; i += 1) {

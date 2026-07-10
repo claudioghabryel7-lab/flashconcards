@@ -1149,8 +1149,20 @@ exports.sendAdminBroadcastEmail = functions.https.onRequest((req, res) => {
   })
 })
 
-// Função agendada para expirar usuários trial automaticamente
-// Roda diariamente às 00:00 UTC (21:00 horário de Brasília)
+const { MENTORADO_DAILY_RELEASE_HOUR } = require('./generation/guiaMentoradoShared')
+const { runDailyMentoradoAutomationForAllCourses } = require('./generation/guiaMentoradoDaily')
+
+/** Libera conteúdos do Guia Mentorado dia a dia (só matérias do dia). */
+exports.mentoradoDailyContentRelease = functions.pubsub
+  .schedule(`0 ${MENTORADO_DAILY_RELEASE_HOUR} * * *`)
+  .timeZone('America/Sao_Paulo')
+  .onRun(async () => {
+    console.log('[mentoradoDailyContentRelease] Iniciando liberação diária…')
+    const results = await runDailyMentoradoAutomationForAllCourses()
+    console.log('[mentoradoDailyContentRelease] Concluído:', results.length, 'curso(s)')
+    return null
+  })
+
 exports.expireTrialUsers = functions.pubsub.schedule('0 0 * * *').timeZone('America/Sao_Paulo').onRun(async (context) => {
   console.log('Iniciando verificação de usuários trial expirados...')
   

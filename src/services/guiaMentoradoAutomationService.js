@@ -1,8 +1,8 @@
 import dayjs from 'dayjs'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
-import { DEFAULT_PLANNING_DAYS } from '../constants/guiaMentorado'
-import { extractUniqueTopicsFromCronograma } from '../utils/guiaMentoradoTopics'
+import { DEFAULT_PLANNING_DAYS, MENTORADO_DAILY_RELEASE_HOUR } from '../constants/guiaMentorado'
+import { extractTopicsFromCronogramaDay } from '../utils/guiaMentoradoTopics'
 import {
   buildMentoradoConteudoPrompt,
   buildMentoradoFlashcardMeta,
@@ -11,7 +11,7 @@ import {
 import { startBackgroundGeneration } from './aiGenerationRunner'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 
-/** Data final do planejamento: data da prova ou hoje + 60 dias. */
+/** Data final do planejamento: data da prova ou hoje + 90 dias. */
 export function resolvePlanningEndDate(config = {}) {
   const today = dayjs().startOf('day')
   if (config.dataProva) {
@@ -107,21 +107,51 @@ function buildTopicPayloads(topic, context, autoPublish) {
 }
 
 /**
- * Inicia geração automática de flashcards + material + questões para todos os tópicos do cronograma.
+ * Inicia geração do cronograma na nuvem (admin pode fechar o site).
  */
-export async function startMentoradoContentAutomation({
+export async function startGuiaMentoradoCronogramaGeneration({ userId, courseId, config }) {
+  if (!userId) throw new Error('Usuário não autenticado.')
+  if (!courseId) throw new Error('Curso não selecionado.')
+
+  const { jobId, promise } = await startBackgroundGeneration({
+    userId,
+    courseId,
+    jobType: 'guia_mentorado_cronograma',
+    topicKey: null,
+    metadata: {
+      autoGerarConteudo: Boolean(config?.autoGerarConteudo),
+    },
+    runOnServer: true,
+    serverPayload: {
+      courseId,
+      config,
+    },
+  })
+
+  return { jobId, promise }
+}
+
+/**
+ * Inicia geração automática apenas dos tópicos de um dia do cronograma.
+ */
+export async function startMentoradoDayContentAutomation({
   userId,
   courseId,
-  cronogramaEntries,
+  targetDate,
+  dayEntry,
   editalVerticalizado,
   autoPublish = true,
 }) {
   if (!userId) throw new Error('Usuário não autenticado.')
   if (!courseId) throw new Error('Curso não selecionado.')
+  if (!targetDate) throw new Error('Data do dia não informada.')
 
-  const topics = extractUniqueTopicsFromCronograma(cronogramaEntries, editalVerticalizado)
+  const topics = extractTopicsFromCronogramaDay(
+    { ...dayEntry, data: targetDate },
+    editalVerticalizado,
+  )
   if (!topics.length) {
-    throw new Error('Nenhum tópico válido encontrado no cronograma para automação.')
+    throw new Error('Nenhum tópico válido encontrado para este dia.')
   }
 
   const baseContext = await loadMentoradoAutomationContext(courseId)
@@ -139,15 +169,19 @@ export async function startMentoradoContentAutomation({
     topicKey: null,
     metadata: {
       topicCount: topicPayloads.length,
+      targetDate,
       autoPublish,
     },
     runOnServer: true,
     serverPayload: {
       courseId,
       autoPublish,
+      targetDate,
       topics: topicPayloads,
     },
   })
 
   return { jobId, promise, topicCount: topicPayloads.length }
 }
+
+export { MENTORADO_DAILY_RELEASE_HOUR }

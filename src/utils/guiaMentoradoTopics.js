@@ -98,6 +98,30 @@ export function resolveCronogramaMateria(editalVerticalizado, materiaItem = {}) 
 }
 
 /**
+ * Extrai tópicos de um único dia do cronograma.
+ */
+export function extractTopicsFromCronogramaDay(dayEntry = {}, editalVerticalizado) {
+  const materias = dayEntry.materias || []
+  const tipo = dayEntry.tipo || dayEntry.type || 'estudo'
+  const dayKey = dayEntry.data || dayEntry.dayKey || null
+
+  if (tipo === 'simulado' || tipo === 'descanso') return []
+
+  const map = new Map()
+  materias.forEach((materiaItem) => {
+    const resolved = resolveCronogramaMateria(editalVerticalizado, materiaItem)
+    if (!resolved?.topicKey || map.has(resolved.topicKey)) return
+    map.set(resolved.topicKey, {
+      ...resolved,
+      firstStudyDate: dayKey,
+      studyDates: dayKey ? [dayKey] : [],
+    })
+  })
+
+  return Array.from(map.values())
+}
+
+/**
  * Extrai tópicos únicos de todos os dias do cronograma.
  */
 export function extractUniqueTopicsFromCronograma(cronogramaEntries = [], editalVerticalizado) {

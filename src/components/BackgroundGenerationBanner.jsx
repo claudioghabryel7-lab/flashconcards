@@ -14,7 +14,8 @@ const JOB_LABELS = {
   materia_revisada: 'Matéria revisada',
   vespera_prova: 'Véspera de prova',
   guia_mentorado: 'Guia mentorado',
-  guia_mentorado_automation: 'Automação Guia Mentorado',
+  guia_mentorado_cronograma: 'Cronograma Guia Mentorado',
+  guia_mentorado_automation: 'Conteúdos do dia (Guia Mentorado)',
   admin_batch: 'Geração em lote',
 }
 

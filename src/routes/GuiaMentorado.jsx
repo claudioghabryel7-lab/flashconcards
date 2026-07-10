@@ -8,18 +8,17 @@ import {
   XMarkIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline'
-import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import { loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import { hasPurchasedCourse } from '../utils/courseAccess'
 import MentoradoCalendar from '../components/guiaMentorado/MentoradoCalendar'
-import { DEFAULT_PLANNING_DAYS } from '../constants/guiaMentorado'
+import { DEFAULT_PLANNING_DAYS, MENTORADO_DAILY_RELEASE_HOUR } from '../constants/guiaMentorado'
 import {
   isUsingDefaultPlanningWindow,
   resolvePlanningEndDate,
-  startMentoradoContentAutomation,
+  startGuiaMentoradoCronogramaGeneration,
 } from '../services/guiaMentoradoAutomationService'
 
 const GuiaMentorado = () => {
@@ -183,10 +182,15 @@ const GuiaMentorado = () => {
     }
   }
   
-  // Gerar cronograma estratégico com IA
+  // Gerar cronograma estratégico com IA (na nuvem)
   const generateCronograma = async () => {
     if (!editalVerticalizado) {
       alert('É necessário ter um edital verticalizado para gerar o cronograma.')
+      return
+    }
+
+    if (!user?.uid) {
+      alert('Faça login como administrador para gerar o cronograma.')
       return
     }
 
@@ -200,284 +204,29 @@ const GuiaMentorado = () => {
     }
 
     const usingDefaultWindow = isUsingDefaultPlanningWindow(config)
-    
+
     setGenerating(true)
-    
+
     try {
       setMessage(
         usingDefaultWindow
-          ? `🤖 Gerando cronograma para ${DEFAULT_PLANNING_DAYS} dias (sem data da prova definida)…`
-          : '🤖 Gerando cronograma estratégico com IA…',
+          ? `🤖 Gerando cronograma na nuvem (${DEFAULT_PLANNING_DAYS} dias)… Pode fechar o site.`
+          : '🤖 Gerando cronograma na nuvem… Pode fechar o site.',
       )
-      
-      // Preparar dados do edital para a IA
-      const disciplinas = editalVerticalizado.disciplinas || []
-      const editalSummary = disciplinas.map(d => ({
-        nome: d.nome,
-        topicos: d.topicos?.map(t => ({
-          numero: t.numero,
-          nome: t.nome
-        })) || []
-      }))
-      
-      // Prompt para a IA gerar cronograma estratégico
-      const prompt = `DATA ATUAL: ${today.format('DD/MM/YYYY')}
-DATA FINAL DO PLANEJAMENTO: ${planningEnd.format('DD/MM/YYYY')}
-${config.dataProva && !usingDefaultWindow ? `DATA DA PROVA: ${dayjs(config.dataProva).format('DD/MM/YYYY')}` : `MODO SEM DATA DA PROVA: planeje exatamente ${DEFAULT_PLANNING_DAYS} dias de estudo a partir de hoje`}
-DIAS DE PLANEJAMENTO: ${daysUntilProva}
-TEM TAF: ${config.hasTAF ? 'Sim' : 'Não'}
-TEM REDAÇÃO: ${config.hasRedacao ? 'Sim' : 'Não'}
-EXERCÍCIOS TAF: ${config.tafExercicios?.join(', ') || 'Nenhum'}
 
-EDITAL VERTICALIZADO COMPLETO:
-${JSON.stringify(editalSummary, null, 2)}
-
-ANÁLISE OBRIGATÓRIA DO EDITAL:
-- Você DEVE ler TODAS as matérias listadas acima
-- Você DEVE ler TODOS os tópicos de cada matéria
-- Conte quantas matérias existem no total
-- Conte quantos tópicos existem no total
-- Calcule quantos tópicos precisa estudar por dia para cobrir TUDO até a prova
-- NÃO pule nenhuma matéria ou tópico
-
-INSTRUÇÕES:
-Você é um MENTOR DE ESTUDOS especialista em concursos. Crie um cronograma estratégico do dia atual até o dia da prova.
-
-REGRAS OBRIGATÓRIAS DO MENTOR:
-1. TODAS as matérias do edital devem ser contempladas - NÃO PULE NENHUMA MATÉRIA OU TÓPICO
-2. TODOS os tópicos de cada matéria devem ser estudados pelo menos uma vez
-3. AGRUPE matérias AFINS no mesmo dia (ex: Direito Constitucional + Administrativo + Penal juntos)
-4. NÃO misture matérias muito diferentes (ex: NÃO coloque Português + Biologia + Lei X no mesmo dia)
-5. Use 3-4 matérias por dia se necessário para acelerar e fechar o edital completo
-6. Dias de TAF devem ter estudo também (manhã: TAF, tarde/noite: estudo)
-7. Sem dia de descanso (simulado serve como descanso)
-8. Reta final: últimos 7 dias apenas revisão/simulado
-9. Distribua as matérias de forma ESTRATÉGICA e equilibrada (não sequencial)
-10. Priorize matérias mais importantes com mais tempo de estudo
-11. OBJETIVO: Fechar TODO o edital 7 dias antes da prova
-
-ESTRATÉGIA DE AGRUPAMENTO INTELIGENTE:
-- Agrupe matérias da mesma área: jurídicas (Constitucional, Administrativo, Penal, Civil, Trabalho)
-- Agrupe matérias de exatas: Raciocínio Lógico, Matemática, Informática
-- Agrupe matérias de humanas: Português, História, Geografia
-- Agrupe matérias específicas: Direito Penal Militar, Direito Processual Penal Militar, Estatuto do Policial
-- Exemplo de dia inteligente: Constitucional + Administrativo + Penal (todas jurídicas)
-- Exemplo de dia ruim: Português + Biologia + Lei X (muito diferentes)
-
-ESTRATÉGIA DE DISTRIBUIÇÃO:
-- Divida as matérias em grupos por área de conhecimento
-- Intercale grupos diferentes em dias alternados
-- Use 3-4 matérias por dia para acelerar o progresso
-- Crie blocos de estudo focados em áreas específicas
-- Varie os tipos de estudo (teoria, prática, revisão)
-
-RETORNE APENAS ESTE JSON (sem texto adicional):
-{
-  "cronograma": [
-    {
-      "data": "YYYY-MM-DD",
-      "tipo": "estudo",
-      "fase": "fundamentacao",
-      "materias": [{"disciplina": "nome", "topico": "nome"}],
-      "taf_exercicio": "",
-      "descricao": ""
-    }
-  ]
-}
-
-CRÍTICO - NÃO CORTAR O JSON:
-- O JSON deve ser COMPLETO e VÁLIDO
-- NÃO pare no meio do array cronograma
-- Certifique-se de fechar todas as chaves e colchetes
-- Se o JSON for muito longo, simplifique as descrições mas NÃO corte a estrutura
-- Verifique se o array cronograma está completo antes de finalizar
-
-IMPORTANTE:
-- Comece em ${today.format('DD/MM/YYYY')}
-- Termine em ${planningEnd.format('DD/MM/YYYY')}
-- JSON deve ser válido e completo
-- Use aspas duplas
-- Não adicione comentários no JSON
-- NÃO corte o JSON no meio - verifique se está completo antes de enviar`
-
-      console.log('📝 Enviando prompt para IA...')
-      
-      // Aumentar limite de tokens para cronogramas longos (até 65536 tokens)
-      const response = await callGeminiWithRetry(prompt, {
-        courseId: selectedCourseId || 'alego-default',
-        generationConfig: {
-          temperature: 0.35,
-          maxOutputTokens: 65536,
-        },
+      await startGuiaMentoradoCronogramaGeneration({
+        userId: user.uid,
+        courseId: selectedCourseId,
+        config,
       })
-      const generatedText = extractGeneratedText(response)
-      
-      console.log('📝 Resposta da IA:', generatedText)
-      
-      // Extrair JSON da resposta com tratamento de erro melhorado
-      let jsonMatch = generatedText.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
-        // Tentar encontrar JSON entre blocos de código markdown
-        jsonMatch = generatedText.match(/```json\s*([\s\S]*?)\s*```/)
-        if (jsonMatch) {
-          jsonMatch = [jsonMatch[1]]
-        }
-      }
-      
-      if (!jsonMatch) {
-        throw new Error('Não foi possível extrair JSON da resposta da IA. A resposta não contém um JSON válido.')
-      }
-      
-      let jsonText = jsonMatch[0]
-      
-      // Tentar completar JSON se estiver cortado (problema comum com respostas longas)
-      let cronogramaIA
-      try {
-        cronogramaIA = JSON.parse(jsonText)
-      } catch (parseError) {
-        console.error('Erro ao fazer parse do JSON:', parseError)
-        console.error('JSON que falhou:', jsonText.substring(0, 500))
-        
-        // Tentar completar JSON cortado
-        try {
-          // Contar chaves para tentar fechar corretamente
-          const openBraces = (jsonText.match(/\{/g) || []).length
-          const closeBraces = (jsonText.match(/\}/g) || []).length
-          const openBrackets = (jsonText.match(/\[/g) || []).length
-          const closeBrackets = (jsonText.match(/\]/g) || []).length
-          
-          let completedJson = jsonText
-          
-          // Adicionar chaves/colchetes faltantes
-          for (let i = 0; i < openBraces - closeBraces; i++) {
-            completedJson += '}'
-          }
-          for (let i = 0; i < openBrackets - closeBrackets; i++) {
-            completedJson += ']'
-          }
-          
-          // Remover vírgula no final se houver
-          completedJson = completedJson.replace(/,\s*}/g, '}')
-          completedJson = completedJson.replace(/,\s*]/g, ']')
-          
-          cronogramaIA = JSON.parse(completedJson)
-          console.log('JSON completado com sucesso')
-        } catch (completeError) {
-          console.error('Erro ao completar JSON:', completeError)
-          
-          // Tentar limpar o JSON e fazer parse novamente
-          try {
-            const cleanedJson = jsonText
-              .replace(/[\n\r]/g, '')
-              .replace(/\s+/g, ' ')
-              .replace(/,\s*}/g, '}')
-              .replace(/,\s*]/g, ']')
-            cronogramaIA = JSON.parse(cleanedJson)
-            console.log('JSON limpo com sucesso')
-          } catch (cleanError) {
-            console.error('Erro ao fazer parse do JSON limpo:', cleanError)
-            throw new Error('Erro ao fazer parse do JSON gerado pela IA. O JSON está malformado ou incompleto. Tente gerar novamente.')
-          }
-        }
-      }
-      
-      if (!cronogramaIA.cronograma || !Array.isArray(cronogramaIA.cronograma)) {
-        throw new Error('Estrutura de JSON inválida: não contém array "cronograma"')
-      }
-      
-      // Validar estrutura de cada dia
-      cronogramaIA.cronograma.forEach((dia, idx) => {
-        if (!dia.data || !dia.tipo) {
-          throw new Error(`Dia ${idx} inválido: falta "data" ou "tipo"`)
-        }
-        if (!Array.isArray(dia.materias)) {
-          dia.materias = []
-        }
-      })
-      
-      setMessage('💾 Salvando cronograma...')
-      
-      // Salvar cronograma por mês (cada mês tem seu próprio documento)
-      const monthsToSave = new Set()
-      
-      cronogramaIA.cronograma.forEach((dia) => {
-        const dayKey = dia.data
-        const dayDate = dayjs(dayKey)
-        const monthKey = dayDate.format('YYYY-MM')
-        monthsToSave.add(monthKey)
-      })
-      
-      // Salvar cada mês separadamente
-      for (const monthKey of monthsToSave) {
-        const cronogramaData = {
-          month: monthKey,
-          generatedAt: serverTimestamp(),
-          config: config,
-          generatedBy: 'ai',
-          days: {},
-        }
-        
-        // Filtrar dias deste mês
-        cronogramaIA.cronograma.forEach((dia) => {
-          const dayKey = dia.data
-          const dayDate = dayjs(dayKey)
-          
-          if (dayDate.format('YYYY-MM') === monthKey) {
-            cronogramaData.days[dayKey] = {
-              type: dia.tipo,
-              fase: dia.fase,
-              materias: dia.materias || [],
-              tafExercicio: dia.taf_exercicio || '',
-              descricao: dia.descricao || '',
-              completed: false,
-            }
-          }
-        })
-        
-        // Salvar este mês
-        const cronogramaRef = doc(db, 'courses', selectedCourseId, 'cronograma', monthKey)
-        await setDoc(cronogramaRef, cronogramaData)
-      }
-      
-      // Atualizar visualização para o mês atual
-      const currentMonthKey = currentMonth.format('YYYY-MM')
-      const currentMonthRef = doc(db, 'courses', selectedCourseId, 'cronograma', currentMonthKey)
-      const currentMonthDoc = await getDoc(currentMonthRef)
-      
-      if (currentMonthDoc.exists()) {
-        setCronograma(currentMonthDoc.data())
-      }
-      
-      setMessage(`✅ Cronograma gerado com sucesso! ${monthsToSave.size} meses planejados.`)
 
-      if (config.autoGerarConteudo) {
-        if (!user?.uid) {
-          setMessage(
-            '✅ Cronograma salvo. Faça login como admin para disparar a geração automática de conteúdos.',
-          )
-        } else {
-          setMessage('🚀 Cronograma salvo. Iniciando geração automática de flashcards, material e questões…')
-          try {
-            const { topicCount } = await startMentoradoContentAutomation({
-              userId: user.uid,
-              courseId: selectedCourseId,
-              cronogramaEntries: cronogramaIA.cronograma,
-              editalVerticalizado,
-              autoPublish: true,
-            })
-            setMessage(
-              `✅ Cronograma pronto! Automação iniciada para ${topicCount} tópico(s). Acompanhe o banner de geração.`,
-            )
-          } catch (autoErr) {
-            console.error('Erro na automação do Guia Mentorado:', autoErr)
-            setMessage(
-              `✅ Cronograma salvo, mas a automação falhou: ${autoErr.message || 'erro desconhecido'}`,
-            )
-          }
-        }
-      }
-      
-      setTimeout(() => setMessage(''), 8000)
+      setMessage(
+        config.autoGerarConteudo
+          ? `✅ Cronograma em geração na nuvem. Hoje libera os tópicos do dia; demais dias às ${MENTORADO_DAILY_RELEASE_HOUR}h. Acompanhe o banner.`
+          : '✅ Cronograma em geração na nuvem. Acompanhe o banner no canto inferior direito.',
+      )
+
+      setTimeout(() => setMessage(''), 10000)
     } catch (error) {
       console.error('Erro ao gerar cronograma:', error)
       alert('Erro ao gerar cronograma: ' + error.message)
@@ -573,8 +322,9 @@ IMPORTANTE:
 
       {isAdmin && config.autoGerarConteudo && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
-          Automação ativa: ao gerar o cronograma, o sistema cria e libera flashcards, material (Estudar) e questões
-          de cada tópico automaticamente no servidor.
+          Automação ativa: ao gerar o cronograma, o sistema libera <strong>só os tópicos do dia</strong>.
+          No dia da geração libera imediatamente; nos demais dias, automaticamente às{' '}
+          <strong>{MENTORADO_DAILY_RELEASE_HOUR}h</strong> (horário de Brasília).
         </div>
       )}
 
@@ -633,8 +383,8 @@ IMPORTANTE:
                         Gerar e liberar conteúdos automaticamente
                       </span>
                       <span className="mt-1 block text-xs text-cp-muted">
-                        Para cada tópico do cronograma, gera flashcards, material de estudo e questões (nível 1)
-                        e publica como disponível — sem clicar tópico por tópico no admin.
+                        Para cada dia do cronograma, gera e libera flashcards, material e questões só das matérias
+                        daquele dia — às {MENTORADO_DAILY_RELEASE_HOUR}h (Brasília). No dia da geração, libera na hora.
                       </span>
                     </span>
                   </label>
