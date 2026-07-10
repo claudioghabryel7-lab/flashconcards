@@ -97,6 +97,13 @@ export function resolveCronogramaMateria(editalVerticalizado, materiaItem = {}) 
   }
 }
 
+function normalizeMateriaItem(materiaItem) {
+  if (!materiaItem) return null
+  if (typeof materiaItem === 'string') return { topico: materiaItem }
+  if (typeof materiaItem === 'object') return materiaItem
+  return null
+}
+
 /**
  * Extrai tópicos de um único dia do cronograma.
  */
@@ -108,7 +115,9 @@ export function extractTopicsFromCronogramaDay(dayEntry = {}, editalVerticalizad
   if (tipo === 'simulado' || tipo === 'descanso') return []
 
   const map = new Map()
-  materias.forEach((materiaItem) => {
+  materias.forEach((rawItem) => {
+    const materiaItem = normalizeMateriaItem(rawItem)
+    if (!materiaItem) return
     const resolved = resolveCronogramaMateria(editalVerticalizado, materiaItem)
     if (!resolved?.topicKey || map.has(resolved.topicKey)) return
     map.set(resolved.topicKey, {

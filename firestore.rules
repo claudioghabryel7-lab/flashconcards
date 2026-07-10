@@ -236,6 +236,13 @@ service cloud.firestore {
           allow delete: if isAuthenticated() && request.auth.uid == userId;
         }
       }
+
+      match /mentoradoAutomation/{dateKey} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() &&
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
       
       match /materialApoio/{docId} {
         allow read: if isAuthenticated() && 

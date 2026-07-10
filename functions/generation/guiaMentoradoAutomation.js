@@ -3,6 +3,13 @@ const {
   sanitizeTopicKeyForFirestore,
   normalizeTopicKeyForStorage,
 } = require('./topicKeyUtils')
+const {
+  initDayStatus,
+  updateDayStatus,
+  updateTopicStep,
+  finalizeDayStatus,
+} = require('./guiaMentoradoStatus')
+const { markDayContentGenerated } = require('./guiaMentoradoStatus')
 
 const CONTENT_STATUS = {
   AVAILABLE: 'disponivel',
@@ -54,11 +61,6 @@ JSON: { "flashcards": [{ "frente": "", "verso": "", "dificuldade": "médio" }] }
 Retorne APENAS JSON válido.`
 }
 
-async function docExists(path) {
-  const snap = await getDb().doc(path).get()
-  return snap.exists()
-}
-
 async function hasFlashcards(courseId, topicKey, disciplina, modulo) {
   const snap = await getDb().collection(`courses/${courseId}/flashcards`).get()
   const normalized = normalizeTopicKeyForStorage(topicKey)
@@ -72,14 +74,24 @@ async function hasFlashcards(courseId, topicKey, disciplina, modulo) {
 async function hasConteudo(courseId, topicKey) {
   const key = sanitizeTopicKeyForFirestore(topicKey)
   const snap = await getDb().doc(`courses/${courseId}/conteudosCompletos/${key}`).get()
-  if (!snap.exists()) return false
+  if (!snap.exists) return false
   const data = snap.data()
   return Boolean(data.content || (data.secoes && data.secoes.length) || data.revisaoTurbo?.length)
 }
 
 async function hasQuestoes(courseId, topicKey) {
   const key = `${sanitizeTopicKeyForFirestore(topicKey)}_nivel_1`
-  return docExists(`courses/${courseId}/questoesTopico/${key}`)
+  const snap = await getDb().doc(`courses/${courseId}/questoesTopico/${key}`).get()
+  return snap.exists
+}
+
+async function isTopicContentComplete(courseId, topic) {
+  const [fc, mat, q] = await Promise.all([
+    hasFlashcards(courseId, topic.topicKey, topic.disciplina, topic.modulo),
+    hasConteudo(courseId, topic.topicKey),
+    hasQuestoes(courseId, topic.topicKey),
+  ])
+  return { complete: fc && mat && q, flashcards: fc, material: mat, questoes: q }
 }
 
 async function deleteExistingFlashcards(courseId, topicKey, disciplina, modulo) {
@@ -102,7 +114,7 @@ async function deleteExistingFlashcards(courseId, topicKey, disciplina, modulo) 
   if (count) await batch.commit()
 }
 
-async function generateAndSaveFlashcards(courseId, topic, status) {
+async function generateAndSaveFlashcards(courseId, topic) {
   const meta = topic.flashcardMeta
   if (await hasFlashcards(courseId, topic.topicKey, topic.disciplina, topic.modulo)) {
     return { skipped: true, type: 'flashcards' }
@@ -144,6 +156,7 @@ async function generateAndSaveFlashcards(courseId, topic, status) {
   let batch = db.batch()
   let opCount = 0
   const ts = require('firebase-admin').firestore.FieldValue.serverTimestamp()
+  const draftStatus = CONTENT_STATUS.UNAVAILABLE
 
   for (let index = 0; index < allItems.length; index += 1) {
     const item = allItems[index]
@@ -165,7 +178,7 @@ async function generateAndSaveFlashcards(courseId, topic, status) {
       dificuldade: item.dificuldade || 'médio',
       courseId,
       shared: true,
-      status,
+      status: draftStatus,
       createdAt: ts,
       updatedAt: ts,
       order: index,
@@ -183,7 +196,7 @@ async function generateAndSaveFlashcards(courseId, topic, status) {
   return { skipped: false, type: 'flashcards', count: allItems.length }
 }
 
-async function generateAndSaveConteudo(courseId, topic, status) {
+async function generateAndSaveConteudo(courseId, topic) {
   if (await hasConteudo(courseId, topic.topicKey)) {
     return { skipped: true, type: 'conteudo' }
   }
@@ -205,7 +218,7 @@ async function generateAndSaveConteudo(courseId, topic, status) {
         materia: parsed.materia || parsed.titulo || topic.topicoNome,
         numero: parsed.numero || topic.topicKey,
         topicKey: topic.topicKey,
-        status,
+        status: CONTENT_STATUS.UNAVAILABLE,
         updatedAt: ts,
         generatedAt: ts,
       },
@@ -215,7 +228,7 @@ async function generateAndSaveConteudo(courseId, topic, status) {
   return { skipped: false, type: 'conteudo' }
 }
 
-async function generateAndSaveQuestoes(courseId, topic, status) {
+async function generateAndSaveQuestoes(courseId, topic) {
   if (await hasQuestoes(courseId, topic.topicKey)) {
     return { skipped: true, type: 'questoes' }
   }
@@ -237,7 +250,7 @@ async function generateAndSaveQuestoes(courseId, topic, status) {
         topico: parsed.topico || topic.topicoNome,
         nivel: 1,
         topicKey: topic.topicKey,
-        status,
+        status: CONTENT_STATUS.UNAVAILABLE,
         updatedAt: ts,
         generatedAt: ts,
       },
@@ -247,7 +260,8 @@ async function generateAndSaveQuestoes(courseId, topic, status) {
   return { skipped: false, type: 'questoes' }
 }
 
-async function publishTopicoStatus(courseId, topic, status) {
+async function publishTopicoStatus(courseId, topic) {
+  const status = CONTENT_STATUS.AVAILABLE
   const normalized = normalizeTopicKeyForStorage(topic.topicKey)
   const sanitized = sanitizeTopicKeyForFirestore(topic.topicKey)
   const ts = require('firebase-admin').firestore.FieldValue.serverTimestamp()
@@ -301,80 +315,171 @@ async function publishTopicoStatus(courseId, topic, status) {
   if (ops) await batch.commit()
 }
 
+async function processSingleTopic(courseId, targetDate, topic, updateJob, userId, jobId, index, total) {
+  const label = topic.topicoNome || topic.topicKey
+  const basePct = Math.round((index / total) * 100)
+  const topicErrors = []
+
+  await updateTopicStep(courseId, targetDate, topic.topicKey, {
+    status: 'generating',
+    step: 'flashcards',
+  })
+
+  await updateJob(userId, jobId, {
+    progress: Math.min(basePct + 3, 98),
+    message: `[${index + 1}/${total}] ${label} — gerando flashcards…`,
+  })
+
+  try {
+    await generateAndSaveFlashcards(courseId, topic)
+    await updateTopicStep(courseId, targetDate, topic.topicKey, { flashcards: 'done', step: 'material' })
+  } catch (err) {
+    topicErrors.push(`flashcards: ${err.message}`)
+    await updateTopicStep(courseId, targetDate, topic.topicKey, {
+      flashcards: 'error',
+      error: err.message,
+    })
+  }
+
+  await updateJob(userId, jobId, {
+    progress: Math.min(basePct + 15, 98),
+    message: `[${index + 1}/${total}] ${label} — gerando material…`,
+  })
+
+  try {
+    await generateAndSaveConteudo(courseId, topic)
+    await updateTopicStep(courseId, targetDate, topic.topicKey, { material: 'done', step: 'questoes' })
+  } catch (err) {
+    topicErrors.push(`material: ${err.message}`)
+    await updateTopicStep(courseId, targetDate, topic.topicKey, {
+      material: 'error',
+      error: err.message,
+    })
+  }
+
+  await updateJob(userId, jobId, {
+    progress: Math.min(basePct + 28, 98),
+    message: `[${index + 1}/${total}] ${label} — gerando questões…`,
+  })
+
+  try {
+    await generateAndSaveQuestoes(courseId, topic)
+    await updateTopicStep(courseId, targetDate, topic.topicKey, { questoes: 'done', step: 'publicando' })
+  } catch (err) {
+    topicErrors.push(`questoes: ${err.message}`)
+    await updateTopicStep(courseId, targetDate, topic.topicKey, {
+      questoes: 'error',
+      error: err.message,
+    })
+  }
+
+  const readiness = await isTopicContentComplete(courseId, topic)
+  if (readiness.complete) {
+    try {
+      await publishTopicoStatus(courseId, topic)
+      await updateTopicStep(courseId, targetDate, topic.topicKey, {
+        status: 'published',
+        step: 'concluído',
+        error: null,
+      })
+      await updateJob(userId, jobId, {
+        progress: Math.min(basePct + 35, 99),
+        message: `[${index + 1}/${total}] ${label} — liberado para alunos ✓`,
+      })
+      return { published: true, errors: topicErrors }
+    } catch (err) {
+      topicErrors.push(`publicar: ${err.message}`)
+      await updateTopicStep(courseId, targetDate, topic.topicKey, {
+        status: 'error',
+        step: 'publicando',
+        error: err.message,
+      })
+    }
+  } else {
+    const missing = []
+    if (!readiness.flashcards) missing.push('flashcards')
+    if (!readiness.material) missing.push('material')
+    if (!readiness.questoes) missing.push('questões')
+    const msg = `Incompleto: falta ${missing.join(', ')}`
+    topicErrors.push(msg)
+    await updateTopicStep(courseId, targetDate, topic.topicKey, {
+      status: 'error',
+      step: 'concluído',
+      error: msg,
+    })
+  }
+
+  return { published: false, errors: topicErrors }
+}
+
 async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPayload, updateJob) {
   const topics = serverPayload?.topics || []
   const autoPublish = serverPayload?.autoPublish !== false
+  const targetDate = serverPayload?.targetDate || null
 
   if (!topics.length) {
     throw new Error('Nenhum tópico enviado para automação do Guia Mentorado.')
   }
+  if (!autoPublish) {
+    throw new Error('Automação requer publicação automática após geração.')
+  }
 
-  const publishStatus = autoPublish ? CONTENT_STATUS.AVAILABLE : CONTENT_STATUS.UNAVAILABLE
   const total = topics.length
   const errors = []
+  let publishedCount = 0
 
-  const targetDate = serverPayload?.targetDate || null
-  const dateLabel = targetDate ? ` (${targetDate})` : ''
+  if (targetDate) {
+    await initDayStatus(courseId, targetDate, topics, jobId)
+  }
 
+  const dateLabel = targetDate ? ` ${targetDate}` : ''
   await updateJob(userId, jobId, {
     progress: 2,
-    message: `Automação do dia${dateLabel} — ${total} tópico(s)`,
+    message: `Dia${dateLabel} — ${total} tópico(s), um por vez…`,
   })
 
   for (let i = 0; i < topics.length; i += 1) {
-    const topic = topics[i]
-    const label = topic.topicoNome || topic.topicKey
-    const basePct = Math.round((i / total) * 100)
-
-    await updateJob(userId, jobId, {
-      progress: Math.min(basePct + 2, 99),
-      message: `[${i + 1}/${total}] ${label} — flashcards…`,
-    })
-
-    try {
-      await generateAndSaveFlashcards(courseId, topic, publishStatus)
-    } catch (err) {
-      errors.push({ topic: label, step: 'flashcards', error: err.message })
-    }
-
-    await updateJob(userId, jobId, {
-      progress: Math.min(basePct + 12, 99),
-      message: `[${i + 1}/${total}] ${label} — material…`,
-    })
-
-    try {
-      await generateAndSaveConteudo(courseId, topic, publishStatus)
-    } catch (err) {
-      errors.push({ topic: label, step: 'conteudo', error: err.message })
-    }
-
-    await updateJob(userId, jobId, {
-      progress: Math.min(basePct + 22, 99),
-      message: `[${i + 1}/${total}] ${label} — questões…`,
-    })
-
-    try {
-      await generateAndSaveQuestoes(courseId, topic, publishStatus)
-    } catch (err) {
-      errors.push({ topic: label, step: 'questoes', error: err.message })
-    }
-
-    if (autoPublish) {
-      try {
-        await publishTopicoStatus(courseId, topic, publishStatus)
-      } catch (err) {
-        errors.push({ topic: label, step: 'publicar', error: err.message })
-      }
+    const result = await processSingleTopic(
+      courseId,
+      targetDate,
+      topics[i],
+      updateJob,
+      userId,
+      jobId,
+      i,
+      total,
+    )
+    if (result.published) publishedCount += 1
+    if (result.errors?.length) {
+      errors.push({
+        topic: topics[i].topicoNome || topics[i].topicKey,
+        steps: result.errors,
+      })
     }
   }
 
-  if (errors.length >= total * 3) {
-    throw new Error('Falha crítica na automação do Guia Mentorado.')
+  if (targetDate) {
+    await finalizeDayStatus(courseId, targetDate, { errors, total })
+    await updateDayStatus(courseId, targetDate, {
+      publishedCount,
+      status: publishedCount >= total ? 'done' : publishedCount > 0 ? 'partial' : 'error',
+    })
+    if (publishedCount >= total) {
+      await markDayContentGenerated(courseId, targetDate, publishedCount, total)
+    }
   }
 
-  return { totalTopics: total, errors, autoPublish }
+  if (publishedCount === 0 && errors.length) {
+    throw new Error(
+      `Nenhum tópico foi liberado. Verifique o painel de automação do dia.${errors[0]?.steps?.[0] ? ` (${errors[0].steps[0]})` : ''}`,
+    )
+  }
+
+  return { totalTopics: total, publishedCount, errors, targetDate }
 }
 
 module.exports = {
   processGuiaMentoradoAutomation,
+  isTopicContentComplete,
+  publishTopicoStatus,
 }

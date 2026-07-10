@@ -6,7 +6,13 @@ const {
   extractTopicsFromCronogramaDay,
   buildTopicPayloads,
 } = require('./guiaMentoradoEdital')
-const { processGuiaMentoradoAutomation } = require('./guiaMentoradoAutomation')
+const { isTopicContentComplete } = require('./guiaMentoradoAutomation')
+const {
+  initDayStatus,
+  updateDayStatus,
+  markDayContentGenerated,
+} = require('./guiaMentoradoStatus')
+const { sanitizeTopicKeyForFirestore } = require('./topicKeyUtils')
 
 function getDb() {
   return admin.firestore()
@@ -20,113 +26,163 @@ async function loadCronogramaDay(courseId, targetDate) {
   const db = getDb()
   const monthKey = monthKeyFromDateKey(targetDate)
   const snap = await db.doc(`courses/${courseId}/cronograma/${monthKey}`).get()
-  if (!snap.exists()) return null
+  if (!snap.exists) return null
   const days = snap.data().days || {}
   return days[targetDate] || null
 }
 
-async function markDayContentGenerated(courseId, targetDate) {
-  const db = getDb()
-  const monthKey = monthKeyFromDateKey(targetDate)
-  const ref = db.doc(`courses/${courseId}/cronograma/${monthKey}`)
-  await ref.set(
-    {
-      [`days.${targetDate}.contentGenerated`]: true,
-      [`days.${targetDate}.contentGeneratedAt`]: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  )
-}
-
-/**
- * Gera e libera conteúdos apenas dos tópicos do dia indicado.
- */
-async function processMentoradoDayAutomation(courseId, targetDate, options = {}) {
-  const { userId = null, jobId = null, updateJob = null, autoPublish = true } = options
-  const noopUpdate = async () => {}
-
+async function prepareDayAutomation(courseId, targetDate) {
   const configSnap = await getDb().doc(`courses/${courseId}/config/guiaMentorado`).get()
   const config = configSnap.exists() ? configSnap.data() : {}
   if (!config.autoGerarConteudo) {
-    return { skipped: true, reason: 'automação desativada', targetDate, topicCount: 0 }
+    return { ok: false, reason: 'Automação desativada nas configurações.' }
   }
 
   const dayEntry = await loadCronogramaDay(courseId, targetDate)
   if (!dayEntry) {
-    return { skipped: true, reason: 'dia não encontrado no cronograma', targetDate, topicCount: 0 }
-  }
-
-  if (dayEntry.contentGenerated) {
-    return { skipped: true, reason: 'conteúdo do dia já gerado', targetDate, topicCount: 0 }
+    return { ok: false, reason: `Dia ${targetDate} não encontrado no cronograma.` }
   }
 
   const tipo = dayEntry.type || dayEntry.tipo || 'estudo'
   if (tipo === 'simulado' || tipo === 'descanso') {
-    await markDayContentGenerated(courseId, targetDate)
-    return { skipped: true, reason: `dia tipo ${tipo}`, targetDate, topicCount: 0 }
+    return { ok: false, reason: `Dia marcado como ${tipo} — sem conteúdos para gerar.` }
   }
 
   const editalVerticalizado = await loadEditalVerticalizado(courseId)
-  if (!editalVerticalizado) {
-    throw new Error('Edital verticalizado não encontrado.')
+  if (!editalVerticalizado?.disciplinas?.length) {
+    return { ok: false, reason: 'Edital verticalizado não encontrado.' }
   }
 
-  const dayForExtraction = {
-    data: targetDate,
-    tipo,
-    materias: dayEntry.materias || [],
-  }
+  const topics = extractTopicsFromCronogramaDay(
+    { data: targetDate, tipo, materias: dayEntry.materias || [] },
+    editalVerticalizado,
+  )
 
-  const topics = extractTopicsFromCronogramaDay(dayForExtraction, editalVerticalizado)
   if (!topics.length) {
-    await markDayContentGenerated(courseId, targetDate)
-    return { skipped: true, reason: 'sem tópicos no dia', targetDate, topicCount: 0 }
+    return {
+      ok: false,
+      reason: 'Nenhum tópico reconhecido para este dia. Verifique se as matérias do cronograma batem com o edital.',
+      materias: dayEntry.materias || [],
+    }
   }
 
   const baseContext = await loadMentoradoAutomationContext(courseId)
   if (!baseContext.editalText?.trim()) {
-    throw new Error('Texto do edital não encontrado para automação.')
+    return { ok: false, reason: 'Texto do edital indisponível para a IA.' }
   }
 
   const context = { ...baseContext, courseId }
-  const topicPayloads = topics.map((topic) => buildTopicPayloads(topic, context, autoPublish))
+  const topicPayloads = topics.map((topic) => buildTopicPayloads(topic, context))
 
-  const progressFn = updateJob || noopUpdate
-  const effectiveUserId = userId || config.automationUserId || 'system-mentorado'
-  const effectiveJobId = jobId || `daily-${courseId}-${targetDate}`
-
-  if (updateJob) {
-    await progressFn(effectiveUserId, effectiveJobId, {
-      message: `Dia ${targetDate}: ${topicPayloads.length} tópico(s)…`,
-    })
+  const pendingTopics = []
+  for (const topic of topics) {
+    const readiness = await isTopicContentComplete(courseId, topic)
+    const statusSnap = await getDb()
+      .doc(`courses/${courseId}/topicoStatus/${sanitizeTopicKeyForFirestore(topic.topicKey)}`)
+      .get()
+    const isPublished =
+      statusSnap.exists() && statusSnap.data().status === 'disponivel' && readiness.complete
+    if (!isPublished) pendingTopics.push(topic)
   }
 
-  const outcome = await processGuiaMentoradoAutomation(
-    effectiveUserId,
-    effectiveJobId,
-    courseId,
-    {
-      autoPublish,
-      targetDate,
-      topics: topicPayloads,
-    },
-    progressFn,
+  const pendingPayloads = topicPayloads.filter((p) =>
+    pendingTopics.some((t) => t.topicKey === p.topicKey),
   )
 
-  await markDayContentGenerated(courseId, targetDate)
+  if (!pendingPayloads.length) {
+    await markDayContentGenerated(courseId, targetDate, topics.length, topics.length)
+    return { ok: false, reason: 'Todos os tópicos deste dia já estão gerados e liberados.', allDone: true }
+  }
 
   return {
-    skipped: false,
-    targetDate,
-    topicCount: topicPayloads.length,
-    outcome,
+    ok: true,
+    config,
+    topics: pendingTopics,
+    topicPayloads: pendingPayloads,
+    totalTopics: topics.length,
   }
 }
 
-async function runDailyMentoradoAutomationForAllCourses() {
+async function spawnDayAutomationJob(userId, courseId, targetDate, topicPayloads, metadata = {}) {
   const db = getDb()
+  const ref = db.collection(`users/${userId}/generationJobs`).doc()
+  const ts = admin.firestore.FieldValue.serverTimestamp()
+
+  await ref.set({
+    userId,
+    courseId,
+    jobType: 'guia_mentorado_automation',
+    topicKey: null,
+    metadata: {
+      targetDate,
+      topicCount: topicPayloads.length,
+      ...metadata,
+    },
+    runOnServer: true,
+    serverPayload: {
+      courseId,
+      targetDate,
+      autoPublish: true,
+      topics: topicPayloads,
+    },
+    status: 'pending',
+    progress: 0,
+    message: `Preparando conteúdos do dia ${targetDate}…`,
+    createdAt: ts,
+    updatedAt: ts,
+  })
+
+  return ref.id
+}
+
+async function startDayAutomation(courseId, targetDate, userId, options = {}) {
+  const prepared = await prepareDayAutomation(courseId, targetDate)
+  if (!prepared.ok) {
+    if (prepared.reason && !prepared.allDone) {
+      await initDayStatus(courseId, targetDate, [])
+      await updateDayStatus(courseId, targetDate, {
+        status: 'skipped',
+        reason: prepared.reason,
+        materias: prepared.materias || null,
+      })
+    }
+    return { started: false, ...prepared }
+  }
+
+  const effectiveUserId = userId || prepared.config.automationUserId
+  if (!effectiveUserId) {
+    throw new Error('Usuário admin não identificado para disparar automação.')
+  }
+
+  await initDayStatus(courseId, targetDate, prepared.topics)
+
+  const jobId = await spawnDayAutomationJob(
+    effectiveUserId,
+    courseId,
+    targetDate,
+    prepared.topicPayloads,
+    options.metadata || {},
+  )
+
+  await updateDayStatus(courseId, targetDate, { jobId, status: 'running' })
+
+  return {
+    started: true,
+    jobId,
+    topicCount: prepared.topicPayloads.length,
+    totalTopics: prepared.totalTopics,
+    targetDate,
+  }
+}
+
+async function processMentoradoDayAutomation(courseId, targetDate, options = {}) {
+  const { userId = null } = options
+  return startDayAutomation(courseId, targetDate, userId, options)
+}
+
+async function runDailyMentoradoAutomationForAllCourses() {
   const todayKey = getTodayKeyInSaoPaulo()
-  const coursesSnap = await db.collection('courses').get()
+  const coursesSnap = await getDb().collection('courses').get()
   const results = []
 
   for (const courseDoc of coursesSnap.docs) {
@@ -135,12 +191,11 @@ async function runDailyMentoradoAutomationForAllCourses() {
     if (courseData.active === false) continue
 
     try {
-      const configSnap = await db.doc(`courses/${courseId}/config/guiaMentorado`).get()
+      const configSnap = await getDb().doc(`courses/${courseId}/config/guiaMentorado`).get()
       if (!configSnap.exists() || !configSnap.data().autoGerarConteudo) continue
 
-      const result = await processMentoradoDayAutomation(courseId, todayKey, {
-        autoPublish: true,
-      })
+      const userId = configSnap.data().automationUserId || null
+      const result = await startDayAutomation(courseId, todayKey, userId)
       results.push({ courseId, ...result })
       console.log(`[mentoradoDaily] ${courseId}:`, result)
     } catch (err) {
@@ -155,6 +210,7 @@ async function runDailyMentoradoAutomationForAllCourses() {
 module.exports = {
   processMentoradoDayAutomation,
   runDailyMentoradoAutomationForAllCourses,
+  prepareDayAutomation,
+  startDayAutomation,
   loadCronogramaDay,
-  markDayContentGenerated,
 }

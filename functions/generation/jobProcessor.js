@@ -449,8 +449,8 @@ async function processGenerationJob(userId, jobId, jobData) {
         progress: 100,
         message:
           outcome.errors?.length > 0
-            ? `Concluído com ${outcome.errors.length} aviso(s) em alguns tópicos`
-            : `Automação concluída — ${outcome.totalTopics} tópico(s) processado(s)`,
+            ? `Dia ${serverPayload?.targetDate || ''}: ${outcome.publishedCount}/${outcome.totalTopics} liberado(s)`
+            : `Dia concluído — ${outcome.publishedCount} tópico(s) liberado(s)`,
         resultRef: null,
         finishedAt: admin.firestore.FieldValue.serverTimestamp(),
       })

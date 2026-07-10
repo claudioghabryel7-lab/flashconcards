@@ -8,7 +8,7 @@ const {
   parseDateKey,
 } = require('./guiaMentoradoShared')
 const { loadEditalVerticalizado } = require('./guiaMentoradoEdital')
-const { processMentoradoDayAutomation } = require('./guiaMentoradoDaily')
+const { startDayAutomation } = require('./guiaMentoradoDaily')
 
 function getDb() {
   return admin.firestore()
@@ -166,15 +166,17 @@ async function processGuiaMentoradoCronograma(userId, jobId, courseId, serverPay
   let dayAutomation = null
   if (autoGerarConteudo) {
     await updateJob(userId, jobId, {
-      progress: 85,
-      message: `Cronograma salvo. Gerando conteúdos do dia ${todayKey}…`,
+      progress: 88,
+      message: `Cronograma salvo. Iniciando geração do dia ${todayKey}…`,
     })
-    dayAutomation = await processMentoradoDayAutomation(courseId, todayKey, {
-      userId,
-      jobId,
-      updateJob,
-      autoPublish: true,
+    dayAutomation = await startDayAutomation(courseId, todayKey, userId, {
+      metadata: { triggeredBy: 'cronograma' },
     })
+    if (!dayAutomation.started && dayAutomation.reason) {
+      await updateJob(userId, jobId, {
+        message: `Cronograma salvo. Automação: ${dayAutomation.reason}`,
+      })
+    }
   }
 
   return {

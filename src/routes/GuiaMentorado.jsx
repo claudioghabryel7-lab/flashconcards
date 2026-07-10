@@ -14,11 +14,13 @@ import { useAuth } from '../hooks/useAuth'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import { hasPurchasedCourse } from '../utils/courseAccess'
 import MentoradoCalendar from '../components/guiaMentorado/MentoradoCalendar'
+import MentoradoDayAutomationStatus from '../components/guiaMentorado/MentoradoDayAutomationStatus'
 import { DEFAULT_PLANNING_DAYS, MENTORADO_DAILY_RELEASE_HOUR } from '../constants/guiaMentorado'
 import {
   isUsingDefaultPlanningWindow,
   resolvePlanningEndDate,
   startGuiaMentoradoCronogramaGeneration,
+  startMentoradoDayContentAutomation,
 } from '../services/guiaMentoradoAutomationService'
 
 const GuiaMentorado = () => {
@@ -41,7 +43,10 @@ const GuiaMentorado = () => {
   const [showConfigModal, setShowConfigModal] = useState(false)
   const [calendarLoading, setCalendarLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [generatingDay, setGeneratingDay] = useState(false)
   const [message, setMessage] = useState('')
+
+  const todayKey = dayjs().format('YYYY-MM-DD')
   
   // Carregar cursos (apenas relevantes para o usuário)
   useEffect(() => {
@@ -173,6 +178,7 @@ const GuiaMentorado = () => {
       const configRef = doc(db, 'courses', selectedCourseId, 'config', 'guiaMentorado')
       await setDoc(configRef, {
         ...newConfig,
+        automationUserId: user?.uid || null,
         updatedAt: serverTimestamp(),
       })
       setConfig(newConfig)
@@ -233,6 +239,34 @@ const GuiaMentorado = () => {
       setMessage('')
     } finally {
       setGenerating(false)
+    }
+  }
+
+  const generateTodayContents = async () => {
+    if (!user?.uid) {
+      alert('Faça login como administrador.')
+      return
+    }
+    if (!editalVerticalizado) {
+      alert('Edital verticalizado não carregado.')
+      return
+    }
+
+    setGeneratingDay(true)
+    try {
+      const { topicCount } = await startMentoradoDayContentAutomation({
+        userId: user.uid,
+        courseId: selectedCourseId,
+        targetDate: todayKey,
+        editalVerticalizado,
+      })
+      setMessage(`🚀 Gerando ${topicCount} tópico(s) de hoje, um por vez. Acompanhe abaixo e no banner.`)
+      setTimeout(() => setMessage(''), 10000)
+    } catch (error) {
+      console.error('Erro ao gerar conteúdos do dia:', error)
+      alert(error.message || 'Erro ao iniciar geração do dia.')
+    } finally {
+      setGeneratingDay(false)
     }
   }
   
@@ -322,10 +356,18 @@ const GuiaMentorado = () => {
 
       {isAdmin && config.autoGerarConteudo && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
-          Automação ativa: ao gerar o cronograma, o sistema libera <strong>só os tópicos do dia</strong>.
-          No dia da geração libera imediatamente; nos demais dias, automaticamente às{' '}
-          <strong>{MENTORADO_DAILY_RELEASE_HOUR}h</strong> (horário de Brasília).
+          Automação ativa: gera <strong>um tópico por vez</strong> (flashcards → material → questões → libera).
+          Hoje dispara na hora; demais dias às <strong>{MENTORADO_DAILY_RELEASE_HOUR}h</strong> (Brasília).
         </div>
+      )}
+
+      {isAdmin && config.autoGerarConteudo && cronograma && (
+        <MentoradoDayAutomationStatus
+          courseId={selectedCourseId}
+          targetDate={todayKey}
+          onGenerateToday={generateTodayContents}
+          generating={generatingDay}
+        />
       )}
 
       <MentoradoCalendar

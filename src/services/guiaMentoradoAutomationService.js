@@ -3,6 +3,7 @@ import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { DEFAULT_PLANNING_DAYS, MENTORADO_DAILY_RELEASE_HOUR } from '../constants/guiaMentorado'
 import { extractTopicsFromCronogramaDay } from '../utils/guiaMentoradoTopics'
+import { buildEditalStructurePrompt, loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
 import {
   buildMentoradoConteudoPrompt,
   buildMentoradoFlashcardMeta,
@@ -36,7 +37,12 @@ export async function loadMentoradoAutomationContext(courseId) {
 
   const editalSnap = await getDoc(doc(db, 'courses', resolvedId, 'prompts', 'edital'))
   const editalData = editalSnap.exists() ? editalSnap.data() : {}
-  const editalText = (editalData.pdfText || editalData.prompt || '').toString()
+  let editalText = (editalData.pdfText || editalData.prompt || '').toString()
+
+  if (!editalText.trim()) {
+    const verticalizado = await loadEditalVerticalizado(resolvedId)
+    editalText = buildEditalStructurePrompt(verticalizado, 50)
+  }
 
   const unifiedSnap = await getDoc(doc(db, 'courses', resolvedId, 'prompts', 'unified'))
   const unifiedData = unifiedSnap.exists() ? unifiedSnap.data() : {}
@@ -138,7 +144,6 @@ export async function startMentoradoDayContentAutomation({
   userId,
   courseId,
   targetDate,
-  dayEntry,
   editalVerticalizado,
   autoPublish = true,
 }) {
@@ -146,9 +151,17 @@ export async function startMentoradoDayContentAutomation({
   if (!courseId) throw new Error('Curso não selecionado.')
   if (!targetDate) throw new Error('Data do dia não informada.')
 
+  const monthKey = targetDate.slice(0, 7)
+  const cronogramaSnap = await getDoc(doc(db, 'courses', courseId, 'cronograma', monthKey))
+  const dayEntry = cronogramaSnap.exists() ? cronogramaSnap.data()?.days?.[targetDate] : null
+  if (!dayEntry) {
+    throw new Error(`Dia ${targetDate} não encontrado no cronograma.`)
+  }
+
+  const edital = editalVerticalizado || (await loadEditalVerticalizado(courseId))
   const topics = extractTopicsFromCronogramaDay(
-    { ...dayEntry, data: targetDate },
-    editalVerticalizado,
+    { data: targetDate, tipo: dayEntry.type || dayEntry.tipo, materias: dayEntry.materias || [] },
+    edital,
   )
   if (!topics.length) {
     throw new Error('Nenhum tópico válido encontrado para este dia.')

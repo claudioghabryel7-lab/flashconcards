@@ -129,6 +129,27 @@ function resolveCronogramaMateria(editalVerticalizado, materiaItem = {}) {
   }
 }
 
+function buildEditalTextFromVerticalizado(edital) {
+  if (!edital?.disciplinas?.length) return ''
+  return edital.disciplinas
+    .map((d) => {
+      const topicos = (d.topicos || [])
+        .map((t) => `${(t.numero || '').toString().trim()} ${(t.nome || '').toString().trim()}`.trim())
+        .filter(Boolean)
+        .join('; ')
+      return `${d.nome}: ${topicos || '(sem tópicos)'}`
+    })
+    .join('\n')
+    .slice(0, 15000)
+}
+
+function normalizeMateriaItem(materiaItem) {
+  if (!materiaItem) return null
+  if (typeof materiaItem === 'string') return { topico: materiaItem }
+  if (typeof materiaItem === 'object') return materiaItem
+  return null
+}
+
 function extractTopicsFromCronogramaDay(dayEntry = {}, editalVerticalizado) {
   const materias = dayEntry.materias || []
   const tipo = dayEntry.tipo || dayEntry.type || 'estudo'
@@ -137,7 +158,9 @@ function extractTopicsFromCronogramaDay(dayEntry = {}, editalVerticalizado) {
   if (tipo === 'simulado' || tipo === 'descanso') return []
 
   const map = new Map()
-  materias.forEach((materiaItem) => {
+  materias.forEach((rawItem) => {
+    const materiaItem = normalizeMateriaItem(rawItem)
+    if (!materiaItem) return
     const resolved = resolveCronogramaMateria(editalVerticalizado, materiaItem)
     if (!resolved?.topicKey || map.has(resolved.topicKey)) return
     map.set(resolved.topicKey, {
@@ -182,7 +205,12 @@ async function loadMentoradoAutomationContext(courseId) {
 
   const editalSnap = await db.doc(`courses/${resolvedId}/prompts/edital`).get()
   const editalData = editalSnap.exists ? editalSnap.data() : {}
-  const editalText = (editalData.pdfText || editalData.prompt || '').toString()
+  let editalText = (editalData.pdfText || editalData.prompt || '').toString()
+
+  if (!editalText.trim()) {
+    const verticalizado = await loadEditalVerticalizado(resolvedId)
+    editalText = buildEditalTextFromVerticalizado(verticalizado)
+  }
 
   const unifiedSnap = await db.doc(`courses/${resolvedId}/prompts/unified`).get()
   const unifiedData = unifiedSnap.exists ? unifiedSnap.data() : {}
@@ -196,9 +224,7 @@ async function loadMentoradoAutomationContext(courseId) {
   }
 }
 
-function buildTopicPayloads(topic, context, autoPublish) {
-  const CONTENT_STATUS = { AVAILABLE: 'disponivel', UNAVAILABLE: 'indisponivel' }
-  const status = autoPublish ? CONTENT_STATUS.AVAILABLE : CONTENT_STATUS.UNAVAILABLE
+function buildTopicPayloads(topic, context) {
   const tipoProva =
     context.banca?.toUpperCase().includes('CESPE') ||
     context.banca?.toUpperCase().includes('CEBRASPE')
@@ -248,7 +274,6 @@ Retorne APENAS JSON válido.`
     flashcardMeta,
     conteudoPrompt,
     questoesPrompt,
-    publishStatus: status,
   }
 }
 
@@ -258,4 +283,5 @@ module.exports = {
   extractTopicsFromCronogramaDay,
   buildTopicPayloads,
   resolveCronogramaMateria,
+  buildEditalTextFromVerticalizado,
 }
