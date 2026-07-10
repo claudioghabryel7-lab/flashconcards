@@ -74,6 +74,7 @@ function buildMentoradoCronogramaPrompt({
 DATA FINAL DO PLANEJAMENTO: ${formatDateBR(planningEnd)}
 ${config.dataProva && !usingDefaultWindow ? `DATA DA PROVA: ${formatDateBR(planningEnd)}` : `MODO SEM DATA DA PROVA: planeje exatamente ${DEFAULT_PLANNING_DAYS} dias de estudo a partir de hoje`}
 DIAS DE PLANEJAMENTO: ${daysUntilProva}
+TOTAL DE ENTRADAS OBRIGATÓRIAS NO ARRAY: ${daysUntilProva + 1} (uma por dia, do dia atual até a data final, inclusive)
 TEM TAF: ${config.hasTAF ? 'Sim' : 'Não'}
 TEM REDAÇÃO: ${config.hasRedacao ? 'Sim' : 'Não'}
 EXERCÍCIOS TAF: ${config.tafExercicios?.join(', ') || 'Nenhum'}
@@ -121,6 +122,9 @@ RETORNE APENAS ESTE JSON (sem texto adicional):
 CRÍTICO - NÃO CORTAR O JSON:
 - O JSON deve ser COMPLETO e VÁLIDO
 - NÃO pare no meio do array cronograma
+- O array cronograma DEVE ter EXATAMENTE ${daysUntilProva + 1} objetos — um para CADA dia do calendário
+- NÃO pule datas: se falta um dia no meio, o cronograma fica inválido
+- Use datas consecutivas no formato YYYY-MM-DD
 
 IMPORTANTE:
 - Comece em ${formatDateBR(today)}
