@@ -50,12 +50,14 @@ function mapCommentDoc(d) {
 }
 
 function subscribeWithFallback(primaryQuery, fallbackQuery, mapDocs, onData, onError) {
-  return onSnapshot(
+  let fallbackUnsub = null
+
+  const primaryUnsub = onSnapshot(
     primaryQuery,
     (snap) => onData(mapDocs(snap)),
     (err) => {
       if (err.code === 'failed-precondition') {
-        return onSnapshot(
+        fallbackUnsub = onSnapshot(
           fallbackQuery,
           (snap) => {
             const rows = mapDocs(snap)
@@ -64,10 +66,16 @@ function subscribeWithFallback(primaryQuery, fallbackQuery, mapDocs, onData, onE
           },
           onError,
         )
+        return
       }
       onError?.(err)
     },
   )
+
+  return () => {
+    primaryUnsub()
+    fallbackUnsub?.()
+  }
 }
 
 export async function addContentComment({

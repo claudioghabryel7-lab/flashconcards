@@ -11,6 +11,7 @@ import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import { syncUserCommunityIdentity } from '../services/communityUserService'
 import { invalidateCommunityAuthorCache } from '../hooks/useCommunityAuthors'
 import toast from 'react-hot-toast'
+import { firestoreErrorMessage } from '../utils/firestoreHelpers'
 
 export default function PerfilConfiguracoes() {
   const { user, profile } = useAuth()
@@ -52,7 +53,10 @@ export default function PerfilConfiguracoes() {
   }
 
   const handleSave = async () => {
-    if (!user?.uid) return
+    if (!user?.uid) {
+      toast.error('Sessão expirada. Faça login novamente.')
+      return
+    }
     setSaving(true)
     try {
       const displayName = form.displayName.trim() || user.email?.split('@')[0] || 'Aluno'
@@ -66,6 +70,7 @@ export default function PerfilConfiguracoes() {
           bio: form.bio.trim() || null,
           oneYearGoal: form.oneYearGoal.trim() || null,
           shareTrilhaToFeed: form.shareTrilhaToFeed,
+          profileUpdatedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         },
         { merge: true },
@@ -75,16 +80,19 @@ export default function PerfilConfiguracoes() {
         await updateProfile(auth.currentUser, { displayName })
       }
 
-      await syncUserCommunityIdentity(user.uid, {
+      toast.success('Perfil salvo!')
+
+      syncUserCommunityIdentity(user.uid, {
         displayName,
         photoBase64: form.photoBase64 || null,
       })
-      invalidateCommunityAuthorCache(user.uid)
-
-      toast.success('Perfil salvo!')
+        .then(() => invalidateCommunityAuthorCache(user.uid))
+        .catch((syncErr) => {
+          console.warn('Perfil salvo, mas sync da comunidade falhou:', syncErr)
+        })
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao salvar perfil.')
+      toast.error(firestoreErrorMessage(err, 'Erro ao salvar perfil.'))
     } finally {
       setSaving(false)
     }

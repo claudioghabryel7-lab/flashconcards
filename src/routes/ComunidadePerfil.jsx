@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   collection,
@@ -16,6 +16,7 @@ import ComunidadeShell from '../components/feed/ComunidadeShell'
 import FeedPostThumbnail from '../components/feed/FeedPostThumbnail'
 import UserPublicCommentsList from '../components/content/UserPublicCommentsList'
 import { subscribeUserComments, backfillUserCommentsToFeed } from '../services/contentCommentsService'
+import { subscribeUserFeedComments } from '../services/userFeedCommentsService'
 import {
   followUser,
   subscribeFollowCounts,
@@ -36,8 +37,21 @@ export default function ComunidadePerfil() {
   const [followLoading, setFollowLoading] = useState(false)
   const [profileTab, setProfileTab] = useState('posts')
   const [comments, setComments] = useState([])
+  const [feedComments, setFeedComments] = useState([])
   const [commentsLoading, setCommentsLoading] = useState(true)
+  const [commentsError, setCommentsError] = useState('')
   const [backfillDone, setBackfillDone] = useState(false)
+
+  const mergedComments = useMemo(() => {
+    const map = new Map()
+    ;[...comments, ...feedComments].forEach((item) => {
+      const key = item._docPath || `${item.courseId}-${item.id}`
+      if (!map.has(key)) map.set(key, item)
+    })
+    return Array.from(map.values()).sort(
+      (a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0),
+    )
+  }, [comments, feedComments])
 
   const isOwnProfile = userId === currentUser?.uid
 
@@ -134,18 +148,48 @@ export default function ComunidadePerfil() {
   useEffect(() => {
     if (!userId) return () => {}
     setCommentsLoading(true)
-    const unsub = subscribeUserComments(
+    setCommentsError('')
+
+    let contentReady = false
+    let feedReady = false
+
+    const maybeDone = () => {
+      if (contentReady && feedReady) setCommentsLoading(false)
+    }
+
+    const unsubContent = subscribeUserComments(
       userId,
       (rows) => {
         setComments(rows)
-        setCommentsLoading(false)
+        contentReady = true
+        maybeDone()
       },
       (err) => {
         console.error('Erro ao carregar comentários do perfil:', err)
-        setCommentsLoading(false)
+        setCommentsError('Não foi possível carregar todos os comentários.')
+        contentReady = true
+        maybeDone()
       },
     )
-    return () => unsub?.()
+
+    const unsubFeed = subscribeUserFeedComments(
+      userId,
+      (rows) => {
+        setFeedComments(rows)
+        feedReady = true
+        maybeDone()
+      },
+      (err) => {
+        console.error('Erro ao carregar comentários da comunidade:', err)
+        feedReady = true
+        maybeDone()
+      },
+    )
+
+    return () => {
+      unsubContent?.()
+      unsubFeed?.()
+    }
   }, [userId])
 
   useEffect(() => {
@@ -291,7 +335,7 @@ export default function ComunidadePerfil() {
           }`}
         >
           <MessageCircle className="h-4 w-4" />
-          Comentários ({comments.length})
+          Comentários ({mergedComments.length})
         </button>
       </div>
 
@@ -320,12 +364,14 @@ export default function ComunidadePerfil() {
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-cp-accent" />
         </div>
+      ) : commentsError ? (
+        <div className="px-6 py-10 text-center text-sm text-amber-600">{commentsError}</div>
       ) : (
         <UserPublicCommentsList
-          comments={comments}
+          comments={mergedComments}
           emptyMessage={
             isOwnProfile
-              ? 'Você ainda não comentou em flashcards ou questões.'
+              ? 'Você ainda não comentou em flashcards, questões ou publicações da comunidade.'
               : 'Este usuário ainda não fez comentários públicos.'
           }
         />

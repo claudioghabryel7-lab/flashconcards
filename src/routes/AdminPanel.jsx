@@ -6898,23 +6898,43 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     )
   }
 
-  const tabs = [
-    { id: 'config', label: 'Configurações', icon: '⚙️' },
-    { id: 'flashcards', label: 'Flashcards', icon: '📚' },
-    { id: 'users', label: 'Usuários', icon: '👥' },
-    { id: 'edital', label: 'Edital Verticalizado', icon: '📋' },
-    { id: 'banners', label: 'Banners', icon: '🖼️' },
-    { id: 'popup', label: 'Popup Banner', icon: '🔔' },
-    { id: 'courses', label: 'Cursos', icon: '🎓' },
-    { id: 'reviews', label: 'Avaliações', icon: '⭐' },
-    { id: 'news', label: 'Notícias', icon: '📰' },
-    { id: 'simulados', label: 'Simulados', icon: '📝' },
-    { id: 'shared-links', label: 'Links Compartilhados', icon: '🔗' },
-    { id: 'trials', label: 'Testes Gratuitos', icon: '🎁' },
-    { id: 'moderacao', label: 'Moderação', icon: '🚩' },
-    { id: 'material-concurso', label: 'Material Concurso', icon: '📘' },
-    { id: 'prompt-test', label: 'Teste de Prompts', icon: '🧪' },
+  const adminTabGroups = [
+    {
+      label: 'Plataforma',
+      tabs: [
+        { id: 'config', label: 'Configurações', icon: '⚙️' },
+        { id: 'users', label: 'Usuários', icon: '👥' },
+        { id: 'courses', label: 'Cursos', icon: '🎓' },
+        { id: 'moderacao', label: 'Moderação', icon: '🚩' },
+      ],
+    },
+    {
+      label: 'Conteúdo',
+      tabs: [
+        { id: 'flashcards', label: 'Flashcards', icon: '📚' },
+        { id: 'edital', label: 'Edital', icon: '📋' },
+        { id: 'material-concurso', label: 'Material IA', icon: '📘' },
+        { id: 'simulados', label: 'Simulados', icon: '📝' },
+        { id: 'news', label: 'Notícias', icon: '📰' },
+      ],
+    },
+    {
+      label: 'Marketing',
+      tabs: [
+        { id: 'banners', label: 'Banners', icon: '🖼️' },
+        { id: 'popup', label: 'Popup', icon: '🔔' },
+        { id: 'reviews', label: 'Avaliações', icon: '⭐' },
+        { id: 'trials', label: 'Testes Grátis', icon: '🎁' },
+        { id: 'shared-links', label: 'Links', icon: '🔗' },
+      ],
+    },
+    {
+      label: 'Ferramentas',
+      tabs: [{ id: 'prompt-test', label: 'Teste Prompts', icon: '🧪' }],
+    },
   ]
+
+  const tabs = adminTabGroups.flatMap((group) => group.tabs)
   
   // Estado para gerenciar simulados compartilhados
   const [sharedSimulados, setSharedSimulados] = useState([])
@@ -7039,27 +7059,36 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
 
         {/* Tabs Navigation */}
         <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 mb-6">
-          <div className="overflow-x-auto border-b border-slate-200 dark:border-slate-700">
-            <div className="flex min-w-max flex-nowrap gap-2 p-2 lg:flex-wrap lg:min-w-0">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                title={tab.label}
-                className={`group relative flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all sm:px-4 sm:py-3 sm:text-sm ${
-                  activeTab === tab.id
-                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-                }`}
-              >
-                {activeTab === tab.id && (
-                  <div className="absolute inset-0 translate-x-[-100%] bg-gradient-to-r from-white/0 via-white/20 to-white/0 transition-transform duration-1000 group-hover:translate-x-[100%]"></div>
-                )}
-                <span className="relative z-10" aria-hidden="true">{tab.icon}</span>
-                <span className="relative z-10 whitespace-nowrap">{tab.label}</span>
-              </button>
-            ))}
+          <div className="border-b border-slate-200 dark:border-slate-700 p-3 sm:p-4">
+            <div className="space-y-4">
+              {adminTabGroups.map((group) => (
+                <div key={group.label}>
+                  <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    {group.label}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {group.tabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveTab(tab.id)}
+                        title={tab.label}
+                        className={`group relative flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 sm:py-2.5 sm:text-sm ${
+                          activeTab === tab.id
+                            ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
+                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        {activeTab === tab.id && (
+                          <div className="absolute inset-0 translate-x-[-100%] bg-gradient-to-r from-white/0 via-white/20 to-white/0 transition-transform duration-1000 group-hover:translate-x-[100%]" />
+                        )}
+                        <span className="relative z-10" aria-hidden="true">{tab.icon}</span>
+                        <span className="relative z-10 whitespace-nowrap">{tab.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -10835,6 +10864,9 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                               <div>
                                 <p className="font-semibold text-alego-700">{user.displayName || user.email}</p>
                                 <p className="text-sm text-slate-500">{user.email}</p>
+                                {user.phone && (
+                                  <p className="text-sm text-slate-600">📱 {user.phone}</p>
+                                )}
                                 <div className="mt-1 flex gap-2 flex-wrap">
                                   <span className="inline-block rounded-full bg-alego-100 px-2 py-1 text-xs font-semibold text-alego-600">
                                     {user.role === 'admin' ? 'Admin' : 'Aluno'}
