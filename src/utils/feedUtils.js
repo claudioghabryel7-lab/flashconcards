@@ -22,48 +22,153 @@ const PATTERN_DIAMONDS =
 const PATTERN_BOOKS =
   'url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Crect x=\'8\' y=\'6\' width=\'10\' height=\'28\' rx=\'1\' fill=\'white\' fill-opacity=\'0.06\'/%3E%3Crect x=\'22\' y=\'10\' width=\'10\' height=\'24\' rx=\'1\' fill=\'white\' fill-opacity=\'0.04\'/%3E%3C/svg%3E")'
 
+const PATTERN_BADGE =
+  'url("data:image/svg+xml,%3Csvg width=\'32\' height=\'32\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M16 2 L20 8 L28 9 L22 14 L24 22 L16 18 L8 22 L10 14 L4 9 L12 8 Z\' fill=\'white\' fill-opacity=\'0.08\'/%3E%3C/svg%3E")'
+
+const PATTERN_STRIPES =
+  'url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Crect width=\'40\' height=\'40\' fill=\'white\' fill-opacity=\'0.04\'/%3E%3Cpath d=\'M0 20 H40 M20 0 V40\' stroke=\'white\' stroke-opacity=\'0.12\'/%3E%3C/svg%3E")'
+
+const PATTERN_COLUMNS =
+  'url("data:image/svg+xml,%3Csvg width=\'36\' height=\'36\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Crect x=\'4\' y=\'8\' width=\'6\' height=\'24\' fill=\'white\' fill-opacity=\'0.07\'/%3E%3Crect x=\'15\' y=\'4\' width=\'6\' height=\'28\' fill=\'white\' fill-opacity=\'0.05\'/%3E%3Crect x=\'26\' y=\'8\' width=\'6\' height=\'24\' fill=\'white\' fill-opacity=\'0.07\'/%3E%3C/svg%3E")'
+
+const PATTERN_SCALES =
+  'url("data:image/svg+xml,%3Csvg width=\'48\' height=\'32\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M24 4 L24 28 M8 12 L40 12 M12 20 A12 12 0 0 0 36 20\' fill=\'none\' stroke=\'white\' stroke-opacity=\'0.1\' stroke-width=\'1.5\'/%3E%3C/svg%3E")'
+
+const PATTERN_HEX =
+  'url("data:image/svg+xml,%3Csvg width=\'28\' height=\'32\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M14 0 L28 8 L28 24 L14 32 L0 24 L0 8 Z\' fill=\'none\' stroke=\'white\' stroke-opacity=\'0.09\'/%3E%3C/svg%3E")'
+
 export const CARD_COLOR_THEMES = {
   violet: {
     label: 'Roxo',
+    group: 'classic',
     background: 'linear-gradient(135deg, #5b21b6 0%, #7c3aed 45%, #1e1b4b 100%)',
     pattern: PATTERN_DOTS,
   },
   amber: {
     label: 'Laranja',
+    group: 'classic',
     background: 'linear-gradient(135deg, #d97706 0%, #f97316 50%, #be123c 100%)',
     pattern: PATTERN_WAVES,
   },
   emerald: {
     label: 'Verde',
+    group: 'classic',
     background: 'linear-gradient(135deg, #059669 0%, #10b981 50%, #134e4a 100%)',
     pattern: PATTERN_GRID,
   },
   slate: {
     label: 'Azul',
+    group: 'classic',
     background: 'linear-gradient(135deg, #475569 0%, #4338ca 50%, #1e3a8a 100%)',
     pattern: PATTERN_DIAMONDS,
   },
   rose: {
     label: 'Rosa',
+    group: 'classic',
     background: 'linear-gradient(135deg, #e11d48 0%, #db2777 50%, #86198f 100%)',
     pattern: PATTERN_DOTS,
   },
   cyan: {
     label: 'Ciano',
+    group: 'classic',
     background: 'linear-gradient(135deg, #0891b2 0%, #0ea5e9 50%, #1d4ed8 100%)',
     pattern: PATTERN_WAVES,
   },
   midnight: {
     label: 'Noturno',
+    group: 'classic',
     background: 'linear-gradient(135deg, #27272a 0%, #0f172a 60%, #000000 100%)',
     pattern: PATTERN_BOOKS,
   },
+  policia: {
+    label: 'Polícia',
+    group: 'themed',
+    background: 'linear-gradient(135deg, #0c1e3d 0%, #1e3a8a 45%, #172554 100%)',
+    pattern: PATTERN_BADGE,
+  },
+  futebol: {
+    label: 'Futebol',
+    group: 'themed',
+    background: 'linear-gradient(135deg, #14532d 0%, #16a34a 50%, #052e16 100%)',
+    pattern: PATTERN_STRIPES,
+  },
+  tribunal: {
+    label: 'Tribunal',
+    group: 'themed',
+    background: 'linear-gradient(135deg, #3f1d0f 0%, #78350f 45%, #1c1917 100%)',
+    pattern: PATTERN_COLUMNS,
+  },
+  juridico: {
+    label: 'Jurídico',
+    group: 'themed',
+    background: 'linear-gradient(135deg, #4c0519 0%, #881337 50%, #1e1b4b 100%)',
+    pattern: PATTERN_SCALES,
+  },
+  concurso: {
+    label: 'Concurso',
+    group: 'themed',
+    background: 'linear-gradient(135deg, #1e40af 0%, #2563eb 50%, #1e3a8a 100%)',
+    pattern: PATTERN_GRID,
+  },
+  pm: {
+    label: 'PM',
+    group: 'themed',
+    background: 'linear-gradient(135deg, #365314 0%, #4d7c0f 50%, #1a2e05 100%)',
+    pattern: PATTERN_HEX,
+  },
+  bombeiro: {
+    label: 'Bombeiro',
+    group: 'themed',
+    background: 'linear-gradient(135deg, #991b1b 0%, #dc2626 50%, #7f1d1d 100%)',
+    pattern: PATTERN_WAVES,
+  },
+  ouro: {
+    label: 'Ouro',
+    group: 'themed',
+    background: 'linear-gradient(135deg, #92400e 0%, #d97706 50%, #78350f 100%)',
+    pattern: PATTERN_BADGE,
+  },
+}
+
+export const CARD_COLOR_GROUPS = {
+  classic: 'Cores clássicas',
+  themed: 'Temas de concurso',
 }
 
 export const CARD_FONT_STYLES = {
-  display: { label: 'Syne', titleClass: 'font-display', bodyClass: 'font-sans' },
-  sans: { label: 'Padrão', titleClass: 'font-sans', bodyClass: 'font-sans' },
-  mono: { label: 'Mono', titleClass: 'font-mono', bodyClass: 'font-mono' },
+  display: { label: 'Syne', group: 'classic', titleClass: 'font-display', bodyClass: 'font-sans' },
+  sans: { label: 'Padrão', group: 'classic', titleClass: 'font-sans', bodyClass: 'font-sans' },
+  mono: { label: 'Mono', group: 'classic', titleClass: 'font-mono', bodyClass: 'font-mono' },
+  tribunal: {
+    label: 'Tribunal',
+    group: 'themed',
+    titleClass: 'font-tribunal',
+    bodyClass: 'font-serif-body',
+  },
+  policia: {
+    label: 'Polícia',
+    group: 'themed',
+    titleClass: 'font-police',
+    bodyClass: 'font-police',
+  },
+  futebol: {
+    label: 'Futebol',
+    group: 'themed',
+    titleClass: 'font-sport',
+    bodyClass: 'font-sans',
+  },
+  oficial: {
+    label: 'Oficial',
+    group: 'themed',
+    titleClass: 'font-oficial',
+    bodyClass: 'font-serif-body',
+  },
+  juridico: {
+    label: 'Jurídico',
+    group: 'themed',
+    titleClass: 'font-tribunal',
+    bodyClass: 'font-serif-body',
+  },
 }
 
 const MODALITY_DEFAULT_COLOR = {

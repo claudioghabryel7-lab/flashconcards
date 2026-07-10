@@ -1,5 +1,5 @@
 import { Users } from 'lucide-react'
-import { usePresenceRegistry } from '@/hooks/usePresenceRegistry'
+import { useSimulatedOnlineCount } from '@/hooks/useSimulatedOnlineCount'
 
 type OnlineNowBadgeProps = {
   /** Filtrar por curso (páginas de curso). Omita ou use platformWide para contagem global. */
@@ -16,16 +16,13 @@ export default function OnlineNowBadge({
   className = '',
   compact = false,
 }: OnlineNowBadgeProps) {
-  const { onlineCount, loading } = usePresenceRegistry({
-    courseId: platformWide ? null : courseId,
-    platformWide,
-  })
+  const onlineCount = useSimulatedOnlineCount({ courseId, platformWide })
 
   const title = platformWide
-    ? 'Alunos online na plataforma agora (tempo real)'
+    ? 'Alunos estudando na plataforma agora'
     : courseId
-      ? 'Alunos deste curso online agora (tempo real)'
-      : 'Alunos online agora (tempo real)'
+      ? 'Alunos deste curso estudando agora'
+      : 'Alunos estudando agora'
 
   return (
     <span
@@ -37,7 +34,7 @@ export default function OnlineNowBadge({
         <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
       </span>
       <Users className="h-3 w-3" />
-      {loading ? '…' : onlineCount}
+      {onlineCount}
       {!compact && <span className="hidden sm:inline">online agora</span>}
     </span>
   )

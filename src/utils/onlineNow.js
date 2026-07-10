@@ -3,6 +3,53 @@ export const PRESENCE_ONLINE_TTL_MS = 45_000
 
 export const PRESENCE_HEARTBEAT_MS = 15_000
 
+/** Intervalo em que o número simulado de online pode mudar (evita flicker). */
+export const SIMULATED_ONLINE_TICK_MS = 4 * 60 * 1000
+
+function hashSeed(str) {
+  let h = 0
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0
+  return h
+}
+
+/** 22:00–05:59 = madrugada/noite; 06:00–21:59 = horário de estudo. */
+export function isOnlineNightPeriod(date = new Date()) {
+  const hour = date.getHours()
+  return hour >= 22 || hour < 6
+}
+
+export function getSimulatedOnlineRange(now = Date.now()) {
+  return isOnlineNightPeriod(new Date(now))
+    ? { min: 1, max: 9 }
+    : { min: 5, max: 30 }
+}
+
+function pickInRange(min, max, now, seed) {
+  const bucket = Math.floor(now / SIMULATED_ONLINE_TICK_MS)
+  const span = max - min + 1
+  return min + (hashSeed(`${seed}:${bucket}`) % span)
+}
+
+/**
+ * Contagem exibida no badge — simulada por faixa horária.
+ * Madrugada/noite (22h–06h): 1–9 · Dia (06h–22h): 5–30
+ */
+export function getSimulatedOnlineCount(
+  now = Date.now(),
+  { courseId = null, platformWide = true } = {},
+) {
+  const { min, max } = getSimulatedOnlineRange(now)
+  const platformCount = pickInRange(min, max, now, 'platform')
+
+  if (platformWide || !courseId) return platformCount
+
+  const ratio = 0.22 + (hashSeed(String(courseId)) % 48) / 100
+  const scaled = Math.round(platformCount * ratio)
+  const courseMin = Math.max(1, Math.floor(min * 0.35))
+  const courseMax = Math.max(courseMin, Math.floor(max * 0.7))
+  return Math.max(courseMin, Math.min(courseMax, scaled || courseMin))
+}
+
 export function isPresenceFresh(lastSeen, now = Date.now()) {
   if (!lastSeen) return false
 

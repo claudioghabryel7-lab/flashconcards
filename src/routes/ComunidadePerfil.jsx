@@ -9,7 +9,7 @@ import {
   where,
 } from 'firebase/firestore'
 import { Grid3X3, Loader2, MessageCircle } from 'lucide-react'
-import { db } from '../firebase/config'
+import { db, initFirebase } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import UserAvatar from '../components/UserAvatar'
 import ComunidadeShell from '../components/feed/ComunidadeShell'
@@ -39,7 +39,7 @@ export default function ComunidadePerfil() {
   const [comments, setComments] = useState([])
   const [feedComments, setFeedComments] = useState([])
   const [commentsLoading, setCommentsLoading] = useState(true)
-  const [commentsError, setCommentsError] = useState('')
+  const [contentCommentsFailed, setContentCommentsFailed] = useState(false)
   const [backfillDone, setBackfillDone] = useState(false)
 
   const mergedComments = useMemo(() => {
@@ -147,46 +147,74 @@ export default function ComunidadePerfil() {
 
   useEffect(() => {
     if (!userId) return () => {}
-    setCommentsLoading(true)
-    setCommentsError('')
 
-    let contentReady = false
-    let feedReady = false
+    let cancelled = false
+    let unsubContent = () => {}
+    let unsubFeed = () => {}
+    let retryTimer = null
 
-    const maybeDone = () => {
-      if (contentReady && feedReady) setCommentsLoading(false)
+    const attach = () => {
+      initFirebase()
+      if (!db) return false
+
+      unsubContent?.()
+      unsubFeed?.()
+
+      setCommentsLoading(true)
+      setContentCommentsFailed(false)
+
+      let contentReady = false
+      let feedReady = false
+
+      const maybeDone = () => {
+        if (contentReady && feedReady) setCommentsLoading(false)
+      }
+
+      unsubContent = subscribeUserComments(
+        userId,
+        (rows) => {
+          if (cancelled) return
+          setComments(rows)
+          contentReady = true
+          maybeDone()
+        },
+        () => {
+          if (cancelled) return
+          setContentCommentsFailed(true)
+          setComments([])
+          contentReady = true
+          maybeDone()
+        },
+      )
+
+      unsubFeed = subscribeUserFeedComments(
+        userId,
+        (rows) => {
+          if (cancelled) return
+          setFeedComments(rows)
+          feedReady = true
+          maybeDone()
+        },
+        (err) => {
+          if (cancelled) return
+          console.error('Erro ao carregar comentários da comunidade:', err)
+          feedReady = true
+          maybeDone()
+        },
+      )
+
+      return true
     }
 
-    const unsubContent = subscribeUserComments(
-      userId,
-      (rows) => {
-        setComments(rows)
-        contentReady = true
-        maybeDone()
-      },
-      (err) => {
-        console.error('Erro ao carregar comentários do perfil:', err)
-        setCommentsError('Não foi possível carregar todos os comentários.')
-        contentReady = true
-        maybeDone()
-      },
-    )
-
-    const unsubFeed = subscribeUserFeedComments(
-      userId,
-      (rows) => {
-        setFeedComments(rows)
-        feedReady = true
-        maybeDone()
-      },
-      (err) => {
-        console.error('Erro ao carregar comentários da comunidade:', err)
-        feedReady = true
-        maybeDone()
-      },
-    )
+    if (!attach()) {
+      retryTimer = setInterval(() => {
+        if (cancelled || attach()) clearInterval(retryTimer)
+      }, 250)
+    }
 
     return () => {
+      cancelled = true
+      if (retryTimer) clearInterval(retryTimer)
       unsubContent?.()
       unsubFeed?.()
     }
@@ -364,17 +392,26 @@ export default function ComunidadePerfil() {
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-cp-accent" />
         </div>
-      ) : commentsError ? (
-        <div className="px-6 py-10 text-center text-sm text-amber-600">{commentsError}</div>
+      ) : mergedComments.length === 0 && contentCommentsFailed ? (
+        <div className="px-6 py-10 text-center text-sm text-amber-600">
+          Não foi possível carregar os comentários. Tente novamente em instantes.
+        </div>
       ) : (
-        <UserPublicCommentsList
-          comments={mergedComments}
-          emptyMessage={
-            isOwnProfile
-              ? 'Você ainda não comentou em flashcards, questões ou publicações da comunidade.'
-              : 'Este usuário ainda não fez comentários públicos.'
-          }
-        />
+        <>
+          {contentCommentsFailed && (
+            <p className="border-b border-amber-500/20 bg-amber-500/10 px-6 py-2 text-center text-xs text-amber-700">
+              Alguns comentários em flashcards e questões não carregaram; exibindo o que foi encontrado.
+            </p>
+          )}
+          <UserPublicCommentsList
+            comments={mergedComments}
+            emptyMessage={
+              isOwnProfile
+                ? 'Você ainda não comentou em flashcards, questões ou publicações da comunidade.'
+                : 'Este usuário ainda não fez comentários públicos.'
+            }
+          />
+        </>
       )}
     </ComunidadeShell>
   )

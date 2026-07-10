@@ -2,10 +2,15 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import FeedPostMedia from './FeedPostMedia'
 import {
+  CARD_COLOR_GROUPS,
   CARD_COLOR_THEMES,
   CARD_FONT_STYLES,
   getDefaultCardTheme,
 } from '../../utils/feedUtils'
+
+function groupEntries(entries, groupKey) {
+  return Object.entries(entries).filter(([, item]) => item.group === groupKey)
+}
 
 export default function FeedPostEditModal({ post, open, saving, onClose, onSave }) {
   const defaults = getDefaultCardTheme(post?.modalidade)
@@ -48,45 +53,51 @@ export default function FeedPostEditModal({ post, open, saving, onClose, onSave 
             <FeedPostMedia post={previewPost} exportMode />
           </div>
 
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-cp-muted">
-              Cor do card
-            </p>
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-              {Object.entries(CARD_COLOR_THEMES).map(([key, theme]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setColor(key)}
-                  className={`flex flex-col items-center gap-1 rounded-xl p-1 transition ${
-                    color === key ? 'ring-2 ring-cp-accent ring-offset-2 ring-offset-cp-bg' : ''
-                  }`}
-                >
-                  <span className={`h-10 w-full rounded-lg`} style={{ background: theme.background }} />
-                  <span className="text-[9px] text-cp-muted">{theme.label}</span>
-                </button>
-              ))}
+          {Object.entries(CARD_COLOR_GROUPS).map(([groupKey, groupLabel]) => (
+            <div key={groupKey}>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-cp-muted">
+                {groupKey === 'classic' ? 'Cor do card' : groupLabel}
+              </p>
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+                {groupEntries(CARD_COLOR_THEMES, groupKey).map(([key, theme]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setColor(key)}
+                    className={`flex flex-col items-center gap-1 rounded-xl p-1 transition ${
+                      color === key ? 'ring-2 ring-cp-accent ring-offset-2 ring-offset-cp-bg' : ''
+                    }`}
+                  >
+                    <span className="h-10 w-full rounded-lg" style={{ background: theme.background }} />
+                    <span className="text-[9px] text-cp-muted">{theme.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ))}
 
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-cp-muted">
               Fonte do texto
             </p>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(CARD_FONT_STYLES).map(([key, style]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setFont(key)}
-                  className={`rounded-full border px-4 py-2 text-sm transition ${
-                    font === key
-                      ? 'border-cp-accent bg-cp-accent/15 text-cp-accent'
-                      : 'border-cp-border text-cp-text hover:border-cp-accent/40'
-                  } ${style.titleClass}`}
-                >
-                  {style.label}
-                </button>
+            <div className="space-y-3">
+              {['classic', 'themed'].map((groupKey) => (
+                <div key={groupKey} className="flex flex-wrap gap-2">
+                  {groupEntries(CARD_FONT_STYLES, groupKey).map(([key, style]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setFont(key)}
+                      className={`rounded-full border px-4 py-2 text-sm transition ${
+                        font === key
+                          ? 'border-cp-accent bg-cp-accent/15 text-cp-accent'
+                          : 'border-cp-border text-cp-text hover:border-cp-accent/40'
+                      } ${style.titleClass}`}
+                    >
+                      {style.label}
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           </div>

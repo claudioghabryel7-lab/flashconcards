@@ -270,17 +270,23 @@ export function subscribeContentComments(
 }
 
 export function subscribeUserComments(userId, onData, onError) {
-  if (!userId) return () => {}
+  if (!userId || !db) {
+    onData?.([])
+    return () => {}
+  }
 
-  const mapDocs = (snap) => snap.docs.map(mapCommentDoc)
+  const mapDocs = (snap) => {
+    const rows = snap.docs.map(mapCommentDoc)
+    rows.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+    return rows
+  }
 
-  return subscribeWithFallback(
-    query(collectionGroup(db, 'contentComments'), where('userId', '==', userId), orderBy('createdAt', 'desc')),
-    query(collectionGroup(db, 'contentComments'), where('userId', '==', userId)),
-    mapDocs,
-    onData,
-    onError,
-  )
+  const q = query(collectionGroup(db, 'contentComments'), where('userId', '==', userId))
+  return onSnapshot(q, (snap) => onData(mapDocs(snap)), (err) => {
+    console.error('Erro ao carregar comentários do usuário:', err)
+    onData?.([])
+    onError?.(err)
+  })
 }
 
 export async function voteContentComment({ courseId, commentId, userId, voteType }) {

@@ -45,6 +45,11 @@ export default {
         display: ['Syne', 'var(--font-geist-sans)', 'system-ui', 'sans-serif'],
         sans: ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
         mono: ['var(--font-geist-mono)', 'ui-monospace', 'monospace'],
+        tribunal: ['Cinzel', 'Georgia', 'serif'],
+        'serif-body': ['Crimson Text', 'Georgia', 'serif'],
+        police: ['Share Tech Mono', 'ui-monospace', 'monospace'],
+        sport: ['Orbitron', 'system-ui', 'sans-serif'],
+        oficial: ['Special Elite', 'Georgia', 'serif'],
       },
       boxShadow: {
         'cp-glow': '0 0 60px var(--cp-glow)',

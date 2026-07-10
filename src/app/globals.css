@@ -1,5 +1,13 @@
 @import '@fontsource/syne/600.css';
 @import '@fontsource/syne/700.css';
+@import '@fontsource/cinzel/600.css';
+@import '@fontsource/cinzel/700.css';
+@import '@fontsource/crimson-text/400.css';
+@import '@fontsource/crimson-text/600.css';
+@import '@fontsource/orbitron/600.css';
+@import '@fontsource/orbitron/700.css';
+@import '@fontsource/share-tech-mono/400.css';
+@import '@fontsource/special-elite/400.css';
 @import '../styles/cp-legacy-bridge.css';
 @import '../styles/responsive-layout.css';
 @import '../styles/course-onboarding.css';
