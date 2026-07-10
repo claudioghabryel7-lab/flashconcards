@@ -49,7 +49,7 @@ async function throwIfCancelled(userId, jobId) {
 
 async function isJobCancelled(userId, jobId) {
   const snap = await getDb().doc(`users/${userId}/generationJobs/${jobId}`).get()
-  return snap.exists() && snap.data().status === 'cancelled'
+  return snap.exists && snap.data().status === 'cancelled'
 }
 
 async function touchActiveJob(userId, jobId, patch = {}) {

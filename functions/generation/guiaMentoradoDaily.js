@@ -33,7 +33,7 @@ async function loadCronogramaDay(courseId, targetDate) {
 
 async function prepareDayAutomation(courseId, targetDate) {
   const configSnap = await getDb().doc(`courses/${courseId}/config/guiaMentorado`).get()
-  const config = configSnap.exists() ? configSnap.data() : {}
+  const config = configSnap.exists ? configSnap.data() : {}
   if (!config.autoGerarConteudo) {
     return { ok: false, reason: 'Automação desativada nas configurações.' }
   }
@@ -81,7 +81,7 @@ async function prepareDayAutomation(courseId, targetDate) {
       .doc(`courses/${courseId}/topicoStatus/${sanitizeTopicKeyForFirestore(topic.topicKey)}`)
       .get()
     const isPublished =
-      statusSnap.exists() && statusSnap.data().status === 'disponivel' && readiness.complete
+      statusSnap.exists && statusSnap.data().status === 'disponivel' && readiness.complete
     if (!isPublished) pendingTopics.push(topic)
   }
 
@@ -192,7 +192,7 @@ async function runDailyMentoradoAutomationForAllCourses() {
 
     try {
       const configSnap = await getDb().doc(`courses/${courseId}/config/guiaMentorado`).get()
-      if (!configSnap.exists() || !configSnap.data().autoGerarConteudo) continue
+      if (!configSnap.exists || !configSnap.data().autoGerarConteudo) continue
 
       const userId = configSnap.data().automationUserId || null
       const result = await startDayAutomation(courseId, todayKey, userId)

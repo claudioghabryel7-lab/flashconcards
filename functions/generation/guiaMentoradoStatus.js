@@ -93,7 +93,7 @@ async function updateTopicStep(courseId, targetDate, topicKey, patch) {
 async function finalizeDayStatus(courseId, targetDate, { errors = [], total = 0 } = {}) {
   const ref = statusRef(courseId, targetDate)
   const snap = await ref.get()
-  const topics = snap.exists() ? snap.data().topics || [] : []
+  const topics = snap.exists ? snap.data().topics || [] : []
   const publishedCount = topics.filter((t) => t.status === 'published').length
 
   let status = 'done'

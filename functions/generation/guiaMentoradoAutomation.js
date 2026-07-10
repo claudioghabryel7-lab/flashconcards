@@ -623,7 +623,7 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
 
   if (targetDate) {
     const statusSnap = await getDb().doc(`courses/${courseId}/mentoradoAutomation/${targetDate}`).get()
-    const totalPublished = statusSnap.exists() ? statusSnap.data().publishedCount || 0 : publishedCount
+    const totalPublished = statusSnap.exists ? statusSnap.data().publishedCount || 0 : publishedCount
     await finalizeDayStatus(courseId, targetDate, { errors: [], total })
     await updateDayStatus(courseId, targetDate, {
       publishedCount: totalPublished,

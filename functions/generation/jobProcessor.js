@@ -33,7 +33,7 @@ async function resolveTopicoPublishStatus(courseId, topicKey) {
   if (!sanitized) return CONTENT_STATUS.UNAVAILABLE
 
   const snap = await getDb().doc(`courses/${courseId}/topicoStatus/${sanitized}`).get()
-  if (snap.exists() && snap.data().status === CONTENT_STATUS.AVAILABLE) {
+  if (snap.exists && snap.data().status === CONTENT_STATUS.AVAILABLE) {
     return CONTENT_STATUS.AVAILABLE
   }
   return CONTENT_STATUS.UNAVAILABLE
@@ -42,7 +42,7 @@ async function resolveTopicoPublishStatus(courseId, topicKey) {
 async function resolveIncidenciaContentStatus(courseId, disciplinaNome) {
   const key = sanitizeDisciplinaKey(disciplinaNome)
   const snap = await getDb().doc(`courses/${courseId}/conteudosIncidencia/${key}`).get()
-  if (snap.exists()) {
+  if (snap.exists) {
     const status = snap.data().status
     if (status === CONTENT_STATUS.AVAILABLE || status === 'disponivel') {
       return CONTENT_STATUS.AVAILABLE
@@ -218,7 +218,7 @@ async function processConteudoIncidencia(userId, jobId, courseId, serverPayload)
 
   if (!status) {
     const existing = await getDb().doc(`courses/${courseId}/conteudosIncidencia/${docId}`).get()
-    const prevStatus = existing.exists() ? existing.data().status : null
+    const prevStatus = existing.exists ? existing.data().status : null
     status =
       prevStatus === CONTENT_STATUS.AVAILABLE || prevStatus === 'disponivel'
         ? CONTENT_STATUS.AVAILABLE

@@ -508,7 +508,7 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
               console.log(`Encontrado transactionId no metadata: ${transactionId}`)
               const transactionDoc = await transactionsRef.doc(transactionId).get()
               
-              if (transactionDoc.exists()) {
+              if (transactionDoc.exists) {
                 // Processar com este documento
                 snapshot = {
                   docs: [transactionDoc],
@@ -614,7 +614,7 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
             const userRef = admin.firestore().collection('users').doc(userId)
             const userDoc = await userRef.get()
             
-            if (userDoc.exists()) {
+            if (userDoc.exists) {
               const userData = userDoc.data()
               const currentPurchasedCourses = userData.purchasedCourses || []
               
