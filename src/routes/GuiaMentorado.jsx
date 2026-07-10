@@ -365,6 +365,7 @@ const GuiaMentorado = () => {
         <MentoradoDayAutomationStatus
           courseId={selectedCourseId}
           targetDate={todayKey}
+          userId={user?.uid}
           onGenerateToday={generateTodayContents}
           generating={generatingDay}
         />

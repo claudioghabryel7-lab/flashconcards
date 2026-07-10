@@ -8,7 +8,30 @@ function statusRef(courseId, targetDate) {
   return getDb().doc(`courses/${courseId}/mentoradoAutomation/${targetDate}`)
 }
 
-async function initDayStatus(courseId, targetDate, topics = [], jobId = null) {
+async function resetGeneratingTopicsOnCancel(courseId, targetDate, reason = 'Cancelado pelo admin') {
+  const ref = statusRef(courseId, targetDate)
+  const snap = await ref.get()
+  if (!snap.exists) return
+
+  const data = snap.data()
+  const topics = (data.topics || []).map((t) =>
+    t.status === 'generating'
+      ? { ...t, status: 'pending', step: 'aguardando', error: null }
+      : t,
+  )
+
+  await ref.set(
+    {
+      topics,
+      status: 'cancelled',
+      reason,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+async function initDayStatus(courseId, targetDate, topics = [], jobId = null, automationUserId = null) {
   const ts = admin.firestore.FieldValue.serverTimestamp()
   const payload = {
     date: targetDate,
@@ -17,6 +40,7 @@ async function initDayStatus(courseId, targetDate, topics = [], jobId = null) {
     totalTopics: topics.length,
     publishedCount: 0,
     jobId: jobId || null,
+    automationUserId: automationUserId || null,
     topics: topics.map((t) => ({
       topicKey: t.topicKey,
       topicoNome: t.topicoNome || t.topicKey,
@@ -113,4 +137,5 @@ module.exports = {
   updateTopicStep,
   finalizeDayStatus,
   markDayContentGenerated,
+  resetGeneratingTopicsOnCancel,
 }

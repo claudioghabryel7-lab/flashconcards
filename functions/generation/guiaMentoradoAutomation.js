@@ -496,12 +496,6 @@ async function abortAutomationJob({
     serverPayload,
     resumeState: { targetDate },
   })
-  if (targetDate && topics[topicIndex]) {
-    await updateTopicStep(courseId, targetDate, topics[topicIndex].topicKey, {
-      status: 'pending',
-      step: 'aguardando',
-    })
-  }
 }
 
 async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPayload, updateJob) {
@@ -535,7 +529,7 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
   let publishedCount = 0
 
   if (targetDate && startIndex === 0) {
-    await initDayStatus(courseId, targetDate, topics, jobId)
+    await initDayStatus(courseId, targetDate, topics, jobId, userId)
   } else if (targetDate && startIndex > 0) {
     await updateDayStatus(courseId, targetDate, { status: 'running', jobId })
   }

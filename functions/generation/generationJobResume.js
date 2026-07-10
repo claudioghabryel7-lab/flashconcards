@@ -171,11 +171,8 @@ async function handleGenerationJobCancelled(userId, jobId, jobData = {}) {
     const targetDate =
       jobData.serverPayload?.targetDate || jobData.resumeState?.targetDate || null
     if (courseId && targetDate) {
-      const { updateDayStatus } = require('./guiaMentoradoStatus')
-      await updateDayStatus(courseId, targetDate, {
-        status: 'cancelled',
-        reason: 'Cancelado pelo admin',
-      })
+      const { resetGeneratingTopicsOnCancel } = require('./guiaMentoradoStatus')
+      await resetGeneratingTopicsOnCancel(courseId, targetDate)
     }
   }
 }
