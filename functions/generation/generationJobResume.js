@@ -5,6 +5,10 @@ const {
 } = require('./geminiKeyPool')
 
 const RETRY_INTERVAL_MS = 5 * 60 * 1000
+const STALL_RUNNING_MS = 10 * 60 * 1000
+const CF_SAFE_MS = 7 * 60 * 1000
+
+const WAITING_STATUSES = ['waiting_api', 'waiting_retry', 'waiting_timeout']
 
 function getDb() {
   return admin.firestore()
@@ -23,7 +27,34 @@ function isApiQuotaError(error) {
   )
 }
 
-async function pauseJobForApi({
+function isMentoradoJob(jobType) {
+  return jobType === 'guia_mentorado_automation' || jobType === 'guia_mentorado_cronograma'
+}
+
+async function isJobCancelled(userId, jobId) {
+  const snap = await getDb().doc(`users/${userId}/generationJobs/${jobId}`).get()
+  return snap.exists() && snap.data().status === 'cancelled'
+}
+
+async function touchActiveJob(userId, jobId, patch = {}) {
+  await getDb()
+    .doc(`generationActiveJobs/${jobId}`)
+    .set(
+      {
+        userId,
+        jobId,
+        lastHeartbeat: admin.firestore.FieldValue.serverTimestamp(),
+        ...patch,
+      },
+      { merge: true },
+    )
+}
+
+async function clearActiveJob(jobId) {
+  await getDb().doc(`generationActiveJobs/${jobId}`).delete().catch(() => {})
+}
+
+async function pauseJobForResume({
   userId,
   jobId,
   courseId,
@@ -32,6 +63,9 @@ async function pauseJobForApi({
   resumeFromTopicIndex = 0,
   topicLabel = '',
   updateJob,
+  status = 'waiting_retry',
+  message,
+  waitReason = 'retry',
 }) {
   const ts = admin.firestore.FieldValue.serverTimestamp()
   const nextRetryAt = new Date(Date.now() + RETRY_INTERVAL_MS)
@@ -40,16 +74,28 @@ async function pauseJobForApi({
     resumeFromTopicIndex,
     targetDate: serverPayload?.targetDate || null,
     topicLabel,
+    waitReason,
   }
 
-  const message = topicLabel
-    ? `API expirada — aguardando… (${topicLabel})`
-    : 'API expirada — aguardando liberação das chaves…'
+  const defaultMessages = {
+    waiting_api: topicLabel
+      ? `API expirada — aguardando… (${topicLabel})`
+      : 'API expirada — aguardando liberação das chaves…',
+    waiting_timeout: topicLabel
+      ? `Pausado (limite do servidor) — retomando… (${topicLabel})`
+      : 'Pausado (limite do servidor) — retomando em instantes…',
+    waiting_retry: topicLabel
+      ? `Aguardando para retomar… (${topicLabel})`
+      : 'Aguardando para retomar a geração…',
+  }
+
+  const finalMessage = message || defaultMessages[status] || defaultMessages.waiting_retry
 
   await updateJob(userId, jobId, {
-    status: 'waiting_api',
-    message,
+    status,
+    message: finalMessage,
     resumeState,
+    waitReason,
     nextRetryAt: admin.firestore.Timestamp.fromDate(nextRetryAt),
   })
 
@@ -60,10 +106,18 @@ async function pauseJobForApi({
     jobType,
     serverPayload,
     resumeState,
+    status,
+    waitReason,
     nextRetryAt: admin.firestore.Timestamp.fromDate(nextRetryAt),
     updatedAt: ts,
     createdAt: ts,
   })
+
+  await touchActiveJob(userId, jobId, { status, waitReason })
+}
+
+async function pauseJobForApi(params) {
+  return pauseJobForResume({ ...params, status: 'waiting_api', waitReason: 'api' })
 }
 
 async function hasAvailableGeminiKey() {
@@ -86,25 +140,113 @@ async function bumpResumeRetry(jobId, minutes = 5) {
 
 async function clearResumeQueue(jobId) {
   await getDb().doc(`generationResumeQueue/${jobId}`).delete().catch(() => {})
+  await clearActiveJob(jobId)
+}
+
+function shouldCheckpointTimeout(jobStartedAt) {
+  return Date.now() - jobStartedAt >= CF_SAFE_MS
+}
+
+async function runWithHeartbeat(work, onHeartbeat, intervalMs = 30000) {
+  let active = true
+  const timer = setInterval(() => {
+    if (!active) return
+    Promise.resolve(onHeartbeat()).catch(() => {})
+  }, intervalMs)
+  try {
+    return await work()
+  } finally {
+    active = false
+    clearInterval(timer)
+  }
+}
+
+async function recoverStalledRunningJobs() {
+  const db = getDb()
+  const cutoff = Date.now() - STALL_RUNNING_MS
+  const snap = await db.collection('generationActiveJobs').limit(30).get()
+  let recovered = 0
+
+  for (const doc of snap.docs) {
+    const data = doc.data()
+    const heartbeat = data.lastHeartbeat?.toDate?.()
+    if (!heartbeat || heartbeat.getTime() > cutoff) continue
+
+    const { userId, jobId } = data
+    if (!userId || !jobId) continue
+
+    const jobSnap = await db.doc(`users/${userId}/generationJobs/${jobId}`).get()
+    if (!jobSnap.exists) {
+      await clearActiveJob(jobId)
+      continue
+    }
+
+    const jobData = jobSnap.data()
+    if (jobData.status !== 'running' || !isMentoradoJob(jobData.jobType)) continue
+    if (await isJobCancelled(userId, jobId)) {
+      await clearResumeQueue(jobId)
+      continue
+    }
+
+    const resumeFromTopicIndex =
+      jobData.resumeState?.resumeFromTopicIndex ??
+      jobData.serverPayload?.resumeFromTopicIndex ??
+      0
+
+    await pauseJobForResume({
+      userId,
+      jobId,
+      courseId: jobData.courseId,
+      jobType: jobData.jobType,
+      serverPayload: {
+        ...(jobData.serverPayload || {}),
+        resumeFromTopicIndex,
+      },
+      resumeFromTopicIndex,
+      topicLabel: jobData.resumeState?.topicLabel || '',
+      updateJob: async (uid, jid, patch) => {
+        await db.doc(`users/${uid}/generationJobs/${jid}`).update({
+          ...patch,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+      },
+      status: 'waiting_retry',
+      waitReason: 'stalled',
+      message: 'Geração pausada (sem atualização) — retomando automaticamente…',
+    })
+    recovered += 1
+  }
+
+  return recovered
 }
 
 async function resumeWaitingGenerationJobs() {
   const db = getDb()
   const now = admin.firestore.Timestamp.now()
+
+  const stalled = await recoverStalledRunningJobs()
+
   const snap = await db
     .collection('generationResumeQueue')
     .where('nextRetryAt', '<=', now)
     .limit(20)
     .get()
 
-  if (snap.empty) return { resumed: 0, waiting: 0 }
+  if (snap.empty) return { resumed: 0, waiting: 0, stalled }
 
-  const apiReady = await hasAvailableGeminiKey()
-  if (!apiReady) {
-    for (const doc of snap.docs) {
-      await bumpResumeRetry(doc.id)
+  const needsApi = snap.docs.some((d) => {
+    const s = d.data().status || 'waiting_api'
+    return s === 'waiting_api'
+  })
+
+  if (needsApi) {
+    const apiReady = await hasAvailableGeminiKey()
+    if (!apiReady) {
+      for (const doc of snap.docs) {
+        await bumpResumeRetry(doc.id)
+      }
+      return { resumed: 0, waiting: snap.size, apiReady: false, stalled }
     }
-    return { resumed: 0, waiting: snap.size, apiReady: false }
   }
 
   const { processGenerationJob } = require('./jobProcessor')
@@ -115,6 +257,11 @@ async function resumeWaitingGenerationJobs() {
     const { userId, jobId, courseId, jobType } = data
     if (!userId || !jobId) continue
 
+    if (await isJobCancelled(userId, jobId)) {
+      await clearResumeQueue(jobId)
+      continue
+    }
+
     const jobRef = db.doc(`users/${userId}/generationJobs/${jobId}`)
     const jobSnap = await jobRef.get()
     if (!jobSnap.exists) {
@@ -123,7 +270,7 @@ async function resumeWaitingGenerationJobs() {
     }
 
     const jobData = jobSnap.data()
-    if (jobData.status !== 'waiting_api') {
+    if (!WAITING_STATUSES.includes(jobData.status)) {
       await clearResumeQueue(jobId)
       continue
     }
@@ -140,22 +287,50 @@ async function resumeWaitingGenerationJobs() {
 
     await jobRef.update({
       status: 'running',
-      message: 'API disponível — retomando geração…',
+      message: 'Retomando geração automaticamente…',
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     })
 
+    await touchActiveJob(userId, jobId, { status: 'running' })
+
     try {
-      await processGenerationJob(userId, jobId, {
+      const outcome = await processGenerationJob(userId, jobId, {
         ...jobData,
         courseId: courseId || jobData.courseId,
         jobType: jobType || jobData.jobType,
         serverPayload,
       })
-      await clearResumeQueue(jobId)
+      if (!outcome?.paused) {
+        await clearResumeQueue(jobId)
+      }
       resumed += 1
     } catch (err) {
       console.error(`[resumeWaitingGenerationJobs] job ${jobId}:`, err)
-      if (isApiQuotaError(err)) {
+      if (await isJobCancelled(userId, jobId)) {
+        await clearResumeQueue(jobId)
+        continue
+      }
+      if (isMentoradoJob(jobType || jobData.jobType)) {
+        const pauseStatus = isApiQuotaError(err) ? 'waiting_api' : 'waiting_retry'
+        await pauseJobForResume({
+          userId,
+          jobId,
+          courseId: courseId || jobData.courseId,
+          jobType: jobType || jobData.jobType,
+          serverPayload,
+          resumeFromTopicIndex,
+          updateJob: async (uid, jid, patch) => {
+            await db.doc(`users/${uid}/generationJobs/${jid}`).update({
+              ...patch,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            })
+          },
+          status: pauseStatus,
+          waitReason: isApiQuotaError(err) ? 'api' : 'error',
+          message: isApiQuotaError(err)
+            ? 'API expirada — aguardando para retomar…'
+            : `Erro temporário — tentando de novo em 5 min… (${err.message || 'erro'})`,
+        })
         await bumpResumeRetry(jobId)
       } else {
         await jobRef.update({
@@ -170,12 +345,22 @@ async function resumeWaitingGenerationJobs() {
     }
   }
 
-  return { resumed, waiting: snap.size - resumed, apiReady: true }
+  return { resumed, waiting: snap.size - resumed, stalled, apiReady: true }
 }
 
 module.exports = {
   isApiQuotaError,
+  isJobCancelled,
+  isMentoradoJob,
   pauseJobForApi,
+  pauseJobForResume,
   resumeWaitingGenerationJobs,
   hasAvailableGeminiKey,
+  touchActiveJob,
+  clearActiveJob,
+  clearResumeQueue,
+  shouldCheckpointTimeout,
+  runWithHeartbeat,
+  CF_SAFE_MS,
+  WAITING_STATUSES,
 }

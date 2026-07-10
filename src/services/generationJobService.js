@@ -16,10 +16,20 @@ export const GENERATION_JOB_STATUS = {
   PENDING: 'pending',
   RUNNING: 'running',
   WAITING_API: 'waiting_api',
+  WAITING_RETRY: 'waiting_retry',
+  WAITING_TIMEOUT: 'waiting_timeout',
   DONE: 'done',
   ERROR: 'error',
   CANCELLED: 'cancelled',
 }
+
+const MENTORADO_JOB_TYPES = ['guia_mentorado_automation', 'guia_mentorado_cronograma']
+
+export const GENERATION_WAITING_STATUSES = [
+  GENERATION_JOB_STATUS.WAITING_API,
+  GENERATION_JOB_STATUS.WAITING_RETRY,
+  GENERATION_JOB_STATUS.WAITING_TIMEOUT,
+]
 
 function jobsRef(userId) {
   return collection(db, 'users', userId, 'generationJobs')
@@ -78,7 +88,7 @@ export async function reconcileStaleGenerationJobs(userId) {
       where('status', 'in', [
         GENERATION_JOB_STATUS.PENDING,
         GENERATION_JOB_STATUS.RUNNING,
-        GENERATION_JOB_STATUS.WAITING_API,
+        ...GENERATION_WAITING_STATUSES,
       ]),
     ),
   )
@@ -88,6 +98,8 @@ export async function reconcileStaleGenerationJobs(userId) {
 
   snap.docs.forEach((d) => {
     const data = d.data()
+    if (MENTORADO_JOB_TYPES.includes(data.jobType)) return
+
     const updatedAt = data.updatedAt?.toDate?.() || data.createdAt?.toDate?.()
     if (!updatedAt) return
 
@@ -119,7 +131,8 @@ export async function dismissGenerationJob(userId, jobId) {
   await updateGenerationJob(userId, jobId, {
     status: GENERATION_JOB_STATUS.CANCELLED,
     progress: 100,
-    message: 'Dispensado',
+    message: 'Cancelado pelo admin',
+    finishedAt: serverTimestamp(),
   })
 }
 
@@ -131,7 +144,7 @@ export function subscribeActiveGenerationJobs(userId, onData) {
     where('status', 'in', [
       GENERATION_JOB_STATUS.PENDING,
       GENERATION_JOB_STATUS.RUNNING,
-      GENERATION_JOB_STATUS.WAITING_API,
+      ...GENERATION_WAITING_STATUSES,
     ]),
   )
 

@@ -10,7 +10,16 @@ const {
   finalizeDayStatus,
 } = require('./guiaMentoradoStatus')
 const { markDayContentGenerated } = require('./guiaMentoradoStatus')
-const { isApiQuotaError, pauseJobForApi } = require('./generationJobResume')
+const {
+  isApiQuotaError,
+  isJobCancelled,
+  pauseJobForApi,
+  pauseJobForResume,
+  touchActiveJob,
+  clearActiveJob,
+  shouldCheckpointTimeout,
+  runWithHeartbeat,
+} = require('./generationJobResume')
 
 const CONTENT_STATUS = {
   AVAILABLE: 'disponivel',
@@ -115,7 +124,7 @@ async function deleteExistingFlashcards(courseId, topicKey, disciplina, modulo) 
   if (count) await batch.commit()
 }
 
-async function generateAndSaveFlashcards(courseId, topic) {
+async function generateAndSaveFlashcards(courseId, topic, onHeartbeat) {
   const meta = topic.flashcardMeta
   if (await hasFlashcards(courseId, topic.topicKey, topic.disciplina, topic.modulo)) {
     return { skipped: true, type: 'flashcards' }
@@ -126,23 +135,29 @@ async function generateAndSaveFlashcards(courseId, topic) {
   let allItems = []
   const firstBatchCount = Math.min(BATCH_SIZE, MAX_FLASHCARDS)
 
-  const batch1 = await generateAiJson(
-    buildFlashcardPrompt(meta, 1, 2, firstBatchCount, []),
-    { generationConfig: { maxOutputTokens: 24000, temperature: 0.35 } },
+  const runBatch = async (label, fn) =>
+    runWithHeartbeat(fn, () => onHeartbeat?.(label), 30000)
+
+  const batch1 = await runBatch('flashcards lote 1/2', () =>
+    generateAiJson(buildFlashcardPrompt(meta, 1, 2, firstBatchCount, []), {
+      generationConfig: { maxOutputTokens: 24000, temperature: 0.35 },
+    }),
   )
   allItems = dedupeFlashcards(batch1.flashcards || [])
 
   if (allItems.length < MIN_FLASHCARDS) {
     const remaining = Math.min(MAX_FLASHCARDS - allItems.length, BATCH_SIZE)
-    const batch2 = await generateAiJson(
-      buildFlashcardPrompt(
-        meta,
-        2,
-        2,
-        remaining,
-        allItems.map((c) => c.frente || c.pergunta),
+    const batch2 = await runBatch('flashcards lote 2/2', () =>
+      generateAiJson(
+        buildFlashcardPrompt(
+          meta,
+          2,
+          2,
+          remaining,
+          allItems.map((c) => c.frente || c.pergunta),
+        ),
+        { generationConfig: { maxOutputTokens: 24000, temperature: 0.35 } },
       ),
-      { generationConfig: { maxOutputTokens: 24000, temperature: 0.35 } },
     )
     allItems = dedupeFlashcards([...allItems, ...(batch2.flashcards || [])])
   }
@@ -197,16 +212,21 @@ async function generateAndSaveFlashcards(courseId, topic) {
   return { skipped: false, type: 'flashcards', count: allItems.length }
 }
 
-async function generateAndSaveConteudo(courseId, topic) {
+async function generateAndSaveConteudo(courseId, topic, onHeartbeat) {
   if (await hasConteudo(courseId, topic.topicKey)) {
     return { skipped: true, type: 'conteudo' }
   }
 
-  const parsed = await generateAiJson(topic.conteudoPrompt, {
-    useRAG: true,
-    useGoogleSearch: true,
-    generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
-  })
+  const parsed = await runWithHeartbeat(
+    () =>
+      generateAiJson(topic.conteudoPrompt, {
+        useRAG: true,
+        useGoogleSearch: true,
+        generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
+      }),
+    () => onHeartbeat?.('material'),
+    30000,
+  )
 
   const sanitizedKey = sanitizeTopicKeyForFirestore(topic.topicKey)
   const ts = require('firebase-admin').firestore.FieldValue.serverTimestamp()
@@ -229,16 +249,21 @@ async function generateAndSaveConteudo(courseId, topic) {
   return { skipped: false, type: 'conteudo' }
 }
 
-async function generateAndSaveQuestoes(courseId, topic) {
+async function generateAndSaveQuestoes(courseId, topic, onHeartbeat) {
   if (await hasQuestoes(courseId, topic.topicKey)) {
     return { skipped: true, type: 'questoes' }
   }
 
-  const parsed = await generateAiJson(topic.questoesPrompt, {
-    useRAG: true,
-    useGoogleSearch: true,
-    generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
-  })
+  const parsed = await runWithHeartbeat(
+    () =>
+      generateAiJson(topic.questoesPrompt, {
+        useRAG: true,
+        useGoogleSearch: true,
+        generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
+      }),
+    () => onHeartbeat?.('questões'),
+    30000,
+  )
 
   const sanitizedKey = `${sanitizeTopicKeyForFirestore(topic.topicKey)}_nivel_1`
   const ts = require('firebase-admin').firestore.FieldValue.serverTimestamp()
@@ -316,10 +341,26 @@ async function publishTopicoStatus(courseId, topic) {
   if (ops) await batch.commit()
 }
 
-async function processSingleTopic(courseId, targetDate, topic, updateJob, userId, jobId, index, total) {
+async function processSingleTopic(
+  courseId,
+  targetDate,
+  topic,
+  updateJob,
+  userId,
+  jobId,
+  index,
+  total,
+) {
   const label = topic.topicoNome || topic.topicKey
   const basePct = Math.round((index / total) * 100)
-  const topicErrors = []
+
+  const heartbeat = async (step) => {
+    await updateJob(userId, jobId, {
+      progress: Math.min(basePct + 3, 98),
+      message: `[${index + 1}/${total}] ${label} — ${step}… (aguarde)`,
+    })
+    await touchActiveJob(userId, jobId, { step, topicIndex: index })
+  }
 
   await updateTopicStep(courseId, targetDate, topic.topicKey, {
     status: 'generating',
@@ -331,89 +372,99 @@ async function processSingleTopic(courseId, targetDate, topic, updateJob, userId
     message: `[${index + 1}/${total}] ${label} — gerando flashcards…`,
   })
 
-  try {
-    await generateAndSaveFlashcards(courseId, topic)
-    await updateTopicStep(courseId, targetDate, topic.topicKey, { flashcards: 'done', step: 'material' })
-  } catch (err) {
-    if (isApiQuotaError(err)) throw err
-    topicErrors.push(`flashcards: ${err.message}`)
-    await updateTopicStep(courseId, targetDate, topic.topicKey, {
-      flashcards: 'error',
-      error: err.message,
-    })
-  }
+  await generateAndSaveFlashcards(courseId, topic, heartbeat)
+  await updateTopicStep(courseId, targetDate, topic.topicKey, { flashcards: 'done', step: 'material' })
 
   await updateJob(userId, jobId, {
     progress: Math.min(basePct + 15, 98),
     message: `[${index + 1}/${total}] ${label} — gerando material…`,
   })
 
-  try {
-    await generateAndSaveConteudo(courseId, topic)
-    await updateTopicStep(courseId, targetDate, topic.topicKey, { material: 'done', step: 'questoes' })
-  } catch (err) {
-    if (isApiQuotaError(err)) throw err
-    topicErrors.push(`material: ${err.message}`)
-    await updateTopicStep(courseId, targetDate, topic.topicKey, {
-      material: 'error',
-      error: err.message,
-    })
-  }
+  await generateAndSaveConteudo(courseId, topic, heartbeat)
+  await updateTopicStep(courseId, targetDate, topic.topicKey, { material: 'done', step: 'questoes' })
 
   await updateJob(userId, jobId, {
     progress: Math.min(basePct + 28, 98),
     message: `[${index + 1}/${total}] ${label} — gerando questões…`,
   })
 
-  try {
-    await generateAndSaveQuestoes(courseId, topic)
-    await updateTopicStep(courseId, targetDate, topic.topicKey, { questoes: 'done', step: 'publicando' })
-  } catch (err) {
-    if (isApiQuotaError(err)) throw err
-    topicErrors.push(`questoes: ${err.message}`)
-    await updateTopicStep(courseId, targetDate, topic.topicKey, {
-      questoes: 'error',
-      error: err.message,
-    })
-  }
+  await generateAndSaveQuestoes(courseId, topic, heartbeat)
+  await updateTopicStep(courseId, targetDate, topic.topicKey, { questoes: 'done', step: 'publicando' })
 
   const readiness = await isTopicContentComplete(courseId, topic)
-  if (readiness.complete) {
-    try {
-      await publishTopicoStatus(courseId, topic)
-      await updateTopicStep(courseId, targetDate, topic.topicKey, {
-        status: 'published',
-        step: 'concluído',
-        error: null,
-      })
-      await updateJob(userId, jobId, {
-        progress: Math.min(basePct + 35, 99),
-        message: `[${index + 1}/${total}] ${label} — liberado para alunos ✓`,
-      })
-      return { published: true, errors: topicErrors }
-    } catch (err) {
-      topicErrors.push(`publicar: ${err.message}`)
-      await updateTopicStep(courseId, targetDate, topic.topicKey, {
-        status: 'error',
-        step: 'publicando',
-        error: err.message,
-      })
-    }
-  } else {
+  if (!readiness.complete) {
     const missing = []
     if (!readiness.flashcards) missing.push('flashcards')
     if (!readiness.material) missing.push('material')
     if (!readiness.questoes) missing.push('questões')
-    const msg = `Incompleto: falta ${missing.join(', ')}`
-    topicErrors.push(msg)
-    await updateTopicStep(courseId, targetDate, topic.topicKey, {
-      status: 'error',
-      step: 'concluído',
-      error: msg,
+    const err = new Error(`Incompleto: falta ${missing.join(', ')}`)
+    err.code = 'topic_incomplete'
+    throw err
+  }
+
+  await publishTopicoStatus(courseId, topic)
+  await updateTopicStep(courseId, targetDate, topic.topicKey, {
+    status: 'published',
+    step: 'concluído',
+    error: null,
+  })
+  await updateJob(userId, jobId, {
+    progress: Math.min(basePct + 35, 99),
+    message: `[${index + 1}/${total}] ${label} — liberado para alunos ✓`,
+  })
+  return { published: true }
+}
+
+async function pauseAutomationJob({
+  err,
+  userId,
+  jobId,
+  courseId,
+  serverPayload,
+  topicIndex,
+  topics,
+  targetDate,
+  updateJob,
+}) {
+  const label = topics[topicIndex]?.topicoNome || topics[topicIndex]?.topicKey || ''
+  const waitReason = isApiQuotaError(err) ? 'api' : err?.code === 'cf_timeout' ? 'timeout' : 'retry'
+  const jobStatus = isApiQuotaError(err)
+    ? 'waiting_api'
+    : waitReason === 'timeout'
+      ? 'waiting_timeout'
+      : 'waiting_retry'
+
+  const pauseFn = isApiQuotaError(err) ? pauseJobForApi : pauseJobForResume
+  await pauseFn({
+    userId,
+    jobId,
+    courseId,
+    jobType: 'guia_mentorado_automation',
+    serverPayload: { ...serverPayload, resumeFromTopicIndex: topicIndex },
+    resumeFromTopicIndex: topicIndex,
+    topicLabel: label,
+    updateJob,
+    status: jobStatus,
+    waitReason,
+    message: isApiQuotaError(err)
+      ? `API expirada — aguardando… (${label})`
+      : waitReason === 'timeout'
+        ? `Pausado (limite do servidor) — retomando… (${label})`
+        : `Aguardando para retomar… (${label})`,
+  })
+
+  if (targetDate) {
+    await updateDayStatus(courseId, targetDate, {
+      status: jobStatus,
+      reason: err?.message || 'Aguardando retomada automática',
     })
   }
 
-  return { published: false, errors: topicErrors }
+  return {
+    paused: true,
+    resumeFromTopicIndex: topicIndex,
+    targetDate,
+  }
 }
 
 async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPayload, updateJob) {
@@ -421,6 +472,7 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
   const autoPublish = serverPayload?.autoPublish !== false
   const targetDate = serverPayload?.targetDate || null
   const startIndex = Math.max(0, Number(serverPayload?.resumeFromTopicIndex) || 0)
+  const jobStartedAt = Date.now()
 
   if (!topics.length) {
     throw new Error('Nenhum tópico enviado para automação do Guia Mentorado.')
@@ -429,8 +481,12 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
     throw new Error('Automação requer publicação automática após geração.')
   }
 
+  if (await isJobCancelled(userId, jobId)) {
+    await clearActiveJob(jobId)
+    return { cancelled: true }
+  }
+
   const total = topics.length
-  const errors = []
   let publishedCount = 0
 
   if (targetDate && startIndex === 0) {
@@ -448,8 +504,34 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
         ? `Retomando dia${dateLabel} — tópico ${startIndex + 1}/${total}…`
         : `Dia${dateLabel} — ${total} tópico(s), um por vez…`,
   })
+  await touchActiveJob(userId, jobId, {
+    jobType: 'guia_mentorado_automation',
+    courseId,
+    status: 'running',
+  })
 
   for (let i = startIndex; i < topics.length; i += 1) {
+    if (await isJobCancelled(userId, jobId)) {
+      await clearActiveJob(jobId)
+      return { cancelled: true, publishedCount }
+    }
+
+    if (shouldCheckpointTimeout(jobStartedAt)) {
+      const err = new Error('Checkpoint do servidor — retomando em instantes')
+      err.code = 'cf_timeout'
+      return pauseAutomationJob({
+        err,
+        userId,
+        jobId,
+        courseId,
+        serverPayload,
+        topicIndex: i,
+        topics,
+        targetDate,
+        updateJob,
+      })
+    }
+
     try {
       const result = await processSingleTopic(
         courseId,
@@ -462,63 +544,42 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
         total,
       )
       if (result.published) publishedCount += 1
-      if (result.errors?.length) {
-        errors.push({
-          topic: topics[i].topicoNome || topics[i].topicKey,
-          steps: result.errors,
-        })
-      }
+      await touchActiveJob(userId, jobId, { topicIndex: i, publishedCount })
     } catch (err) {
-      if (isApiQuotaError(err)) {
-        const label = topics[i].topicoNome || topics[i].topicKey
-        await pauseJobForApi({
-          userId,
-          jobId,
-          courseId,
-          jobType: 'guia_mentorado_automation',
-          serverPayload: { ...serverPayload, resumeFromTopicIndex: i },
-          resumeFromTopicIndex: i,
-          topicLabel: label,
-          updateJob,
-        })
-        if (targetDate) {
-          await updateDayStatus(courseId, targetDate, {
-            status: 'waiting_api',
-            reason: 'API expirada — aguardando para continuar',
-          })
-        }
-        return {
-          paused: true,
-          resumeFromTopicIndex: i,
-          publishedCount,
-          totalTopics: total,
-          targetDate,
-        }
+      if (await isJobCancelled(userId, jobId)) {
+        await clearActiveJob(jobId)
+        return { cancelled: true, publishedCount }
       }
-      throw err
+      return pauseAutomationJob({
+        err,
+        userId,
+        jobId,
+        courseId,
+        serverPayload,
+        topicIndex: i,
+        topics,
+        targetDate,
+        updateJob,
+      })
     }
   }
+
+  await clearActiveJob(jobId)
 
   if (targetDate) {
     const statusSnap = await getDb().doc(`courses/${courseId}/mentoradoAutomation/${targetDate}`).get()
     const totalPublished = statusSnap.exists() ? statusSnap.data().publishedCount || 0 : publishedCount
-    await finalizeDayStatus(courseId, targetDate, { errors, total })
+    await finalizeDayStatus(courseId, targetDate, { errors: [], total })
     await updateDayStatus(courseId, targetDate, {
       publishedCount: totalPublished,
-      status: totalPublished >= total ? 'done' : totalPublished > 0 ? 'partial' : 'error',
+      status: totalPublished >= total ? 'done' : 'partial',
     })
     if (totalPublished >= total) {
       await markDayContentGenerated(courseId, targetDate, totalPublished, total)
     }
   }
 
-  if (publishedCount === 0 && errors.length && startIndex === 0) {
-    throw new Error(
-      `Nenhum tópico foi liberado. Verifique o painel de automação do dia.${errors[0]?.steps?.[0] ? ` (${errors[0].steps[0]})` : ''}`,
-    )
-  }
-
-  return { totalTopics: total, publishedCount, errors, targetDate, paused: false }
+  return { totalTopics: total, publishedCount, targetDate, paused: false }
 }
 
 module.exports = {

@@ -20,6 +20,11 @@ const axios = require('axios')
 admin.initializeApp()
 
 const { processGenerationJob } = require('./generation/jobProcessor')
+const {
+  isMentoradoJob,
+  isApiQuotaError,
+  pauseJobForResume,
+} = require('./generation/generationJobResume')
 
 /** Processa jobs de geração IA no servidor — continua mesmo com aba/dispositivo fechado. */
 exports.onGenerationJobCreated = functions
@@ -38,6 +43,35 @@ exports.onGenerationJobCreated = functions
       return null
     } catch (error) {
       console.error(`[onGenerationJobCreated] job ${jobId}:`, error)
+
+      if (isMentoradoJob(data.jobType)) {
+        const pauseStatus = isApiQuotaError(error) ? 'waiting_api' : 'waiting_retry'
+        await pauseJobForResume({
+          userId,
+          jobId,
+          courseId: data.courseId,
+          jobType: data.jobType,
+          serverPayload: data.serverPayload || {},
+          resumeFromTopicIndex:
+            data.resumeState?.resumeFromTopicIndex ??
+            data.serverPayload?.resumeFromTopicIndex ??
+            0,
+          topicLabel: data.resumeState?.topicLabel || '',
+          updateJob: async (_uid, _jid, patch) => {
+            await snap.ref.update({
+              ...patch,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            })
+          },
+          status: pauseStatus,
+          waitReason: isApiQuotaError(error) ? 'api' : 'error',
+          message: isApiQuotaError(error)
+            ? 'API expirada — aguardando para retomar…'
+            : `Erro temporário — tentando de novo em 5 min… (${error?.message || 'erro'})`,
+        })
+        return null
+      }
+
       await snap.ref.update({
         status: 'error',
         progress: 100,

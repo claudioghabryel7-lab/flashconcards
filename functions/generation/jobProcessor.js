@@ -380,6 +380,7 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
 const { processAdminEditalVerticalizado } = require('./adminEditalProcessor')
 const { processGuiaMentoradoAutomation } = require('./guiaMentoradoAutomation')
 const { processGuiaMentoradoCronograma } = require('./guiaMentoradoCronograma')
+const { clearResumeQueue } = require('./generationJobResume')
 
 async function processGenerationJob(userId, jobId, jobData) {
   const { courseId, jobType, serverPayload } = jobData
@@ -444,16 +445,18 @@ async function processGenerationJob(userId, jobId, jobData) {
         serverPayload,
         (uid, jid, patch) => updateJob(uid, jid, patch),
       )
+      if (outcome.cancelled) {
+        await clearResumeQueue(jobId)
+        return outcome
+      }
       if (outcome.paused) {
         return outcome
       }
+      await clearResumeQueue(jobId)
       await updateJob(userId, jobId, {
         status: 'done',
         progress: 100,
-        message:
-          outcome.errors?.length > 0
-            ? `Dia ${serverPayload?.targetDate || ''}: ${outcome.publishedCount}/${outcome.totalTopics} liberado(s)`
-            : `Dia concluído — ${outcome.publishedCount} tópico(s) liberado(s)`,
+        message: `Dia concluído — ${outcome.publishedCount}/${outcome.totalTopics} tópico(s) liberado(s)`,
         resultRef: null,
         finishedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
