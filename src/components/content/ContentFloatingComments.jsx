@@ -74,7 +74,7 @@ function DraggableFloatingBubble({
   const bubbleRef = useRef(null)
   const dragRef = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
-  const isLaneLayout = layoutMode === 'lane'
+  const isLaneLayout = layoutMode === 'lane' || layoutMode === 'overlay'
   const duration = 26 + (index % 5) * 4
   const delay = (index % 7) * 2.8
   const enterDelay = index * 0.14
@@ -239,11 +239,22 @@ export default function FloatingCommentsShell({
   const rightLaneRef = useRef(null)
 
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)')
-    const sync = () => setLayoutMode(mq.matches ? 'stacked' : 'lane')
+    const mqMobile = window.matchMedia('(max-width: 767px)')
+    const mqDesktop = window.matchMedia('(min-width: 1280px)')
+
+    const sync = () => {
+      if (mqMobile.matches) setLayoutMode('stacked')
+      else if (mqDesktop.matches) setLayoutMode('overlay')
+      else setLayoutMode('lane')
+    }
+
     sync()
-    mq.addEventListener('change', sync)
-    return () => mq.removeEventListener('change', sync)
+    mqMobile.addEventListener('change', sync)
+    mqDesktop.addEventListener('change', sync)
+    return () => {
+      mqMobile.removeEventListener('change', sync)
+      mqDesktop.removeEventListener('change', sync)
+    }
   }, [])
 
   useEffect(() => {
@@ -314,6 +325,9 @@ export default function FloatingCommentsShell({
   const showBubbles = enabled && !loading && visibleComments.length > 0
   const leftComments = visibleComments.filter((_, i) => i % 2 === 0)
   const rightComments = visibleComments.filter((_, i) => i % 2 === 1)
+  const useLaneLayout = showBubbles && layoutMode === 'lane'
+  const useOverlayLayout = showBubbles && layoutMode === 'overlay'
+  const useStackedLayout = showBubbles && layoutMode === 'stacked'
 
   const renderBubble = (comment, index, side, laneRef) => (
     <DraggableFloatingBubble
@@ -405,19 +419,24 @@ export default function FloatingCommentsShell({
 
       <div
         ref={stageRef}
-        className={`floating-comments-stage ${enabled ? 'floating-comments-stage--active' : ''} ${
-          showBubbles && layoutMode === 'stacked' ? 'floating-comments-stage--stacked' : ''
+        className={`floating-comments-stage ${
+          useLaneLayout ? 'floating-comments-stage--lane' : ''
+        } ${useOverlayLayout ? 'floating-comments-stage--overlay' : ''} ${
+          useStackedLayout ? 'floating-comments-stage--stacked' : ''
         }`}
       >
-        {showBubbles && layoutMode === 'stacked' && (
-          <div className="floating-comments-mobile-strip" aria-hidden={false}>
-            {visibleComments.map((c, i) =>
-              renderBubble(c, i, i % 2 === 0 ? 'left' : 'right', stageRef),
-            )}
-          </div>
+        {useLaneLayout && (
+          <>
+            <div ref={leftLaneRef} className="floating-comments-lane floating-comments-lane--left">
+              {leftComments.map((c, i) => renderBubble(c, i, 'left', leftLaneRef))}
+            </div>
+            <div ref={rightLaneRef} className="floating-comments-lane floating-comments-lane--right">
+              {rightComments.map((c, i) => renderBubble(c, i, 'right', rightLaneRef))}
+            </div>
+          </>
         )}
 
-        {showBubbles && layoutMode === 'lane' && (
+        {useOverlayLayout && (
           <>
             <div ref={leftLaneRef} className="floating-comments-lane floating-comments-lane--left">
               {leftComments.map((c, i) => renderBubble(c, i, 'left', leftLaneRef))}
@@ -429,6 +448,14 @@ export default function FloatingCommentsShell({
         )}
 
         <div className="floating-comments-content">{children}</div>
+
+        {useStackedLayout && (
+          <div className="floating-comments-mobile-strip" aria-label="Comentários flutuantes">
+            {visibleComments.map((c, i) =>
+              renderBubble(c, i, i % 2 === 0 ? 'left' : 'right', stageRef),
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

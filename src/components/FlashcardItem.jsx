@@ -150,7 +150,7 @@ const FlashcardItem = ({
   return (
     <div className="relative mx-auto w-full max-w-xl px-0 sm:px-0">
       <div
-        className={`relative mx-auto w-full cursor-pointer select-none overflow-hidden ${cardHeight}`}
+        className={`cp-flashcard-stage relative mx-auto w-full cursor-pointer select-none overflow-hidden ${cardHeight}`}
         style={{ perspective: '1200px', WebkitPerspective: '1200px', touchAction: 'manipulation' }}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}

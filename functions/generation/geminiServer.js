@@ -109,18 +109,85 @@ function stripConversationalWrapper(text = '') {
   return cleaned
 }
 
+function collectTextFromGeminiResponse(response) {
+  const candidate = response?.candidates?.[0]
+  if (!candidate) {
+    const blockReason = response?.promptFeedback?.blockReason
+    return {
+      text: '',
+      finishReason: blockReason || 'NO_CANDIDATES',
+      blocked: Boolean(blockReason),
+    }
+  }
+
+  const parts = candidate.content?.parts || []
+  const chunks = []
+  for (const part of parts) {
+    if (typeof part?.text === 'string' && part.text.trim()) {
+      chunks.push(part.text)
+    }
+  }
+
+  return {
+    text: chunks.join('').trim(),
+    finishReason: candidate.finishReason || null,
+    blocked: false,
+  }
+}
+
 function extractGeneratedText(response) {
-  const parts = response?.candidates?.[0]?.content?.parts || []
-  return parts.map((p) => p.text || '').join('').trim()
+  const { text, finishReason, blocked } = collectTextFromGeminiResponse(response)
+
+  if (!text) {
+    let message = 'A IA não retornou texto'
+    if (blocked) {
+      message = `Conteúdo bloqueado pela IA (${finishReason}). Tente gerar novamente.`
+    } else if (finishReason === 'MAX_TOKENS') {
+      message =
+        'A IA atingiu o limite de tamanho e não completou o material. Tente gerar novamente.'
+    } else if (finishReason === 'SAFETY' || finishReason === 'RECITATION') {
+      message = 'A IA bloqueou parte do conteúdo por segurança. Tente gerar novamente.'
+    } else if (finishReason === 'NO_CANDIDATES') {
+      message = 'A IA não retornou resposta. Tente gerar novamente.'
+    }
+
+    const err = new Error(message)
+    err.code = blocked ? 'ai_blocked' : 'ai_empty_response'
+    err.finishReason = finishReason
+    throw err
+  }
+
+  return text
+}
+
+function closeTruncatedJson(raw) {
+  let s = String(raw).trim()
+  s = s.replace(/,\s*"[^"\\]*(?:\\.[^"\\]*)*$/, '')
+  s = s.replace(/,\s*$/, '')
+  s = s.replace(/:\s*$/, ': null')
+  const openBraces = (s.match(/\{/g) || []).length - (s.match(/\}/g) || []).length
+  const openBrackets = (s.match(/\[/g) || []).length - (s.match(/\]/g) || []).length
+  if (openBrackets > 0) s += ']'.repeat(openBrackets)
+  if (openBraces > 0) s += '}'.repeat(openBraces)
+  return s
 }
 
 async function parseAiJsonText(generatedText) {
-  if (!generatedText || typeof generatedText !== 'string') {
-    throw new Error('Texto da IA inválido')
+  const normalized =
+    typeof generatedText === 'string'
+      ? generatedText.trim()
+      : generatedText == null
+        ? ''
+        : String(generatedText).trim()
+
+  if (!normalized) {
+    const err = new Error('A IA não retornou texto para processar')
+    err.code = 'ai_empty_response'
+    throw err
   }
 
   const cleaned = stripConversationalWrapper(
-    generatedText
+    normalized
       .replace(/```json\s*/gi, '')
       .replace(/```/g, '')
       .trim(),
@@ -128,13 +195,17 @@ async function parseAiJsonText(generatedText) {
 
   const jsonMatch = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/)
   if (!jsonMatch) {
-    throw new Error('JSON não encontrado na resposta da IA')
+    const err = new Error('Nenhum JSON válido encontrado na resposta da IA')
+    err.code = 'ai_json_parse_error'
+    throw err
   }
 
   const raw = jsonMatch[0]
   const attempts = [
     (s) => JSON.parse(s),
+    (s) => JSON.parse(closeTruncatedJson(s)),
     (s) => JSON.parse(jsonrepair(s)),
+    (s) => JSON.parse(closeTruncatedJson(s).replace(/,\s*([}\]])/g, '$1').replace(/[\u0000-\u001F]+/g, ' ')),
     (s) => JSON.parse(s.replace(/,\s*([}\]])/g, '$1').replace(/[\u0000-\u001F]+/g, ' ')),
   ]
 
@@ -147,7 +218,21 @@ async function parseAiJsonText(generatedText) {
     }
   }
 
-  throw lastError || new Error('Não foi possível reparar o JSON da resposta')
+  const err = new Error('Não foi possível reparar o JSON da resposta da IA')
+  err.code = 'ai_json_parse_error'
+  err.cause = lastError
+  throw err
+}
+
+function isRetryableAiError(error) {
+  const code = error?.code
+  const msg = String(error?.message || '').toLowerCase()
+  return (
+    code === 'ai_empty_response' ||
+    code === 'ai_json_parse_error' ||
+    msg.includes('json') ||
+    msg.includes('reparar')
+  )
 }
 
 async function callGemini(prompt, options = {}) {
@@ -182,15 +267,33 @@ async function callGemini(prompt, options = {}) {
 }
 
 async function generateAiJson(prompt, options = {}) {
-  const response = await callGemini(prompt, options)
-  const text = extractGeneratedText(response)
-  const parsed = await parseAiJsonText(text)
+  const maxAttempts = options.maxParseAttempts ?? 2
+  let lastError
 
-  if (parsed?.erro) {
-    throw new Error(String(parsed.erro))
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const effectivePrompt =
+        attempt === 1
+          ? prompt
+          : `${prompt}\n\nIMPORTANTE: a resposta anterior não pôde ser lida. Retorne APENAS um único JSON válido e completo, sem markdown nem texto extra.`
+
+      const response = await callGemini(effectivePrompt, options)
+      const text = extractGeneratedText(response)
+      const parsed = await parseAiJsonText(text)
+
+      if (parsed?.erro) {
+        throw new Error(String(parsed.erro))
+      }
+
+      return parsed
+    } catch (error) {
+      lastError = error
+      if (attempt < maxAttempts && isRetryableAiError(error)) continue
+      break
+    }
   }
 
-  return parsed
+  throw lastError || new Error('Falha na geração com IA. Tente novamente.')
 }
 
 module.exports = {

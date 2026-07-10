@@ -62,7 +62,61 @@ export function formatAiErrorForUser(error) {
   if (isGeminiQuotaError(error)) {
     return 'Cota da API Gemini esgotada ou limite gratuito atingido. Tente novamente mais tarde ou configure outra chave.'
   }
+  const msg = String(error?.message || error || '')
+  if (msg.includes('Nenhum JSON') || msg.includes('reparar o JSON') || msg.includes('formato inválido')) {
+    return 'A IA respondeu em formato inválido ou incompleto. Tente gerar novamente.'
+  }
   return 'Falha na geração com IA. Tente novamente.'
+}
+
+function resolveAiErrorMessage(error) {
+  if (!error) return formatAiErrorForUser(error)
+  if (isGeminiQuotaError(error)) return formatAiErrorForUser(error)
+  if (error.code === 'ai_empty_response' || error.code === 'ai_blocked' || error.code === 'ai_generation_error') {
+    return error.message
+  }
+  const cause = error.cause
+  if (cause?.code === 'ai_empty_response' || cause?.code === 'ai_blocked') {
+    return cause.message
+  }
+  return formatAiErrorForUser(error)
+}
+
+function isRetryableAiError(error) {
+  const code = error?.code
+  const msg = String(error?.message || '').toLowerCase()
+  return (
+    code === 'ai_empty_response' ||
+    code === 'ai_json_parse_error' ||
+    msg.includes('json') ||
+    msg.includes('reparar')
+  )
+}
+
+function collectTextFromGeminiResponse(response) {
+  const candidate = response?.candidates?.[0]
+  if (!candidate) {
+    const blockReason = response?.promptFeedback?.blockReason
+    return {
+      text: '',
+      finishReason: blockReason || 'NO_CANDIDATES',
+      blocked: Boolean(blockReason),
+    }
+  }
+
+  const parts = candidate.content?.parts || []
+  const chunks = []
+  for (const part of parts) {
+    if (typeof part?.text === 'string' && part.text.trim()) {
+      chunks.push(part.text)
+    }
+  }
+
+  return {
+    text: chunks.join('').trim(),
+    finishReason: candidate.finishReason || null,
+    blocked: false,
+  }
 }
 
 function stripConversationalWrapper(text = '') {
@@ -353,68 +407,122 @@ async function executeGeminiRequest(prompt, options = {}) {
  * @returns {string} - Texto gerado
  */
 export function extractGeneratedText(response) {
-  const generatedText = response.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  
-  if (!generatedText || typeof generatedText !== 'string' || !generatedText.trim()) {
-    const err = new Error('A IA não retornou texto')
-    err.code = 'ai_empty_response'
+  const { text, finishReason, blocked } = collectTextFromGeminiResponse(response)
+
+  if (!text) {
+    let message = 'A IA não retornou texto'
+    if (blocked) {
+      message = `Conteúdo bloqueado pela IA (${finishReason}). Tente gerar novamente.`
+    } else if (finishReason === 'MAX_TOKENS') {
+      message =
+        'A IA atingiu o limite de tamanho e não completou o material. Tente gerar novamente.'
+    } else if (finishReason === 'SAFETY' || finishReason === 'RECITATION') {
+      message = 'A IA bloqueou parte do conteúdo por segurança. Tente gerar novamente.'
+    } else if (finishReason === 'NO_CANDIDATES') {
+      message = 'A IA não retornou resposta. Tente gerar novamente.'
+    }
+
+    const err = new Error(message)
+    err.code = blocked ? 'ai_blocked' : 'ai_empty_response'
+    err.finishReason = finishReason
     throw err
   }
 
-  return generatedText.trim()
+  if (finishReason === 'MAX_TOKENS') {
+    console.warn('⚠️ Resposta da IA truncada (MAX_TOKENS) — tentando reparar JSON parcial')
+  }
+
+  return text
 }
 
 /**
  * Chamada silenciosa + parse JSON robusto (uso padrão em todas as gerações).
  */
 export async function generateAiJson(prompt, options = {}) {
-  const response = await callGeminiWithRetry(prompt, {
-    silent: true,
-    verifyContent: false,
-    useRAG: options.useRAG ?? false,
-    useGoogleSearch: options.useGoogleSearch ?? false,
-    ...options,
-  })
+  const maxAttempts = options.maxParseAttempts ?? 2
+  let lastError
 
-  try {
-    const text = extractGeneratedText(response)
-    const parsed = await parseAiJsonText(text)
-    if (parsed?.erro) {
-      const err = new Error(String(parsed.erro))
-      err.code = 'ai_generation_error'
-      throw err
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const effectivePrompt =
+        attempt === 1
+          ? prompt
+          : `${prompt}\n\nIMPORTANTE: a resposta anterior não pôde ser lida. Retorne APENAS um único JSON válido e completo, sem markdown nem texto extra.`
+
+      const response = await callGeminiWithRetry(effectivePrompt, {
+        silent: true,
+        verifyContent: false,
+        useRAG: options.useRAG ?? false,
+        useGoogleSearch: options.useGoogleSearch ?? false,
+        ...options,
+      })
+
+      const text = extractGeneratedText(response)
+      const parsed = await parseAiJsonText(text)
+      if (parsed?.erro) {
+        const err = new Error(String(parsed.erro))
+        err.code = 'ai_generation_error'
+        throw err
+      }
+      return parsed
+    } catch (error) {
+      lastError = error
+      if (isGeminiQuotaError(error)) throw error
+      if (attempt < maxAttempts && isRetryableAiError(error)) continue
+      break
     }
-    return parsed
-  } catch (error) {
-    if (isGeminiQuotaError(error)) throw error
-    const err = new Error(formatAiErrorForUser(error))
-    err.code = error.code || 'ai_json_parse_error'
-    err.cause = error
-    throw err
   }
+
+  const err = new Error(resolveAiErrorMessage(lastError))
+  err.code = lastError?.code || 'ai_json_parse_error'
+  err.cause = lastError
+  throw err
+}
+
+function closeTruncatedJson(raw) {
+  let s = String(raw).trim()
+  s = s.replace(/,\s*"[^"\\]*(?:\\.[^"\\]*)*$/, '')
+  s = s.replace(/,\s*$/, '')
+  s = s.replace(/:\s*$/, ': null')
+  const openBraces = (s.match(/\{/g) || []).length - (s.match(/\}/g) || []).length
+  const openBrackets = (s.match(/\[/g) || []).length - (s.match(/\]/g) || []).length
+  if (openBrackets > 0) s += ']'.repeat(openBrackets)
+  if (openBraces > 0) s += '}'.repeat(openBraces)
+  return s
 }
 
 export async function parseAiJsonText(generatedText) {
-  if (!generatedText || typeof generatedText !== 'string') {
-    throw new Error('Texto da IA inválido')
+  const normalized =
+    typeof generatedText === 'string'
+      ? generatedText.trim()
+      : generatedText == null
+        ? ''
+        : String(generatedText).trim()
+
+  if (!normalized) {
+    const err = new Error('A IA não retornou texto para processar')
+    err.code = 'ai_empty_response'
+    throw err
   }
 
   const cleaned = stripConversationalWrapper(
-    generatedText
+    normalized
       .replace(/```json\s*/gi, '')
       .replace(/```/g, '')
-      .trim()
+      .trim(),
   )
 
   const jsonMatch = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/)
   if (!jsonMatch) {
-    throw new Error('Nenhum JSON válido encontrado na resposta')
+    const err = new Error('Nenhum JSON válido encontrado na resposta da IA')
+    err.code = 'ai_json_parse_error'
+    throw err
   }
 
   try {
     return JSON.parse(jsonMatch[0])
   } catch {
-    return await repairJsonText(jsonMatch[0])
+    return repairJsonText(jsonMatch[0])
   }
 }
 
@@ -434,12 +542,14 @@ export async function extractJsonFromResponse(response) {
 export async function repairJsonText(raw) {
   const attempts = [
     (s) => JSON.parse(s),
+    (s) => JSON.parse(closeTruncatedJson(s)),
     async (s) => {
       const mod = await import('jsonrepair')
       const repairFn = mod.jsonrepair || mod.default
       if (typeof repairFn !== 'function') throw new Error('jsonrepair indisponível')
       return JSON.parse(repairFn(s))
     },
+    (s) => JSON.parse(closeTruncatedJson(s).replace(/,\s*([}\]])/g, '$1').replace(/[\u0000-\u001F]+/g, ' ')),
     (s) => JSON.parse(s.replace(/,\s*([}\]])/g, '$1').replace(/[\u0000-\u001F]+/g, ' ')),
   ]
 
@@ -452,7 +562,10 @@ export async function repairJsonText(raw) {
     }
   }
 
-  throw lastError || new Error('Não foi possível reparar o JSON da resposta')
+  const err = new Error('Não foi possível reparar o JSON da resposta da IA')
+  err.code = 'ai_json_parse_error'
+  err.cause = lastError
+  throw err
 }
 
 /**

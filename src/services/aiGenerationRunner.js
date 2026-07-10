@@ -82,12 +82,18 @@ export async function startBackgroundGeneration({
 
   if (useServer) {
     const promise = waitForGenerationJob(userId, jobId).then((job) => job?.resultRef ?? job)
+    promise.catch((err) => {
+      console.error('[generation] job falhou:', err?.message || err)
+    })
     activeTasks.set(jobId, promise)
     promise.finally(() => activeTasks.delete(jobId))
     return { jobId, promise }
   }
 
   const promise = executeJob(userId, jobId, task)
+  promise.catch((err) => {
+    console.error('[generation] task falhou:', err?.message || err)
+  })
   activeTasks.set(jobId, promise)
   return { jobId, promise }
 }

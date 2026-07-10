@@ -20,14 +20,47 @@
   width: 100%;
   isolation: isolate;
   overflow: visible;
-  min-height: min(420px, 58vh);
+  min-height: auto;
 }
 
-.floating-comments-stage--active {
+/* Tablet: grid 3 colunas (comportamento original) */
+.floating-comments-stage--lane {
   display: grid;
   grid-template-columns: minmax(11.5rem, 20%) minmax(0, 1fr) minmax(11.5rem, 20%);
   align-items: start;
   gap: 0.5rem;
+  min-height: min(420px, 58vh);
+}
+
+/* Desktop: conteúdo em largura total, balões nas margens sem comprimir */
+.floating-comments-stage--overlay {
+  display: block;
+  min-height: auto;
+}
+
+.floating-comments-stage--overlay .floating-comments-lane {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: min(13.5rem, 22%);
+  min-height: 100%;
+  z-index: 25;
+}
+
+.floating-comments-stage--overlay .floating-comments-lane--left {
+  left: 0;
+}
+
+.floating-comments-stage--overlay .floating-comments-lane--right {
+  right: 0;
+}
+
+.floating-comments-stage--overlay .floating-comments-content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: min(100%, 920px);
+  margin-inline: auto;
 }
 
 .floating-comments-lane {
@@ -107,23 +140,45 @@
 .floating-mini-bubble--stacked {
   position: relative;
   z-index: 1;
-  width: 100%;
-  max-width: none;
+  flex: 0 0 auto;
+  width: clamp(10.5rem, 78vw, 16rem);
+  max-width: min(260px, 88vw);
   cursor: default;
   animation: floating-bubble-enter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .floating-comments-mobile-strip {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: nowrap;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  margin-top: 0.75rem;
+  padding-bottom: 0.35rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.floating-comments-mobile-strip .floating-mini-bubble {
+  scroll-snap-align: start;
 }
 
 .floating-comments-stage--stacked {
   display: flex;
   flex-direction: column;
   min-height: auto;
+}
+
+.floating-comments-stage--stacked .floating-comments-content {
+  grid-column: auto;
+  grid-row: auto;
+  order: 1;
+}
+
+.floating-comments-stage--stacked .floating-comments-mobile-strip {
+  order: 2;
 }
 
 .floating-mini-bubble--dragging .floating-mini-bubble__inner {
@@ -236,24 +291,17 @@
 
 /* Mobile */
 @media (max-width: 767px) {
-  .floating-comments-stage {
-    min-height: min(380px, 52vh);
+  .floating-comments-stage--stacked {
+    min-height: auto;
   }
 
-  .floating-mini-bubble {
-    width: clamp(10.5rem, 72vw, 16rem);
-    max-width: min(260px, 92vw);
-    padding: 0.5rem 0.55rem 0.55rem;
-    padding-top: 0.65rem;
-  }
-
-  .floating-mini-bubble__name {
+  .floating-mini-bubble--stacked .floating-mini-bubble__name {
     font-size: 0.68rem;
   }
 
-  .floating-mini-bubble__text {
+  .floating-mini-bubble--stacked .floating-mini-bubble__text {
     font-size: 0.64rem;
-    -webkit-line-clamp: 4;
+    -webkit-line-clamp: 3;
   }
 }
 
@@ -264,9 +312,8 @@
     max-width: 280px;
   }
 
-  .floating-comments-stage--active {
-    padding-left: 0.25rem;
-    padding-right: 0.25rem;
+  .floating-comments-stage--overlay .floating-comments-content {
+    max-width: min(100%, 960px);
   }
 }
 

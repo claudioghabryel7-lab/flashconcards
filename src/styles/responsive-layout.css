@@ -36,6 +36,25 @@
     overflow: visible !important;
   }
 
+  .floating-comments-stage--stacked .noji-study,
+  .floating-comments-stage--stacked .ia-content-enhanced {
+    max-width: 100%;
+    min-height: auto !important;
+  }
+
+  .floating-comments-stage--stacked .cp-flashcard-stage {
+    min-height: min(280px, 42dvh) !important;
+    height: min(280px, 42dvh) !important;
+  }
+
+  .floating-comments-stage--stacked .noji-card-actions {
+    min-height: 8.5rem;
+  }
+
+  .floating-comments-toolbar {
+    width: 100%;
+  }
+
   .noji-study-header {
     flex-wrap: wrap;
     gap: 0.5rem;
@@ -83,6 +102,18 @@
 
   .cp-study-practice-card {
     padding: 1.75rem 2rem !important;
+    overflow: visible !important;
+  }
+
+  .floating-comments-stage--overlay {
+    overflow: visible;
+  }
+
+  .floating-comments-stage--overlay .floating-comments-content {
+    padding-inline: 0;
+  }
+
+  .cp-study-practice-card:has(.floating-comments-stage--overlay) {
     overflow: visible !important;
   }
 }
