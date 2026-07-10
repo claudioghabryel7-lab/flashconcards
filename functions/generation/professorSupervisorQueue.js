@@ -8,7 +8,7 @@ const { SESSION_HOURS, INTERVAL_MINUTES, REVIEW_COOLDOWN_DAYS } = require('./pro
 
 const INTERVAL_MS = INTERVAL_MINUTES * 60 * 1000
 const SESSION_MS = SESSION_HOURS * 60 * 60 * 1000
-const BACKLOG_TOPICS_PER_COURSE = 5
+const BACKLOG_TOPICS_PER_COURSE = null
 const DIGITACAO_INTERVAL_MINUTES = 0
 
 function getDb() {
@@ -208,7 +208,10 @@ async function enqueueBacklogTopics(courseId, todayTopicKeys, edital, todayKey) 
 
   shuffleInPlace(candidates)
   let added = 0
-  for (const topic of candidates.slice(0, BACKLOG_TOPICS_PER_COURSE)) {
+  const backlogTopics = BACKLOG_TOPICS_PER_COURSE
+    ? candidates.slice(0, BACKLOG_TOPICS_PER_COURSE)
+    : candidates
+  for (const topic of backlogTopics) {
     added += await enqueueTopicPipeline(courseId, topic, {
       priorityBase: 40,
       targetDate: todayKey,
@@ -481,8 +484,10 @@ async function tickProfessorSupervisor({ force = false } = {}) {
     .limit(1)
     .get()
 
+  let rebuildAdded = 0
   if (pendingSnap.empty) {
-    await buildQueueItems()
+    const rebuild = await buildQueueItems()
+    rebuildAdded = rebuild.added || 0
     pendingSnap = await getDb()
       .collection('professorSupervisorQueue')
       .where('status', '==', 'pending')
@@ -491,6 +496,20 @@ async function tickProfessorSupervisor({ force = false } = {}) {
   }
 
   if (pendingSnap.empty) {
+    if (rebuildAdded === 0) {
+      await patchSupervisorConfig({
+        enabled: false,
+        phase: 'completed',
+        lastMessage: 'Fiscalização concluída — todos os itens já revisados.',
+        currentActivity: {
+          phase: 'completed',
+          message: 'Sessão encerrada — nada pendente para fiscalizar.',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      })
+      return { skipped: true, reason: 'session_complete' }
+    }
+
     await updateSupervisorActivity({
       phase: 'idle',
       message: 'Fila vazia — nada a fiscalizar agora.',

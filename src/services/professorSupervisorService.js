@@ -180,6 +180,7 @@ export const SUPERVISOR_PHASE_LABELS = {
   waiting_api: 'Aguardando API',
   building_queue: 'Montando fila',
   session_expired: 'Sessão encerrada (8h)',
+  completed: 'Fiscalização concluída',
 }
 
 export const PROFESSOR_STEP_LABELS = {

@@ -99,6 +99,22 @@ async function saveHistory(entry) {
   })
 }
 
+async function saveSkipHistory({ courseId, itemType, payload, dedupeKey, reason, summary }) {
+  await saveHistory({
+    courseId,
+    itemType,
+    dedupeKey,
+    payload,
+    skipped: true,
+    skipReason: reason,
+    verdict: { summary: summary || reason },
+    professorsUsed: 0,
+    appliedCount: 0,
+    reviewId: null,
+    autoApplied: false,
+  })
+}
+
 async function saveAdminReview(entry) {
   const ref = await getDb().collection('professorSupervisorReviews').add({
     ...entry,
@@ -216,6 +232,15 @@ async function processTopicoStepItem(courseId, payload, itemType, updateJob, use
   const script = scriptCheckTopicStep(bundle, step)
 
   if (!script.needsReview && script.severity === 'low') {
+    const dedupeKey = `${courseId}:${itemType}:${payload.topicKey}`
+    await saveSkipHistory({
+      courseId,
+      itemType,
+      payload,
+      dedupeKey,
+      reason: 'script_ok',
+      summary: `Etapa ${step} passou na checagem estrutural — IA não necessária.`,
+    })
     return {
       skipped: true,
       reason: 'script_ok',
@@ -245,6 +270,15 @@ async function processDigitacaoItem(courseId, payload, updateJob, userId, jobId)
   )
   const material = bundle.material
   if (!material) {
+    const dedupeKey = `${courseId}:topico_digitacao:${payload.topicKey}`
+    await saveSkipHistory({
+      courseId,
+      itemType: 'topico_digitacao',
+      payload,
+      dedupeKey,
+      reason: 'no_material',
+      summary: 'Material ausente — digitação ignorada.',
+    })
     return { skipped: true, reason: 'no_material', summary: 'Material ausente — digitação ignorada.' }
   }
 
@@ -365,11 +399,31 @@ RELATO DO ALUNO: ${payload.reportText || ''}`
 
 async function processVesperaItem(courseId, updateJob, userId, jobId) {
   const snap = await getDb().doc(`courses/${courseId}/vesperaDeProva/material`).get()
-  if (!snap.exists) return { skipped: true, reason: 'no_vespera' }
+  if (!snap.exists) {
+    const dedupeKey = `${courseId}:vespera:material`
+    await saveSkipHistory({
+      courseId,
+      itemType: 'vespera',
+      payload: { scope: 'material' },
+      dedupeKey,
+      reason: 'no_vespera',
+      summary: 'Véspera de prova ausente.',
+    })
+    return { skipped: true, reason: 'no_vespera' }
+  }
 
   const materialDoc = snap.data()
   const script = scriptCheckVespera(materialDoc)
   if (!script.needsReview) {
+    const dedupeKey = `${courseId}:vespera:material`
+    await saveSkipHistory({
+      courseId,
+      itemType: 'vespera',
+      payload: { scope: 'material' },
+      dedupeKey,
+      reason: 'script_ok',
+      summary: 'Véspera OK na checagem estrutural.',
+    })
     return { skipped: true, reason: 'script_ok', summary: 'Véspera OK na checagem estrutural.' }
   }
 
