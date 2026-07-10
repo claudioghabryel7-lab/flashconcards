@@ -218,7 +218,9 @@ async function geminiRequestWithKeyFallback({
     }
   }
 
-  throw new Error(lastError)
+  const err = new Error(lastError)
+  err.code = 'api_quota_exhausted'
+  throw err
 }
 
 module.exports = {

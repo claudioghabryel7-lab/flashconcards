@@ -444,6 +444,9 @@ async function processGenerationJob(userId, jobId, jobData) {
         serverPayload,
         (uid, jid, patch) => updateJob(uid, jid, patch),
       )
+      if (outcome.paused) {
+        return outcome
+      }
       await updateJob(userId, jobId, {
         status: 'done',
         progress: 100,

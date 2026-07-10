@@ -1163,6 +1163,20 @@ exports.mentoradoDailyContentRelease = functions.pubsub
     return null
   })
 
+const { resumeWaitingGenerationJobs } = require('./generation/generationJobResume')
+
+/** Retoma jobs pausados por API expirada (a cada 5 min). */
+exports.resumeWaitingGenerationJobs = functions.pubsub
+  .schedule('every 5 minutes')
+  .timeZone('America/Sao_Paulo')
+  .onRun(async () => {
+    const result = await resumeWaitingGenerationJobs()
+    if (result.resumed > 0 || result.waiting > 0) {
+      console.log('[resumeWaitingGenerationJobs]', result)
+    }
+    return null
+  })
+
 exports.expireTrialUsers = functions.pubsub.schedule('0 0 * * *').timeZone('America/Sao_Paulo').onRun(async (context) => {
   console.log('Iniciando verificação de usuários trial expirados...')
   

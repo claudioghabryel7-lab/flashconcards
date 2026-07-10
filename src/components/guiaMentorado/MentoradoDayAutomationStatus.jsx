@@ -35,7 +35,7 @@ export default function MentoradoDayAutomationStatus({ courseId, targetDate, onG
 
   const dayLabel = dayjs(targetDate).format('DD/MM/YYYY')
   const topics = status?.topics || []
-  const isRunning = status?.status === 'running'
+  const isRunning = status?.status === 'running' || status?.status === 'waiting_api'
 
   return (
     <div className="cp-card space-y-4 !rounded-2xl p-4">
@@ -49,6 +49,7 @@ export default function MentoradoDayAutomationStatus({ courseId, targetDate, onG
             <p className="mt-1 text-xs text-cp-muted">
               {status.publishedCount ?? 0}/{status.totalTopics ?? topics.length} tópico(s) liberado(s)
               {status.status === 'running' && ' — em andamento…'}
+              {status.status === 'waiting_api' && ' — API expirada, aguardando…'}
               {status.status === 'partial' && ' — concluído com pendências'}
               {status.status === 'error' && ' — erro'}
               {status.reason && ` (${status.reason})`}

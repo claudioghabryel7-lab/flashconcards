@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, ClockIcon } from '@heroicons/react/24/outline'
 import { useBackgroundGeneration } from '../hooks/useBackgroundGeneration'
 import { useAuth } from '../hooks/useAuth'
-import { dismissGenerationJob } from '../services/generationJobService'
+import { dismissGenerationJob, GENERATION_JOB_STATUS } from '../services/generationJobService'
 
 const JOB_LABELS = {
   conteudo_completo: 'Conteúdo do tópico',
@@ -42,38 +42,53 @@ export default function BackgroundGenerationBanner() {
       role="status"
       aria-live="polite"
     >
-      {jobs.map((job) => (
-        <div
-          key={job.id}
-          className="rounded-xl border border-cp-accent/30 bg-cp-surface/95 px-4 py-3 shadow-lg backdrop-blur-sm"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
-              <p className="text-sm font-medium text-cp-text">
-                {JOB_LABELS[job.jobType] || 'Geração com IA'}
-              </p>
+      {jobs.map((job) => {
+        const waitingApi = job.status === GENERATION_JOB_STATUS.WAITING_API
+        return (
+          <div
+            key={job.id}
+            className={`rounded-xl border px-4 py-3 shadow-lg backdrop-blur-sm ${
+              waitingApi
+                ? 'border-amber-500/40 bg-amber-500/10'
+                : 'border-cp-accent/30 bg-cp-surface/95'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                {waitingApi ? (
+                  <ClockIcon className="h-4 w-4 animate-pulse text-amber-600" />
+                ) : (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+                )}
+                <p className="text-sm font-medium text-cp-text">
+                  {JOB_LABELS[job.jobType] || 'Geração com IA'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleDismiss(job.id)}
+                disabled={dismissing[job.id]}
+                className="shrink-0 rounded-lg p-1 text-cp-muted transition hover:bg-cp-surface hover:text-cp-text disabled:opacity-50"
+                title="Dispensar aviso"
+                aria-label="Dispensar"
+              >
+                <XMarkIcon className="h-4 w-4" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => handleDismiss(job.id)}
-              disabled={dismissing[job.id]}
-              className="shrink-0 rounded-lg p-1 text-cp-muted transition hover:bg-cp-surface hover:text-cp-text disabled:opacity-50"
-              title="Dispensar aviso"
-              aria-label="Dispensar"
-            >
-              <XMarkIcon className="h-4 w-4" />
-            </button>
+            <p className={`mt-1 text-xs ${waitingApi ? 'text-amber-800 dark:text-amber-200' : 'text-cp-muted'}`}>
+              {job.message || (waitingApi ? 'API expirada — aguardando…' : 'Gerando em segundo plano…')}
+              {!waitingApi && typeof job.progress === 'number' && job.progress > 0
+                ? ` (${job.progress}%)`
+                : ''}
+            </p>
+            <p className="mt-1 text-[10px] text-cp-muted/80">
+              {waitingApi
+                ? 'O servidor verifica a cada 5 min e continua sozinho quando a API voltar.'
+                : 'Você pode sair desta tela — a geração continua no servidor.'}
+            </p>
           </div>
-          <p className="mt-1 text-xs text-cp-muted">
-            {job.message || 'Gerando em segundo plano…'}
-            {typeof job.progress === 'number' && job.progress > 0 ? ` (${job.progress}%)` : ''}
-          </p>
-          <p className="mt-1 text-[10px] text-cp-muted/80">
-            Você pode sair desta tela — a geração continua enquanto o app estiver aberto.
-          </p>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

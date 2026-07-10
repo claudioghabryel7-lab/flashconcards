@@ -45,9 +45,9 @@ const GuiaMentorado = () => {
   const [generating, setGenerating] = useState(false)
   const [generatingDay, setGeneratingDay] = useState(false)
   const [message, setMessage] = useState('')
-
+  const dailyReleaseLabel =
+    MENTORADO_DAILY_RELEASE_HOUR === 0 ? '00:00 (meia-noite)' : `${MENTORADO_DAILY_RELEASE_HOUR}h`
   const todayKey = dayjs().format('YYYY-MM-DD')
-  
   // Carregar cursos (apenas relevantes para o usuário)
   useEffect(() => {
     const loadCourses = async () => {
@@ -228,7 +228,7 @@ const GuiaMentorado = () => {
 
       setMessage(
         config.autoGerarConteudo
-          ? `✅ Cronograma em geração na nuvem. Hoje libera os tópicos do dia; demais dias às ${MENTORADO_DAILY_RELEASE_HOUR}h. Acompanhe o banner.`
+          ? `✅ Cronograma em geração na nuvem. Hoje libera os tópicos do dia; demais dias às ${dailyReleaseLabel}. Acompanhe o banner.`
           : '✅ Cronograma em geração na nuvem. Acompanhe o banner no canto inferior direito.',
       )
 
@@ -357,7 +357,7 @@ const GuiaMentorado = () => {
       {isAdmin && config.autoGerarConteudo && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
           Automação ativa: gera <strong>um tópico por vez</strong> (flashcards → material → questões → libera).
-          Hoje dispara na hora; demais dias às <strong>{MENTORADO_DAILY_RELEASE_HOUR}h</strong> (Brasília).
+          Hoje dispara na hora; demais dias às <strong>{dailyReleaseLabel}</strong> (Brasília).
         </div>
       )}
 
@@ -426,7 +426,7 @@ const GuiaMentorado = () => {
                       </span>
                       <span className="mt-1 block text-xs text-cp-muted">
                         Para cada dia do cronograma, gera e libera flashcards, material e questões só das matérias
-                        daquele dia — às {MENTORADO_DAILY_RELEASE_HOUR}h (Brasília). No dia da geração, libera na hora.
+                        daquele dia — às {dailyReleaseLabel} (Brasília). No dia da geração, libera na hora.
                       </span>
                     </span>
                   </label>

@@ -15,6 +15,7 @@ import { stripUndefined } from '../utils/firestoreHelpers'
 export const GENERATION_JOB_STATUS = {
   PENDING: 'pending',
   RUNNING: 'running',
+  WAITING_API: 'waiting_api',
   DONE: 'done',
   ERROR: 'error',
   CANCELLED: 'cancelled',
@@ -65,6 +66,7 @@ export async function updateGenerationJob(userId, jobId, patch) {
 
 const STALE_JOB_MS = 45 * 60 * 1000
 const STALE_SERVER_JOB_MS = 90 * 60 * 1000
+const STALE_WAITING_API_MS = 24 * 60 * 60 * 1000
 
 /** Marca jobs travados (ex.: aba fechada) como erro para não ficar banner infinito. */
 export async function reconcileStaleGenerationJobs(userId) {
@@ -73,7 +75,11 @@ export async function reconcileStaleGenerationJobs(userId) {
   const snap = await getDocs(
     query(
       jobsRef(userId),
-      where('status', 'in', [GENERATION_JOB_STATUS.PENDING, GENERATION_JOB_STATUS.RUNNING]),
+      where('status', 'in', [
+        GENERATION_JOB_STATUS.PENDING,
+        GENERATION_JOB_STATUS.RUNNING,
+        GENERATION_JOB_STATUS.WAITING_API,
+      ]),
     ),
   )
 
@@ -85,7 +91,12 @@ export async function reconcileStaleGenerationJobs(userId) {
     const updatedAt = data.updatedAt?.toDate?.() || data.createdAt?.toDate?.()
     if (!updatedAt) return
 
-    const staleMs = data.runOnServer ? STALE_SERVER_JOB_MS : STALE_JOB_MS
+    const staleMs =
+      data.status === GENERATION_JOB_STATUS.WAITING_API
+        ? STALE_WAITING_API_MS
+        : data.runOnServer
+          ? STALE_SERVER_JOB_MS
+          : STALE_JOB_MS
     if (now - updatedAt.getTime() < staleMs) return
 
     updates.push(
@@ -117,7 +128,11 @@ export function subscribeActiveGenerationJobs(userId, onData) {
 
   const q = query(
     jobsRef(userId),
-    where('status', 'in', [GENERATION_JOB_STATUS.PENDING, GENERATION_JOB_STATUS.RUNNING]),
+    where('status', 'in', [
+      GENERATION_JOB_STATUS.PENDING,
+      GENERATION_JOB_STATUS.RUNNING,
+      GENERATION_JOB_STATUS.WAITING_API,
+    ]),
   )
 
   return onSnapshot(

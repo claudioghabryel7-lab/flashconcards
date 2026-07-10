@@ -1,5 +1,5 @@
 const DEFAULT_PLANNING_DAYS = 90
-const MENTORADO_DAILY_RELEASE_HOUR = 6
+const MENTORADO_DAILY_RELEASE_HOUR = 0
 
 function formatDateBR(date) {
   const d = String(date.getDate()).padStart(2, '0')

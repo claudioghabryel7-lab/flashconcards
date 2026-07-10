@@ -10,6 +10,7 @@ const {
   finalizeDayStatus,
 } = require('./guiaMentoradoStatus')
 const { markDayContentGenerated } = require('./guiaMentoradoStatus')
+const { isApiQuotaError, pauseJobForApi } = require('./generationJobResume')
 
 const CONTENT_STATUS = {
   AVAILABLE: 'disponivel',
@@ -334,6 +335,7 @@ async function processSingleTopic(courseId, targetDate, topic, updateJob, userId
     await generateAndSaveFlashcards(courseId, topic)
     await updateTopicStep(courseId, targetDate, topic.topicKey, { flashcards: 'done', step: 'material' })
   } catch (err) {
+    if (isApiQuotaError(err)) throw err
     topicErrors.push(`flashcards: ${err.message}`)
     await updateTopicStep(courseId, targetDate, topic.topicKey, {
       flashcards: 'error',
@@ -350,6 +352,7 @@ async function processSingleTopic(courseId, targetDate, topic, updateJob, userId
     await generateAndSaveConteudo(courseId, topic)
     await updateTopicStep(courseId, targetDate, topic.topicKey, { material: 'done', step: 'questoes' })
   } catch (err) {
+    if (isApiQuotaError(err)) throw err
     topicErrors.push(`material: ${err.message}`)
     await updateTopicStep(courseId, targetDate, topic.topicKey, {
       material: 'error',
@@ -366,6 +369,7 @@ async function processSingleTopic(courseId, targetDate, topic, updateJob, userId
     await generateAndSaveQuestoes(courseId, topic)
     await updateTopicStep(courseId, targetDate, topic.topicKey, { questoes: 'done', step: 'publicando' })
   } catch (err) {
+    if (isApiQuotaError(err)) throw err
     topicErrors.push(`questoes: ${err.message}`)
     await updateTopicStep(courseId, targetDate, topic.topicKey, {
       questoes: 'error',
@@ -416,6 +420,7 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
   const topics = serverPayload?.topics || []
   const autoPublish = serverPayload?.autoPublish !== false
   const targetDate = serverPayload?.targetDate || null
+  const startIndex = Math.max(0, Number(serverPayload?.resumeFromTopicIndex) || 0)
 
   if (!topics.length) {
     throw new Error('Nenhum tópico enviado para automação do Guia Mentorado.')
@@ -428,54 +433,92 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
   const errors = []
   let publishedCount = 0
 
-  if (targetDate) {
+  if (targetDate && startIndex === 0) {
     await initDayStatus(courseId, targetDate, topics, jobId)
+  } else if (targetDate && startIndex > 0) {
+    await updateDayStatus(courseId, targetDate, { status: 'running', jobId })
   }
 
   const dateLabel = targetDate ? ` ${targetDate}` : ''
   await updateJob(userId, jobId, {
-    progress: 2,
-    message: `Dia${dateLabel} — ${total} tópico(s), um por vez…`,
+    status: 'running',
+    progress: Math.min(Math.round((startIndex / total) * 100), 99),
+    message:
+      startIndex > 0
+        ? `Retomando dia${dateLabel} — tópico ${startIndex + 1}/${total}…`
+        : `Dia${dateLabel} — ${total} tópico(s), um por vez…`,
   })
 
-  for (let i = 0; i < topics.length; i += 1) {
-    const result = await processSingleTopic(
-      courseId,
-      targetDate,
-      topics[i],
-      updateJob,
-      userId,
-      jobId,
-      i,
-      total,
-    )
-    if (result.published) publishedCount += 1
-    if (result.errors?.length) {
-      errors.push({
-        topic: topics[i].topicoNome || topics[i].topicKey,
-        steps: result.errors,
-      })
+  for (let i = startIndex; i < topics.length; i += 1) {
+    try {
+      const result = await processSingleTopic(
+        courseId,
+        targetDate,
+        topics[i],
+        updateJob,
+        userId,
+        jobId,
+        i,
+        total,
+      )
+      if (result.published) publishedCount += 1
+      if (result.errors?.length) {
+        errors.push({
+          topic: topics[i].topicoNome || topics[i].topicKey,
+          steps: result.errors,
+        })
+      }
+    } catch (err) {
+      if (isApiQuotaError(err)) {
+        const label = topics[i].topicoNome || topics[i].topicKey
+        await pauseJobForApi({
+          userId,
+          jobId,
+          courseId,
+          jobType: 'guia_mentorado_automation',
+          serverPayload: { ...serverPayload, resumeFromTopicIndex: i },
+          resumeFromTopicIndex: i,
+          topicLabel: label,
+          updateJob,
+        })
+        if (targetDate) {
+          await updateDayStatus(courseId, targetDate, {
+            status: 'waiting_api',
+            reason: 'API expirada — aguardando para continuar',
+          })
+        }
+        return {
+          paused: true,
+          resumeFromTopicIndex: i,
+          publishedCount,
+          totalTopics: total,
+          targetDate,
+        }
+      }
+      throw err
     }
   }
 
   if (targetDate) {
+    const statusSnap = await getDb().doc(`courses/${courseId}/mentoradoAutomation/${targetDate}`).get()
+    const totalPublished = statusSnap.exists() ? statusSnap.data().publishedCount || 0 : publishedCount
     await finalizeDayStatus(courseId, targetDate, { errors, total })
     await updateDayStatus(courseId, targetDate, {
-      publishedCount,
-      status: publishedCount >= total ? 'done' : publishedCount > 0 ? 'partial' : 'error',
+      publishedCount: totalPublished,
+      status: totalPublished >= total ? 'done' : totalPublished > 0 ? 'partial' : 'error',
     })
-    if (publishedCount >= total) {
-      await markDayContentGenerated(courseId, targetDate, publishedCount, total)
+    if (totalPublished >= total) {
+      await markDayContentGenerated(courseId, targetDate, totalPublished, total)
     }
   }
 
-  if (publishedCount === 0 && errors.length) {
+  if (publishedCount === 0 && errors.length && startIndex === 0) {
     throw new Error(
       `Nenhum tópico foi liberado. Verifique o painel de automação do dia.${errors[0]?.steps?.[0] ? ` (${errors[0].steps[0]})` : ''}`,
     )
   }
 
-  return { totalTopics: total, publishedCount, errors, targetDate }
+  return { totalTopics: total, publishedCount, errors, targetDate, paused: false }
 }
 
 module.exports = {
