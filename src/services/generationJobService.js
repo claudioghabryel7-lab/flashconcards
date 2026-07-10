@@ -23,7 +23,11 @@ export const GENERATION_JOB_STATUS = {
   CANCELLED: 'cancelled',
 }
 
-const MENTORADO_JOB_TYPES = ['guia_mentorado_automation', 'guia_mentorado_cronograma']
+const MENTORADO_JOB_TYPES = [
+  'guia_mentorado_automation',
+  'guia_mentorado_cronograma',
+  'professor_supervisor',
+]
 
 export const GENERATION_WAITING_STATUSES = [
   GENERATION_JOB_STATUS.WAITING_API,

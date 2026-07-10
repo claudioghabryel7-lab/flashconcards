@@ -37,6 +37,7 @@ import {
 } from 'firebase/firestore'
 import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager'
 import AdminContentModeration from '../components/admin/AdminContentModeration'
+import AdminProfessorSupervisor from '../components/admin/AdminProfessorSupervisor'
 import AdminEmailBroadcast from '../components/admin/AdminEmailBroadcast'
 import AdminCacheReset from '../components/admin/AdminCacheReset'
 import AdminConcursoMaterial from '../components/admin/AdminConcursoMaterial'
@@ -6893,6 +6894,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
         { id: 'users', label: 'Usuários', icon: '👥' },
         { id: 'courses', label: 'Cursos', icon: '🎓' },
         { id: 'moderacao', label: 'Moderação', icon: '🚩' },
+        { id: 'professor-fiscalizador', label: 'Professor IA', icon: '🎓' },
       ],
     },
     {
@@ -13270,6 +13272,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
             )}
 
             {activeTab === 'moderacao' && <AdminContentModeration />}
+
+            {activeTab === 'professor-fiscalizador' && <AdminProfessorSupervisor />}
           </div>
         </div>
 

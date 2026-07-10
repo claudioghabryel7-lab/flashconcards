@@ -132,6 +132,20 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create, update, delete: if isAdmin();
     }
+
+    match /professorSupervisorReviews/{reviewId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /professorSupervisorHistory/{historyId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /professorSupervisorQueue/{itemId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
     
     match /config/popupBanner {
       allow read: if true;

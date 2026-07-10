@@ -380,6 +380,7 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
 const { processAdminEditalVerticalizado } = require('./adminEditalProcessor')
 const { processGuiaMentoradoAutomation } = require('./guiaMentoradoAutomation')
 const { processGuiaMentoradoCronograma } = require('./guiaMentoradoCronograma')
+const { processProfessorSupervisor } = require('./professorSupervisor')
 const { clearResumeQueue } = require('./generationJobResume')
 
 async function processGenerationJob(userId, jobId, jobData) {
@@ -389,6 +390,7 @@ async function processGenerationJob(userId, jobId, jobData) {
     'admin_edital_verticalizado',
     'guia_mentorado_automation',
     'guia_mentorado_cronograma',
+    'professor_supervisor',
   ]
   if (!serverPayload?.prompt && !noPromptJobs.includes(jobType)) {
     throw new Error('Payload de geração inválido.')
@@ -404,6 +406,9 @@ async function processGenerationJob(userId, jobId, jobData) {
   }
   if (jobType === 'guia_mentorado_automation' && !serverPayload?.topics?.length) {
     throw new Error('Lista de tópicos ausente para automação do Guia Mentorado.')
+  }
+  if (jobType === 'professor_supervisor' && !serverPayload?.itemType) {
+    throw new Error('Payload ausente para professor fiscalizador.')
   }
   if (!courseId) {
     throw new Error('courseId ausente no job.')
@@ -460,6 +465,19 @@ async function processGenerationJob(userId, jobId, jobData) {
         resultRef: null,
         finishedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
+      return outcome
+    case 'professor_supervisor':
+      outcome = await processProfessorSupervisor(
+        userId,
+        jobId,
+        courseId,
+        serverPayload,
+        (uid, jid, patch) => updateJob(uid, jid, patch),
+      )
+      if (outcome.cancelled || outcome.paused) {
+        return outcome
+      }
+      await clearResumeQueue(jobId)
       return outcome
     case 'guia_mentorado_cronograma':
       outcome = await processGuiaMentoradoCronograma(

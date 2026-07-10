@@ -27,8 +27,16 @@ function isApiQuotaError(error) {
   )
 }
 
+function isResumableJob(jobType) {
+  return (
+    jobType === 'guia_mentorado_automation' ||
+    jobType === 'guia_mentorado_cronograma' ||
+    jobType === 'professor_supervisor'
+  )
+}
+
 function isMentoradoJob(jobType) {
-  return jobType === 'guia_mentorado_automation' || jobType === 'guia_mentorado_cronograma'
+  return isResumableJob(jobType)
 }
 
 function createJobCancelledError() {
@@ -410,6 +418,7 @@ module.exports = {
   isJobCancelled,
   isJobCancelledError,
   isMentoradoJob,
+  isResumableJob,
   throwIfCancelled,
   handleGenerationJobCancelled,
   pauseJobForApi,

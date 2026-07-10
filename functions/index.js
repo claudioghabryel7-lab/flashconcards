@@ -19,13 +19,7 @@ const axios = require('axios')
 
 admin.initializeApp()
 
-const { processGenerationJob } = require('./generation/jobProcessor')
-const {
-  isMentoradoJob,
-  isApiQuotaError,
-  pauseJobForResume,
-  handleGenerationJobCancelled,
-} = require('./generation/generationJobResume')
+const { getJobProcessor, getResumeModule, getDailyModule, getSupervisorQueueModule } = require('./generationLoader')
 
 /** Processa jobs de geração IA no servidor — continua mesmo com aba/dispositivo fechado. */
 exports.onGenerationJobCreated = functions
@@ -40,12 +34,14 @@ exports.onGenerationJobCreated = functions
     const { userId, jobId } = context.params
 
     try {
+      const { processGenerationJob } = getJobProcessor()
       await processGenerationJob(userId, jobId, data)
       return null
     } catch (error) {
       console.error(`[onGenerationJobCreated] job ${jobId}:`, error)
 
-      if (isMentoradoJob(data.jobType)) {
+      const { isResumableJob, isApiQuotaError, pauseJobForResume } = getResumeModule()
+      if (isResumableJob(data.jobType)) {
         const pauseStatus = isApiQuotaError(error) ? 'waiting_api' : 'waiting_retry'
         await pauseJobForResume({
           userId,
@@ -96,6 +92,7 @@ exports.onGenerationJobUpdated = functions.firestore
     }
 
     const { userId, jobId } = context.params
+    const { handleGenerationJobCancelled } = getResumeModule()
     await handleGenerationJobCancelled(userId, jobId, after)
     console.log(`[onGenerationJobUpdated] job ${jobId} cancelado — fila limpa`)
     return null
@@ -1201,7 +1198,6 @@ exports.sendAdminBroadcastEmail = functions.https.onRequest((req, res) => {
 })
 
 const { MENTORADO_DAILY_RELEASE_HOUR } = require('./generation/guiaMentoradoShared')
-const { runDailyMentoradoAutomationForAllCourses } = require('./generation/guiaMentoradoDaily')
 
 /** Libera conteúdos do Guia Mentorado dia a dia (só matérias do dia). */
 exports.mentoradoDailyContentRelease = functions.pubsub
@@ -1209,21 +1205,38 @@ exports.mentoradoDailyContentRelease = functions.pubsub
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
     console.log('[mentoradoDailyContentRelease] Iniciando liberação diária…')
+    const { runDailyMentoradoAutomationForAllCourses } = getDailyModule()
     const results = await runDailyMentoradoAutomationForAllCourses()
     console.log('[mentoradoDailyContentRelease] Concluído:', results.length, 'curso(s)')
     return null
   })
-
-const { resumeWaitingGenerationJobs } = require('./generation/generationJobResume')
 
 /** Retoma jobs pausados por API expirada (a cada 5 min). */
 exports.resumeWaitingGenerationJobs = functions.pubsub
   .schedule('every 5 minutes')
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
+    const { resumeWaitingGenerationJobs } = getResumeModule()
     const result = await resumeWaitingGenerationJobs()
     if (result.resumed > 0 || result.waiting > 0) {
       console.log('[resumeWaitingGenerationJobs]', result)
+    }
+    return null
+  })
+
+/** Professor fiscalizador — 1 item por vez, só se API disponível e ativado pelo admin. */
+exports.professorSupervisorTick = functions.pubsub
+  .schedule('every 10 minutes')
+  .timeZone('America/Sao_Paulo')
+  .onRun(async () => {
+    try {
+      const { tickProfessorSupervisor } = getSupervisorQueueModule()
+      const result = await tickProfessorSupervisor()
+      if (result.started) {
+        console.log('[professorSupervisorTick]', result)
+      }
+    } catch (err) {
+      console.error('[professorSupervisorTick]', err)
     }
     return null
   })

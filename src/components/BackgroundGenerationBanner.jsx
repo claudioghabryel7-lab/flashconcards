@@ -20,6 +20,7 @@ const JOB_LABELS = {
   guia_mentorado: 'Guia mentorado',
   guia_mentorado_cronograma: 'Cronograma Guia Mentorado',
   guia_mentorado_automation: 'Conteúdos do dia (Guia Mentorado)',
+  professor_supervisor: 'Professor fiscalizador',
   admin_batch: 'Geração em lote',
 }
 
