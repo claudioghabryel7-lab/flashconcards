@@ -43,11 +43,11 @@ import AdminCacheReset from '../components/admin/AdminCacheReset'
 import AdminConcursoMaterial from '../components/admin/AdminConcursoMaterial'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { defaultContentStatus, toggleContentStatus } from '../utils/contentStatus'
-import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon, ArrowPathIcon, XMarkIcon, EnvelopeIcon } from '@heroicons/react/24/outline'
 import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
 import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { auth, db, storage } from '../firebase/config'
-import { requestPasswordResetEmail } from '../utils/adminApi'
+import { requestPasswordResetEmail, sendRetroactiveWelcomeEmails } from '../utils/adminApi'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -205,6 +205,7 @@ const AdminPanel = () => {
   const [resetEmail, setResetEmail] = useState('')
   const [generatedLink, setGeneratedLink] = useState('')
   const [generatingLink, setGeneratingLink] = useState(false)
+  const [sendingRetroactiveWelcome, setSendingRetroactiveWelcome] = useState(false)
   const [resetPasswordError, setResetPasswordError] = useState(null) // { email: string, existsInFirestore: boolean }
   
   
@@ -4585,6 +4586,34 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
       }
     } finally {
       setGeneratingLink(false)
+    }
+  }
+
+  const handleRetroactiveWelcomeEmails = async () => {
+    const verifiedCount = users.filter(isUserEmailVerified).length
+    const pendingWelcome = users.filter(
+      (u) => isUserEmailVerified(u) && !u.welcomeEmailSentAt && u.role !== 'admin',
+    ).length
+
+    if (
+      !confirm(
+        `Enviar email de boas-vindas para até ${pendingWelcome} usuário(s) verificado(s) que ainda não receberam?\n\nTotal verificados: ${verifiedCount}. Pode levar alguns minutos.`,
+      )
+    ) {
+      return
+    }
+
+    setSendingRetroactiveWelcome(true)
+    setMessage('')
+    try {
+      const result = await sendRetroactiveWelcomeEmails()
+      setMessage(
+        `✅ Boas-vindas retroativas: ${result.sent} enviados · ${result.skipped} ignorados · ${result.failed} falhas.`,
+      )
+    } catch (err) {
+      setMessage(`❌ Erro ao enviar boas-vindas retroativas: ${err.message}`)
+    } finally {
+      setSendingRetroactiveWelcome(false)
     }
   }
 
@@ -10779,6 +10808,31 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
             </div>
                     )}
                     </div>
+                  </div>
+                </div>
+
+                <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-emerald-500/5 to-violet-500/5 rounded-full blur-3xl -mr-24 -mt-24" />
+                  <div className="relative">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-alego-600 mb-2">
+                      <EnvelopeIcon className="h-5 w-5" />
+                      Email de boas-vindas pós-verificação
+                    </p>
+                    <p className="text-xs text-slate-500 mb-4">
+                      Após confirmar o email, o aluno recebe automaticamente um guia de boas-vindas com dicas da
+                      plataforma e orientação para marcar como &quot;não é spam&quot;. Use o botão abaixo para enviar
+                      retroativamente a quem já verificou antes dessa funcionalidade.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleRetroactiveWelcomeEmails}
+                      disabled={sendingRetroactiveWelcome}
+                      className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                    >
+                      {sendingRetroactiveWelcome
+                        ? 'Enviando emails… (pode demorar)'
+                        : 'Enviar boas-vindas retroativas'}
+                    </button>
                   </div>
                 </div>
 

@@ -12,6 +12,7 @@ const {
   verifyAdminRequest,
   verifyAuthRequest,
   sendBrandedEmail,
+  sendAccountWelcomeEmail,
   getEmailCredentials,
   DEFAULT_FROM_NAME,
 } = require('./emailUtils')
@@ -1063,6 +1064,12 @@ exports.verifyEmailCode = functions.https.onRequest((req, res) => {
       )
       await codeRef.delete()
 
+      try {
+        await sendAccountWelcomeEmail(uid)
+      } catch (welcomeErr) {
+        console.error('Erro ao enviar email de boas-vindas pós-verificação:', welcomeErr)
+      }
+
       return res.status(200).json({ success: true, message: 'Email verificado com sucesso!' })
     } catch (error) {
       console.error('Erro ao verificar código:', error)
@@ -1071,6 +1078,65 @@ exports.verifyEmailCode = functions.https.onRequest((req, res) => {
     }
   })
 })
+
+// Envia email de boas-vindas retroativo para usuários já verificados
+exports.sendRetroactiveWelcomeEmails = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .https.onRequest((req, res) => {
+    cors(req, res, async () => {
+      if (req.method === 'OPTIONS') return res.status(204).send('')
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
+
+      try {
+        await verifyAdminRequest(req)
+
+        const usersSnap = await admin.firestore().collection('users').get()
+        let sent = 0
+        let skipped = 0
+        let failed = 0
+        const errors = []
+
+        for (const docSnap of usersSnap.docs) {
+          const data = docSnap.data() || {}
+          const uid = docSnap.id
+
+          const isVerified =
+            data.emailVerified === true ||
+            (await admin.auth().getUser(uid).then((u) => u.emailVerified).catch(() => false))
+
+          if (!isVerified) {
+            skipped += 1
+            continue
+          }
+
+          try {
+            const result = await sendAccountWelcomeEmail(uid)
+            if (result.sent) sent += 1
+            else skipped += 1
+          } catch (err) {
+            failed += 1
+            errors.push({ uid, email: data.email, error: err.message })
+            console.error(`Falha welcome retroativo ${uid}:`, err)
+          }
+
+          // Pequena pausa para não sobrecarregar o Gmail
+          await new Promise((r) => setTimeout(r, 350))
+        }
+
+        return res.status(200).json({
+          success: true,
+          sent,
+          skipped,
+          failed,
+          errors: errors.slice(0, 20),
+        })
+      } catch (error) {
+        console.error('Erro no envio retroativo de boas-vindas:', error)
+        const status = error.status || 500
+        return res.status(status).json({ error: error.message || 'Erro ao enviar emails.' })
+      }
+    })
+  })
 
 // Função para atualizar senha do usuário (usado na página de reset)
 exports.updateUserPassword = functions.https.onRequest((req, res) => {

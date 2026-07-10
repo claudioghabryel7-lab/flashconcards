@@ -90,6 +90,42 @@ function buildBadgePill(label, color, border, bg) {
   return `<td style="padding:4px 12px;border-radius:9999px;border:1px solid ${border};background:${bg};font-family:'DM Sans',Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${color};white-space:nowrap;">${escapeHtml(label)}</td>`
 }
 
+function buildVerificationEmailHeader({ title, subtitle = '' }) {
+  return `<tr>
+    <td style="padding:28px 36px 0;text-align:center;background:${D.heroBg};">
+      <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:0 auto;">
+        <tr>
+          ${buildBadgePill('✦ Verificação', D.accent, 'rgba(124,58,237,0.22)', 'rgba(124,58,237,0.08)')}
+          <td width="8" style="font-size:0;line-height:0;">&nbsp;</td>
+          ${buildBadgePill('Conta segura', '#0891b2', 'rgba(8,145,178,0.22)', 'rgba(8,145,178,0.08)')}
+        </tr>
+      </table>
+      <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:18px auto 0;">
+        <tr>
+          <td style="padding:6px;border-radius:20px;background:linear-gradient(135deg,rgba(124,58,237,0.18),rgba(8,145,178,0.18));">
+            <table role="presentation" cellspacing="0" cellpadding="0">
+              <tr>
+                <td style="padding:12px;border-radius:16px;background:#ffffff;box-shadow:0 8px 24px rgba(124,58,237,0.14);">
+                  <img src="${SITE_LOGO_URL}" alt="${DEFAULT_FROM_NAME}" width="56" height="56" style="display:block;border-radius:14px;" />
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td bgcolor="#ffffff" style="padding:18px 36px 26px;text-align:center;background-color:#ffffff;">
+      <p style="margin:0;font-family:'DM Sans',Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${D.faint};">Concurseiro Preditivo</p>
+      <h1 style="margin:10px 0 0;font-family:'Syne',Arial,sans-serif;font-size:28px;line-height:1.15;font-weight:700;color:#18181b;letter-spacing:-.03em;mso-line-height-rule:exactly;">${escapeHtml(title)}</h1>
+      <div style="width:48px;height:3px;margin:12px auto 0;border-radius:9999px;background:${D.gradientStrip};"></div>
+      ${subtitle ? `<p style="margin:12px auto 0;max-width:420px;font-family:'DM Sans',Arial,sans-serif;font-size:15px;line-height:1.55;color:${D.muted};">${escapeHtml(subtitle)}</p>` : ''}
+    </td>
+  </tr>
+  ${buildOrnamentDivider()}`
+}
+
 function buildEmailHeader({ title, subtitle = '' }) {
   return `<tr>
     <td style="padding:32px 36px 28px;text-align:center;background:${D.heroBg};">
@@ -221,6 +257,8 @@ function emailShell({ preheader = '', bodyInner = '' }) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light only" />
+  <meta name="supported-color-schemes" content="light" />
   <link href="${EMAIL_FONT_LINK}" rel="stylesheet" />
   <title>${DEFAULT_FROM_NAME}</title>
 </head>
@@ -292,9 +330,86 @@ function buildVerificationCodeHtml(code) {
   </table>`
 }
 
+function buildAccountWelcomeHtml({ displayName = '', hasCourse = false, courseCount = 0 }) {
+  const greeting = displayName ? `Olá, ${displayName}!` : 'Olá!'
+  const courseLine = hasCourse
+    ? courseCount > 1
+      ? `Parabéns pela aquisição! Você já tem acesso a ${courseCount} cursos na plataforma. Desejamos excelentes estudos, foco e muita determinação rumo à sua aprovação!`
+      : 'Parabéns pela aquisição do curso! Desejamos excelentes estudos, foco e muita determinação rumo à sua aprovação!'
+    : 'Sua conta está pronta para uso. Explore a plataforma e comece sua jornada de estudos com inteligência artificial ao seu lado.'
+
+  return buildBrandedEmailHtml({
+    title: 'Conta confirmada!',
+    subtitle: 'Bem-vindo(a) ao Concurseiro Preditivo',
+    bodyHtml: paragraphsToHtml([
+      `${greeting} Seu email foi verificado com sucesso e sua conta está ativa.`,
+      courseLine,
+      'Abaixo estão dicas rápidas para você aproveitar ao máximo a plataforma desde o primeiro dia.',
+    ]),
+    highlight:
+      'Importante: marque nossos emails como "Não é spam" para não perder avisos, novidades e lembretes de estudo.',
+    bullets: [
+      'Acesse o Dashboard e selecione seu curso para começar',
+      'Estude com Flashcards inteligentes personalizados por IA',
+      'Use o Flash Mentor para tirar dúvidas e revisar conteúdos',
+      'Siga o Guia Mentorado para organizar sua rotina de estudos',
+      'Adicione flashconcards@gmail.com aos contatos e marque como confiável',
+    ],
+    ctaLabel: 'Começar a estudar',
+    ctaUrl: `${SITE_URL}/select-course`,
+    footerNote: 'Bons estudos! Estamos na torcida pela sua aprovação.',
+  })
+}
+
+async function sendAccountWelcomeEmail(uid) {
+  const userRef = admin.firestore().collection('users').doc(uid)
+  const userDoc = await userRef.get()
+  const docExists = typeof userDoc.exists === 'function' ? userDoc.exists() : userDoc.exists
+  if (!docExists) {
+    return { skipped: true, reason: 'no_profile' }
+  }
+
+  const data = userDoc.data() || {}
+  if (data.role === 'admin') {
+    return { skipped: true, reason: 'admin' }
+  }
+  if (data.welcomeEmailSentAt) {
+    return { skipped: true, reason: 'already_sent' }
+  }
+
+  const email = String(data.email || '').toLowerCase().trim()
+  if (!email) {
+    return { skipped: true, reason: 'no_email' }
+  }
+
+  const purchasedCourses = Array.isArray(data.purchasedCourses) ? data.purchasedCourses : []
+  const hasCourse = purchasedCourses.length > 0 || data.hasActiveSubscription === true
+  const displayName = data.displayName || email.split('@')[0]
+
+  const html = buildAccountWelcomeHtml({
+    displayName,
+    hasCourse,
+    courseCount: purchasedCourses.length,
+  })
+
+  await sendBrandedEmail({
+    to: email,
+    subject: `Conta confirmada — bons estudos! | ${DEFAULT_FROM_NAME}`,
+    html,
+    text: `${displayName}, sua conta foi confirmada! Acesse ${SITE_URL}/select-course para começar. Marque flashconcards@gmail.com como contato seguro.`,
+  })
+
+  await userRef.set(
+    { welcomeEmailSentAt: admin.firestore.FieldValue.serverTimestamp() },
+    { merge: true },
+  )
+
+  return { sent: true, email }
+}
+
 function buildEmailVerificationHtml({ code, displayName = '', email = '' }) {
   const bodyInner = `
-    ${buildEmailHeader({
+    ${buildVerificationEmailHeader({
       title: 'Confirme seu email',
       subtitle: 'Última etapa para liberar seu acesso à plataforma',
     })}
@@ -385,6 +500,7 @@ async function sendBrandedEmail({ to, subject, html, text }) {
 module.exports = {
   createEmailTransporter,
   buildBrandedEmailHtml,
+  buildAccountWelcomeHtml,
   buildEmailVerificationHtml,
   paragraphsToHtml,
   bulletsToHtml,
@@ -393,6 +509,7 @@ module.exports = {
   verifyAdminRequest,
   verifyAuthRequest,
   sendBrandedEmail,
+  sendAccountWelcomeEmail,
   getEmailCredentials,
   DEFAULT_FROM_NAME,
   SITE_LOGO_URL,

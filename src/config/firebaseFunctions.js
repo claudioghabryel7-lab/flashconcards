@@ -33,6 +33,7 @@ export const FIREBASE_FUNCTIONS = {
 
   sendEmailVerificationCode: `${FIREBASE_FUNCTIONS_BASE_URL}/sendEmailVerificationCode`,
   verifyEmailCode: `${FIREBASE_FUNCTIONS_BASE_URL}/verifyEmailCode`,
+  sendRetroactiveWelcomeEmails: `${FIREBASE_FUNCTIONS_BASE_URL}/sendRetroactiveWelcomeEmails`,
   
   // Função para gerar notícias de concursos automaticamente com IA
   generateConcursoNews: `${FIREBASE_FUNCTIONS_BASE_URL}/generateConcursoNews`,

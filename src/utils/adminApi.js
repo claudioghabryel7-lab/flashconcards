@@ -49,3 +49,7 @@ export function requestPasswordResetEmail(email) {
 export function sendAdminBroadcastEmail(payload) {
   return callAdminCloudFunction(FIREBASE_FUNCTIONS.sendAdminBroadcastEmail, payload)
 }
+
+export function sendRetroactiveWelcomeEmails() {
+  return callAdminCloudFunction(FIREBASE_FUNCTIONS.sendRetroactiveWelcomeEmails, {})
+}
