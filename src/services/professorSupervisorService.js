@@ -19,11 +19,32 @@ import { db } from '../firebase/config'
 const CONFIG_PATH = ['config', 'professorFiscalizador']
 const SESSION_HOURS = 8
 
+export function getSaoPauloClockParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  }).formatToParts(date)
+  return {
+    hour: Number(parts.find((p) => p.type === 'hour')?.value ?? 0),
+    minute: Number(parts.find((p) => p.type === 'minute')?.value ?? 0),
+  }
+}
+
+export function getTodayKeyInSaoPaulo(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(date)
+}
+
+export function formatDailyStartLabel(hour = 0, minute = 0) {
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
 export function subscribeProfessorSupervisorConfig(onData) {
   if (!db) return () => {}
   const ref = doc(db, ...CONFIG_PATH)
   return onSnapshot(ref, (snap) => {
-    onData(snap.exists() ? snap.data() : { enabled: false })
+    onData(snap.exists() ? snap.data() : { enabled: false, recurringDaily: false })
   })
 }
 
@@ -32,13 +53,21 @@ export async function setProfessorSupervisorEnabled(userId, enabled) {
   const ref = doc(db, ...CONFIG_PATH)
 
   if (enabled) {
+    const { hour, minute } = getSaoPauloClockParts()
+    const todayKey = getTodayKeyInSaoPaulo()
     const now = Date.now()
     const sessionEndsAt = Timestamp.fromDate(new Date(now + SESSION_HOURS * 60 * 60 * 1000))
+    const dailyLabel = formatDailyStartLabel(hour, minute)
+
     await setDoc(
       ref,
       {
         enabled: true,
+        recurringDaily: true,
         automationUserId: userId,
+        dailyStartHour: hour,
+        dailyStartMinute: minute,
+        lastAutoStartDate: todayKey,
         sessionStartedAt: serverTimestamp(),
         sessionEndsAt,
         nextRunAt: serverTimestamp(),
@@ -49,7 +78,7 @@ export async function setProfessorSupervisorEnabled(userId, enabled) {
           message: 'Iniciando sessão — primeiro item em instantes…',
           updatedAt: serverTimestamp(),
         },
-        lastMessage: 'Sessão iniciada — fiscalizando em instantes…',
+        lastMessage: `Agendamento diário às ${dailyLabel} — fiscalizando em instantes…`,
         updatedAt: serverTimestamp(),
       },
       { merge: true },
@@ -61,11 +90,12 @@ export async function setProfessorSupervisorEnabled(userId, enabled) {
     ref,
     {
       enabled: false,
+      recurringDaily: false,
       automationUserId: null,
       phase: 'idle',
       currentActivity: {
         phase: 'idle',
-        message: 'Desativado pelo admin',
+        message: 'Agendamento diário desativado pelo admin',
         updatedAt: serverTimestamp(),
       },
       lastMessage: 'Professor fiscalizador desativado.',
@@ -178,6 +208,7 @@ export const SUPERVISOR_PHASE_LABELS = {
   running: 'Fiscalizando agora',
   waiting_next: 'Aguardando próximo item',
   waiting_api: 'Aguardando API',
+  waiting_daily: 'Aguardando horário diário',
   building_queue: 'Montando fila',
   session_expired: 'Sessão encerrada (8h)',
   completed: 'Fiscalização concluída',

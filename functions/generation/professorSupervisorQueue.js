@@ -1,5 +1,5 @@
 const admin = require('firebase-admin')
-const { getTodayKeyInSaoPaulo } = require('./guiaMentoradoShared')
+const { getTodayKeyInSaoPaulo, getSaoPauloClockParts, formatDailyStartLabel } = require('./guiaMentoradoShared')
 const { loadCronogramaDay } = require('./guiaMentoradoDaily')
 const { loadEditalVerticalizado, extractTopicsFromCronogramaDay, resolveTopicFromEdital } = require('./guiaMentoradoEdital')
 const { isTopicContentComplete } = require('./guiaMentoradoAutomation')
@@ -17,6 +17,98 @@ function getDb() {
 
 function configRef() {
   return getDb().doc('config/professorFiscalizador')
+}
+
+function shouldStartDailySession(data = {}) {
+  if (!data.recurringDaily || !data.automationUserId || data.enabled) return false
+  const todayKey = getTodayKeyInSaoPaulo()
+  if (data.lastAutoStartDate === todayKey) return false
+
+  const hour = data.dailyStartHour ?? 0
+  const minute = data.dailyStartMinute ?? 0
+  const now = getSaoPauloClockParts()
+  const nowMinutes = now.hour * 60 + now.minute
+  const startMinutes = hour * 60 + minute
+  return nowMinutes >= startMinutes
+}
+
+async function startSupervisorSession(userId, { auto = false, dailyStartHour, dailyStartMinute } = {}) {
+  const todayKey = getTodayKeyInSaoPaulo()
+  const clock = getSaoPauloClockParts()
+  const startHour = dailyStartHour ?? clock.hour
+  const startMinute = dailyStartMinute ?? clock.minute
+  const sessionEndsAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + SESSION_MS))
+  const ts = admin.firestore.FieldValue.serverTimestamp()
+
+  await patchSupervisorConfig({
+    enabled: true,
+    recurringDaily: true,
+    automationUserId: userId,
+    dailyStartHour: startHour,
+    dailyStartMinute: startMinute,
+    sessionStartedAt: ts,
+    sessionEndsAt,
+    nextRunAt: ts,
+    phase: 'starting',
+    itemsProcessedSession: 0,
+    lastAutoStartDate: todayKey,
+    currentActivity: {
+      phase: 'starting',
+      message: auto
+        ? `Sessão diária iniciada às ${formatDailyStartLabel(startHour, startMinute)}…`
+        : 'Iniciando sessão — primeiro item em instantes…',
+      updatedAt: ts,
+    },
+    lastMessage: auto
+      ? `Sessão diária automática — ${formatDailyStartLabel(startHour, startMinute)}`
+      : `Agendamento diário às ${formatDailyStartLabel(startHour, startMinute)} — fiscalizando em instantes…`,
+  })
+}
+
+async function ensureWaitingDailyPhase(data = {}) {
+  const label = formatDailyStartLabel(data.dailyStartHour ?? 0, data.dailyStartMinute ?? 0)
+  const todayKey = getTodayKeyInSaoPaulo()
+  const alreadyStartedToday = data.lastAutoStartDate === todayKey
+  const message = alreadyStartedToday
+    ? `Aguardando amanhã às ${label} (sessão de hoje concluída)`
+    : `Aguardando horário diário (${label})`
+
+  if (data.phase === 'waiting_daily' && data.lastMessage === message) return
+
+  await patchSupervisorConfig({
+    enabled: false,
+    phase: 'waiting_daily',
+    lastMessage: message,
+    currentActivity: {
+      phase: 'waiting_daily',
+      message,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+  })
+}
+
+async function endSupervisorSession({ phase = 'completed', message, keepRecurring = true } = {}) {
+  const snap = await configRef().get()
+  const data = snap.exists ? snap.data() : {}
+  const recurring = keepRecurring && Boolean(data.recurringDaily)
+  const dailyLabel = formatDailyStartLabel(data.dailyStartHour ?? 0, data.dailyStartMinute ?? 0)
+  const finalMessage =
+    message ||
+    (recurring
+      ? `Sessão concluída — próxima automática amanhã às ${dailyLabel}`
+      : 'Fiscalização concluída.')
+
+  await patchSupervisorConfig({
+    enabled: false,
+    recurringDaily: recurring,
+    phase: recurring ? 'waiting_daily' : phase,
+    lastMessage: finalMessage,
+    currentActivity: {
+      phase: recurring ? 'waiting_daily' : phase,
+      message: finalMessage,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+  })
 }
 
 function isSessionActive(data = {}) {
@@ -42,6 +134,10 @@ async function loadSupervisorConfig() {
     lastMessage: data.lastMessage || '',
     queueSize: data.queueSize || 0,
     sessionActive: isSessionActive(data),
+    recurringDaily: Boolean(data.recurringDaily),
+    dailyStartHour: data.dailyStartHour ?? null,
+    dailyStartMinute: data.dailyStartMinute ?? null,
+    lastAutoStartDate: data.lastAutoStartDate || null,
   }
 }
 
@@ -416,21 +512,31 @@ function itemLabel(item) {
 
 async function tickProfessorSupervisor({ force = false } = {}) {
   const snap = await configRef().get()
-  const data = snap.exists ? snap.data() : {}
+  let data = snap.exists ? snap.data() : {}
+
+  if (data.recurringDaily && data.automationUserId && !data.enabled) {
+    if (shouldStartDailySession(data)) {
+      await startSupervisorSession(data.automationUserId, { auto: true })
+      const refreshed = await configRef().get()
+      data = refreshed.exists ? refreshed.data() : {}
+      force = true
+    } else {
+      await ensureWaitingDailyPhase(data)
+      return { skipped: true, reason: 'waiting_daily' }
+    }
+  }
 
   if (!data.enabled || !data.automationUserId) {
     return { skipped: true, reason: 'disabled' }
   }
 
   if (!isSessionActive(data)) {
-    await patchSupervisorConfig({
+    await endSupervisorSession({
       phase: 'session_expired',
-      lastMessage: 'Sessão de 8h encerrada — clique Ativar para nova sessão.',
-      currentActivity: {
-        phase: 'session_expired',
-        message: 'Sessão de 8h encerrada',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
+      message: data.recurringDaily
+        ? `Sessão de 8h encerrada — próxima automática amanhã às ${formatDailyStartLabel(data.dailyStartHour ?? 0, data.dailyStartMinute ?? 0)}`
+        : 'Sessão de 8h encerrada.',
+      keepRecurring: Boolean(data.recurringDaily),
     })
     return { skipped: true, reason: 'session_expired' }
   }
@@ -497,15 +603,8 @@ async function tickProfessorSupervisor({ force = false } = {}) {
 
   if (pendingSnap.empty) {
     if (rebuildAdded === 0) {
-      await patchSupervisorConfig({
-        enabled: false,
-        phase: 'completed',
-        lastMessage: 'Fiscalização concluída — todos os itens já revisados.',
-        currentActivity: {
-          phase: 'completed',
-          message: 'Sessão encerrada — nada pendente para fiscalizar.',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
+      await endSupervisorSession({
+        keepRecurring: Boolean(data.recurringDaily),
       })
       return { skipped: true, reason: 'session_complete' }
     }
@@ -565,4 +664,5 @@ module.exports = {
   finishQueueItem,
   tickProfessorSupervisor,
   spawnSupervisorJob,
+  startSupervisorSession,
 }

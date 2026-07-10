@@ -12,6 +12,7 @@ import {
   subscribeProfessorSupervisorConfig,
   setProfessorSupervisorEnabled,
   fetchSupervisorHistory,
+  formatDailyStartLabel,
   SUPERVISOR_PHASE_LABELS,
   PROFESSOR_STEP_LABELS,
 } from '../../services/professorSupervisorService'
@@ -76,7 +77,7 @@ export default function AdminProfessorSupervisor() {
     if (!user?.uid || toggling) return
     setToggling(true)
     try {
-      await setProfessorSupervisorEnabled(user.uid, !config.enabled)
+      await setProfessorSupervisorEnabled(user.uid, !config.recurringDaily)
     } catch (err) {
       console.error(err)
       alert('Erro ao alterar o professor fiscalizador.')
@@ -84,6 +85,12 @@ export default function AdminProfessorSupervisor() {
       setToggling(false)
     }
   }
+
+  const isScheduleOn = Boolean(config.recurringDaily)
+  const dailyLabel =
+    config.dailyStartHour != null
+      ? formatDailyStartLabel(config.dailyStartHour, config.dailyStartMinute ?? 0)
+      : null
 
   const activity = config.currentActivity || {}
   const phase = config.phase || 'idle'
@@ -119,9 +126,16 @@ export default function AdminProfessorSupervisor() {
             <div>
               <h2 className="cp-headline text-lg text-cp-text">Professor fiscalizador + digitação</h2>
               <p className="mt-1 max-w-xl text-sm text-cp-muted">
-                Sessão de <strong>{SESSION_HOURS}h</strong> ao ativar — cronograma do dia primeiro, depois
-                tópicos liberados em ordem aleatória. Inclui <strong>Professor de digitação</strong> (script,
-                sem IA) nos materiais. Itens com IA: a cada <strong>5 min</strong>; digitação: na sequência.
+                Ao ativar, salva o <strong>horário atual</strong> e repete <strong>todo dia</strong>{' '}
+                {dailyLabel ? (
+                  <>
+                    às <strong>{dailyLabel}</strong>
+                  </>
+                ) : (
+                  ''
+                )}
+                . Sessão de até <strong>{SESSION_HOURS}h</strong> por dia — para sozinha ao concluir. Cronograma
+                do dia primeiro, depois backlog. Digitação (script) + fiscalização IA.
               </p>
             </div>
           </div>
@@ -130,12 +144,16 @@ export default function AdminProfessorSupervisor() {
             onClick={handleToggle}
             disabled={toggling}
             className={`rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50 ${
-              config.enabled
+              isScheduleOn
                 ? 'bg-red-500/15 text-red-700 hover:bg-red-500/25 dark:text-red-300'
                 : 'cp-btn-primary'
             }`}
           >
-            {toggling ? 'Salvando…' : config.enabled ? 'Desativar' : 'Ativar sessão (8h)'}
+            {toggling
+              ? 'Salvando…'
+              : isScheduleOn
+                ? 'Desativar agendamento diário'
+                : 'Ativar diariamente (horário atual)'}
           </button>
         </div>
 
@@ -170,11 +188,17 @@ export default function AdminProfessorSupervisor() {
           {nextRunLabel && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{nextRunLabel}</p>}
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="rounded-xl border border-cp-border bg-cp-surface/50 px-3 py-2 text-xs">
+            <p className="text-cp-muted">Agendamento</p>
+            <p className="font-semibold text-cp-text">
+              {isScheduleOn ? `Diário ${dailyLabel || ''}` : 'Desativado'}
+            </p>
+          </div>
           <div className="rounded-xl border border-cp-border bg-cp-surface/50 px-3 py-2 text-xs">
             <p className="text-cp-muted">Sessão</p>
             <p className="font-semibold text-cp-text">
-              {isSessionLive ? sessionRemaining : config.enabled ? 'Encerrada' : 'Desativada'}
+              {isSessionLive ? sessionRemaining : config.enabled ? 'Encerrada' : isScheduleOn ? 'Aguardando' : '—'}
             </p>
           </div>
           <div className="rounded-xl border border-cp-border bg-cp-surface/50 px-3 py-2 text-xs">

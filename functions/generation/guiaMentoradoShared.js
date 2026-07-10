@@ -17,6 +17,22 @@ function getTodayKeyInSaoPaulo() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 }
 
+function getSaoPauloClockParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  }).formatToParts(date)
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0)
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? 0)
+  return { hour, minute }
+}
+
+function formatDailyStartLabel(hour = 0, minute = 0) {
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
 function resolvePlanningEndDate(config = {}) {
   const todayKey = getTodayKeyInSaoPaulo()
   const today = parseDateKey(todayKey)
@@ -117,6 +133,8 @@ module.exports = {
   DEFAULT_PLANNING_DAYS,
   MENTORADO_DAILY_RELEASE_HOUR,
   getTodayKeyInSaoPaulo,
+  getSaoPauloClockParts,
+  formatDailyStartLabel,
   resolvePlanningEndDate,
   isUsingDefaultPlanningWindow,
   buildMentoradoCronogramaPrompt,
