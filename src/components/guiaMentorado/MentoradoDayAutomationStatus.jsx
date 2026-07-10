@@ -47,6 +47,7 @@ export default function MentoradoDayAutomationStatus({ courseId, targetDate, onG
     waiting_retry: ' — aguardando retomada automática…',
     waiting_timeout: ' — pausado (limite do servidor), retomando…',
     partial: ' — concluído com pendências',
+    cancelled: ' — cancelado pelo admin',
     error: ' — erro',
   }
 

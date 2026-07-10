@@ -31,6 +31,22 @@ function isMentoradoJob(jobType) {
   return jobType === 'guia_mentorado_automation' || jobType === 'guia_mentorado_cronograma'
 }
 
+function createJobCancelledError() {
+  const err = new Error('Job cancelado pelo admin')
+  err.code = 'job_cancelled'
+  return err
+}
+
+function isJobCancelledError(err) {
+  return err?.code === 'job_cancelled'
+}
+
+async function throwIfCancelled(userId, jobId) {
+  if (await isJobCancelled(userId, jobId)) {
+    throw createJobCancelledError()
+  }
+}
+
 async function isJobCancelled(userId, jobId) {
   const snap = await getDb().doc(`users/${userId}/generationJobs/${jobId}`).get()
   return snap.exists() && snap.data().status === 'cancelled'
@@ -147,14 +163,54 @@ function shouldCheckpointTimeout(jobStartedAt) {
   return Date.now() - jobStartedAt >= CF_SAFE_MS
 }
 
-async function runWithHeartbeat(work, onHeartbeat, intervalMs = 30000) {
+async function handleGenerationJobCancelled(userId, jobId, jobData = {}) {
+  await clearResumeQueue(jobId)
+
+  if (jobData.jobType === 'guia_mentorado_automation') {
+    const courseId = jobData.courseId
+    const targetDate =
+      jobData.serverPayload?.targetDate || jobData.resumeState?.targetDate || null
+    if (courseId && targetDate) {
+      const { updateDayStatus } = require('./guiaMentoradoStatus')
+      await updateDayStatus(courseId, targetDate, {
+        status: 'cancelled',
+        reason: 'Cancelado pelo admin',
+      })
+    }
+  }
+}
+
+async function runWithHeartbeat(work, onHeartbeat, intervalMs = 15000, shouldAbort = null) {
   let active = true
+  let abortError = null
+
+  const runAbortCheck = async () => {
+    if (abortError) throw abortError
+    if (!shouldAbort) return
+    if (await shouldAbort()) {
+      abortError = createJobCancelledError()
+      active = false
+      throw abortError
+    }
+  }
+
   const timer = setInterval(() => {
     if (!active) return
-    Promise.resolve(onHeartbeat()).catch(() => {})
+    Promise.resolve(runAbortCheck())
+      .then(() => {
+        if (!abortError) return onHeartbeat?.()
+      })
+      .catch((err) => {
+        if (isJobCancelledError(err)) abortError = err
+      })
   }, intervalMs)
+
   try {
-    return await work()
+    await runAbortCheck()
+    const result = await work(runAbortCheck)
+    if (abortError) throw abortError
+    await runAbortCheck()
+    return result
   } finally {
     active = false
     clearInterval(timer)
@@ -184,7 +240,7 @@ async function recoverStalledRunningJobs() {
     const jobData = jobSnap.data()
     if (jobData.status !== 'running' || !isMentoradoJob(jobData.jobType)) continue
     if (await isJobCancelled(userId, jobId)) {
-      await clearResumeQueue(jobId)
+      await handleGenerationJobCancelled(userId, jobId, jobData)
       continue
     }
 
@@ -258,7 +314,7 @@ async function resumeWaitingGenerationJobs() {
     if (!userId || !jobId) continue
 
     if (await isJobCancelled(userId, jobId)) {
-      await clearResumeQueue(jobId)
+      await handleGenerationJobCancelled(userId, jobId, jobData)
       continue
     }
 
@@ -307,7 +363,11 @@ async function resumeWaitingGenerationJobs() {
     } catch (err) {
       console.error(`[resumeWaitingGenerationJobs] job ${jobId}:`, err)
       if (await isJobCancelled(userId, jobId)) {
-        await clearResumeQueue(jobId)
+        await handleGenerationJobCancelled(userId, jobId, {
+          ...jobData,
+          courseId: courseId || jobData.courseId,
+          jobType: jobType || jobData.jobType,
+        })
         continue
       }
       if (isMentoradoJob(jobType || jobData.jobType)) {
@@ -351,7 +411,10 @@ async function resumeWaitingGenerationJobs() {
 module.exports = {
   isApiQuotaError,
   isJobCancelled,
+  isJobCancelledError,
   isMentoradoJob,
+  throwIfCancelled,
+  handleGenerationJobCancelled,
   pauseJobForApi,
   pauseJobForResume,
   resumeWaitingGenerationJobs,

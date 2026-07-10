@@ -24,6 +24,7 @@ const {
   isMentoradoJob,
   isApiQuotaError,
   pauseJobForResume,
+  handleGenerationJobCancelled,
 } = require('./generation/generationJobResume')
 
 /** Processa jobs de geração IA no servidor — continua mesmo com aba/dispositivo fechado. */
@@ -82,6 +83,22 @@ exports.onGenerationJobCreated = functions
       })
       return null
     }
+  })
+
+/** Ao cancelar (X), limpa fila de retomada e atualiza painel do dia imediatamente. */
+exports.onGenerationJobUpdated = functions.firestore
+  .document('users/{userId}/generationJobs/{jobId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data() || {}
+    const after = change.after.data() || {}
+    if (before.status === after.status || after.status !== 'cancelled') {
+      return null
+    }
+
+    const { userId, jobId } = context.params
+    await handleGenerationJobCancelled(userId, jobId, after)
+    console.log(`[onGenerationJobUpdated] job ${jobId} cancelado — fila limpa`)
+    return null
   })
 
 // createEmailTransporter movido para emailUtils.js

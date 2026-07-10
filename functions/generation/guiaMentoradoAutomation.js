@@ -13,12 +13,15 @@ const { markDayContentGenerated } = require('./guiaMentoradoStatus')
 const {
   isApiQuotaError,
   isJobCancelled,
+  isJobCancelledError,
   pauseJobForApi,
   pauseJobForResume,
   touchActiveJob,
   clearActiveJob,
   shouldCheckpointTimeout,
   runWithHeartbeat,
+  throwIfCancelled,
+  handleGenerationJobCancelled,
 } = require('./generationJobResume')
 
 const CONTENT_STATUS = {
@@ -124,7 +127,7 @@ async function deleteExistingFlashcards(courseId, topicKey, disciplina, modulo) 
   if (count) await batch.commit()
 }
 
-async function generateAndSaveFlashcards(courseId, topic, onHeartbeat) {
+async function generateAndSaveFlashcards(courseId, topic, onHeartbeat, shouldAbort) {
   const meta = topic.flashcardMeta
   if (await hasFlashcards(courseId, topic.topicKey, topic.disciplina, topic.modulo)) {
     return { skipped: true, type: 'flashcards' }
@@ -136,8 +139,9 @@ async function generateAndSaveFlashcards(courseId, topic, onHeartbeat) {
   const firstBatchCount = Math.min(BATCH_SIZE, MAX_FLASHCARDS)
 
   const runBatch = async (label, fn) =>
-    runWithHeartbeat(fn, () => onHeartbeat?.(label), 30000)
+    runWithHeartbeat(fn, () => onHeartbeat?.(label), 15000, shouldAbort)
 
+  await onHeartbeat?.('flashcards lote 1/2')
   const batch1 = await runBatch('flashcards lote 1/2', () =>
     generateAiJson(buildFlashcardPrompt(meta, 1, 2, firstBatchCount, []), {
       generationConfig: { maxOutputTokens: 24000, temperature: 0.35 },
@@ -146,6 +150,7 @@ async function generateAndSaveFlashcards(courseId, topic, onHeartbeat) {
   allItems = dedupeFlashcards(batch1.flashcards || [])
 
   if (allItems.length < MIN_FLASHCARDS) {
+    await onHeartbeat?.('flashcards lote 2/2')
     const remaining = Math.min(MAX_FLASHCARDS - allItems.length, BATCH_SIZE)
     const batch2 = await runBatch('flashcards lote 2/2', () =>
       generateAiJson(
@@ -212,7 +217,7 @@ async function generateAndSaveFlashcards(courseId, topic, onHeartbeat) {
   return { skipped: false, type: 'flashcards', count: allItems.length }
 }
 
-async function generateAndSaveConteudo(courseId, topic, onHeartbeat) {
+async function generateAndSaveConteudo(courseId, topic, onHeartbeat, shouldAbort) {
   if (await hasConteudo(courseId, topic.topicKey)) {
     return { skipped: true, type: 'conteudo' }
   }
@@ -225,7 +230,8 @@ async function generateAndSaveConteudo(courseId, topic, onHeartbeat) {
         generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
       }),
     () => onHeartbeat?.('material'),
-    30000,
+    15000,
+    shouldAbort,
   )
 
   const sanitizedKey = sanitizeTopicKeyForFirestore(topic.topicKey)
@@ -249,7 +255,7 @@ async function generateAndSaveConteudo(courseId, topic, onHeartbeat) {
   return { skipped: false, type: 'conteudo' }
 }
 
-async function generateAndSaveQuestoes(courseId, topic, onHeartbeat) {
+async function generateAndSaveQuestoes(courseId, topic, onHeartbeat, shouldAbort) {
   if (await hasQuestoes(courseId, topic.topicKey)) {
     return { skipped: true, type: 'questoes' }
   }
@@ -262,7 +268,8 @@ async function generateAndSaveQuestoes(courseId, topic, onHeartbeat) {
         generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
       }),
     () => onHeartbeat?.('questões'),
-    30000,
+    15000,
+    shouldAbort,
   )
 
   const sanitizedKey = `${sanitizeTopicKeyForFirestore(topic.topicKey)}_nivel_1`
@@ -354,7 +361,10 @@ async function processSingleTopic(
   const label = topic.topicoNome || topic.topicKey
   const basePct = Math.round((index / total) * 100)
 
+  const shouldAbort = () => isJobCancelled(userId, jobId)
+
   const heartbeat = async (step) => {
+    await throwIfCancelled(userId, jobId)
     await updateJob(userId, jobId, {
       progress: Math.min(basePct + 3, 98),
       message: `[${index + 1}/${total}] ${label} — ${step}… (aguarde)`,
@@ -362,6 +372,7 @@ async function processSingleTopic(
     await touchActiveJob(userId, jobId, { step, topicIndex: index })
   }
 
+  await throwIfCancelled(userId, jobId)
   await updateTopicStep(courseId, targetDate, topic.topicKey, {
     status: 'generating',
     step: 'flashcards',
@@ -372,7 +383,8 @@ async function processSingleTopic(
     message: `[${index + 1}/${total}] ${label} — gerando flashcards…`,
   })
 
-  await generateAndSaveFlashcards(courseId, topic, heartbeat)
+  await generateAndSaveFlashcards(courseId, topic, heartbeat, shouldAbort)
+  await throwIfCancelled(userId, jobId)
   await updateTopicStep(courseId, targetDate, topic.topicKey, { flashcards: 'done', step: 'material' })
 
   await updateJob(userId, jobId, {
@@ -380,7 +392,8 @@ async function processSingleTopic(
     message: `[${index + 1}/${total}] ${label} — gerando material…`,
   })
 
-  await generateAndSaveConteudo(courseId, topic, heartbeat)
+  await generateAndSaveConteudo(courseId, topic, heartbeat, shouldAbort)
+  await throwIfCancelled(userId, jobId)
   await updateTopicStep(courseId, targetDate, topic.topicKey, { material: 'done', step: 'questoes' })
 
   await updateJob(userId, jobId, {
@@ -388,7 +401,7 @@ async function processSingleTopic(
     message: `[${index + 1}/${total}] ${label} — gerando questões…`,
   })
 
-  await generateAndSaveQuestoes(courseId, topic, heartbeat)
+  await generateAndSaveQuestoes(courseId, topic, heartbeat, shouldAbort)
   await updateTopicStep(courseId, targetDate, topic.topicKey, { questoes: 'done', step: 'publicando' })
 
   const readiness = await isTopicContentComplete(courseId, topic)
@@ -467,6 +480,30 @@ async function pauseAutomationJob({
   }
 }
 
+async function abortAutomationJob({
+  userId,
+  jobId,
+  courseId,
+  serverPayload,
+  targetDate,
+  topics,
+  topicIndex,
+}) {
+  await clearActiveJob(jobId)
+  await handleGenerationJobCancelled(userId, jobId, {
+    courseId,
+    jobType: 'guia_mentorado_automation',
+    serverPayload,
+    resumeState: { targetDate },
+  })
+  if (targetDate && topics[topicIndex]) {
+    await updateTopicStep(courseId, targetDate, topics[topicIndex].topicKey, {
+      status: 'pending',
+      step: 'aguardando',
+    })
+  }
+}
+
 async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPayload, updateJob) {
   const topics = serverPayload?.topics || []
   const autoPublish = serverPayload?.autoPublish !== false
@@ -482,7 +519,15 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
   }
 
   if (await isJobCancelled(userId, jobId)) {
-    await clearActiveJob(jobId)
+    await abortAutomationJob({
+      userId,
+      jobId,
+      courseId,
+      serverPayload,
+      targetDate,
+      topics,
+      topicIndex: startIndex,
+    })
     return { cancelled: true }
   }
 
@@ -512,7 +557,15 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
 
   for (let i = startIndex; i < topics.length; i += 1) {
     if (await isJobCancelled(userId, jobId)) {
-      await clearActiveJob(jobId)
+      await abortAutomationJob({
+        userId,
+        jobId,
+        courseId,
+        serverPayload,
+        targetDate,
+        topics,
+        topicIndex: i,
+      })
       return { cancelled: true, publishedCount }
     }
 
@@ -546,8 +599,16 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
       if (result.published) publishedCount += 1
       await touchActiveJob(userId, jobId, { topicIndex: i, publishedCount })
     } catch (err) {
-      if (await isJobCancelled(userId, jobId)) {
-        await clearActiveJob(jobId)
+      if (isJobCancelledError(err) || (await isJobCancelled(userId, jobId))) {
+        await abortAutomationJob({
+          userId,
+          jobId,
+          courseId,
+          serverPayload,
+          targetDate,
+          topics,
+          topicIndex: i,
+        })
         return { cancelled: true, publishedCount }
       }
       return pauseAutomationJob({
