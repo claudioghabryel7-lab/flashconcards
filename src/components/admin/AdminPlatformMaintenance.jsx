@@ -93,18 +93,24 @@ export default function AdminPlatformMaintenance() {
     if (generating || !user?.uid) return
 
     const confirmed = window.confirm(
-      'Gerar todos os tópicos do Guia Mentorado (do primeiro dia até hoje) em TODOS os cursos com automação ativa?\n\nCada curso receberá um job na nuvem — pode levar horas. Acompanhe no banner de geração.',
+      'Gerar os conteúdos faltantes do Guia Mentorado (do 1º dia até hoje)?\n\nUsa o mesmo fluxo de “Gerar conteúdos de hoje”, dia a dia. Só 1 curso por vez — acompanhe no banner.',
     )
     if (!confirmed) return
 
     setGenerating(true)
     setFeedback('')
-    setProgress('Preparando jobs…')
+    setProgress('Preparando dias…')
 
     try {
       const { jobs } = await startMentoradoBackfillAllCourses(user.uid, setProgress)
+      const byCourse = jobs.reduce((acc, j) => {
+        acc[j.courseName] = (acc[j.courseName] || 0) + 1
+        return acc
+      }, {})
       setFeedback(
-        `✅ ${jobs.length} job(s) iniciado(s) na nuvem. Dias: ${jobs.map((j) => `${j.courseName} (${j.dayCount})`).join(', ')}`,
+        `✅ ${jobs.length} dia(s) enfileirado(s): ${Object.entries(byCourse)
+          .map(([name, n]) => `${name} (${n})`)
+          .join(', ')}. Acompanhe no banner.`,
       )
       setProgress('')
     } catch (err) {
