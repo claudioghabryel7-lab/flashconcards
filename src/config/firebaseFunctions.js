@@ -40,6 +40,8 @@ export const FIREBASE_FUNCTIONS = {
   
   // Função para gerar notícia de concurso a partir de um link de referência
   generateNewsFromLink: `${FIREBASE_FUNCTIONS_BASE_URL}/generateNewsFromLink`,
+
+  nudgeGenerationJobResume: `${FIREBASE_FUNCTIONS_BASE_URL}/nudgeGenerationJobResume`,
 }
 
 /**

@@ -67,7 +67,7 @@ exports.onGenerationJobCreated = functions
           waitReason: isApiQuotaError(error) ? 'api' : 'error',
           message: isApiQuotaError(error)
             ? 'API expirada — aguardando para retomar…'
-            : `Erro temporário — tentando de novo em 5 min… (${error?.message || 'erro'})`,
+            : `Erro temporário — tentando de novo em 15s… (${error?.message || 'erro'})`,
         })
         return null
       }
@@ -1354,17 +1354,48 @@ exports.mentoradoDailyContentRelease = functions.pubsub
     return null
   })
 
-/** Retoma jobs pausados por API expirada (a cada 5 min). */
+/** Retoma jobs pausados por API expirada (a cada 1 min). */
 exports.resumeWaitingGenerationJobs = functions.pubsub
-  .schedule('every 5 minutes')
+  .schedule('every 1 minutes')
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
     const { resumeWaitingGenerationJobs } = getResumeModule()
     const result = await resumeWaitingGenerationJobs()
-    if (result.resumed > 0 || result.waiting > 0) {
+    if (result.resumed > 0 || result.waiting > 0 || result.stalled > 0) {
       console.log('[resumeWaitingGenerationJobs]', result)
     }
     return null
+  })
+
+/** Cliente força retomada de job travado ou aguardando. */
+exports.nudgeGenerationJobResume = functions
+  .runWith({ timeoutSeconds: 540, memory: '1GB' })
+  .https.onRequest((req, res) => {
+    cors(req, res, async () => {
+      if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Método não permitido' })
+      }
+      try {
+        const authUser = await verifyAuthRequest(req)
+        const { userId, jobId } = req.body || {}
+        if (!userId || !jobId) {
+          return res.status(400).json({ error: 'userId e jobId são obrigatórios' })
+        }
+        if (authUser.uid !== userId) {
+          try {
+            await verifyAdminRequest(req)
+          } catch {
+            return res.status(403).json({ error: 'Não autorizado' })
+          }
+        }
+        const { nudgeStalledGenerationJob } = getResumeModule()
+        const result = await nudgeStalledGenerationJob(userId, jobId)
+        return res.status(200).json(result)
+      } catch (err) {
+        console.error('[nudgeGenerationJobResume]', err)
+        return res.status(500).json({ error: err.message || 'Erro ao retomar job' })
+      }
+    })
   })
 
 /** Professor fiscalizador — 1 item por vez, só se API disponível e ativado pelo admin. */

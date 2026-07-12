@@ -14,6 +14,8 @@ import { isContentAvailable, CONTENT_STATUS } from '../utils/contentStatus'
 import SimpleMaterialEditor from '../components/SimpleMaterialEditor'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import ShareToFeedButton from '../components/feed/ShareToFeedButton'
+import ContentFeedbackActions from '../components/content/ContentFeedbackActions'
+import { buildMateriaContentId } from '../utils/contentCommentIds'
 import { FEED_POST_TYPES } from '../services/trilhaFeedService'
 import { stripHtml } from '../utils/htmlTextHelpers'
 import { downloadMaterialPdf } from '../utils/materialPdfExport'
@@ -674,28 +676,30 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
 **MODO HACKER DOS CONCURSOS**
 
 1. ****RAIO-X DE PROBABILIDADE**:
-   - Top Assuntos Quentes: Gere entre 5 a 15 tópicos com maior probabilidade de cair NO CONCURSO ${concursoName || 'mencionado'} (quantidade depende da extensão do conteúdo da disciplina)
+   - Top Assuntos Quentes: Gere entre ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} e ${CONTEUDO_COMPLETO_DEPTH.MAX_TOPICOS_QUENTES} tópicos com maior probabilidade de cair NO CONCURSO ${concursoName || 'mencionado'}
    - O Padrão da Banca: Como a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar esta disciplina especificamente no concurso.
 
 2. **REVISÃO TURBO**:
    - 🚨 OBRIGATÓRIO: Gere UM RESUMO para CADA UM dos "Top Assuntos Quentes" listados no Raio-X de Probabilidade
-   - Se houver 5 top assuntos quentes, gere 5 resumos (um para cada)
-   - Se houver 10 top assuntos quentes, gere 10 resumos (um para cada)
+   - Se houver ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} top assuntos quentes, gere ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} resumos (um para cada)
    - Cada resumo deve corresponder EXATAMENTE a um dos top assuntos quentes listados
    - NÃO PULE nenhum top assunto quente - todos devem ter seu resumo
    - Cada resumo deve:
      * Explicar o conceito de forma clara e didática (NADA SUPERFICIAL, QUERO BEM COMPLETO)
+     * Ter no mínimo ${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_POR_RESUMO} palavras
      * Citar exemplos práticos do concurso ${concursoName || 'mencionado'}
      * Ser específico para o cargo de ${courseName || 'mencionado'}
      * Incluir dicas de memorização (nada genérico e vazio/vago)
      * Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
-   - 3-4 pegadinhas ("Cuidado meu querido aluno!"):
+
+3. **CUIDADO, CAÇAPA! (PEGADINHAS)** — seção separada da Revisão Turbo:
+   - Gere 4 a 6 pegadinhas ("Cuidado meu querido aluno!"):
      * Erros comuns que a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar
      * Detalhes que passam despercebidos
      * Armadilhas específicas do concurso ${concursoName || 'mencionado'}
      * Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
 
-3. **QUESTÕES PREDITIVAS**:
+4. **QUESTÕES PREDITIVAS**:
    - Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} questões para este tópico
    - No estilo da banca ${banca || 'NÃO DEFINIDA'} (A, B, C, D, E ou Certo/Errado)
    - Contextualizadas com o concurso ${concursoName || 'mencionado'} e cargo ${courseName || 'mencionado'}
@@ -1052,14 +1056,23 @@ REGRAS:
                   {editingContent ? 'Editando…' : 'Editar'}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={handleValidateTopic}
-                disabled={validating || generating || editingContent}
-                className="cp-btn-ghost !text-xs !text-red-400"
-              >
-                {validating ? 'Analisando…' : 'Reportar'}
-              </button>
+              {conteudo && resolvedCourseId && resolvedTopicKey && (
+                <ContentFeedbackActions
+                  courseId={resolvedCourseId}
+                  contentType="materia"
+                  contentId={buildMateriaContentId({
+                    courseId: resolvedCourseId,
+                    topicKey: resolvedTopicKey,
+                    kind: 'completo',
+                  })}
+                  topicKey={resolvedTopicKey}
+                  preview={stripHtml(conteudo.materia || conteudo.titulo || '').slice(0, 200)}
+                  materia={conteudo.materia || conteudo.titulo || ''}
+                  assunto={effectiveTopicNome || resolvedTopicKey}
+                  contextLabel="este material"
+                  variant="inline"
+                />
+              )}
             </div>
           </div>
           {validationMessage && (

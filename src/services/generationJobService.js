@@ -9,7 +9,8 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore'
-import { db } from '../firebase/config'
+import { db, auth } from '../firebase/config'
+import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { stripUndefined } from '../utils/firestoreHelpers'
 
 export const GENERATION_JOB_STATUS = {
@@ -82,6 +83,36 @@ export async function updateGenerationJob(userId, jobId, patch) {
 const STALE_JOB_MS = 45 * 60 * 1000
 const STALE_SERVER_JOB_MS = 90 * 60 * 1000
 const STALE_WAITING_API_MS = 24 * 60 * 60 * 1000
+export const STALL_NUDGE_MS = 15 * 1000
+export const STALL_PROGRESS_NUDGE_MS = 45 * 1000
+
+function jobProgressTimestamp(job = {}) {
+  return job.progressUpdatedAt || job.updatedAt
+}
+
+export function secondsSinceJobProgress(job, now = Date.now()) {
+  const date =
+    jobProgressTimestamp(job)?.toDate?.() ||
+    (jobProgressTimestamp(job) instanceof Date ? jobProgressTimestamp(job) : null)
+  if (!date) return null
+  return Math.max(0, Math.floor((now - date.getTime()) / 1000))
+}
+
+export function isJobProgressStalled(job, now = Date.now(), stallMs = STALL_PROGRESS_NUDGE_MS) {
+  if (!job || job.status !== GENERATION_JOB_STATUS.RUNNING) return false
+  const secs = secondsSinceJobProgress(job, now)
+  if (secs == null) return true
+  return secs * 1000 >= stallMs
+}
+
+export function shouldNudgeJob(job, now = Date.now()) {
+  if (!job?.runOnServer) return false
+  if (GENERATION_WAITING_STATUSES.includes(job.status)) return true
+  if (job.status === GENERATION_JOB_STATUS.RUNNING) {
+    return isJobProgressStalled(job, now)
+  }
+  return false
+}
 
 /** Marca jobs travados (ex.: aba fechada) como erro para não ficar banner infinito. */
 export async function reconcileStaleGenerationJobs(userId) {
@@ -224,4 +255,35 @@ export function waitForGenerationJob(userId, jobId, { timeoutMs = 90 * 60 * 1000
       }
     })
   })
+}
+
+/** Pede ao servidor que retome um job travado ou aguardando. */
+export async function nudgeGenerationJobResume(userId, jobId) {
+  if (!userId || !jobId) return { ok: false, reason: 'missing_params' }
+
+  const user = auth?.currentUser
+  if (!user || user.uid !== userId) return { ok: false, reason: 'not_authenticated' }
+
+  const token = await user.getIdToken()
+  const response = await fetch(FIREBASE_FUNCTIONS.nudgeGenerationJobResume, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ userId, jobId }),
+  })
+
+  let data = {}
+  try {
+    data = await response.json()
+  } catch {
+    data = { ok: false, reason: 'invalid_response' }
+  }
+
+  if (!response.ok) {
+    return { ok: false, reason: data.error || data.reason || 'request_failed' }
+  }
+
+  return data
 }

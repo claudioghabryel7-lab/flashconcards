@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from './useAuth'
 import {
   subscribeActiveGenerationJobs,
   reconcileStaleGenerationJobs,
+  nudgeGenerationJobResume,
+  shouldNudgeJob,
+  STALL_NUDGE_MS,
 } from '../services/generationJobService'
 
 /** Observa jobs de geração ativos do usuário (segundo plano). */
 export function useBackgroundGeneration() {
   const { user } = useAuth()
   const [jobs, setJobs] = useState([])
+  const lastNudgeRef = useRef({})
 
   useEffect(() => {
     if (!user?.uid) {
@@ -20,7 +24,7 @@ export function useBackgroundGeneration() {
 
     const interval = setInterval(() => {
       reconcileStaleGenerationJobs(user.uid).catch(() => {})
-    }, 5 * 60 * 1000)
+    }, STALL_NUDGE_MS)
 
     const unsub = subscribeActiveGenerationJobs(user.uid, setJobs)
     return () => {
@@ -28,6 +32,23 @@ export function useBackgroundGeneration() {
       unsub?.()
     }
   }, [user?.uid])
+
+  useEffect(() => {
+    if (!user?.uid || !jobs.length) return () => {}
+
+    const nudgeInterval = setInterval(() => {
+      const now = Date.now()
+      jobs.forEach((job) => {
+        if (!shouldNudgeJob(job, now)) return
+        const last = lastNudgeRef.current[job.id] || 0
+        if (now - last < STALL_NUDGE_MS) return
+        lastNudgeRef.current[job.id] = now
+        nudgeGenerationJobResume(user.uid, job.id).catch(() => {})
+      })
+    }, STALL_NUDGE_MS)
+
+    return () => clearInterval(nudgeInterval)
+  }, [user?.uid, jobs])
 
   return { jobs, hasActiveJobs: jobs.length > 0 }
 }

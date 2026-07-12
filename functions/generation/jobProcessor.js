@@ -143,6 +143,7 @@ async function saveMergeDoc(courseId, collectionName, docId, parsed, extraFields
 
 async function processConteudoCompleto(userId, jobId, courseId, serverPayload) {
   const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
+  const { validateConteudoCompletoPayload } = require('./conteudoCompletoValidate')
   await updateJob(userId, jobId, { progress: 15, message: 'Gerando conteúdo com IA…' })
 
   const parsed = await generateAiJson(prompt, {
@@ -153,7 +154,15 @@ async function processConteudoCompleto(userId, jobId, courseId, serverPayload) {
       temperature: 0.35,
       ...(aiOptions.generationConfig || {}),
     },
+    rejectTruncatedJson: true,
   })
+
+  const validation = validateConteudoCompletoPayload(parsed)
+  if (!validation.ok) {
+    const err = new Error(`Material incompleto — ${validation.errors.join(' ')}`)
+    err.code = 'material_incomplete'
+    throw err
+  }
 
   await updateJob(userId, jobId, { progress: 85, message: 'Salvando conteúdo…' })
 

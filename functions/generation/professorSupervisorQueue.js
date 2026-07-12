@@ -319,13 +319,11 @@ async function enqueueBacklogTopics(courseId, todayTopicKeys, edital, todayKey) 
 
 async function buildQueueItems() {
   const db = getDb()
-  const todayKey = getTodayKeyInSaoPaulo()
-  const isMonday = new Date().getDay() === 1
   let added = 0
 
   await updateSupervisorActivity({
     phase: 'building_queue',
-    message: 'Montando fila de fiscalização…',
+    message: 'Montando fila de sinalizações…',
   })
 
   const coursesSnap = await db.collection('courses').where('active', '!=', false).limit(40).get()
@@ -337,7 +335,7 @@ async function buildQueueItems() {
       .collection(`courses/${courseId}/contentFeedback`)
       .where('kind', '==', 'flag')
       .where('status', '==', 'open')
-      .limit(5)
+      .limit(10)
       .get()
 
     for (const flagDoc of flagsSnap.docs) {
@@ -355,74 +353,6 @@ async function buildQueueItems() {
         },
       })
       if (id) added += 1
-    }
-
-    const mentoradoSnap = await db.doc(`courses/${courseId}/config/guiaMentorado`).get()
-    if (mentoradoSnap.exists && mentoradoSnap.data().autoGerarConteudo) {
-      const dayEntry = await loadCronogramaDay(courseId, todayKey)
-      if (dayEntry) {
-        const tipo = dayEntry.type || dayEntry.tipo || 'estudo'
-        if (tipo !== 'simulado' && tipo !== 'descanso') {
-          const edital = await loadEditalVerticalizado(courseId)
-          const topics = extractTopicsFromCronogramaDay(
-            { data: todayKey, tipo, materias: dayEntry.materias || [] },
-            edital,
-          )
-          const todayTopicKeys = new Set(topics.map((t) => t.topicKey))
-          for (const topic of topics) {
-            const readiness = await isTopicContentComplete(courseId, topic)
-            const statusSnap = await db
-              .doc(`courses/${courseId}/topicoStatus/${sanitizeTopicKeyForFirestore(topic.topicKey)}`)
-              .get()
-            const published =
-              statusSnap.exists && statusSnap.data().status === 'disponivel' && readiness.complete
-            if (!published) continue
-
-            added += await enqueueTopicPipeline(courseId, topic, {
-              priorityBase: 50,
-              targetDate: todayKey,
-              source: 'cronograma',
-            })
-          }
-
-          added += await enqueueBacklogTopics(courseId, todayTopicKeys, edital, todayKey)
-        }
-      }
-    } else if (mentoradoSnap.exists) {
-      const edital = await loadEditalVerticalizado(courseId)
-      added += await enqueueBacklogTopics(courseId, new Set(), edital, todayKey)
-    }
-
-    const vesperaSnap = await db.doc(`courses/${courseId}/vesperaDeProva/material`).get()
-    if (vesperaSnap.exists) {
-      const dedupeKey = `${courseId}:vespera:material`
-      if (!(await wasRecentlyReviewed(courseId, dedupeKey))) {
-        const id = await enqueueItem({
-          courseId,
-          itemType: 'vespera',
-          priority: 30,
-          payload: { scope: 'material' },
-        })
-        if (id) added += 1
-      }
-    }
-
-    if (isMonday) {
-      const redacaoSnap = await db.doc(`courses/${courseId}/config/redacao`).get()
-      const dedupeKey = `${courseId}:redacao:${todayKey}`
-      if (!(await wasRecentlyReviewed(courseId, dedupeKey))) {
-        const id = await enqueueItem({
-          courseId,
-          itemType: 'redacao',
-          priority: 60,
-          payload: {
-            rotateTheme: true,
-            targetDate: todayKey,
-            currentTema: redacaoSnap.exists ? redacaoSnap.data().tema || '' : '',
-          },
-        })
-        if (id) added += 1
-      }
     }
   }
 

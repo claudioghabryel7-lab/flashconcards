@@ -172,7 +172,18 @@ function closeTruncatedJson(raw) {
   return s
 }
 
-async function parseAiJsonText(generatedText) {
+function looksTruncatedJson(raw) {
+  const s = String(raw).trim()
+  if (!s) return true
+  const openBraces = (s.match(/\{/g) || []).length - (s.match(/\}/g) || []).length
+  const openBrackets = (s.match(/\[/g) || []).length - (s.match(/\]/g) || []).length
+  if (openBraces > 0 || openBrackets > 0) return true
+  if (/,\s*$/.test(s)) return true
+  if (/:\s*$/.test(s)) return true
+  return false
+}
+
+async function parseAiJsonText(generatedText, { rejectTruncated = false } = {}) {
   const normalized =
     typeof generatedText === 'string'
       ? generatedText.trim()
@@ -201,9 +212,16 @@ async function parseAiJsonText(generatedText) {
   }
 
   const raw = jsonMatch[0]
+
+  if (rejectTruncated && looksTruncatedJson(raw)) {
+    const err = new Error('JSON da IA veio truncado — material incompleto, gerando novamente.')
+    err.code = 'ai_json_truncated'
+    throw err
+  }
+
   const attempts = [
     (s) => JSON.parse(s),
-    (s) => JSON.parse(closeTruncatedJson(s)),
+    ...(rejectTruncated ? [] : [(s) => JSON.parse(closeTruncatedJson(s))]),
     (s) => JSON.parse(jsonrepair(s)),
     (s) => JSON.parse(closeTruncatedJson(s).replace(/,\s*([}\]])/g, '$1').replace(/[\u0000-\u001F]+/g, ' ')),
     (s) => JSON.parse(s.replace(/,\s*([}\]])/g, '$1').replace(/[\u0000-\u001F]+/g, ' ')),
@@ -230,8 +248,11 @@ function isRetryableAiError(error) {
   return (
     code === 'ai_empty_response' ||
     code === 'ai_json_parse_error' ||
+    code === 'ai_json_truncated' ||
+    code === 'material_incomplete' ||
     msg.includes('json') ||
-    msg.includes('reparar')
+    msg.includes('reparar') ||
+    msg.includes('incompleto')
   )
 }
 
@@ -278,8 +299,19 @@ async function generateAiJson(prompt, options = {}) {
           : `${prompt}\n\nIMPORTANTE: a resposta anterior não pôde ser lida. Retorne APENAS um único JSON válido e completo, sem markdown nem texto extra.`
 
       const response = await callGemini(effectivePrompt, options)
-      const text = extractGeneratedText(response)
-      const parsed = await parseAiJsonText(text)
+      let { text, finishReason } = collectTextFromGeminiResponse(response)
+      if (!text) {
+        text = extractGeneratedText(response)
+      }
+      if (options.rejectTruncatedJson && finishReason === 'MAX_TOKENS') {
+        const err = new Error('A IA atingiu o limite de tamanho — material incompleto.')
+        err.code = 'ai_json_truncated'
+        err.finishReason = finishReason
+        throw err
+      }
+      const parsed = await parseAiJsonText(text, {
+        rejectTruncated: Boolean(options.rejectTruncatedJson),
+      })
 
       if (parsed?.erro) {
         throw new Error(String(parsed.erro))

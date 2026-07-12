@@ -12,6 +12,7 @@ import FloatingWhatsAppButton from '@/components/FloatingWhatsAppButton'
 const quickLinks = [
   { to: '/flashcards', title: 'Flashcards com IA', desc: 'Repetição espaçada por tópico', icon: SparklesIcon, accent: 'cp-card-accent-violet' },
   { to: '/resolver-questoes', title: 'Resolver Questões', desc: 'Questões liberadas com gráficos de acertos', icon: ChartBarIcon, accent: 'cp-card-accent-cyan' },
+  { to: '/resolver-material', title: 'Materiais Liberados', desc: 'Materiais do edital já disponíveis', icon: DocumentTextIcon, accent: 'cp-card-accent-violet' },
   { to: '/edital-verticalizado', title: 'Edital Verticalizado', desc: 'Conteúdo organizado do edital', icon: DocumentTextIcon, accent: 'cp-card-accent-cyan' },
   { to: '/guia-mentorado', title: 'Guia Mentorado', desc: 'Cronograma estratégico', icon: LightBulbIcon, accent: 'cp-card-accent-pink' },
   { to: '/vespera-de-prova', title: 'Véspera de Prova', desc: 'Revisão final antes da prova', icon: ClockIcon, accent: 'cp-card-accent-cyan' },

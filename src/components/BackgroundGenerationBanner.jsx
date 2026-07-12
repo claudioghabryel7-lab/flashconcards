@@ -28,11 +28,11 @@ const JOB_LABELS = {
 
 const WAITING_HINTS = {
   [GENERATION_JOB_STATUS.WAITING_API]:
-    'O servidor verifica a cada 5 min e continua sozinho quando a API voltar.',
+    'O servidor verifica a cada 15 segundos e continua sozinho quando a API voltar.',
   [GENERATION_JOB_STATUS.WAITING_TIMEOUT]:
     'Limite do servidor atingido — retoma automaticamente em instantes.',
   [GENERATION_JOB_STATUS.WAITING_RETRY]:
-    'Erro temporário — o servidor tenta de novo a cada 5 min até concluir.',
+    'Erro temporário — o servidor tenta de novo a cada 15 segundos até concluir.',
 }
 
 function isWaitingStatus(status) {
