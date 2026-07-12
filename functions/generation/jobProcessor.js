@@ -144,6 +144,7 @@ async function saveMergeDoc(courseId, collectionName, docId, parsed, extraFields
 async function processConteudoCompleto(userId, jobId, courseId, serverPayload) {
   const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
   const { validateConteudoCompletoPayload } = require('./conteudoCompletoValidate')
+  const { hydrateConteudoCompletoMaterial } = require('./materialFormatting')
   await updateJob(userId, jobId, { progress: 15, message: 'Gerando conteúdo com IA…' })
 
   const parsed = await generateAiJson(prompt, {
@@ -155,6 +156,7 @@ async function processConteudoCompleto(userId, jobId, courseId, serverPayload) {
       ...(aiOptions.generationConfig || {}),
     },
     rejectTruncatedJson: true,
+    maxParseAttempts: 4,
   })
 
   const validation = validateConteudoCompletoPayload(parsed)
@@ -164,22 +166,24 @@ async function processConteudoCompleto(userId, jobId, courseId, serverPayload) {
     throw err
   }
 
+  const topicKey = savePlan.topicKey || ''
+  const normalized = hydrateConteudoCompletoMaterial(parsed, topicKey)
+
   await updateJob(userId, jobId, { progress: 85, message: 'Salvando conteúdo…' })
 
-  const topicKey = savePlan.topicKey || ''
   const sanitizedKey = savePlan.docId || sanitizeTopicKeyForFirestore(topicKey)
   const status =
     savePlan.status ||
     (await resolveTopicoPublishStatus(courseId, topicKey))
 
-  const resultRef = await saveMergeDoc(courseId, 'conteudosCompletos', sanitizedKey, parsed, {
-    materia: parsed.materia || parsed.titulo || topicKey,
-    numero: parsed.numero || topicKey,
+  const resultRef = await saveMergeDoc(courseId, 'conteudosCompletos', sanitizedKey, normalized, {
+    materia: normalized.materia,
+    numero: normalized.numero || topicKey,
     topicKey,
     status,
   })
 
-  return { resultRef, parsed }
+  return { resultRef, parsed: normalized }
 }
 
 async function processQuestoesTopico(userId, jobId, courseId, serverPayload) {

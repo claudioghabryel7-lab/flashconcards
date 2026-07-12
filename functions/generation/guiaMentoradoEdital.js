@@ -224,6 +224,8 @@ async function loadMentoradoAutomationContext(courseId) {
   }
 }
 
+const { buildConteudoCompletoServerPrompt } = require('./conteudoCompletoPrompt')
+
 function buildTopicPayloads(topic, context) {
   const tipoProva =
     context.banca?.toUpperCase().includes('CESPE') ||
@@ -243,12 +245,15 @@ function buildTopicPayloads(topic, context) {
     editalText: (context.editalText || '').slice(0, 12000),
   }
 
-  const conteudoPrompt = `Gere material de apoio completo (Estudar) para o tópico:
-DISCIPLINA: ${topic.disciplina}
-TÓPICO: ${topic.topicoNome}
-BANCA: ${context.banca || 'não definida'}
-EDITAL: ${(context.editalText || '').slice(0, 10000)}
-Retorne APENAS JSON válido com revisaoTurbo, pegadinhas, questoesPreditivas e content em HTML simples.`
+  const conteudoPrompt = buildConteudoCompletoServerPrompt({
+    disciplina: topic.disciplina,
+    topicoNome: topic.topicoNome,
+    topicKey: topic.topicKey,
+    banca: context.banca,
+    concursoName: context.concursoName,
+    courseName: context.courseName,
+    editalText: context.editalText,
+  })
 
   const altBlock =
     tipoProva === 'Certo/Errado'

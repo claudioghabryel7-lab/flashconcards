@@ -6,6 +6,8 @@ import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import MaterialStructuredView from '../components/content/MaterialStructuredView'
+import { hydrateConteudoCompletoMaterial } from '../utils/materialFormatting'
 
 const ConteudoCompletoView = () => {
   const { conteudoId } = useParams()
@@ -91,10 +93,15 @@ const ConteudoCompletoView = () => {
           return
         }
 
-        setConteudo({
-          id: conteudoDoc.id,
-          ...conteudoDoc.data(),
-        })
+        setConteudo(
+          hydrateConteudoCompletoMaterial(
+            {
+              id: conteudoDoc.id,
+              ...conteudoDoc.data(),
+            },
+            conteudoDoc.id,
+          ),
+        )
         setLoading(false)
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err)
@@ -184,40 +191,10 @@ const ConteudoCompletoView = () => {
             </div>
           )}
           
-          {/* Conteúdo principal em HTML */}
-          {conteudo.content && (
-            <div 
-              className="mb-8 text-slate-700 dark:text-slate-300"
-              dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(conteudo.content) }}
-            />
-          )}
-          
-          {/* Seções adicionais */}
-          {conteudo.secoes && Array.isArray(conteudo.secoes) && conteudo.secoes.length > 0 && (
-            <div className="space-y-8 mt-8">
-              {conteudo.secoes.map((secao, index) => (
-                <div 
-                  key={index} 
-                  className="border-l-4 border-alego-500 pl-6 py-3 bg-slate-50 dark:bg-slate-900/50 rounded-r-lg"
-                >
-                  <h3 className="text-xl sm:text-2xl font-semibold text-alego-600 dark:text-alego-400 mb-3">
-                    {secao.titulo || `Seção ${index + 1}`}
-                    {secao.tipo && (
-                      <span className="ml-3 text-sm bg-alego-100 dark:bg-alego-900 text-alego-700 dark:text-alego-300 px-3 py-1 rounded-full">
-                        {secao.tipo}
-                      </span>
-                    )}
-                  </h3>
-                  {secao.conteudo && (
-                    <div 
-                      className="text-slate-700 dark:text-slate-300"
-                      dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(secao.conteudo) }}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          <MaterialStructuredView
+            material={conteudo}
+            transformHtml={replaceConcursoWithCourse}
+          />
           
           {/* Tags */}
           {conteudo.tags && Array.isArray(conteudo.tags) && conteudo.tags.length > 0 && (
@@ -282,15 +259,16 @@ const ConteudoCompletoView = () => {
             </div>
           )}
           
-          {/* Fallback: se não houver conteúdo estruturado */}
-          {!conteudo.content && (!conteudo.secoes || conteudo.secoes.length === 0) && (
-            <div className="mb-4">
-              <p className="text-slate-500 dark:text-slate-400 mb-4">
-                Conteúdo em formato não estruturado:
-              </p>
-              <pre className="text-sm bg-slate-100 dark:bg-slate-900 p-6 rounded-lg overflow-auto max-h-96 border border-slate-200 dark:border-slate-700">
-                {JSON.stringify(conteudo, null, 2)}
-              </pre>
+          {/* Fallback quando material veio sem estrutura */}
+          {!conteudo.raioXProbabilidade &&
+            !conteudo.revisaoTurbo?.length &&
+            !conteudo.pegadinhas?.length &&
+            !conteudo.questoesPreditivas?.length &&
+            !conteudo.content &&
+            (!conteudo.secoes || conteudo.secoes.length === 0) && (
+            <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+              Este material foi salvo sem estrutura completa. Clique em &quot;Chamar o professor!&quot; no tópico
+              para gerar novamente com Raio-X, Revisão Turbo, pegadinhas e questões.
             </div>
           )}
         </div>

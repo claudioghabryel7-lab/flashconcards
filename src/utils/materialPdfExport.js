@@ -1,6 +1,7 @@
 import { toCanvas } from 'html-to-image'
 import jsPDF from 'jspdf'
 import '../styles/material-pdf-export.css'
+import { materialHasStructuredSections } from './materialFormatting'
 
 const PDF_MARGIN_MM = 12
 const A4_CONTENT_WIDTH_PX = 794
@@ -162,11 +163,15 @@ export async function downloadElementAsPdf(element, filename = 'material.pdf') {
   }
 }
 
-/** Baixa PDF formatado igual ao site (captura o DOM renderizado). */
+/** Baixa PDF formatado — usa HTML de impressão dedicado (layout premium). */
 export async function downloadMaterialPdf(material, filename = 'material.pdf', options = {}) {
   if (!material) throw new Error('Nenhum material para exportar.')
 
-  if (options.element) {
+  const preferStructuredHtml =
+    options.preferStructuredHtml !== false &&
+    (materialHasStructuredSections(material) || !options.element)
+
+  if (options.element && !preferStructuredHtml) {
     await downloadElementAsPdf(options.element, filename)
     return
   }
@@ -427,9 +432,12 @@ const PRINT_STYLES = `
 `
 
 function resolveTitle(material = {}) {
+  const materia = material.materia || ''
+  const titulo = material.titulo || ''
+  if (titulo && /material de apoio/i.test(titulo)) return titulo
+  if (materia) return `Material de Apoio Completo: ${materia}`
   return (
-    material.titulo ||
-    material.materia ||
+    titulo ||
     `${material.concurso || 'Material'}${material.cargo ? ` — ${material.cargo}` : ''}`
   )
 }

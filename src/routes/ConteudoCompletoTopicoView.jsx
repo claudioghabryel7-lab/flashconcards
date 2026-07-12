@@ -15,10 +15,15 @@ import SimpleMaterialEditor from '../components/SimpleMaterialEditor'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import ShareToFeedButton from '../components/feed/ShareToFeedButton'
 import ContentFeedbackActions from '../components/content/ContentFeedbackActions'
+import MaterialStructuredView from '../components/content/MaterialStructuredView'
 import { buildMateriaContentId } from '../utils/contentCommentIds'
 import { FEED_POST_TYPES } from '../services/trilhaFeedService'
 import { stripHtml } from '../utils/htmlTextHelpers'
 import { downloadMaterialPdf } from '../utils/materialPdfExport'
+import {
+  hydrateConteudoCompletoMaterial,
+  resolveMaterialPdfFilename,
+} from '../utils/materialFormatting'
 import { getConteudoCompletoDepthInstructions, CONTEUDO_COMPLETO_DEPTH } from '../utils/contentDepthRules'
 import ReactMarkdown from 'react-markdown'
 
@@ -311,7 +316,7 @@ const ConteudoCompletoTopicoView = () => {
           return
         }
         if (foundDoc) {
-          setConteudo(foundDoc)
+          setConteudo(hydrateConteudoCompletoMaterial(foundDoc, trimmedKey))
           setLoading(false)
           return
         }
@@ -364,7 +369,7 @@ const ConteudoCompletoTopicoView = () => {
           const numeroSnap = await getDocs(qNumero)
           const matchedFromNumero = tryMatchFromSnapshot(numeroSnap)
           if (matchedFromNumero) {
-            setConteudo(matchedFromNumero)
+            setConteudo(hydrateConteudoCompletoMaterial(matchedFromNumero, trimmedKey))
             setLoading(false)
             return
           }
@@ -376,7 +381,7 @@ const ConteudoCompletoTopicoView = () => {
           const materiaSnap = await getDocs(qMateria)
           const matchedFromMateria = tryMatchFromSnapshot(materiaSnap)
           if (matchedFromMateria) {
-            setConteudo(matchedFromMateria)
+            setConteudo(hydrateConteudoCompletoMaterial(matchedFromMateria, trimmedKey))
             setLoading(false)
             return
           }
@@ -502,10 +507,11 @@ ONDE:
 
     setDownloadingPdf(true)
     try {
-      const fileName = `${conteudo.materia || 'material'}-${conteudo.titulo || 'topico'}.pdf`
-      await downloadMaterialPdf(conteudo, fileName, {
+      const normalized = hydrateConteudoCompletoMaterial(conteudo, resolvedTopicKey)
+      const fileName = resolveMaterialPdfFilename(normalized, resolvedTopicKey)
+      await downloadMaterialPdf(normalized, fileName, {
         courseName,
-        element: materialExportRef.current,
+        preferStructuredHtml: true,
       })
     } catch (error) {
       console.error('Erro ao gerar PDF:', error)
@@ -517,7 +523,7 @@ ONDE:
 
   const handleGenerateContent = async () => {
     if (!resolvedCourseId || !resolvedTopicKey) return false
-    if (!hasGeminiApiKeys()) {
+    if (!user?.uid && !hasGeminiApiKeys()) {
       setError('Nenhuma API Key Gemini configurada.')
       return
     }
@@ -808,10 +814,9 @@ REGRAS:
         })
 
         await promise
-        const contentRef = doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', sanitizedKey)
-        const snap = await getDoc(contentRef)
-        if (snap.exists()) {
-          setConteudo({ id: sanitizedKey, ...snap.data() })
+        const foundDoc = await findDocumentByTopicKey(resolvedCourseId, resolvedTopicKey)
+        if (foundDoc && !foundDoc.locked) {
+          setConteudo(hydrateConteudoCompletoMaterial(foundDoc, resolvedTopicKey))
         }
         setProgress(100)
         return true
@@ -823,20 +828,21 @@ REGRAS:
         useRAG: true,
       })
       setProgress(75)
-      const payload = {
-        ...parsed,
-        materia: parsed.materia || parsed.titulo || resolvedTopicKey,
-        numero: parsed.numero || resolvedTopicKey,
-        topicKey: resolvedTopicKey,
-        status: initialStatus,
-        updatedAt: serverTimestamp(),
-        generatedAt: serverTimestamp(),
-      }
+      const payload = hydrateConteudoCompletoMaterial(
+        {
+          ...parsed,
+          topicKey: resolvedTopicKey,
+          status: initialStatus,
+        },
+        resolvedTopicKey,
+      )
+      payload.updatedAt = serverTimestamp()
+      payload.generatedAt = serverTimestamp()
 
       await setDoc(doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', sanitizedKey), payload, {
         merge: true,
       })
-      setConteudo({ id: sanitizedKey, ...payload })
+      setConteudo(hydrateConteudoCompletoMaterial({ id: sanitizedKey, ...payload }, resolvedTopicKey))
       setError('')
       setProgress(100)
       return true
@@ -1111,196 +1117,10 @@ REGRAS:
               saving={savingEdit}
             />
           ) : (
-            <>
-              {/* Raio-X de Probabilidade */}
-              {conteudo.raioXProbabilidade && (
-                <div className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-xl p-6 mb-8">
-                  <div className="flex items-center gap-2 mb-4">
-                    <FireIcon className="h-6 w-6 text-orange-600" />
-                    <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                      Raio-X de Probabilidade
-                    </h4>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    {conteudo.raioXProbabilidade.topicosQuentes && (
-                      <div>
-                        <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                          🔥 Top Assuntos Quentes:
-                        </h5>
-                        <ul className="space-y-1">
-                          {conteudo.raioXProbabilidade.topicosQuentes.map((assunto, aIdx) => (
-                            <li key={aIdx} className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                              <span className="text-orange-600 font-bold">{aIdx + 1}.</span>
-                              {assunto}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {conteudo.raioXProbabilidade.padraoBanca && (
-                      <div>
-                        <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                          📊 O Padrão da Banca:
-                        </h5>
-                        <div 
-                          className="text-sm text-slate-600 dark:text-slate-400"
-                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(conteudo.raioXProbabilidade.padraoBanca) }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-              
-              {/* Revisão Turbo */}
-              {conteudo.revisaoTurbo && Array.isArray(conteudo.revisaoTurbo) && conteudo.revisaoTurbo.length > 0 && (
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6 mb-8">
-                  <div className="flex items-center gap-2 mb-4">
-                    <LightBulbIcon className="h-6 w-6 text-blue-600" />
-                    <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                      Revisão Turbo
-                    </h4>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    {conteudo.revisaoTurbo.map((resumo, rIdx) => (
-                      <div key={rIdx} className="text-sm text-slate-600 dark:text-slate-400">
-                        <h5 className="font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                          {resumo.titulo}
-                        </h5>
-                        <div 
-                          className="ia-content-enhanced text-sm text-slate-600 dark:text-slate-400"
-                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(resumo.conteudo) }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Pegadinhas */}
-              {conteudo.pegadinhas && Array.isArray(conteudo.pegadinhas) && conteudo.pegadinhas.length > 0 && (
-                <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-6 mb-8">
-                  <div className="flex items-center gap-2 mb-4">
-                    <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
-                    <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                      Cuidado, Caçapa!
-                    </h4>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    {conteudo.pegadinhas.map((pegadinha, pIdx) => (
-                      <div key={pIdx} className="text-sm text-red-600 dark:text-red-400">
-                        <h5 className="font-semibold mb-2">
-                          {pegadinha.titulo}
-                        </h5>
-                        <div 
-                          className="ia-content-enhanced text-sm text-red-600 dark:text-red-400"
-                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(pegadinha.conteudo) }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Questões Preditivas */}
-              {conteudo.questoesPreditivas && Array.isArray(conteudo.questoesPreditivas) && conteudo.questoesPreditivas.length > 0 && (
-                <div className="mb-8">
-                  <div className="flex items-center gap-2 mb-4">
-                    <BookOpenIcon className="h-6 w-6 text-alego-600" />
-                    <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                      Questões Preditivas
-                    </h4>
-                  </div>
-                  
-                  <div className="space-y-6">
-                    {conteudo.questoesPreditivas.map((questao, qIdx) => (
-                      <div
-                        key={qIdx}
-                        className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-6"
-                      >
-                        <div className="mb-4">
-                          <span className="text-xs font-semibold text-alego-600 mb-2 block">
-                            Aposta {qIdx + 1} de {conteudo.questoesPreditivas.length}
-                          </span>
-                          <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">
-                            {questao.enunciado}
-                          </p>
-                        </div>
-                        
-                        {questao.alternativas && (
-                          <div className="space-y-2 mb-4">
-                            {Object.entries(questao.alternativas).map(([letra, alt]) => (
-                              <div
-                                key={letra}
-                                className={`p-3 rounded-lg text-sm ${
-                                  letra === questao.correta
-                                    ? 'bg-green-100 dark:bg-green-900/30 border-2 border-green-500 text-green-800 dark:text-green-300'
-                                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300'
-                                }`}
-                              >
-                                {letra}) {alt}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        
-                        {questao.gabaritoComentado && (
-                          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                            <h5 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2">
-                              💡 Gabarito Comentado:
-                            </h5>
-                            <div 
-                              className="text-sm text-blue-600 dark:text-blue-300 ia-content-enhanced"
-                              dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(questao.gabaritoComentado) }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Conteúdo original (para compatibilidade) */}
-              {conteudo.content && (
-                <div className="mb-8">
-                  <div 
-                    className="ia-content-enhanced"
-                    dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(conteudo.content) }}
-                  />
-                </div>
-              )}
-
-              {conteudo.secoes && Array.isArray(conteudo.secoes) && conteudo.secoes.length > 0 && (
-                <div className="space-y-8 mt-8">
-                  {conteudo.secoes.map((secao, index) => (
-                    <div
-                      key={index}
-                      className="border-l-4 border-alego-500 pl-6 py-3 bg-slate-50 dark:bg-slate-900/50 rounded-r-lg"
-                    >
-                      <h3 className="text-xl sm:text-2xl font-semibold text-alego-600 dark:text-alego-400 mb-3">
-                        {secao.titulo || `Seção ${index + 1}`}
-                        {secao.tipo && (
-                          <span className="ml-3 text-sm bg-alego-100 dark:bg-alego-900 text-alego-700 dark:text-alego-300 px-3 py-1 rounded-full">
-                            {secao.tipo}
-                          </span>
-                        )}
-                      </h3>
-                      {secao.conteudo && (
-                        <div 
-                          className="ia-content-enhanced"
-                          dangerouslySetInnerHTML={{ __html: replaceConcursoWithCourse(secao.conteudo) }}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
+            <MaterialStructuredView
+              material={conteudo}
+              transformHtml={replaceConcursoWithCourse}
+            />
           )}
         </div>
       </div>

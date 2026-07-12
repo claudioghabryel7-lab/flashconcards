@@ -222,18 +222,31 @@ async function generateAndSaveConteudo(courseId, topic, onHeartbeat, shouldAbort
     return { skipped: true, type: 'conteudo' }
   }
 
+  const { validateConteudoCompletoPayload } = require('./conteudoCompletoValidate')
+  const { hydrateConteudoCompletoMaterial } = require('./materialFormatting')
+
   const parsed = await runWithHeartbeat(
     () =>
       generateAiJson(topic.conteudoPrompt, {
         useRAG: true,
         useGoogleSearch: true,
         generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
+        rejectTruncatedJson: true,
+        maxParseAttempts: 4,
       }),
     () => onHeartbeat?.('material'),
     15000,
     shouldAbort,
   )
 
+  const validation = validateConteudoCompletoPayload(parsed)
+  if (!validation.ok) {
+    const err = new Error(`Material incompleto — ${validation.errors.join(' ')}`)
+    err.code = 'material_incomplete'
+    throw err
+  }
+
+  const hydrated = hydrateConteudoCompletoMaterial(parsed, topic.topicKey)
   const sanitizedKey = sanitizeTopicKeyForFirestore(topic.topicKey)
   const ts = require('firebase-admin').firestore.FieldValue.serverTimestamp()
 
@@ -241,9 +254,9 @@ async function generateAndSaveConteudo(courseId, topic, onHeartbeat, shouldAbort
     .doc(`courses/${courseId}/conteudosCompletos/${sanitizedKey}`)
     .set(
       {
-        ...parsed,
-        materia: parsed.materia || parsed.titulo || topic.topicoNome,
-        numero: parsed.numero || topic.topicKey,
+        ...hydrated,
+        materia: hydrated.materia,
+        numero: hydrated.numero || topic.topicKey,
         topicKey: topic.topicKey,
         status: CONTENT_STATUS.UNAVAILABLE,
         updatedAt: ts,
