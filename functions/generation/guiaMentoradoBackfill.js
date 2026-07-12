@@ -8,6 +8,7 @@ const {
   clearActiveJob,
   pauseJobForResume,
   isJobCancelled,
+  JOB_HEARTBEAT_MS,
 } = require('./generationJobResume')
 
 function getDb() {
@@ -33,6 +34,11 @@ async function processGuiaMentoradoBackfill(userId, jobId, courseId, serverPaylo
     status: 'running',
   })
 
+  const keepAliveTimer = setInterval(() => {
+    touchActiveJob(userId, jobId, { status: 'running', keepAlive: true }).catch(() => {})
+  }, JOB_HEARTBEAT_MS)
+
+  try {
   for (let i = startDayIndex; i < dayKeys.length; i += 1) {
     if (await isJobCancelled(userId, jobId)) {
       await clearActiveJob(jobId)
@@ -153,6 +159,9 @@ async function processGuiaMentoradoBackfill(userId, jobId, courseId, serverPaylo
 
   await clearActiveJob(jobId)
   return { daysProcessed: totalDays, courseId }
+  } finally {
+    clearInterval(keepAliveTimer)
+  }
 }
 
 module.exports = {

@@ -31,6 +31,21 @@ const MENTORADO_JOB_TYPES = [
   'professor_supervisor',
 ]
 
+/** Jobs em processo de cancelamento — evita nudge retomar enquanto para. */
+const cancellingJobIds = new Set()
+
+export function markJobCancelling(jobId) {
+  if (jobId) cancellingJobIds.add(jobId)
+}
+
+export function unmarkJobCancelling(jobId) {
+  if (jobId) cancellingJobIds.delete(jobId)
+}
+
+export function isJobCancelling(jobId) {
+  return cancellingJobIds.has(jobId)
+}
+
 export const GENERATION_WAITING_STATUSES = [
   GENERATION_JOB_STATUS.WAITING_API,
   GENERATION_JOB_STATUS.WAITING_RETRY,
@@ -83,8 +98,8 @@ export async function updateGenerationJob(userId, jobId, patch) {
 const STALE_JOB_MS = 45 * 60 * 1000
 const STALE_SERVER_JOB_MS = 90 * 60 * 1000
 const STALE_WAITING_API_MS = 24 * 60 * 60 * 1000
-export const STALL_NUDGE_MS = 15 * 1000
-export const STALL_PROGRESS_NUDGE_MS = 45 * 1000
+export const STALL_NUDGE_MS = 5 * 1000
+export const STALL_PROGRESS_NUDGE_MS = 25 * 1000
 
 function jobProgressTimestamp(job = {}) {
   return job.progressUpdatedAt || job.updatedAt
@@ -107,6 +122,8 @@ export function isJobProgressStalled(job, now = Date.now(), stallMs = STALL_PROG
 
 export function shouldNudgeJob(job, now = Date.now()) {
   if (!job?.runOnServer) return false
+  if (isJobCancelling(job.id)) return false
+  if (job.status === GENERATION_JOB_STATUS.PENDING) return true
   if (GENERATION_WAITING_STATUSES.includes(job.status)) return true
   if (job.status === GENERATION_JOB_STATUS.RUNNING) {
     return isJobProgressStalled(job, now)
@@ -163,13 +180,42 @@ export async function reconcileStaleGenerationJobs(userId) {
 }
 
 export async function dismissGenerationJob(userId, jobId) {
-  if (!userId || !jobId) return
-  await updateGenerationJob(userId, jobId, {
-    status: GENERATION_JOB_STATUS.CANCELLED,
-    progress: 100,
-    message: 'Cancelado pelo admin',
-    finishedAt: serverTimestamp(),
-  })
+  if (!userId || !jobId) return { ok: false }
+
+  markJobCancelling(jobId)
+  try {
+    const user = auth?.currentUser
+    if (user?.uid === userId) {
+      const token = await user.getIdToken()
+      const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId, jobId }),
+      })
+      let data = {}
+      try {
+        data = await response.json()
+      } catch {
+        data = {}
+      }
+      if (response.ok && data.ok !== false) {
+        return { ok: true, ...data }
+      }
+    }
+
+    await updateGenerationJob(userId, jobId, {
+      status: GENERATION_JOB_STATUS.CANCELLED,
+      progress: 100,
+      message: 'Cancelado pelo admin',
+      finishedAt: serverTimestamp(),
+    })
+    return { ok: true, fallback: true }
+  } finally {
+    unmarkJobCancelling(jobId)
+  }
 }
 
 const ACTIVE_JOB_STATUSES = [
@@ -178,7 +224,7 @@ const ACTIVE_JOB_STATUSES = [
   ...GENERATION_WAITING_STATUSES,
 ]
 
-/** Cancela todos os jobs ativos do usuário (força parada). */
+/** Cancela todos os jobs ativos do usuário (força parada no servidor). */
 export async function cancelAllGenerationJobs(userId) {
   if (!userId || !db) return { cancelled: 0 }
 
@@ -188,8 +234,36 @@ export async function cancelAllGenerationJobs(userId) {
 
   if (!snap.docs.length) return { cancelled: 0 }
 
-  await Promise.all(snap.docs.map((d) => dismissGenerationJob(userId, d.id)))
-  return { cancelled: snap.docs.length }
+  snap.docs.forEach((d) => markJobCancelling(d.id))
+
+  try {
+    const user = auth?.currentUser
+    if (user?.uid === userId) {
+      const token = await user.getIdToken()
+      const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId, all: true }),
+      })
+      let data = {}
+      try {
+        data = await response.json()
+      } catch {
+        data = {}
+      }
+      if (response.ok) {
+        return { cancelled: data.cancelled ?? snap.docs.length, ...data }
+      }
+    }
+
+    await Promise.all(snap.docs.map((d) => dismissGenerationJob(userId, d.id)))
+    return { cancelled: snap.docs.length }
+  } finally {
+    snap.docs.forEach((d) => unmarkJobCancelling(d.id))
+  }
 }
 
 export function subscribeActiveGenerationJobs(userId, onData) {
@@ -255,6 +329,37 @@ export function waitForGenerationJob(userId, jobId, { timeoutMs = 90 * 60 * 1000
       }
     })
   })
+}
+
+/** Pede ao servidor que inicie um job pendente imediatamente. */
+export async function kickGenerationJob(userId, jobId) {
+  if (!userId || !jobId) return { ok: false, reason: 'missing_params' }
+
+  const user = auth?.currentUser
+  if (!user || user.uid !== userId) return { ok: false, reason: 'not_authenticated' }
+
+  const token = await user.getIdToken()
+  const response = await fetch(FIREBASE_FUNCTIONS.kickGenerationJob, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ userId, jobId }),
+  })
+
+  let data = {}
+  try {
+    data = await response.json()
+  } catch {
+    data = { ok: false, reason: 'invalid_response' }
+  }
+
+  if (!response.ok) {
+    return { ok: false, reason: data.error || data.reason || 'request_failed' }
+  }
+
+  return data
 }
 
 /** Pede ao servidor que retome um job travado ou aguardando. */

@@ -22,7 +22,12 @@ const axios = require('axios')
 
 admin.initializeApp()
 
-const { getJobProcessor, getResumeModule, getDailyModule, getSupervisorQueueModule } = require('./generationLoader')
+const {
+  getResumeModule,
+  getDailyModule,
+  getSupervisorQueueModule,
+  getKickModule,
+} = require('./generationLoader')
 
 /** Processa jobs de geração IA no servidor — continua mesmo com aba/dispositivo fechado. */
 exports.onGenerationJobCreated = functions
@@ -35,53 +40,10 @@ exports.onGenerationJobCreated = functions
     }
 
     const { userId, jobId } = context.params
-
-    try {
-      const { processGenerationJob } = getJobProcessor()
-      await processGenerationJob(userId, jobId, data)
-      return null
-    } catch (error) {
-      console.error(`[onGenerationJobCreated] job ${jobId}:`, error)
-
-      const { isResumableJob, isApiQuotaError, pauseJobForResume } = getResumeModule()
-      if (isResumableJob(data.jobType)) {
-        const pauseStatus = isApiQuotaError(error) ? 'waiting_api' : 'waiting_retry'
-        await pauseJobForResume({
-          userId,
-          jobId,
-          courseId: data.courseId,
-          jobType: data.jobType,
-          serverPayload: data.serverPayload || {},
-          resumeFromTopicIndex:
-            data.resumeState?.resumeFromTopicIndex ??
-            data.serverPayload?.resumeFromTopicIndex ??
-            0,
-          topicLabel: data.resumeState?.topicLabel || '',
-          updateJob: async (_uid, _jid, patch) => {
-            await snap.ref.update({
-              ...patch,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            })
-          },
-          status: pauseStatus,
-          waitReason: isApiQuotaError(error) ? 'api' : 'error',
-          message: isApiQuotaError(error)
-            ? 'API expirada — aguardando para retomar…'
-            : `Erro temporário — tentando de novo em 15s… (${error?.message || 'erro'})`,
-        })
-        return null
-      }
-
-      await snap.ref.update({
-        status: 'error',
-        progress: 100,
-        message: error?.message || 'Falha na geração com IA. Tente novamente.',
-        errorCode: error?.code || null,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        finishedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
-      return null
-    }
+    const { runServerGenerationJob } = getKickModule()
+    const result = await runServerGenerationJob(userId, jobId, data)
+    console.log(`[onGenerationJobCreated] ${jobId}:`, result?.ok ? 'ok' : result?.reason || result)
+    return null
   })
 
 /** Ao cancelar (X), limpa fila de retomada e atualiza painel do dia imediatamente. */
@@ -1359,10 +1321,13 @@ exports.resumeWaitingGenerationJobs = functions.pubsub
   .schedule('every 1 minutes')
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
+    const { processStuckPendingGenerationJobs } = getKickModule()
+    const stuck = await processStuckPendingGenerationJobs()
+
     const { resumeWaitingGenerationJobs } = getResumeModule()
     const result = await resumeWaitingGenerationJobs()
-    if (result.resumed > 0 || result.waiting > 0 || result.stalled > 0) {
-      console.log('[resumeWaitingGenerationJobs]', result)
+    if (stuck.kicked > 0 || result.resumed > 0 || result.waiting > 0 || result.stalled > 0) {
+      console.log('[resumeWaitingGenerationJobs]', { stuck, ...result })
     }
     return null
   })
@@ -1383,7 +1348,12 @@ exports.onGenerationResumeQueueWrite = functions
       await new Promise((resolve) => setTimeout(resolve, waitMs))
     }
 
-    const { resumeSingleGenerationJob } = getResumeModule()
+    const { resumeSingleGenerationJob, isJobCancelled } = getResumeModule()
+    const userId = data.userId
+    if (userId && (await isJobCancelled(userId, jobId))) {
+      return null
+    }
+
     const result = await resumeSingleGenerationJob(jobId, data)
     if (result.resumed) {
       console.log('[onGenerationResumeQueueWrite] retomado:', jobId, result.jobType)
@@ -1421,6 +1391,73 @@ exports.nudgeGenerationJobResume = functions
       }
     })
   })
+
+/** Dispara processamento imediato de job pendente (fallback se onCreate não disparar). */
+exports.kickGenerationJob = functions
+  .runWith({ timeoutSeconds: 540, memory: '1GB' })
+  .https.onRequest((req, res) => {
+    cors(req, res, async () => {
+      if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Método não permitido' })
+      }
+      try {
+        const authUser = await verifyAuthRequest(req)
+        const { userId, jobId } = req.body || {}
+        if (!userId || !jobId) {
+          return res.status(400).json({ error: 'userId e jobId são obrigatórios' })
+        }
+        if (authUser.uid !== userId) {
+          try {
+            await verifyAdminRequest(req)
+          } catch {
+            return res.status(403).json({ error: 'Não autorizado' })
+          }
+        }
+        const { kickGenerationJob } = getKickModule()
+        const result = await kickGenerationJob(userId, jobId)
+        return res.status(200).json(result)
+      } catch (err) {
+        console.error('[kickGenerationJob]', err)
+        return res.status(500).json({ error: err.message || 'Erro ao iniciar job' })
+      }
+    })
+  })
+
+/** Cancela job no servidor — para retomadas e libera slot. */
+exports.cancelGenerationJob = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Método não permitido' })
+    }
+    try {
+      const authUser = await verifyAuthRequest(req)
+      const { userId, jobId, all } = req.body || {}
+      if (!userId) {
+        return res.status(400).json({ error: 'userId é obrigatório' })
+      }
+      if (authUser.uid !== userId) {
+        try {
+          await verifyAdminRequest(req)
+        } catch {
+          return res.status(403).json({ error: 'Não autorizado' })
+        }
+      }
+      const { cancelGenerationJob, cancelAllGenerationJobs } = getResumeModule()
+      if (all) {
+        const result = await cancelAllGenerationJobs(userId)
+        return res.status(200).json(result)
+      }
+      if (!jobId) {
+        return res.status(400).json({ error: 'jobId é obrigatório (ou all: true)' })
+      }
+      const result = await cancelGenerationJob(userId, jobId)
+      return res.status(200).json(result)
+    } catch (err) {
+      console.error('[cancelGenerationJob]', err)
+      return res.status(500).json({ error: err.message || 'Erro ao cancelar job' })
+    }
+  })
+})
 
 /** Professor fiscalizador — 1 item por vez, só se API disponível e ativado pelo admin. */
 exports.professorSupervisorTick = functions.pubsub

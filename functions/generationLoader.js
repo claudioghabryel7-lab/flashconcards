@@ -3,6 +3,7 @@ let jobProcessorMod = null
 let resumeMod = null
 let dailyMod = null
 let supervisorQueueMod = null
+let kickMod = null
 
 function getJobProcessor() {
   if (!jobProcessorMod) {
@@ -32,9 +33,17 @@ function getSupervisorQueueModule() {
   return supervisorQueueMod
 }
 
+function getKickModule() {
+  if (!kickMod) {
+    kickMod = require('./generation/generationJobKick')
+  }
+  return kickMod
+}
+
 module.exports = {
   getJobProcessor,
   getResumeModule,
   getDailyModule,
   getSupervisorQueueModule,
+  getKickModule,
 }

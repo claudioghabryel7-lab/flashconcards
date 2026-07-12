@@ -22,6 +22,7 @@ const {
   runWithHeartbeat,
   throwIfCancelled,
   handleGenerationJobCancelled,
+  JOB_HEARTBEAT_MS,
 } = require('./generationJobResume')
 
 const CONTENT_STATUS = {
@@ -139,7 +140,7 @@ async function generateAndSaveFlashcards(courseId, topic, onHeartbeat, shouldAbo
   const firstBatchCount = Math.min(BATCH_SIZE, MAX_FLASHCARDS)
 
   const runBatch = async (label, fn) =>
-    runWithHeartbeat(fn, () => onHeartbeat?.(label), 15000, shouldAbort)
+    runWithHeartbeat(fn, () => onHeartbeat?.(label), JOB_HEARTBEAT_MS, shouldAbort)
 
   await onHeartbeat?.('flashcards lote 1/2')
   const batch1 = await runBatch('flashcards lote 1/2', () =>
@@ -235,7 +236,7 @@ async function generateAndSaveConteudo(courseId, topic, onHeartbeat, shouldAbort
         maxParseAttempts: 4,
       }),
     () => onHeartbeat?.('material'),
-    15000,
+    JOB_HEARTBEAT_MS,
     shouldAbort,
   )
 
@@ -281,7 +282,7 @@ async function generateAndSaveQuestoes(courseId, topic, onHeartbeat, shouldAbort
         generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
       }),
     () => onHeartbeat?.('questões'),
-    15000,
+    JOB_HEARTBEAT_MS,
     shouldAbort,
   )
 
@@ -608,6 +609,22 @@ async function processGuiaMentoradoAutomation(
     status: 'running',
   })
 
+  let keepAliveTimer = null
+  const startKeepAlive = () => {
+    if (keepAliveTimer) return
+    keepAliveTimer = setInterval(() => {
+      touchActiveJob(userId, jobId, { status: 'running', keepAlive: true }).catch(() => {})
+    }, JOB_HEARTBEAT_MS)
+  }
+  const stopKeepAlive = () => {
+    if (!keepAliveTimer) return
+    clearInterval(keepAliveTimer)
+    keepAliveTimer = null
+  }
+
+  startKeepAlive()
+
+  try {
   for (let i = startIndex; i < topics.length; i += 1) {
     if (await isJobCancelled(userId, jobId)) {
       await abortAutomationJob({
@@ -702,6 +719,9 @@ async function processGuiaMentoradoAutomation(
   }
 
   return { totalTopics: total, publishedCount, targetDate, paused: false }
+  } finally {
+    stopKeepAlive()
+  }
 }
 
 module.exports = {

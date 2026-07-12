@@ -14,7 +14,6 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { startBackgroundGeneration } from './aiGenerationRunner'
-import { loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
 
 dayjs.extend(utc)
 dayjs.extend(timezone)
@@ -182,8 +181,6 @@ export async function startMentoradoBackfillAllCourses(userId, onProgress) {
 
     onProgress?.(`🚀 ${courseName}: iniciando geração de ${dayKeys.length} dia(s)…`)
 
-    const editalVerticalizado = await loadEditalVerticalizado(courseId)
-
     const { jobId } = await startBackgroundGeneration({
       userId,
       courseId,
@@ -199,7 +196,6 @@ export async function startMentoradoBackfillAllCourses(userId, onProgress) {
       serverPayload: {
         courseId,
         dayKeys,
-        editalVerticalizado,
       },
     })
 

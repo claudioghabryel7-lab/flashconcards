@@ -2,6 +2,7 @@ import {
   createGenerationJob,
   updateGenerationJob,
   waitForGenerationJob,
+  kickGenerationJob,
   GENERATION_JOB_STATUS,
 } from './generationJobService'
 import { formatAiErrorForUser } from '../utils/geminiApi'
@@ -81,6 +82,10 @@ export async function startBackgroundGeneration({
   })
 
   if (useServer) {
+    kickGenerationJob(userId, jobId).catch((err) => {
+      console.warn('[kickGenerationJob]', jobId, err?.message || err)
+    })
+
     const promise = waitForGenerationJob(userId, jobId).then((job) => job?.resultRef ?? job)
     promise.catch((err) => {
       console.error('[generation] job falhou:', err?.message || err)

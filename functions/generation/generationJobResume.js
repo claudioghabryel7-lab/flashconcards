@@ -5,9 +5,10 @@ const {
   collectMotherGeminiApiKey,
 } = require('./geminiKeyPool')
 
-const RETRY_INTERVAL_MS = 15 * 1000
-const CONCURRENCY_RETRY_MS = 15 * 1000
-const STALL_PROGRESS_MS = 45 * 1000
+const JOB_HEARTBEAT_MS = 5 * 1000
+const RETRY_INTERVAL_MS = 5 * 1000
+const CONCURRENCY_RETRY_MS = 5 * 1000
+const STALL_PROGRESS_MS = 30 * 1000
 const CF_SAFE_MS = 7 * 60 * 1000
 
 const WAITING_STATUSES = ['waiting_api', 'waiting_retry', 'waiting_timeout']
@@ -183,18 +184,69 @@ function shouldCheckpointTimeout(jobStartedAt) {
 async function handleGenerationJobCancelled(userId, jobId, jobData = {}) {
   await clearResumeQueue(jobId)
 
-  if (jobData.jobType === 'guia_mentorado_automation') {
-    const courseId = jobData.courseId
-    const targetDate =
-      jobData.serverPayload?.targetDate || jobData.resumeState?.targetDate || null
-    if (courseId && targetDate) {
-      const { resetGeneratingTopicsOnCancel } = require('./guiaMentoradoStatus')
-      await resetGeneratingTopicsOnCancel(courseId, targetDate)
-    }
+  const courseId = jobData.courseId
+  const targetDate =
+    jobData.serverPayload?.targetDate || jobData.resumeState?.targetDate || null
+
+  if (
+    courseId &&
+    targetDate &&
+    (jobData.jobType === 'guia_mentorado_automation' ||
+      jobData.jobType === 'guia_mentorado_backfill')
+  ) {
+    const { resetGeneratingTopicsOnCancel } = require('./guiaMentoradoStatus')
+    await resetGeneratingTopicsOnCancel(courseId, targetDate)
   }
 }
 
-async function runWithHeartbeat(work, onHeartbeat, intervalMs = 15000, shouldAbort = null) {
+/** Cancela job no servidor — limpa fila de retomada e libera slot ativo. */
+async function cancelGenerationJob(userId, jobId) {
+  const db = getDb()
+  const jobRef = db.doc(`users/${userId}/generationJobs/${jobId}`)
+  const snap = await jobRef.get()
+  if (!snap.exists) return { ok: false, reason: 'not_found' }
+
+  const jobData = snap.data()
+  if (jobData.status === 'cancelled') {
+    await clearResumeQueue(jobId)
+    return { ok: true, reason: 'already_cancelled' }
+  }
+
+  const ts = admin.firestore.FieldValue.serverTimestamp()
+  await jobRef.update({
+    status: 'cancelled',
+    progress: 100,
+    message: 'Cancelado pelo admin',
+    finishedAt: ts,
+    updatedAt: ts,
+    progressUpdatedAt: ts,
+  })
+
+  await handleGenerationJobCancelled(userId, jobId, jobData)
+  return { ok: true, jobId, jobType: jobData.jobType }
+}
+
+async function cancelAllGenerationJobs(userId) {
+  const db = getDb()
+  const snap = await db
+    .collection(`users/${userId}/generationJobs`)
+    .where('status', 'in', ['pending', 'running', ...WAITING_STATUSES])
+    .get()
+
+  if (snap.empty) return { ok: true, cancelled: 0 }
+
+  const results = await Promise.allSettled(
+    snap.docs.map((d) => cancelGenerationJob(userId, d.id)),
+  )
+
+  const cancelled = results.filter(
+    (r) => r.status === 'fulfilled' && r.value?.ok,
+  ).length
+
+  return { ok: true, cancelled }
+}
+
+async function runWithHeartbeat(work, onHeartbeat, intervalMs = JOB_HEARTBEAT_MS, shouldAbort = null) {
   let active = true
   let abortError = null
 
@@ -313,6 +365,12 @@ async function nudgeStalledGenerationJob(userId, jobId) {
     )
     const result = await resumeSingleGenerationJob(jobId)
     return { ok: true, reason: 'nudged_waiting', resumed: result.resumed ? 1 : 0 }
+  }
+
+  if (jobData.status === 'pending') {
+    const { kickGenerationJob } = require('./generationJobKick')
+    const result = await kickGenerationJob(userId, jobId)
+    return { ok: true, reason: 'kicked_pending', ...result }
   }
 
   return { ok: false, reason: 'not_waiting' }
@@ -510,7 +568,7 @@ async function resumeSingleGenerationJob(jobId, queueData = null) {
         waitReason: isApiQuotaError(err) ? 'api' : 'error',
         message: isApiQuotaError(err)
           ? 'API expirada — aguardando para retomar…'
-          : `Erro temporário — tentando de novo em 15s… (${err.message || 'erro'})`,
+            : `Erro temporário — tentando de novo em 5s… (${err.message || 'erro'})`,
       })
       await bumpResumeRetry(jobId)
       return { resumed: false, reason: 'error', error: err.message }
@@ -591,6 +649,8 @@ module.exports = {
   resumeWaitingGenerationJobs,
   resumeSingleGenerationJob,
   nudgeStalledGenerationJob,
+  cancelGenerationJob,
+  cancelAllGenerationJobs,
   hasAvailableGeminiKey,
   touchActiveJob,
   clearActiveJob,
@@ -598,7 +658,7 @@ module.exports = {
   shouldCheckpointTimeout,
   runWithHeartbeat,
   CF_SAFE_MS,
-  CONCURRENCY_RETRY_MS,
+  JOB_HEARTBEAT_MS,
   STALL_PROGRESS_MS,
   WAITING_STATUSES,
 }
