@@ -130,6 +130,26 @@ async function collectCronogramaDayKeysClient(courseId, endDate) {
   return [...new Set(dayKeys)].sort()
 }
 
+const ACTIVE_BACKFILL_STATUSES = [
+  'pending',
+  'running',
+  'waiting_api',
+  'waiting_retry',
+  'waiting_timeout',
+]
+
+async function hasActiveBackfillJob(userId, courseId) {
+  const snap = await getDocs(
+    query(
+      collection(db, 'users', userId, 'generationJobs'),
+      where('courseId', '==', courseId),
+      where('jobType', '==', 'guia_mentorado_backfill'),
+      where('status', 'in', ACTIVE_BACKFILL_STATUSES),
+    ),
+  )
+  return snap.docs.length > 0
+}
+
 export async function startMentoradoBackfillAllCourses(userId, onProgress) {
   if (!userId) throw new Error('Usuário não autenticado.')
 
@@ -152,6 +172,11 @@ export async function startMentoradoBackfillAllCourses(userId, onProgress) {
     const dayKeys = await collectCronogramaDayKeysClient(courseId, todayKey)
     if (!dayKeys.length) {
       onProgress?.(`⏭️ ${courseName}: sem dias no cronograma até hoje — pulando`)
+      continue
+    }
+
+    if (await hasActiveBackfillJob(userId, courseId)) {
+      onProgress?.(`⏭️ ${courseName}: já existe backfill em andamento — pulando`)
       continue
     }
 

@@ -108,6 +108,7 @@ async function processGuiaMentoradoBackfill(userId, jobId, courseId, serverPaylo
       courseId,
       automationPayload,
       updateJob,
+      { nestedInBackfill: true },
     )
 
     if (outcome.cancelled) {
@@ -131,16 +132,19 @@ async function processGuiaMentoradoBackfill(userId, jobId, courseId, serverPaylo
           dayKeys,
           resumeFromDayIndex: i,
           resumeFromTopicIndex: topicIdx,
-          topics: prepared.topicPayloads,
           targetDate: dayKey,
           autoPublish: true,
         },
         resumeFromTopicIndex: topicIdx,
-        topicLabel: dayKey,
+        topicLabel:
+          prepared.topicPayloads?.[topicIdx]?.topicoNome ||
+          dayKey,
         updateJob,
         status: jobData.status || 'waiting_retry',
         waitReason: jobData.waitReason || 'retry',
-        message: jobData.message,
+        message:
+          jobData.message ||
+          `Aguardando para retomar… (${dayKey})`,
       })
 
       return { paused: true, resumeFromDayIndex: i, resumeFromTopicIndex: topicIdx }

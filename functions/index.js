@@ -1367,13 +1367,14 @@ exports.resumeWaitingGenerationJobs = functions.pubsub
     return null
   })
 
-/** Agenda retomada ~15s após pausa (funciona mesmo com aba fechada). */
+/** Agenda retomada ~15s após pausa — só o job afetado (não interfere nos outros). */
 exports.onGenerationResumeQueueWrite = functions
-  .runWith({ timeoutSeconds: 120, memory: '512MB' })
+  .runWith({ timeoutSeconds: 540, memory: '1GB' })
   .firestore.document('generationResumeQueue/{jobId}')
-  .onWrite(async (change) => {
+  .onWrite(async (change, context) => {
     if (!change.after.exists) return null
 
+    const jobId = context.params.jobId
     const data = change.after.data() || {}
     const nextMs = data.nextRetryAt?.toMillis?.() || Date.now()
     const waitMs = Math.min(Math.max(0, nextMs - Date.now()), 90 * 1000)
@@ -1382,10 +1383,10 @@ exports.onGenerationResumeQueueWrite = functions
       await new Promise((resolve) => setTimeout(resolve, waitMs))
     }
 
-    const { resumeWaitingGenerationJobs } = getResumeModule()
-    const result = await resumeWaitingGenerationJobs()
-    if (result.resumed > 0) {
-      console.log('[onGenerationResumeQueueWrite] retomado:', result)
+    const { resumeSingleGenerationJob } = getResumeModule()
+    const result = await resumeSingleGenerationJob(jobId, data)
+    if (result.resumed) {
+      console.log('[onGenerationResumeQueueWrite] retomado:', jobId, result.jobType)
     }
     return null
   })

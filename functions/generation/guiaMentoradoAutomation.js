@@ -456,6 +456,7 @@ async function pauseAutomationJob({
   topics,
   targetDate,
   updateJob,
+  nestedInBackfill = false,
 }) {
   const label = topics[topicIndex]?.topicoNome || topics[topicIndex]?.topicKey || ''
   const waitReason = isApiQuotaError(err) ? 'api' : err?.code === 'cf_timeout' ? 'timeout' : 'retry'
@@ -464,6 +465,42 @@ async function pauseAutomationJob({
     : waitReason === 'timeout'
       ? 'waiting_timeout'
       : 'waiting_retry'
+
+  const defaultMessages = {
+    waiting_api: label ? `API expirada — aguardando… (${label})` : 'API expirada — aguardando…',
+    waiting_timeout: label
+      ? `Pausado (limite do servidor) — retomando… (${label})`
+      : 'Pausado (limite do servidor) — retomando…',
+    waiting_retry: label ? `Aguardando para retomar… (${label})` : 'Aguardando para retomar…',
+  }
+
+  const finalMessage =
+    isApiQuotaError(err)
+      ? defaultMessages.waiting_api
+      : waitReason === 'timeout'
+        ? defaultMessages.waiting_timeout
+        : err?.message
+          ? `Aguardando para retomar… (${label})`
+          : defaultMessages.waiting_retry
+
+  if (nestedInBackfill) {
+    await updateJob(userId, jobId, {
+      status: jobStatus,
+      message: finalMessage,
+      resumeState: {
+        resumeFromTopicIndex: topicIndex,
+        targetDate,
+        topicLabel: label,
+        waitReason,
+      },
+      waitReason,
+    })
+    return {
+      paused: true,
+      resumeFromTopicIndex: topicIndex,
+      targetDate,
+    }
+  }
 
   const pauseFn = isApiQuotaError(err) ? pauseJobForApi : pauseJobForResume
   await pauseFn({
@@ -477,11 +514,7 @@ async function pauseAutomationJob({
     updateJob,
     status: jobStatus,
     waitReason,
-    message: isApiQuotaError(err)
-      ? `API expirada — aguardando… (${label})`
-      : waitReason === 'timeout'
-        ? `Pausado (limite do servidor) — retomando… (${label})`
-        : `Aguardando para retomar… (${label})`,
+    message: finalMessage,
   })
 
   if (targetDate) {
@@ -516,12 +549,20 @@ async function abortAutomationJob({
   })
 }
 
-async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPayload, updateJob) {
+async function processGuiaMentoradoAutomation(
+  userId,
+  jobId,
+  courseId,
+  serverPayload,
+  updateJob,
+  options = {},
+) {
   const topics = serverPayload?.topics || []
   const autoPublish = serverPayload?.autoPublish !== false
   const targetDate = serverPayload?.targetDate || null
   const startIndex = Math.max(0, Number(serverPayload?.resumeFromTopicIndex) || 0)
   const jobStartedAt = Date.now()
+  const nestedInBackfill = Boolean(options.nestedInBackfill)
 
   if (!topics.length) {
     throw new Error('Nenhum tópico enviado para automação do Guia Mentorado.')
@@ -594,6 +635,7 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
         topics,
         targetDate,
         updateJob,
+        nestedInBackfill,
       })
     }
 
@@ -633,6 +675,7 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
         topics,
         targetDate,
         updateJob,
+        nestedInBackfill,
       })
     }
   }
