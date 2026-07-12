@@ -381,15 +381,71 @@ const { processAdminEditalVerticalizado } = require('./adminEditalProcessor')
 const { processGuiaMentoradoAutomation } = require('./guiaMentoradoAutomation')
 const { processGuiaMentoradoCronograma } = require('./guiaMentoradoCronograma')
 const { processProfessorSupervisor } = require('./professorSupervisor')
-const { clearResumeQueue } = require('./generationJobResume')
+const {
+  clearResumeQueue,
+  touchActiveJob,
+  clearActiveJob,
+  pauseJobForResume,
+} = require('./generationJobResume')
+const { tryAcquireServerJobSlot, MAX_CONCURRENT_SERVER_JOBS } = require('./generationJobConcurrency')
+
+const CONCURRENCY_RETRY_MS = 15 * 1000
 
 async function processGenerationJob(userId, jobId, jobData) {
+  const db = admin.firestore()
+  const jobRef = db.doc(`users/${userId}/generationJobs/${jobId}`)
+
+  if (jobData.status === 'pending') {
+    const claimed = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(jobRef)
+      if (!snap.exists || snap.data().status !== 'pending') return false
+      tx.update(jobRef, {
+        status: 'running',
+        message: 'Processando no servidor…',
+        startedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      return true
+    })
+    if (!claimed) return { skipped: true, reason: 'already_claimed' }
+  }
+
+  const slot = await tryAcquireServerJobSlot(userId, jobId, jobData.jobType)
+  if (!slot.acquired) {
+    if (slot.reason === 'limit') {
+      await updateJob(userId, jobId, {
+        status: 'waiting_timeout',
+        message: `Aguardando vaga (${MAX_CONCURRENT_SERVER_JOBS} jobs simultâneos no máximo)…`,
+      })
+      await pauseJobForResume({
+        userId,
+        jobId,
+        courseId: jobData.courseId,
+        jobType: jobData.jobType,
+        serverPayload: jobData.serverPayload || {},
+        resumeFromTopicIndex:
+          jobData.resumeState?.resumeFromTopicIndex ??
+          jobData.serverPayload?.resumeFromTopicIndex ??
+          0,
+        topicLabel: jobData.resumeState?.topicLabel || '',
+        updateJob: (uid, jid, patch) => updateJob(uid, jid, patch),
+        status: 'waiting_timeout',
+        waitReason: 'concurrency',
+        message: `Aguardando vaga (${MAX_CONCURRENT_SERVER_JOBS} jobs simultâneos no máximo)…`,
+        retryDelayMs: CONCURRENCY_RETRY_MS,
+      })
+      return { paused: true, reason: 'concurrency_limit' }
+    }
+    return { skipped: true, reason: slot.reason || 'no_slot' }
+  }
+
   const { courseId, jobType, serverPayload } = jobData
   const noPromptJobs = [
     'flashcards_topico',
     'admin_edital_verticalizado',
     'guia_mentorado_automation',
     'guia_mentorado_cronograma',
+    'guia_mentorado_backfill',
     'professor_supervisor',
   ]
   if (!serverPayload?.prompt && !noPromptJobs.includes(jobType)) {
@@ -407,6 +463,9 @@ async function processGenerationJob(userId, jobId, jobData) {
   if (jobType === 'guia_mentorado_automation' && !serverPayload?.topics?.length) {
     throw new Error('Lista de tópicos ausente para automação do Guia Mentorado.')
   }
+  if (jobType === 'guia_mentorado_backfill' && !serverPayload?.courseId) {
+    throw new Error('courseId ausente para backfill do Guia Mentorado.')
+  }
   if (jobType === 'professor_supervisor' && !serverPayload?.itemType) {
     throw new Error('Payload ausente para professor fiscalizador.')
   }
@@ -414,12 +473,20 @@ async function processGenerationJob(userId, jobId, jobData) {
     throw new Error('courseId ausente no job.')
   }
 
-  await updateJob(userId, jobId, {
-    status: 'running',
-    progress: 5,
-    message: 'Processando no servidor…',
-    startedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
+  if (jobData.status !== 'pending') {
+    await updateJob(userId, jobId, {
+      status: 'running',
+      progress: 5,
+      message: 'Processando no servidor…',
+      startedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+  } else {
+    await updateJob(userId, jobId, {
+      progress: 5,
+      message: 'Processando no servidor…',
+    })
+  }
+  await touchActiveJob(userId, jobId, { jobType, status: 'running' })
 
   let outcome
 
@@ -497,6 +564,28 @@ async function processGenerationJob(userId, jobId, jobData) {
         finishedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
       return outcome
+    case 'guia_mentorado_backfill': {
+      const { processGuiaMentoradoBackfill } = require('./guiaMentoradoBackfill')
+      outcome = await processGuiaMentoradoBackfill(
+        userId,
+        jobId,
+        courseId,
+        serverPayload,
+        (uid, jid, patch) => updateJob(uid, jid, patch),
+      )
+      if (outcome.cancelled || outcome.paused) {
+        return outcome
+      }
+      await clearResumeQueue(jobId)
+      await updateJob(userId, jobId, {
+        status: 'done',
+        progress: 100,
+        message: `Backfill concluído — ${outcome.daysProcessed || 0} dia(s) processado(s).`,
+        resultRef: null,
+        finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      return outcome
+    }
     case 'admin_materia_revisada': {
       const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
       await updateJob(userId, jobId, { progress: 20, message: 'Gerando matéria revisada…' })
@@ -525,6 +614,7 @@ async function processGenerationJob(userId, jobId, jobData) {
     finishedAt: admin.firestore.FieldValue.serverTimestamp(),
   })
 
+  await clearActiveJob(jobId)
   return outcome
 }
 

@@ -4,6 +4,7 @@ import { useBackgroundGeneration } from '../hooks/useBackgroundGeneration'
 import { useAuth } from '../hooks/useAuth'
 import {
   dismissGenerationJob,
+  cancelAllGenerationJobs,
   GENERATION_JOB_STATUS,
   GENERATION_WAITING_STATUSES,
 } from '../services/generationJobService'
@@ -20,6 +21,7 @@ const JOB_LABELS = {
   guia_mentorado: 'Guia mentorado',
   guia_mentorado_cronograma: 'Cronograma Guia Mentorado',
   guia_mentorado_automation: 'Conteúdos do dia (Guia Mentorado)',
+  guia_mentorado_backfill: 'Guia Mentorado (dia 1 → hoje)',
   professor_supervisor: 'Professor fiscalizador',
   admin_batch: 'Geração em lote',
 }
@@ -41,8 +43,20 @@ export default function BackgroundGenerationBanner() {
   const { user } = useAuth()
   const { jobs } = useBackgroundGeneration()
   const [dismissing, setDismissing] = useState({})
+  const [stoppingAll, setStoppingAll] = useState(false)
 
   if (!jobs.length) return null
+
+  const handleStopAll = async () => {
+    if (!user?.uid || stoppingAll) return
+    if (!window.confirm('Parar TODOS os jobs em andamento? A geração será cancelada.')) return
+    setStoppingAll(true)
+    try {
+      await cancelAllGenerationJobs(user.uid)
+    } finally {
+      setStoppingAll(false)
+    }
+  }
 
   const handleDismiss = async (jobId) => {
     if (!user?.uid || dismissing[jobId]) return
@@ -60,6 +74,17 @@ export default function BackgroundGenerationBanner() {
       role="status"
       aria-live="polite"
     >
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleStopAll}
+          disabled={stoppingAll}
+          className="inline-flex items-center gap-1 rounded-lg border border-red-500/40 bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-600 shadow-sm transition hover:bg-red-500/20 disabled:opacity-50 dark:text-red-300"
+          title="Parar todos os jobs"
+        >
+          {stoppingAll ? 'Parando…' : 'Parar todas as tarefas'}
+        </button>
+      </div>
       {jobs.map((job) => {
         const waiting = isWaitingStatus(job.status)
         const waitingApi = job.status === GENERATION_JOB_STATUS.WAITING_API

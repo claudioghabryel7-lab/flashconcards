@@ -4,6 +4,8 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { useDarkMode } from './hooks/useDarkMode.jsx'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
+import useSiteMaintenance from './hooks/useSiteMaintenance'
+import MaintenanceScreen from './components/MaintenanceScreen'
 import Header from './components/Header'
 import PopupBanner from './components/PopupBanner'
 import OfflineIndicator from './components/OfflineIndicator'
@@ -126,11 +128,19 @@ const GuestOnlyRoute = ({ children }) => {
 function App() {
   try {
     const { darkMode } = useDarkMode()
-    const { user } = useAuth()
+    const { user, isAdmin } = useAuth()
     const location = useLocation()
+    const { maintenanceMode, maintenanceMessage, loading: maintenanceLoading } = useSiteMaintenance()
     
     // Rastrear status online/offline
     useOnlineStatus()
+
+    const maintenanceAllowedPaths = ['/login', '/reset-password', '/verify-email', '/admin']
+    const isMaintenanceAllowedPath = maintenanceAllowedPaths.some((p) =>
+      location.pathname.startsWith(p),
+    )
+    const showMaintenance =
+      !maintenanceLoading && maintenanceMode && !isAdmin && !isMaintenanceAllowedPath
     
     // Verificar se é a página em branco (sem Header/Footer do site principal)
     const isBlankPage = location.pathname.startsWith('/blank')
@@ -147,6 +157,10 @@ function App() {
       </div>
     )
     
+    if (showMaintenance) {
+      return <MaintenanceScreen message={maintenanceMessage} />
+    }
+
     // Se for página em branco, renderizar com BlankLayout (tem seu próprio Header/Footer)
     // EXCEÇÃO: Se for /blank com ?admin=true, usar BlankPage antigo (tem admin integrado)
     if (isBlankPage) {

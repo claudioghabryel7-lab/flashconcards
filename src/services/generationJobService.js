@@ -26,6 +26,7 @@ export const GENERATION_JOB_STATUS = {
 const MENTORADO_JOB_TYPES = [
   'guia_mentorado_automation',
   'guia_mentorado_cronograma',
+  'guia_mentorado_backfill',
   'professor_supervisor',
 ]
 
@@ -138,6 +139,26 @@ export async function dismissGenerationJob(userId, jobId) {
     message: 'Cancelado pelo admin',
     finishedAt: serverTimestamp(),
   })
+}
+
+const ACTIVE_JOB_STATUSES = [
+  GENERATION_JOB_STATUS.PENDING,
+  GENERATION_JOB_STATUS.RUNNING,
+  ...GENERATION_WAITING_STATUSES,
+]
+
+/** Cancela todos os jobs ativos do usuário (força parada). */
+export async function cancelAllGenerationJobs(userId) {
+  if (!userId || !db) return { cancelled: 0 }
+
+  const snap = await getDocs(
+    query(jobsRef(userId), where('status', 'in', ACTIVE_JOB_STATUSES)),
+  )
+
+  if (!snap.docs.length) return { cancelled: 0 }
+
+  await Promise.all(snap.docs.map((d) => dismissGenerationJob(userId, d.id)))
+  return { cancelled: snap.docs.length }
 }
 
 export function subscribeActiveGenerationJobs(userId, onData) {

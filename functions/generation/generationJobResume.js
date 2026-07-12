@@ -2,9 +2,11 @@ const admin = require('firebase-admin')
 const {
   getGeminiKeysInOrder,
   silentProbeGeminiKey,
+  collectMotherGeminiApiKey,
 } = require('./geminiKeyPool')
 
 const RETRY_INTERVAL_MS = 5 * 60 * 1000
+const CONCURRENCY_RETRY_MS = 15 * 1000
 const STALL_RUNNING_MS = 10 * 60 * 1000
 const CF_SAFE_MS = 7 * 60 * 1000
 
@@ -31,6 +33,7 @@ function isResumableJob(jobType) {
   return (
     jobType === 'guia_mentorado_automation' ||
     jobType === 'guia_mentorado_cronograma' ||
+    jobType === 'guia_mentorado_backfill' ||
     jobType === 'professor_supervisor'
   )
 }
@@ -90,9 +93,10 @@ async function pauseJobForResume({
   status = 'waiting_retry',
   message,
   waitReason = 'retry',
+  retryDelayMs = RETRY_INTERVAL_MS,
 }) {
   const ts = admin.firestore.FieldValue.serverTimestamp()
-  const nextRetryAt = new Date(Date.now() + RETRY_INTERVAL_MS)
+  const nextRetryAt = new Date(Date.now() + Math.max(0, retryDelayMs))
 
   const resumeState = {
     resumeFromTopicIndex,
@@ -137,7 +141,11 @@ async function pauseJobForResume({
     createdAt: ts,
   })
 
-  await touchActiveJob(userId, jobId, { status, waitReason })
+  if (jobType === 'professor_supervisor' || waitReason === 'concurrency') {
+    await clearActiveJob(jobId)
+  } else {
+    await touchActiveJob(userId, jobId, { status, waitReason })
+  }
 }
 
 async function pauseJobForApi(params) {
@@ -149,6 +157,10 @@ async function hasAvailableGeminiKey() {
   for (const key of keys) {
     const ok = await silentProbeGeminiKey(key)
     if (ok) return true
+  }
+  const mother = collectMotherGeminiApiKey()
+  if (mother && !keys.includes(mother)) {
+    return silentProbeGeminiKey(mother)
   }
   return false
 }
@@ -311,15 +323,25 @@ async function resumeWaitingGenerationJobs() {
   }
 
   const { processGenerationJob } = require('./jobProcessor')
+  const { countActiveServerJobs, MAX_CONCURRENT_SERVER_JOBS } = require('./generationJobConcurrency')
   let resumed = 0
 
   for (const doc of snap.docs) {
+    const activeCount = await countActiveServerJobs()
+    if (activeCount >= MAX_CONCURRENT_SERVER_JOBS) break
+
     const data = doc.data()
     const { userId, jobId, courseId, jobType } = data
     if (!userId || !jobId) continue
 
     if (await isJobCancelled(userId, jobId)) {
-      await handleGenerationJobCancelled(userId, jobId, jobData)
+      const cancelledSnap = await db.doc(`users/${userId}/generationJobs/${jobId}`).get()
+      const cancelledData = cancelledSnap.exists ? cancelledSnap.data() : data
+      await handleGenerationJobCancelled(userId, jobId, {
+        ...cancelledData,
+        courseId: courseId || cancelledData.courseId,
+        jobType: jobType || cancelledData.jobType,
+      })
       continue
     }
 
@@ -431,5 +453,6 @@ module.exports = {
   shouldCheckpointTimeout,
   runWithHeartbeat,
   CF_SAFE_MS,
+  CONCURRENCY_RETRY_MS,
   WAITING_STATUSES,
 }

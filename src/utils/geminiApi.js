@@ -20,6 +20,7 @@ import {
   geminiRequestWithKeyFallback,
   hasGeminiApiKeys,
   isGeminiQuotaOrUnavailable,
+  listGeminiApiKeyEntries,
 } from './geminiKeyPool.js'
 
 export { hasGeminiApiKeys, collectGeminiApiKeys as getGeminiApiKeys } from './geminiKeyPool.js'
@@ -670,10 +671,10 @@ function formatWaitTime(seconds) {
  * @returns {Promise<Array<Object>>} - Lista de status das keys
  */
 export async function checkGeminiApiKeysStatus() {
-  const apiKeys = loadApiKeys()
+  const entries = listGeminiApiKeyEntries()
   const results = []
 
-  if (apiKeys.length === 0) {
+  if (entries.length === 0) {
     return [
       {
         name: 'Configuração',
@@ -685,17 +686,15 @@ export async function checkGeminiApiKeysStatus() {
     ]
   }
 
-  for (let i = 0; i < apiKeys.length; i++) {
-    const key = apiKeys[i]
-    const keyName = i === 0 ? 'VITE_GEMINI_API_KEY (Principal)' : `VITE_GEMINI_API_KEY_${i}`
-    
-    console.log(`🔍 Testando ${keyName}...`)
+  for (const entry of entries) {
+    const { key, label } = entry
+    console.log(`🔍 Testando ${label}...`)
     const status = await testApiKey(key)
-    
+
     results.push({
-      name: keyName,
+      name: label,
       keyPreview: key.substring(0, 10) + '...',
-      ...status
+      ...status,
     })
   }
 

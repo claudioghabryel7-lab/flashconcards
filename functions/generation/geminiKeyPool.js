@@ -6,6 +6,9 @@ const { geminiFetch } = require('./geminiHttp')
 const KEY_BAD_TTL_MS = 15 * 60 * 1000
 const KEY_OK_TTL_MS = 5 * 60 * 1000
 const SILENT_PROBE_MODEL = 'gemini-2.5-flash'
+const GEMINI_MOTHER_KEY_LABEL = 'API MÃE'
+
+const MOTHER_ENV_NAMES = ['GEMINI_API_KEY_MAE', 'VITE_GEMINI_API_KEY_MAE']
 
 const keyHealth = new Map()
 let rootEnvLoaded = false
@@ -79,7 +82,7 @@ function collectGeminiApiKeys() {
   }
 
   if (!keys.length) {
-    loadRootEnvLocal()
+    if (!rootEnvLoaded) loadRootEnvLocal()
     add(process.env.GEMINI_API_KEY)
     add(process.env.VITE_GEMINI_API_KEY)
     for (let i = 1; i <= 10; i += 1) {
@@ -89,6 +92,21 @@ function collectGeminiApiKeys() {
   }
 
   return keys
+}
+
+function collectMotherGeminiApiKey() {
+  const cfg = functions.config().gemini || {}
+  if (isValidKey(cfg.api_key_mae)) return cfg.api_key_mae.trim()
+  for (const name of MOTHER_ENV_NAMES) {
+    const key = readKey(name)
+    if (key) return key
+  }
+  loadRootEnvLocal()
+  for (const name of MOTHER_ENV_NAMES) {
+    const key = readKey(name)
+    if (key) return key
+  }
+  return null
 }
 
 function isKeyGood(key) {
@@ -179,7 +197,8 @@ async function geminiRequestWithKeyFallback({
   probeNextOnFail = true,
 }) {
   const keys = getGeminiKeysInOrder()
-  if (!keys.length) {
+  const motherKey = collectMotherGeminiApiKey()
+  if (!keys.length && !motherKey) {
     throw new Error(
       'GEMINI_API_KEY não configurada nas Cloud Functions. Rode `npm run sync:gemini-env` e faça deploy.',
     )
@@ -220,12 +239,31 @@ async function geminiRequestWithKeyFallback({
 
   const err = new Error(lastError)
   err.code = 'api_quota_exhausted'
+
+  if (motherKey && !keys.includes(motherKey)) {
+    for (const model of models) {
+      const response = await geminiFetch(model, motherKey, buildBody(model))
+      const data = await response.json().catch(() => ({}))
+      if (response.ok) {
+        markGeminiKeyOk(motherKey)
+        return { data, apiKey: motherKey, model, keyLabel: GEMINI_MOTHER_KEY_LABEL }
+      }
+      lastError = data.error?.message || `HTTP ${response.status}`
+      if (isGeminiQuotaOrUnavailable(response.status, lastError)) {
+        markGeminiKeyBad(motherKey)
+      }
+    }
+    err.message = `${lastError} (${GEMINI_MOTHER_KEY_LABEL} também falhou)`
+  }
+
   throw err
 }
 
 module.exports = {
   collectGeminiApiKeys,
+  collectMotherGeminiApiKey,
   geminiRequestWithKeyFallback,
   silentProbeGeminiKey,
   getGeminiKeysInOrder,
+  GEMINI_MOTHER_KEY_LABEL,
 }

@@ -4,6 +4,9 @@ import { geminiFetch } from './geminiHttp.js'
 export const KEY_BAD_TTL_MS = 15 * 60 * 1000
 export const KEY_OK_TTL_MS = 5 * 60 * 1000
 export const SILENT_PROBE_MODEL = 'gemini-2.5-flash'
+export const GEMINI_MOTHER_KEY_LABEL = 'API MÃE'
+
+const MOTHER_ENV_NAMES = ['VITE_GEMINI_API_KEY_MAE', 'GEMINI_API_KEY_MAE']
 
 const keyHealth = new Map()
 
@@ -48,8 +51,41 @@ export function collectGeminiApiKeys(envReader = readEnv) {
   return keys
 }
 
+/** Chave reserva — só usada quando todas as demais falharem (API MÃE). */
+export function collectMotherGeminiApiKey(envReader = readEnv) {
+  for (const name of MOTHER_ENV_NAMES) {
+    const key = readKey(envReader, name)
+    if (key) return key
+  }
+  return null
+}
+
+/** Lista rotulada para painel de status (regulares + MÃE por último). */
+export function listGeminiApiKeyEntries(envReader = readEnv) {
+  const entries = []
+  const seen = new Set()
+  const add = (label, name) => {
+    const key = readKey(envReader, name)
+    if (!key || seen.has(key)) return
+    seen.add(key)
+    entries.push({ key, label })
+  }
+
+  add('VITE_GEMINI_API_KEY (Principal)', 'VITE_GEMINI_API_KEY')
+  add('VITE_GOOGLE_AI_API_KEY', 'VITE_GOOGLE_AI_API_KEY')
+  for (let i = 1; i <= 10; i += 1) {
+    add(`VITE_GEMINI_API_KEY_${i}`, `VITE_GEMINI_API_KEY_${i}`)
+  }
+
+  const mother = collectMotherGeminiApiKey(envReader)
+  if (mother && !seen.has(mother)) {
+    entries.push({ key: mother, label: GEMINI_MOTHER_KEY_LABEL })
+  }
+  return entries
+}
+
 export function hasGeminiApiKeys(envReader = readEnv) {
-  return collectGeminiApiKeys(envReader).length > 0
+  return collectGeminiApiKeys(envReader).length > 0 || Boolean(collectMotherGeminiApiKey(envReader))
 }
 
 function getHealth(key) {
@@ -153,7 +189,8 @@ export async function geminiRequestWithKeyFallback({
   probeNextOnFail = true,
 }) {
   const keys = getGeminiKeysInOrder(envReader)
-  if (!keys.length) {
+  const motherKey = collectMotherGeminiApiKey(envReader)
+  if (!keys.length && !motherKey) {
     throw new Error(
       'Nenhuma API key Gemini configurada. Defina VITE_GEMINI_API_KEY no .env.local ou no Vercel.',
     )
@@ -199,5 +236,22 @@ export async function geminiRequestWithKeyFallback({
 
   const err = new Error(`Todas as API keys Gemini falharam. Último erro: ${lastError}`)
   if (isGeminiQuotaOrUnavailable(429, lastError)) err.code = 'quota_exceeded'
+
+  if (motherKey && !keys.includes(motherKey)) {
+    for (const model of models) {
+      const response = await geminiFetch(model, motherKey, buildBody(model))
+      const data = await response.json().catch(() => ({}))
+      if (response.ok) {
+        markGeminiKeyOk(motherKey)
+        return { data, apiKey: motherKey, model, keyLabel: GEMINI_MOTHER_KEY_LABEL }
+      }
+      lastError = data.error?.message || `HTTP ${response.status}`
+      if (isGeminiQuotaOrUnavailable(response.status, lastError)) {
+        markGeminiKeyBad(motherKey)
+      }
+    }
+    err.message = `${err.message} (${GEMINI_MOTHER_KEY_LABEL} também falhou)`
+  }
+
   throw err
 }
