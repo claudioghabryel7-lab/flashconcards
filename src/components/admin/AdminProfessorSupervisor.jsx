@@ -124,7 +124,7 @@ export default function AdminProfessorSupervisor() {
               <AcademicCapIcon className="h-6 w-6 text-indigo-600" />
             </div>
             <div>
-              <h2 className="cp-headline text-lg text-cp-text">Professor fiscalizador + digitação</h2>
+              <h2 className="cp-headline text-lg text-cp-text">Professor IA — correções automáticas</h2>
               <p className="mt-1 max-w-xl text-sm text-cp-muted">
                 Ao ativar, salva o <strong>horário atual</strong> e repete <strong>todo dia</strong>{' '}
                 {dailyLabel ? (
@@ -134,8 +134,9 @@ export default function AdminProfessorSupervisor() {
                 ) : (
                   ''
                 )}
-                . Sessão de até <strong>{SESSION_HOURS}h</strong> por dia — para sozinha ao concluir. Cronograma
-                do dia primeiro, depois backlog. Digitação (script) + fiscalização IA.
+                . Sessão de até <strong>{SESSION_HOURS}h</strong> por dia. Corrige automaticamente{' '}
+                <strong>sinalizações</strong> de flashcards, material e questões (sem moderação). Toda{' '}
+                <strong>segunda-feira</strong> publica novo tema de redação.
               </p>
             </div>
           </div>
@@ -234,7 +235,10 @@ export default function AdminProfessorSupervisor() {
                   className="rounded-lg border border-cp-border px-3 py-2 text-xs text-cp-muted"
                 >
                   <span className="font-medium text-cp-text">{row.itemType}</span> — {row.courseId} —{' '}
-                  {row.autoApplied ? `${row.appliedCount || 0} correção(ões)` : 'enviado ao admin'} —{' '}
+                  {row.autoApplied || row.skipModeration
+                    ? `${row.appliedCount || 0} correção(ões) auto`
+                    : 'enviado ao admin'}{' '}
+                  —{' '}
                   {when}
                 </div>
               )

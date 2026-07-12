@@ -318,6 +318,11 @@ async function publishTopicoStatus(courseId, topic) {
       topicKey: normalized,
       status,
       disciplinaNome: topic.disciplina,
+      releasedAssets: {
+        flashcards: true,
+        material: true,
+        questoes: true,
+      },
       updatedAt: ts,
       mentoradoAutomation: true,
     },
@@ -644,6 +649,12 @@ async function processGuiaMentoradoAutomation(userId, jobId, courseId, serverPay
     })
     if (totalPublished >= total) {
       await markDayContentGenerated(courseId, targetDate, totalPublished, total)
+      try {
+        const { releaseNextVesperaDisciplina } = require('./vesperaDailyRelease')
+        await releaseNextVesperaDisciplina(courseId)
+      } catch (vesperaErr) {
+        console.warn(`[mentorado] véspera release ${courseId}:`, vesperaErr.message)
+      }
     }
   }
 

@@ -92,13 +92,69 @@ function collectAvailableTopics(map, metaByKey) {
   return topics
 }
 
-function buildNotification(courseId, topicKey, meta) {
+function buildNotification(courseId, topicKey, meta, contentType = 'topico') {
+  const labels = {
+    flashcards: 'Flashcards liberados',
+    material: 'Material liberado',
+    questoes: 'Questões liberadas',
+    topico: 'Novo tópico liberado',
+    vespera: 'Revisão liberada',
+  }
+  const links = {
+    flashcards: '/flashcards',
+    material: '/resolver-material',
+    questoes: '/resolver-questoes',
+    topico: '/edital-verticalizado',
+    vespera: '/vespera-de-prova',
+  }
+  const baseLabel = decodeTopicLabel(topicKey, meta.disciplinaNome)
+
   return {
-    id: notificationId(courseId, topicKey),
+    id: `${notificationId(courseId, topicKey)}:${contentType}`,
     courseId,
     topicKey,
-    label: decodeTopicLabel(topicKey, meta.disciplinaNome),
+    contentType,
+    linkPath: links[contentType] || links.topico,
+    label:
+      contentType === 'topico'
+        ? baseLabel
+        : `${labels[contentType] || 'Conteúdo liberado'} — ${baseLabel}`,
     createdAt: toMillis(meta.updatedAt),
+    read: false,
+  }
+}
+
+function notificationTypesFromMeta(meta = {}) {
+  const assets = meta.releasedAssets || {}
+  const hasExplicit = assets.flashcards || assets.material || assets.questoes
+  if (!hasExplicit) {
+    return ['flashcards', 'material', 'questoes']
+  }
+  const types = []
+  if (assets.flashcards) types.push('flashcards')
+  if (assets.material) types.push('material')
+  if (assets.questoes) types.push('questoes')
+  return types.length ? types : ['topico']
+}
+
+function assetsSignature(meta = {}) {
+  const assets = meta.releasedAssets || {}
+  const hasExplicit = assets.flashcards || assets.material || assets.questoes
+  if (!hasExplicit) return 'all'
+  return ['flashcards', 'material', 'questoes']
+    .filter((k) => assets[k])
+    .join(',')
+}
+
+function buildVesperaNotification(courseId, data, docId) {
+  return {
+    id: `vespera:${courseId}:${docId}`,
+    courseId,
+    topicKey: `vespera:${data.disciplinaIndex ?? docId}`,
+    contentType: 'vespera',
+    linkPath: '/vespera-de-prova',
+    label: data.label || `Revisão liberada: ${data.disciplina || 'Matéria'}`,
+    createdAt: toMillis(data.createdAt),
     read: false,
   }
 }
@@ -114,7 +170,10 @@ export function useTopicNotifications(userId, courseId) {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const prevMapRef = useRef({})
+  const prevAssetsRef = useRef({})
   const initializedRef = useRef(false)
+  const vesperaInitRef = useRef(false)
+  const prevVesperaIdsRef = useRef(new Set())
 
   const persist = useCallback(
     (data) => {
@@ -132,6 +191,9 @@ export function useTopicNotifications(userId, courseId) {
       setUnreadCount(0)
       initializedRef.current = false
       prevMapRef.current = {}
+      prevAssetsRef.current = {}
+      vesperaInitRef.current = false
+      prevVesperaIdsRef.current = new Set()
       return () => {}
     }
 
@@ -150,34 +212,47 @@ export function useTopicNotifications(userId, courseId) {
         const existingIds = new Set(items.map((n) => n.id))
         const newItems = []
 
-        const addTopic = (topicKey, meta) => {
-          if (acknowledgedKeys[topicKey]) return
-          const notif = buildNotification(resolvedId, topicKey, meta)
-          if (existingIds.has(notif.id)) {
-            acknowledgedKeys = { ...acknowledgedKeys, [topicKey]: true }
-            return
-          }
-          newItems.push(notif)
-          acknowledgedKeys = { ...acknowledgedKeys, [topicKey]: true }
-          existingIds.add(notif.id)
+        const addTopic = (topicKey, meta, { forceRetro = false } = {}) => {
+          const types = notificationTypesFromMeta(meta)
+          const sig = assetsSignature(meta)
+          const prevSig = prevAssetsRef.current[topicKey]
+          const isNewRelease = forceRetro || !prevSig || prevSig !== sig
+
+          types.forEach((contentType) => {
+            if (!isNewRelease && prevSig?.includes(contentType)) return
+            if (acknowledgedKeys[`${topicKey}:${contentType}`]) return
+            const notif = buildNotification(resolvedId, topicKey, meta, contentType)
+            if (existingIds.has(notif.id)) {
+              acknowledgedKeys = { ...acknowledgedKeys, [`${topicKey}:${contentType}`]: true }
+              return
+            }
+            newItems.push(notif)
+            acknowledgedKeys = { ...acknowledgedKeys, [`${topicKey}:${contentType}`]: true }
+            existingIds.add(notif.id)
+          })
+
+          prevAssetsRef.current[topicKey] = sig
         }
 
         if (!initializedRef.current) {
-          // Retroativo: todos os tópicos já liberados neste curso
           collectAvailableTopics(map, metaByKey).forEach(({ topicKey, meta }) => {
-            addTopic(topicKey, meta)
+            addTopic(topicKey, meta, { forceRetro: true })
           })
           initializedRef.current = true
           prevMapRef.current = { ...map }
         } else {
-          // Tempo real: só liberações novas desde a última snapshot
           const prev = prevMapRef.current
           collectAvailableTopics(map, metaByKey).forEach(({ topicKey, meta }) => {
             const wasAvailable =
               prev[topicKey] === CONTENT_STATUS.AVAILABLE ||
               prev[sanitizeTopicKeyForFirestore(topicKey)] === CONTENT_STATUS.AVAILABLE
-            if (wasAvailable) return
-            addTopic(topicKey, meta)
+            if (!wasAvailable) {
+              addTopic(topicKey, meta)
+              return
+            }
+            const prevSig = prevAssetsRef.current[topicKey]
+            const sig = assetsSignature(meta)
+            if (prevSig !== sig) addTopic(topicKey, meta)
           })
           prevMapRef.current = { ...map }
         }
@@ -198,6 +273,62 @@ export function useTopicNotifications(userId, courseId) {
       unsub()
       initializedRef.current = false
       prevMapRef.current = {}
+      prevAssetsRef.current = {}
+    }
+  }, [userId, courseId, persist])
+
+  useEffect(() => {
+    if (!userId || !courseId) return () => {}
+
+    const resolvedId = courseId || 'alego-default'
+
+    const unsub = onSnapshot(
+      collection(db, 'courses', resolvedId, 'vesperaNotifications'),
+      (snapshot) => {
+        const storedNow = loadStored(userId, resolvedId)
+        let { acknowledgedKeys, items } = storedNow
+        const existingIds = new Set(items.map((n) => n.id))
+        const newItems = []
+        const currentIds = new Set()
+
+        snapshot.docs.forEach((d) => {
+          currentIds.add(d.id)
+          const data = d.data()
+          if (data.status === 'dismissed') return
+
+          const ackKey = `vespera:${d.id}`
+          const isNew = !vesperaInitRef.current || !prevVesperaIdsRef.current.has(d.id)
+
+          if (!isNew) return
+          if (acknowledgedKeys[ackKey]) return
+
+          const notif = buildVesperaNotification(resolvedId, data, d.id)
+          if (existingIds.has(notif.id)) {
+            acknowledgedKeys = { ...acknowledgedKeys, [ackKey]: true }
+            return
+          }
+          newItems.push(notif)
+          acknowledgedKeys = { ...acknowledgedKeys, [ackKey]: true }
+          existingIds.add(notif.id)
+        })
+
+        prevVesperaIdsRef.current = currentIds
+        vesperaInitRef.current = true
+
+        if (newItems.length > 0) {
+          const merged = [...newItems, ...items]
+            .sort((a, b) => b.createdAt - a.createdAt)
+            .slice(0, MAX_ITEMS)
+          persist({ acknowledgedKeys, items: merged })
+        }
+      },
+      (err) => console.error('Erro nas notificações de véspera:', err),
+    )
+
+    return () => {
+      unsub()
+      vesperaInitRef.current = false
+      prevVesperaIdsRef.current = new Set()
     }
   }, [userId, courseId, persist])
 

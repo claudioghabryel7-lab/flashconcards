@@ -12,16 +12,19 @@ function hashSeed(str) {
   return h
 }
 
-/** 22:00–05:59 = madrugada/noite; 06:00–21:59 = horário de estudo. */
+/** 21:45–05:59 = noite/madrugada; 06:00–21:44 = horário de estudo. */
 export function isOnlineNightPeriod(date = new Date()) {
   const hour = date.getHours()
-  return hour >= 22 || hour < 6
+  const minute = date.getMinutes()
+  if (hour > 21 || (hour === 21 && minute >= 45)) return true
+  if (hour < 6) return true
+  return false
 }
 
 export function getSimulatedOnlineRange(now = Date.now()) {
   return isOnlineNightPeriod(new Date(now))
-    ? { min: 1, max: 9 }
-    : { min: 5, max: 30 }
+    ? { min: 2, max: 9 }
+    : { min: 7, max: 23 }
 }
 
 function pickInRange(min, max, now, seed) {
@@ -32,7 +35,7 @@ function pickInRange(min, max, now, seed) {
 
 /**
  * Contagem exibida no badge — simulada por faixa horária.
- * Madrugada/noite (22h–06h): 1–9 · Dia (06h–22h): 5–30
+ * Madrugada/noite (21:45–06h): 2–9 · Dia (06h–21:44): 7–23
  */
 export function getSimulatedOnlineCount(
   now = Date.now(),

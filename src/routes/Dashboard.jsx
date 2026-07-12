@@ -8,6 +8,7 @@ import { ArrowRightIcon as ArrowRightOutline, DocumentTextIcon, UserGroupIcon, C
 import { useAuth } from '../hooks/useAuth'
 import OnlineNowBadge from '@/components/cp/OnlineNowBadge'
 import FloatingWhatsAppButton from '@/components/FloatingWhatsAppButton'
+import { useTopicNotifications } from '../hooks/useTopicNotifications'
 
 const quickLinks = [
   { to: '/flashcards', title: 'Flashcards com IA', desc: 'Repetição espaçada por tópico', icon: SparklesIcon, accent: 'cp-card-accent-violet' },
@@ -24,6 +25,20 @@ const quickLinks = [
 
 const Dashboard = () => {
   const { user, profile } = useAuth()
+  const courseId = profile?.selectedCourseId || 'alego-default'
+  const { notifications, unreadCount } = useTopicNotifications(user?.uid, courseId)
+
+  const badgeFor = (contentType) => {
+    const count = notifications.filter((n) => !n.read && n.contentType === contentType).length
+    return count > 0 ? count : null
+  }
+
+  const cardBadges = {
+    '/flashcards': badgeFor('flashcards'),
+    '/resolver-material': badgeFor('material'),
+    '/resolver-questoes': badgeFor('questoes'),
+    '/vespera-de-prova': notifications.filter((n) => !n.read && n.contentType === 'vespera').length || null,
+  }
 
   return (
     <div className="pb-10">
@@ -54,7 +69,14 @@ const Dashboard = () => {
                 <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-cp-border bg-cp-surface text-cp-accent transition group-hover:border-cp-accent/30 group-hover:shadow-cp-glow">
                   <Icon className="h-5 w-5" />
                 </div>
-                <h3 className="text-sm font-medium text-cp-text">{link.title}</h3>
+                <h3 className="text-sm font-medium text-cp-text flex items-center gap-2">
+                  {link.title}
+                  {cardBadges[link.to] ? (
+                    <span className="rounded-full bg-cp-accent px-2 py-0.5 text-[10px] font-bold text-cp-bg">
+                      {cardBadges[link.to]}
+                    </span>
+                  ) : null}
+                </h3>
                 <p className="mt-1 text-xs text-cp-muted">{link.desc}</p>
                 <ArrowRightOutline className="mt-3 h-4 w-4 text-cp-accent transition group-hover:translate-x-1" />
               </Link>

@@ -350,14 +350,84 @@ async function processDigitacaoItem(courseId, payload, updateJob, userId, jobId)
   }
 }
 
+async function resolveFlagFeedback(courseId, flagId) {
+  if (!flagId) return
+  await getDb()
+    .doc(`courses/${courseId}/contentFeedback/${flagId}`)
+    .set(
+      {
+        status: 'resolved',
+        resolvedBy: 'professor_supervisor',
+        resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    )
+}
+
+async function loadFlaggedContentBlock(courseId, payload = {}) {
+  const db = getDb()
+  const { contentType, contentId, topicKey } = payload
+  const { sanitizeTopicKeyForFirestore } = require('./topicKeyUtils')
+
+  if (contentType === 'flashcard') {
+    const cardId = String(contentId || '').replace(/^[^_]+_fc_/, '')
+    const snap = await db.doc(`courses/${courseId}/flashcards/${cardId}`).get()
+    if (snap.exists) {
+      const c = snap.data()
+      return `FLASHCARD COMPLETO:\n${JSON.stringify(
+        {
+          id: snap.id,
+          frente: c.frente || c.pergunta,
+          verso: c.verso || c.resposta,
+        },
+        null,
+        2,
+      )}`
+    }
+  }
+
+  if (contentType === 'material' || contentType === 'materia') {
+    const docId = sanitizeTopicKeyForFirestore(topicKey || contentId)
+    const snap = await db.doc(`courses/${courseId}/conteudosCompletos/${docId}`).get()
+    if (snap.exists) {
+      return `MATERIAL COMPLETO:\n${JSON.stringify(snap.data(), null, 2).slice(0, 28000)}`
+    }
+  }
+
+  if (contentType === 'questao') {
+    const packsSnap = await db.collection(`courses/${courseId}/questoesTopico`).get()
+    for (const packDoc of packsSnap.docs) {
+      const pack = packDoc.data()
+      const questoes = pack.questoes || []
+      const idx = questoes.findIndex((q, i) => {
+        const id = `${packDoc.id}_q${i}`
+        return contentId?.includes(id) || contentId === id
+      })
+      if (idx >= 0) {
+        return `QUESTÃO COMPLETA (pack ${packDoc.id}, índice ${idx}):\n${JSON.stringify(questoes[idx], null, 2)}`
+      }
+    }
+  }
+
+  return ''
+}
+
 async function processFlagItem(courseId, payload, updateJob, userId, jobId) {
-  const contextBlock = `TIPO: conteúdo sinalizado por aluno
+  const contentBlock = await loadFlaggedContentBlock(courseId, payload)
+  const contextBlock = `TIPO: conteúdo sinalizado por aluno — corrija APENAS o trecho errado apontado no relato
 CURSO: ${courseId}
 TIPO CONTEÚDO: ${payload.contentType}
 ID: ${payload.contentId}
 TÓPICO: ${payload.topicKey || '—'}
 PREVIEW: ${payload.preview || ''}
-RELATO DO ALUNO: ${payload.reportText || ''}`
+RELATO DO ALUNO: ${payload.reportText || ''}
+
+${contentBlock ? `CONTEÚDO INTEGRAL:\n${contentBlock}` : ''}
+
+INSTRUÇÕES:
+- Corrija somente o que está errado conforme o relato — não reescreva o material inteiro
+- Não use digitação automática nem revisão ortográfica em massa
+- Aplique correções pontuais nos campos indicados (target + refId + field + newText)`
 
   const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
   const final = chain.final
@@ -370,18 +440,6 @@ RELATO DO ALUNO: ${payload.reportText || ''}`
   )
   const diffSummary = buildDiffSummary(patches, final.corrections || [])
 
-  const reviewId = await saveAdminReview({
-    courseId,
-    itemType: 'flag',
-    payload,
-    dedupeKey,
-    verdict: final,
-    professorsUsed: chain.professorsUsed,
-    patches,
-    diffSummary,
-    appliedCount: applied,
-  })
-
   await saveHistory({
     courseId,
     itemType: 'flag',
@@ -390,11 +448,21 @@ RELATO DO ALUNO: ${payload.reportText || ''}`
     verdict: final,
     professorsUsed: chain.professorsUsed,
     appliedCount: applied,
-    reviewId,
+    reviewId: null,
     autoApplied: true,
+    skipModeration: true,
   })
 
-  return { summary: final.summary, applied, needsAdmin: true, reviewId, professorsUsed: chain.professorsUsed }
+  await resolveFlagFeedback(courseId, payload.flagId)
+
+  return {
+    summary: final.summary,
+    applied,
+    needsAdmin: false,
+    reviewId: null,
+    professorsUsed: chain.professorsUsed,
+    flagResolved: true,
+  }
 }
 
 async function processVesperaItem(courseId, updateJob, userId, jobId) {
@@ -481,7 +549,7 @@ STATUS: ${config.status || 'indisponivel'}
 PROBLEMAS SCRIPT: ${JSON.stringify(script.issues)}`
 
   if (payload.rotateTheme) {
-    contextBlock += `\nTAREFA EXTRA: Se o tema estiver desatualizado ou fraco, proponha novo tema de redação para concurso (campo corrections target redacao).`
+    contextBlock += `\nTAREFA OBRIGATÓRIA: Proponha um NOVO tema de redação para concurso (corrections target redacao, field tema). O tema deve ser diferente do atual.`
   }
 
   const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
@@ -493,32 +561,47 @@ PROBLEMAS SCRIPT: ${JSON.stringify(script.issues)}`
     payload,
     final.corrections || [],
   )
-  const diffSummary = buildDiffSummary(patches, final.corrections || [])
-  const reviewId = await saveAdminReview({
-    courseId,
-    itemType: 'redacao',
-    payload,
-    dedupeKey,
-    scriptIssues: script.issues,
-    verdict: final,
-    professorsUsed: chain.professorsUsed,
-    patches,
-    diffSummary,
-    appliedCount: applied,
-  })
+
+  const ts = admin.firestore.FieldValue.serverTimestamp()
+  if (payload.rotateTheme && applied === 0 && final.suggestedTema) {
+    await getDb().doc(`courses/${courseId}/config/redacao`).set(
+      {
+        tema: final.suggestedTema,
+        status: 'disponivel',
+        supervisorReviewed: true,
+        updatedAt: ts,
+        rotatedAt: ts,
+      },
+      { merge: true },
+    )
+  } else if (payload.rotateTheme) {
+    await getDb().doc(`courses/${courseId}/config/redacao`).set(
+      { status: 'disponivel', supervisorReviewed: true, updatedAt: ts, rotatedAt: ts },
+      { merge: true },
+    )
+  }
 
   await saveHistory({
     courseId,
     itemType: 'redacao',
     dedupeKey,
+    payload,
     verdict: final,
     professorsUsed: chain.professorsUsed,
     appliedCount: applied,
-    reviewId,
+    reviewId: null,
     autoApplied: true,
+    skipModeration: true,
   })
 
-  return { summary: final.summary, applied, needsAdmin: true, reviewId, professorsUsed: chain.professorsUsed }
+  return {
+    summary: final.summary,
+    applied,
+    needsAdmin: false,
+    reviewId: null,
+    professorsUsed: chain.professorsUsed,
+    themePublished: Boolean(payload.rotateTheme),
+  }
 }
 
 async function processProfessorSupervisor(userId, jobId, courseId, serverPayload, updateJob) {
@@ -575,7 +658,7 @@ async function processProfessorSupervisor(userId, jobId, courseId, serverPayload
   try {
     switch (itemType) {
       case 'topico_digitacao':
-        outcome = await processDigitacaoItem(courseId, payload, syncJob, userId, jobId)
+        outcome = { skipped: true, reason: 'digitacao_disabled', summary: 'Digitação desativada — apenas sinalizações.' }
         break
       case 'topico':
       case 'topico_flashcards':
@@ -606,9 +689,11 @@ async function processProfessorSupervisor(userId, jobId, courseId, serverPayload
       ? outcome.digitacaoOnly || outcome.reason === 'digitacao_ok'
         ? outcome.summary || 'Digitação OK'
         : `Checagem OK — ${outcome.reason || 'sem IA'}`
-      : outcome.digitacaoOnly
-        ? `Digitação corrigida — aguardando moderação (${outcome.applied || 0} campo(s))`
-        : `Correções aplicadas — aguardando moderação (${outcome.applied || 0} alteração(ões), ${outcome.professorsUsed} professor(es))`
+      : itemType === 'flag'
+        ? `Correção aplicada automaticamente (${outcome.applied || 0} alteração(ões))`
+        : outcome.digitacaoOnly
+          ? `Digitação corrigida — aguardando moderação (${outcome.applied || 0} campo(s))`
+          : `Correções aplicadas — aguardando moderação (${outcome.applied || 0} alteração(ões), ${outcome.professorsUsed} professor(es))`
 
     await syncJob(userId, jobId, {
       status: 'done',

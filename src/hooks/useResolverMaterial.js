@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
+import { collection, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
-import { CONTENT_STATUS } from '../utils/contentStatus'
 import { buildTopicoPublishMapFromSnapshot } from '../services/topicoPublishService'
 import {
   buildOrganizedMaterialFromEdital,
@@ -53,21 +52,18 @@ export function useResolverMaterial(courseId, user, profile) {
 
     setLoadingMaterial(true)
     const ref = collection(db, 'courses', resolvedId, 'conteudosCompletos')
-    const materialQuery = isAdmin
-      ? ref
-      : query(ref, where('status', '==', CONTENT_STATUS.AVAILABLE))
 
     return onSnapshot(
-      materialQuery,
+      ref,
       (snap) => {
         setMaterialDocs(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
         setLoadingMaterial(false)
       },
       () => setLoadingMaterial(false),
     )
-  }, [resolvedId, user, profile, isAdmin])
+  }, [resolvedId, user, profile])
 
-  const allItems = useMemo(() => {
+  const accessibleItems = useMemo(() => {
     if (!profile) return []
 
     return materialDocs
@@ -86,6 +82,8 @@ export function useResolverMaterial(courseId, user, profile) {
       })
       .filter(Boolean)
   }, [materialDocs, edital, publishMap, profile, isAdmin, resolvedId])
+
+  const allItems = accessibleItems
 
   const organized = useMemo(() => {
     const fromEdital = filterOrganizedMaterialWithContent(

@@ -1,5 +1,5 @@
 const admin = require('firebase-admin')
-const { getTodayKeyInSaoPaulo } = require('./guiaMentoradoShared')
+const { getTodayKeyInSaoPaulo, collectDayKeysUpToToday } = require('./guiaMentoradoShared')
 const { prepareDayAutomation } = require('./guiaMentoradoDaily')
 const { processGuiaMentoradoAutomation } = require('./guiaMentoradoAutomation')
 const {
@@ -14,29 +14,11 @@ function getDb() {
   return admin.firestore()
 }
 
-async function collectDayKeysUpToToday(courseId) {
-  const todayKey = getTodayKeyInSaoPaulo()
-  const cronogramaSnap = await getDb().collection(`courses/${courseId}/cronograma`).get()
-  const dayKeys = []
-
-  for (const monthDoc of cronogramaSnap.docs) {
-    const days = monthDoc.data().days || {}
-    for (const [dateKey, entry] of Object.entries(days)) {
-      if (dateKey > todayKey) continue
-      const tipo = entry.type || entry.tipo || 'estudo'
-      if (tipo === 'simulado' || tipo === 'descanso') continue
-      dayKeys.push(dateKey)
-    }
-  }
-
-  return [...new Set(dayKeys)].sort()
-}
-
 async function processGuiaMentoradoBackfill(userId, jobId, courseId, serverPayload, updateJob) {
   const jobStartedAt = Date.now()
   const dayKeys = serverPayload?.dayKeys?.length
     ? serverPayload.dayKeys
-    : await collectDayKeysUpToToday(courseId)
+    : await collectDayKeysUpToToday(courseId, getDb)
 
   if (!dayKeys.length) {
     throw new Error('Nenhum dia de estudo encontrado no cronograma até hoje.')
@@ -170,6 +152,5 @@ async function processGuiaMentoradoBackfill(userId, jobId, courseId, serverPaylo
 }
 
 module.exports = {
-  collectDayKeysUpToToday,
   processGuiaMentoradoBackfill,
 }

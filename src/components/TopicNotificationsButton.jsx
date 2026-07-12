@@ -51,7 +51,7 @@ const TopicNotificationsButton = memo(() => {
       {open && (
         <div className="absolute right-0 top-full z-[80] mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-cp-border bg-cp-bg shadow-2xl">
           <div className="flex items-center justify-between border-b border-cp-border px-4 py-3">
-            <p className="text-sm font-semibold text-cp-text">Tópicos liberados</p>
+            <p className="text-sm font-semibold text-cp-text">Conteúdos liberados</p>
             {notifications.length > 0 && (
               <button
                 type="button"
@@ -72,7 +72,7 @@ const TopicNotificationsButton = memo(() => {
               notifications.map((n) => (
                 <Link
                   key={n.id}
-                  href="/edital-verticalizado"
+                  href={n.linkPath || '/edital-verticalizado'}
                   onClick={() => {
                     markRead(n.id)
                     setOpen(false)

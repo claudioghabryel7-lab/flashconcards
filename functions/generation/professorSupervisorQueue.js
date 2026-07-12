@@ -326,10 +326,25 @@ async function buildQueueItems() {
     message: 'Montando fila de sinalizações…',
   })
 
+  const isMondaySP =
+    new Date().toLocaleDateString('en-US', { timeZone: 'America/Sao_Paulo', weekday: 'short' }) ===
+    'Mon'
+
   const coursesSnap = await db.collection('courses').where('active', '!=', false).limit(40).get()
 
   for (const courseDoc of coursesSnap.docs) {
     const courseId = courseDoc.id
+
+    if (isMondaySP) {
+      const todayKey = getTodayKeyInSaoPaulo()
+      const redacaoId = await enqueueItem({
+        courseId,
+        itemType: 'redacao',
+        priority: 90,
+        payload: { rotateTheme: true, targetDate: todayKey, source: 'monday_cron' },
+      })
+      if (redacaoId) added += 1
+    }
 
     const flagsSnap = await db
       .collection(`courses/${courseId}/contentFeedback`)

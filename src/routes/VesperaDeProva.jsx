@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
@@ -27,6 +27,7 @@ const VesperaDeProva = () => {
   const [courseName, setCourseName] = useState('')
   const [loading, setLoading] = useState(true)
   const [generatedMaterial, setGeneratedMaterial] = useState(null)
+  const [releasedIndices, setReleasedIndices] = useState(null)
   const [shareToken, setShareToken] = useState(null)
   const [shareExpiry, setShareExpiry] = useState(null)
   
@@ -56,54 +57,70 @@ const VesperaDeProva = () => {
     setCourseId(finalCourseId)
   }, [searchParams, profile])
   
-  // Carregar nome do curso e edital verticalizado
+  // Carregar nome do curso
   useEffect(() => {
     if (!courseId) return
-    
-    const loadCourseData = async () => {
-      try {
-        setLoading(true)
-        
-        // Carregar nome do curso
-        const courseDoc = await getDoc(doc(db, 'courses', courseId))
+
+    getDoc(doc(db, 'courses', courseId))
+      .then((courseDoc) => {
         if (courseDoc.exists()) {
           const data = courseDoc.data()
           setCourseName(data.name || data.competition || '')
         }
-        
-        // Verificar se há material gerado
-        const materialRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'material')
-        const materialSnapshot = await getDoc(materialRef)
-        
-        if (materialSnapshot.exists()) {
-          const materialData = materialSnapshot.data()
-          setGeneratedMaterial(materialData)
-          
-          // Carregar progresso do usuário
-          if (user) {
-            const progressRef = doc(db, 'userVesperaProgress', user.uid, 'courses', courseId)
-            const progressSnapshot = await getDoc(progressRef)
-            if (progressSnapshot.exists()) {
-              setProgresso(progressSnapshot.data().progress || {})
-            }
-          }
-        }
-        
-        // Verificar se é link compartilhado
-        const sharedToken = searchParams.get('token')
-        if (sharedToken) {
-          await loadSharedMaterial(sharedToken)
-        }
-        
-      } catch (error) {
-        console.error('Erro ao carregar dados:', error)
-      } finally {
+      })
+      .catch((error) => console.error('Erro ao carregar curso:', error))
+  }, [courseId])
+
+  // Material e liberação em tempo real
+  useEffect(() => {
+    if (!courseId) return () => {}
+
+    setLoading(true)
+
+    const materialRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'material')
+    const releaseRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'releaseState')
+
+    const unsubMaterial = onSnapshot(
+      materialRef,
+      (snap) => {
+        setGeneratedMaterial(snap.exists() ? snap.data() : null)
         setLoading(false)
+      },
+      () => setLoading(false),
+    )
+
+    const unsubRelease = onSnapshot(releaseRef, (snap) => {
+      if (snap.exists()) {
+        setReleasedIndices(snap.data().releasedIndices || [])
+        return
       }
+      if (isAdmin) {
+        setReleasedIndices(null)
+      } else {
+        setReleasedIndices([])
+      }
+    })
+
+    const sharedToken = searchParams.get('token')
+    if (sharedToken) {
+      loadSharedMaterial(sharedToken)
     }
-    
-    loadCourseData()
-  }, [courseId, user, searchParams])
+
+    return () => {
+      unsubMaterial()
+      unsubRelease()
+    }
+  }, [courseId, isAdmin, searchParams])
+
+  // Progresso do aluno
+  useEffect(() => {
+    if (!courseId || !user) return () => {}
+
+    const progressRef = doc(db, 'userVesperaProgress', user.uid, 'courses', courseId)
+    return onSnapshot(progressRef, (snap) => {
+      setProgresso(snap.exists() ? snap.data().progress || {} : {})
+    })
+  }, [courseId, user])
   
   // Carregar material compartilhado
   const loadSharedMaterial = async (token) => {
@@ -284,7 +301,15 @@ const VesperaDeProva = () => {
       {/* Material gerado - Visualização */}
       {generatedMaterial && (
         <div className="space-y-8">
-          {generatedMaterial.material.map((disciplina, idx) => (
+          {generatedMaterial.material
+            .map((disciplina, idx) => ({ disciplina, idx }))
+            .filter(({ idx }) => {
+              if (isAdmin) return true
+              if (releasedIndices === null) return true
+              if (!releasedIndices?.length) return false
+              return releasedIndices.includes(idx)
+            })
+            .map(({ disciplina, idx }) => (
             <div
               key={idx}
               className="bg-background-card rounded-2xl border border-border-primary overflow-hidden"

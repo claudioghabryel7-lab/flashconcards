@@ -222,7 +222,13 @@ export async function setTopicoPublishStatus(
   // Registro central (UI do edital)
   operations.push({
     ref: doc(db, 'courses', resolvedId, 'topicoStatus', sanitizedKey),
-    data: { topicKey: normalizedTopicKey, status, disciplinaNome, updatedAt: now },
+    data: {
+      topicKey: normalizedTopicKey,
+      status,
+      disciplinaNome,
+      releasedAssets: { flashcards: true, material: true, questoes: true },
+      updatedAt: now,
+    },
   })
 
   await commitBatches(operations)

@@ -47,7 +47,7 @@ const GuiaMentorado = () => {
   const [message, setMessage] = useState('')
   const dailyReleaseLabel =
     MENTORADO_DAILY_RELEASE_HOUR === 0 ? '00:00 (meia-noite)' : `${MENTORADO_DAILY_RELEASE_HOUR}h`
-  const todayKey = dayjs().format('YYYY-MM-DD')
+  const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
   // Carregar cursos (apenas relevantes para o usuário)
   useEffect(() => {
     const loadCourses = async () => {

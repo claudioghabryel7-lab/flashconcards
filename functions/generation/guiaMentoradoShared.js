@@ -58,6 +58,24 @@ function isUsingDefaultPlanningWindow(config = {}) {
   return prova <= today
 }
 
+async function collectDayKeysUpToToday(courseId, getDb) {
+  const todayKey = getTodayKeyInSaoPaulo()
+  const cronogramaSnap = await getDb().collection(`courses/${courseId}/cronograma`).get()
+  const dayKeys = []
+
+  for (const monthDoc of cronogramaSnap.docs) {
+    const days = monthDoc.data().days || {}
+    for (const [dateKey, entry] of Object.entries(days)) {
+      if (dateKey > todayKey) continue
+      const tipo = entry.type || entry.tipo || 'estudo'
+      if (tipo === 'simulado' || tipo === 'descanso') continue
+      dayKeys.push(dateKey)
+    }
+  }
+
+  return [...new Set(dayKeys)].sort()
+}
+
 function buildMentoradoCronogramaPrompt({
   todayKey,
   planningEndKey,
@@ -141,6 +159,7 @@ module.exports = {
   formatDailyStartLabel,
   resolvePlanningEndDate,
   isUsingDefaultPlanningWindow,
+  collectDayKeysUpToToday,
   buildMentoradoCronogramaPrompt,
   parseDateKey,
 }

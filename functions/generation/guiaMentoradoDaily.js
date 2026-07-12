@@ -1,5 +1,5 @@
 const admin = require('firebase-admin')
-const { getTodayKeyInSaoPaulo } = require('./guiaMentoradoShared')
+const { getTodayKeyInSaoPaulo, collectDayKeysUpToToday } = require('./guiaMentoradoShared')
 const {
   loadEditalVerticalizado,
   loadMentoradoAutomationContext,
@@ -135,7 +135,27 @@ async function spawnDayAutomationJob(userId, courseId, targetDate, topicPayloads
   return ref.id
 }
 
+async function hasActiveAutomationJob(courseId, targetDate) {
+  const configSnap = await getDb().doc(`courses/${courseId}/config/guiaMentorado`).get()
+  const userId = configSnap.exists ? configSnap.data().automationUserId : null
+  if (!userId) return false
+
+  const jobsSnap = await getDb()
+    .collection(`users/${userId}/generationJobs`)
+    .where('courseId', '==', courseId)
+    .where('jobType', '==', 'guia_mentorado_automation')
+    .where('status', 'in', ['pending', 'running', 'waiting_api', 'waiting_timeout', 'waiting_retry'])
+    .limit(20)
+    .get()
+
+  return jobsSnap.docs.some((d) => d.data()?.serverPayload?.targetDate === targetDate)
+}
+
 async function startDayAutomation(courseId, targetDate, userId, options = {}) {
+  if (await hasActiveAutomationJob(courseId, targetDate)) {
+    return { started: false, reason: `Já existe job ativo para o dia ${targetDate}.`, duplicate: true }
+  }
+
   const prepared = await prepareDayAutomation(courseId, targetDate)
   if (!prepared.ok) {
     if (prepared.reason && !prepared.allDone) {
@@ -195,9 +215,27 @@ async function runDailyMentoradoAutomationForAllCourses() {
       if (!configSnap.exists || !configSnap.data().autoGerarConteudo) continue
 
       const userId = configSnap.data().automationUserId || null
-      const result = await startDayAutomation(courseId, todayKey, userId)
-      results.push({ courseId, ...result })
-      console.log(`[mentoradoDaily] ${courseId}:`, result)
+      const dayKeys = await collectDayKeysUpToToday(courseId, getDb)
+      let started = false
+
+      for (const dayKey of dayKeys) {
+        const prepared = await prepareDayAutomation(courseId, dayKey)
+        if (!prepared.ok) continue
+
+        const result = await startDayAutomation(courseId, dayKey, userId)
+        results.push({ courseId, dayKey, ...result })
+        console.log(`[mentoradoDaily] ${courseId} ${dayKey}:`, result)
+        if (result.started) {
+          started = true
+          break
+        }
+      }
+
+      if (!started) {
+        const todayResult = await startDayAutomation(courseId, todayKey, userId)
+        results.push({ courseId, dayKey: todayKey, ...todayResult })
+        console.log(`[mentoradoDaily] ${courseId} hoje:`, todayResult)
+      }
     } catch (err) {
       console.error(`[mentoradoDaily] erro em ${courseId}:`, err)
       results.push({ courseId, error: err.message })
