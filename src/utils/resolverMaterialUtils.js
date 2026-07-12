@@ -14,21 +14,24 @@ export function isMaterialAccessible({
   isAdmin,
 }) {
   if (isAdmin) return true
+  if (!profile) return false
+
+  // Igual aos flashcards: liberado no documento = aluno vê
+  const docPublished =
+    doc?.status === CONTENT_STATUS.AVAILABLE || doc?.status === 'disponivel'
+  if (docPublished) return true
+
   if (!topicKey) return false
 
   const publishStatus = resolveTopicPublishStatus(publishMap, topicKey)
-  const topicoPublished = isTopicPublished(publishStatus)
-  const docPublished =
-    doc?.status === CONTENT_STATUS.AVAILABLE || doc?.status === 'disponivel'
-
-  if (!topicoPublished && !docPublished) return false
+  if (!isTopicPublished(publishStatus)) return false
 
   return canAccessTopicoContent({
     profile,
     courseId,
     topicKey,
     edital,
-    publishStatus: topicoPublished ? publishStatus : CONTENT_STATUS.AVAILABLE,
+    publishStatus,
   })
 }
 

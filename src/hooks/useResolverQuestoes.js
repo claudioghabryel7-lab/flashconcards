@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, doc, onSnapshot } from 'firebase/firestore'
+import { collection, doc, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
-import { isContentAvailable } from '../utils/contentStatus'
+import { CONTENT_STATUS, isContentAvailable } from '../utils/contentStatus'
 import { hasPurchasedCourse } from '../utils/courseAccess'
 import { buildTopicoPublishMapFromSnapshot } from '../services/topicoPublishService'
 import {
@@ -86,24 +86,41 @@ export function useResolverQuestoes(courseId, user, profile) {
     const topicoRef = collection(db, 'courses', resolvedId, 'questoesTopico')
     const incRef = collection(db, 'courses', resolvedId, 'questoesIncidencia')
 
+    // Mesma lógica dos flashcards: aluno só lista status == disponivel (exigência das rules)
+    const topicoQuery = isAdmin
+      ? topicoRef
+      : query(topicoRef, where('status', '==', CONTENT_STATUS.AVAILABLE))
+    const incQuery = isAdmin
+      ? incRef
+      : query(incRef, where('status', '==', CONTENT_STATUS.AVAILABLE))
+
     const unsubTopico = onSnapshot(
-      topicoRef,
+      topicoQuery,
       (snap) => {
         setTopicoPacks(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
         setLoadingQuestoes(false)
       },
-      () => setLoadingQuestoes(false),
+      (err) => {
+        console.error('Erro ao carregar questões do tópico:', err)
+        setLoadingQuestoes(false)
+      },
     )
 
-    const unsubInc = onSnapshot(incRef, (snap) => {
-      setIncidenciaPacks(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    })
+    const unsubInc = onSnapshot(
+      incQuery,
+      (snap) => {
+        setIncidenciaPacks(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      },
+      (err) => {
+        console.error('Erro ao carregar questões de incidência:', err)
+      },
+    )
 
     return () => {
       unsubTopico()
       unsubInc()
     }
-  }, [resolvedId, user, profile])
+  }, [resolvedId, user, profile, isAdmin])
 
   useEffect(() => {
     if (!user?.uid) {

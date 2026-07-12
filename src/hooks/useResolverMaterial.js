@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, onSnapshot } from 'firebase/firestore'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
+import { CONTENT_STATUS } from '../utils/contentStatus'
 import { buildTopicoPublishMapFromSnapshot } from '../services/topicoPublishService'
 import {
   buildOrganizedMaterialFromEdital,
@@ -52,16 +53,23 @@ export function useResolverMaterial(courseId, user, profile) {
 
     setLoadingMaterial(true)
     const ref = collection(db, 'courses', resolvedId, 'conteudosCompletos')
+    // Mesma lógica dos flashcards: aluno só lista status == disponivel (exigência das rules)
+    const materialQuery = isAdmin
+      ? ref
+      : query(ref, where('status', '==', CONTENT_STATUS.AVAILABLE))
 
     return onSnapshot(
-      ref,
+      materialQuery,
       (snap) => {
         setMaterialDocs(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
         setLoadingMaterial(false)
       },
-      () => setLoadingMaterial(false),
+      (err) => {
+        console.error('Erro ao carregar materiais:', err)
+        setLoadingMaterial(false)
+      },
     )
-  }, [resolvedId, user, profile])
+  }, [resolvedId, user, profile, isAdmin])
 
   const accessibleItems = useMemo(() => {
     if (!profile) return []
