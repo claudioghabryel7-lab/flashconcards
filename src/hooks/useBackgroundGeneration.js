@@ -36,16 +36,21 @@ export function useBackgroundGeneration() {
   useEffect(() => {
     if (!user?.uid || !jobs.length) return () => {}
 
-    const nudgeInterval = setInterval(() => {
-      const now = Date.now()
+    const nudgeEligible = (now) => {
       jobs.forEach((job) => {
         if (!shouldNudgeJob(job, now)) return
         const last = lastNudgeRef.current[job.id] || 0
         if (now - last < STALL_NUDGE_MS) return
         lastNudgeRef.current[job.id] = now
-        nudgeGenerationJobResume(user.uid, job.id).catch(() => {})
+        nudgeGenerationJobResume(user.uid, job.id).catch((err) => {
+          console.warn('[nudgeGenerationJobResume]', job.id, err?.message || err)
+        })
       })
-    }, STALL_NUDGE_MS)
+    }
+
+    nudgeEligible(Date.now())
+
+    const nudgeInterval = setInterval(() => nudgeEligible(Date.now()), STALL_NUDGE_MS)
 
     return () => clearInterval(nudgeInterval)
   }, [user?.uid, jobs])

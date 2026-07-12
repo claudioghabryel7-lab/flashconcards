@@ -1354,7 +1354,7 @@ exports.mentoradoDailyContentRelease = functions.pubsub
     return null
   })
 
-/** Retoma jobs pausados por API expirada (a cada 1 min). */
+/** Retoma jobs pausados — backup a cada 1 min (retomada principal: fila + nudge). */
 exports.resumeWaitingGenerationJobs = functions.pubsub
   .schedule('every 1 minutes')
   .timeZone('America/Sao_Paulo')
@@ -1363,6 +1363,29 @@ exports.resumeWaitingGenerationJobs = functions.pubsub
     const result = await resumeWaitingGenerationJobs()
     if (result.resumed > 0 || result.waiting > 0 || result.stalled > 0) {
       console.log('[resumeWaitingGenerationJobs]', result)
+    }
+    return null
+  })
+
+/** Agenda retomada ~15s após pausa (funciona mesmo com aba fechada). */
+exports.onGenerationResumeQueueWrite = functions
+  .runWith({ timeoutSeconds: 120, memory: '512MB' })
+  .firestore.document('generationResumeQueue/{jobId}')
+  .onWrite(async (change) => {
+    if (!change.after.exists) return null
+
+    const data = change.after.data() || {}
+    const nextMs = data.nextRetryAt?.toMillis?.() || Date.now()
+    const waitMs = Math.min(Math.max(0, nextMs - Date.now()), 90 * 1000)
+
+    if (waitMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs))
+    }
+
+    const { resumeWaitingGenerationJobs } = getResumeModule()
+    const result = await resumeWaitingGenerationJobs()
+    if (result.resumed > 0) {
+      console.log('[onGenerationResumeQueueWrite] retomado:', result)
     }
     return null
   })

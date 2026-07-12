@@ -21,15 +21,20 @@ async function pruneStaleActiveJobs() {
 
     const { userId, jobId } = data
     if (userId && jobId) {
-      const jobSnap = await db.doc(`users/${userId}/generationJobs/${jobId}`).get()
-      if (jobSnap.exists) {
-        const status = jobSnap.data().status
-        if (['done', 'error', 'cancelled'].includes(status)) {
-          await doc.ref.delete().catch(() => {})
-          pruned += 1
-          continue
-        }
+    const jobSnap = await db.doc(`users/${userId}/generationJobs/${jobId}`).get()
+    if (jobSnap.exists) {
+      const status = jobSnap.data().status
+      if (['done', 'error', 'cancelled'].includes(status)) {
+        await doc.ref.delete().catch(() => {})
+        pruned += 1
+        continue
       }
+      if (['waiting_api', 'waiting_retry', 'waiting_timeout'].includes(status)) {
+        await doc.ref.delete().catch(() => {})
+        pruned += 1
+        continue
+      }
+    }
     }
 
     if (!heartbeat || heartbeat.getTime() <= cutoff) {
@@ -43,8 +48,28 @@ async function pruneStaleActiveJobs() {
 
 async function countActiveServerJobs() {
   await pruneStaleActiveJobs()
-  const snap = await getDb().collection('generationActiveJobs').get()
-  return snap.size
+  const db = getDb()
+  const snap = await db.collection('generationActiveJobs').get()
+  let count = 0
+
+  for (const doc of snap.docs) {
+    const data = doc.data()
+    if (data.exempt) continue
+
+    const { userId, jobId } = data
+    if (!userId || !jobId) continue
+
+    const jobSnap = await db.doc(`users/${userId}/generationJobs/${jobId}`).get()
+    if (!jobSnap.exists) {
+      await doc.ref.delete().catch(() => {})
+      continue
+    }
+
+    const status = jobSnap.data().status
+    if (status === 'running') count += 1
+  }
+
+  return count
 }
 
 async function tryAcquireServerJobSlot(userId, jobId, jobType = '') {

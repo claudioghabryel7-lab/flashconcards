@@ -141,11 +141,8 @@ async function pauseJobForResume({
     createdAt: ts,
   })
 
-  if (jobType === 'professor_supervisor' || waitReason === 'concurrency') {
-    await clearActiveJob(jobId)
-  } else {
-    await touchActiveJob(userId, jobId, { status, waitReason })
-  }
+  // Jobs aguardando retomada não ocupam slot de concorrência.
+  await clearActiveJob(jobId)
 }
 
 async function pauseJobForApi(params) {
