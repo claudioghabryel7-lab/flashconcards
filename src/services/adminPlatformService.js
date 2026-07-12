@@ -157,10 +157,19 @@ export async function startMentoradoBackfillAllCourses(userId, onProgress) {
   const activeCourses = coursesSnap.docs.filter((d) => d.data().active !== false)
 
   const jobs = []
+  const MAX_PARALLEL_BACKFILL = 1
+  let started = 0
 
   for (const courseDoc of activeCourses) {
     const courseId = courseDoc.id
     const courseName = courseDoc.data().name || courseDoc.data().competition || courseId
+
+    if (started >= MAX_PARALLEL_BACKFILL) {
+      onProgress?.(
+        `⏸️ ${courseName}: só 1 backfill por vez — aguarde o atual terminar e rode de novo para os demais cursos.`,
+      )
+      continue
+    }
 
     const configSnap = await getDoc(doc(db, 'courses', courseId, 'config', 'guiaMentorado'))
     if (!configSnap.exists() || !configSnap.data().autoGerarConteudo) {
@@ -200,6 +209,7 @@ export async function startMentoradoBackfillAllCourses(userId, onProgress) {
     })
 
     jobs.push({ courseId, courseName, jobId, dayCount: dayKeys.length })
+    started += 1
   }
 
   if (!jobs.length) {

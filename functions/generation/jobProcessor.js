@@ -22,13 +22,16 @@ function getDb() {
 
 async function updateJob(userId, jobId, patch) {
   const ts = admin.firestore.FieldValue.serverTimestamp()
+  const { stripUndefinedDeep } = require('./generationJobResume')
   await getDb()
     .doc(`users/${userId}/generationJobs/${jobId}`)
-    .update({
-      ...patch,
-      updatedAt: ts,
-      progressUpdatedAt: ts,
-    })
+    .update(
+      stripUndefinedDeep({
+        ...patch,
+        updatedAt: ts,
+        progressUpdatedAt: ts,
+      }),
+    )
 }
 
 async function resolveTopicoPublishStatus(courseId, topicKey) {
@@ -429,10 +432,14 @@ async function processGenerationJob(userId, jobId, jobData) {
 
   const slot = await tryAcquireServerJobSlot(userId, jobId, jobData.jobType)
   if (!slot.acquired) {
-    if (slot.reason === 'limit') {
+    if (slot.reason === 'limit' || slot.reason === 'backfill_limit') {
+      const waitMessage =
+        slot.reason === 'backfill_limit'
+          ? 'Aguardando outro backfill terminar (1 por vez)…'
+          : `Aguardando vaga (${MAX_CONCURRENT_SERVER_JOBS} jobs simultâneos no máximo)…`
       await updateJob(userId, jobId, {
         status: 'waiting_timeout',
-        message: `Aguardando vaga (${MAX_CONCURRENT_SERVER_JOBS} jobs simultâneos no máximo)…`,
+        message: waitMessage,
       })
       await pauseJobForResume({
         userId,
@@ -447,11 +454,11 @@ async function processGenerationJob(userId, jobId, jobData) {
         topicLabel: jobData.resumeState?.topicLabel || '',
         updateJob: (uid, jid, patch) => updateJob(uid, jid, patch),
         status: 'waiting_timeout',
-        waitReason: 'concurrency',
-        message: `Aguardando vaga (${MAX_CONCURRENT_SERVER_JOBS} jobs simultâneos no máximo)…`,
+        waitReason: slot.reason === 'backfill_limit' ? 'backfill_serial' : 'concurrency',
+        message: waitMessage,
         retryDelayMs: CONCURRENCY_RETRY_MS,
       })
-      return { paused: true, reason: 'concurrency_limit' }
+      return { paused: true, reason: slot.reason }
     }
     return { skipped: true, reason: slot.reason || 'no_slot' }
   }

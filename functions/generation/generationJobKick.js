@@ -96,37 +96,36 @@ async function kickGenerationJob(userId, jobId) {
   return runServerGenerationJob(userId, jobId, data)
 }
 
-/** Varre jobs presos em pending e dispara processamento. */
+/** Varre jobs presos em pending via generationActiveJobs + fila de retomada. */
 async function processStuckPendingGenerationJobs() {
   const db = getDb()
-  const snap = await db
-    .collectionGroup('generationJobs')
-    .where('status', '==', 'pending')
-    .limit(30)
-    .get()
-
   const now = Date.now()
   let kicked = 0
+  const seen = new Set()
 
-  for (const doc of snap.docs) {
-    const data = doc.data()
-    if (!data.runOnServer) continue
+  const queueSnap = await db.collection('generationResumeQueue').limit(30).get()
+  for (const doc of queueSnap.docs) {
+    const data = doc.data() || {}
+    const { userId, jobId } = data
+    if (!userId || !jobId || seen.has(jobId)) continue
 
-    const createdMs = data.createdAt?.toMillis?.() || 0
+    const jobSnap = await db.doc(`users/${userId}/generationJobs/${jobId}`).get()
+    if (!jobSnap.exists || jobSnap.data().status !== 'pending') continue
+    if (!jobSnap.data().runOnServer) continue
+
+    const createdMs = jobSnap.data().createdAt?.toMillis?.() || 0
     if (createdMs && now - createdMs < PENDING_KICK_GRACE_MS) continue
 
-    const userId = parseUserIdFromJobPath(doc.ref.path)
-    if (!userId) continue
-
+    seen.add(jobId)
     try {
-      const result = await kickGenerationJob(userId, doc.id)
+      const result = await kickGenerationJob(userId, jobId)
       if (result.ok || result.paused) kicked += 1
     } catch (err) {
-      console.error(`[processStuckPending] ${doc.id}:`, err)
+      console.error(`[processStuckPending] ${jobId}:`, err)
     }
   }
 
-  return { kicked, scanned: snap.size }
+  return { kicked, scanned: seen.size }
 }
 
 module.exports = {

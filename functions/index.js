@@ -21,6 +21,11 @@ const { GoogleGenerativeAI } = require('@google/generative-ai')
 const axios = require('axios')
 
 admin.initializeApp()
+try {
+  admin.firestore().settings({ ignoreUndefinedProperties: true })
+} catch {
+  /* já configurado */
+}
 
 const {
   getResumeModule,
@@ -1354,9 +1359,15 @@ exports.onGenerationResumeQueueWrite = functions
       return null
     }
 
-    const result = await resumeSingleGenerationJob(jobId, data)
-    if (result.resumed) {
-      console.log('[onGenerationResumeQueueWrite] retomado:', jobId, result.jobType)
+    try {
+      const result = await resumeSingleGenerationJob(jobId, data)
+      if (result.resumed) {
+        console.log('[onGenerationResumeQueueWrite] retomado:', jobId, result.jobType)
+      } else if (result.reason && result.reason !== 'not_due') {
+        console.log('[onGenerationResumeQueueWrite]', jobId, result.reason)
+      }
+    } catch (err) {
+      console.error('[onGenerationResumeQueueWrite] erro', jobId, err)
     }
     return null
   })

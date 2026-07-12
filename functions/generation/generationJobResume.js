@@ -13,6 +13,20 @@ const CF_SAFE_MS = 7 * 60 * 1000
 
 const WAITING_STATUSES = ['waiting_api', 'waiting_retry', 'waiting_timeout']
 
+function stripUndefinedDeep(value) {
+  if (value === undefined) return undefined
+  if (value === null || typeof value !== 'object') return value
+  if (Array.isArray(value)) return value
+  if (typeof value.toDate === 'function') return value
+
+  const out = {}
+  for (const [k, v] of Object.entries(value)) {
+    if (v === undefined) continue
+    out[k] = stripUndefinedDeep(v)
+  }
+  return out
+}
+
 function getDb() {
   return admin.firestore()
 }
@@ -119,6 +133,14 @@ async function pauseJobForResume({
   }
 
   const finalMessage = message || defaultMessages[status] || defaultMessages.waiting_retry
+  const lastError = (() => {
+    const m = String(message || '')
+    const open = m.lastIndexOf('(')
+    const close = m.lastIndexOf(')')
+    if (open === -1 || close <= open) return null
+    const extracted = m.slice(open + 1, close).trim()
+    return extracted && !extracted.includes('tentativa') ? extracted : null
+  })()
 
   await updateJob(userId, jobId, {
     status,
@@ -126,24 +148,78 @@ async function pauseJobForResume({
     resumeState,
     waitReason,
     nextRetryAt: admin.firestore.Timestamp.fromDate(nextRetryAt),
+    ...(lastError ? { lastError } : {}),
   })
 
-  await getDb().doc(`generationResumeQueue/${jobId}`).set({
-    userId,
-    jobId,
-    courseId,
-    jobType,
-    serverPayload,
-    resumeState,
-    status,
-    waitReason,
-    nextRetryAt: admin.firestore.Timestamp.fromDate(nextRetryAt),
-    updatedAt: ts,
-    createdAt: ts,
-  })
+  await getDb().doc(`generationResumeQueue/${jobId}`).set(
+    stripUndefinedDeep({
+      userId,
+      jobId,
+      courseId,
+      jobType,
+      serverPayload: stripUndefinedDeep(serverPayload || {}),
+      resumeState,
+      status,
+      waitReason,
+      nextRetryAt: admin.firestore.Timestamp.fromDate(nextRetryAt),
+      updatedAt: ts,
+      createdAt: ts,
+    }),
+  )
 
   // Jobs aguardando retomada não ocupam slot de concorrência.
   await clearActiveJob(jobId)
+}
+
+async function touchJobHeartbeat(userId, jobId, patch = {}) {
+  const ts = admin.firestore.FieldValue.serverTimestamp()
+  await getDb()
+    .doc(`users/${userId}/generationJobs/${jobId}`)
+    .update({
+      ...patch,
+      updatedAt: ts,
+      progressUpdatedAt: ts,
+    })
+}
+
+async function touchWaitingJobOnNudge(userId, jobId, jobData) {
+  const attempt = Math.max(0, Number(jobData.nudgeAttempt) || 0) + 1
+  const lastError = jobData.lastError || null
+  const topicLabel = jobData.resumeState?.topicLabel || ''
+
+  let message = 'Retomando automaticamente…'
+  if (jobData.status === 'waiting_api') {
+    message = topicLabel
+      ? `API indisponível — tentativa ${attempt} (${topicLabel})`
+      : `API indisponível — tentativa ${attempt}, verificando a cada 5s…`
+  } else if (jobData.status === 'waiting_timeout') {
+    message = topicLabel
+      ? `Pausado (servidor) — tentativa ${attempt} (${topicLabel})`
+      : `Pausado (servidor) — tentativa ${attempt}, retomando a cada 5s…`
+  } else if (lastError) {
+    message = `Erro temporário — tentativa ${attempt} a cada 5s… (${lastError})`
+  } else if (topicLabel) {
+    message = `Aguardando retomada — tentativa ${attempt} (${topicLabel})`
+  } else {
+    message = `Aguardando retomada — tentativa ${attempt} a cada 5s…`
+  }
+
+  await touchJobHeartbeat(userId, jobId, {
+    nudgeAttempt: attempt,
+    message,
+  })
+
+  await getDb()
+    .doc(`generationResumeQueue/${jobId}`)
+    .set(
+      {
+        nextRetryAt: admin.firestore.Timestamp.now(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    )
+
+  return { attempt, message }
 }
 
 async function pauseJobForApi(params) {
@@ -289,6 +365,76 @@ function isJobProgressStale(jobData, stallMs = STALL_PROGRESS_MS) {
   return Date.now() - ts.getTime() >= stallMs
 }
 
+function mergeResumeServerPayload(jobData = {}, queueData = {}, resumeFromTopicIndex = 0) {
+  const jobPayload = jobData.serverPayload || {}
+  const queuePayload = queueData.serverPayload || {}
+  const jobType = queueData.jobType || jobData.jobType || ''
+  const topics = queuePayload.topics?.length
+    ? queuePayload.topics
+    : jobPayload.topics?.length
+      ? jobPayload.topics
+      : null
+
+  const merged = {
+    ...jobPayload,
+    ...queuePayload,
+    courseId: queuePayload.courseId || jobPayload.courseId || jobData.courseId,
+    dayKeys: queuePayload.dayKeys || jobPayload.dayKeys,
+    resumeFromDayIndex:
+      queuePayload.resumeFromDayIndex ?? jobPayload.resumeFromDayIndex ?? 0,
+    resumeFromTopicIndex:
+      resumeFromTopicIndex ??
+      queuePayload.resumeFromTopicIndex ??
+      jobPayload.resumeFromTopicIndex ??
+      0,
+    targetDate: queuePayload.targetDate || jobPayload.targetDate || null,
+    autoPublish: queuePayload.autoPublish ?? jobPayload.autoPublish ?? true,
+  }
+
+  if (topics?.length) merged.topics = topics
+  // Backfill carrega tópicos do cronograma — nunca persistir topics vazio/undefined
+  if (jobType === 'guia_mentorado_backfill') {
+    delete merged.topics
+  }
+  return stripUndefinedDeep(merged)
+}
+
+async function ensureResumeQueueFromJob(userId, jobId, jobData) {
+  const resumeFromTopicIndex =
+    jobData.resumeState?.resumeFromTopicIndex ??
+    jobData.serverPayload?.resumeFromTopicIndex ??
+    0
+  const serverPayload = mergeResumeServerPayload(
+    jobData,
+    { serverPayload: jobData.serverPayload || {} },
+    resumeFromTopicIndex,
+  )
+  const ts = admin.firestore.FieldValue.serverTimestamp()
+
+  await getDb()
+    .doc(`generationResumeQueue/${jobId}`)
+    .set(
+      stripUndefinedDeep({
+        userId,
+        jobId,
+        courseId: jobData.courseId || null,
+        jobType: jobData.jobType,
+        serverPayload,
+        resumeState: jobData.resumeState || {
+          resumeFromTopicIndex,
+          targetDate: serverPayload.targetDate || null,
+          topicLabel: '',
+          waitReason: jobData.waitReason || 'retry',
+        },
+        status: jobData.status,
+        waitReason: jobData.waitReason || jobData.resumeState?.waitReason || 'retry',
+        nextRetryAt: admin.firestore.Timestamp.now(),
+        updatedAt: ts,
+      }),
+      { merge: true },
+    )
+}
+
 async function forceResumeJob(userId, jobId, jobData, { waitReason = 'nudge', message } = {}) {
   const resumeFromTopicIndex =
     jobData.resumeState?.resumeFromTopicIndex ??
@@ -356,18 +502,18 @@ async function nudgeStalledGenerationJob(userId, jobId) {
   }
 
   if (WAITING_STATUSES.includes(jobData.status)) {
-    await db.doc(`generationResumeQueue/${jobId}`).set(
-      {
-        nextRetryAt: admin.firestore.Timestamp.now(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    )
-    const result = await resumeSingleGenerationJob(jobId)
-    return { ok: true, reason: 'nudged_waiting', resumed: result.resumed ? 1 : 0 }
+    await ensureResumeQueueFromJob(userId, jobId, jobData)
+    await touchWaitingJobOnNudge(userId, jobId, jobData)
+    resumeSingleGenerationJob(jobId, null, userId).catch((err) => {
+      console.error(`[nudgeStalledGenerationJob] resume async ${jobId}:`, err)
+    })
+    return { ok: true, reason: 'nudge_scheduled', resumed: 0 }
   }
 
   if (jobData.status === 'pending') {
+    await touchJobHeartbeat(userId, jobId, {
+      message: 'Enviado ao servidor — aguardando início…',
+    })
     const { kickGenerationJob } = require('./generationJobKick')
     const result = await kickGenerationJob(userId, jobId)
     return { ok: true, reason: 'kicked_pending', ...result }
@@ -435,36 +581,42 @@ async function recoverStalledRunningJobs() {
   return recovered
 }
 
-function mergeResumeServerPayload(jobData = {}, queueData = {}, resumeFromTopicIndex = 0) {
-  const jobPayload = jobData.serverPayload || {}
-  const queuePayload = queueData.serverPayload || {}
-  return {
-    ...jobPayload,
-    ...queuePayload,
-    courseId: queuePayload.courseId || jobPayload.courseId || jobData.courseId,
-    dayKeys: queuePayload.dayKeys || jobPayload.dayKeys,
-    resumeFromDayIndex:
-      queuePayload.resumeFromDayIndex ?? jobPayload.resumeFromDayIndex ?? 0,
-    resumeFromTopicIndex:
-      resumeFromTopicIndex ??
-      queuePayload.resumeFromTopicIndex ??
-      jobPayload.resumeFromTopicIndex ??
-      0,
-    topics: queuePayload.topics?.length ? queuePayload.topics : jobPayload.topics,
-    targetDate: queuePayload.targetDate || jobPayload.targetDate || null,
-    autoPublish: queuePayload.autoPublish ?? jobPayload.autoPublish ?? true,
-  }
-}
-
-async function resumeSingleGenerationJob(jobId, queueData = null) {
+async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = null) {
   const db = getDb()
   const now = admin.firestore.Timestamp.now()
+
+  async function loadJobForUser(userId) {
+    const jobSnap = await db.doc(`users/${userId}/generationJobs/${jobId}`).get()
+    if (!jobSnap.exists) return null
+    return jobSnap.data()
+  }
 
   let data = queueData
   if (!data) {
     const queueSnap = await db.doc(`generationResumeQueue/${jobId}`).get()
-    if (!queueSnap.exists) return { resumed: false, reason: 'no_queue' }
-    data = queueSnap.data()
+    if (!queueSnap.exists) {
+      if (!hintUserId) return { resumed: false, reason: 'no_queue' }
+      const jobData = await loadJobForUser(hintUserId)
+      if (!jobData) return { resumed: false, reason: 'missing_job' }
+      if (!WAITING_STATUSES.includes(jobData.status)) {
+        return { resumed: false, reason: 'no_queue' }
+      }
+      await ensureResumeQueueFromJob(hintUserId, jobId, jobData)
+      data = (await db.doc(`generationResumeQueue/${jobId}`).get()).data()
+    } else {
+      data = queueSnap.data()
+    }
+  }
+
+  if (!data.userId || !data.jobType) {
+    const uid = hintUserId || data.userId
+    if (uid) {
+      const jobData = await loadJobForUser(uid)
+      if (jobData) {
+        await ensureResumeQueueFromJob(uid, jobId, jobData)
+        data = (await db.doc(`generationResumeQueue/${jobId}`).get()).data()
+      }
+    }
   }
 
   const nextRetry = data.nextRetryAt
@@ -514,13 +666,17 @@ async function resumeSingleGenerationJob(jobId, queueData = null) {
     0
 
   const serverPayload = mergeResumeServerPayload(jobData, data, resumeFromTopicIndex)
+  const ts = admin.firestore.FieldValue.serverTimestamp()
 
-  await jobRef.update({
-    status: 'running',
-    message: 'Retomando geração automaticamente…',
-    serverPayload,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
+  await jobRef.update(
+    stripUndefinedDeep({
+      status: 'running',
+      message: 'Retomando geração automaticamente…',
+      serverPayload,
+      updatedAt: ts,
+      progressUpdatedAt: ts,
+    }),
+  )
 
   await touchActiveJob(userId, jobId, { status: 'running', jobType: effectiveJobType })
 
@@ -558,19 +714,20 @@ async function resumeSingleGenerationJob(jobId, queueData = null) {
         resumeFromTopicIndex,
         topicLabel: jobData.resumeState?.topicLabel || '',
         updateJob: async (uid, jid, patch) => {
-          await db.doc(`users/${uid}/generationJobs/${jid}`).update({
-            ...patch,
-            serverPayload: patch.serverPayload || serverPayload,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          })
+          await db.doc(`users/${uid}/generationJobs/${jid}`).update(
+            stripUndefinedDeep({
+              ...patch,
+              serverPayload: stripUndefinedDeep(patch.serverPayload || serverPayload),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }),
+          )
         },
         status: pauseStatus,
         waitReason: isApiQuotaError(err) ? 'api' : 'error',
         message: isApiQuotaError(err)
           ? 'API expirada — aguardando para retomar…'
-            : `Erro temporário — tentando de novo em 5s… (${err.message || 'erro'})`,
+          : `Erro temporário — tentando de novo em 5s… (${err.message || 'erro'})`,
       })
-      await bumpResumeRetry(jobId)
       return { resumed: false, reason: 'error', error: err.message }
     }
 
@@ -654,6 +811,7 @@ module.exports = {
   hasAvailableGeminiKey,
   touchActiveJob,
   clearActiveJob,
+  touchJobHeartbeat,
   clearResumeQueue,
   shouldCheckpointTimeout,
   runWithHeartbeat,
@@ -661,4 +819,5 @@ module.exports = {
   JOB_HEARTBEAT_MS,
   STALL_PROGRESS_MS,
   WAITING_STATUSES,
+  stripUndefinedDeep,
 }

@@ -1,6 +1,7 @@
 const admin = require('firebase-admin')
 
 const MAX_CONCURRENT_SERVER_JOBS = 3
+const MAX_CONCURRENT_BACKFILL_JOBS = 1
 const CONCURRENCY_EXEMPT_JOB_TYPES = new Set(['guia_mentorado_backfill'])
 const STALE_ACTIVE_JOB_MS = 15 * 60 * 1000
 
@@ -72,8 +73,41 @@ async function countActiveServerJobs() {
   return count
 }
 
+async function countRunningBackfillJobs(excludeJobId = null) {
+  await pruneStaleActiveJobs()
+  const db = getDb()
+  const snap = await db.collection('generationActiveJobs').limit(50).get()
+  let count = 0
+
+  for (const doc of snap.docs) {
+    if (doc.id === excludeJobId) continue
+    const data = doc.data()
+    if (data.jobType !== 'guia_mentorado_backfill') continue
+
+    const { userId, jobId } = data
+    if (!userId || !jobId) continue
+
+    const jobSnap = await db.doc(`users/${userId}/generationJobs/${jobId}`).get()
+    if (!jobSnap.exists) {
+      await doc.ref.delete().catch(() => {})
+      continue
+    }
+
+    if (jobSnap.data().status === 'running') count += 1
+  }
+
+  return count
+}
+
 async function tryAcquireServerJobSlot(userId, jobId, jobType = '') {
   if (CONCURRENCY_EXEMPT_JOB_TYPES.has(jobType)) {
+    if (jobType === 'guia_mentorado_backfill') {
+      const otherBackfills = await countRunningBackfillJobs(jobId)
+      if (otherBackfills >= MAX_CONCURRENT_BACKFILL_JOBS) {
+        return { acquired: false, reason: 'backfill_limit', active: otherBackfills }
+      }
+    }
+
     const ts = admin.firestore.FieldValue.serverTimestamp()
     await getDb()
       .doc(`generationActiveJobs/${jobId}`)
@@ -138,8 +172,10 @@ async function tryAcquireServerJobSlot(userId, jobId, jobType = '') {
 
 module.exports = {
   MAX_CONCURRENT_SERVER_JOBS,
+  MAX_CONCURRENT_BACKFILL_JOBS,
   CONCURRENCY_EXEMPT_JOB_TYPES,
   countActiveServerJobs,
+  countRunningBackfillJobs,
   tryAcquireServerJobSlot,
   pruneStaleActiveJobs,
 }

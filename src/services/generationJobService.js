@@ -318,10 +318,14 @@ export function waitForGenerationJob(userId, jobId, { timeoutMs = 90 * 60 * 1000
         clearTimeout(timer)
         unsub()
         resolve(job)
-      } else if (
-        job.status === GENERATION_JOB_STATUS.ERROR ||
-        job.status === GENERATION_JOB_STATUS.CANCELLED
-      ) {
+      } else if (job.status === GENERATION_JOB_STATUS.CANCELLED) {
+        settled = true
+        clearTimeout(timer)
+        unsub()
+        const err = new Error(job.message || 'Cancelado.')
+        err.code = 'job_cancelled'
+        reject(err)
+      } else if (job.status === GENERATION_JOB_STATUS.ERROR) {
         settled = true
         clearTimeout(timer)
         unsub()

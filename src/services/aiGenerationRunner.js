@@ -88,6 +88,7 @@ export async function startBackgroundGeneration({
 
     const promise = waitForGenerationJob(userId, jobId).then((job) => job?.resultRef ?? job)
     promise.catch((err) => {
+      if (err?.code === 'job_cancelled') return
       console.error('[generation] job falhou:', err?.message || err)
     })
     activeTasks.set(jobId, promise)
