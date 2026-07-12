@@ -1425,7 +1425,7 @@ exports.kickGenerationJob = functions
           }
         }
         const { kickGenerationJob } = getKickModule()
-        const result = await kickGenerationJob(userId, jobId)
+        const result = await kickGenerationJob(userId, jobId, { wait: false })
         return res.status(200).json(result)
       } catch (err) {
         console.error('[kickGenerationJob]', err)

@@ -77,7 +77,7 @@ async function runServerGenerationJob(userId, jobId, initialData = null) {
 }
 
 /** Dispara processamento de um job pendente (fallback se onCreate não rodar). */
-async function kickGenerationJob(userId, jobId) {
+async function kickGenerationJob(userId, jobId, { wait = true } = {}) {
   const ref = getDb().doc(`users/${userId}/generationJobs/${jobId}`)
   const snap = await ref.get()
   if (!snap.exists) return { ok: false, reason: 'not_found' }
@@ -91,6 +91,13 @@ async function kickGenerationJob(userId, jobId) {
 
   if (data.status !== 'pending') {
     return { ok: true, reason: 'already_started', status: data.status }
+  }
+
+  if (!wait) {
+    runServerGenerationJob(userId, jobId, data).catch((err) => {
+      console.error(`[kickGenerationJob] async ${jobId}:`, err)
+    })
+    return { ok: true, reason: 'kick_scheduled' }
   }
 
   return runServerGenerationJob(userId, jobId, data)

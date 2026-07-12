@@ -8,7 +8,9 @@ const {
 const JOB_HEARTBEAT_MS = 5 * 1000
 const RETRY_INTERVAL_MS = 5 * 1000
 const CONCURRENCY_RETRY_MS = 5 * 1000
-const STALL_PROGRESS_MS = 30 * 1000
+/** Só considera "sem sinal" após 5 min — geração de IA pode ficar quieta por minutos. */
+const STALL_PROGRESS_MS = 5 * 60 * 1000
+const ACTIVE_HEARTBEAT_FRESH_MS = 90 * 1000
 const CF_SAFE_MS = 7 * 60 * 1000
 
 const WAITING_STATUSES = ['waiting_api', 'waiting_retry', 'waiting_timeout']
@@ -79,17 +81,36 @@ async function isJobCancelled(userId, jobId) {
 }
 
 async function touchActiveJob(userId, jobId, patch = {}) {
-  await getDb()
-    .doc(`generationActiveJobs/${jobId}`)
-    .set(
+  const ts = admin.firestore.FieldValue.serverTimestamp()
+  const db = getDb()
+
+  await Promise.all([
+    db.doc(`generationActiveJobs/${jobId}`).set(
       {
         userId,
         jobId,
-        lastHeartbeat: admin.firestore.FieldValue.serverTimestamp(),
+        lastHeartbeat: ts,
         ...patch,
       },
       { merge: true },
-    )
+    ),
+    // Mantém o job "vivo" no banner — evita falso "sem sinal" durante chamadas longas à IA
+    db
+      .doc(`users/${userId}/generationJobs/${jobId}`)
+      .update({
+        progressUpdatedAt: ts,
+        updatedAt: ts,
+      })
+      .catch(() => {}),
+  ])
+}
+
+async function hasFreshActiveHeartbeat(jobId, freshMs = ACTIVE_HEARTBEAT_FRESH_MS) {
+  const snap = await getDb().doc(`generationActiveJobs/${jobId}`).get()
+  if (!snap.exists) return false
+  const hb = snap.data().lastHeartbeat?.toDate?.()
+  if (!hb) return false
+  return Date.now() - hb.getTime() < freshMs
 }
 
 async function clearActiveJob(jobId) {
@@ -447,17 +468,19 @@ async function forceResumeJob(userId, jobId, jobData, { waitReason = 'nudge', me
     jobId,
     courseId: jobData.courseId,
     jobType: jobData.jobType,
-    serverPayload: {
+    serverPayload: stripUndefinedDeep({
       ...(jobData.serverPayload || {}),
       resumeFromTopicIndex,
-    },
+    }),
     resumeFromTopicIndex,
     topicLabel: jobData.resumeState?.topicLabel || '',
     updateJob: async (uid, jid, patch) => {
-      await db.doc(`users/${uid}/generationJobs/${jid}`).update({
-        ...patch,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
+      await db.doc(`users/${uid}/generationJobs/${jid}`).update(
+        stripUndefinedDeep({
+          ...patch,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }),
+      )
     },
     status: 'waiting_retry',
     waitReason,
@@ -465,16 +488,11 @@ async function forceResumeJob(userId, jobId, jobData, { waitReason = 'nudge', me
     retryDelayMs: 0,
   })
 
-  await db.doc(`generationResumeQueue/${jobId}`).set(
-    {
-      nextRetryAt: admin.firestore.Timestamp.now(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  )
-
-  const result = await resumeSingleGenerationJob(jobId)
-  return { ok: true, reason: 'resumed', resumed: result.resumed ? 1 : 0 }
+  // NÃO esperar a geração — HTTP do nudge precisa responder em <1s
+  resumeSingleGenerationJob(jobId, null, userId).catch((err) => {
+    console.error(`[forceResumeJob] async ${jobId}:`, err)
+  })
+  return { ok: true, reason: 'resume_scheduled', resumed: 0 }
 }
 
 async function nudgeStalledGenerationJob(userId, jobId) {
@@ -492,12 +510,17 @@ async function nudgeStalledGenerationJob(userId, jobId) {
   }
 
   if (jobData.status === 'running') {
+    // Heartbeat fresco = job ainda processando (ex.: chamada Gemini longa). NÃO forçar retomada.
+    if (await hasFreshActiveHeartbeat(jobId)) {
+      await touchJobHeartbeat(userId, jobId).catch(() => {})
+      return { ok: true, reason: 'still_active' }
+    }
     if (!isJobProgressStale(jobData)) {
       return { ok: true, reason: 'still_active' }
     }
     return forceResumeJob(userId, jobId, jobData, {
       waitReason: 'nudge_stalled',
-      message: 'Sem sinal — retomando automaticamente…',
+      message: 'Sem sinal do servidor — retomando…',
     })
   }
 
@@ -515,7 +538,7 @@ async function nudgeStalledGenerationJob(userId, jobId) {
       message: 'Enviado ao servidor — aguardando início…',
     })
     const { kickGenerationJob } = require('./generationJobKick')
-    const result = await kickGenerationJob(userId, jobId)
+    const result = await kickGenerationJob(userId, jobId, { wait: false })
     return { ok: true, reason: 'kicked_pending', ...result }
   }
 

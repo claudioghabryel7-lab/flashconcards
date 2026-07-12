@@ -99,7 +99,8 @@ const STALE_JOB_MS = 45 * 60 * 1000
 const STALE_SERVER_JOB_MS = 90 * 60 * 1000
 const STALE_WAITING_API_MS = 24 * 60 * 60 * 1000
 export const STALL_NUDGE_MS = 5 * 1000
-export const STALL_PROGRESS_NUDGE_MS = 25 * 1000
+/** Jobs running só são nudgeados após 4 min sem progresso — IA pode demorar. */
+export const STALL_PROGRESS_NUDGE_MS = 4 * 60 * 1000
 
 function jobProgressTimestamp(job = {}) {
   return job.progressUpdatedAt || job.updatedAt
@@ -322,9 +323,7 @@ export function waitForGenerationJob(userId, jobId, { timeoutMs = 90 * 60 * 1000
         settled = true
         clearTimeout(timer)
         unsub()
-        const err = new Error(job.message || 'Cancelado.')
-        err.code = 'job_cancelled'
-        reject(err)
+        resolve({ ...job, cancelled: true })
       } else if (job.status === GENERATION_JOB_STATUS.ERROR) {
         settled = true
         clearTimeout(timer)
@@ -373,26 +372,34 @@ export async function nudgeGenerationJobResume(userId, jobId) {
   const user = auth?.currentUser
   if (!user || user.uid !== userId) return { ok: false, reason: 'not_authenticated' }
 
-  const token = await user.getIdToken()
-  const response = await fetch(FIREBASE_FUNCTIONS.nudgeGenerationJobResume, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ userId, jobId }),
-  })
-
-  let data = {}
   try {
-    data = await response.json()
-  } catch {
-    data = { ok: false, reason: 'invalid_response' }
-  }
+    const token = await user.getIdToken()
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 15_000)
+    const response = await fetch(FIREBASE_FUNCTIONS.nudgeGenerationJobResume, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ userId, jobId }),
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
 
-  if (!response.ok) {
-    return { ok: false, reason: data.error || data.reason || 'request_failed' }
-  }
+    let data = {}
+    try {
+      data = await response.json()
+    } catch {
+      data = { ok: false, reason: 'invalid_response' }
+    }
 
-  return data
+    if (!response.ok) {
+      return { ok: false, reason: data.error || data.reason || 'request_failed' }
+    }
+
+    return data
+  } catch (err) {
+    return { ok: false, reason: err?.name === 'AbortError' ? 'timeout' : 'network_error' }
+  }
 }

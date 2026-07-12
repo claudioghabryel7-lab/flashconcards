@@ -13,6 +13,7 @@ export function useBackgroundGeneration() {
   const { user } = useAuth()
   const [jobs, setJobs] = useState([])
   const lastNudgeRef = useRef({})
+  const failStreakRef = useRef({})
 
   useEffect(() => {
     if (!user?.uid) {
@@ -24,7 +25,7 @@ export function useBackgroundGeneration() {
 
     const interval = setInterval(() => {
       reconcileStaleGenerationJobs(user.uid).catch(() => {})
-    }, STALL_NUDGE_MS)
+    }, 60 * 1000)
 
     const unsub = subscribeActiveGenerationJobs(user.uid, setJobs)
     return () => {
@@ -39,12 +40,23 @@ export function useBackgroundGeneration() {
     const nudgeEligible = (now) => {
       jobs.forEach((job) => {
         if (!shouldNudgeJob(job, now)) return
+        const fails = failStreakRef.current[job.id] || 0
+        // Backoff: 5s, 15s, 30s, 60s após falhas (evita spam 500/CORS)
+        const delay = Math.min(60_000, STALL_NUDGE_MS * Math.pow(2, Math.min(fails, 4)))
         const last = lastNudgeRef.current[job.id] || 0
-        if (now - last < STALL_NUDGE_MS) return
+        if (now - last < delay) return
         lastNudgeRef.current[job.id] = now
-        nudgeGenerationJobResume(user.uid, job.id).catch((err) => {
-          console.warn('[nudgeGenerationJobResume]', job.id, err?.message || err)
-        })
+        nudgeGenerationJobResume(user.uid, job.id)
+          .then((result) => {
+            if (result?.ok === false) {
+              failStreakRef.current[job.id] = fails + 1
+            } else {
+              failStreakRef.current[job.id] = 0
+            }
+          })
+          .catch(() => {
+            failStreakRef.current[job.id] = fails + 1
+          })
       })
     }
 
