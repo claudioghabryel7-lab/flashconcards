@@ -25,6 +25,7 @@ import {
   resolveMaterialPdfFilename,
 } from '../utils/materialFormatting'
 import { getConteudoCompletoDepthInstructions, CONTEUDO_COMPLETO_DEPTH } from '../utils/contentDepthRules'
+import { AI_TEXT_FORMAT_RULES, AI_MATERIAL_FORMAT_RULES } from '../utils/aiTextFormatting'
 import ReactMarkdown from 'react-markdown'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
@@ -696,21 +697,20 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
      * Citar exemplos práticos do concurso ${concursoName || 'mencionado'}
      * Ser específico para o cargo de ${courseName || 'mencionado'}
      * Incluir dicas de memorização (nada genérico e vazio/vago)
-     * Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
+     * Formate em HTML organizado: <h4> subtítulos, vários <p>, <b> em termos-chave, <mark> para grifar artigos/prazos, <ul><li> em listas
 
 3. **CUIDADO, CAÇAPA! (PEGADINHAS)** — seção separada da Revisão Turbo:
    - Gere 4 a 6 pegadinhas ("Cuidado meu querido aluno!"):
      * Erros comuns que a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar
      * Detalhes que passam despercebidos
      * Armadilhas específicas do concurso ${concursoName || 'mencionado'}
-     * Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
+     * HTML com parágrafos <p>, <b> no erro comum e <mark> na pegadinha exata
 
 4. **QUESTÕES PREDITIVAS**:
    - Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} questões para este tópico
    - No estilo da banca ${banca || 'NÃO DEFINIDA'} (A, B, C, D, E ou Certo/Errado)
    - Contextualizadas com o concurso ${concursoName || 'mencionado'} e cargo ${courseName || 'mencionado'}
-   - Gabarito Comentado: explique o porquê das outras estarem erradas
-   - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
+   - Gabarito Comentado: explique o porquê das outras estarem erradas, com <p> separados e <b>/<mark> nos pontos-chave
    - Seja detalhado e completo nas explicações
 
 🚨 INSTRUÇÃO CRÍTICA - CONTEÚDO ATUALIZADO:
@@ -790,7 +790,8 @@ REGRAS:
 - Cite o nome do concurso e cargo nos resumos e questões
 - Preencha "validacaoArtigo" PRIMEIRO com o artigo/lei/jurisprudência literal antes de escrever o conteúdo
 - Retorne APENAS o JSON válido, sem texto adicional
-- Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
+- ${AI_MATERIAL_FORMAT_RULES}
+- ${AI_TEXT_FORMAT_RULES}`
 
       setProgress((prev) => Math.min(prev + 15, 70))
       const initialStatus = await fetchTopicoPublishStatus(resolvedCourseId, resolvedTopicKey)

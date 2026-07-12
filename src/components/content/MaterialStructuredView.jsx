@@ -4,12 +4,13 @@ import {
   ExclamationTriangleIcon,
   BookOpenIcon,
 } from '@heroicons/react/24/outline'
+import CommentFormattedText from './CommentFormattedText'
 
 function RichHtml({ html, className = '' }) {
   if (!html) return null
   return (
     <div
-      className={`ia-content-enhanced text-sm text-slate-600 dark:text-slate-400 ${className}`}
+      className={`ia-content-enhanced text-base text-slate-600 dark:text-slate-400 ${className}`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   )
@@ -82,8 +83,8 @@ export default function MaterialStructuredView({
           </div>
           <div className="space-y-5">
             {revisaoTurbo.map((resumo, idx) => (
-              <div key={`${resumo.titulo}-${idx}`}>
-                <h5 className="font-semibold text-slate-700 dark:text-slate-300 mb-2">
+              <div key={`${resumo.titulo}-${idx}`} className="pb-2">
+                <h5 className="font-semibold text-slate-700 dark:text-slate-300 mb-3 text-base">
                   {resumo.titulo}
                 </h5>
                 <RichHtml html={transformHtml(resumo.conteudo)} />
@@ -132,9 +133,10 @@ export default function MaterialStructuredView({
                 <span className="text-xs font-semibold text-alego-600 mb-2 block">
                   Aposta {idx + 1} de {questoes.length}
                 </span>
-                <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line mb-4">
-                  {questao.enunciado}
-                </p>
+                <CommentFormattedText
+                  text={questao.enunciado}
+                  className="text-sm text-slate-700 dark:text-slate-300 mb-4"
+                />
                 {questao.alternativas && (
                   <div className="space-y-2 mb-4">
                     {Object.entries(questao.alternativas).map(([letra, alt]) => (

@@ -9,6 +9,9 @@
   word-break: normal;
   hyphens: none;
   -webkit-hyphens: none;
+  line-height: 1.85;
+  letter-spacing: 0.015em;
+  font-size: 1.05rem;
 }
 
 .ia-content-enhanced p,
@@ -22,9 +25,23 @@
   -webkit-hyphens: none;
 }
 
-/* Estilos para parágrafos com espaçamento adequado */
-.ia-content-enhanced p {
-  @apply mb-4 leading-relaxed;
+/* Parágrafos com respiro — leitura confortável */
+.ia-content-enhanced p,
+.ia-content-enhanced .material-paragraph {
+  margin-top: 0;
+  margin-bottom: 1.35rem;
+  line-height: 1.85;
+  letter-spacing: 0.015em;
+}
+
+.ia-content-enhanced p:last-child,
+.ia-content-enhanced .material-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.ia-content-enhanced p + p,
+.ia-content-enhanced .material-paragraph + .material-paragraph {
+  margin-top: 0.25rem;
 }
 
 /* Primeiro parágrafo com destaque sutil */
@@ -32,13 +49,14 @@
   @apply text-base sm:text-lg font-medium;
 }
 
-/* Negrito com melhor destaque */
+/* Negrito com melhor destaque — sem apertar o texto ao redor */
 .ia-content-enhanced strong,
 .ia-content-enhanced b {
   @apply font-bold;
   background: linear-gradient(to right, rgb(239 246 255), rgb(224 231 255));
-  @apply px-2 py-1 rounded;
+  @apply px-1.5 py-0.5 rounded;
   @apply border-l-4 border-blue-500;
+  line-height: 1.7;
 }
 
 /* Dark mode para negrito */
@@ -64,7 +82,26 @@
 .ia-content-enhanced h3 {
   @apply text-lg sm:text-xl font-bold;
   @apply border-l-4 border-indigo-500 dark:border-indigo-400;
-  @apply pl-3 mb-2;
+  @apply pl-3 mb-2 mt-6;
+}
+
+.ia-content-enhanced h4 {
+  @apply text-base sm:text-lg font-bold text-slate-800 dark:text-slate-200;
+  @apply mt-5 mb-2 pl-3 border-l-4 border-amber-400 dark:border-amber-500;
+}
+
+/* Grifo / destaque em trechos importantes */
+.ia-content-enhanced mark {
+  @apply px-1.5 py-0.5 rounded;
+  background: linear-gradient(to right, rgb(254 249 195), rgb(253 230 138));
+  @apply text-slate-900 font-medium;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.dark .ia-content-enhanced mark {
+  background: linear-gradient(to right, rgb(113 63 18 / 0.35), rgb(146 64 14 / 0.3));
+  @apply text-amber-100;
 }
 
 /* Tabelas com design moderno */

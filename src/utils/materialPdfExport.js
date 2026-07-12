@@ -399,8 +399,10 @@ const PRINT_STYLES = `
     color: #6d28d9;
     vertical-align: middle;
   }
-  .ia-content-enhanced { max-width: none; color: #475569; font-size: 10.5pt; }
-  .ia-content-enhanced p { margin: 0 0 12px; line-height: 1.65; }
+  .ia-content-enhanced { max-width: none; color: #475569; font-size: 10.5pt; line-height: 1.85; letter-spacing: 0.02em; }
+  .ia-content-enhanced p, .ia-content-enhanced .material-paragraph { margin: 0 0 14px; line-height: 1.85; }
+  .ia-content-enhanced mark { background: #fef3c7; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
+  .ia-content-enhanced h4 { font-size: 11pt; font-weight: 700; margin: 14px 0 6px; padding-left: 8px; border-left: 3px solid #f59e0b; color: #334155; }
   .ia-content-enhanced strong, .ia-content-enhanced b {
     font-weight: 700;
     background: linear-gradient(to right, #eff6ff, #e0e7ff);

@@ -2,6 +2,7 @@ import {
   CONTEUDO_COMPLETO_DEPTH,
   getConteudoCompletoDepthInstructions,
 } from './contentDepthRules'
+import { AI_TEXT_FORMAT_RULES, AI_MATERIAL_FORMAT_RULES } from './aiTextFormatting'
 
 import { DEFAULT_PLANNING_DAYS } from '../constants/guiaMentorado'
 
@@ -126,7 +127,9 @@ Retorne APENAS JSON válido:
 REGRAS:
 - Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} questões preditivas
 - Foco 100% neste tópico — nada genérico
-- Sem markdown — apenas HTML simples (<b>, <i>, <p>)
+- Sem markdown — apenas HTML (<b>, <i>, <p>, <h4>, <mark>, <ul>, <li>)
+- ${AI_MATERIAL_FORMAT_RULES}
+- ${AI_TEXT_FORMAT_RULES}
 - JSON completo e válido`
 }
 

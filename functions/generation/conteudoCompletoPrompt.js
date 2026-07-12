@@ -1,5 +1,6 @@
 const MIN_TOPICOS_QUENTES = 8
 const MIN_QUESTOES = 8
+const { AI_TEXT_FORMAT_RULES, AI_MATERIAL_FORMAT_RULES } = require('./aiTextFormatting')
 
 function buildConteudoCompletoServerPrompt({
   disciplina = '',
@@ -39,7 +40,7 @@ RETORNE APENAS UM JSON VÁLIDO E COMPLETO (sem markdown, sem texto fora do JSON)
   "revisaoTurbo": [
     {
       "titulo": "Nome do assunto quente 1",
-      "conteudo": "<p>Resumo COMPLETO com no mínimo 600 palavras, HTML simples (<p>, <b>, <ul>, <li>)</p>"
+      "conteudo": "<h4>Conceito central</h4><p>Resumo COMPLETO com parágrafos <p>, negrito <b>, grifos <mark> e listas <ul><li></p>"
     }
   ],
   "pegadinhas": [
@@ -63,9 +64,11 @@ REGRAS OBRIGATÓRIAS:
 2. revisaoTurbo: UM resumo para CADA assunto quente do Raio-X (mesma quantidade).
 3. pegadinhas: 4 a 6 itens detalhados.
 4. questoesPreditivas: EXATAMENTE ${MIN_QUESTOES} questões inéditas.
-5. Use HTML simples nos campos de texto (conteudo, padraoBanca, gabaritoComentado).
-6. NÃO corte o JSON no meio. NÃO omita seções.
-7. Conteúdo técnico, denso e específico do tópico "${nome}" — nada genérico.`
+5. Use HTML organizado nos campos de texto (conteudo, padraoBanca, gabaritoComentado).
+6. ${AI_MATERIAL_FORMAT_RULES}
+7. NÃO corte o JSON no meio. NÃO omita seções.
+8. ${AI_TEXT_FORMAT_RULES}
+9. Conteúdo técnico, denso e específico do tópico "${nome}" — nada genérico.`
 }
 
 module.exports = {

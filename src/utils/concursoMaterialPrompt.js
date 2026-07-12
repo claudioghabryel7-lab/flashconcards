@@ -1,4 +1,5 @@
 import { getConteudoCompletoDepthInstructions } from './contentDepthRules'
+import { AI_MATERIAL_FORMAT_RULES, AI_TEXT_FORMAT_RULES } from './aiTextFormatting'
 
 const nowPtBr = () =>
   new Date().toLocaleDateString('pt-BR', {
@@ -78,7 +79,7 @@ FORMATO JSON OBRIGATÓRIO:
     "padraoBanca": "descrição detalhada"
   },
   "revisaoTurbo": [
-    { "titulo": "título", "conteudo": "texto longo e completo em HTML simples (<b>, <i>, <p>)" }
+    { "titulo": "título", "conteudo": "HTML organizado com <h4>, <p>, <b>, <mark>, <ul><li>" }
   ],
   "pegadinhas": [
     { "titulo": "Cuidado, caçapa!", "conteudo": "pegadinha detalhada" }
@@ -101,5 +102,7 @@ FORMATO JSON OBRIGATÓRIO:
 REGRAS:
 - Conteúdo fiel à legislação vigente — não invente leis
 - Tom técnico, denso e específico para ${concurso} / ${cargo}
+- ${AI_MATERIAL_FORMAT_RULES}
+- ${AI_TEXT_FORMAT_RULES}
 - Retorne APENAS JSON válido`
 }

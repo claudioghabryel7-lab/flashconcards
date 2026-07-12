@@ -173,7 +173,7 @@ export function QuestaoEnunciadoCard({
         </div>
       </div>
       <div className="px-4 py-5 sm:px-5 sm:py-6">
-        <p className="text-base font-medium leading-relaxed text-cp-text sm:text-lg">{enunciado}</p>
+        <CommentFormattedText text={enunciado} className="text-base font-medium text-cp-text sm:text-lg" />
       </div>
     </div>
   )
@@ -250,7 +250,9 @@ export function QuestaoAlternativas({
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cp-accent/20 bg-cp-accent/10 font-mono text-sm font-bold text-cp-accent">
                 {key}
               </span>
-              <span className="pt-1 text-sm leading-relaxed text-cp-text">{value}</span>
+              <span className="pt-1 text-sm leading-relaxed text-cp-text">
+                <CommentFormattedText text={value} />
+              </span>
               {reveal && isCorrect && (
                 <CheckCircleIcon className="ml-auto h-5 w-5 shrink-0 text-emerald-400" />
               )}

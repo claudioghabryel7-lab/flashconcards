@@ -1,4 +1,4 @@
-import { readEnv } from '@/lib/env.js'
+import { AI_TEXT_FORMAT_RULES, sanitizeFlashcardText } from '../utils/aiTextFormatting'
 import {
   collection,
   doc,
@@ -159,7 +159,8 @@ FORMATO JSON OBRIGATÓRIO:
 
 REGRAS:
 - Retorne APENAS JSON válido
-- Sem markdown nos textos
+- ${AI_TEXT_FORMAT_RULES}
+- Separe ideias no verso com linha em branco entre parágrafos
 - Respostas completas e detalhadas (mínimo 2-4 frases no verso), nunca superficiais
 - Cubra TODO o tópico do edital — o curso precisa de ${MIN_FLASHCARDS} a ${MAX_FLASHCARDS} cards no total
 - Conteúdo fiel à legislação e ao edital`
@@ -293,8 +294,8 @@ export async function generateAndSaveFlashcardsForTopico({
 
     allItems.forEach((item, index) => {
       const docRef = doc(flashcardsRef)
-      const frente = item.frente || item.pergunta || ''
-      const verso = item.verso || item.resposta || ''
+      const frente = sanitizeFlashcardText(item.frente || item.pergunta || '')
+      const verso = sanitizeFlashcardText(item.verso || item.resposta || '')
       const payload = {
         disciplina,
         materia: disciplina,

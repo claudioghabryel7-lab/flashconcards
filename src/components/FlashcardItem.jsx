@@ -2,6 +2,7 @@
 import { HeartIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/solid'
 import { useAuth } from '../hooks/useAuth'
 import ContentFeedbackActions from './content/ContentFeedbackActions'
+import CommentFormattedText from './content/CommentFormattedText'
 import { buildFlashcardContentId } from '../utils/contentCommentIds'
 
 const FlashcardItem = ({
@@ -254,9 +255,9 @@ const FlashcardItem = ({
                     <span className="mb-3 inline-flex rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
                       Pergunta
                     </span>
-                    <h3 className={`text-lg font-semibold leading-relaxed sm:text-2xl ${textColor}`}>
-                      {card.pergunta}
-                    </h3>
+                    <div className={`text-lg font-semibold leading-relaxed sm:text-2xl ${textColor}`}>
+                      <CommentFormattedText text={card.pergunta} className="text-inherit" />
+                    </div>
                     <p className="noji-hint mt-6 text-sm text-slate-400">Toque para revelar a resposta</p>
                   </>
                 )}
@@ -319,7 +320,7 @@ const FlashcardItem = ({
                   <div className="w-full text-left">{editForm}</div>
                 ) : (
                   <div className="w-full text-base font-medium leading-relaxed text-white sm:text-xl">
-                    {card.resposta}
+                    <CommentFormattedText text={card.resposta} className="text-white" />
                   </div>
                 )}
               </div>

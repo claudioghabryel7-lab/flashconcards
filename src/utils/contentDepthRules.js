@@ -25,5 +25,6 @@ export function getConteudoCompletoDepthInstructions({ banca, concursoName, cour
 6. Questões Preditivas: gere EXATAMENTE ${MIN_QUESTOES} questões inéditas, com gabarito comentado longo e fundamentado.
 7. NUNCA corte frases, palavras ou parágrafos no meio — complete todas as ideias até o fim.
 8. Se o JSON ficar grande, priorize completar todas as seções obrigatórias em vez de encurtar textos.
-9. O material deve parecer um capítulo de apostila premium, não um resumo de uma página.`
+9. O material deve parecer um capítulo de apostila premium, não um resumo de uma página.
+10. Formate com HTML organizado: parágrafos <p>, subtítulos <h4>, negrito <b>, grifos <mark> em trechos-chave e listas <ul><li>.`
 }

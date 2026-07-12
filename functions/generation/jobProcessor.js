@@ -11,6 +11,7 @@ const CONTENT_STATUS = {
   UNAVAILABLE: 'indisponivel',
 }
 
+const { sanitizeFlashcardText, AI_TEXT_FORMAT_RULES } = require('./aiTextFormatting')
 const MIN_FLASHCARDS = 40
 const MAX_FLASHCARDS = 60
 const BATCH_SIZE = 30
@@ -95,7 +96,8 @@ FORMATO JSON OBRIGATÓRIO:
 
 REGRAS:
 - Retorne APENAS JSON válido
-- Sem markdown nos textos
+- ${AI_TEXT_FORMAT_RULES}
+- Separe ideias no verso com linha em branco entre parágrafos
 - Respostas completas e detalhadas (mínimo 2-4 frases no verso), nunca superficiais
 - Cubra TODO o tópico — são necessários ${MIN_FLASHCARDS} a ${MAX_FLASHCARDS} cards no total
 - Conteúdo fiel à legislação e ao edital`
@@ -351,8 +353,8 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
   for (let index = 0; index < allItems.length; index += 1) {
     const item = allItems[index]
     const docRef = flashcardsRef.doc()
-    const frente = item.frente || item.pergunta || ''
-    const verso = item.verso || item.resposta || ''
+    const frente = sanitizeFlashcardText(item.frente || item.pergunta || '')
+    const verso = sanitizeFlashcardText(item.verso || item.resposta || '')
 
     batch.set(docRef, {
       disciplina: meta.disciplina,

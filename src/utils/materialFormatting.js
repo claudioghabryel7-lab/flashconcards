@@ -1,3 +1,10 @@
+import {
+  hasMarkdownArtifacts,
+  normalizeMarkdownToHtml,
+  sanitizeQuestaoAlternativas,
+  sanitizeQuestaoText,
+} from './aiTextFormatting'
+
 export function stripHtmlLite(text = '') {
   return String(text).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
@@ -10,13 +17,81 @@ function escapeHtml(text = '') {
     .replace(/"/g, '&quot;')
 }
 
+/** Quebra texto corrido em parágrafos legíveis. */
+export function splitIntoReadableParagraphs(text = '') {
+  const trimmed = String(text || '').trim()
+  if (!trimmed) return []
+
+  if (/\n\s*\n/.test(trimmed)) {
+    return trimmed.split(/\n\s*\n+/).map((s) => s.trim()).filter(Boolean)
+  }
+
+  if (trimmed.includes('\n')) {
+    return trimmed.split(/\n+/).map((s) => s.trim()).filter(Boolean)
+  }
+
+  const sentences = trimmed.match(/[^.!?…]+[.!?…]+(?:\s+|$)|[^.!?…]+$/g) || [trimmed]
+  const paragraphs = []
+  let buffer = []
+  let length = 0
+
+  for (const sentence of sentences) {
+    const part = sentence.trim()
+    if (!part) continue
+    buffer.push(part)
+    length += part.length
+    if (buffer.length >= 3 || length >= 420) {
+      paragraphs.push(buffer.join(' '))
+      buffer = []
+      length = 0
+    }
+  }
+
+  if (buffer.length) paragraphs.push(buffer.join(' '))
+  return paragraphs.length ? paragraphs : [trimmed]
+}
+
+function htmlToPlainText(html = '') {
+  return String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/** Converte texto (puro ou HTML apertado) em HTML com parágrafos espaçados. */
 export function coerceHtmlContent(text = '') {
   const raw = String(text || '').trim()
   if (!raw) return ''
-  if (/<[a-z][\s\S]*>/i.test(raw)) return raw
-  return raw
-    .split(/\n{2,}/)
-    .map((block) => `<p>${escapeHtml(block).replace(/\n/g, '<br/>')}</p>`)
+
+  let working = raw
+  if (hasMarkdownArtifacts(raw)) {
+    working = normalizeMarkdownToHtml(raw)
+  }
+
+  if (/<[a-z][\s\S]*>/i.test(working)) {
+    const plain = htmlToPlainText(working)
+    const paragraphCount = (working.match(/<p[\s>]/gi) || []).length
+
+    if (paragraphCount <= 1 && plain.length > 280) {
+      return splitIntoReadableParagraphs(plain)
+        .map((block) => `<p class="material-paragraph">${escapeHtml(block)}</p>`)
+        .join('')
+    }
+
+    return working
+      .replace(/<p>/gi, '<p class="material-paragraph">')
+      .replace(/<p\s+class="/gi, '<p class="material-paragraph ')
+  }
+
+  return splitIntoReadableParagraphs(working)
+    .map((block) => `<p class="material-paragraph">${escapeHtml(block).replace(/\n/g, '<br/>')}</p>`)
     .join('')
 }
 
@@ -42,9 +117,14 @@ function normalizeQuestao(questao = {}, index = 0) {
     }
   })
 
+  const enunciadoRaw = sanitizeQuestaoText(
+    String(questao.enunciado || questao.pergunta || `Questão ${index + 1}`),
+  )
+  const enunciadoParagraphs = splitIntoReadableParagraphs(htmlToPlainText(enunciadoRaw))
+
   return {
-    enunciado: String(questao.enunciado || questao.pergunta || `Questão ${index + 1}`),
-    alternativas: normalizedAlts,
+    enunciado: enunciadoParagraphs.join('\n\n'),
+    alternativas: sanitizeQuestaoAlternativas(normalizedAlts),
     correta: questao.correta || questao.respostaCorreta || questao.gabarito || 'A',
     gabaritoComentado: coerceHtmlContent(
       questao.gabaritoComentado || questao.explicacao || questao.comentario || '',

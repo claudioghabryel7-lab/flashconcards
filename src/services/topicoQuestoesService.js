@@ -10,6 +10,11 @@ import {
 import { db } from '../firebase/config'
 import { formatTopicoAsModulo } from '../utils/editalVerticalizadoLoader'
 import { generateAiJson, hasGeminiApiKeys } from '../utils/geminiApi'
+import {
+  AI_TEXT_FORMAT_RULES,
+  sanitizeQuestaoAlternativas,
+  sanitizeQuestaoText,
+} from '../utils/aiTextFormatting'
 
 /**
  * Busca questões já salvas para um tópico (compartilhadas entre usuários do curso).
@@ -128,7 +133,8 @@ REGRAS:
 - Cite o nome do concurso nas questões
 - Preencha "analiseJuridicaPrevia" PRIMEIRO com o artigo/lei/jurisprudência literal antes de escrever o enunciado
 - Retorne APENAS o JSON válido, sem texto adicional
-- Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
+- ${AI_TEXT_FORMAT_RULES}
+- Separe parágrafos no enunciado e no comentário com linha em branco`
 
     const parsed = await generateAiJson(prompt, { courseId })
     const items = parsed.questoes || []
@@ -168,11 +174,11 @@ REGRAS:
       topicoNumero: topicoNumero || '',
       modulo: modulo || '',
       topicKey: topicKey || '',
-      enunciado: item.enunciado || '',
-      alternativas: item.alternativas || [],
+      enunciado: sanitizeQuestaoText(item.enunciado || ''),
+      alternativas: sanitizeQuestaoAlternativas(item.alternativas || []),
       gabarito: item.gabarito || '',
-      comentario: item.comentario || '',
-      analiseJuridicaPrevia: item.analiseJuridicaPrevia || '',
+      comentario: sanitizeQuestaoText(item.comentario || ''),
+      analiseJuridicaPrevia: sanitizeQuestaoText(item.analiseJuridicaPrevia || ''),
       courseId: resolvedId,
       shared: true,
       createdAt: serverTimestamp(),
