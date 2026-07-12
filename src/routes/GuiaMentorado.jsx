@@ -22,6 +22,7 @@ import {
   startGuiaMentoradoCronogramaGeneration,
   startMentoradoDayContentAutomation,
 } from '../services/guiaMentoradoAutomationService'
+import { startMentoradoBackfillForCourse } from '../services/adminPlatformService'
 
 const GuiaMentorado = () => {
   const { profile, user } = useAuth()
@@ -44,6 +45,7 @@ const GuiaMentorado = () => {
   const [calendarLoading, setCalendarLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [generatingDay, setGeneratingDay] = useState(false)
+  const [generatingPastDays, setGeneratingPastDays] = useState(false)
   const [message, setMessage] = useState('')
   const dailyReleaseLabel =
     MENTORADO_DAILY_RELEASE_HOUR === 0 ? '00:00 (meia-noite)' : `${MENTORADO_DAILY_RELEASE_HOUR}h`
@@ -269,6 +271,49 @@ const GuiaMentorado = () => {
       setGeneratingDay(false)
     }
   }
+
+  const generatePastDaysContents = async () => {
+    if (!user?.uid) {
+      alert('Faça login como administrador.')
+      return
+    }
+    if (!selectedCourseId) {
+      alert('Selecione um curso.')
+      return
+    }
+    if (!editalVerticalizado) {
+      alert('Edital verticalizado não carregado.')
+      return
+    }
+
+    const confirmed = window.confirm(
+      'Gerar os conteúdos faltantes deste curso (do 1º dia do cronograma até hoje)?\n\nUsa o mesmo fluxo de “Gerar conteúdos de hoje”, dia a dia. Acompanhe no banner.',
+    )
+    if (!confirmed) return
+
+    setGeneratingPastDays(true)
+    try {
+      const courseName =
+        courses.find((c) => c.id === selectedCourseId)?.name ||
+        courses.find((c) => c.id === selectedCourseId)?.competition ||
+        selectedCourseId
+      const { jobs } = await startMentoradoBackfillForCourse({
+        userId: user.uid,
+        courseId: selectedCourseId,
+        courseName,
+        editalVerticalizado,
+      })
+      setMessage(
+        `🚀 ${jobs.length} dia(s) enfileirado(s) na nuvem. Acompanhe no banner de geração.`,
+      )
+      setTimeout(() => setMessage(''), 12000)
+    } catch (error) {
+      console.error('Erro ao gerar dias passados:', error)
+      alert(error.message || 'Erro ao iniciar geração dos dias passados.')
+    } finally {
+      setGeneratingPastDays(false)
+    }
+  }
   
   return (
     <div className="space-y-6">
@@ -367,7 +412,9 @@ const GuiaMentorado = () => {
           targetDate={todayKey}
           userId={user?.uid}
           onGenerateToday={generateTodayContents}
+          onGeneratePastDays={generatePastDaysContents}
           generating={generatingDay}
+          generatingPastDays={generatingPastDays}
         />
       )}
 

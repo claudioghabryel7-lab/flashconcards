@@ -39,7 +39,9 @@ export default function MentoradoDayAutomationStatus({
   targetDate,
   userId,
   onGenerateToday,
+  onGeneratePastDays,
   generating,
+  generatingPastDays,
 }) {
   const [status, setStatus] = useState(null)
   const [linkedJob, setLinkedJob] = useState(null)
@@ -137,15 +139,29 @@ export default function MentoradoDayAutomationStatus({
             <p className="mt-1 text-xs text-cp-muted">Nenhuma geração registrada para hoje ainda.</p>
           )}
         </div>
-        {onGenerateToday && (
-          <button
-            type="button"
-            onClick={onGenerateToday}
-            disabled={generating || isRunning}
-            className="cp-btn-primary !text-xs disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {generating || isRunning ? 'Gerando…' : 'Gerar conteúdos de hoje'}
-          </button>
+        {(onGenerateToday || onGeneratePastDays) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {onGeneratePastDays && (
+              <button
+                type="button"
+                onClick={onGeneratePastDays}
+                disabled={generating || generatingPastDays || isRunning}
+                className="cp-btn-ghost !text-xs disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {generatingPastDays ? 'Enfileirando…' : 'Gerar dias passados'}
+              </button>
+            )}
+            {onGenerateToday && (
+              <button
+                type="button"
+                onClick={onGenerateToday}
+                disabled={generating || generatingPastDays || isRunning}
+                className="cp-btn-primary !text-xs disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {generating || isRunning ? 'Gerando…' : 'Gerar conteúdos de hoje'}
+              </button>
+            )}
+          </div>
         )}
       </div>
 

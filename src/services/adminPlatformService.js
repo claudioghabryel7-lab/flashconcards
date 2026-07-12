@@ -167,19 +167,95 @@ async function hasActiveDayAutomationJob(userId, courseId, targetDate) {
 }
 
 /**
- * Mesmo fluxo do botão "Gerar conteúdos de hoje", repetido para cada dia
- * do cronograma desde o primeiro até hoje (só o que ainda falta).
+ * Mesmo fluxo do botão "Gerar conteúdos de hoje", para um curso:
+ * dias do cronograma do 1º até hoje que ainda faltam.
+ */
+export async function startMentoradoBackfillForCourse({
+  userId,
+  courseId,
+  courseName,
+  editalVerticalizado: editalPrefetched = null,
+  onProgress,
+}) {
+  if (!userId) throw new Error('Usuário não autenticado.')
+  if (!courseId) throw new Error('Curso não selecionado.')
+
+  const todayKey = todayKeySaoPaulo()
+  const name = courseName || courseId
+
+  const dayKeys = await collectCronogramaDayKeysClient(courseId, todayKey)
+  if (!dayKeys.length) {
+    throw new Error('Nenhum dia de estudo no cronograma até hoje.')
+  }
+
+  onProgress?.(`📖 ${name}: carregando edital…`)
+  const editalVerticalizado =
+    editalPrefetched || (await loadEditalVerticalizado(courseId))
+  if (!editalVerticalizado?.disciplinas?.length) {
+    throw new Error('Edital verticalizado não encontrado.')
+  }
+
+  const jobs = []
+
+  for (const dayKey of dayKeys) {
+    if (await isDayFullyDone(courseId, dayKey)) {
+      onProgress?.(`✅ ${name} ${dayKey}: já completo — pulando`)
+      continue
+    }
+
+    if (await hasActiveDayAutomationJob(userId, courseId, dayKey)) {
+      onProgress?.(`⏭️ ${name} ${dayKey}: já tem job ativo — pulando`)
+      continue
+    }
+
+    try {
+      onProgress?.(
+        `🚀 ${name}: gerando dia ${dayKey} (${jobs.length + 1}/${dayKeys.length})…`,
+      )
+      const { jobId, topicCount } = await startMentoradoDayContentAutomation({
+        userId,
+        courseId,
+        targetDate: dayKey,
+        editalVerticalizado,
+        autoPublish: true,
+      })
+      jobs.push({ courseId, courseName: name, jobId, dayKey, topicCount })
+    } catch (err) {
+      const msg = err?.message || String(err)
+      if (/já estão gerados|não encontrado|Nenhum tópico|descanso|simulado/i.test(msg)) {
+        onProgress?.(`⏭️ ${name} ${dayKey}: ${msg}`)
+      } else {
+        onProgress?.(`⚠️ ${name} ${dayKey}: ${msg}`)
+      }
+    }
+  }
+
+  if (!jobs.length) {
+    throw new Error(
+      'Nada pendente neste curso até hoje. Todos os dias já estão gerados ou já têm job ativo.',
+    )
+  }
+
+  onProgress?.(
+    `✅ ${name}: ${jobs.length} dia(s) enfileirado(s) — mesmo fluxo de “Gerar conteúdos de hoje”.`,
+  )
+
+  return { jobs, todayKey, dayCount: dayKeys.length }
+}
+
+/**
+ * Backfill em massa: 1 curso por vez (cursos com automação ativa).
  */
 export async function startMentoradoBackfillAllCourses(userId, onProgress) {
   if (!userId) throw new Error('Usuário não autenticado.')
 
-  const todayKey = todayKeySaoPaulo()
   const coursesSnap = await getDocs(collection(db, 'courses'))
   const activeCourses = coursesSnap.docs.filter((d) => d.data().active !== false)
 
   const jobs = []
   const MAX_COURSES_PER_RUN = 1
   let coursesStarted = 0
+  let todayKey = todayKeySaoPaulo()
 
   for (const courseDoc of activeCourses) {
     const courseId = courseDoc.id
@@ -198,62 +274,18 @@ export async function startMentoradoBackfillAllCourses(userId, onProgress) {
       continue
     }
 
-    const dayKeys = await collectCronogramaDayKeysClient(courseId, todayKey)
-    if (!dayKeys.length) {
-      onProgress?.(`⏭️ ${courseName}: sem dias no cronograma até hoje — pulando`)
-      continue
-    }
-
-    onProgress?.(`📖 ${courseName}: carregando edital…`)
-    const editalVerticalizado = await loadEditalVerticalizado(courseId)
-    if (!editalVerticalizado?.disciplinas?.length) {
-      onProgress?.(`⏭️ ${courseName}: edital verticalizado ausente — pulando`)
-      continue
-    }
-
-    let startedForCourse = 0
-
-    for (const dayKey of dayKeys) {
-      if (await isDayFullyDone(courseId, dayKey)) {
-        onProgress?.(`✅ ${courseName} ${dayKey}: já completo — pulando`)
-        continue
-      }
-
-      if (await hasActiveDayAutomationJob(userId, courseId, dayKey)) {
-        onProgress?.(`⏭️ ${courseName} ${dayKey}: já tem job ativo — pulando`)
-        continue
-      }
-
-      try {
-        onProgress?.(
-          `🚀 ${courseName}: gerando dia ${dayKey} (${startedForCourse + 1}/${dayKeys.length})…`,
-        )
-        const { jobId, topicCount } = await startMentoradoDayContentAutomation({
-          userId,
-          courseId,
-          targetDate: dayKey,
-          editalVerticalizado,
-          autoPublish: true,
-        })
-        jobs.push({ courseId, courseName, jobId, dayKey, topicCount })
-        startedForCourse += 1
-      } catch (err) {
-        const msg = err?.message || String(err)
-        if (/já estão gerados|não encontrado|Nenhum tópico|descanso|simulado/i.test(msg)) {
-          onProgress?.(`⏭️ ${courseName} ${dayKey}: ${msg}`)
-        } else {
-          onProgress?.(`⚠️ ${courseName} ${dayKey}: ${msg}`)
-        }
-      }
-    }
-
-    if (startedForCourse > 0) {
+    try {
+      const result = await startMentoradoBackfillForCourse({
+        userId,
+        courseId,
+        courseName,
+        onProgress,
+      })
+      jobs.push(...result.jobs)
+      todayKey = result.todayKey
       coursesStarted += 1
-      onProgress?.(
-        `✅ ${courseName}: ${startedForCourse} dia(s) enfileirado(s) com o mesmo fluxo de “Gerar conteúdos de hoje”.`,
-      )
-    } else {
-      onProgress?.(`⏭️ ${courseName}: nada pendente até hoje`)
+    } catch (err) {
+      onProgress?.(`⏭️ ${courseName}: ${err.message || err}`)
     }
   }
 
