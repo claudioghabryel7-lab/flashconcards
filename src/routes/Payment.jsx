@@ -8,7 +8,6 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   ArrowPathIcon,
-  ExclamationTriangleIcon
 } from '@heroicons/react/24/solid'
 import { useAuth } from '../hooks/useAuth'
 import { doc, setDoc, getDoc, collection, serverTimestamp, onSnapshot } from 'firebase/firestore'
@@ -77,14 +76,12 @@ const Payment = () => {
   const [name, setName] = useState(user?.displayName || profile?.displayName || '')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('pix') // 'pix' ou 'card'
+  const [paymentMethod, setPaymentMethod] = useState('boleto') // 'boleto' | 'card'
   const [installments, setInstallments] = useState(1)
   const [loading, setLoading] = useState(false)
   const [paymentStatus, setPaymentStatus] = useState(null) // 'success', 'pending', 'error'
   const [errorMessage, setErrorMessage] = useState('')
   const [createdCredentials, setCreatedCredentials] = useState(null) // { email, password }
-  const [pixCode, setPixCode] = useState('') // Código PIX copia-e-cola para exibir
-  const [pixQrCodeBase64, setPixQrCodeBase64] = useState('') // Imagem base64 do QR Code
   const [currentTransactionId, setCurrentTransactionId] = useState('') // ID da transação atual
   const [selectedCourse, setSelectedCourse] = useState(null) // Curso selecionado
   
@@ -484,81 +481,7 @@ const Payment = () => {
       await setDoc(transactionRef, transactionData)
       setCurrentTransactionId(transactionId)
 
-      if (paymentMethod === 'pix') {
-        let pixResponse = null
-        try {
-          pixResponse = await fetch(FIREBASE_FUNCTIONS.createPixPayment, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              amount: product.price,
-              description: product.name,
-              transactionId: transactionId,
-              userEmail: emailTrim,
-              userName: nameTrim,
-            })
-          })
-
-          if (!pixResponse.ok) {
-            let errorData = {}
-            try {
-              errorData = await pixResponse.json()
-            } catch (e) {
-              errorData = { message: pixResponse.statusText || 'Erro desconhecido' }
-            }
-            
-            if (errorData.code === 'PIX_NOT_ENABLED' || errorData.message?.includes('PIX não habilitado')) {
-              setErrorMessage('PIX não está habilitado na conta do Mercado Pago (ambiente de teste). Use cartão no checkout MP ou habilite PIX no painel.')
-            } else {
-              setErrorMessage(errorData.message || errorData.error || 'Erro ao gerar código PIX. Tente novamente.')
-            }
-            setLoading(false)
-            setPaymentStatus('error')
-            return
-          }
-
-          const pixData = await pixResponse.json()
-
-          if (pixData.success && pixData.pixCopyPaste) {
-            await setDoc(transactionRef, {
-              mercadopagoPaymentId: pixData.paymentId,
-              pixQrCode: pixData.pixQrCode,
-              pixCopyPaste: pixData.pixCopyPaste,
-              ticketUrl: pixData.ticketUrl,
-              mercadopagoStatus: pixData.status,
-            }, { merge: true })
-
-            const pixCopyPasteCode = pixData.pixCopyPaste || ''
-            setPixCode(pixCopyPasteCode)
-            
-            let qrCodeBase64 = ''
-            if (pixData.pixQrCode && typeof pixData.pixQrCode === 'string') {
-              const qrCode = pixData.pixQrCode.trim()
-              if (qrCode.startsWith('000201')) {
-                qrCodeBase64 = ''
-              } else if (qrCode.startsWith('iVBORw0KGgo') || qrCode.startsWith('/9j/')) {
-                qrCodeBase64 = qrCode
-              } else if (qrCode.length > 500) {
-                qrCodeBase64 = qrCode
-              }
-            }
-            setPixQrCodeBase64(qrCodeBase64)
-            setPaymentStatus('pending')
-            setLoading(false)
-          } else {
-            throw new Error(pixData.message || pixData.error || 'Resposta do Mercado Pago inválida')
-          }
-        } catch (error) {
-          console.error('Erro ao criar pagamento PIX:', error)
-          setErrorMessage(error.message || 'Erro ao gerar código PIX. Tente novamente.')
-          setLoading(false)
-          setPaymentStatus('error')
-        }
-      } else {
-        await processCardPayment(transactionData)
-      }
+      await processMercadoPagoCheckout(transactionData, paymentMethod === 'boleto' ? 'boleto' : 'card')
     } catch (error) {
       console.error('Erro ao processar pagamento:', error)
       setErrorMessage(error.message || 'Erro ao processar pagamento. Tente novamente.')
@@ -664,7 +587,7 @@ const Payment = () => {
     }
   }
 
-  const processCardPayment = async (transactionData) => {
+  const processMercadoPagoCheckout = async (transactionData, checkoutKind = 'card') => {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
     const courseQuery = product.courseId ? `&course=${encodeURIComponent(product.courseId)}` : ''
     const txn = encodeURIComponent(transactionData.transactionId)
@@ -682,7 +605,8 @@ const Payment = () => {
         courseDuration: selectedCourse?.courseDuration || null,
         courseDurationUnit: selectedCourse?.courseDurationUnit || null,
         courseDurationValue: selectedCourse?.courseDurationValue ?? null,
-        autoRenew: Boolean(transactionData.autoRenew),
+        checkoutKind,
+        autoRenew: checkoutKind === 'card' && Boolean(transactionData.autoRenew),
         successUrl: `${origin}/pagamento?status=success&txn=${txn}${courseQuery}`,
         failureUrl: `${origin}/pagamento?status=failure&txn=${txn}${courseQuery}`,
         pendingUrl: `${origin}/pagamento?status=pending&txn=${txn}${courseQuery}`,
@@ -703,8 +627,9 @@ const Payment = () => {
       mercadopagoPreapprovalId: preferenceData.preapprovalId || null,
       mercadopagoCheckoutUrl: preferenceData.checkoutUrl,
       mercadopagoCheckoutMode: preferenceData.mode || 'checkout',
+      mercadopagoCheckoutKind: checkoutKind,
       mercadopagoTestMode: preferenceData.testMode === true,
-      autoRenew: Boolean(transactionData.autoRenew),
+      autoRenew: checkoutKind === 'card' && Boolean(transactionData.autoRenew),
     }, { merge: true })
 
     window.location.href = preferenceData.checkoutUrl
@@ -972,110 +897,9 @@ const Payment = () => {
                     ) : null}
                   </AnimatePresence>
                 </motion.div>
-              ) : paymentStatus === 'pending' && paymentMethod === 'pix' ? (
+              ) : paymentStatus === 'pending' ? (
                 <motion.div
-                  key="pix-pending"
-                  initial={{ opacity: 0, scale: 0.97 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="rounded-3xl border border-cp-border bg-cp-surface/80 p-6 sm:p-8"
-                >
-                  <div className="mb-6 text-center">
-                    <ArrowPathIcon className="mx-auto mb-4 h-12 w-12 animate-spin text-cp-accent" />
-                    <h2 className="cp-headline text-2xl">Aguardando PIX</h2>
-                    <p className="mt-2 text-sm text-cp-muted">
-                      Escaneie o QR Code ou copie o código para pagar
-                    </p>
-                  </div>
-
-                  <div className="mb-4 flex items-center justify-center rounded-2xl border border-cp-border bg-white p-4">
-                    <div className="text-center">
-                      {pixQrCodeBase64 || pixCode ? (
-                        <>
-                          <p className="mb-2 text-xs text-slate-500">QR Code PIX</p>
-                          <div className="mx-auto flex h-48 w-48 items-center justify-center rounded-lg bg-slate-100">
-                            {pixQrCodeBase64 &&
-                            (pixQrCodeBase64.startsWith('iVBORw0KGgo') ||
-                              pixQrCodeBase64.startsWith('/9j/') ||
-                              pixQrCodeBase64.length > 500) ? (
-                              <img
-                                src={`data:image/png;base64,${pixQrCodeBase64}`}
-                                alt="QR Code PIX"
-                                className="h-full w-full rounded-lg object-contain"
-                                onError={(e) => {
-                                  console.warn(
-                                    'Falha ao exibir imagem base64, gerando QR Code do código PIX',
-                                  )
-                                  if (pixCode && !pixCode.startsWith('iVBORw0KGgo')) {
-                                    e.target.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`
-                                  } else {
-                                    e.target.style.display = 'none'
-                                  }
-                                }}
-                              />
-                            ) : pixCode && !pixCode.startsWith('iVBORw0KGgo') ? (
-                              <img
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`}
-                                alt="QR Code PIX"
-                                className="h-full w-full rounded-lg object-contain"
-                                onError={(e) => {
-                                  console.error('Falha ao gerar QR Code')
-                                  e.target.style.display = 'none'
-                                }}
-                              />
-                            ) : (
-                              <div className="p-4 text-xs text-slate-500">
-                                QR Code não disponível. Use o código abaixo.
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <p className="mb-2 text-xs text-slate-500">Gerando QR Code...</p>
-                          <div className="mx-auto flex h-48 w-48 items-center justify-center rounded-lg bg-slate-100">
-                            <ArrowPathIcon className="h-8 w-8 animate-spin text-slate-400" />
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mb-6">
-                    <label className={labelClass}>Código PIX (copia e cola)</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value={pixCode || 'Gerando código...'}
-                        className={`${inputClass} font-mono text-xs`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (pixCode) {
-                            navigator.clipboard.writeText(pixCode)
-                            alert('Código copiado!')
-                          }
-                        }}
-                        disabled={!pixCode}
-                        className="shrink-0 rounded-xl bg-cp-accent px-4 py-3 text-sm font-bold text-slate-950 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Copiar
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-cp-accent/20 bg-cp-accent/5 p-4">
-                    <p className="flex items-start gap-2 text-sm text-cp-muted">
-                      <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-cp-accent" />
-                      Após o pagamento, o acesso é ativado automaticamente e você recebe confirmação
-                      por email.
-                    </p>
-                  </div>
-                </motion.div>
-              ) : paymentStatus === 'pending' && paymentMethod === 'card' ? (
-                <motion.div
-                  key="card-pending"
+                  key="checkout-pending"
                   initial={{ opacity: 0, scale: 0.97 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="rounded-3xl border border-cp-border bg-cp-surface/80 p-6 text-center sm:p-8"
@@ -1083,8 +907,9 @@ const Payment = () => {
                   <ArrowPathIcon className="mx-auto mb-4 h-14 w-14 animate-spin text-cp-accent" />
                   <h2 className="cp-headline text-2xl">Confirmando pagamento</h2>
                   <p className="mt-2 text-sm text-cp-muted">
-                    Estamos confirmando seu pagamento no Mercado Pago. Isso pode levar alguns
-                    instantes.
+                    {paymentMethod === 'boleto'
+                      ? 'Conclua no Mercado Pago (boleto ou PIX). O acesso libera automaticamente após a confirmação. Boleto pode levar 1–3 dias úteis; PIX costuma ser imediato.'
+                      : 'Estamos confirmando seu pagamento no Mercado Pago. Isso pode levar alguns instantes.'}
                   </p>
                 </motion.div>
               ) : (
@@ -1105,7 +930,7 @@ const Payment = () => {
                         </p>
                       ) : (
                         <p className="mb-3 text-xs text-cp-muted">
-                          Crie sua conta agora. Depois do PIX, o acesso é liberado neste email.
+                          Crie sua conta agora. Após o pagamento no Mercado Pago, o acesso é liberado neste email.
                         </p>
                       )}
                     </div>
@@ -1169,28 +994,28 @@ const Payment = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          setPaymentMethod('pix')
+                          setPaymentMethod('boleto')
                           setAutoRenew(false)
                         }}
                         className={`rounded-2xl border p-4 text-left transition ${
-                          paymentMethod === 'pix'
+                          paymentMethod === 'boleto'
                             ? 'border-cp-accent/50 bg-cp-accent/10 shadow-[0_0_24px_-12px_rgba(34,211,238,0.55)]'
                             : 'border-cp-border bg-[var(--cp-bg)]/40 hover:border-cp-accent/30'
                         }`}
                       >
                         <BanknotesIcon
                           className={`mb-2 h-7 w-7 ${
-                            paymentMethod === 'pix' ? 'text-cp-accent' : 'text-cp-muted'
+                            paymentMethod === 'boleto' ? 'text-cp-accent' : 'text-cp-muted'
                           }`}
                         />
                         <p
                           className={`text-sm font-semibold ${
-                            paymentMethod === 'pix' ? 'text-cp-text' : 'text-cp-muted'
+                            paymentMethod === 'boleto' ? 'text-cp-text' : 'text-cp-muted'
                           }`}
                         >
-                          PIX
+                          Boleto
                         </p>
-                        <p className="mt-1 text-xs text-cp-muted">Aprovação rápida</p>
+                        <p className="mt-1 text-xs text-cp-muted">Boleto ou PIX no Mercado Pago</p>
                       </button>
 
                       <button
@@ -1218,6 +1043,18 @@ const Payment = () => {
                       </button>
                     </div>
                   </div>
+
+                  {paymentMethod === 'boleto' ? (
+                    <div className="mb-6 rounded-2xl border border-cp-border bg-[var(--cp-bg)]/40 p-4">
+                      <p className="flex items-start gap-2 text-sm text-cp-muted">
+                        <BanknotesIcon className="mt-0.5 h-5 w-5 shrink-0 text-cp-accent" />
+                        Você será redirecionado ao checkout seguro do Mercado Pago para pagar com{' '}
+                        <strong className="text-cp-text">boleto</strong> ou{' '}
+                        <strong className="text-cp-text">PIX</strong>. O acesso libera automaticamente
+                        após a confirmação.
+                      </p>
+                    </div>
+                  ) : null}
 
                   {paymentMethod === 'card' ? (
                     <div className="mb-6 space-y-4">
@@ -1299,9 +1136,7 @@ const Payment = () => {
                     ) : (
                       <>
                         <LockClosedIcon className="h-5 w-5" />
-                        {paymentMethod === 'pix'
-                          ? `Pagar ${formatCurrency(product.price)} com PIX`
-                          : `Pagar ${formatCurrency(product.price)} no Mercado Pago`}
+                        {`Pagar ${formatCurrency(product.price)} no Mercado Pago`}
                       </>
                     )}
                   </button>

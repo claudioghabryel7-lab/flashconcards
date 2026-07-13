@@ -475,6 +475,7 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
         successUrl,
         failureUrl,
         pendingUrl,
+        checkoutKind: checkoutKindRaw,
       } = req.body || {}
 
       const amountNumber = parseFloat(amount)
@@ -484,6 +485,9 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
           message: 'Informe amount, description e transactionId válidos.',
         })
       }
+
+      // boleto = ticket + PIX no Checkout Pro; card = cartão (e PreApproval se autoRenew)
+      const checkoutKind = checkoutKindRaw === 'boleto' ? 'boleto' : 'card'
 
       const accessToken = getMercadoPagoAccessToken()
       if (!accessToken) {
@@ -512,7 +516,7 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
       const failure = resolveMercadoPagoBackUrl(failureUrl, failureFallback)
       const pending = resolveMercadoPagoBackUrl(pendingUrl, pendingFallback)
 
-      const wantAutoRenew = Boolean(autoRenew)
+      const wantAutoRenew = checkoutKind === 'card' && Boolean(autoRenew)
       const recurring = wantAutoRenew
         ? toMercadoPagoRecurring({
             courseDuration,
@@ -570,6 +574,24 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
       }
 
       const preference = new Preference(client)
+      const paymentMethods =
+        checkoutKind === 'boleto'
+          ? {
+              // Só boleto (ticket) + PIX (bank_transfer) no Checkout Pro
+              excluded_payment_types: [
+                { id: 'credit_card' },
+                { id: 'debit_card' },
+                { id: 'prepaid_card' },
+              ],
+            }
+          : {
+              // Só cartão no fluxo de cartão
+              excluded_payment_types: [
+                { id: 'ticket' },
+                { id: 'bank_transfer' },
+              ],
+            }
+
       const body = {
         items: [
           {
@@ -589,8 +611,10 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
           transaction_id: String(transactionId),
           course_id: courseId || null,
           auto_renew: false,
+          checkout_kind: checkoutKind,
           course_duration: courseDuration || null,
         },
+        payment_methods: paymentMethods,
         back_urls: {
           success,
           failure,
@@ -607,7 +631,14 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
         body.auto_return = 'approved'
       }
 
-      console.log('createCheckoutPreference back_urls:', body.back_urls, 'auto_return:', body.auto_return)
+      console.log(
+        'createCheckoutPreference kind:',
+        checkoutKind,
+        'back_urls:',
+        body.back_urls,
+        'auto_return:',
+        body.auto_return,
+      )
 
       const result = await preference.create({ body })
       const testMode = isMercadoPagoTestMode()
