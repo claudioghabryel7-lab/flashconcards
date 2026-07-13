@@ -14,6 +14,7 @@ import {
   where,
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
+import { buildFlagCorrectionLink } from '../utils/flagCorrectionLinks'
 
 function mapFlagDoc(d) {
   const data = d.data() || {}
@@ -163,6 +164,12 @@ export async function resolveContentFlag(courseId, flagDocId) {
       topicKey: flagData.topicKey || null,
       flagId: flagDocId,
       preview: flagData.preview || '',
+      linkPath: buildFlagCorrectionLink({
+        courseId,
+        contentType: flagData.contentType,
+        contentId: flagData.contentId,
+        topicKey: flagData.topicKey,
+      }),
       read: false,
       createdAt: serverTimestamp(),
     })

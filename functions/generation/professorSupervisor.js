@@ -429,17 +429,49 @@ async function resolveFlagFeedback(courseId, flagId, { applied = 0, summary = ''
       ? `Seu relatório sobre ${typeLabel} foi revisado e o conteúdo foi corrigido.`
       : `Seu relatório sobre ${typeLabel} foi revisado pelo professor. ${summary || 'O conteúdo foi analisado.'}`
 
+  const courseIdSafe = courseId || null
+  const topicKey = flagData.topicKey || null
+  const contentType = flagData.contentType || null
+  let linkPath = '/edital-verticalizado'
+  try {
+    if (contentType === 'flashcard' && topicKey) {
+      const decoded = decodeURIComponent(topicKey)
+      const parts = decoded.split(' :: ')
+      const materia = parts[0] || ''
+      const modulo = parts.slice(1).join(' :: ') || ''
+      const params = new URLSearchParams()
+      if (courseIdSafe) params.set('course', courseIdSafe)
+      if (materia) params.set('materia', materia)
+      if (modulo) params.set('modulo', modulo)
+      if (flagData.contentId) params.set('card', String(flagData.contentId))
+      linkPath = `/flashcards/estudar?${params.toString()}`
+    } else if ((contentType === 'material' || contentType === 'materia') && courseIdSafe && topicKey) {
+      linkPath = `/conteudo-completo/topic/${courseIdSafe}/${encodeURIComponent(topicKey)}`
+    } else if (contentType === 'questao' && courseIdSafe && topicKey) {
+      linkPath = `/questoes-topic/${courseIdSafe}/${encodeURIComponent(topicKey)}`
+    } else if (contentType === 'flashcard') {
+      linkPath = courseIdSafe ? `/flashcards?course=${courseIdSafe}` : '/flashcards'
+    } else if (contentType === 'questao') {
+      linkPath = '/resolver-questoes'
+    } else if (contentType === 'material' || contentType === 'materia') {
+      linkPath = '/resolver-material'
+    }
+  } catch (_) {
+    /* keep default */
+  }
+
   await db.collection(`users/${targetUserId}/notifications`).add({
     type: 'flag_corrected',
     tone: 'success',
     title: applied > 0 ? 'Sinalização corrigida' : 'Sinalização revisada',
     message,
-    courseId: courseId || null,
-    contentType: flagData.contentType || null,
+    courseId: courseIdSafe,
+    contentType,
     contentId: flagData.contentId || null,
-    topicKey: flagData.topicKey || null,
+    topicKey,
     flagId,
     preview: flagData.preview || '',
+    linkPath,
     appliedCorrections: applied,
     read: false,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),

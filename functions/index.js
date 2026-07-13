@@ -59,7 +59,22 @@ function getMercadoPagoAccessToken(options = {}) {
 }
 
 function isMercadoPagoTestMode() {
-  return String(process.env.MERCADOPAGO_MODE || 'test').toLowerCase() === 'test'
+  const mode = String(process.env.MERCADOPAGO_MODE || 'test').toLowerCase()
+  if (mode === 'prod' || mode === 'production') return false
+  if (mode === 'test' || mode === 'sandbox') return true
+  // Fallback pelo prefixo do token ativo
+  const token = getMercadoPagoAccessToken()
+  return String(token).startsWith('TEST-')
+}
+
+/** URL de checkout: em produção NUNCA usa sandbox (sandbox pede login de conta teste). */
+function resolveCheckoutInitPoint(result, { testMode } = {}) {
+  const initPoint = result?.init_point || null
+  const sandboxPoint = result?.sandbox_init_point || null
+  if (testMode) {
+    return sandboxPoint || initPoint
+  }
+  return initPoint || null
 }
 
 function assertGeminiConfigured() {
@@ -550,14 +565,15 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
 
         const result = await preApproval.create({ body: preBody })
         const testMode = isMercadoPagoTestMode()
-        const checkoutUrl =
-          result.init_point || result.sandbox_init_point || result.sandbox_init_point
+        const checkoutUrl = resolveCheckoutInitPoint(result, { testMode })
 
         if (!checkoutUrl) {
           return res.status(500).json({
             error: 'Assinatura sem URL',
-            message: 'Mercado Pago não retornou init_point da assinatura.',
-            details: result,
+            message: testMode
+              ? 'Mercado Pago não retornou init_point da assinatura.'
+              : 'Conta de produção sem init_point. Verifique se o aplicativo MP está em produção e com checkout habilitado.',
+            details: { hasInit: Boolean(result.init_point), hasSandbox: Boolean(result.sandbox_init_point) },
           })
         }
 
@@ -642,15 +658,27 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
 
       const result = await preference.create({ body })
       const testMode = isMercadoPagoTestMode()
-      const checkoutUrl = testMode
-        ? result.sandbox_init_point || result.init_point
-        : result.init_point || result.sandbox_init_point
+      const checkoutUrl = resolveCheckoutInitPoint(result, { testMode })
+
+      console.log('createCheckoutPreference result:', {
+        testMode,
+        tokenPrefix: String(getMercadoPagoAccessToken()).slice(0, 8),
+        hasInitPoint: Boolean(result.init_point),
+        hasSandbox: Boolean(result.sandbox_init_point),
+        preferenceId: result.id,
+      })
 
       if (!checkoutUrl) {
         return res.status(500).json({
           error: 'Preferência sem URL',
-          message: 'Mercado Pago não retornou init_point.',
-          details: result,
+          message: testMode
+            ? 'Mercado Pago não retornou init_point.'
+            : 'Produção sem link de pagamento (init_point). Confira no painel do MP se a aplicação está ativa em produção e com Checkout Pro/pagamentos online habilitados.',
+          details: {
+            hasInitPoint: Boolean(result.init_point),
+            hasSandbox: Boolean(result.sandbox_init_point),
+            testMode,
+          },
         })
       }
 

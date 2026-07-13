@@ -9,25 +9,36 @@ const STORAGE_KEY = (uid, courseId) => `topicNotifs_${uid}_${courseId}`
 
 function loadStored(uid, courseId) {
   if (!uid || !courseId || typeof window === 'undefined') {
-    return { acknowledgedKeys: {}, items: [] }
+    return { acknowledgedKeys: {}, items: [], clearedAt: 0 }
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY(uid, courseId))
-    if (raw) return JSON.parse(raw)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      return {
+        acknowledgedKeys: parsed.acknowledgedKeys || {},
+        items: parsed.items || [],
+        clearedAt: parsed.clearedAt || 0,
+      }
+    }
     // Migração do formato antigo (global por usuário)
     const legacy = localStorage.getItem(`topicNotifs_${uid}`)
     if (legacy) {
       const parsed = JSON.parse(legacy)
       const items = (parsed.items || []).filter((n) => n.courseId === courseId)
-      const acknowledgedKeys = {}
+      const acknowledgedKeys = { ...(parsed.acknowledgedKeys || {}) }
       items.forEach((n) => {
-        if (n.topicKey) acknowledgedKeys[n.topicKey] = true
+        if (n.topicKey && n.contentType) {
+          acknowledgedKeys[`${n.topicKey}:${n.contentType}`] = true
+        } else if (n.topicKey) {
+          acknowledgedKeys[n.topicKey] = true
+        }
       })
-      return { acknowledgedKeys, items }
+      return { acknowledgedKeys, items, clearedAt: parsed.clearedAt || 0 }
     }
-    return { acknowledgedKeys: {}, items: [] }
+    return { acknowledgedKeys: {}, items: [], clearedAt: 0 }
   } catch {
-    return { acknowledgedKeys: {}, items: [] }
+    return { acknowledgedKeys: {}, items: [], clearedAt: 0 }
   }
 }
 
@@ -92,6 +103,43 @@ function collectAvailableTopics(map, metaByKey) {
   return topics
 }
 
+function buildContentLink(contentType, courseId, topicKey, extra = {}) {
+  const course = courseId || ''
+  let materia = ''
+  let modulo = ''
+  try {
+    const decoded = decodeURIComponent(topicKey || '')
+    const parts = decoded.split(' :: ')
+    materia = parts[0] || ''
+    modulo = parts.slice(1).join(' :: ') || ''
+  } catch {
+    modulo = topicKey || ''
+  }
+
+  if (contentType === 'flashcards' || contentType === 'flashcard') {
+    const params = new URLSearchParams()
+    if (course) params.set('course', course)
+    if (materia) params.set('materia', materia)
+    if (modulo) params.set('modulo', modulo)
+    if (extra.contentId) params.set('card', String(extra.contentId))
+    return `/flashcards/estudar?${params.toString()}`
+  }
+  if (contentType === 'material' || contentType === 'materia') {
+    if (course && topicKey) {
+      return `/conteudo-completo/topic/${course}/${encodeURIComponent(topicKey)}`
+    }
+    return '/resolver-material'
+  }
+  if (contentType === 'questoes' || contentType === 'questao') {
+    if (course && topicKey) {
+      return `/questoes-topic/${course}/${encodeURIComponent(topicKey)}`
+    }
+    return '/resolver-questoes'
+  }
+  if (contentType === 'vespera') return '/vespera-de-prova'
+  return '/edital-verticalizado'
+}
+
 function buildNotification(courseId, topicKey, meta, contentType = 'topico') {
   const labels = {
     flashcards: 'Flashcards liberados',
@@ -100,13 +148,6 @@ function buildNotification(courseId, topicKey, meta, contentType = 'topico') {
     topico: 'Novo tópico liberado',
     vespera: 'Revisão liberada',
   }
-  const links = {
-    flashcards: '/flashcards',
-    material: '/resolver-material',
-    questoes: '/resolver-questoes',
-    topico: '/edital-verticalizado',
-    vespera: '/vespera-de-prova',
-  }
   const baseLabel = decodeTopicLabel(topicKey, meta.disciplinaNome)
 
   return {
@@ -114,7 +155,7 @@ function buildNotification(courseId, topicKey, meta, contentType = 'topico') {
     courseId,
     topicKey,
     contentType,
-    linkPath: links[contentType] || links.topico,
+    linkPath: buildContentLink(contentType === 'topico' ? 'flashcards' : contentType, courseId, topicKey),
     label:
       contentType === 'topico'
         ? baseLabel
@@ -208,7 +249,7 @@ export function useTopicNotifications(userId, courseId) {
         const map = buildTopicoPublishMapFromSnapshot(snapshot)
         const metaByKey = buildMetaIndex(snapshot)
         const storedNow = loadStored(userId, resolvedId)
-        let { acknowledgedKeys, items } = storedNow
+        let { acknowledgedKeys, items, clearedAt = 0 } = storedNow
         const existingIds = new Set(items.map((n) => n.id))
         const newItems = []
 
@@ -216,6 +257,15 @@ export function useTopicNotifications(userId, courseId) {
           const types = notificationTypesFromMeta(meta)
           const sig = assetsSignature(meta)
           const prevSig = prevAssetsRef.current[topicKey]
+          const releasedAt = toMillis(meta.updatedAt || meta.releasedAt)
+          // Após "Limpar", não recria itens antigos
+          if (clearedAt && releasedAt && releasedAt <= clearedAt) {
+            types.forEach((contentType) => {
+              acknowledgedKeys = { ...acknowledgedKeys, [`${topicKey}:${contentType}`]: true }
+            })
+            prevAssetsRef.current[topicKey] = sig
+            return
+          }
           const isNewRelease = forceRetro || !prevSig || prevSig !== sig
 
           types.forEach((contentType) => {
@@ -261,9 +311,9 @@ export function useTopicNotifications(userId, courseId) {
           const merged = [...newItems, ...items]
             .sort((a, b) => b.createdAt - a.createdAt)
             .slice(0, MAX_ITEMS)
-          persist({ acknowledgedKeys, items: merged })
-        } else if (Object.keys(acknowledgedKeys).length !== Object.keys(storedNow.acknowledgedKeys).length) {
-          persist({ acknowledgedKeys, items })
+          persist({ acknowledgedKeys, items: merged, clearedAt })
+        } else if (Object.keys(acknowledgedKeys).length !== Object.keys(storedNow.acknowledgedKeys || {}).length) {
+          persist({ acknowledgedKeys, items, clearedAt })
         }
       },
       (err) => console.error('Erro nas notificações de tópicos:', err),
@@ -286,7 +336,7 @@ export function useTopicNotifications(userId, courseId) {
       collection(db, 'courses', resolvedId, 'vesperaNotifications'),
       (snapshot) => {
         const storedNow = loadStored(userId, resolvedId)
-        let { acknowledgedKeys, items } = storedNow
+        let { acknowledgedKeys, items, clearedAt = 0 } = storedNow
         const existingIds = new Set(items.map((n) => n.id))
         const newItems = []
         const currentIds = new Set()
@@ -297,6 +347,12 @@ export function useTopicNotifications(userId, courseId) {
           if (data.status === 'dismissed') return
 
           const ackKey = `vespera:${d.id}`
+          const createdAt = toMillis(data.createdAt)
+          if (clearedAt && createdAt && createdAt <= clearedAt) {
+            acknowledgedKeys = { ...acknowledgedKeys, [ackKey]: true }
+            return
+          }
+
           const isNew = !vesperaInitRef.current || !prevVesperaIdsRef.current.has(d.id)
 
           if (!isNew) return
@@ -319,7 +375,9 @@ export function useTopicNotifications(userId, courseId) {
           const merged = [...newItems, ...items]
             .sort((a, b) => b.createdAt - a.createdAt)
             .slice(0, MAX_ITEMS)
-          persist({ acknowledgedKeys, items: merged })
+          persist({ acknowledgedKeys, items: merged, clearedAt })
+        } else if (Object.keys(acknowledgedKeys).length !== Object.keys(storedNow.acknowledgedKeys || {}).length) {
+          persist({ acknowledgedKeys, items, clearedAt })
         }
       },
       (err) => console.error('Erro nas notificações de véspera:', err),
@@ -349,7 +407,22 @@ export function useTopicNotifications(userId, courseId) {
 
   const clearAll = useCallback(() => {
     const stored = loadStored(userId, courseId)
-    persist({ ...stored, items: [] })
+    const acknowledgedKeys = { ...stored.acknowledgedKeys }
+    stored.items.forEach((n) => {
+      if (n.topicKey && n.contentType) {
+        acknowledgedKeys[`${n.topicKey}:${n.contentType}`] = true
+      }
+      if (n.contentType === 'vespera' && n.id?.startsWith('vespera:')) {
+        const parts = n.id.split(':')
+        if (parts[2]) acknowledgedKeys[`vespera:${parts[2]}`] = true
+      }
+    })
+    // Impede que o snapshot recoloque o histórico antigo
+    persist({
+      acknowledgedKeys,
+      items: [],
+      clearedAt: Date.now(),
+    })
   }, [userId, courseId, persist])
 
   return { notifications, unreadCount, markAllRead, markRead, clearAll }

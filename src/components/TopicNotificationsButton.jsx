@@ -6,6 +6,7 @@ import { Bell } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useTopicNotifications } from '@/hooks/useTopicNotifications'
 import { useFlagCorrectionNotifications } from '@/hooks/useFlagCorrectionNotifications'
+import { buildFlagCorrectionLink } from '@/utils/flagCorrectionLinks'
 import dayjs from 'dayjs'
 
 const TopicNotificationsButton = memo(() => {
@@ -85,26 +86,33 @@ const TopicNotificationsButton = memo(() => {
                 </button>
               </div>
               <div className="max-h-40 overflow-y-auto">
-                {flagNotifs.map((n) => (
-                  <button
-                    key={n.id}
-                    type="button"
-                    onClick={() => {
-                      markFlagRead(n.id)
-                    }}
-                    className={`block w-full border-b border-cp-border/50 px-4 py-3 text-left transition-colors hover:bg-emerald-500/5 ${
-                      !n.read ? 'bg-emerald-500/10' : ''
-                    }`}
-                  >
-                    <p className="text-sm font-medium leading-snug text-emerald-800 dark:text-emerald-200">
-                      {n.title || 'Sinalização corrigida'}
-                    </p>
-                    <p className="mt-0.5 text-xs text-cp-muted">{n.message}</p>
-                    <p className="mt-1 text-[10px] text-emerald-600/80">
-                      {dayjs(n.createdAt).format('DD/MM HH:mm')}
-                    </p>
-                  </button>
-                ))}
+                {flagNotifs.map((n) => {
+                  const href = buildFlagCorrectionLink(n)
+                  return (
+                    <Link
+                      key={n.id}
+                      href={href}
+                      onClick={() => {
+                        markFlagRead(n.id)
+                        setOpen(false)
+                      }}
+                      className={`block w-full border-b border-cp-border/50 px-4 py-3 text-left transition-colors hover:bg-emerald-500/5 ${
+                        !n.read ? 'bg-emerald-500/10' : ''
+                      }`}
+                    >
+                      <p className="text-sm font-medium leading-snug text-emerald-800 dark:text-emerald-200">
+                        {n.title || 'Sinalização corrigida'}
+                      </p>
+                      <p className="mt-0.5 text-xs text-cp-muted">{n.message}</p>
+                      <p className="mt-1 text-[10px] font-medium text-emerald-600">
+                        Abrir conteúdo corrigido →
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-emerald-600/80">
+                        {dayjs(n.createdAt).format('DD/MM HH:mm')}
+                      </p>
+                    </Link>
+                  )
+                })}
               </div>
             </>
           )}
