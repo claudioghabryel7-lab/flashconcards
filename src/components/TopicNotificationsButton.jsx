@@ -39,6 +39,13 @@ const TopicNotificationsButton = memo(() => {
     markAllRead: markCommunityRead,
   } = useCommunityFeedNotifications(user?.uid)
 
+  const correctionNotifs = flagNotifs.filter(
+    (n) => !n.type || n.type === 'flag_corrected',
+  )
+  const pushMotivationNotifs = flagNotifs.filter(
+    (n) => n.type === 'motivation' || n.type === 'motivation_push',
+  )
+
   const [open, setOpen] = useState(false)
   const panelRef = useRef(null)
   const soundWatcherRef = useRef(null)
@@ -100,17 +107,46 @@ const TopicNotificationsButton = memo(() => {
       {open && (
         <div className="absolute right-0 top-full z-[80] mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-cp-border bg-cp-bg shadow-2xl">
           {motivation ? (
-            <>
-              <div className="border-b border-cp-border bg-amber-500/10 px-4 py-3">
-                <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                  {motivation.title}
-                </p>
-                <p className="mt-1 text-xs text-cp-muted">{motivation.message}</p>
-              </div>
-            </>
+            <div className="border-b border-cp-border bg-amber-500/10 px-4 py-3">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                {motivation.title}
+              </p>
+              <p className="mt-1 text-xs text-cp-muted">{motivation.message}</p>
+            </div>
           ) : null}
 
-          {flagNotifs.length > 0 && (
+          {pushMotivationNotifs.length > 0 && (
+            <>
+              <div className="border-b border-cp-border bg-amber-500/5 px-4 py-2">
+                <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                  Lembretes motivacionais
+                </p>
+              </div>
+              <div className="max-h-36 overflow-y-auto">
+                {pushMotivationNotifs.map((n) => (
+                  <Link
+                    key={n.id}
+                    href={n.linkPath || '/dashboard'}
+                    onClick={() => {
+                      markFlagRead(n.id)
+                      setOpen(false)
+                    }}
+                    className={`block border-b border-cp-border/50 px-4 py-3 transition-colors hover:bg-amber-500/5 ${
+                      !n.read ? 'bg-amber-500/10' : ''
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-cp-text">{n.title}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-cp-muted">{n.message}</p>
+                    <p className="mt-1 text-[10px] text-cp-muted">
+                      {dayjs(n.createdAt).format('DD/MM HH:mm')}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </>
+          )}
+
+          {correctionNotifs.length > 0 && (
             <>
               <div className="flex items-center justify-between border-b border-cp-border bg-emerald-500/10 px-4 py-3">
                 <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
@@ -125,7 +161,7 @@ const TopicNotificationsButton = memo(() => {
                 </button>
               </div>
               <div className="max-h-40 overflow-y-auto">
-                {flagNotifs.map((n) => {
+                {correctionNotifs.map((n) => {
                   const href = buildFlagCorrectionLink(n)
                   return (
                     <Link
@@ -142,7 +178,7 @@ const TopicNotificationsButton = memo(() => {
                       <p className="text-sm font-medium leading-snug text-emerald-800 dark:text-emerald-200">
                         {n.title || 'Sinalização corrigida'}
                       </p>
-                      <p className="mt-0.5 text-xs text-cp-muted line-clamp-3">{n.message}</p>
+                      <p className="mt-0.5 line-clamp-3 text-xs text-cp-muted">{n.message}</p>
                       <p className="mt-1 text-[10px] font-medium text-emerald-600">
                         Abrir conteúdo corrigido →
                       </p>

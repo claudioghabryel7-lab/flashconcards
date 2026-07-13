@@ -31,7 +31,28 @@ export const useOnlineStatus = () => {
     if (!userId) return () => {}
 
     const userPresenceRef = doc(db, 'presence', userId)
+    const userRef = doc(db, 'users', userId)
     let heartbeatInterval = null
+    let lastUserTouch = 0
+
+    const touchUserAccess = async () => {
+      const now = Date.now()
+      // Evita writes excessivos no doc do usuário (a cada ~2 min)
+      if (now - lastUserTouch < 2 * 60 * 1000) return
+      lastUserTouch = now
+      try {
+        await setDoc(
+          userRef,
+          {
+            lastAccessAt: serverTimestamp(),
+            lastSeen: serverTimestamp(),
+          },
+          { merge: true },
+        )
+      } catch {
+        /* ignore */
+      }
+    }
 
     const writePresence = async (status) => {
       try {
@@ -40,6 +61,7 @@ export const useOnlineStatus = () => {
           buildPresencePayload(user, profile, status),
           { merge: true },
         )
+        if (status === 'online') await touchUserAccess()
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err)
         if (isDevEnv()) {

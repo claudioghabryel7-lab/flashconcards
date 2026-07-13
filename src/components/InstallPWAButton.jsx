@@ -57,7 +57,10 @@ const InstallPWAButton = ({ variant = 'banner', className = '' }) => {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open])
 
-  if (isInstalled) return null
+  if (isInstalled) {
+    // Já instalado: ainda mostra atalho rápido para lembrete de notificações no variant icon
+    if (variant !== 'icon') return null
+  }
 
   const runNativeInstall = async () => {
     if (!deferredPrompt) return false
@@ -96,57 +99,71 @@ const InstallPWAButton = ({ variant = 'banner', className = '' }) => {
 
         {open && (
           <div className="absolute right-0 top-full z-[80] mt-2 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-cp-border bg-cp-bg p-4 shadow-2xl">
-            <p className="text-sm font-semibold text-cp-text">Instalar o app</p>
-            <p className="mt-1 text-xs text-cp-muted">
-              Use o FlashConCards como aplicativo no celular ou computador — mais rápido e com
-              notificações sonoras.
-            </p>
-
-            {deferredPrompt ? (
-              <button
-                type="button"
-                onClick={runNativeInstall}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-cp-accent px-3 py-2.5 text-sm font-semibold text-cp-bg transition hover:opacity-90"
-              >
-                <ArrowDownTrayIcon className="h-4 w-4" />
-                Instalar agora
-              </button>
-            ) : null}
-
-            {isIOS ? (
-              <ol className="mt-3 list-decimal space-y-1.5 pl-4 text-xs text-cp-muted">
-                <li>
-                  Toque em <strong className="text-cp-text">Compartilhar</strong> (□↑) no Safari
-                </li>
-                <li>
-                  Escolha <strong className="text-cp-text">Adicionar à Tela de Início</strong>
-                </li>
-                <li>
-                  Confirme em <strong className="text-cp-text">Adicionar</strong>
-                </li>
-              </ol>
-            ) : isAndroid ? (
-              <ol className="mt-3 list-decimal space-y-1.5 pl-4 text-xs text-cp-muted">
-                <li>Abra o menu do Chrome (⋮)</li>
-                <li>
-                  Toque em <strong className="text-cp-text">Instalar app</strong> ou{' '}
-                  <strong className="text-cp-text">Adicionar à tela inicial</strong>
-                </li>
-              </ol>
+            {isInstalled ? (
+              <>
+                <p className="text-sm font-semibold text-cp-text">App instalado</p>
+                <p className="mt-1 text-xs text-cp-muted">
+                  Para receber lembretes no celular (mesmo com o app fechado), aceite o pedido de
+                  notificações quando aparecer o banner, ou ative nas configurações do navegador.
+                </p>
+              </>
             ) : (
-              <ol className="mt-3 list-decimal space-y-1.5 pl-4 text-xs text-cp-muted">
-                <li>No Chrome/Edge, abra o menu (⋮)</li>
-                <li>
-                  Clique em <strong className="text-cp-text">Instalar FlashConCards</strong> ou no
-                  ícone ⊕ na barra de endereço
-                </li>
-              </ol>
+              <>
+                <p className="text-sm font-semibold text-cp-text">Instalar o app</p>
+                <p className="mt-1 text-xs text-cp-muted">
+                  Use o FlashConCards como aplicativo no celular — mais rápido e com notificações no
+                  aparelho (após ativar o sino de permissão).
+                </p>
+
+                {deferredPrompt ? (
+                  <button
+                    type="button"
+                    onClick={runNativeInstall}
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-cp-accent px-3 py-2.5 text-sm font-semibold text-cp-bg transition hover:opacity-90"
+                  >
+                    <ArrowDownTrayIcon className="h-4 w-4" />
+                    Instalar agora
+                  </button>
+                ) : null}
+
+                {isIOS ? (
+                  <ol className="mt-3 list-decimal space-y-1.5 pl-4 text-xs text-cp-muted">
+                    <li>
+                      Toque em <strong className="text-cp-text">Compartilhar</strong> (□↑) no Safari
+                    </li>
+                    <li>
+                      Escolha <strong className="text-cp-text">Adicionar à Tela de Início</strong>
+                    </li>
+                    <li>
+                      Confirme em <strong className="text-cp-text">Adicionar</strong>
+                    </li>
+                  </ol>
+                ) : isAndroid ? (
+                  <ol className="mt-3 list-decimal space-y-1.5 pl-4 text-xs text-cp-muted">
+                    <li>Abra o menu do Chrome (⋮)</li>
+                    <li>
+                      Toque em <strong className="text-cp-text">Instalar app</strong> ou{' '}
+                      <strong className="text-cp-text">Adicionar à tela inicial</strong>
+                    </li>
+                  </ol>
+                ) : (
+                  <ol className="mt-3 list-decimal space-y-1.5 pl-4 text-xs text-cp-muted">
+                    <li>No Chrome/Edge, abra o menu (⋮)</li>
+                    <li>
+                      Clique em <strong className="text-cp-text">Instalar FlashConCards</strong> ou no
+                      ícone ⊕ na barra de endereço
+                    </li>
+                  </ol>
+                )}
+              </>
             )}
           </div>
         )}
       </div>
     )
   }
+
+  if (isInstalled) return null
 
   if (!isIOS && !isAndroid && !deferredPrompt) return null
 

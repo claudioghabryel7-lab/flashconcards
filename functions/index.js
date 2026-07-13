@@ -1917,6 +1917,37 @@ exports.weeklyRedacaoThemeRotation = functions.pubsub
     return null
   })
 
+/**
+ * Push motivacional personalizado para alunos inativos (FCM).
+ * 10h e 18h (Brasília) — só quem ativou notificações e está 24h+ sem estudar.
+ */
+exports.motivationalInactivityPush = functions.pubsub
+  .schedule('0 10,18 * * *')
+  .timeZone('America/Sao_Paulo')
+  .onRun(async () => {
+    console.log('[motivationalInactivityPush] Iniciando…')
+    const { runMotivationalInactivityPush } = require('./push/motivationalInactivityPush')
+    const result = await runMotivationalInactivityPush()
+    console.log('[motivationalInactivityPush] Concluído:', result)
+    return null
+  })
+
+/** Disparo manual (admin) do push motivacional por inatividade. */
+exports.runMotivationalInactivityPushNow = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    try {
+      if (req.method === 'OPTIONS') return res.status(204).send('')
+      await verifyAdminRequest(req)
+      const { runMotivationalInactivityPush } = require('./push/motivationalInactivityPush')
+      const result = await runMotivationalInactivityPush()
+      return res.status(200).json({ ok: true, ...result })
+    } catch (error) {
+      const status = error.status || 500
+      return res.status(status).json({ error: error.message || 'Erro ao enviar push' })
+    }
+  })
+})
+
 /** Retoma jobs pausados — backup a cada 1 min (retomada principal: fila + nudge). */
 exports.resumeWaitingGenerationJobs = functions.pubsub
   .schedule('every 1 minutes')

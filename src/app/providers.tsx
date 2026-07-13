@@ -16,6 +16,7 @@ import useSiteCacheSync from '@/hooks/useSiteCacheSync'
 import { cleanupConsole } from '@/lib/consoleCleanup'
 import BackgroundGenerationBanner from '@/components/BackgroundGenerationBanner'
 import CourseReviewPrompt from '@/components/CourseReviewPrompt'
+import PushPermissionBanner from '@/components/PushPermissionBanner'
 
 function ClientBootstrap() {
   useEffect(() => {
@@ -39,6 +40,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                 {children}
                 <BackgroundGenerationBanner />
                 <CourseReviewPrompt />
+                <PushPermissionBanner />
                 <Toaster position="top-right" />
               </SystemProvider>
             </AuthProvider>

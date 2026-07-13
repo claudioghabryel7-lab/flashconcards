@@ -39,7 +39,15 @@ export function useFlagCorrectionNotifications(userId) {
               ...d.data(),
               createdAt: d.data().createdAt?.toMillis?.() || Date.now(),
             }))
-            .filter((n) => !n.type || n.type === 'flag_corrected'),
+            .filter((n) => {
+              const t = n.type
+              return (
+                !t ||
+                t === 'flag_corrected' ||
+                t === 'motivation' ||
+                t === 'motivation_push'
+              )
+            }),
         )
       },
       (err) => {

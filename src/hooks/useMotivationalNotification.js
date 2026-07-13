@@ -1,20 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import dayjs from 'dayjs'
+import { useAuth } from './useAuth'
 
 const STORAGE_KEY = (uid) => `cp_motivational_notif_${uid}`
-
-const PHRASES = [
-  'Cada card revisado é um passo a mais na aprovação. Continue!',
-  'Consistência vence intensidade. Estude um pouco todos os dias.',
-  'Você não precisa ser perfeito — só precisa não parar.',
-  'A véspera da prova se constrói com as revisões de hoje.',
-  'Foque no próximo tópico. Um de cada vez.',
-  'Erros no flashcard hoje viram acertos na prova.',
-  'Disciplina silenciosa: abrir o app e estudar, mesmo sem vontade.',
-  'Seu futuro eu agradece o esforço de agora.',
-  'Revise o que já viu. Retenção é o segredo do concurseiro.',
-  'Pequenos blocos diários constroem grandes resultados.',
-]
 
 function todayKey() {
   return dayjs().format('YYYY-MM-DD')
@@ -39,16 +27,39 @@ function saveState(uid, state) {
   }
 }
 
-function pickPhrase(day) {
+function firstName(profile, user) {
+  const raw =
+    String(profile?.displayName || profile?.name || user?.displayName || '').trim() ||
+    String(user?.email || '').split('@')[0] ||
+    'concurseiro'
+  return raw.split(/\s+/)[0]
+}
+
+function buildPersonalizedPhrase(userId, profile, user) {
+  const name = firstName(profile, user)
+  const day = todayKey()
+  const phrases = [
+    `${name}, um bloco curto de flashcards agora vale mais que adiar.`,
+    `${name}, consistência vence intensidade — revise 10 cards hoje.`,
+    `${name}, a véspera da prova se constrói com as revisões de hoje.`,
+    `${name}, erros no flashcard hoje viram acertos na prova.`,
+    `${name}, disciplina silenciosa: abrir o app e estudar, mesmo sem vontade.`,
+    `${name}, seu futuro eu agradece o esforço de agora.`,
+    `${name}, foque no próximo tópico. Um de cada vez.`,
+    `${name}, retenção é o segredo — revise o que já viu.`,
+  ]
   let hash = 0
-  for (let i = 0; i < day.length; i += 1) hash = (hash * 31 + day.charCodeAt(i)) >>> 0
-  return PHRASES[hash % PHRASES.length]
+  const key = `${userId}:${day}`
+  for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) >>> 0
+  return phrases[hash % phrases.length]
 }
 
 /**
- * Uma frase motivacional por dia no sino de notificações (client-side).
+ * Frase motivacional individual no sino (client-side).
+ * Push de inatividade (com app fechado) é feito pela Cloud Function FCM.
  */
 export function useMotivationalNotification(userId) {
+  const { user, profile } = useAuth()
   const [notification, setNotification] = useState(null)
 
   useEffect(() => {
@@ -66,14 +77,14 @@ export function useMotivationalNotification(userId) {
       id: `motivation:${day}`,
       type: 'motivation',
       title: 'Motivação do dia',
-      message: pickPhrase(day),
+      message: buildPersonalizedPhrase(userId, profile, user),
       linkPath: '/edital-verticalizado',
       createdAt: Date.now(),
       read: false,
     }
     saveState(userId, { day, item })
     setNotification(item)
-  }, [userId])
+  }, [userId, profile?.displayName, profile?.name, user?.displayName, user?.email])
 
   const markRead = useCallback(() => {
     if (!userId || !notification) return
