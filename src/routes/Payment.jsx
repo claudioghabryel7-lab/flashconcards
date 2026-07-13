@@ -78,7 +78,7 @@ const Payment = () => {
   const [name, setName] = useState(user?.displayName || profile?.displayName || '')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('transparent') // checkout transparente
+  const [paymentMethod, setPaymentMethod] = useState('pix') // 'pix' | 'card'
   const [installments, setInstallments] = useState(1)
   const [loading, setLoading] = useState(false)
   const [paymentStatus, setPaymentStatus] = useState(null) // 'success', 'pending', 'error'
@@ -469,7 +469,7 @@ const Payment = () => {
         amount: product.price,
         originalAmount: product.originalPrice,
         discount: product.discount,
-        paymentMethod: 'transparent',
+        paymentMethod: paymentMethod === 'card' ? 'card' : 'pix',
         installments: 1,
         installmentValue: product.price,
         status: 'pending',
@@ -483,6 +483,7 @@ const Payment = () => {
         accessLabel: accessInfo.short,
         autoRenew: false,
         checkoutMode: 'transparent_brick',
+        brickMethod: paymentMethod === 'card' ? 'card' : 'pix',
         termsAcceptedAt: serverTimestamp(),
       }
 
@@ -522,11 +523,11 @@ const Payment = () => {
     setShowBrick(false)
     setLoading(false)
     setPaymentStatus('pending')
-    setPaymentMethod(data?.paymentMethodId === 'pix' ? 'pix' : 'boleto')
+    setPaymentMethod(data?.paymentMethodId === 'pix' ? 'pix' : paymentMethod === 'card' ? 'card' : 'pix')
     if (data?.pixCopyPaste) setPixCode(data.pixCopyPaste)
     if (data?.pixQrCode) setPixQrCodeBase64(data.pixQrCode)
     if (data?.ticketUrl) setTicketUrl(data.ticketUrl)
-  }, [])
+  }, [paymentMethod])
 
   const handleBrickError = useCallback((msg) => {
     setErrorMessage(typeof msg === 'string' ? msg : 'Erro no pagamento.')
@@ -951,13 +952,11 @@ const Payment = () => {
                     <>
                       <CheckCircleIcon className="mx-auto mb-4 h-14 w-14 text-amber-400" />
                       <h2 className="cp-headline text-2xl">
-                        {paymentMethod === 'pix' ? 'Pague com PIX' : 'Boleto gerado'}
+                        {paymentMethod === 'pix' ? 'Pague com PIX' : 'Aguardando pagamento'}
                       </h2>
                       <p className="mt-2 text-sm text-cp-muted">
                         O acesso libera automaticamente após a confirmação.
-                        {paymentMethod === 'boleto'
-                          ? ' Boleto pode levar 1–3 dias úteis.'
-                          : ' PIX costuma ser imediato.'}
+                        {paymentMethod === 'pix' ? ' PIX costuma ser imediato.' : ''}
                       </p>
                       {pixQrCodeBase64 ? (
                         <img
@@ -991,7 +990,7 @@ const Payment = () => {
                           rel="noopener noreferrer"
                           className="cp-btn-primary mt-4 inline-flex w-full justify-center"
                         >
-                          Abrir boleto / comprovante
+                          Abrir comprovante / detalhes
                         </a>
                       ) : null}
                       <p className="mt-4 flex items-center justify-center gap-2 text-xs text-cp-muted">
@@ -1017,9 +1016,15 @@ const Payment = () => {
                   className="rounded-3xl border border-cp-border bg-cp-surface/80 p-5 sm:p-8"
                 >
                   <div className="mb-5">
-                    <p className="mb-1 text-sm font-bold text-cp-text">Pagamento no site</p>
+                    <p className="mb-1 text-sm font-bold text-cp-text">
+                      {brickTxn.brickMethod === 'card' || paymentMethod === 'card'
+                        ? 'Pagamento com cartão'
+                        : 'Pagamento com PIX'}
+                    </p>
                     <p className="text-xs text-cp-muted">
-                      PIX, boleto ou cartão — sem redirecionar para login do Mercado Pago.
+                      {brickTxn.brickMethod === 'card' || paymentMethod === 'card'
+                        ? 'Crédito (até 6x) ou débito — neste site, sem login do Mercado Pago.'
+                        : 'Pague com PIX neste site. Confirmação costuma ser imediata.'}
                     </p>
                   </div>
                   {errorMessage ? (
@@ -1037,6 +1042,7 @@ const Payment = () => {
                     userEmail={brickTxn.userEmail}
                     userName={brickTxn.userName}
                     courseId={product.courseId}
+                    method={brickTxn.brickMethod === 'card' || paymentMethod === 'card' ? 'card' : 'pix'}
                     onSuccess={handleBrickSuccess}
                     onPending={handleBrickPending}
                     onError={handleBrickError}
@@ -1129,25 +1135,61 @@ const Payment = () => {
                     ) : null}
                   </div>
 
-                  <div className="mb-6 rounded-2xl border border-cp-border bg-[var(--cp-bg)]/40 p-4">
-                    <p className="mb-3 text-sm font-semibold text-cp-text">Formas de pagamento</p>
-                    <div className="mb-3 flex flex-wrap items-center gap-3">
-                      <span className="inline-flex items-center gap-1.5 text-xs text-cp-muted">
-                        <img src="/pay-pix.png" alt="PIX" className="h-6 w-auto object-contain" />
-                        PIX
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 text-xs text-cp-muted">
-                        <BanknotesIcon className="h-5 w-5 text-cp-accent" />
-                        Boleto
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 text-xs text-cp-muted">
-                        <CreditCardIcon className="h-5 w-5 text-cp-accent" />
-                        Cartão
-                      </span>
+                  <div className="mb-6">
+                    <label className={labelClass}>Forma de pagamento</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('pix')}
+                        className={`rounded-2xl border p-4 text-left transition ${
+                          paymentMethod === 'pix'
+                            ? 'border-cp-accent/50 bg-cp-accent/10 shadow-[0_0_24px_-12px_rgba(34,211,238,0.55)]'
+                            : 'border-cp-border bg-[var(--cp-bg)]/40 hover:border-cp-accent/30'
+                        }`}
+                      >
+                        <img
+                          src="/pay-pix.png"
+                          alt="PIX"
+                          className="mb-2 h-7 w-auto max-w-[72px] rounded object-contain"
+                        />
+                        <p
+                          className={`text-sm font-semibold ${
+                            paymentMethod === 'pix' ? 'text-cp-text' : 'text-cp-muted'
+                          }`}
+                        >
+                          PIX
+                        </p>
+                        <p className="mt-1 text-xs text-cp-muted">Confirmação rápida</p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('card')}
+                        className={`rounded-2xl border p-4 text-left transition ${
+                          paymentMethod === 'card'
+                            ? 'border-cp-accent/50 bg-cp-accent/10 shadow-[0_0_24px_-12px_rgba(34,211,238,0.55)]'
+                            : 'border-cp-border bg-[var(--cp-bg)]/40 hover:border-cp-accent/30'
+                        }`}
+                      >
+                        <CreditCardIcon
+                          className={`mb-2 h-7 w-7 ${
+                            paymentMethod === 'card' ? 'text-cp-accent' : 'text-cp-muted'
+                          }`}
+                        />
+                        <p
+                          className={`text-sm font-semibold ${
+                            paymentMethod === 'card' ? 'text-cp-text' : 'text-cp-muted'
+                          }`}
+                        >
+                          Cartão
+                        </p>
+                        <p className="mt-1 text-xs text-cp-muted">Crédito até 6x ou débito</p>
+                      </button>
                     </div>
-                    <p className="text-sm text-cp-muted">
-                      Você paga <strong className="text-cp-text">neste site</strong> (Checkout
-                      Transparente). Sem redirecionar para a tela de login do Mercado Pago.
+                    <p className="mt-3 text-xs text-cp-muted">
+                      {paymentMethod === 'card'
+                        ? 'Na próxima etapa você informa o cartão neste site (sem login do Mercado Pago).'
+                        : 'Na próxima etapa o QR Code / código PIX aparece neste site.'}
                     </p>
                   </div>
 
@@ -1196,7 +1238,7 @@ const Payment = () => {
                     ) : (
                       <>
                         <LockClosedIcon className="h-5 w-5" />
-                        {`Continuar para pagar ${formatCurrency(product.price)}`}
+                        {`Continuar com ${paymentMethod === 'card' ? 'cartão' : 'PIX'} · ${formatCurrency(product.price)}`}
                       </>
                     )}
                   </button>

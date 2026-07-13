@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+'use client'
+
+import { useEffect, useId, useRef, useState } from 'react'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 
 function loadMercadoPagoSdk() {
@@ -7,9 +9,16 @@ function loadMercadoPagoSdk() {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector('script[data-mp-sdk="v2"]')
     if (existing) {
-      existing.addEventListener('load', () => resolve(window.MercadoPago))
+      const done = () =>
+        window.MercadoPago
+          ? resolve(window.MercadoPago)
+          : reject(new Error('SDK Mercado Pago indisponível'))
+      if (window.MercadoPago) {
+        done()
+        return
+      }
+      existing.addEventListener('load', done)
       existing.addEventListener('error', () => reject(new Error('Falha ao carregar SDK MP')))
-      if (window.MercadoPago) resolve(window.MercadoPago)
       return
     }
     const script = document.createElement('script')
@@ -22,9 +31,45 @@ function loadMercadoPagoSdk() {
   })
 }
 
+function buildPaymentMethods(method) {
+  if (method === 'card') {
+    return {
+      creditCard: 'all',
+      debitCard: 'all',
+      minInstallments: 1,
+      maxInstallments: 6,
+    }
+  }
+  return {
+    bankTransfer: 'all',
+  }
+}
+
+function isIgnorableBrickError(err) {
+  if (err == null) return true
+  if (typeof err === 'object') {
+    const keys = Object.keys(err)
+    if (keys.length === 0) return true
+    if (err.type === 'non_critical') return true
+    if (err.cause === 'already_initialized') return true
+    if (err.cause === 'container_not_found' && !err.message) return true
+  }
+  return false
+}
+
+function formatBrickError(err) {
+  if (!err) return 'Erro no formulário de pagamento.'
+  if (typeof err === 'string') return err
+  return (
+    err.message ||
+    err.cause ||
+    (typeof err === 'object' ? JSON.stringify(err) : 'Erro no formulário de pagamento.')
+  )
+}
+
 /**
- * Payment Brick — Checkout Transparente (PIX, boleto e cartão no site).
- * Sem wallet do MP (evita tela de login).
+ * Payment Brick — Checkout Transparente.
+ * method: 'pix' | 'card'
  */
 export default function MercadoPagoPaymentBrick({
   amount,
@@ -33,11 +78,15 @@ export default function MercadoPagoPaymentBrick({
   userEmail,
   userName,
   courseId,
+  method = 'pix',
   onSuccess,
   onPending,
   onError,
 }) {
-  const containerId = useRef(`paymentBrick_${transactionId || 'checkout'}`).current
+  const reactId = useId().replace(/:/g, '')
+  const safeMethod = method === 'card' ? 'card' : 'pix'
+  const containerId = `mp_brick_${reactId}_${safeMethod}`
+
   const controllerRef = useRef(null)
   const onSuccessRef = useRef(onSuccess)
   const onPendingRef = useRef(onPending)
@@ -45,16 +94,45 @@ export default function MercadoPagoPaymentBrick({
   onSuccessRef.current = onSuccess
   onPendingRef.current = onPending
   onErrorRef.current = onError
+
   const [loadingBrick, setLoadingBrick] = useState(true)
   const [bootError, setBootError] = useState('')
+  const [domReady, setDomReady] = useState(false)
+
+  // Garante que o container exista no DOM (evita container_not_found no Strict Mode)
+  useEffect(() => {
+    setDomReady(true)
+  }, [])
 
   useEffect(() => {
+    if (!domReady) return undefined
+
     let cancelled = false
+    let mountToken = 0
+
+    const unmountController = () => {
+      try {
+        controllerRef.current?.unmount?.()
+      } catch (_) {
+        /* ignore */
+      }
+      controllerRef.current = null
+      const el = document.getElementById(containerId)
+      if (el) el.innerHTML = ''
+    }
 
     const mount = async () => {
+      const token = ++mountToken
       setLoadingBrick(true)
       setBootError('')
+      unmountController()
+
       try {
+        const amountNumber = Number(Number(amount).toFixed(2))
+        if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+          throw new Error('Valor do pagamento inválido.')
+        }
+
         const cfgRes = await fetch(FIREBASE_FUNCTIONS.getMercadoPagoPublicConfig, {
           method: 'GET',
         })
@@ -64,22 +142,24 @@ export default function MercadoPagoPaymentBrick({
         }
 
         const MercadoPago = await loadMercadoPagoSdk()
-        if (cancelled) return
+        if (cancelled || token !== mountToken) return
+
+        // Aguarda 2 frames para o div do container estar no DOM
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+        if (cancelled || token !== mountToken) return
+
+        const container = document.getElementById(containerId)
+        if (!container) {
+          throw new Error('Container do checkout não encontrado. Recarregue a página.')
+        }
+        container.innerHTML = ''
 
         const mp = new MercadoPago(cfg.publicKey, { locale: 'pt-BR' })
         const bricksBuilder = mp.bricks()
 
-        if (controllerRef.current?.unmount) {
-          try {
-            controllerRef.current.unmount()
-          } catch (_) {
-            /* ignore */
-          }
-        }
-
         controllerRef.current = await bricksBuilder.create('payment', containerId, {
           initialization: {
-            amount: Number(Number(amount).toFixed(2)),
+            amount: amountNumber,
             payer: {
               email: userEmail || undefined,
             },
@@ -90,27 +170,30 @@ export default function MercadoPagoPaymentBrick({
           customization: {
             visual: {
               style: {
-                theme: 'dark',
+                theme: 'default',
               },
+              defaultPaymentOption:
+                safeMethod === 'card'
+                  ? { creditCardForm: true }
+                  : { bankTransferForm: true },
             },
-            paymentMethods: {
-              // Sem mercadoPago/wallet → não força login na conta MP
-              ticket: 'all',
-              bankTransfer: 'all',
-              creditCard: 'all',
-              debitCard: 'all',
-              maxInstallments: 12,
-            },
+            paymentMethods: buildPaymentMethods(safeMethod),
           },
           callbacks: {
             onReady: () => {
-              if (!cancelled) setLoadingBrick(false)
+              if (!cancelled && token === mountToken) setLoadingBrick(false)
             },
             onError: (err) => {
-              console.error('[Payment Brick]', err)
-              if (!cancelled) {
+              if (isIgnorableBrickError(err)) {
+                console.warn('[Payment Brick] aviso ignorado', err)
+                return
+              }
+              console.error('[Payment Brick]', err?.cause || err?.message || err)
+              if (!cancelled && token === mountToken) {
                 setLoadingBrick(false)
-                onErrorRef.current?.(err?.message || 'Erro no formulário de pagamento.')
+                const msg = formatBrickError(err)
+                setBootError(msg)
+                onErrorRef.current?.(msg)
               }
             },
             onSubmit: ({ formData }) =>
@@ -122,7 +205,7 @@ export default function MercadoPagoPaymentBrick({
                     body: JSON.stringify({
                       transactionId,
                       formData,
-                      amount,
+                      amount: amountNumber,
                       description,
                       userEmail,
                       userName,
@@ -140,22 +223,26 @@ export default function MercadoPagoPaymentBrick({
                     return
                   }
 
-                  // PIX / boleto ficam pending com QR ou boleto
                   onPendingRef.current?.(data)
                   resolve()
-                } catch (err) {
-                  onErrorRef.current?.(err.message || 'Erro ao processar pagamento.')
+                } catch (submitErr) {
+                  onErrorRef.current?.(submitErr.message || 'Erro ao processar pagamento.')
                   reject()
                 }
               }),
           },
         })
+
+        if (cancelled || token !== mountToken) {
+          unmountController()
+        }
       } catch (err) {
-        console.error(err)
-        if (!cancelled) {
-          setBootError(err.message || 'Não foi possível carregar o checkout.')
+        console.error('[Payment Brick] mount', err)
+        if (!cancelled && token === mountToken) {
+          const msg = err?.message || 'Não foi possível carregar o checkout.'
+          setBootError(msg)
           setLoadingBrick(false)
-          onErrorRef.current?.(err.message)
+          onErrorRef.current?.(msg)
         }
       }
     }
@@ -164,26 +251,39 @@ export default function MercadoPagoPaymentBrick({
 
     return () => {
       cancelled = true
-      try {
-        controllerRef.current?.unmount?.()
-      } catch (_) {
-        /* ignore */
-      }
-      controllerRef.current = null
+      mountToken += 1
+      unmountController()
     }
-  }, [amount, description, transactionId, userEmail, userName, courseId, containerId])
+  }, [
+    domReady,
+    amount,
+    description,
+    transactionId,
+    userEmail,
+    userName,
+    courseId,
+    containerId,
+    safeMethod,
+  ])
 
   return (
     <div className="w-full">
       {loadingBrick ? (
-        <p className="mb-3 text-center text-sm text-cp-muted">Carregando pagamento seguro…</p>
+        <p className="mb-3 text-center text-sm text-cp-muted">
+          {safeMethod === 'card'
+            ? 'Carregando pagamento com cartão…'
+            : 'Carregando pagamento PIX…'}
+        </p>
       ) : null}
       {bootError ? (
         <p className="mb-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">
           {bootError}
         </p>
       ) : null}
-      <div id={containerId} className="min-h-[320px] w-full" />
+      <div
+        id={containerId}
+        className="min-h-[320px] w-full overflow-hidden rounded-2xl bg-white p-2 text-neutral-900"
+      />
     </div>
   )
 }

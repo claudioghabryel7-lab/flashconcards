@@ -583,9 +583,18 @@ exports.processBrickPayment = functions.https.onRequest((req, res) => {
         paymentBody.transaction_amount = Number(amountNumber.toFixed(2))
       }
 
+      // Parcelas: crédito até 6x; débito/PIX/boleto ficam em 1x
+      const rawInstallments = Number(paymentBody.installments)
+      if (Number.isFinite(rawInstallments) && rawInstallments > 0) {
+        paymentBody.installments = Math.min(6, Math.max(1, Math.floor(rawInstallments)))
+      } else if (paymentBody.token) {
+        paymentBody.installments = 1
+      }
+
       console.log('processBrickPayment:', {
         transactionId,
         paymentMethodId: paymentBody.payment_method_id,
+        installments: paymentBody.installments || null,
         tokenPrefix: String(accessToken).slice(0, 8),
       })
 
@@ -699,8 +708,13 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
         })
       }
 
-      // boleto = ticket + PIX no Checkout Pro; card = cartão (e PreApproval se autoRenew)
-      const checkoutKind = checkoutKindRaw === 'boleto' ? 'boleto' : 'card'
+      // boleto = ticket + PIX; card = só cartão; brick/all = todas as formas (Payment Brick)
+      const checkoutKind =
+        checkoutKindRaw === 'boleto'
+          ? 'boleto'
+          : checkoutKindRaw === 'brick' || checkoutKindRaw === 'all'
+            ? 'brick'
+            : 'card'
 
       const accessToken = getMercadoPagoAccessToken()
       if (!accessToken) {
@@ -788,6 +802,7 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
       }
 
       const preference = new Preference(client)
+      // brick = todas as formas (PIX/boleto/crédito/débito) com até 6x no crédito
       const paymentMethods =
         checkoutKind === 'boleto'
           ? {
@@ -798,8 +813,13 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
                 { id: 'prepaid_card' },
               ],
             }
-          : {
-              // Só cartão no fluxo de cartão
+          : checkoutKind === 'brick' || checkoutKind === 'all'
+            ? {
+                installments: 6,
+              }
+            : {
+              // Só cartão no fluxo de cartão — até 6x
+              installments: 6,
               excluded_payment_types: [
                 { id: 'ticket' },
                 { id: 'bank_transfer' },

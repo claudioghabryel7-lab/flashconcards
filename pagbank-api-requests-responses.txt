@@ -1,0 +1,138 @@
+FlashConCards - Requests e Responses das APIs PagBank utilizadas na integração
+================================================================================
+
+API utilizada: Checkout PagBank (criar checkout / link de pagamento)
+Documentação: https://developer.pagbank.com.br/reference/criar-checkout
+Endpoint: POST /checkouts
+
+Conta: claudioghabryel.cg@gmail.com
+Aplicação: concurseiropreditivo
+Webhook: https://us-central1-plegi-d84c2.cloudfunctions.net/webhookPagSeguro
+Site: https://www.flashconcards.com.br/pagamento
+
+
+--------------------------------------------------------------------------------
+1) SANDBOX - CRIAR CHECKOUT (SUCESSO)
+--------------------------------------------------------------------------------
+
+REQUEST
+-------
+POST https://sandbox.api.pagseguro.com/checkouts
+Authorization: Bearer <TOKEN_SANDBOX>
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reference_id": "TXN-TEST-SANDBOX-1",
+  "customer": {
+    "name": "Cliente Teste",
+    "email": "teste@flashconcards.com.br"
+  },
+  "customer_modifiable": true,
+  "items": [
+    {
+      "reference_id": "test",
+      "name": "Teste PagSeguro Sandbox",
+      "quantity": 1,
+      "unit_amount": 100
+    }
+  ],
+  "payment_methods": [
+    { "type": "CREDIT_CARD" },
+    { "type": "DEBIT_CARD" },
+    { "type": "PIX" },
+    { "type": "BOLETO" }
+  ],
+  "redirect_url": "https://www.flashconcards.com.br/pagamento?status=success",
+  "return_url": "https://www.flashconcards.com.br/pagamento?status=failure",
+  "notification_urls": [
+    "https://us-central1-plegi-d84c2.cloudfunctions.net/webhookPagSeguro"
+  ],
+  "payment_notification_urls": [
+    "https://us-central1-plegi-d84c2.cloudfunctions.net/webhookPagSeguro"
+  ]
+}
+
+
+RESPONSE (HTTP 200 / 201)
+-------------------------
+{
+  "id": "CHEC_4807871D-29DF-492D-A239-96635DBB30F3",
+  "status": "ACTIVE",
+  "reference_id": "TXN-TEST-SANDBOX-1",
+  "links": [
+    {
+      "rel": "PAY",
+      "href": "https://pagamento.sandbox.pagbank.com.br/pagamento?code=4807871d-29df-492d-a239-96635dbb30f3",
+      "method": "GET"
+    }
+  ]
+}
+
+Observação: o cliente é redirecionado para a URL do link "PAY" (Checkout hospedado PagBank).
+
+
+--------------------------------------------------------------------------------
+2) PRODUÇÃO - CRIAR CHECKOUT (BLOQUEIO ATUAL - ALLOWLIST)
+--------------------------------------------------------------------------------
+
+REQUEST
+-------
+POST https://api.pagseguro.com/checkouts
+Authorization: Bearer <TOKEN_PRODUCAO>
+Content-Type: application/json
+Accept: application/json
+
+{
+  "reference_id": "TXN-TEST-PROD-1",
+  "customer": {
+    "name": "Cliente Teste",
+    "email": "teste@flashconcards.com.br"
+  },
+  "customer_modifiable": true,
+  "items": [
+    {
+      "reference_id": "curso",
+      "name": "Curso FlashConCards",
+      "quantity": 1,
+      "unit_amount": 100
+    }
+  ],
+  "payment_methods": [
+    { "type": "CREDIT_CARD" },
+    { "type": "DEBIT_CARD" },
+    { "type": "PIX" },
+    { "type": "BOLETO" }
+  ],
+  "redirect_url": "https://www.flashconcards.com.br/pagamento?status=success",
+  "return_url": "https://www.flashconcards.com.br/pagamento?status=failure",
+  "notification_urls": [
+    "https://us-central1-plegi-d84c2.cloudfunctions.net/webhookPagSeguro"
+  ],
+  "payment_notification_urls": [
+    "https://us-central1-plegi-d84c2.cloudfunctions.net/webhookPagSeguro"
+  ]
+}
+
+
+RESPONSE (HTTP 403)
+-------------------
+{
+  "error_messages": [
+    {
+      "error": "allowlist_access_required",
+      "description": "Allowlist access required. Contact PagBank."
+    }
+  ]
+}
+
+
+--------------------------------------------------------------------------------
+3) RESUMO DA INTEGRAÇÃO
+--------------------------------------------------------------------------------
+
+- Utilizamos apenas a API de Checkout (criar checkout e redirecionar o comprador).
+- Métodos de pagamento: cartão de crédito, cartão de débito, PIX e boleto.
+- Notificações de pagamento são recebidas no webhook informado acima.
+- Sandbox: integração validada com sucesso.
+- Produção: aguardando liberação allowlist da API de Checkout.
