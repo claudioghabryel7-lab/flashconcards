@@ -17,7 +17,6 @@ import {
 import { db } from '../firebase/config'
 
 const CONFIG_PATH = ['config', 'professorFiscalizador']
-const SESSION_HOURS = 8
 
 export function getSaoPauloClockParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -40,6 +39,46 @@ export function formatDailyStartLabel(hour = 0, minute = 0) {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
 
+export function formatScheduleWindowLabel(cfg = {}) {
+  const start = formatDailyStartLabel(cfg.windowStartHour ?? cfg.dailyStartHour ?? 0, cfg.windowStartMinute ?? cfg.dailyStartMinute ?? 0)
+  const end = formatDailyStartLabel(cfg.windowEndHour ?? 18, cfg.windowEndMinute ?? 0)
+  return `${start}–${end}`
+}
+
+/** Minutos desde meia-noite. */
+function toMinutes(hour, minute) {
+  return Number(hour || 0) * 60 + Number(minute || 0)
+}
+
+/**
+ * Calcula fim da janela de hoje (America/Sao_Paulo) como Timestamp.
+ * Suporta janela overnight (ex.: 22:00 → 06:00).
+ */
+export function computeSessionEndsAtFromWindow(cfg = {}, date = new Date()) {
+  const startH = cfg.windowStartHour ?? cfg.dailyStartHour ?? 0
+  const startM = cfg.windowStartMinute ?? cfg.dailyStartMinute ?? 0
+  const endH = cfg.windowEndHour ?? ((startH + 8) % 24)
+  const endM = cfg.windowEndMinute ?? 0
+  const now = getSaoPauloClockParts(date)
+  const nowMin = toMinutes(now.hour, now.minute)
+  const startMin = toMinutes(startH, startM)
+  const endMin = toMinutes(endH, endM)
+  const overnight = endMin <= startMin
+
+  let minutesLeft
+  if (!overnight) {
+    minutesLeft = Math.max(1, endMin - nowMin)
+  } else if (nowMin >= startMin) {
+    // Depois do início → até meia-noite + até o fim
+    minutesLeft = Math.max(1, 24 * 60 - nowMin + endMin)
+  } else {
+    // Antes do fim (madrugada)
+    minutesLeft = Math.max(1, endMin - nowMin)
+  }
+
+  return Timestamp.fromDate(new Date(Date.now() + minutesLeft * 60 * 1000))
+}
+
 export function subscribeProfessorSupervisorConfig(onData) {
   if (!db) return () => {}
   const ref = doc(db, ...CONFIG_PATH)
@@ -48,16 +87,33 @@ export function subscribeProfessorSupervisorConfig(onData) {
   })
 }
 
-export async function setProfessorSupervisorEnabled(userId, enabled) {
+/**
+ * Ativa/desativa agenda semanal (seg→seg) com janela diária de horário.
+ * @param {string} userId
+ * @param {boolean} enabled
+ * @param {{ startHour?: number, startMinute?: number, endHour?: number, endMinute?: number }} schedule
+ */
+export async function setProfessorSupervisorEnabled(userId, enabled, schedule = {}) {
   if (!db || !userId) throw new Error('Não autenticado.')
   const ref = doc(db, ...CONFIG_PATH)
 
   if (enabled) {
-    const { hour, minute } = getSaoPauloClockParts()
+    const clock = getSaoPauloClockParts()
+    const startHour = schedule.startHour ?? clock.hour
+    const startMinute = schedule.startMinute ?? 0
+    const endHour = schedule.endHour ?? Math.min(23, startHour + 8)
+    const endMinute = schedule.endMinute ?? 0
     const todayKey = getTodayKeyInSaoPaulo()
-    const now = Date.now()
-    const sessionEndsAt = Timestamp.fromDate(new Date(now + SESSION_HOURS * 60 * 60 * 1000))
-    const dailyLabel = formatDailyStartLabel(hour, minute)
+    const windowCfg = {
+      windowStartHour: startHour,
+      windowStartMinute: startMinute,
+      windowEndHour: endHour,
+      windowEndMinute: endMinute,
+      dailyStartHour: startHour,
+      dailyStartMinute: startMinute,
+    }
+    const sessionEndsAt = computeSessionEndsAtFromWindow(windowCfg)
+    const windowLabel = formatScheduleWindowLabel(windowCfg)
 
     await setDoc(
       ref,
@@ -65,8 +121,7 @@ export async function setProfessorSupervisorEnabled(userId, enabled) {
         enabled: true,
         recurringDaily: true,
         automationUserId: userId,
-        dailyStartHour: hour,
-        dailyStartMinute: minute,
+        ...windowCfg,
         lastAutoStartDate: todayKey,
         sessionStartedAt: serverTimestamp(),
         sessionEndsAt,
@@ -75,10 +130,10 @@ export async function setProfessorSupervisorEnabled(userId, enabled) {
         itemsProcessedSession: 0,
         currentActivity: {
           phase: 'starting',
-          message: 'Iniciando sessão — primeiro item em instantes…',
+          message: `Agenda ${windowLabel} (seg–dom) — iniciando…`,
           updatedAt: serverTimestamp(),
         },
-        lastMessage: `Agendamento diário às ${dailyLabel} — fiscalizando em instantes…`,
+        lastMessage: `Agenda ativa ${windowLabel} (segunda a domingo)`,
         updatedAt: serverTimestamp(),
       },
       { merge: true },
@@ -95,7 +150,7 @@ export async function setProfessorSupervisorEnabled(userId, enabled) {
       phase: 'idle',
       currentActivity: {
         phase: 'idle',
-        message: 'Agendamento diário desativado pelo admin',
+        message: 'Agenda desativada pelo admin',
         updatedAt: serverTimestamp(),
       },
       lastMessage: 'Professor fiscalizador desativado.',
@@ -220,15 +275,58 @@ export async function clearSupervisorHistory() {
   return { deleted }
 }
 
+/**
+ * Limpa a fila do Professor IA (pending/error/processing/cancelled).
+ * Use para remover itens legados (tópicos/véspera) anteriores à Moderação-only.
+ */
+export async function clearSupervisorQueue() {
+  if (!db) return { deleted: 0 }
+  const snap = await getDocs(collection(db, 'professorSupervisorQueue'))
+  if (snap.empty) {
+    await setDoc(
+      doc(db, ...CONFIG_PATH),
+      { queueSize: 0, updatedAt: serverTimestamp() },
+      { merge: true },
+    )
+    return { deleted: 0 }
+  }
+
+  let deleted = 0
+  const docs = snap.docs
+  for (let i = 0; i < docs.length; i += 400) {
+    const batch = writeBatch(db)
+    const chunk = docs.slice(i, i + 400)
+    chunk.forEach((d) => batch.delete(d.ref))
+    await batch.commit()
+    deleted += chunk.length
+  }
+
+  await setDoc(
+    doc(db, ...CONFIG_PATH),
+    {
+      queueSize: 0,
+      currentActivity: {
+        phase: 'idle',
+        message: 'Fila limpa pelo admin — aguardando novas sinalizações da Moderação',
+        updatedAt: serverTimestamp(),
+      },
+      lastMessage: `Fila limpa (${deleted} item(ns) removido(s))`,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+  return { deleted }
+}
+
 export const SUPERVISOR_PHASE_LABELS = {
   idle: 'Ocioso',
   starting: 'Iniciando…',
   running: 'Fiscalizando agora',
   waiting_next: 'Aguardando próximo item',
   waiting_api: 'Aguardando API',
-  waiting_daily: 'Aguardando horário diário',
+  waiting_daily: 'Fora do horário / aguardando janela',
   building_queue: 'Montando fila',
-  session_expired: 'Sessão encerrada (8h)',
+  session_expired: 'Janela do dia encerrada',
   completed: 'Fiscalização concluída',
 }
 

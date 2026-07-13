@@ -16,16 +16,30 @@ import {
   setProfessorSupervisorEnabled,
   fetchSupervisorHistory,
   clearSupervisorHistory,
+  clearSupervisorQueue,
   formatDailyStartLabel,
+  formatScheduleWindowLabel,
   SUPERVISOR_PHASE_LABELS,
   PROFESSOR_STEP_LABELS,
+  getSaoPauloClockParts,
 } from '../../services/professorSupervisorService'
 import { subscribeGenerationJob } from '../../services/generationJobService'
 
 dayjs.extend(duration)
 
-const SESSION_HOURS = 8
 const HISTORY_MIN_KEY = 'fcc:profHistoryMinimized'
+
+function padTime(h, m) {
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+function parseTimeInput(value) {
+  const [h, m] = String(value || '09:00').split(':').map((n) => Number(n))
+  return {
+    hour: Number.isFinite(h) ? Math.min(23, Math.max(0, h)) : 9,
+    minute: Number.isFinite(m) ? Math.min(59, Math.max(0, m)) : 0,
+  }
+}
 
 function formatRemaining(sessionEndsAt) {
   const ends = sessionEndsAt?.toDate?.()
@@ -46,6 +60,9 @@ export default function AdminProfessorSupervisor() {
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState(false)
   const [clearingHistory, setClearingHistory] = useState(false)
+  const [clearingQueue, setClearingQueue] = useState(false)
+  const [startTime, setStartTime] = useState('09:00')
+  const [endTime, setEndTime] = useState('17:00')
   const [historyMinimized, setHistoryMinimized] = useState(() => {
     if (typeof window === 'undefined') return false
     try {
@@ -60,6 +77,13 @@ export default function AdminProfessorSupervisor() {
     const unsub = subscribeProfessorSupervisorConfig((data) => {
       setConfig(data)
       setLoading(false)
+      const sh = data.windowStartHour ?? data.dailyStartHour
+      const sm = data.windowStartMinute ?? data.dailyStartMinute ?? 0
+      const eh = data.windowEndHour
+      const em = data.windowEndMinute ?? 0
+      if (sh != null) setStartTime(padTime(sh, sm))
+      if (eh != null) setEndTime(padTime(eh, em))
+      else if (sh != null) setEndTime(padTime(Math.min(23, Number(sh) + 8), 0))
     })
     return () => unsub?.()
   }, [])
@@ -76,10 +100,10 @@ export default function AdminProfessorSupervisor() {
   }, [jobUserId, jobId])
 
   useEffect(() => {
-    if (!config.enabled) return undefined
+    if (!config.enabled && !config.recurringDaily) return undefined
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
-  }, [config.enabled])
+  }, [config.enabled, config.recurringDaily])
 
   useEffect(() => {
     fetchSupervisorHistory({ max: 15 })
@@ -91,10 +115,49 @@ export default function AdminProfessorSupervisor() {
     if (!user?.uid || toggling) return
     setToggling(true)
     try {
-      await setProfessorSupervisorEnabled(user.uid, !config.recurringDaily)
+      if (config.recurringDaily) {
+        await setProfessorSupervisorEnabled(user.uid, false)
+      } else {
+        const start = parseTimeInput(startTime)
+        const end = parseTimeInput(endTime)
+        if (start.hour === end.hour && start.minute === end.minute) {
+          alert('Horário de início e fim precisam ser diferentes.')
+          return
+        }
+        await setProfessorSupervisorEnabled(user.uid, true, {
+          startHour: start.hour,
+          startMinute: start.minute,
+          endHour: end.hour,
+          endMinute: end.minute,
+        })
+      }
     } catch (err) {
       console.error(err)
       alert('Erro ao alterar o professor fiscalizador.')
+    } finally {
+      setToggling(false)
+    }
+  }
+
+  const handleSaveWindow = async () => {
+    if (!user?.uid || toggling || !config.recurringDaily) return
+    setToggling(true)
+    try {
+      const start = parseTimeInput(startTime)
+      const end = parseTimeInput(endTime)
+      if (start.hour === end.hour && start.minute === end.minute) {
+        alert('Horário de início e fim precisam ser diferentes.')
+        return
+      }
+      await setProfessorSupervisorEnabled(user.uid, true, {
+        startHour: start.hour,
+        startMinute: start.minute,
+        endHour: end.hour,
+        endMinute: end.minute,
+      })
+    } catch (err) {
+      console.error(err)
+      alert('Erro ao salvar horário.')
     } finally {
       setToggling(false)
     }
@@ -129,11 +192,32 @@ export default function AdminProfessorSupervisor() {
     }
   }
 
+  const handleClearQueue = async () => {
+    if (clearingQueue) return
+    if (
+      !window.confirm(
+        'Limpar toda a fila do Professor IA?\n\nIsso remove itens antigos (tópicos/véspera/etc.) e deixa só as novas sinalizações da Moderação quando forem enfileiradas.\n\nNão pode ser desfeito.',
+      )
+    ) {
+      return
+    }
+    setClearingQueue(true)
+    try {
+      const { deleted } = await clearSupervisorQueue()
+      alert(`Fila limpa: ${deleted} item(ns) removido(s).`)
+    } catch (err) {
+      console.error(err)
+      alert(
+        err?.message ||
+          'Erro ao limpar fila. Faça deploy das regras do Firestore (admin precisa poder deletar professorSupervisorQueue).',
+      )
+    } finally {
+      setClearingQueue(false)
+    }
+  }
+
   const isScheduleOn = Boolean(config.recurringDaily)
-  const dailyLabel =
-    config.dailyStartHour != null
-      ? formatDailyStartLabel(config.dailyStartHour, config.dailyStartMinute ?? 0)
-      : null
+  const windowLabel = formatScheduleWindowLabel(config)
 
   const activity = config.currentActivity || {}
   const phase = config.phase || 'idle'
@@ -158,6 +242,8 @@ export default function AdminProfessorSupervisor() {
   const isSessionLive =
     config.enabled && config.sessionEndsAt?.toDate?.() && config.sessionEndsAt.toDate().getTime() > now
 
+  const clock = getSaoPauloClockParts()
+
   return (
     <div className="space-y-4">
       <div className="cp-card !rounded-2xl p-5">
@@ -169,16 +255,10 @@ export default function AdminProfessorSupervisor() {
             <div>
               <h2 className="cp-headline text-lg text-cp-text">Professor IA — correções automáticas</h2>
               <p className="mt-1 max-w-xl text-sm text-cp-muted">
-                Ao ativar, salva o <strong>horário atual</strong> e repete <strong>todo dia</strong>{' '}
-                {dailyLabel ? (
-                  <>
-                    às <strong>{dailyLabel}</strong>
-                  </>
-                ) : null}
-                . Sessão de até <strong>{SESSION_HOURS}h</strong> por dia. Corrige{' '}
-                <strong>somente</strong> os conteúdos da aba <strong>🚩 Moderação</strong> (sinalizações
-                abertas de flashcards, material e questões). Após corrigir, o aluno que sinalizou recebe
-                notificação <strong className="text-emerald-600">verde</strong> no sino.
+                Agenda <strong>segunda a domingo</strong> com janela de horário. Corrige{' '}
+                <strong>somente</strong> a aba <strong>🚩 Moderação</strong> (sinalizações abertas). Sem
+                report novo, fica em espera — não gasta API à toa. Aluno recebe notificação{' '}
+                <strong className="text-emerald-600">verde</strong> no sino após a correção.
               </p>
             </div>
           </div>
@@ -192,12 +272,52 @@ export default function AdminProfessorSupervisor() {
                 : 'cp-btn-primary'
             }`}
           >
-            {toggling
-              ? 'Salvando…'
-              : isScheduleOn
-                ? 'Desativar agendamento diário'
-                : 'Ativar diariamente (horário atual)'}
+            {toggling ? 'Salvando…' : isScheduleOn ? 'Desativar agenda' : 'Ativar agenda (seg–dom)'}
           </button>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-cp-border bg-cp-surface/40 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-cp-muted">
+            Horário online (Brasília) — segunda a domingo
+          </p>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <label className="text-xs text-cp-muted">
+              De
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="mt-1 block rounded-lg border border-cp-border bg-cp-bg px-3 py-2 text-sm text-cp-text"
+              />
+            </label>
+            <label className="text-xs text-cp-muted">
+              Até
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className="mt-1 block rounded-lg border border-cp-border bg-cp-bg px-3 py-2 text-sm text-cp-text"
+              />
+            </label>
+            {isScheduleOn ? (
+              <button
+                type="button"
+                onClick={handleSaveWindow}
+                disabled={toggling}
+                className="rounded-xl border border-cp-border px-4 py-2 text-sm font-semibold text-cp-text transition hover:bg-cp-surface disabled:opacity-50"
+              >
+                Salvar horário
+              </button>
+            ) : (
+              <p className="pb-2 text-[11px] text-cp-muted">
+                Agora em SP: {formatDailyStartLabel(clock.hour, clock.minute)} — defina a janela e clique em
+                Ativar.
+              </p>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] text-cp-muted">
+            Ex.: 09:00–17:00 → o professor só processa Moderação nesse intervalo, todos os dias da semana.
+          </p>
         </div>
 
         <div className="mt-4 rounded-2xl border border-indigo-500/25 bg-indigo-500/5 p-4">
@@ -233,13 +353,13 @@ export default function AdminProfessorSupervisor() {
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-xl border border-cp-border bg-cp-surface/50 px-3 py-2 text-xs">
-            <p className="text-cp-muted">Agendamento</p>
+            <p className="text-cp-muted">Agenda</p>
             <p className="font-semibold text-cp-text">
-              {isScheduleOn ? `Diário ${dailyLabel || ''}` : 'Desativado'}
+              {isScheduleOn ? `Seg–dom ${windowLabel}` : 'Desativada'}
             </p>
           </div>
           <div className="rounded-xl border border-cp-border bg-cp-surface/50 px-3 py-2 text-xs">
-            <p className="text-cp-muted">Sessão</p>
+            <p className="text-cp-muted">Janela de hoje</p>
             <p className="font-semibold text-cp-text">
               {isSessionLive ? sessionRemaining : config.enabled ? 'Encerrada' : isScheduleOn ? 'Aguardando' : '—'}
             </p>
@@ -249,10 +369,24 @@ export default function AdminProfessorSupervisor() {
             <p className="font-semibold text-cp-text">{phaseLabel}</p>
           </div>
           <div className="rounded-xl border border-cp-border bg-cp-surface/50 px-3 py-2 text-xs">
-            <p className="flex items-center gap-1 text-cp-muted">
-              <QueueListIcon className="h-3.5 w-3.5" /> Fila
-            </p>
-            <p className="font-semibold text-cp-text">{config.queueSize ?? 0} pendente(s)</p>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="flex items-center gap-1 text-cp-muted">
+                  <QueueListIcon className="h-3.5 w-3.5" /> Fila
+                </p>
+                <p className="font-semibold text-cp-text">{config.queueSize ?? 0} pendente(s)</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearQueue}
+                disabled={clearingQueue}
+                title="Limpar fila (remove itens legados)"
+                className="inline-flex items-center gap-1 rounded-lg border border-red-500/40 px-2 py-1 text-[10px] font-semibold text-red-600 hover:bg-red-500/10 disabled:opacity-50"
+              >
+                <TrashIcon className="h-3.5 w-3.5" />
+                {clearingQueue ? '…' : 'Limpar'}
+              </button>
+            </div>
           </div>
           <div className="rounded-xl border border-cp-border bg-cp-surface/50 px-3 py-2 text-xs">
             <p className="flex items-center gap-1 text-cp-muted">

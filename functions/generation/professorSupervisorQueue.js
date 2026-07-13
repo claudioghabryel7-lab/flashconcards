@@ -21,33 +21,99 @@ function configRef() {
   return getDb().doc('config/professorFiscalizador')
 }
 
-function shouldStartDailySession(data = {}) {
-  if (!data.recurringDaily || !data.automationUserId || data.enabled) return false
-  const todayKey = getTodayKeyInSaoPaulo()
-  if (data.lastAutoStartDate === todayKey) return false
-
-  const hour = data.dailyStartHour ?? 0
-  const minute = data.dailyStartMinute ?? 0
-  const now = getSaoPauloClockParts()
-  const nowMinutes = now.hour * 60 + now.minute
-  const startMinutes = hour * 60 + minute
-  return nowMinutes >= startMinutes
+function toMinutes(hour, minute) {
+  return Number(hour || 0) * 60 + Number(minute || 0)
 }
 
-async function startSupervisorSession(userId, { auto = false, dailyStartHour, dailyStartMinute } = {}) {
+function getWindowBounds(data = {}) {
+  const startHour = data.windowStartHour ?? data.dailyStartHour ?? 0
+  const startMinute = data.windowStartMinute ?? data.dailyStartMinute ?? 0
+  const endHour = data.windowEndHour ?? ((startHour + SESSION_HOURS) % 24)
+  const endMinute = data.windowEndMinute ?? 0
+  return { startHour, startMinute, endHour, endMinute }
+}
+
+function formatWindowLabel(data = {}) {
+  const w = getWindowBounds(data)
+  return `${formatDailyStartLabel(w.startHour, w.startMinute)}–${formatDailyStartLabel(w.endHour, w.endMinute)}`
+}
+
+/** Está dentro da janela diária (America/Sao_Paulo)? Suporta overnight. */
+function isWithinScheduleWindow(data = {}) {
+  const w = getWindowBounds(data)
+  const now = getSaoPauloClockParts()
+  const nowMin = toMinutes(now.hour, now.minute)
+  const startMin = toMinutes(w.startHour, w.startMinute)
+  const endMin = toMinutes(w.endHour, w.endMinute)
+  if (endMin > startMin) {
+    return nowMin >= startMin && nowMin < endMin
+  }
+  // Overnight: ex. 22:00 → 06:00
+  return nowMin >= startMin || nowMin < endMin
+}
+
+function computeSessionEndsAtFromWindow(data = {}) {
+  const w = getWindowBounds(data)
+  const now = getSaoPauloClockParts()
+  const nowMin = toMinutes(now.hour, now.minute)
+  const startMin = toMinutes(w.startHour, w.startMinute)
+  const endMin = toMinutes(w.endHour, w.endMinute)
+  const overnight = endMin <= startMin
+
+  let minutesLeft
+  if (!overnight) {
+    minutesLeft = Math.max(1, endMin - nowMin)
+  } else if (nowMin >= startMin) {
+    minutesLeft = Math.max(1, 24 * 60 - nowMin + endMin)
+  } else {
+    minutesLeft = Math.max(1, endMin - nowMin)
+  }
+
+  return admin.firestore.Timestamp.fromDate(new Date(Date.now() + minutesLeft * 60 * 1000))
+}
+
+function shouldStartDailySession(data = {}) {
+  if (!data.recurringDaily || !data.automationUserId || data.enabled) return false
+  if (!isWithinScheduleWindow(data)) return false
+  const todayKey = getTodayKeyInSaoPaulo()
+  // Já rodou nesta janela hoje e encerrou → só retoma se ainda estiver na janela
+  // e a sessão anterior não tiver sido marcada como "completa no dia".
+  // Permitimos retomar se lastAutoStartDate === today mas phase waiting e ainda na janela
+  // (ex.: admin limpou fila). Evita loop: só starta se enabled=false e within window.
+  if (data.lastAutoStartDate === todayKey && data.phase === 'session_expired') {
+    return false
+  }
+  return true
+}
+
+async function startSupervisorSession(userId, { auto = false, dailyStartHour, dailyStartMinute, windowEndHour, windowEndMinute } = {}) {
   const todayKey = getTodayKeyInSaoPaulo()
   const clock = getSaoPauloClockParts()
-  const startHour = dailyStartHour ?? clock.hour
-  const startMinute = dailyStartMinute ?? clock.minute
-  const sessionEndsAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + SESSION_MS))
+  const snap = await configRef().get()
+  const prev = snap.exists ? snap.data() : {}
+
+  const startHour = dailyStartHour ?? prev.windowStartHour ?? prev.dailyStartHour ?? clock.hour
+  const startMinute = dailyStartMinute ?? prev.windowStartMinute ?? prev.dailyStartMinute ?? 0
+  const endHour = windowEndHour ?? prev.windowEndHour ?? ((startHour + SESSION_HOURS) % 24)
+  const endMinute = windowEndMinute ?? prev.windowEndMinute ?? 0
+
+  const windowCfg = {
+    windowStartHour: startHour,
+    windowStartMinute: startMinute,
+    windowEndHour: endHour,
+    windowEndMinute: endMinute,
+    dailyStartHour: startHour,
+    dailyStartMinute: startMinute,
+  }
+  const sessionEndsAt = computeSessionEndsAtFromWindow(windowCfg)
+  const label = formatWindowLabel(windowCfg)
   const ts = admin.firestore.FieldValue.serverTimestamp()
 
   await patchSupervisorConfig({
     enabled: true,
     recurringDaily: true,
     automationUserId: userId,
-    dailyStartHour: startHour,
-    dailyStartMinute: startMinute,
+    ...windowCfg,
     sessionStartedAt: ts,
     sessionEndsAt,
     nextRunAt: ts,
@@ -57,23 +123,21 @@ async function startSupervisorSession(userId, { auto = false, dailyStartHour, da
     currentActivity: {
       phase: 'starting',
       message: auto
-        ? `Sessão diária iniciada às ${formatDailyStartLabel(startHour, startMinute)}…`
+        ? `Janela ${label} iniciada — só Moderação…`
         : 'Iniciando sessão — primeiro item em instantes…',
       updatedAt: ts,
     },
     lastMessage: auto
-      ? `Sessão diária automática — ${formatDailyStartLabel(startHour, startMinute)}`
-      : `Agendamento diário às ${formatDailyStartLabel(startHour, startMinute)} — fiscalizando em instantes…`,
+      ? `Sessão automática na janela ${label}`
+      : `Agenda ${label} (seg–dom) — fiscalizando Moderação…`,
   })
 }
 
 async function ensureWaitingDailyPhase(data = {}) {
-  const label = formatDailyStartLabel(data.dailyStartHour ?? 0, data.dailyStartMinute ?? 0)
-  const todayKey = getTodayKeyInSaoPaulo()
-  const alreadyStartedToday = data.lastAutoStartDate === todayKey
-  const message = alreadyStartedToday
-    ? `Aguardando amanhã às ${label} (sessão de hoje concluída)`
-    : `Aguardando horário diário (${label})`
+  const label = formatWindowLabel(data)
+  const message = isWithinScheduleWindow(data)
+    ? `Aguardando retorno na janela ${label}`
+    : `Fora do horário — online ${label} (seg–dom)`
 
   if (data.phase === 'waiting_daily' && data.lastMessage === message) return
 
@@ -93,11 +157,11 @@ async function endSupervisorSession({ phase = 'completed', message, keepRecurrin
   const snap = await configRef().get()
   const data = snap.exists ? snap.data() : {}
   const recurring = keepRecurring && Boolean(data.recurringDaily)
-  const dailyLabel = formatDailyStartLabel(data.dailyStartHour ?? 0, data.dailyStartMinute ?? 0)
+  const label = formatWindowLabel(data)
   const finalMessage =
     message ||
     (recurring
-      ? `Sessão concluída — próxima automática amanhã às ${dailyLabel}`
+      ? `Sessão encerrada — próxima na janela ${label} (seg–dom)`
       : 'Fiscalização concluída.')
 
   await patchSupervisorConfig({
@@ -115,6 +179,8 @@ async function endSupervisorSession({ phase = 'completed', message, keepRecurrin
 
 function isSessionActive(data = {}) {
   if (!data.enabled) return false
+  // Agenda com janela: precisa estar dentro do horário E antes do sessionEndsAt
+  if (data.recurringDaily && !isWithinScheduleWindow(data)) return false
   const ends = data.sessionEndsAt?.toDate?.()
   if (!ends) return false
   return Date.now() < ends.getTime()
@@ -139,6 +205,10 @@ async function loadSupervisorConfig() {
     recurringDaily: Boolean(data.recurringDaily),
     dailyStartHour: data.dailyStartHour ?? null,
     dailyStartMinute: data.dailyStartMinute ?? null,
+    windowStartHour: data.windowStartHour ?? data.dailyStartHour ?? null,
+    windowStartMinute: data.windowStartMinute ?? data.dailyStartMinute ?? null,
+    windowEndHour: data.windowEndHour ?? null,
+    windowEndMinute: data.windowEndMinute ?? null,
     lastAutoStartDate: data.lastAutoStartDate || null,
   }
 }
@@ -538,8 +608,8 @@ async function tickProfessorSupervisor({ force = false } = {}) {
     await endSupervisorSession({
       phase: 'session_expired',
       message: data.recurringDaily
-        ? `Sessão de 8h encerrada — próxima automática amanhã às ${formatDailyStartLabel(data.dailyStartHour ?? 0, data.dailyStartMinute ?? 0)}`
-        : 'Sessão de 8h encerrada.',
+        ? `Janela encerrada — próxima em ${formatWindowLabel(data)} (seg–dom)`
+        : 'Sessão encerrada.',
       keepRecurring: Boolean(data.recurringDaily),
     })
     return { skipped: true, reason: 'session_expired' }
@@ -631,6 +701,17 @@ async function tickProfessorSupervisor({ force = false } = {}) {
   }
 
   if (pendingSnap.empty) {
+    // Na janela de Moderação: fica em espera (não encerra o dia) — evita gastar API e
+    // permite pegar novas sinalizações quando aparecerem.
+    if (data.recurringDaily && isWithinScheduleWindow(data)) {
+      await updateSupervisorActivity({
+        phase: 'idle',
+        message: 'Nenhuma sinalização na Moderação — aguardando novos reports…',
+      })
+      await scheduleNextRun(INTERVAL_MINUTES)
+      return { skipped: true, reason: 'empty_queue_waiting_flags' }
+    }
+
     if (rebuildAdded === 0) {
       await endSupervisorSession({
         keepRecurring: Boolean(data.recurringDaily),
