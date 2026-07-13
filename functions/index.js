@@ -29,7 +29,15 @@ const {
 
 function getMercadoPagoAccessToken(options = {}) {
   const { forPix = false } = options
-  const mode = String(process.env.MERCADOPAGO_MODE || 'test').toLowerCase()
+  const mode = String(
+    process.env.MERCADOPAGO_MODE ||
+      functions.config().mercadopago?.mode ||
+      'test',
+  ).toLowerCase()
+  const cfgToken =
+    functions.config().mercadopago?.access_token_prod ||
+    functions.config().mercadopago?.access_token ||
+    ''
 
   // Token TEST do MP geralmente não gera PIX (retorna internal_error).
   // Para PIX preferimos a chave de produção.
@@ -38,12 +46,13 @@ function getMercadoPagoAccessToken(options = {}) {
       process.env.MERCADOPAGO_ACCESS_TOKEN_PIX ||
       process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
       process.env.MERCADOPAGO_ACCESS_TOKEN ||
+      cfgToken ||
       process.env.MERCADOPAGO_ACCESS_TOKEN_TEST ||
       ''
     )
   }
 
-  if (mode === 'test') {
+  if (mode === 'test' || mode === 'sandbox') {
     return (
       process.env.MERCADOPAGO_ACCESS_TOKEN_TEST ||
       process.env.MERCADOPAGO_ACCESS_TOKEN ||
@@ -53,18 +62,43 @@ function getMercadoPagoAccessToken(options = {}) {
   return (
     process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
     process.env.MERCADOPAGO_ACCESS_TOKEN ||
-    functions.config().mercadopago?.access_token_prod ||
+    cfgToken ||
     ''
   )
 }
 
 function isMercadoPagoTestMode() {
-  const mode = String(process.env.MERCADOPAGO_MODE || 'test').toLowerCase()
+  const mode = String(
+    process.env.MERCADOPAGO_MODE ||
+      functions.config().mercadopago?.mode ||
+      'test',
+  ).toLowerCase()
   if (mode === 'prod' || mode === 'production') return false
   if (mode === 'test' || mode === 'sandbox') return true
   // Fallback pelo prefixo do token ativo
   const token = getMercadoPagoAccessToken()
   return String(token).startsWith('TEST-')
+}
+
+function getMercadoPagoPublicKey() {
+  const cfgKey =
+    functions.config().mercadopago?.public_key_prod ||
+    functions.config().mercadopago?.public_key ||
+    ''
+  if (isMercadoPagoTestMode()) {
+    return (
+      process.env.MERCADOPAGO_PUBLIC_KEY_TEST ||
+      process.env.MERCADOPAGO_PUBLIC_KEY ||
+      cfgKey ||
+      ''
+    )
+  }
+  return (
+    process.env.MERCADOPAGO_PUBLIC_KEY_PROD ||
+    process.env.MERCADOPAGO_PUBLIC_KEY ||
+    cfgKey ||
+    ''
+  )
 }
 
 /** URL de checkout: em produção NUNCA usa sandbox (sandbox pede login de conta teste). */
@@ -448,6 +482,170 @@ exports.createPixPayment = functions.https.onRequest((req, res) => {
         message: error.message || error.cause?.[0]?.description || 'Erro desconhecido',
         code: error.cause?.[0]?.code || error.code || 'PIX_CREATE_FAILED',
         details: error.cause || error.response?.data || null
+      })
+    }
+  })
+})
+
+/** Public Key para Checkout Transparente (Payment Brick) — sem secrets. */
+exports.getMercadoPagoPublicConfig = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method !== 'GET' && req.method !== 'POST') {
+      return res.status(405).json({ error: 'Método não permitido' })
+    }
+    const publicKey = getMercadoPagoPublicKey()
+    if (!publicKey) {
+      return res.status(500).json({
+        error: 'Public key ausente',
+        message: 'Configure MERCADOPAGO_PUBLIC_KEY_PROD no ambiente das functions.',
+      })
+    }
+    return res.status(200).json({
+      publicKey,
+      testMode: isMercadoPagoTestMode(),
+      locale: 'pt-BR',
+    })
+  })
+})
+
+/**
+ * Checkout Transparente — processa formData do Payment Brick (cartão / PIX / boleto).
+ * Pagamento acontece no site; sem redirecionar ao login do MP.
+ */
+exports.processBrickPayment = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Método não permitido' })
+    }
+
+    try {
+      const {
+        transactionId,
+        formData,
+        amount,
+        description,
+        userEmail,
+        userName,
+        courseId,
+      } = req.body || {}
+
+      const amountNumber = parseFloat(amount)
+      if (!transactionId || !formData || Number.isNaN(amountNumber) || amountNumber <= 0) {
+        return res.status(400).json({
+          error: 'Dados inválidos',
+          message: 'Informe transactionId, formData e amount válidos.',
+        })
+      }
+
+      const accessToken = getMercadoPagoAccessToken({ forPix: true })
+      if (!accessToken || String(accessToken).startsWith('TEST-')) {
+        // Checkout transparente em produção deve usar APP_USR
+        if (!accessToken) {
+          return res.status(500).json({
+            error: 'Mercado Pago não configurado',
+            message: 'Access token ausente.',
+          })
+        }
+      }
+
+      const client = new MercadoPagoConfig({
+        accessToken,
+        options: { timeout: 20000 },
+      })
+      const payment = new Payment(client)
+
+      const payerFromBrick = formData.payer || {}
+      const paymentBody = {
+        ...formData,
+        transaction_amount: Number(amountNumber.toFixed(2)),
+        description: String(description || 'Curso').slice(0, 255),
+        external_reference: String(transactionId),
+        metadata: {
+          ...(formData.metadata || {}),
+          transaction_id: String(transactionId),
+          course_id: courseId || null,
+        },
+        notification_url:
+          process.env.MERCADOPAGO_WEBHOOK_URL ||
+          'https://us-central1-plegi-d84c2.cloudfunctions.net/webhookMercadoPago',
+        payer: {
+          ...payerFromBrick,
+          email: payerFromBrick.email || userEmail || undefined,
+          first_name:
+            payerFromBrick.first_name ||
+            (userName || 'Cliente').split(' ')[0] ||
+            'Cliente',
+        },
+      }
+
+      // Garante amount coerente (Brick já manda, mas reforçamos)
+      if (paymentBody.transaction_amount == null) {
+        paymentBody.transaction_amount = Number(amountNumber.toFixed(2))
+      }
+
+      console.log('processBrickPayment:', {
+        transactionId,
+        paymentMethodId: paymentBody.payment_method_id,
+        tokenPrefix: String(accessToken).slice(0, 8),
+      })
+
+      const result = await payment.create({
+        body: paymentBody,
+        requestOptions: {
+          idempotencyKey: `${transactionId}-${Date.now()}`,
+        },
+      })
+      const status = result.status || 'pending'
+      const statusDetail = result.status_detail || null
+      const pointOfInteraction = result.point_of_interaction || {}
+      const txData = pointOfInteraction.transaction_data || {}
+
+      const pixCopyPaste = txData.qr_code || null
+      const pixQrCode = txData.qr_code_base64 || null
+      const ticketUrl = txData.ticket_url || result.transaction_details?.external_resource_url || null
+
+      try {
+        await admin.firestore().collection('transactions').doc(String(transactionId)).set(
+          {
+            mercadopagoPaymentId: result.id != null ? String(result.id) : null,
+            mercadopagoStatus: status,
+            mercadopagoStatusDetail: statusDetail,
+            paymentMethodId: result.payment_method_id || paymentBody.payment_method_id || null,
+            pixCopyPaste: pixCopyPaste || null,
+            pixQrCode: pixQrCode || null,
+            ticketUrl: ticketUrl || null,
+            checkoutMode: 'transparent_brick',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            ...(status === 'approved'
+              ? { status: 'approved', paidAt: admin.firestore.FieldValue.serverTimestamp() }
+              : {}),
+          },
+          { merge: true },
+        )
+      } catch (txErr) {
+        console.warn('processBrickPayment: falha ao atualizar transaction', txErr?.message || txErr)
+      }
+
+      return res.status(200).json({
+        success: true,
+        paymentId: result.id,
+        status,
+        statusDetail,
+        paymentMethodId: result.payment_method_id || null,
+        pixCopyPaste,
+        pixQrCode,
+        ticketUrl,
+        testMode: isMercadoPagoTestMode(),
+      })
+    } catch (error) {
+      console.error('Erro processBrickPayment:', error)
+      return res.status(500).json({
+        error: 'Erro ao processar pagamento',
+        message:
+          error.message ||
+          error.cause?.[0]?.description ||
+          'Erro desconhecido',
+        details: error.cause || error.response?.data || null,
       })
     }
   })
