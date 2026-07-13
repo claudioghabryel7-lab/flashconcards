@@ -30,6 +30,7 @@ const {
   touchActiveJob,
   clearActiveJob,
   runWithHeartbeat,
+  generateAiJsonWithJobHeartbeat,
 } = require('./generationJobResume')
 
 function getDb() {
@@ -680,69 +681,105 @@ MATERIAL: ${JSON.stringify(materialDoc, null, 2).slice(0, 14000)}`
 }
 
 async function processRedacaoItem(courseId, payload, updateJob, userId, jobId) {
-  const snap = await getDb().doc(`courses/${courseId}/config/redacao`).get()
+  const db = getDb()
+  const snap = await db.doc(`courses/${courseId}/config/redacao`).get()
   const config = snap.exists ? snap.data() : {}
-  const script = scriptCheckRedacao(config)
+  const courseSnap = await db.doc(`courses/${courseId}`).get()
+  const course = courseSnap.exists ? courseSnap.data() || {} : {}
+  const banca = String(course.banca || course.examBoard || 'banca do concurso').trim()
+  const concurso = String(course.competition || course.name || courseId).trim()
+  const temaAtual = String(config.tema || '').trim()
 
-  let contextBlock = `TIPO: redação semanal
-CURSO: ${courseId}
-TEMA ATUAL: ${config.tema || ''}
-STATUS: ${config.status || 'indisponivel'}
-PROBLEMAS SCRIPT: ${JSON.stringify(script.issues)}`
+  await updateJob(userId, jobId, {
+    progress: 20,
+    message: `Gerando tema de redação (${banca} / ${concurso})…`,
+  })
 
-  if (payload.rotateTheme) {
-    contextBlock += `\nTAREFA OBRIGATÓRIA: Proponha um NOVO tema de redação para concurso (corrections target redacao, field tema). O tema deve ser diferente do atual.`
-  }
+  // Só tema (+ guia opcional). NÃO inventar flashcards, material de edital nem questões.
+  const prompt = `Você é professor de redação para concursos públicos.
 
-  const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
-  const final = chain.final
-  const dedupeKey = `${courseId}:redacao:${payload.scope || payload.targetDate || 'rotate'}`
-  const { applied, patches } = await applyCorrectionsWithSnapshot(
-    courseId,
-    'redacao',
-    payload,
-    final.corrections || [],
+BANCA: ${banca}
+CONCURSO/CARGO: ${concurso}
+TEMA ATUAL (não repetir se possível): ${temaAtual || '(nenhum)'}
+
+TAREFA ÚNICA:
+1) Proponha UM tema de redação dissertativa-argumentativa com ALTA probabilidade de cair nesta banca/concurso (atual, específico, alinhado ao cargo).
+2) Opcionalmente, um guia curto (guiaNota1000) explicando como escrever redação nota máxima segundo os critérios típicos dessa banca (estrutura, coerência, repertório, o que evitar).
+
+PROIBIDO:
+- Inventar flashcards
+- Inventar material de edital / conteúdo de disciplinas
+- Inventar questões objetivas
+- Qualquer correção fora de tema/guia de redação
+
+Retorne APENAS JSON válido:
+{
+  "tema": "texto do tema",
+  "guiaNota1000": "texto curto em markdown com dicas da banca (pode ser string vazia)",
+  "summary": "resumo em 1 frase"
+}`
+
+  const parsed = await generateAiJsonWithJobHeartbeat(
+    userId,
+    jobId,
+    prompt,
+    {
+      useRAG: true,
+      maxParseAttempts: 3,
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.55 },
+    },
+    `Gerando tema de redação (${banca} / ${concurso})…`,
   )
 
-  const ts = admin.firestore.FieldValue.serverTimestamp()
-  if (payload.rotateTheme && applied === 0 && final.suggestedTema) {
-    await getDb().doc(`courses/${courseId}/config/redacao`).set(
-      {
-        tema: final.suggestedTema,
-        status: 'disponivel',
-        supervisorReviewed: true,
-        updatedAt: ts,
-        rotatedAt: ts,
-      },
-      { merge: true },
-    )
-  } else if (payload.rotateTheme) {
-    await getDb().doc(`courses/${courseId}/config/redacao`).set(
-      { status: 'disponivel', supervisorReviewed: true, updatedAt: ts, rotatedAt: ts },
-      { merge: true },
-    )
+  const tema = String(parsed?.tema || '').trim()
+  if (!tema) {
+    throw new Error('IA não retornou tema de redação válido.')
   }
 
+  const guiaNota1000 = String(parsed?.guiaNota1000 || '').trim()
+  const ts = admin.firestore.FieldValue.serverTimestamp()
+  await db.doc(`courses/${courseId}/config/redacao`).set(
+    {
+      tema,
+      ...(guiaNota1000 ? { guiaNota1000 } : {}),
+      status: 'disponivel',
+      supervisorReviewed: true,
+      updatedAt: ts,
+      rotatedAt: ts,
+      lastRotationReason: payload.reason || 'weekly',
+      bancaSnapshot: banca,
+      concursoSnapshot: concurso,
+    },
+    { merge: true },
+  )
+
+  await updateJob(userId, jobId, {
+    progress: 90,
+    message: `Tema publicado: ${tema.slice(0, 80)}…`,
+  })
+
+  const dedupeKey = `${courseId}:redacao:${payload.scope || payload.targetDate || 'rotate'}`
   await saveHistory({
     courseId,
     itemType: 'redacao',
     dedupeKey,
     payload,
-    verdict: final,
-    professorsUsed: chain.professorsUsed,
-    appliedCount: applied,
+    verdict: { summary: parsed?.summary || 'Tema semanal gerado', tema, guiaNota1000: Boolean(guiaNota1000) },
+    professorsUsed: 1,
+    appliedCount: 1,
     reviewId: null,
     autoApplied: true,
     skipModeration: true,
   })
 
   return {
-    summary: final.summary,
-    applied,
+    summary: parsed?.summary || `Tema: ${tema}`,
+    applied: 1,
     needsAdmin: false,
     reviewId: null,
-    professorsUsed: chain.professorsUsed,
-    themePublished: Boolean(payload.rotateTheme),
+    professorsUsed: 1,
+    themePublished: true,
+    tema,
   }
 }
 

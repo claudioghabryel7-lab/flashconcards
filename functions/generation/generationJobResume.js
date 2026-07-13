@@ -47,7 +47,79 @@ function isApiQuotaError(error) {
   )
 }
 
+function isJobCancelledError(err) {
+  return err?.code === 'job_cancelled'
+}
+
+/** Erros que devem pausar e retentar (não marcar job como error). */
+function isTransientGenerationError(error) {
+  if (isApiQuotaError(error)) return true
+  if (isJobCancelledError(error)) return false
+  const code = error?.code
+  const msg = String(error?.message || '').toLowerCase()
+  if (
+    code === 'ai_empty_response' ||
+    code === 'ai_json_parse_error' ||
+    code === 'ai_json_truncated' ||
+    code === 'cf_timeout' ||
+    code === 'material_incomplete'
+  ) {
+    return true
+  }
+  if (
+    msg.includes('temporár') ||
+    msg.includes('timeout') ||
+    msg.includes('timed out') ||
+    msg.includes('econnreset') ||
+    msg.includes('econnrefused') ||
+    msg.includes('fetch failed') ||
+    msg.includes('network') ||
+    msg.includes('socket') ||
+    msg.includes('503') ||
+    msg.includes('502') ||
+    msg.includes('500') ||
+    msg.includes('504') ||
+    msg.includes('unavailable') ||
+    msg.includes('internal') ||
+    msg.includes('overloaded') ||
+    msg.includes('try again') ||
+    msg.includes('tente novamente') ||
+    msg.includes('falha na geração') ||
+    msg.includes('empty') ||
+    msg.includes('json')
+  ) {
+    return true
+  }
+  if (
+    msg.includes('payload') ||
+    msg.includes('ausente') ||
+    msg.includes('não suportado') ||
+    msg.includes('nao suportado') ||
+    msg.includes('não autenticado')
+  ) {
+    return false
+  }
+  return true
+}
+
 function isResumableJob(jobType) {
+  return [
+    'guia_mentorado_automation',
+    'guia_mentorado_cronograma',
+    'guia_mentorado_backfill',
+    'professor_supervisor',
+    'flashcards_topico',
+    'questoes_topico',
+    'conteudo_completo',
+    'conteudo_incidencia',
+    'questoes_incidencia',
+    'vespera_prova',
+    'admin_edital_verticalizado',
+    'admin_materia_revisada',
+  ].includes(jobType)
+}
+
+function isMentoradoJob(jobType) {
   return (
     jobType === 'guia_mentorado_automation' ||
     jobType === 'guia_mentorado_cronograma' ||
@@ -56,18 +128,10 @@ function isResumableJob(jobType) {
   )
 }
 
-function isMentoradoJob(jobType) {
-  return isResumableJob(jobType)
-}
-
 function createJobCancelledError() {
   const err = new Error('Job cancelado pelo admin')
   err.code = 'job_cancelled'
   return err
-}
-
-function isJobCancelledError(err) {
-  return err?.code === 'job_cancelled'
 }
 
 async function throwIfCancelled(userId, jobId) {
@@ -583,7 +647,7 @@ async function nudgeStalledGenerationJob(userId, jobId) {
   if (!jobSnap.exists) return { ok: false, reason: 'not_found' }
 
   const jobData = jobSnap.data()
-  if (!jobData.runOnServer || !isMentoradoJob(jobData.jobType)) {
+  if (!jobData.runOnServer || !isResumableJob(jobData.jobType)) {
     return { ok: false, reason: 'not_server_job' }
   }
   if (await isJobCancelled(userId, jobId)) {
@@ -647,7 +711,7 @@ async function recoverStalledRunningJobs() {
     }
 
     const jobData = jobSnap.data()
-    if (jobData.status !== 'running' || !isMentoradoJob(jobData.jobType)) continue
+    if (jobData.status !== 'running' || !isResumableJob(jobData.jobType)) continue
     if (await isJobCancelled(userId, jobId)) {
       await handleGenerationJobCancelled(userId, jobId, jobData)
       continue
@@ -807,7 +871,7 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
       })
       return { resumed: false, reason: 'cancelled' }
     }
-    if (isMentoradoJob(effectiveJobType)) {
+    if (isResumableJob(effectiveJobType) && isTransientGenerationError(err)) {
       const pauseStatus = isApiQuotaError(err) ? 'waiting_api' : 'waiting_retry'
       await pauseJobForResume({
         userId,
@@ -829,8 +893,8 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
         status: pauseStatus,
         waitReason: isApiQuotaError(err) ? 'api' : 'error',
         message: isApiQuotaError(err)
-          ? 'API expirada — aguardando para retomar…'
-          : `Erro temporário — tentando de novo em 5s… (${err.message || 'erro'})`,
+          ? 'API indisponível — trocando chave e retomando…'
+          : `Erro temporário — tentando outra API em 5s… (${err.message || 'erro'})`,
       })
       return { resumed: false, reason: 'error', error: err.message }
     }
@@ -899,6 +963,7 @@ async function resumeWaitingGenerationJobs() {
 
 module.exports = {
   isApiQuotaError,
+  isTransientGenerationError,
   isJobCancelled,
   isJobCancelledError,
   isMentoradoJob,

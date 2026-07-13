@@ -244,6 +244,18 @@ function classifyGeminiKeyFailure(status, message = '') {
     return 'rate_limit'
   }
   if (
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    msg.includes('internal') ||
+    msg.includes('unavailable') ||
+    msg.includes('overloaded') ||
+    msg.includes('deadline')
+  ) {
+    return 'rate_limit'
+  }
+  if (
     msg.includes('quota') ||
     msg.includes('resource has been exhausted') ||
     msg.includes('exceeded') ||
@@ -330,8 +342,15 @@ async function geminiRequestWithKeyFallback({
                 if (ok) break
               }
             }
-            continue
           }
+          // Qualquer falha HTTP → tenta próxima chave/modelo
+          continue
+        } catch (fetchErr) {
+          lastError = fetchErr?.message || String(fetchErr)
+          lastWasKeyFailure = true
+          // Rede/timeout: marca rate_limit curto e segue
+          markGeminiKeyBad(apiKey, 'rate_limit')
+          continue
         } finally {
           releaseGeminiKey(apiKey)
         }

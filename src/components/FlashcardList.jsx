@@ -11,12 +11,10 @@ import { useSearchParams } from 'react-router-dom'
 import { getRatingButtonLabel } from '../utils/spacedRepetition'
 
 const COLOR_OPTIONS = [
-  { name: 'Branco', bg: 'bg-white', text: 'text-slate-900', border: 'border-slate-200' },
   { name: 'Cinza', bg: 'bg-slate-100', text: 'text-slate-900', border: 'border-slate-300' },
   { name: 'Azul', bg: 'bg-blue-50', text: 'text-slate-900', border: 'border-blue-200' },
   { name: 'Verde', bg: 'bg-emerald-50', text: 'text-slate-900', border: 'border-emerald-200' },
   { name: 'Roxo', bg: 'bg-violet-50', text: 'text-slate-900', border: 'border-violet-200' },
-  { name: 'Escuro', bg: 'bg-slate-800', text: 'text-white', border: 'border-slate-700' },
 ]
 
 const FlashcardList = ({

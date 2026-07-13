@@ -24,6 +24,7 @@ const TreinoRedacao = () => {
   const [loading, setLoading] = useState(false)
   const [configLoading, setConfigLoading] = useState(true)
   const [redacaoTema, setRedacaoTema] = useState('')
+  const [guiaNota1000, setGuiaNota1000] = useState('')
   const [redacaoStatus, setRedacaoStatus] = useState(defaultContentStatus())
   const [editingTema, setEditingTema] = useState(false)
   const [savingTema, setSavingTema] = useState(false)
@@ -112,6 +113,7 @@ const TreinoRedacao = () => {
         if (configSnap.exists()) {
           const data = configSnap.data()
           setRedacaoTema(data.tema || '')
+          setGuiaNota1000(data.guiaNota1000 || '')
           setRedacaoStatus(data.status || defaultContentStatus())
         } else {
           setRedacaoStatus(defaultContentStatus())
@@ -776,6 +778,14 @@ CRÍTICO:
               {loading ? 'Gerando tema...' : redacaoTema || 'Tema não definido'}
             </p>
           )}
+          {guiaNota1000 ? (
+            <div className="mt-4 rounded-xl border border-cp-border/70 bg-cp-surface/40 p-4">
+              <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-cp-accent">
+                Como fazer redação nota máxima (banca)
+              </p>
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-cp-muted">{guiaNota1000}</div>
+            </div>
+          ) : null}
           <p className="mt-3 text-xs text-cp-muted">Dissertação argumentativa · 25–30 linhas · 4 espaços = novo parágrafo</p>
         </div>
 

@@ -293,7 +293,7 @@ async function callGemini(prompt, options = {}) {
 }
 
 async function generateAiJson(prompt, options = {}) {
-  const maxAttempts = options.maxParseAttempts ?? 2
+  const maxAttempts = options.maxParseAttempts ?? 4
   let lastError
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -325,7 +325,12 @@ async function generateAiJson(prompt, options = {}) {
       return parsed
     } catch (error) {
       lastError = error
+      // Sempre tenta de novo em erros transitórios / JSON — callGemini já roda o pool de chaves
       if (attempt < maxAttempts && isRetryableAiError(error)) continue
+      if (attempt < maxAttempts) {
+        // Mesmo erros não classificados: mais uma chance (outra chave pode ter respondido mal)
+        continue
+      }
       break
     }
   }

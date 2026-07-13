@@ -3,6 +3,7 @@ const { processGenerationJob } = require('./jobProcessor')
 const {
   isResumableJob,
   isApiQuotaError,
+  isTransientGenerationError,
   pauseJobForResume,
 } = require('./generationJobResume')
 
@@ -21,7 +22,7 @@ function parseUserIdFromJobPath(path = '') {
 async function handleServerJobError(userId, jobId, data, error, updateRef) {
   console.error(`[runServerGenerationJob] job ${jobId}:`, error)
 
-  if (isResumableJob(data.jobType)) {
+  if (isResumableJob(data.jobType) && isTransientGenerationError(error)) {
     const pauseStatus = isApiQuotaError(error) ? 'waiting_api' : 'waiting_retry'
     await pauseJobForResume({
       userId,
@@ -43,8 +44,8 @@ async function handleServerJobError(userId, jobId, data, error, updateRef) {
       status: pauseStatus,
       waitReason: isApiQuotaError(error) ? 'api' : 'error',
       message: isApiQuotaError(error)
-        ? 'API expirada — aguardando para retomar…'
-        : `Erro temporário — tentando de novo em 5s… (${error?.message || 'erro'})`,
+        ? 'API indisponível — trocando chave e retomando…'
+        : `Erro temporário — tentando outra API em 5s… (${error?.message || 'erro'})`,
     })
     return { ok: false, paused: true, error: error.message }
   }
