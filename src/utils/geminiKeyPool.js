@@ -274,7 +274,8 @@ export async function geminiRequestWithKeyFallback({
   models = ['gemini-2.5-flash', 'gemini-2.5-pro'],
   envReader = readEnv,
   silent = true,
-  probeNextOnFail = true,
+  // Com 1 chave, probe de outras só gasta quota. Default off.
+  probeNextOnFail = false,
 }) {
   const motherKey = collectMotherGeminiApiKey(envReader)
   const allKeys = collectGeminiApiKeys(envReader)

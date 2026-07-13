@@ -298,7 +298,8 @@ async function silentProbeGeminiKey(apiKey) {
 async function geminiRequestWithKeyFallback({
   buildBody,
   models = ['gemini-2.5-flash', 'gemini-2.5-pro'],
-  probeNextOnFail = true,
+  // Com 1 chave, probe de outras só gasta quota. Default off.
+  probeNextOnFail = false,
 }) {
   const motherKey = collectMotherGeminiApiKey()
   const allKeys = collectGeminiApiKeys()
