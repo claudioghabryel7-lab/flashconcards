@@ -686,8 +686,10 @@ async function processRedacaoItem(courseId, payload, updateJob, userId, jobId) {
   const config = snap.exists ? snap.data() : {}
   const courseSnap = await db.doc(`courses/${courseId}`).get()
   const course = courseSnap.exists ? courseSnap.data() || {} : {}
-  const banca = String(course.banca || course.examBoard || 'banca do concurso').trim()
-  const concurso = String(course.competition || course.name || courseId).trim()
+  // Fonte de verdade: campos do curso no Admin (banca examinadora + cargo/competition)
+  const banca = String(course.banca || '').trim() || 'banca do concurso'
+  const cargo = String(course.competition || '').trim()
+  const concurso = cargo || String(course.name || courseId).trim()
   const temaAtual = String(config.tema || '').trim()
 
   await updateJob(userId, jobId, {
@@ -698,19 +700,21 @@ async function processRedacaoItem(courseId, payload, updateJob, userId, jobId) {
   // Só tema (+ guia opcional). NÃO inventar flashcards, material de edital nem questões.
   const prompt = `Você é professor de redação para concursos públicos.
 
-BANCA: ${banca}
-CONCURSO/CARGO: ${concurso}
+BANCA EXAMINADORA (use EXATAMENTE esta — vem do cadastro do curso; NÃO troque por órgão/secretaria): ${banca}
+CARGO (calibre a dificuldade e o enfoque do tema por este cargo): ${cargo || concurso}
+CONCURSO: ${concurso}
 TEMA ATUAL (não repetir se possível): ${temaAtual || '(nenhum)'}
 
 TAREFA ÚNICA:
-1) Proponha UM tema de redação dissertativa-argumentativa com ALTA probabilidade de cair nesta banca/concurso (atual, específico, alinhado ao cargo).
-2) Opcionalmente, um guia curto (guiaNota1000) explicando como escrever redação nota máxima segundo os critérios típicos dessa banca (estrutura, coerência, repertório, o que evitar).
+1) Proponha UM tema de redação dissertativa-argumentativa com ALTA probabilidade de cair nesta banca para este cargo (atual, específico). A dificuldade deve refletir o nível típico do cargo informado.
+2) Opcionalmente, um guia curto (guiaNota1000) explicando como escrever redação nota máxima segundo os critérios típicos da banca "${banca}" (estrutura, coerência, repertório, o que evitar).
 
 PROIBIDO:
 - Inventar flashcards
 - Inventar material de edital / conteúdo de disciplinas
 - Inventar questões objetivas
 - Qualquer correção fora de tema/guia de redação
+- Substituir a banca "${banca}" por nome de órgão, secretaria ou instituição organizadora
 
 Retorne APENAS JSON válido:
 {
@@ -749,6 +753,7 @@ Retorne APENAS JSON válido:
       lastRotationReason: payload.reason || 'weekly',
       bancaSnapshot: banca,
       concursoSnapshot: concurso,
+      cargoSnapshot: cargo || concurso,
     },
     { merge: true },
   )

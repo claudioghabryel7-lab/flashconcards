@@ -12,30 +12,34 @@ import { db } from '../firebase/config'
  */
 export async function getUnifiedPrompt(courseId) {
   try {
+    // Banca e cargo vêm SEMPRE do documento do curso (Admin → edição do curso).
+    // O prompt unificado pode ter cópias desatualizadas (órgão no lugar da banca, etc.).
+    const courseRef = doc(db, 'courses', courseId)
+    const courseDoc = await getDoc(courseRef)
+    const courseData = courseDoc.exists() ? courseDoc.data() || {} : {}
+    const courseBanca = String(courseData.banca || '').trim()
+    const courseCargo = String(courseData.competition || courseData.name || '').trim()
+
     const unifiedRef = doc(db, 'courses', courseId, 'prompts', 'unified')
     const unifiedDoc = await getDoc(unifiedRef)
-    
+
     if (unifiedDoc.exists()) {
-      const data = unifiedDoc.data()
+      const data = unifiedDoc.data() || {}
       return {
-        banca: data.banca || '',
-        concursoName: data.concursoName || '',
+        banca: courseBanca || String(data.banca || '').trim(),
+        concursoName: courseCargo || String(data.concursoName || '').trim(),
         prompt: data.prompt || '',
       }
     }
-    
-    // Fallback: tentar buscar do documento do curso
-    const courseRef = doc(db, 'courses', courseId)
-    const courseDoc = await getDoc(courseRef)
+
     if (courseDoc.exists()) {
-      const courseData = courseDoc.data()
       return {
-        banca: courseData.banca || '',
-        concursoName: courseData.competition || courseData.name || '',
+        banca: courseBanca,
+        concursoName: courseCargo,
         prompt: '',
       }
     }
-    
+
     return null
   } catch (err) {
     console.error('Erro ao buscar prompt unificado:', err)

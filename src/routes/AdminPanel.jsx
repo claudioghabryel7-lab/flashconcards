@@ -3039,6 +3039,22 @@ REGRAS CRÍTICAS:
         referenceLink: editingCourseData.referenceLink?.trim() || '',
         banca: editingCourseData.banca?.trim() || '', // Banca examinadora
       })
+
+      // Manter prompt unificado alinhado à banca/cargo do curso
+      try {
+        await setDoc(
+          doc(db, 'courses', courseId, 'prompts', 'unified'),
+          {
+            banca: editingCourseData.banca?.trim() || '',
+            concursoName: editingCourseData.competition.trim(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        )
+      } catch (syncErr) {
+        console.warn('Não foi possível sincronizar prompts/unified:', syncErr)
+      }
+
       cancelEditingCourse()
     } catch (err) {
       console.error('Erro ao salvar edição do curso:', err)

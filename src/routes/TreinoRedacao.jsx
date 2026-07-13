@@ -36,7 +36,7 @@ const TreinoRedacao = () => {
   const [selectedCourseId, setSelectedCourseId] = useState(null)
   const [courseName, setCourseName] = useState('')
   const [courseCompetition, setCourseCompetition] = useState('')
-  const [courseBanca, setCourseBanca] = useState('CESPE')
+  const [courseBanca, setCourseBanca] = useState('')
   const textareaRef = useRef(null)
 
   const getCourseId = () => selectedCourseId || 'alego-default'
@@ -53,13 +53,7 @@ const TreinoRedacao = () => {
     const courseId = getCourseId()
     const editalText = await loadEditalText(courseId)
 
-    const { buildRedacaoModeloPrompt, getUnifiedPrompt } = await import('../utils/unifiedPrompt')
-    const unified = await getUnifiedPrompt(courseId)
-    if (unified?.banca) {
-      setCourseBanca(unified.banca)
-    }
-
-    const prompt = await buildRedacaoModeloPrompt(
+    const prompt = await (await import('../utils/unifiedPrompt')).buildRedacaoModeloPrompt(
       courseId,
       tema,
       editalText ? editalText.substring(0, 30000) : ''
@@ -75,7 +69,7 @@ const TreinoRedacao = () => {
     return extractGeneratedText(response).trim()
   }
 
-  // Carregar curso do perfil
+  // Carregar curso do perfil — banca e cargo sempre do documento do curso
   useEffect(() => {
     if (!profile) return
     
@@ -90,12 +84,8 @@ const TreinoRedacao = () => {
         const data = docSnap.data()
         setCourseName(data.name || '')
         setCourseCompetition(data.competition || '')
-        if (data.banca) setCourseBanca(data.banca)
+        setCourseBanca(String(data.banca || '').trim())
       }
-
-      const { getUnifiedPrompt } = await import('../utils/unifiedPrompt')
-      const unified = await getUnifiedPrompt(courseId)
-      if (unified?.banca) setCourseBanca(unified.banca)
     }
 
     loadCourse()
@@ -175,6 +165,14 @@ const TreinoRedacao = () => {
       const courseId = getCourseId()
       const editalText = await loadEditalText(courseId)
 
+      // Garantir banca/cargo frescos do documento do curso
+      const courseSnap = await getDoc(doc(db, 'courses', courseId))
+      const courseData = courseSnap.exists() ? courseSnap.data() || {} : {}
+      const banca = String(courseData.banca || courseBanca || '').trim()
+      const cargo = String(courseData.competition || courseCompetition || '').trim()
+      if (banca) setCourseBanca(banca)
+      if (cargo) setCourseCompetition(cargo)
+
       const { buildRedacaoPrompt } = await import('../utils/unifiedPrompt')
       const baseThemePrompt = await buildRedacaoPrompt(
         courseId,
@@ -183,14 +181,15 @@ const TreinoRedacao = () => {
 
       const themePrompt = `${baseThemePrompt}
 
-BANCA: ${courseBanca || 'banca do concurso'}
-CARGO/CONCURSO: ${courseCompetition || courseName || 'Cargo público'}
+BANCA EXAMINADORA (use EXATAMENTE esta — campo do curso no admin): ${banca || 'banca do concurso'}
+CARGO (use para calibrar a dificuldade e o enfoque do tema): ${cargo || courseName || 'Cargo público'}
 
 Gere:
-1) UM tema de redação dissertativa-argumentativa com alta probabilidade de cair nesta banca/concurso (específico, atual, alinhado ao cargo).
-2) Um MATERIAL DE APOIO (guiaNota1000) explicando como fazer redação nota máxima segundo os critérios típicos dessa banca (estrutura, coerência, repertório, o que a banca valoriza/pune). Texto claro para o aluno estudar antes de escrever.
+1) UM tema de redação dissertativa-argumentativa com alta probabilidade de cair nesta banca para este cargo (específico, atual, alinhado ao cargo). A dificuldade deve refletir o nível típico do cargo informado.
+2) Um MATERIAL DE APOIO (guiaNota1000) explicando como fazer redação nota máxima segundo os critérios típicos da banca "${banca || 'informada'}" (estrutura, coerência, repertório, o que a banca valoriza/pune). Texto claro para o aluno estudar antes de escrever.
 
 PROIBIDO: inventar flashcards, questões ou material de edital de disciplinas.
+PROIBIDO: trocar a banca por órgão/secretaria/instituição — a banca é "${banca || 'a do curso'}".
 
 Retorne APENAS JSON válido:
 {
@@ -735,7 +734,13 @@ CRÍTICO:
         <div>
           <span className="cp-badge cp-badge-accent">Redação</span>
           <h1 className="cp-headline mt-3 text-2xl">Treino de Redação</h1>
-          {courseName && <p className="mt-1 text-sm text-cp-muted">{courseName} · Banca {courseBanca}</p>}
+          {courseName && (
+            <p className="mt-1 text-sm text-cp-muted">
+              {courseName}
+              {courseBanca ? ` · Banca ${courseBanca}` : ''}
+              {courseCompetition ? ` · ${courseCompetition}` : ''}
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

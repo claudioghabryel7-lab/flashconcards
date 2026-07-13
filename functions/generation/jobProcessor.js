@@ -448,6 +448,7 @@ const {
   touchActiveJob,
   clearActiveJob,
   pauseJobForResume,
+  startJobSelfKeepAlive,
 } = require('./generationJobResume')
 const { tryAcquireServerJobSlot, MAX_CONCURRENT_SERVER_JOBS } = require('./generationJobConcurrency')
 
@@ -466,6 +467,7 @@ async function processGenerationJob(userId, jobId, jobData) {
         message: 'Processando no servidor…',
         startedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        progressUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
       return true
     })
@@ -542,161 +544,168 @@ async function processGenerationJob(userId, jobId, jobData) {
     throw new Error('courseId ausente no job.')
   }
 
-  if (jobData.status !== 'pending') {
-    await updateJob(userId, jobId, {
-      status: 'running',
-      progress: 5,
-      message: 'Processando no servidor…',
-      startedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
-  } else {
-    await updateJob(userId, jobId, {
-      progress: 5,
-      message: 'Processando no servidor…',
-    })
-  }
-  await touchActiveJob(userId, jobId, { jobType, status: 'running' })
-
-  let outcome
-
-  switch (jobType) {
-    case 'conteudo_completo':
-      outcome = await processConteudoCompleto(userId, jobId, courseId, serverPayload)
-      break
-    case 'questoes_topico':
-      outcome = await processQuestoesTopico(userId, jobId, courseId, serverPayload)
-      break
-    case 'conteudo_incidencia':
-      outcome = await processConteudoIncidencia(userId, jobId, courseId, serverPayload)
-      break
-    case 'questoes_incidencia':
-      outcome = await processQuestoesIncidencia(userId, jobId, courseId, serverPayload)
-      break
-    case 'flashcards_topico':
-      outcome = await processFlashcardsTopico(userId, jobId, courseId, serverPayload)
-      break
-    case 'vespera_prova': {
-      const { processVesperaProva } = require('./vesperaProvaProcessor')
-      outcome = await processVesperaProva(userId, jobId, courseId, serverPayload)
-      break
+  let stopKeepAlive = () => {}
+  try {
+    if (jobData.status !== 'pending') {
+      await updateJob(userId, jobId, {
+        status: 'running',
+        progress: 5,
+        message: 'Processando no servidor…',
+        startedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+    } else {
+      await updateJob(userId, jobId, {
+        progress: 5,
+        message: 'Processando no servidor…',
+      })
     }
-    case 'admin_edital_verticalizado':
-      outcome = await processAdminEditalVerticalizado(userId, jobId, courseId, serverPayload)
-      break
-    case 'guia_mentorado_automation':
-      outcome = await processGuiaMentoradoAutomation(
-        userId,
-        jobId,
-        courseId,
-        serverPayload,
-        (uid, jid, patch) => updateJob(uid, jid, patch),
-      )
-      if (outcome.cancelled) {
+    await touchActiveJob(userId, jobId, { jobType, status: 'running' })
+    // Auto-atualiza a cada 15s para não parecer travado / não cair em stall recovery
+    stopKeepAlive = startJobSelfKeepAlive(userId, jobId)
+
+    let outcome
+
+    switch (jobType) {
+      case 'conteudo_completo':
+        outcome = await processConteudoCompleto(userId, jobId, courseId, serverPayload)
+        break
+      case 'questoes_topico':
+        outcome = await processQuestoesTopico(userId, jobId, courseId, serverPayload)
+        break
+      case 'conteudo_incidencia':
+        outcome = await processConteudoIncidencia(userId, jobId, courseId, serverPayload)
+        break
+      case 'questoes_incidencia':
+        outcome = await processQuestoesIncidencia(userId, jobId, courseId, serverPayload)
+        break
+      case 'flashcards_topico':
+        outcome = await processFlashcardsTopico(userId, jobId, courseId, serverPayload)
+        break
+      case 'vespera_prova': {
+        const { processVesperaProva } = require('./vesperaProvaProcessor')
+        outcome = await processVesperaProva(userId, jobId, courseId, serverPayload)
+        break
+      }
+      case 'admin_edital_verticalizado':
+        outcome = await processAdminEditalVerticalizado(userId, jobId, courseId, serverPayload)
+        break
+      case 'guia_mentorado_automation':
+        outcome = await processGuiaMentoradoAutomation(
+          userId,
+          jobId,
+          courseId,
+          serverPayload,
+          (uid, jid, patch) => updateJob(uid, jid, patch),
+        )
+        if (outcome.cancelled) {
+          await clearResumeQueue(jobId)
+          return outcome
+        }
+        if (outcome.paused) {
+          return outcome
+        }
+        await clearResumeQueue(jobId)
+        await updateJob(userId, jobId, {
+          status: 'done',
+          progress: 100,
+          message: `Dia concluído — ${outcome.publishedCount}/${outcome.totalTopics} tópico(s) liberado(s)`,
+          resultRef: null,
+          finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+        return outcome
+      case 'professor_supervisor':
+        outcome = await processProfessorSupervisor(
+          userId,
+          jobId,
+          courseId,
+          serverPayload,
+          (uid, jid, patch) => updateJob(uid, jid, patch),
+        )
+        if (outcome.cancelled || outcome.paused) {
+          return outcome
+        }
         await clearResumeQueue(jobId)
         return outcome
-      }
-      if (outcome.paused) {
+      case 'guia_mentorado_cronograma':
+        outcome = await processGuiaMentoradoCronograma(
+          userId,
+          jobId,
+          courseId,
+          serverPayload,
+          (uid, jid, patch) => updateJob(uid, jid, patch),
+        )
+        await updateJob(userId, jobId, {
+          status: 'done',
+          progress: 100,
+          message: outcome.autoGerarConteudo
+            ? `Cronograma pronto (${outcome.totalDays} dias). Conteúdos do dia iniciados.`
+            : `Cronograma gerado — ${outcome.totalDays} dias em ${outcome.monthsCount} mês(es).`,
+          resultRef: null,
+          finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+        return outcome
+      case 'guia_mentorado_backfill': {
+        const { processGuiaMentoradoBackfill } = require('./guiaMentoradoBackfill')
+        outcome = await processGuiaMentoradoBackfill(
+          userId,
+          jobId,
+          courseId,
+          serverPayload,
+          (uid, jid, patch) => updateJob(uid, jid, patch),
+        )
+        if (outcome.cancelled || outcome.paused) {
+          return outcome
+        }
+        await clearResumeQueue(jobId)
+        await updateJob(userId, jobId, {
+          status: 'done',
+          progress: 100,
+          message: `Backfill concluído — ${outcome.daysProcessed || 0} dia(s) processado(s).`,
+          resultRef: null,
+          finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
         return outcome
       }
-      await clearResumeQueue(jobId)
-      await updateJob(userId, jobId, {
-        status: 'done',
-        progress: 100,
-        message: `Dia concluído — ${outcome.publishedCount}/${outcome.totalTopics} tópico(s) liberado(s)`,
-        resultRef: null,
-        finishedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
-      return outcome
-    case 'professor_supervisor':
-      outcome = await processProfessorSupervisor(
-        userId,
-        jobId,
-        courseId,
-        serverPayload,
-        (uid, jid, patch) => updateJob(uid, jid, patch),
-      )
-      if (outcome.cancelled || outcome.paused) {
-        return outcome
+      case 'admin_materia_revisada': {
+        const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
+        await updateJob(userId, jobId, { progress: 20, message: 'Gerando matéria revisada…' })
+        const parsed = await generateAiJsonWithJobHeartbeat(
+          userId,
+          jobId,
+          prompt,
+          {
+            useRAG: aiOptions.useRAG ?? true,
+            generationConfig:
+              aiOptions.generationConfig || { maxOutputTokens: 16000, temperature: 0.7 },
+          },
+          'Gerando matéria revisada…',
+        )
+        await updateJob(userId, jobId, { progress: 85, message: 'Salvando matéria…' })
+        const docId = savePlan.docId || savePlan.materia?.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100)
+        const resultRef = await saveMergeDoc(courseId, 'materiasRevisadas', docId, parsed, {
+          materia: savePlan.materia,
+          status: savePlan.status || 'indisponivel',
+        })
+        outcome = { resultRef, parsed }
+        break
       }
-      await clearResumeQueue(jobId)
-      return outcome
-    case 'guia_mentorado_cronograma':
-      outcome = await processGuiaMentoradoCronograma(
-        userId,
-        jobId,
-        courseId,
-        serverPayload,
-        (uid, jid, patch) => updateJob(uid, jid, patch),
-      )
-      await updateJob(userId, jobId, {
-        status: 'done',
-        progress: 100,
-        message: outcome.autoGerarConteudo
-          ? `Cronograma pronto (${outcome.totalDays} dias). Conteúdos do dia iniciados.`
-          : `Cronograma gerado — ${outcome.totalDays} dias em ${outcome.monthsCount} mês(es).`,
-        resultRef: null,
-        finishedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
-      return outcome
-    case 'guia_mentorado_backfill': {
-      const { processGuiaMentoradoBackfill } = require('./guiaMentoradoBackfill')
-      outcome = await processGuiaMentoradoBackfill(
-        userId,
-        jobId,
-        courseId,
-        serverPayload,
-        (uid, jid, patch) => updateJob(uid, jid, patch),
-      )
-      if (outcome.cancelled || outcome.paused) {
-        return outcome
-      }
-      await clearResumeQueue(jobId)
-      await updateJob(userId, jobId, {
-        status: 'done',
-        progress: 100,
-        message: `Backfill concluído — ${outcome.daysProcessed || 0} dia(s) processado(s).`,
-        resultRef: null,
-        finishedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
-      return outcome
+      default:
+        throw new Error(`Tipo de job não suportado no servidor: ${jobType}`)
     }
-    case 'admin_materia_revisada': {
-      const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
-      await updateJob(userId, jobId, { progress: 20, message: 'Gerando matéria revisada…' })
-      const parsed = await generateAiJsonWithJobHeartbeat(
-        userId,
-        jobId,
-        prompt,
-        {
-          useRAG: aiOptions.useRAG ?? true,
-          generationConfig:
-            aiOptions.generationConfig || { maxOutputTokens: 16000, temperature: 0.7 },
-        },
-        'Gerando matéria revisada…',
-      )
-      await updateJob(userId, jobId, { progress: 85, message: 'Salvando matéria…' })
-      const docId = savePlan.docId || savePlan.materia?.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100)
-      const resultRef = await saveMergeDoc(courseId, 'materiasRevisadas', docId, parsed, {
-        materia: savePlan.materia,
-        status: savePlan.status || 'indisponivel',
-      })
-      outcome = { resultRef, parsed }
-      break
-    }
-    default:
-      throw new Error(`Tipo de job não suportado no servidor: ${jobType}`)
+
+    await updateJob(userId, jobId, {
+      status: 'done',
+      progress: 100,
+      message: 'Concluído',
+      resultRef: outcome.resultRef || null,
+      finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    await clearActiveJob(jobId)
+    return outcome
+  } finally {
+    stopKeepAlive()
   }
-
-  await updateJob(userId, jobId, {
-    status: 'done',
-    progress: 100,
-    message: 'Concluído',
-    resultRef: outcome.resultRef || null,
-    finishedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-
-  await clearActiveJob(jobId)
-  return outcome
 }
 
 module.exports = {

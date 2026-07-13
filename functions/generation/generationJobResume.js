@@ -6,12 +6,13 @@ const {
   isKeyUnavailable,
 } = require('./geminiKeyPool')
 
-const JOB_HEARTBEAT_MS = 5 * 1000
+const JOB_HEARTBEAT_MS = 15 * 1000
 const RETRY_INTERVAL_MS = 5 * 1000
 const CONCURRENCY_RETRY_MS = 5 * 1000
 /** Só considera "sem sinal" após 5 min — geração de IA pode ficar quieta por minutos. */
 const STALL_PROGRESS_MS = 5 * 60 * 1000
-const ACTIVE_HEARTBEAT_FRESH_MS = 90 * 1000
+/** Heartbeat a cada 15s → fresco se < 60s. */
+const ACTIVE_HEARTBEAT_FRESH_MS = 60 * 1000
 const CF_SAFE_MS = 7 * 60 * 1000
 
 const WAITING_STATUSES = ['waiting_api', 'waiting_retry', 'waiting_timeout']
@@ -165,9 +166,50 @@ async function touchActiveJob(userId, jobId, patch = {}) {
       .update({
         progressUpdatedAt: ts,
         updatedAt: ts,
+        lastHeartbeat: ts,
       })
       .catch(() => {}),
   ])
+}
+
+/**
+ * Atualiza o job sozinho a cada 15s enquanto estiver rodando.
+ * Evita falso "travado" / stall recovery durante chamadas longas ou gaps entre lotes.
+ * @returns {() => void} stop
+ */
+function startJobSelfKeepAlive(userId, jobId, intervalMs = JOB_HEARTBEAT_MS) {
+  let stopped = false
+  let tick = 0
+  let inFlight = false
+
+  const beat = () => {
+    if (stopped || inFlight) return
+    inFlight = true
+    Promise.resolve()
+      .then(async () => {
+        if (stopped) return
+        if (await isJobCancelled(userId, jobId)) return
+        tick += 1
+        await touchActiveJob(userId, jobId, {
+          status: 'running',
+          keepAlive: true,
+          keepAliveTick: tick,
+        })
+      })
+      .catch(() => {})
+      .finally(() => {
+        inFlight = false
+      })
+  }
+
+  // Primeiro ping imediato + intervalo fixo
+  beat()
+  const timer = setInterval(beat, Math.max(5000, intervalMs))
+
+  return () => {
+    stopped = true
+    clearInterval(timer)
+  }
 }
 
 async function hasFreshActiveHeartbeat(jobId, freshMs = ACTIVE_HEARTBEAT_FRESH_MS) {
@@ -493,7 +535,7 @@ async function runWithHeartbeat(work, onHeartbeat, intervalMs = JOB_HEARTBEAT_MS
 }
 
 /**
- * Gera JSON com IA mantendo heartbeat do job a cada 5s.
+ * Gera JSON com IA mantendo heartbeat do job a cada 15s.
  * Evita falso "sem sinal" / stall durante chamadas longas ao Gemini.
  */
 async function generateAiJsonWithJobHeartbeat(
@@ -981,6 +1023,7 @@ module.exports = {
   hasAvailableGeminiKey,
   touchActiveJob,
   clearActiveJob,
+  startJobSelfKeepAlive,
   touchJobHeartbeat,
   clearResumeQueue,
   shouldCheckpointTimeout,
