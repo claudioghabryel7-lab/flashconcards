@@ -312,9 +312,11 @@ export default function AdminProfessorSupervisor() {
                       className="rounded-lg border border-cp-border px-3 py-2 text-xs text-cp-muted"
                     >
                       <span className="font-medium text-cp-text">{row.itemType}</span> — {row.courseId} —{' '}
-                      {row.autoApplied || row.skipModeration
-                        ? `${row.appliedCount || 0} correção(ões) auto`
-                        : 'enviado ao admin'}{' '}
+                      {row.skipped
+                        ? `pulado (${row.skipReason || 'ok'})`
+                        : row.autoApplied || row.skipModeration
+                          ? `${row.appliedCount || 0} correção(ões) auto`
+                          : 'enviado ao admin'}{' '}
                       — {when}
                     </div>
                   )

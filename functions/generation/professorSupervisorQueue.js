@@ -166,7 +166,7 @@ async function updateSupervisorActivity(activityPatch = {}) {
 }
 
 async function scheduleNextRun(minutes = INTERVAL_MINUTES) {
-  const delayMs = minutes <= 0 ? 15000 : minutes * 60 * 1000
+  const delayMs = minutes <= 0 ? 5000 : minutes * 60 * 1000
   const nextRunAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + delayMs))
   const waitLabel =
     minutes <= 0 ? 'em instantes' : `~${minutes} min`
@@ -342,29 +342,20 @@ async function shouldEnqueueRedacaoTheme(courseId) {
   return { ok: false, currentTema: tema }
 }
 
-async function buildQueueItems() {
+async function enqueueOpenFlagsForAllCourses() {
   const db = getDb()
-  const todayKey = getTodayKeyInSaoPaulo()
   let added = 0
-
-  await updateSupervisorActivity({
-    phase: 'building_queue',
-    message: 'Montando fila de fiscalização…',
-  })
-
-  // Todos os cursos cadastrados (sem limite artificial)
   const coursesSnap = await db.collection('courses').get()
 
   for (const courseDoc of coursesSnap.docs) {
     const courseId = courseDoc.id
-    const courseData = courseDoc.data() || {}
-    if (courseData.active === false) continue
+    if (courseDoc.data()?.active === false) continue
 
     const flagsSnap = await db
       .collection(`courses/${courseId}/contentFeedback`)
       .where('kind', '==', 'flag')
       .where('status', '==', 'open')
-      .limit(10)
+      .limit(20)
       .get()
 
     for (const flagDoc of flagsSnap.docs) {
@@ -383,6 +374,30 @@ async function buildQueueItems() {
       })
       if (id) added += 1
     }
+  }
+  return added
+}
+
+async function buildQueueItems() {
+  const db = getDb()
+  const todayKey = getTodayKeyInSaoPaulo()
+  let added = 0
+
+  await updateSupervisorActivity({
+    phase: 'building_queue',
+    message: 'Montando fila de fiscalização…',
+  })
+
+  // Flags primeiro (também re-enfileiradas a cada tick — ver enqueueOpenFlagsForAllCourses)
+  added += await enqueueOpenFlagsForAllCourses()
+
+  // Todos os cursos cadastrados (sem limite artificial)
+  const coursesSnap = await db.collection('courses').get()
+
+  for (const courseDoc of coursesSnap.docs) {
+    const courseId = courseDoc.id
+    const courseData = courseDoc.data() || {}
+    if (courseData.active === false) continue
 
     const mentoradoSnap = await db.doc(`courses/${courseId}/config/guiaMentorado`).get()
     if (mentoradoSnap.exists && mentoradoSnap.data().autoGerarConteudo) {
@@ -419,7 +434,6 @@ async function buildQueueItems() {
       const edital = await loadEditalVerticalizado(courseId)
       added += await enqueueBacklogTopics(courseId, new Set(), edital, todayKey)
     } else {
-      // Curso sem guia: ainda percorre tópicos publicados no backlog
       try {
         const edital = await loadEditalVerticalizado(courseId)
         if (edital) {
@@ -462,7 +476,6 @@ async function buildQueueItems() {
     }
   }
 
-  // Itens topico_pipeline que falharam antes do handler: recolocam na fila
   const stuckSnap = await db
     .collection('professorSupervisorQueue')
     .where('itemType', '==', 'topico_pipeline')
@@ -491,13 +504,31 @@ async function buildQueueItems() {
 }
 
 async function popNextQueueItem() {
-  const snap = await getDb()
-    .collection('professorSupervisorQueue')
-    .where('status', '==', 'pending')
-    .orderBy('priority', 'desc')
-    .orderBy('createdAt', 'asc')
-    .limit(1)
-    .get()
+  const db = getDb()
+
+  // Prioriza sinalizações abertas (aluno esperando correção + notificação)
+  let snap = { empty: true, docs: [] }
+  try {
+    snap = await db
+      .collection('professorSupervisorQueue')
+      .where('status', '==', 'pending')
+      .where('itemType', '==', 'flag')
+      .orderBy('createdAt', 'asc')
+      .limit(1)
+      .get()
+  } catch (err) {
+    console.warn('[popNextQueueItem] flag query fallback:', err?.message || err)
+  }
+
+  if (snap.empty) {
+    snap = await db
+      .collection('professorSupervisorQueue')
+      .where('status', '==', 'pending')
+      .orderBy('priority', 'desc')
+      .orderBy('createdAt', 'asc')
+      .limit(1)
+      .get()
+  }
 
   if (snap.empty) return null
 
@@ -634,10 +665,22 @@ async function tickProfessorSupervisor({ force = false } = {}) {
   const activeSnap = await getDb()
     .collection('generationActiveJobs')
     .where('jobType', '==', 'professor_supervisor')
-    .limit(1)
+    .limit(3)
     .get()
   if (!activeSnap.empty) {
-    return { skipped: true, reason: 'already_running' }
+    const { hasFreshActiveHeartbeat, clearActiveJob } = require('./generationJobResume')
+    let hasFresh = false
+    for (const activeDoc of activeSnap.docs) {
+      if (await hasFreshActiveHeartbeat(activeDoc.id)) {
+        hasFresh = true
+      } else {
+        // Job zumbi — libera a fila
+        await clearActiveJob(activeDoc.id)
+      }
+    }
+    if (hasFresh) {
+      return { skipped: true, reason: 'already_running' }
+    }
   }
 
   let pendingSnap = await getDb()
@@ -645,6 +688,20 @@ async function tickProfessorSupervisor({ force = false } = {}) {
     .where('status', '==', 'pending')
     .limit(1)
     .get()
+
+  // Sempre tenta enfileirar sinalizações abertas (mesmo com fila de tópicos pendente)
+  try {
+    const flagsAdded = await enqueueOpenFlagsForAllCourses()
+    if (flagsAdded > 0) {
+      pendingSnap = await getDb()
+        .collection('professorSupervisorQueue')
+        .where('status', '==', 'pending')
+        .limit(1)
+        .get()
+    }
+  } catch (err) {
+    console.warn('[tickProfessorSupervisor] enqueue flags:', err?.message || err)
+  }
 
   let rebuildAdded = 0
   if (pendingSnap.empty) {
@@ -700,10 +757,20 @@ async function tickProfessorSupervisor({ force = false } = {}) {
 }
 
 function scheduleNextRunForItem(itemType) {
-  if (itemType === 'topico_digitacao') {
-    return scheduleNextRun(DIGITACAO_INTERVAL_MINUTES)
+  // Encadeia rápido na sessão (não espera 5 min entre itens)
+  if (itemType === 'topico_digitacao' || itemType === 'flag') {
+    return scheduleNextRun(0)
   }
-  return scheduleNextRun(INTERVAL_MINUTES)
+  return scheduleNextRun(0)
+}
+
+/**
+ * Dispara o próximo item imediatamente (após um job terminar).
+ * Evita depender só do cron de 5 minutos.
+ */
+async function kickNextSupervisorItem() {
+  await scheduleNextRun(0)
+  return tickProfessorSupervisor({ force: true })
 }
 
 module.exports = {
@@ -715,7 +782,9 @@ module.exports = {
   updateSupervisorActivity,
   scheduleNextRun,
   scheduleNextRunForItem,
+  kickNextSupervisorItem,
   buildQueueItems,
+  enqueueOpenFlagsForAllCourses,
   popNextQueueItem,
   finishQueueItem,
   tickProfessorSupervisor,

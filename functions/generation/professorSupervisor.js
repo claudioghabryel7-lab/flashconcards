@@ -15,7 +15,7 @@ const {
   applyCorrectionsWithSnapshot,
   buildDiffSummary,
 } = require('./professorSupervisorPatches')
-const { finishQueueItem, updateSupervisorActivity, scheduleNextRunForItem } = require('./professorSupervisorQueue')
+const { finishQueueItem, updateSupervisorActivity, scheduleNextRunForItem, kickNextSupervisorItem } = require('./professorSupervisorQueue')
 const {
   scanMaterialTypos,
   buildDigitacaoVerdict,
@@ -393,7 +393,7 @@ async function processDigitacaoItem(courseId, payload, updateJob, userId, jobId)
   }
 }
 
-async function resolveFlagFeedback(courseId, flagId) {
+async function resolveFlagFeedback(courseId, flagId, { applied = 0, summary = '' } = {}) {
   if (!flagId) return
   const db = getDb()
   const flagRef = db.doc(`courses/${courseId}/contentFeedback/${flagId}`)
@@ -405,12 +405,17 @@ async function resolveFlagFeedback(courseId, flagId) {
       status: 'resolved',
       resolvedBy: 'professor_supervisor',
       resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+      appliedCorrections: applied,
+      resolveSummary: summary || null,
     },
     { merge: true },
   )
 
   const targetUserId = flagData.userId
-  if (!targetUserId) return
+  if (!targetUserId) {
+    console.warn('[resolveFlagFeedback] flag sem userId:', flagId)
+    return
+  }
 
   const typeLabel =
     flagData.contentType === 'flashcard'
@@ -419,17 +424,23 @@ async function resolveFlagFeedback(courseId, flagId) {
         ? 'questão'
         : flagData.contentType || 'conteúdo'
 
+  const message =
+    applied > 0
+      ? `Seu relatório sobre ${typeLabel} foi revisado e o conteúdo foi corrigido.`
+      : `Seu relatório sobre ${typeLabel} foi revisado pelo professor. ${summary || 'O conteúdo foi analisado.'}`
+
   await db.collection(`users/${targetUserId}/notifications`).add({
     type: 'flag_corrected',
     tone: 'success',
-    title: 'Sinalização corrigida',
-    message: `Seu relatório sobre ${typeLabel} foi revisado e o conteúdo foi corrigido.`,
+    title: applied > 0 ? 'Sinalização corrigida' : 'Sinalização revisada',
+    message,
     courseId: courseId || null,
     contentType: flagData.contentType || null,
     contentId: flagData.contentId || null,
     topicKey: flagData.topicKey || null,
     flagId,
     preview: flagData.preview || '',
+    appliedCorrections: applied,
     read: false,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   })
@@ -485,46 +496,74 @@ async function loadFlaggedContentBlock(courseId, payload = {}) {
 
 async function processFlagItem(courseId, payload, updateJob, userId, jobId) {
   const contentBlock = await loadFlaggedContentBlock(courseId, payload)
+  const flashcardId =
+    payload.contentType === 'flashcard' ? String(payload.contentId || '').replace(/^.*_fc_/, '') : ''
   const contextBlock = `TIPO: conteúdo sinalizado por aluno — corrija APENAS o trecho errado apontado no relato
 CURSO: ${courseId}
 TIPO CONTEÚDO: ${payload.contentType}
-ID: ${payload.contentId}
+CONTENT_ID: ${payload.contentId}
+FLASHCARD_DOC_ID: ${flashcardId || '—'}
 TÓPICO: ${payload.topicKey || '—'}
 PREVIEW: ${payload.preview || ''}
 RELATO DO ALUNO: ${payload.reportText || ''}
 
-${contentBlock ? `CONTEÚDO INTEGRAL:\n${contentBlock}` : ''}
+${contentBlock ? `CONTEÚDO INTEGRAL:\n${contentBlock}` : 'ATENÇÃO: não foi possível carregar o conteúdo — use o preview e o relato.'}
 
-INSTRUÇÕES:
+INSTRUÇÕES OBRIGATÓRIAS:
 - Corrija somente o que está errado conforme o relato — não reescreva o material inteiro
-- Não use digitação automática nem revisão ortográfica em massa
-- Aplique correções pontuais nos campos indicados (target + refId + field + newText)`
+- Em corrections use target exatamente: flashcard | material | questao
+- Para flashcard: refId = "${flashcardId || payload.contentId}", field = frente|verso
+- Para questao: refId = índice numérico ou contentId "${payload.contentId}", field = enunciado|comentario|gabarito|alternativa_*
+- Para material: target material, field do campo a corrigir, newText com o texto corrigido
+- Sempre inclua pelo menos 1 correction se o relato apontar erro concreto`
 
   const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
   const final = chain.final
+  let corrections = final.corrections || []
+
+  // Se a IA não trouxe refId, força o contentId da flag
+  corrections = corrections.map((c) => ({
+    ...c,
+    refId: c.refId || flashcardId || payload.contentId || null,
+    target:
+      c.target ||
+      (payload.contentType === 'flashcard'
+        ? 'flashcard'
+        : payload.contentType === 'questao'
+          ? 'questao'
+          : payload.contentType === 'material' || payload.contentType === 'materia'
+            ? 'material'
+            : c.target),
+  }))
+
   const dedupeKey = `${courseId}:flag:${payload.flagId}`
   const { applied, patches } = await applyCorrectionsWithSnapshot(
     courseId,
     'flag',
     payload,
-    final.corrections || [],
+    corrections,
   )
-  const diffSummary = buildDiffSummary(patches, final.corrections || [])
+  const diffSummary = buildDiffSummary(patches, corrections)
 
   await saveHistory({
     courseId,
     itemType: 'flag',
     dedupeKey,
     payload,
-    verdict: final,
+    verdict: { ...final, corrections },
     professorsUsed: chain.professorsUsed,
     appliedCount: applied,
     reviewId: null,
     autoApplied: true,
     skipModeration: true,
+    diffSummary,
   })
 
-  await resolveFlagFeedback(courseId, payload.flagId)
+  // Notifica o aluno mesmo se applied=0 (revisão feita); marca flag resolvida
+  await resolveFlagFeedback(courseId, payload.flagId, {
+    applied,
+    summary: final.summary || '',
+  })
 
   return {
     summary: final.summary,
@@ -777,6 +816,16 @@ async function processProfessorSupervisor(userId, jobId, courseId, serverPayload
     })
 
     await scheduleNextRunForItem(itemType)
+
+    // Nuvem: inicia o próximo job agora (não espera o cron de 5 min)
+    try {
+      const kick = await kickNextSupervisorItem()
+      if (kick?.started) {
+        console.log('[professorSupervisor] próximo item iniciado:', kick.itemType || kick.jobId)
+      }
+    } catch (kickErr) {
+      console.warn('[professorSupervisor] kick next falhou:', kickErr?.message || kickErr)
+    }
 
     return outcome
   } catch (err) {

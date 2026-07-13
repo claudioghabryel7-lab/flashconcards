@@ -33,11 +33,13 @@ export function useFlagCorrectionNotifications(userId) {
       q,
       (snap) => {
         setNotifications(
-          snap.docs.map((d) => ({
-            id: d.id,
-            ...d.data(),
-            createdAt: d.data().createdAt?.toMillis?.() || Date.now(),
-          })),
+          snap.docs
+            .map((d) => ({
+              id: d.id,
+              ...d.data(),
+              createdAt: d.data().createdAt?.toMillis?.() || Date.now(),
+            }))
+            .filter((n) => !n.type || n.type === 'flag_corrected'),
         )
       },
       (err) => {

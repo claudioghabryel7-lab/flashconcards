@@ -1816,15 +1816,15 @@ exports.cancelGenerationJob = functions.https.onRequest((req, res) => {
   })
 })
 
-/** Professor fiscalizador — 1 item por vez, só se API disponível e ativado pelo admin. */
+/** Professor fiscalizador — 1 item por vez; backup a cada 1 min se a cadeia falhar. */
 exports.professorSupervisorTick = functions.pubsub
-  .schedule('every 5 minutes')
+  .schedule('every 1 minutes')
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
     try {
       const { tickProfessorSupervisor } = getSupervisorQueueModule()
       const result = await tickProfessorSupervisor()
-      if (result.started) {
+      if (result.started || result.skipped) {
         console.log('[professorSupervisorTick]', result)
       }
     } catch (err) {
