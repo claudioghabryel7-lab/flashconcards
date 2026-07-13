@@ -168,7 +168,7 @@ const TreinoRedacao = () => {
     return paragraphCount
   }
 
-  // Gerar tema de redação
+  // Gerar tema + material de apoio (salvo uma vez no config do curso)
   const generateTheme = async () => {
     setLoading(true)
     try {
@@ -180,62 +180,84 @@ const TreinoRedacao = () => {
         courseId,
         editalText ? editalText.substring(0, 30000) : ''
       )
-      
+
       const themePrompt = `${baseThemePrompt}
 
-CARGO: ${courseCompetition || courseName || 'Cargo público'}
+BANCA: ${courseBanca || 'banca do concurso'}
+CARGO/CONCURSO: ${courseCompetition || courseName || 'Cargo público'}
 
-Crie um tema de redação ESPECÍFICO e relevante para o concurso ${courseName || 'mencionado'}${courseCompetition ? ` (${courseCompetition})` : ''}.
+Gere:
+1) UM tema de redação dissertativa-argumentativa com alta probabilidade de cair nesta banca/concurso (específico, atual, alinhado ao cargo).
+2) Um MATERIAL DE APOIO (guiaNota1000) explicando como fazer redação nota máxima segundo os critérios típicos dessa banca (estrutura, coerência, repertório, o que a banca valoriza/pune). Texto claro para o aluno estudar antes de escrever.
 
-INSTRUÇÕES:
-- O tema deve ser atual e relevante para o cargo/concurso
-- Deve estar relacionado com questões sociais, políticas ou administrativas pertinentes ao cargo
-- Seja específico: não use temas genéricos
-- O tema deve permitir uma dissertação argumentativa de 25-30 linhas
-- Se você tiver conhecimento sobre este concurso específico, use temas típicos dessa área.
+PROIBIDO: inventar flashcards, questões ou material de edital de disciplinas.
 
-Retorne APENAS o tema da redação, sem explicações, sem aspas, sem formatação especial.
-O tema deve ser claro e direto.
-
-CRÍTICO: Retorne APENAS o tema, nada mais.`
+Retorne APENAS JSON válido:
+{
+  "tema": "texto do tema",
+  "guiaNota1000": "material de apoio em texto corrido ou markdown curto"
+}`
 
       const response = await callGeminiWithRetry(themePrompt, {
         courseId: getCourseId(),
         generationConfig: {
-          maxOutputTokens: 1024,
+          maxOutputTokens: 4096,
           temperature: 0.5,
         },
       })
-      let theme = extractGeneratedText(response).trim()
-      
-      // Limpar formatação
-      theme = theme.replace(/TEMA:/gi, '').trim()
-      theme = theme.replace(/"/g, '').trim()
-      theme = theme.replace(/^[-•]\s*/, '').trim()
-      
+      let raw = extractGeneratedText(response).trim()
+
+      let theme = ''
+      let guia = ''
+      try {
+        const cleaned = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim()
+        const parsed = JSON.parse(cleaned)
+        theme = String(parsed.tema || '').trim()
+        guia = String(parsed.guiaNota1000 || '').trim()
+      } catch {
+        theme = raw
+          .replace(/TEMA:/gi, '')
+          .replace(/"/g, '')
+          .replace(/^[-•]\s*/, '')
+          .trim()
+      }
+
+      if (!theme) {
+        throw new Error('Tema vazio')
+      }
+
       setRedacaoTema(theme)
+      if (guia) setGuiaNota1000(guia)
+
       if (isAdmin) {
-        await saveRedacaoConfig(theme, redacaoStatus)
+        await saveRedacaoConfig(theme, redacaoStatus, guia || guiaNota1000)
       }
       setIsRunning(true)
     } catch (err) {
       console.error('Erro ao gerar tema:', err)
-      setRedacaoTema(`A importância da eficiência no serviço público para o cargo de ${courseCompetition || courseName || 'servidor público'}`)
+      setRedacaoTema(
+        `A importância da eficiência no serviço público para o cargo de ${courseCompetition || courseName || 'servidor público'}`,
+      )
       setIsRunning(true)
     } finally {
       setLoading(false)
     }
   }
 
-  const saveRedacaoConfig = async (tema = redacaoTema, status = redacaoStatus) => {
+  const saveRedacaoConfig = async (tema = redacaoTema, status = redacaoStatus, guia = guiaNota1000) => {
     setSavingTema(true)
     try {
-      await setDoc(
-        doc(db, 'courses', getCourseId(), 'config', 'redacao'),
-        { tema: tema.trim(), status, updatedAt: serverTimestamp() },
-        { merge: true }
-      )
+      const payload = {
+        tema: String(tema || '').trim(),
+        status,
+        updatedAt: serverTimestamp(),
+      }
+      const guiaTrim = String(guia || '').trim()
+      if (guiaTrim) payload.guiaNota1000 = guiaTrim
+
+      await setDoc(doc(db, 'courses', getCourseId(), 'config', 'redacao'), payload, { merge: true })
       setRedacaoStatus(status)
+      if (guiaTrim) setGuiaNota1000(guiaTrim)
       setEditingTema(false)
     } catch (err) {
       console.error(err)
@@ -740,6 +762,18 @@ CRÍTICO:
           </div>
         </div>
 
+        {guiaNota1000 ? (
+          <div className="cp-card p-4 sm:p-5">
+            <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Material de Apoio</p>
+            <p className="mt-1 text-sm font-semibold text-cp-text">
+              Como fazer redação nota máxima ({courseBanca || 'sua banca'})
+            </p>
+            <div className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-cp-muted">
+              {guiaNota1000}
+            </div>
+          </div>
+        ) : null}
+
         <div className="cp-card border-cp-accent/30 p-5 sm:p-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <p className="font-mono text-[11px] uppercase tracking-wider text-cp-accent">Tema proposto</p>
@@ -778,14 +812,6 @@ CRÍTICO:
               {loading ? 'Gerando tema...' : redacaoTema || 'Tema não definido'}
             </p>
           )}
-          {guiaNota1000 ? (
-            <div className="mt-4 rounded-xl border border-cp-border/70 bg-cp-surface/40 p-4">
-              <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-cp-accent">
-                Como fazer redação nota máxima (banca)
-              </p>
-              <div className="whitespace-pre-wrap text-sm leading-relaxed text-cp-muted">{guiaNota1000}</div>
-            </div>
-          ) : null}
           <p className="mt-3 text-xs text-cp-muted">Dissertação argumentativa · 25–30 linhas · 4 espaços = novo parágrafo</p>
         </div>
 
