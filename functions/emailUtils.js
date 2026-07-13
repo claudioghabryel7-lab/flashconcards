@@ -425,6 +425,7 @@ function buildEmailVerificationHtml({ code, displayName = '', email = '' }) {
           'Remetente: flashconcards@gmail.com',
           'Marque como “não é spam” se encontrar na lixeira',
           'Aguarde 1 minuto entre reenvios na tela de verificação',
+          'Contas não verificadas em até 24 horas são removidas automaticamente',
         ])}
         ${buildFeatureChips()}
       </td>

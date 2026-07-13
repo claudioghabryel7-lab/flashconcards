@@ -15,6 +15,7 @@ import {
 import CPLogo from './CPLogo'
 import UserAvatar from '../UserAvatar'
 import TopicNotificationsButton from '../TopicNotificationsButton'
+import InstallPWAButton from '../InstallPWAButton'
 import CPDrawerMenu from './CPDrawerMenu'
 import { useAuth } from '@/hooks/useAuth'
 import { useDarkMode } from '@/hooks/useDarkMode.jsx'
@@ -148,6 +149,7 @@ export default function CPHeader() {
                   <span className="hidden lg:inline">Trocar curso</span>
                 </button>
 
+                <InstallPWAButton variant="icon" />
                 <TopicNotificationsButton />
 
                 <button

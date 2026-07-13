@@ -1,31 +1,12 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
+import { isDevEnv } from '@/lib/env.js'
 // Logger utilitário - desabilita logs em produção
 const isDev = isDevEnv()
+const noop = () => {}
 
 export const logger = {
-  log: (...args) => {
-    if (isDev) {
-      console.log(...args)
-    }
-  },
-  warn: (...args) => {
-    if (isDev) {
-      console.warn(...args)
-    }
-  },
-  error: (...args) => {
-    // Erros sempre são logados, mesmo em produção
-    console.error(...args)
-  },
-  info: (...args) => {
-    if (isDev) {
-      console.info(...args)
-    }
-  },
-  debug: (...args) => {
-    if (isDev) {
-      console.debug(...args)
-    }
-  }
+  log: isDev ? (...args) => console.log(...args) : noop,
+  warn: isDev ? (...args) => console.warn(...args) : noop,
+  error: isDev ? (...args) => console.error(...args) : noop,
+  info: isDev ? (...args) => console.info(...args) : noop,
+  debug: isDev ? (...args) => console.debug(...args) : noop,
 }
-

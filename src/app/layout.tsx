@@ -1,4 +1,5 @@
 import '@/lib/import-meta-env.js'
+import '@/lib/consoleCleanup.js'
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'

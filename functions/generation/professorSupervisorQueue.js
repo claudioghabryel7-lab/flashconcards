@@ -380,118 +380,39 @@ async function enqueueOpenFlagsForAllCourses() {
 
 async function buildQueueItems() {
   const db = getDb()
-  const todayKey = getTodayKeyInSaoPaulo()
   let added = 0
 
   await updateSupervisorActivity({
     phase: 'building_queue',
-    message: 'Montando fila de fiscalização…',
+    message: 'Montando fila — somente sinalizações da Moderação…',
   })
 
-  // Flags primeiro (também re-enfileiradas a cada tick — ver enqueueOpenFlagsForAllCourses)
+  // Professor IA corrige APENAS a aba Moderação (contentFeedback open flags).
+  // Tópicos, véspera e redação NÃO entram nesta fila.
   added += await enqueueOpenFlagsForAllCourses()
 
-  // Todos os cursos cadastrados (sem limite artificial)
-  const coursesSnap = await db.collection('courses').get()
-
-  for (const courseDoc of coursesSnap.docs) {
-    const courseId = courseDoc.id
-    const courseData = courseDoc.data() || {}
-    if (courseData.active === false) continue
-
-    const mentoradoSnap = await db.doc(`courses/${courseId}/config/guiaMentorado`).get()
-    if (mentoradoSnap.exists && mentoradoSnap.data().autoGerarConteudo) {
-      const dayEntry = await loadCronogramaDay(courseId, todayKey)
-      if (dayEntry) {
-        const tipo = dayEntry.type || dayEntry.tipo || 'estudo'
-        if (tipo !== 'simulado' && tipo !== 'descanso') {
-          const edital = await loadEditalVerticalizado(courseId)
-          const topics = extractTopicsFromCronogramaDay(
-            { data: todayKey, tipo, materias: dayEntry.materias || [] },
-            edital,
-          )
-          const todayTopicKeys = new Set(topics.map((t) => t.topicKey))
-          for (const topic of topics) {
-            const readiness = await isTopicContentComplete(courseId, topic)
-            const statusSnap = await db
-              .doc(`courses/${courseId}/topicoStatus/${sanitizeTopicKeyForFirestore(topic.topicKey)}`)
-              .get()
-            const published =
-              statusSnap.exists && statusSnap.data().status === 'disponivel' && readiness.complete
-            if (!published) continue
-
-            added += await enqueueTopicPipeline(courseId, topic, {
-              priorityBase: 50,
-              targetDate: todayKey,
-              source: 'cronograma',
-            })
-          }
-
-          added += await enqueueBacklogTopics(courseId, todayTopicKeys, edital, todayKey)
-        }
-      }
-    } else if (mentoradoSnap.exists) {
-      const edital = await loadEditalVerticalizado(courseId)
-      added += await enqueueBacklogTopics(courseId, new Set(), edital, todayKey)
-    } else {
-      try {
-        const edital = await loadEditalVerticalizado(courseId)
-        if (edital) {
-          added += await enqueueBacklogTopics(courseId, new Set(), edital, todayKey)
-        }
-      } catch (_) {
-        /* curso sem edital */
+  // Cancela itens legados que não são moderação
+  try {
+    const staleSnap = await db
+      .collection('professorSupervisorQueue')
+      .where('status', 'in', ['pending', 'error'])
+      .limit(100)
+      .get()
+    for (const staleDoc of staleSnap.docs) {
+      const type = staleDoc.data()?.itemType
+      if (type && type !== 'flag') {
+        await staleDoc.ref.set(
+          {
+            status: 'cancelled',
+            cancelReason: 'professor_moderation_only',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
       }
     }
-
-    const vesperaSnap = await db.doc(`courses/${courseId}/vesperaDeProva/material`).get()
-    if (vesperaSnap.exists) {
-      const dedupeKey = `${courseId}:vespera:material`
-      if (!(await wasRecentlyReviewed(courseId, dedupeKey))) {
-        const id = await enqueueItem({
-          courseId,
-          itemType: 'vespera',
-          priority: 30,
-          payload: { scope: 'material' },
-        })
-        if (id) added += 1
-      }
-    }
-
-    const redacaoCheck = await shouldEnqueueRedacaoTheme(courseId)
-    if (redacaoCheck.ok) {
-      const id = await enqueueItem({
-        courseId,
-        itemType: 'redacao',
-        priority: 80,
-        payload: {
-          rotateTheme: true,
-          targetDate: todayKey,
-          scope: 'rotate',
-          currentTema: redacaoCheck.currentTema || '',
-          reason: redacaoCheck.reason,
-        },
-      })
-      if (id) added += 1
-    }
-  }
-
-  const stuckSnap = await db
-    .collection('professorSupervisorQueue')
-    .where('itemType', '==', 'topico_pipeline')
-    .where('status', '==', 'error')
-    .limit(30)
-    .get()
-  for (const stuckDoc of stuckSnap.docs) {
-    await stuckDoc.ref.set(
-      {
-        status: 'pending',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        recoveredAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    )
-    added += 1
+  } catch (err) {
+    console.warn('[buildQueueItems] limpeza legado:', err?.message || err)
   }
 
   const pendingSnap = await db
@@ -506,7 +427,7 @@ async function buildQueueItems() {
 async function popNextQueueItem() {
   const db = getDb()
 
-  // Prioriza sinalizações abertas (aluno esperando correção + notificação)
+  // Somente sinalizações da Moderação
   let snap = { empty: true, docs: [] }
   try {
     snap = await db
@@ -518,14 +439,10 @@ async function popNextQueueItem() {
       .get()
   } catch (err) {
     console.warn('[popNextQueueItem] flag query fallback:', err?.message || err)
-  }
-
-  if (snap.empty) {
     snap = await db
       .collection('professorSupervisorQueue')
       .where('status', '==', 'pending')
-      .orderBy('priority', 'desc')
-      .orderBy('createdAt', 'asc')
+      .where('itemType', '==', 'flag')
       .limit(1)
       .get()
   }
@@ -644,12 +561,11 @@ async function tickProfessorSupervisor({ force = false } = {}) {
   const itemPeek = await getDb()
     .collection('professorSupervisorQueue')
     .where('status', '==', 'pending')
-    .orderBy('priority', 'desc')
-    .orderBy('createdAt', 'asc')
+    .where('itemType', '==', 'flag')
     .limit(1)
     .get()
   const nextItemType = itemPeek.empty ? null : itemPeek.docs[0].data().itemType
-  const needsApi = nextItemType !== 'topico_digitacao'
+  const needsApi = Boolean(nextItemType)
 
   if (needsApi) {
     const apiReady = await hasAvailableGeminiKey()
@@ -785,6 +701,8 @@ module.exports = {
   kickNextSupervisorItem,
   buildQueueItems,
   enqueueOpenFlagsForAllCourses,
+  shouldEnqueueRedacaoTheme,
+  REDACAO_ROTATE_DAYS,
   popNextQueueItem,
   finishQueueItem,
   tickProfessorSupervisor,

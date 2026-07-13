@@ -1,6 +1,7 @@
 'use client'
 
 import '@/lib/import-meta-env.js'
+import '@/lib/consoleCleanup.js'
 import { useEffect } from 'react'
 import { QueryProvider } from '@/providers/QueryProvider'
 import { DarkModeProvider } from '@/hooks/useDarkMode.jsx'
@@ -14,6 +15,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import useSiteCacheSync from '@/hooks/useSiteCacheSync'
 import { cleanupConsole } from '@/lib/consoleCleanup'
 import BackgroundGenerationBanner from '@/components/BackgroundGenerationBanner'
+import CourseReviewPrompt from '@/components/CourseReviewPrompt'
 
 function ClientBootstrap() {
   useEffect(() => {
@@ -36,6 +38,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                 <ClientBootstrap />
                 {children}
                 <BackgroundGenerationBanner />
+                <CourseReviewPrompt />
                 <Toaster position="top-right" />
               </SystemProvider>
             </AuthProvider>

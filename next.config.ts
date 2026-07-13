@@ -37,6 +37,11 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ['framer-motion'],
   env,
+  productionBrowserSourceMaps: false,
+  compiler: {
+    // Remove console.* do bundle em produção
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
   turbopack: {
     resolveAlias: {
       'react-router-dom': './src/lib/react-router-compat.tsx',

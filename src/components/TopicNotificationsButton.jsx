@@ -6,7 +6,14 @@ import { Bell } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useTopicNotifications } from '@/hooks/useTopicNotifications'
 import { useFlagCorrectionNotifications } from '@/hooks/useFlagCorrectionNotifications'
+import { useMotivationalNotification } from '@/hooks/useMotivationalNotification'
+import { useCommunityFeedNotifications } from '@/hooks/useCommunityFeedNotifications'
 import { buildFlagCorrectionLink } from '@/utils/flagCorrectionLinks'
+import {
+  createUnreadSoundWatcher,
+  unlockNotificationAudio,
+  playNotificationSound,
+} from '@/utils/notificationSound'
 import dayjs from 'dayjs'
 
 const TopicNotificationsButton = memo(() => {
@@ -21,11 +28,29 @@ const TopicNotificationsButton = memo(() => {
     markAllRead: markAllFlagsRead,
     clearAll: clearFlags,
   } = useFlagCorrectionNotifications(user?.uid)
+  const {
+    notification: motivation,
+    unreadCount: motivationUnread,
+    markRead: markMotivationRead,
+  } = useMotivationalNotification(user?.uid)
+  const {
+    notifications: communityNotifs,
+    unreadCount: communityUnread,
+    markAllRead: markCommunityRead,
+  } = useCommunityFeedNotifications(user?.uid)
 
   const [open, setOpen] = useState(false)
   const panelRef = useRef(null)
+  const soundWatcherRef = useRef(null)
 
-  const totalUnread = unreadCount + flagUnread
+  const totalUnread = unreadCount + flagUnread + motivationUnread + communityUnread
+
+  useEffect(() => {
+    if (!soundWatcherRef.current) {
+      soundWatcherRef.current = createUnreadSoundWatcher({ kind: 'default' })
+    }
+    soundWatcherRef.current(totalUnread)
+  }, [totalUnread])
 
   useEffect(() => {
     if (!open) return () => {}
@@ -45,10 +70,13 @@ const TopicNotificationsButton = memo(() => {
       <button
         type="button"
         onClick={() => {
+          unlockNotificationAudio()
           setOpen((v) => !v)
           if (!open) {
             if (unreadCount > 0) markAllRead()
             if (flagUnread > 0) markAllFlagsRead()
+            if (motivationUnread > 0) markMotivationRead()
+            if (communityUnread > 0) markCommunityRead()
           }
         }}
         className="relative flex h-10 w-10 items-center justify-center rounded-full border border-cp-border text-cp-muted transition hover:border-cp-accent/30 hover:bg-cp-surface hover:text-cp-text"
@@ -71,6 +99,17 @@ const TopicNotificationsButton = memo(() => {
 
       {open && (
         <div className="absolute right-0 top-full z-[80] mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-cp-border bg-cp-bg shadow-2xl">
+          {motivation ? (
+            <>
+              <div className="border-b border-cp-border bg-amber-500/10 px-4 py-3">
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                  {motivation.title}
+                </p>
+                <p className="mt-1 text-xs text-cp-muted">{motivation.message}</p>
+              </div>
+            </>
+          ) : null}
+
           {flagNotifs.length > 0 && (
             <>
               <div className="flex items-center justify-between border-b border-cp-border bg-emerald-500/10 px-4 py-3">
@@ -103,7 +142,7 @@ const TopicNotificationsButton = memo(() => {
                       <p className="text-sm font-medium leading-snug text-emerald-800 dark:text-emerald-200">
                         {n.title || 'Sinalização corrigida'}
                       </p>
-                      <p className="mt-0.5 text-xs text-cp-muted">{n.message}</p>
+                      <p className="mt-0.5 text-xs text-cp-muted line-clamp-3">{n.message}</p>
                       <p className="mt-1 text-[10px] font-medium text-emerald-600">
                         Abrir conteúdo corrigido →
                       </p>
@@ -113,6 +152,30 @@ const TopicNotificationsButton = memo(() => {
                     </Link>
                   )
                 })}
+              </div>
+            </>
+          )}
+
+          {communityNotifs.length > 0 && (
+            <>
+              <div className="border-b border-cp-border px-4 py-3">
+                <p className="text-sm font-semibold text-cp-text">Comunidade</p>
+                <p className="text-[10px] text-cp-muted">Publicações de quem você segue</p>
+              </div>
+              <div className="max-h-36 overflow-y-auto">
+                {communityNotifs.map((n) => (
+                  <Link
+                    key={n.id}
+                    href={n.linkPath}
+                    onClick={() => setOpen(false)}
+                    className={`block border-b border-cp-border/50 px-4 py-3 transition-colors hover:bg-cp-surface ${
+                      !n.read ? 'bg-cp-accent/5' : ''
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-cp-text">{n.title}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-cp-muted">{n.message}</p>
+                  </Link>
+                ))}
               </div>
             </>
           )}
@@ -133,7 +196,7 @@ const TopicNotificationsButton = memo(() => {
           <div className="max-h-72 overflow-y-auto">
             {notifications.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-cp-muted">
-                {flagNotifs.length === 0
+                {flagNotifs.length === 0 && communityNotifs.length === 0
                   ? 'Nenhuma novidade por enquanto.'
                   : 'Nenhum tópico liberado recente.'}
               </p>
@@ -145,6 +208,9 @@ const TopicNotificationsButton = memo(() => {
                   onClick={() => {
                     markRead(n.id)
                     setOpen(false)
+                    if (n.contentType === 'vespera') {
+                      playNotificationSound({ kind: 'success' })
+                    }
                   }}
                   className={`block border-b border-cp-border/50 px-4 py-3 transition-colors hover:bg-cp-surface ${
                     !n.read ? 'bg-cp-accent/5' : ''

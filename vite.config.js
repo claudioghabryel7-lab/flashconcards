@@ -25,6 +25,8 @@ export default defineConfig({
     assetsInlineLimit: 4096, // Inline assets pequenos (< 4kb)
     // Melhor compressão
     reportCompressedSize: false, // Desabilita para build mais rápido
+    // Source maps apenas em dev
+    sourcemap: false,
     rollupOptions: {
       output: {
         // Code splitting - React deve estar no entry chunk (não separar)
@@ -58,8 +60,9 @@ export default defineConfig({
     },
     // Chunk size warnings
     chunkSizeWarningLimit: 1000,
-    // Source maps apenas em dev
-    sourcemap: false,
+  },
+  esbuild: {
+    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
   },
   // Otimizações de dev server
   server: {

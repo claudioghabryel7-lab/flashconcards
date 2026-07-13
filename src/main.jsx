@@ -3,7 +3,6 @@ import React, { StrictMode } from 'react'
 import ReactDOM, { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'react-hot-toast'
 import { DarkModeProvider } from './hooks/useDarkMode.jsx'
 import { AuthProvider } from './hooks/useAuth.js'
@@ -19,24 +18,22 @@ import './styles/stark-design-system.css'
 import './styles/premium-design-system.css'
 import '@fontsource/geist-sans'
 import '@fontsource/space-grotesk'
-import './debug-api-key.js' // Debug para verificar API key
 import { firebaseInitialized } from './firebase/config.js'
+
+cleanupConsole()
 
 // Proteção global contra erros do framer-motion
 if (typeof window !== 'undefined') {
-  cleanupConsole()
   window.addEventListener('error', (event) => {
     if (event.message && event.message.includes('Activity') && event.filename && event.filename.includes('framer-motion')) {
-      console.warn('[App] Erro do framer-motion capturado, continuando sem animações...')
       event.preventDefault()
       event.stopPropagation()
       return false
     }
   }, true)
-  
+
   window.addEventListener('unhandledrejection', (event) => {
     if (event.reason && event.reason.message && event.reason.message.includes('Activity') && event.reason.stack && event.reason.stack.includes('framer-motion')) {
-      console.warn('[App] Promise rejection do framer-motion capturado, continuando...')
       event.preventDefault()
       return false
     }
@@ -119,8 +116,10 @@ const initApp = () => {
       </StrictMode>
     )
   } catch (error) {
-    // Fallback em caso de erro crítico
-    console.error('Erro crítico ao inicializar aplicação:', error)
+    // Fallback em caso de erro crítico (sem dump no console em produção)
+    if (isDevEnv()) {
+      console.error('Erro crítico ao inicializar aplicação:', error)
+    }
     document.body.innerHTML = '<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f8fafc; color: #1e293b; font-family: system-ui;"><div style="text-align: center; padding: 2rem; max-width: 500px;"><h1 style="font-size: 1.5rem; font-weight: bold; color: #dc2626; margin-bottom: 1rem;">Erro ao carregar aplicação</h1><p style="color: #64748b; margin-bottom: 1.5rem;">Ocorreu um erro ao inicializar a aplicação. Por favor, recarregue a página.</p><button onclick="window.location.reload()" style="padding: 0.5rem 1rem; background: #667eea; color: white; border: none; border-radius: 0.5rem; font-weight: 600; cursor: pointer;">Recarregar Página</button></div></div>'
   }
 }

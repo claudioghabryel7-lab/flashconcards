@@ -8,6 +8,7 @@ import {
   HowItWorks,
   StatsStrip,
 } from '@/components/cp/CPHomeSections'
+import HomeReviewsSection from '@/components/cp/HomeReviewsSection'
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_URL } from '@/lib/site'
 
 export const metadata: Metadata = {
@@ -60,6 +61,7 @@ export default function HomePage() {
         <HowItWorks />
         <FeaturedCourses />
         <CtaBanner />
+        <HomeReviewsSection />
         <HomeFaq />
       </div>
     </>

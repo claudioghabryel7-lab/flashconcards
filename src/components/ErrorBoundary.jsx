@@ -54,18 +54,18 @@ class ErrorBoundary extends Component {
                 >
                   Recarregar Página
                 </button>
-                {this.state.error && (
+                {isDevEnv() && this.state.error ? (
                   <details className="text-left mt-4">
                     <summary className="text-sm text-slate-500 dark:text-slate-400 cursor-pointer mb-2">
                       Detalhes do erro
                     </summary>
                     <pre className="text-xs bg-slate-100 dark:bg-slate-900 p-3 rounded overflow-auto max-h-40">
-                      {this.state.error instanceof Error 
-                        ? this.state.error.message 
+                      {this.state.error instanceof Error
+                        ? this.state.error.message
                         : String(this.state.error)}
                     </pre>
                   </details>
-                )}
+                ) : null}
               </div>
             </div>
           </div>

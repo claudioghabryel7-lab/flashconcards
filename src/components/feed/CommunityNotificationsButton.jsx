@@ -7,6 +7,10 @@ import { db } from '../../firebase/config'
 import { useAuth } from '../../hooks/useAuth'
 import { useTopicNotifications } from '../../hooks/useTopicNotifications'
 import { isFeedPostActive } from '../../utils/feedTimeUtils'
+import {
+  createUnreadSoundWatcher,
+  unlockNotificationAudio,
+} from '../../utils/notificationSound'
 
 const READ_KEY = (uid) => `communityNotifsRead_${uid}`
 const POLL_MS = 60000
@@ -112,8 +116,17 @@ export default function CommunityNotificationsButton({ userId }) {
   )
 
   const totalUnread = feedUnread + topicUnread
+  const soundWatcherRef = useRef(null)
+
+  useEffect(() => {
+    if (!soundWatcherRef.current) {
+      soundWatcherRef.current = createUnreadSoundWatcher({ kind: 'default' })
+    }
+    soundWatcherRef.current(totalUnread)
+  }, [totalUnread])
 
   const handleOpen = () => {
+    unlockNotificationAudio()
     const next = !open
     setOpen(next)
     if (next && userId) {
@@ -195,7 +208,7 @@ export default function CommunityNotificationsButton({ userId }) {
               topicNotifications.map((n) => (
                 <Link
                   key={n.id}
-                  to="/edital-verticalizado"
+                  to={n.linkPath || '/edital-verticalizado'}
                   onClick={() => {
                     markRead(n.id)
                     setOpen(false)

@@ -1905,6 +1905,18 @@ exports.mentoradoDailyContentRelease = functions.pubsub
     return null
   })
 
+/** Rotação semanal de temas de redação (cursos com hasRedacao no Guia Mentorado). */
+exports.weeklyRedacaoThemeRotation = functions.pubsub
+  .schedule('0 3 * * 1')
+  .timeZone('America/Sao_Paulo')
+  .onRun(async () => {
+    console.log('[weeklyRedacaoThemeRotation] Iniciando rotação semanal…')
+    const { runWeeklyRedacaoThemeRotation } = require('./generation/redacaoWeeklyRotation')
+    const results = await runWeeklyRedacaoThemeRotation()
+    console.log('[weeklyRedacaoThemeRotation] Concluído:', results.length, 'curso(s)')
+    return null
+  })
+
 /** Retoma jobs pausados — backup a cada 1 min (retomada principal: fila + nudge). */
 exports.resumeWaitingGenerationJobs = functions.pubsub
   .schedule('every 1 minutes')
@@ -2157,6 +2169,99 @@ exports.expireTrialUsers = functions.pubsub.schedule('0 0 * * *').timeZone('Amer
     throw error
   }
 })
+
+const UNVERIFIED_EMAIL_TTL_MS = 24 * 60 * 60 * 1000
+const PROTECTED_ADMIN_EMAILS = new Set(['claudioghabryel.cg@gmail.com'])
+
+/**
+ * Remove contas com email não verificado há mais de 24h (Auth + Firestore + código pendente).
+ * Roda a cada hora. Admins são preservados.
+ */
+exports.purgeUnverifiedEmails = functions.pubsub
+  .schedule('20 * * * *')
+  .timeZone('America/Sao_Paulo')
+  .onRun(async () => {
+    const db = admin.firestore()
+    const cutoffMs = Date.now() - UNVERIFIED_EMAIL_TTL_MS
+    let nextPageToken
+    let scanned = 0
+    let deleted = 0
+    let skipped = 0
+    let errors = 0
+
+    console.log('[purgeUnverifiedEmails] Iniciando limpeza de emails não verificados (>24h)...')
+
+    do {
+      const listed = await admin.auth().listUsers(1000, nextPageToken)
+      for (const authUser of listed.users) {
+        scanned += 1
+        try {
+          if (authUser.emailVerified) {
+            skipped += 1
+            continue
+          }
+
+          const email = String(authUser.email || '').toLowerCase().trim()
+          if (email && PROTECTED_ADMIN_EMAILS.has(email)) {
+            skipped += 1
+            continue
+          }
+
+          const createdMs = new Date(authUser.metadata.creationTime).getTime()
+          if (!Number.isFinite(createdMs) || createdMs > cutoffMs) {
+            skipped += 1
+            continue
+          }
+
+          const userRef = db.collection('users').doc(authUser.uid)
+          const userSnap = await userRef.get()
+          const userData = userSnap.exists ? userSnap.data() || {} : {}
+
+          if (userData.role === 'admin' || PROTECTED_ADMIN_EMAILS.has(String(userData.email || '').toLowerCase())) {
+            skipped += 1
+            continue
+          }
+
+          // Firestore já marcado como verificado: não apaga (possível dessincronia Auth)
+          if (userData.emailVerified === true) {
+            skipped += 1
+            continue
+          }
+
+          console.log(
+            `[purgeUnverifiedEmails] Removendo ${authUser.uid} (${email || 'sem-email'}) criado em ${authUser.metadata.creationTime}`,
+          )
+
+          try {
+            await admin.auth().deleteUser(authUser.uid)
+          } catch (authErr) {
+            if (authErr?.code !== 'auth/user-not-found') throw authErr
+          }
+
+          if (userSnap.exists) {
+            await userRef.delete()
+          }
+
+          await db
+            .collection('emailVerificationCodes')
+            .doc(authUser.uid)
+            .delete()
+            .catch(() => {})
+
+          deleted += 1
+        } catch (err) {
+          errors += 1
+          console.error(`[purgeUnverifiedEmails] Erro em ${authUser.uid}:`, err)
+        }
+      }
+      nextPageToken = listed.pageToken
+    } while (nextPageToken)
+
+    console.log(
+      `[purgeUnverifiedEmails] Concluído. scanned=${scanned} deleted=${deleted} skipped=${skipped} errors=${errors}`,
+    )
+    return null
+  })
 
 /** Expira acessos de curso com expiresAt vencido (sem renovação pendente). */
 exports.expireCourseAccesses = functions.pubsub

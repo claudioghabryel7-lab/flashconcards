@@ -26,6 +26,7 @@ import { CONTENT_STATUS, isContentAvailable, toggleContentStatus } from '../util
 import { persistCardReview } from '../utils/spacedRepetition'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import { loadStudyCheckpoint, saveStudyCheckpoint } from '../utils/studyCheckpoint'
+import { findCardIndex } from '../utils/flagCorrectionLinks'
 import toast from 'react-hot-toast'
 
 const FlashcardsTopicoView = () => {
@@ -33,9 +34,24 @@ const FlashcardsTopicoView = () => {
   const [searchParams] = useSearchParams()
   const { user, favorites, updateFavorites, profile, isAdmin } = useAuth()
 
-  const disciplina = decodeURIComponent(searchParams.get('disciplina') || '')
-  const modulo = decodeURIComponent(searchParams.get('modulo') || '')
+  const disciplinaParam = decodeURIComponent(searchParams.get('disciplina') || '')
+  const moduloParam = decodeURIComponent(searchParams.get('modulo') || '')
   const topicKey = normalizeTopicKeyForStorage(searchParams.get('topicKey') || '')
+  const focusCardId = searchParams.get('card') || ''
+
+  // Deriva disciplina/módulo do topicKey "Matéria :: Módulo" quando a URL só traz topicKey
+  let disciplina = disciplinaParam
+  let modulo = moduloParam
+  if ((!disciplina || !modulo) && topicKey) {
+    try {
+      const decoded = decodeURIComponent(topicKey)
+      const parts = decoded.split(' :: ')
+      if (!disciplina) disciplina = parts[0] || ''
+      if (!modulo) modulo = parts.slice(1).join(' :: ') || parts[0] || ''
+    } catch {
+      if (!modulo) modulo = topicKey
+    }
+  }
 
   const courseId = courseIdParam || profile?.selectedCourseId || 'alego-default'
   const { canAccess: hasTopicAccess } = useTopicCourseAccess(courseId, topicKey, profile)
@@ -70,7 +86,7 @@ const FlashcardsTopicoView = () => {
   }, [courseId])
 
   useEffect(() => {
-    if (!user || !disciplina || !modulo) {
+    if (!user || (!topicKey && (!disciplina || !modulo))) {
       setLoading(false)
       return
     }
@@ -85,7 +101,7 @@ const FlashcardsTopicoView = () => {
           includeUnpublished: isAdmin,
         })
 
-        if (existing.length === 0 && isAdmin) {
+        if (existing.length === 0 && isAdmin && disciplina && modulo) {
           setGenerating(true)
           const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
           const editalDoc = await getDoc(editalRef)
@@ -117,13 +133,18 @@ const FlashcardsTopicoView = () => {
 
         if (!cancelled) {
           setCards(existing)
-          const saved = loadStudyCheckpoint('flashcards', {
-            userId: user?.uid,
-            courseId,
-            scopeKey: topicKey,
-          })
-          const max = Math.max(0, existing.length - 1)
-          setCurrentIndex(Math.min(saved, max))
+          const focusIdx = findCardIndex(existing, focusCardId)
+          if (focusIdx >= 0) {
+            setCurrentIndex(focusIdx)
+          } else {
+            const saved = loadStudyCheckpoint('flashcards', {
+              userId: user?.uid,
+              courseId,
+              scopeKey: topicKey,
+            })
+            const max = Math.max(0, existing.length - 1)
+            setCurrentIndex(Math.min(saved, max))
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -142,7 +163,8 @@ const FlashcardsTopicoView = () => {
     return () => {
       cancelled = true
     }
-  }, [user, courseId, disciplina, modulo, topicKey, isAdmin])
+  }, [user, courseId, disciplina, modulo, topicKey, isAdmin, focusCardId])
+  // courseName usado só na geração admin; não precisa re-disparar o load
 
   useEffect(() => {
     if (!user) return
@@ -333,7 +355,7 @@ const FlashcardsTopicoView = () => {
     }
   }
 
-  if (!disciplina || !modulo) {
+  if (!topicKey && (!disciplina || !modulo)) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center p-6 text-center">
         <div className="cp-card max-w-md p-8">

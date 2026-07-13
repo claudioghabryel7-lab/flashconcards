@@ -202,19 +202,47 @@ async function processMentoradoDayAutomation(courseId, targetDate, options = {})
 
 async function runDailyMentoradoAutomationForAllCourses() {
   const todayKey = getTodayKeyInSaoPaulo()
-  const coursesSnap = await getDb().collection('courses').get()
+  const db = getDb()
+  const coursesSnap = await db.collection('courses').get()
   const results = []
+
+  // Fallback: userId do Professor IA / config global
+  let fallbackUserId = null
+  try {
+    const profSnap = await db.doc('config/professorFiscalizador').get()
+    fallbackUserId = profSnap.exists ? profSnap.data()?.automationUserId || null : null
+  } catch (_) {
+    /* ignore */
+  }
 
   for (const courseDoc of coursesSnap.docs) {
     const courseId = courseDoc.id
-    const courseData = courseDoc.data()
+    const courseData = courseDoc.data() || {}
+    // Todos os cursos ativos do seletor (não só os com autoGerarConteudo)
     if (courseData.active === false) continue
 
     try {
-      const configSnap = await getDb().doc(`courses/${courseId}/config/guiaMentorado`).get()
-      if (!configSnap.exists || !configSnap.data().autoGerarConteudo) continue
+      const configSnap = await db.doc(`courses/${courseId}/config/guiaMentorado`).get()
+      if (!configSnap.exists) {
+        results.push({ courseId, skipped: true, reason: 'sem_guia_mentorado' })
+        continue
+      }
 
-      const userId = configSnap.data().automationUserId || null
+      const config = configSnap.data() || {}
+      const userId = config.automationUserId || fallbackUserId || null
+
+      // Garante flag de automação para próximas execuções
+      if (config.autoGerarConteudo !== true && userId) {
+        await configSnap.ref.set(
+          {
+            autoGerarConteudo: true,
+            automationUserId: userId,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
+      }
+
       const dayKeys = await collectDayKeysUpToToday(courseId, getDb)
       let started = false
 

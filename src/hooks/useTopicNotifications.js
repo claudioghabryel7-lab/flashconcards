@@ -117,6 +117,14 @@ function buildContentLink(contentType, courseId, topicKey, extra = {}) {
   }
 
   if (contentType === 'flashcards' || contentType === 'flashcard') {
+    if (course && topicKey) {
+      const params = new URLSearchParams()
+      params.set('topicKey', topicKey)
+      if (materia) params.set('disciplina', materia)
+      if (modulo) params.set('modulo', modulo)
+      if (extra.contentId) params.set('card', String(extra.contentId))
+      return `/flashcards/topico/${encodeURIComponent(course)}?${params.toString()}`
+    }
     const params = new URLSearchParams()
     if (course) params.set('course', course)
     if (materia) params.set('materia', materia)

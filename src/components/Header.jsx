@@ -16,6 +16,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import Logo from './Logo.jsx'
 import TopicNotificationsButton from './TopicNotificationsButton'
+import InstallPWAButton from './InstallPWAButton'
 
 const Header = () => {
   const { user, logout, isAdmin, profile } = useAuth()
@@ -164,6 +165,7 @@ const Header = () => {
 
               {user ? (
                 <>
+                  <InstallPWAButton variant="icon" />
                   <TopicNotificationsButton />
 
                   {/* Trocar Curso - Desktop */}

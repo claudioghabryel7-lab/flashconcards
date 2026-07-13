@@ -10705,6 +10705,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                       </p>
                       <p className="text-xs text-slate-500">
                         {review.userEmail} • {review.createdAt?.toDate?.().toLocaleDateString('pt-BR') || 'Data não disponível'}
+                        {review.courseName ? ` • ${review.courseName}` : review.courseId ? ` • ${review.courseId}` : ''}
+                        {review.source === 'in_app_prompt' ? ' • Pop-up app' : ''}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">

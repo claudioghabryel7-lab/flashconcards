@@ -434,17 +434,17 @@ async function resolveFlagFeedback(courseId, flagId, { applied = 0, summary = ''
   const contentType = flagData.contentType || null
   let linkPath = '/edital-verticalizado'
   try {
-    if (contentType === 'flashcard' && topicKey) {
+    if (contentType === 'flashcard' && topicKey && courseIdSafe) {
       const decoded = decodeURIComponent(topicKey)
       const parts = decoded.split(' :: ')
       const materia = parts[0] || ''
       const modulo = parts.slice(1).join(' :: ') || ''
       const params = new URLSearchParams()
-      if (courseIdSafe) params.set('course', courseIdSafe)
-      if (materia) params.set('materia', materia)
+      params.set('topicKey', topicKey)
+      if (materia) params.set('disciplina', materia)
       if (modulo) params.set('modulo', modulo)
       if (flagData.contentId) params.set('card', String(flagData.contentId))
-      linkPath = `/flashcards/estudar?${params.toString()}`
+      linkPath = `/flashcards/topico/${encodeURIComponent(courseIdSafe)}?${params.toString()}`
     } else if ((contentType === 'material' || contentType === 'materia') && courseIdSafe && topicKey) {
       linkPath = `/conteudo-completo/topic/${courseIdSafe}/${encodeURIComponent(topicKey)}`
     } else if (contentType === 'questao' && courseIdSafe && topicKey) {
@@ -799,26 +799,23 @@ async function processProfessorSupervisor(userId, jobId, courseId, serverPayload
 
   try {
     switch (itemType) {
+      case 'flag':
+        outcome = await processFlagItem(courseId, payload, syncJob, userId, jobId)
+        break
       case 'topico_digitacao':
-        outcome = { skipped: true, reason: 'digitacao_disabled', summary: 'Digitação desativada — apenas sinalizações.' }
-        break
       case 'topico_pipeline':
-        outcome = await processTopicPipeline(courseId, payload, syncJob, userId, jobId)
-        break
       case 'topico':
       case 'topico_flashcards':
       case 'topico_material':
       case 'topico_questoes':
-        outcome = await processTopicoStepItem(courseId, payload, itemType, syncJob, userId, jobId)
-        break
-      case 'flag':
-        outcome = await processFlagItem(courseId, payload, syncJob, userId, jobId)
-        break
       case 'vespera':
-        outcome = await processVesperaItem(courseId, syncJob, userId, jobId)
-        break
       case 'redacao':
-        outcome = await processRedacaoItem(courseId, payload, syncJob, userId, jobId)
+        outcome = {
+          skipped: true,
+          reason: 'moderation_only',
+          summary:
+            'Professor IA atua somente na aba Moderação. Item ignorado (geração/redação/véspera têm jobs próprios).',
+        }
         break
       default:
         throw new Error(`Tipo de fiscalização não suportado: ${itemType}`)
@@ -911,4 +908,5 @@ async function processProfessorSupervisor(userId, jobId, courseId, serverPayload
 
 module.exports = {
   processProfessorSupervisor,
+  processRedacaoItem,
 }
