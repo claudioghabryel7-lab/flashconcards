@@ -261,6 +261,49 @@ async function processTopicoStepItem(courseId, payload, itemType, updateJob, use
   return finalizeWithSnapshot(courseId, itemType, { ...payload, step }, final, chain, script, dedupeKey)
 }
 
+async function processTopicPipeline(courseId, payload, updateJob, userId, jobId) {
+  // Digitação fica desativada no switch individual; no pipeline só revisamos conteúdo com IA.
+  const steps = ['topico_flashcards', 'topico_material', 'topico_questoes']
+  let applied = 0
+  let professorsUsed = 0
+  const summaries = []
+
+  for (const stepType of steps) {
+    await throwIfCancelled(userId, jobId)
+    const stepOutcome = await processTopicoStepItem(
+      courseId,
+      payload,
+      stepType,
+      updateJob,
+      userId,
+      jobId,
+    )
+    if (stepOutcome?.skipped) {
+      summaries.push(stepOutcome.summary || stepType)
+      continue
+    }
+    applied += stepOutcome.applied || 0
+    professorsUsed = Math.max(professorsUsed, stepOutcome.professorsUsed || 0)
+    if (stepOutcome.summary) summaries.push(stepOutcome.summary)
+  }
+
+  if (applied === 0 && summaries.length) {
+    return {
+      skipped: true,
+      reason: 'pipeline_ok',
+      summary: summaries[0] || 'Pipeline de tópico OK',
+      professorsUsed,
+    }
+  }
+
+  return {
+    summary: summaries.filter(Boolean).slice(-1)[0] || 'Pipeline de tópico revisado',
+    applied,
+    professorsUsed,
+    needsAdmin: applied > 0,
+  }
+}
+
 async function processDigitacaoItem(courseId, payload, updateJob, userId, jobId) {
   const bundle = await loadTopicBundle(
     courseId,
@@ -582,7 +625,7 @@ PROBLEMAS SCRIPT: ${JSON.stringify(script.issues)}`
 
   const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
   const final = chain.final
-  const dedupeKey = `${courseId}:redacao:${payload.targetDate || 'rotate'}`
+  const dedupeKey = `${courseId}:redacao:${payload.scope || payload.targetDate || 'rotate'}`
   const { applied, patches } = await applyCorrectionsWithSnapshot(
     courseId,
     'redacao',
@@ -687,6 +730,9 @@ async function processProfessorSupervisor(userId, jobId, courseId, serverPayload
     switch (itemType) {
       case 'topico_digitacao':
         outcome = { skipped: true, reason: 'digitacao_disabled', summary: 'Digitação desativada — apenas sinalizações.' }
+        break
+      case 'topico_pipeline':
+        outcome = await processTopicPipeline(courseId, payload, syncJob, userId, jobId)
         break
       case 'topico':
       case 'topico_flashcards':

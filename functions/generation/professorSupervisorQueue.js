@@ -10,6 +10,8 @@ const INTERVAL_MS = INTERVAL_MINUTES * 60 * 1000
 const SESSION_MS = SESSION_HOURS * 60 * 60 * 1000
 const BACKLOG_TOPICS_PER_COURSE = null
 const DIGITACAO_INTERVAL_MINUTES = 0
+const REDACAO_ROTATE_DAYS = 7
+const REDACAO_ROTATE_MS = REDACAO_ROTATE_DAYS * 24 * 60 * 60 * 1000
 
 function getDb() {
   return admin.firestore()
@@ -317,21 +319,47 @@ async function enqueueBacklogTopics(courseId, todayTopicKeys, edital, todayKey) 
   return added
 }
 
+async function shouldEnqueueRedacaoTheme(courseId) {
+  const db = getDb()
+  const guiaSnap = await db.doc(`courses/${courseId}/config/guiaMentorado`).get()
+  if (!guiaSnap.exists || !guiaSnap.data()?.hasRedacao) return { ok: false }
+
+  const redacaoSnap = await db.doc(`courses/${courseId}/config/redacao`).get()
+  const data = redacaoSnap.exists ? redacaoSnap.data() || {} : {}
+  const tema = String(data.tema || '').trim()
+  const last =
+    data.rotatedAt?.toDate?.() ||
+    data.temaRotatedAt?.toDate?.() ||
+    data.updatedAt?.toDate?.() ||
+    null
+
+  if (!tema) {
+    return { ok: true, currentTema: '', reason: 'missing_theme' }
+  }
+  if (!last || Date.now() - last.getTime() >= REDACAO_ROTATE_MS) {
+    return { ok: true, currentTema: tema, reason: 'rotate_due' }
+  }
+  return { ok: false, currentTema: tema }
+}
+
 async function buildQueueItems() {
   const db = getDb()
+  const todayKey = getTodayKeyInSaoPaulo()
   let added = 0
 
   await updateSupervisorActivity({
     phase: 'building_queue',
-    message: 'Montando fila de sinalizações…',
+    message: 'Montando fila de fiscalização…',
   })
 
-  const coursesSnap = await db.collection('courses').where('active', '!=', false).limit(40).get()
+  // Todos os cursos cadastrados (sem limite artificial)
+  const coursesSnap = await db.collection('courses').get()
 
   for (const courseDoc of coursesSnap.docs) {
     const courseId = courseDoc.id
+    const courseData = courseDoc.data() || {}
+    if (courseData.active === false) continue
 
-    // Professor corrige APENAS sinalizações abertas da Moderação (flags).
     const flagsSnap = await db
       .collection(`courses/${courseId}/contentFeedback`)
       .where('kind', '==', 'flag')
@@ -355,6 +383,102 @@ async function buildQueueItems() {
       })
       if (id) added += 1
     }
+
+    const mentoradoSnap = await db.doc(`courses/${courseId}/config/guiaMentorado`).get()
+    if (mentoradoSnap.exists && mentoradoSnap.data().autoGerarConteudo) {
+      const dayEntry = await loadCronogramaDay(courseId, todayKey)
+      if (dayEntry) {
+        const tipo = dayEntry.type || dayEntry.tipo || 'estudo'
+        if (tipo !== 'simulado' && tipo !== 'descanso') {
+          const edital = await loadEditalVerticalizado(courseId)
+          const topics = extractTopicsFromCronogramaDay(
+            { data: todayKey, tipo, materias: dayEntry.materias || [] },
+            edital,
+          )
+          const todayTopicKeys = new Set(topics.map((t) => t.topicKey))
+          for (const topic of topics) {
+            const readiness = await isTopicContentComplete(courseId, topic)
+            const statusSnap = await db
+              .doc(`courses/${courseId}/topicoStatus/${sanitizeTopicKeyForFirestore(topic.topicKey)}`)
+              .get()
+            const published =
+              statusSnap.exists && statusSnap.data().status === 'disponivel' && readiness.complete
+            if (!published) continue
+
+            added += await enqueueTopicPipeline(courseId, topic, {
+              priorityBase: 50,
+              targetDate: todayKey,
+              source: 'cronograma',
+            })
+          }
+
+          added += await enqueueBacklogTopics(courseId, todayTopicKeys, edital, todayKey)
+        }
+      }
+    } else if (mentoradoSnap.exists) {
+      const edital = await loadEditalVerticalizado(courseId)
+      added += await enqueueBacklogTopics(courseId, new Set(), edital, todayKey)
+    } else {
+      // Curso sem guia: ainda percorre tópicos publicados no backlog
+      try {
+        const edital = await loadEditalVerticalizado(courseId)
+        if (edital) {
+          added += await enqueueBacklogTopics(courseId, new Set(), edital, todayKey)
+        }
+      } catch (_) {
+        /* curso sem edital */
+      }
+    }
+
+    const vesperaSnap = await db.doc(`courses/${courseId}/vesperaDeProva/material`).get()
+    if (vesperaSnap.exists) {
+      const dedupeKey = `${courseId}:vespera:material`
+      if (!(await wasRecentlyReviewed(courseId, dedupeKey))) {
+        const id = await enqueueItem({
+          courseId,
+          itemType: 'vespera',
+          priority: 30,
+          payload: { scope: 'material' },
+        })
+        if (id) added += 1
+      }
+    }
+
+    const redacaoCheck = await shouldEnqueueRedacaoTheme(courseId)
+    if (redacaoCheck.ok) {
+      const id = await enqueueItem({
+        courseId,
+        itemType: 'redacao',
+        priority: 80,
+        payload: {
+          rotateTheme: true,
+          targetDate: todayKey,
+          scope: 'rotate',
+          currentTema: redacaoCheck.currentTema || '',
+          reason: redacaoCheck.reason,
+        },
+      })
+      if (id) added += 1
+    }
+  }
+
+  // Itens topico_pipeline que falharam antes do handler: recolocam na fila
+  const stuckSnap = await db
+    .collection('professorSupervisorQueue')
+    .where('itemType', '==', 'topico_pipeline')
+    .where('status', '==', 'error')
+    .limit(30)
+    .get()
+  for (const stuckDoc of stuckSnap.docs) {
+    await stuckDoc.ref.set(
+      {
+        status: 'pending',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        recoveredAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    )
+    added += 1
   }
 
   const pendingSnap = await db
@@ -434,6 +558,7 @@ function itemLabel(item) {
   if (item.itemType === 'topico_digitacao') return `${nome} — digitação (script)`
   if (item.itemType === 'topico_material') return `${nome} — material`
   if (item.itemType === 'topico_questoes') return `${nome} — questões`
+  if (item.itemType === 'topico_pipeline') return `${nome} — pipeline`
   if (item.itemType === 'topico') return nome || 'tópico'
   if (item.itemType === 'flag') return `Sinalização (${item.payload?.contentType || 'conteúdo'})`
   if (item.itemType === 'vespera') return 'Véspera de prova'

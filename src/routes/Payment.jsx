@@ -18,6 +18,7 @@ import { getCourseAccessLabel } from '../utils/courseAccess'
 
 const PAYMENT_BRANDS = [
   { src: '/pay-mercadopago.png', alt: 'Mercado Pago' },
+  { src: '/pay-pix.png', alt: 'PIX' },
   { src: '/pay-visa.png', alt: 'Visa' },
   { src: '/pay-mastercard.png', alt: 'Mastercard' },
   { src: '/pay-elo.png', alt: 'Elo' },
@@ -1003,19 +1004,26 @@ const Payment = () => {
                             : 'border-cp-border bg-[var(--cp-bg)]/40 hover:border-cp-accent/30'
                         }`}
                       >
-                        <BanknotesIcon
-                          className={`mb-2 h-7 w-7 ${
-                            paymentMethod === 'boleto' ? 'text-cp-accent' : 'text-cp-muted'
-                          }`}
-                        />
+                        <div className="mb-2 flex items-center gap-2">
+                          <BanknotesIcon
+                            className={`h-7 w-7 ${
+                              paymentMethod === 'boleto' ? 'text-cp-accent' : 'text-cp-muted'
+                            }`}
+                          />
+                          <img
+                            src="/pay-pix.png"
+                            alt="PIX"
+                            className="h-7 w-auto max-w-[72px] rounded object-contain"
+                          />
+                        </div>
                         <p
                           className={`text-sm font-semibold ${
                             paymentMethod === 'boleto' ? 'text-cp-text' : 'text-cp-muted'
                           }`}
                         >
-                          Boleto
+                          Boleto ou Pix
                         </p>
-                        <p className="mt-1 text-xs text-cp-muted">Boleto ou PIX no Mercado Pago</p>
+                        <p className="mt-1 text-xs text-cp-muted">Checkout Mercado Pago</p>
                       </button>
 
                       <button
