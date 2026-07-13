@@ -49,8 +49,21 @@ ${prior}
 ${REVIEW_JSON_SCHEMA}`
 }
 
-async function runProfessor(role, contextBlock, priorReview, shouldAbort) {
+async function runProfessor(role, contextBlock, priorReview, shouldAbort, userId, jobId) {
   const prompt = buildProfessorPrompt(role, contextBlock, priorReview)
+  if (userId && jobId) {
+    return generateAiJsonWithJobHeartbeat(
+      userId,
+      jobId,
+      prompt,
+      {
+        useRAG: false,
+        useGoogleSearch: role === 1,
+        generationConfig: { maxOutputTokens: 12000, temperature: 0.25 },
+      },
+      `Professor ${role} — fiscalizando…`,
+    )
+  }
   return runWithHeartbeat(
     () =>
       generateAiJson(prompt, {
@@ -59,7 +72,7 @@ async function runProfessor(role, contextBlock, priorReview, shouldAbort) {
         generationConfig: { maxOutputTokens: 12000, temperature: 0.25 },
       }),
     () => {},
-    20000,
+    15000,
     shouldAbort,
   )
 }
@@ -68,7 +81,7 @@ async function runProfessorChain(contextBlock, updateJob, userId, jobId) {
   const shouldAbort = () => isJobCancelled(userId, jobId)
 
   await updateJob(userId, jobId, { progress: 25, message: 'Professor 1 — fiscalizando…' })
-  const p1 = await runProfessor(1, contextBlock, null, shouldAbort)
+  const p1 = await runProfessor(1, contextBlock, null, shouldAbort, userId, jobId)
 
   const p1Actionable =
     (p1.issues?.length || 0) > 0 || (p1.corrections?.length || 0) > 0 || p1.needsAdminReview
@@ -78,7 +91,7 @@ async function runProfessorChain(contextBlock, updateJob, userId, jobId) {
   }
 
   await updateJob(userId, jobId, { progress: 50, message: 'Professor 2 — revisando correção…' })
-  const p2 = await runProfessor(2, contextBlock, p1, shouldAbort)
+  const p2 = await runProfessor(2, contextBlock, p1, shouldAbort, userId, jobId)
 
   const p2Changed =
     JSON.stringify(p2.corrections || []) !== JSON.stringify(p1.corrections || []) ||
@@ -89,7 +102,7 @@ async function runProfessorChain(contextBlock, updateJob, userId, jobId) {
   }
 
   await updateJob(userId, jobId, { progress: 75, message: 'Professor 3 — veredito final…' })
-  const p3 = await runProfessor(3, contextBlock, p2, shouldAbort)
+  const p3 = await runProfessor(3, contextBlock, p2, shouldAbort, userId, jobId)
   return { final: p3, professorsUsed: 3, skippedHigher: false }
 }
 

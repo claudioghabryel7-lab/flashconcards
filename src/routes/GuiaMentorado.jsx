@@ -283,8 +283,8 @@ const GuiaMentorado = () => {
       return
     }
 
-    const confirmed = window.confirm(
-      'Gerar os conteúdos faltantes deste curso (do 1º dia do cronograma até hoje)?\n\nUsa o mesmo fluxo de “Gerar conteúdos de hoje”, dia a dia. Acompanhe no banner.',
+      const confirmed = window.confirm(
+      'Gerar os conteúdos faltantes deste curso (do 1º dia do cronograma até hoje)?\n\nUm único job na nuvem processa dia a dia com retomada automática. Acompanhe no banner.',
     )
     if (!confirmed) return
 
@@ -294,14 +294,14 @@ const GuiaMentorado = () => {
         courses.find((c) => c.id === selectedCourseId)?.name ||
         courses.find((c) => c.id === selectedCourseId)?.competition ||
         selectedCourseId
-      const { jobs } = await startMentoradoBackfillForCourse({
+      const { jobs, dayCount } = await startMentoradoBackfillForCourse({
         userId: user.uid,
         courseId: selectedCourseId,
         courseName,
         editalVerticalizado,
       })
       setMessage(
-        `🚀 ${jobs.length} dia(s) enfileirado(s) na nuvem. Acompanhe no banner de geração.`,
+        `🚀 Backfill iniciado (${dayCount || jobs.length} dia(s) em 1 job). Acompanhe no banner de geração.`,
       )
       setTimeout(() => setMessage(''), 12000)
     } catch (error) {

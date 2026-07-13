@@ -63,7 +63,7 @@ import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import LawDetector from '../utils/lawDetector'
 import LawDownloader from '../utils/lawDownloader'
 import { generateShareToken } from '../utils/shareToken'
-import { enqueueAdminEditalProcessing } from '../services/adminServerGeneration'
+import { enqueueAdminEditalProcessing, enqueueAdminMateriaRevisada } from '../services/adminServerGeneration'
 import {
   buildCourseDurationFields,
   getCourseAccessLabel,
@@ -4796,26 +4796,21 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     const courseData = courseSnapshot.exists() ? courseSnapshot.data() : {}
     const courseName = courseData.name || courseData.competition || courseId
 
-      // 3. Chamar IA para gerar conteúdo técnico completo
-      const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
-      let lastError = null
-      let aiResponse = ''
+      const bancaCourse = String(courseData.banca || '').trim() || String(unifiedData.banca || '').trim()
+      const concursoCourse = String(courseData.competition || '').trim() || String(unifiedData.concursoName || '').trim()
 
-      for (const modelName of modelNames) {
-        try {
-          setMateriaRevisadaProgress(`🔄 Usando modelo: ${modelName}...`)
-          const model = genAI.getGenerativeModel({ 
-            model: modelName,
-            generationConfig: {
-              maxOutputTokens: 16000,
-              temperature: 0.7,
-            }
-          })
+      const materiasRef = collection(db, 'courses', courseId, 'materiasRevisadas')
+      const existingDocs = await getDocs(query(materiasRef, where('materia', '==', materia)))
+      const existingDoc = existingDocs.empty ? null : existingDocs.docs[0]
+      const docId =
+        existingDoc?.id ||
+        materia.replace(/[^a-zA-Z0-9À-ÿ_-]+/g, '_').substring(0, 100)
+      const status = existingDoc?.data()?.status || defaultContentStatus()
 
-          const prompt = `Você é um especialista em criar conteúdo técnico completo e detalhado para o nosso curso "${courseName}".
+      const prompt = `Você é um especialista em criar conteúdo técnico completo e detalhado para o nosso curso "${courseName}".
 
 CONTEXTO SOMENTE PARA NIVELAMENTO (NÃO CITE ESTES NOMES NO CONTEÚDO FINAL):
-${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n` : ''}MATÉRIA: ${materia}
+${bancaCourse ? `BANCA: ${bancaCourse}\n` : ''}${concursoCourse ? `CONCURSO: ${concursoCourse}\n` : ''}MATÉRIA: ${materia}
 
 NUNCA mencione concurso, prefeitura, banca ou órgão no texto. O material deve parecer feito apenas para o curso "${courseName}".
 
@@ -4868,131 +4863,32 @@ Retorne APENAS um objeto JSON válido no seguinte formato:
   ]
 }
 
-IMPORTANTE SOBRE REFERÊNCIAS:
-- Se o edital mencionar sites, leis online, portais governamentais, ou outras fontes públicas, inclua-os no array "referencias"
-- Inclua links diretos quando disponíveis (ex: links para leis no planalto.gov.br, stf.jus.br, etc.)
-- Se houver menção a artigos de leis específicas, inclua links para os textos oficiais
-- Mantenha as referências precisas e verificáveis
-
 CRÍTICO:
 - Retorne APENAS o JSON válido
-- NÃO inclua markdown (sem \`\`\`json)
+- NÃO inclua markdown
 - NÃO inclua explicações antes ou depois
 - O campo "content" deve conter o conteúdo principal em HTML
-- As seções devem organizar o conteúdo em partes (leis, súmulas, entendimentos, etc.)
-- Use tags HTML apropriadas: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>, etc.
-- O campo "referencias" é OBRIGATÓRIO - inclua pelo menos as fontes principais mencionadas no edital`
+`
 
-          const response = await callGeminiWithRetry(prompt, {
-            courseId,
-            generationConfig: {
-              maxOutputTokens: 32000,
-              temperature: 0.35,
-            },
-          })
-          aiResponse = extractGeneratedText(response)
-          setMateriaRevisadaProgress(`✅ Conteúdo gerado com sucesso usando ${modelName}!`)
-          break
-        } catch (modelErr) {
-          console.warn(`⚠️ Modelo ${modelName} falhou:`, modelErr.message)
-          lastError = modelErr
-          if (modelName !== modelNames[modelNames.length - 1]) {
-            continue
-          }
-        }
+      if (!currentAdminUser?.uid) {
+        throw new Error('Usuário não autenticado.')
       }
 
-      if (!aiResponse) {
-        throw lastError || new Error('Erro ao gerar conteúdo com a IA')
-      }
+      setMateriaRevisadaProgress('☁️ Gerando na nuvem… Acompanhe o progresso no banner.')
+      const { promise } = await enqueueAdminMateriaRevisada({
+        userId: currentAdminUser.uid,
+        courseId,
+        materia,
+        prompt,
+        docId,
+        status,
+      })
+      await promise
 
-      setMateriaRevisadaProgress('📝 Processando resposta da IA...')
-
-      // 4. Extrair e limpar JSON
-      let jsonText = aiResponse.trim()
-      
-      // Remover markdown se houver
-      if (jsonText.includes('```json')) {
-        jsonText = jsonText.split('```json')[1].split('```')[0].trim()
-      } else if (jsonText.includes('```')) {
-        jsonText = jsonText.split('```')[1].split('```')[0].trim()
-      }
-
-      // Extrair JSON mesmo se houver texto antes/depois
-      const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        jsonText = jsonMatch[0]
-      }
-
-      // Limpar caracteres de controle inválidos
-      let cleaned = jsonText
-      let result = ''
-      let inString = false
-      for (let i = 0; i < cleaned.length; i++) {
-        const char = cleaned[i]
-        if (char === '"' && (i === 0 || cleaned[i - 1] !== '\\')) {
-          inString = !inString
-          result += char
-        } else if (inString) {
-          if (char === '\n') result += '\\n'
-          else if (char === '\r') result += '\\r'
-          else if (char === '\t') result += '\\t'
-          else if (char >= '\x00' && char <= '\x1F' && char !== '\n' && char !== '\r' && char !== '\t') {
-            // Remover outros caracteres de controle
-          } else {
-            result += char
-          }
-        } else {
-          result += char
-        }
-      }
-      cleaned = result
-
-      let materiaData
-      try {
-        materiaData = JSON.parse(cleaned)
-      } catch (parseErr) {
-        // Tentar limpeza mais agressiva
-        cleaned = cleaned.replace(/(?<!\\)[\x00-\x1F\x7F]/g, '')
-        materiaData = JSON.parse(cleaned)
-      }
-
-      setMateriaRevisadaProgress('💾 Salvando matéria revisada no banco de dados...')
-
-      // 5. Salvar no Firestore
-      const materiasRef = collection(db, 'courses', courseId, 'materiasRevisadas')
-      
-      // Verificar se já existe
-      const existingDocs = await getDocs(query(materiasRef, where('materia', '==', materia)))
-      if (!existingDocs.empty) {
-        // Atualizar existente
-        const existingDoc = existingDocs.docs[0]
-        await updateDoc(existingDoc.ref, {
-          ...materiaData,
-          materia,
-          status: existingDoc.data().status || defaultContentStatus(),
-          updatedAt: serverTimestamp(),
-        })
-        setMateriaRevisadaProgress(`✅ Matéria revisada atualizada com sucesso!`)
-      } else {
-        // Criar novo
-        await addDoc(materiasRef, {
-          ...materiaData,
-          materia,
-          status: defaultContentStatus(),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        })
-        setMateriaRevisadaProgress(`✅ Matéria revisada criada com sucesso!`)
-      }
-
-      // 6. Atualizar lista de matérias existentes
       const allMaterias = await getDocs(materiasRef)
       setExistingMateriasRevisadas(allMaterias.docs.map((d) => ({ id: d.id, ...d.data() })))
-
-      setMessage(`✅ Matéria revisada "${materia}" gerada e salva com sucesso! Baseada exclusivamente no edital do curso.`)
-      
-      // Limpar formulário
+      setMateriaRevisadaProgress('✅ Matéria revisada gerada e salva na nuvem!')
+      setMessage(`✅ Matéria revisada "${materia}" gerada na nuvem com sucesso!`)
       setMateriaRevisadaForm({ ...materiaRevisadaForm, materia: '' })
     } catch (err) {
       console.error('Erro ao gerar matéria revisada:', err)

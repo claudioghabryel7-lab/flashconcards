@@ -24,24 +24,26 @@ const JOB_LABELS = {
   flashcards_topico: 'Flashcards',
   conteudo_incidencia: 'Conteúdo de incidência',
   questoes_incidencia: 'Questões de incidência',
-  flashcards_edital: 'Flashcards do edital',
-  materia_revisada: 'Matéria revisada',
   vespera_prova: 'Véspera de prova',
-  guia_mentorado: 'Guia mentorado',
+  admin_edital_verticalizado: 'Edital verticalizado',
+  admin_materia_revisada: 'Matéria revisada',
+  materia_revisada: 'Matéria revisada', // legado
   guia_mentorado_cronograma: 'Cronograma Guia Mentorado',
   guia_mentorado_automation: 'Conteúdos do dia (Guia Mentorado)',
   guia_mentorado_backfill: 'Guia Mentorado (dia 1 → hoje)',
+  guia_mentorado: 'Guia Mentorado', // legado
   professor_supervisor: 'Professor fiscalizador',
-  admin_batch: 'Geração em lote',
+  flashcards_edital: 'Flashcards do edital', // legado
+  admin_batch: 'Geração em lote', // legado
 }
 
 const WAITING_HINTS = {
   [GENERATION_JOB_STATUS.WAITING_API]:
-    'O servidor verifica a cada 5 segundos e continua sozinho quando a API voltar.',
+    'O servidor atualiza a cada 15s e continua sozinho quando a API voltar.',
   [GENERATION_JOB_STATUS.WAITING_TIMEOUT]:
     'Limite do servidor atingido — retoma automaticamente em instantes.',
   [GENERATION_JOB_STATUS.WAITING_RETRY]:
-    'Erro temporário — o servidor tenta de novo a cada 5 segundos até concluir.',
+    'Erro temporário — o servidor tenta de novo a cada 15 segundos até concluir.',
 }
 
 function isWaitingStatus(status) {

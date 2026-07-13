@@ -452,7 +452,7 @@ const {
 } = require('./generationJobResume')
 const { tryAcquireServerJobSlot, MAX_CONCURRENT_SERVER_JOBS } = require('./generationJobConcurrency')
 
-const CONCURRENCY_RETRY_MS = 5 * 1000
+const CONCURRENCY_RETRY_MS = 15 * 1000
 
 async function processGenerationJob(userId, jobId, jobData) {
   const db = admin.firestore()
@@ -705,6 +705,16 @@ async function processGenerationJob(userId, jobId, jobData) {
     return outcome
   } finally {
     stopKeepAlive()
+    // Garante liberação do slot se o job já terminou (done/error/cancelled)
+    try {
+      const snap = await jobRef.get()
+      const status = snap.exists ? snap.data()?.status : null
+      if (!status || ['done', 'error', 'cancelled'].includes(status)) {
+        await clearActiveJob(jobId)
+      }
+    } catch {
+      /* ignore */
+    }
   }
 }
 

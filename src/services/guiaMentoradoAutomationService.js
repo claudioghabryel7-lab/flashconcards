@@ -197,4 +197,33 @@ export async function startMentoradoDayContentAutomation({
   return { jobId, promise, topicCount: topicPayloads.length }
 }
 
+/**
+ * Um único job na nuvem: gera do 1º dia do cronograma até hoje (com checkpoint).
+ */
+export async function startMentoradoBackfillJob({ userId, courseId, dayKeys = null }) {
+  if (!userId) throw new Error('Usuário não autenticado.')
+  if (!courseId) throw new Error('Curso não selecionado.')
+
+  const { jobId, promise } = await startBackgroundGeneration({
+    userId,
+    courseId,
+    jobType: 'guia_mentorado_backfill',
+    topicKey: null,
+    metadata: {
+      source: 'backfill',
+      dayCount: Array.isArray(dayKeys) ? dayKeys.length : null,
+    },
+    runOnServer: true,
+    serverPayload: {
+      courseId,
+      autoPublish: true,
+      ...(Array.isArray(dayKeys) && dayKeys.length ? { dayKeys } : {}),
+      resumeFromDayIndex: 0,
+      resumeFromTopicIndex: 0,
+    },
+  })
+
+  return { jobId, promise }
+}
+
 export { MENTORADO_DAILY_RELEASE_HOUR }

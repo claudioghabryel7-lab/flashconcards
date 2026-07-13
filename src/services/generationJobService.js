@@ -98,9 +98,10 @@ export async function updateGenerationJob(userId, jobId, patch) {
 const STALE_JOB_MS = 45 * 60 * 1000
 const STALE_SERVER_JOB_MS = 90 * 60 * 1000
 const STALE_WAITING_API_MS = 24 * 60 * 60 * 1000
+/** Jobs waiting/pending: nudge a cada 15s. */
 export const STALL_NUDGE_MS = 15 * 1000
-/** Jobs running só são nudgeados após 2 min sem progresso — keep-alive do servidor é 15s. */
-export const STALL_PROGRESS_NUDGE_MS = 2 * 60 * 1000
+/** Jobs running só são nudgeados após 90s sem progresso — keep-alive do servidor é 15s. */
+export const STALL_PROGRESS_NUDGE_MS = 90 * 1000
 
 function jobProgressTimestamp(job = {}) {
   return job.progressUpdatedAt || job.updatedAt

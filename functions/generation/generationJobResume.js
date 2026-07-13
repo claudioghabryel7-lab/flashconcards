@@ -7,8 +7,8 @@ const {
 } = require('./geminiKeyPool')
 
 const JOB_HEARTBEAT_MS = 15 * 1000
-const RETRY_INTERVAL_MS = 5 * 1000
-const CONCURRENCY_RETRY_MS = 5 * 1000
+const RETRY_INTERVAL_MS = 15 * 1000
+const CONCURRENCY_RETRY_MS = 15 * 1000
 /** Só considera "sem sinal" após 5 min — geração de IA pode ficar quieta por minutos. */
 const STALL_PROGRESS_MS = 5 * 60 * 1000
 /** Heartbeat a cada 15s → fresco se < 60s. */
@@ -319,17 +319,17 @@ async function touchWaitingJobOnNudge(userId, jobId, jobData) {
   if (jobData.status === 'waiting_api') {
     message = topicLabel
       ? `API indisponível — tentativa ${attempt} (${topicLabel})`
-      : `API indisponível — tentativa ${attempt}, verificando a cada 5s…`
+      : `API indisponível — tentativa ${attempt}, verificando a cada 15s…`
   } else if (jobData.status === 'waiting_timeout') {
     message = topicLabel
       ? `Pausado (servidor) — tentativa ${attempt} (${topicLabel})`
-      : `Pausado (servidor) — tentativa ${attempt}, retomando a cada 5s…`
+      : `Pausado (servidor) — tentativa ${attempt}, retomando a cada 15s…`
   } else if (lastError) {
-    message = `Erro temporário — tentativa ${attempt} a cada 5s… (${lastError})`
+    message = `Erro temporário — tentativa ${attempt} a cada 15s… (${lastError})`
   } else if (topicLabel) {
     message = `Aguardando retomada — tentativa ${attempt} (${topicLabel})`
   } else {
-    message = `Aguardando retomada — tentativa ${attempt} a cada 5s…`
+    message = `Aguardando retomada — tentativa ${attempt} a cada 15s…`
   }
 
   await touchJobHeartbeat(userId, jobId, {

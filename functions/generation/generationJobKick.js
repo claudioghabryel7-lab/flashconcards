@@ -5,6 +5,8 @@ const {
   isApiQuotaError,
   isTransientGenerationError,
   pauseJobForResume,
+  clearActiveJob,
+  clearResumeQueue,
 } = require('./generationJobResume')
 
 const PENDING_KICK_GRACE_MS = 8 * 1000
@@ -39,25 +41,33 @@ async function handleServerJobError(userId, jobId, data, error, updateRef) {
         await updateRef.update({
           ...patch,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          progressUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
         })
       },
       status: pauseStatus,
       waitReason: isApiQuotaError(error) ? 'api' : 'error',
       message: isApiQuotaError(error)
         ? 'API indisponível — trocando chave e retomando…'
-        : `Erro temporário — tentando outra API em 5s… (${error?.message || 'erro'})`,
+        : `Erro temporário — tentando outra API em 15s… (${error?.message || 'erro'})`,
     })
     return { ok: false, paused: true, error: error.message }
   }
 
-  await updateRef.update({
-    status: 'error',
-    progress: 100,
-    message: error?.message || 'Falha na geração com IA. Tente novamente.',
-    errorCode: error?.code || null,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    finishedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
+  await updateRef
+    .update({
+      status: 'error',
+      progress: 100,
+      message: error?.message || 'Falha na geração com IA. Tente novamente.',
+      errorCode: error?.code || null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    .catch(() => {})
+
+  // Libera slot imediatamente — evita travar concorrência até o prune
+  await clearActiveJob(jobId)
+  await clearResumeQueue(jobId)
+
   return { ok: false, error: error.message }
 }
 
@@ -104,26 +114,21 @@ async function kickGenerationJob(userId, jobId, { wait = true } = {}) {
   return runServerGenerationJob(userId, jobId, data)
 }
 
-/** Varre jobs presos em pending via generationActiveJobs + fila de retomada. */
+/** Varre jobs presos em pending (fila + collection group fallback). */
 async function processStuckPendingGenerationJobs() {
   const db = getDb()
   const now = Date.now()
   let kicked = 0
   const seen = new Set()
 
-  const queueSnap = await db.collection('generationResumeQueue').limit(30).get()
-  for (const doc of queueSnap.docs) {
-    const data = doc.data() || {}
-    const { userId, jobId } = data
-    if (!userId || !jobId || seen.has(jobId)) continue
-
+  const tryKick = async (userId, jobId) => {
+    if (!userId || !jobId || seen.has(jobId)) return
     const jobSnap = await db.doc(`users/${userId}/generationJobs/${jobId}`).get()
-    if (!jobSnap.exists || jobSnap.data().status !== 'pending') continue
-    if (!jobSnap.data().runOnServer) continue
-
-    const createdMs = jobSnap.data().createdAt?.toMillis?.() || 0
-    if (createdMs && now - createdMs < PENDING_KICK_GRACE_MS) continue
-
+    if (!jobSnap.exists) return
+    const data = jobSnap.data()
+    if (data.status !== 'pending' || !data.runOnServer) return
+    const createdMs = data.createdAt?.toMillis?.() || 0
+    if (createdMs && now - createdMs < PENDING_KICK_GRACE_MS) return
     seen.add(jobId)
     try {
       const result = await kickGenerationJob(userId, jobId)
@@ -131,6 +136,28 @@ async function processStuckPendingGenerationJobs() {
     } catch (err) {
       console.error(`[processStuckPending] ${jobId}:`, err)
     }
+  }
+
+  const queueSnap = await db.collection('generationResumeQueue').limit(40).get()
+  for (const doc of queueSnap.docs) {
+    const data = doc.data() || {}
+    await tryKick(data.userId, data.jobId || doc.id)
+  }
+
+  // Pending sem fila (onCreate falhou)
+  try {
+    const pendingSnap = await db
+      .collectionGroup('generationJobs')
+      .where('status', '==', 'pending')
+      .where('runOnServer', '==', true)
+      .limit(20)
+      .get()
+    for (const doc of pendingSnap.docs) {
+      const userId = parseUserIdFromJobPath(doc.ref.path)
+      await tryKick(userId, doc.id)
+    }
+  } catch (err) {
+    console.warn('[processStuckPending] collectionGroup:', err.message)
   }
 
   return { kicked, scanned: seen.size }
