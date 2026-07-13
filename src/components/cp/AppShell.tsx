@@ -14,6 +14,7 @@ const ProfilePhotoReminder = dynamic(() => import('@/components/ProfilePhotoRemi
 
 const MINIMAL_PATHS = ['/flashcards/pip', '/share-flashcards']
 const FULL_BLEED_PATHS = ['/', '/cursos', '/comunidade']
+const CHECKOUT_PATH_PREFIXES = ['/pagamento', '/curso/', '/adquirir/', '/curso-share/']
 const STUDY_PATH_PREFIXES = [
   '/flashcards',
   '/flashcards/estudar',
@@ -39,6 +40,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isComunidade = isCommunityRoute(pathname)
   const fullBleed = FULL_BLEED_PATHS.includes(pathname) || isComunidade
   const studyLayout = isStudyRoute(pathname)
+  const checkoutLayout = CHECKOUT_PATH_PREFIXES.some((p) => pathname.startsWith(p))
 
   if (minimal) {
     return <>{children}</>
@@ -52,7 +54,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         className={
           fullBleed
             ? 'relative z-10 w-full'
-            : studyLayout
+            : checkoutLayout || studyLayout
               ? 'cp-container-wide relative z-10 py-4 sm:py-6'
               : 'cp-container relative z-10 py-4 sm:py-6'
         }

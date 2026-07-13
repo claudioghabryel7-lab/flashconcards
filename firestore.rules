@@ -439,6 +439,12 @@ service cloud.firestore {
                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       }
+
+      // Notificações de liberação diária da Véspera (lida no app pelo aluno)
+      match /vesperaNotifications/{notifId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isAdmin();
+      }
     }
     
     // Links compartilhados de Véspera de Prova
@@ -605,6 +611,17 @@ service cloud.firestore {
       allow read: if true;
       allow update: if true;
       allow delete: if isAdmin();
+    }
+
+    match /purchaseReviews/{reviewId} {
+      allow create: if true;
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /courseEntitlements/{entitlementId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow write: if false; // apenas Cloud Functions / Admin SDK
     }
     
     match /blog_articles/{articleId} {

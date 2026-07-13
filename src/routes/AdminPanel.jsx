@@ -64,6 +64,11 @@ import LawDetector from '../utils/lawDetector'
 import LawDownloader from '../utils/lawDownloader'
 import { generateShareToken } from '../utils/shareToken'
 import { enqueueAdminEditalProcessing } from '../services/adminServerGeneration'
+import {
+  buildCourseDurationFields,
+  getCourseAccessLabel,
+  resolveCourseDurationParts,
+} from '../utils/courseAccess'
 
 const MATERIAS = [
   'Português',
@@ -266,7 +271,8 @@ const AdminPanel = () => {
     price: 99.90,
     originalPrice: 149.99,
     competition: '',
-    courseDuration: '', // Tempo do curso (ex: "6 meses", "1 ano", etc.)
+    courseDurationUnit: 'months', // lifetime | days | months | years
+    courseDurationValue: 6,
     imageBase64: '',
     imageUrl: '',
     active: true,
@@ -2907,6 +2913,11 @@ REGRAS CRÍTICAS:
       // Gerar slug do nome do curso
       const slug = createSlug(courseForm.name)
       
+      const durationFields = buildCourseDurationFields({
+        unit: courseForm.courseDurationUnit,
+        value: courseForm.courseDurationValue,
+      })
+
       const ref = await addDoc(collection(db, 'courses'), {
         name: courseForm.name,
         slug: slug,
@@ -2914,7 +2925,7 @@ REGRAS CRÍTICAS:
         price: parseFloat(courseForm.price) || 99.90,
         originalPrice: parseFloat(courseForm.originalPrice) || 149.99,
         competition: courseForm.competition,
-        courseDuration: courseForm.courseDuration || '',
+        ...durationFields,
         imageBase64: courseForm.imageBase64 || '',
         imageUrl: courseForm.imageUrl || '',
         active: courseForm.active !== false,
@@ -2934,7 +2945,8 @@ REGRAS CRÍTICAS:
         price: 99.90,
         originalPrice: 149.99,
         competition: '',
-        courseDuration: '',
+        courseDurationUnit: 'months',
+        courseDurationValue: 6,
         imageBase64: '',
         imageUrl: '',
         active: true,
@@ -2965,6 +2977,14 @@ REGRAS CRÍTICAS:
 
   // Funções para editar curso completo
   const startEditingCourse = (course) => {
+    const parsed = resolveCourseDurationParts(course)
+    const unitFromCourse =
+      course.courseDurationUnit === 'lifetime' || course.courseDurationUnit === 'days' ||
+      course.courseDurationUnit === 'months' || course.courseDurationUnit === 'years'
+        ? course.courseDurationUnit
+        : parsed
+          ? parsed.unit
+          : 'lifetime'
     setEditingCourse(course.id)
     setEditingCourseData({
       name: course.name || '',
@@ -2972,7 +2992,11 @@ REGRAS CRÍTICAS:
       price: course.price || 99.90,
       originalPrice: course.originalPrice || 149.99,
       competition: course.competition || '',
-      courseDuration: course.courseDuration || '',
+      courseDurationUnit: unitFromCourse,
+      courseDurationValue:
+        course.courseDurationValue != null
+          ? Number(course.courseDurationValue)
+          : parsed?.amount || 6,
       active: course.active !== false,
       featured: course.featured === true, // Curso em destaque
       referenceLink: course.referenceLink || '', // Link de referência
@@ -2997,6 +3021,11 @@ REGRAS CRÍTICAS:
       // Gerar slug do nome do curso
       const slug = createSlug(editingCourseData.name.trim())
       
+      const durationFields = buildCourseDurationFields({
+        unit: editingCourseData.courseDurationUnit,
+        value: editingCourseData.courseDurationValue,
+      })
+
       await updateCourse(courseId, {
         name: editingCourseData.name.trim(),
         slug: slug, // Atualizar slug quando nome mudar
@@ -3004,7 +3033,7 @@ REGRAS CRÍTICAS:
         price: parseFloat(editingCourseData.price) || 99.90,
         originalPrice: parseFloat(editingCourseData.originalPrice) || 149.99,
         competition: editingCourseData.competition.trim(),
-        courseDuration: editingCourseData.courseDuration?.trim() || '',
+        ...durationFields,
         active: editingCourseData.active,
         featured: editingCourseData.featured === true,
         referenceLink: editingCourseData.referenceLink?.trim() || '',
@@ -9801,17 +9830,53 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
 
                         <div>
                           <label className="block text-xs font-semibold text-slate-600 mb-2">
-                            Tempo do Curso
+                            Tempo de acesso ao curso
                           </label>
-                          <input
-                            type="text"
-                            value={courseForm.courseDuration}
-                            onChange={(e) => setCourseForm(prev => ({ ...prev, courseDuration: e.target.value }))}
-                            placeholder="Ex: 6 meses, 1 ano, 12 meses, etc."
-                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
-                          />
+                          <div className="flex flex-wrap gap-2">
+                            <select
+                              value={courseForm.courseDurationUnit}
+                              onChange={(e) =>
+                                setCourseForm((prev) => ({
+                                  ...prev,
+                                  courseDurationUnit: e.target.value,
+                                  courseDurationValue:
+                                    e.target.value === 'lifetime'
+                                      ? prev.courseDurationValue
+                                      : Math.max(1, Number(prev.courseDurationValue) || 6),
+                                }))
+                              }
+                              className="rounded-lg border border-slate-300 p-2 text-sm min-w-[140px]"
+                            >
+                              <option value="lifetime">Vitalício</option>
+                              <option value="days">Dias</option>
+                              <option value="months">Meses</option>
+                              <option value="years">Anos</option>
+                            </select>
+                            {courseForm.courseDurationUnit !== 'lifetime' && (
+                              <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={courseForm.courseDurationValue}
+                                onChange={(e) =>
+                                  setCourseForm((prev) => ({
+                                    ...prev,
+                                    courseDurationValue: Math.max(1, parseInt(e.target.value, 10) || 1),
+                                  }))
+                                }
+                                className="w-24 rounded-lg border border-slate-300 p-2 text-sm"
+                              />
+                            )}
+                          </div>
                           <p className="text-xs text-slate-500 mt-1">
-                            Informe a duração do curso (ex: "6 meses", "1 ano", "12 meses")
+                            {courseForm.courseDurationUnit === 'lifetime'
+                              ? 'Acesso sem data de expiração.'
+                              : `Será salvo como: ${
+                                  buildCourseDurationFields({
+                                    unit: courseForm.courseDurationUnit,
+                                    value: courseForm.courseDurationValue,
+                                  }).courseDuration
+                                }. Após esse prazo o acesso expira automaticamente.`}
                           </p>
                         </div>
 
@@ -10049,15 +10114,55 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                           
                                           <div>
                                             <label className="block text-xs font-semibold text-slate-600 mb-1">
-                                              Duração
+                                              Tempo de acesso
                                             </label>
-                                            <input
-                                              type="text"
-                                              value={editingCourseData?.courseDuration || ''}
-                                              onChange={(e) => setEditingCourseData(prev => ({ ...prev, courseDuration: e.target.value }))}
-                                              className="w-full rounded-lg border border-slate-300 p-2 text-sm"
-                                              placeholder="Ex: 6 meses"
-                                            />
+                                            <div className="flex gap-2">
+                                              <select
+                                                value={editingCourseData?.courseDurationUnit || 'lifetime'}
+                                                onChange={(e) =>
+                                                  setEditingCourseData((prev) => ({
+                                                    ...prev,
+                                                    courseDurationUnit: e.target.value,
+                                                    courseDurationValue:
+                                                      e.target.value === 'lifetime'
+                                                        ? prev.courseDurationValue
+                                                        : Math.max(1, Number(prev.courseDurationValue) || 6),
+                                                  }))
+                                                }
+                                                className="rounded-lg border border-slate-300 p-2 text-sm flex-1 min-w-0"
+                                              >
+                                                <option value="lifetime">Vitalício</option>
+                                                <option value="days">Dias</option>
+                                                <option value="months">Meses</option>
+                                                <option value="years">Anos</option>
+                                              </select>
+                                              {editingCourseData?.courseDurationUnit !== 'lifetime' && (
+                                                <input
+                                                  type="number"
+                                                  min={1}
+                                                  step={1}
+                                                  value={editingCourseData?.courseDurationValue ?? 6}
+                                                  onChange={(e) =>
+                                                    setEditingCourseData((prev) => ({
+                                                      ...prev,
+                                                      courseDurationValue: Math.max(
+                                                        1,
+                                                        parseInt(e.target.value, 10) || 1,
+                                                      ),
+                                                    }))
+                                                  }
+                                                  className="w-20 rounded-lg border border-slate-300 p-2 text-sm"
+                                                />
+                                              )}
+                                            </div>
+                                            <p className="text-xs text-slate-500 mt-1">
+                                              {editingCourseData?.courseDurationUnit === 'lifetime'
+                                                ? 'Vitalício'
+                                                : buildCourseDurationFields({
+                                                    unit: editingCourseData?.courseDurationUnit,
+                                                    value: editingCourseData?.courseDurationValue,
+                                                  }).courseDuration}
+                                            </p>
                                           </div>
                                         </div>
                                         
@@ -10145,9 +10250,9 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                         {course.originalPrice && course.originalPrice > course.price && (
                                           <span className="line-through ml-2">R$ {course.originalPrice.toFixed(2)}</span>
                                         )}
-                                        {course.courseDuration && (
-                                          <span className="ml-2">• Duração: {course.courseDuration}</span>
-                                        )}
+                                        <span className="ml-2">
+                                          • Acesso: {getCourseAccessLabel(course).short}
+                                        </span>
                                       </p>
                                       {course.description && (
                                         <p className="text-xs text-slate-400 mt-1 line-clamp-2">

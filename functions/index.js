@@ -16,10 +16,51 @@ const {
   getEmailCredentials,
   DEFAULT_FROM_NAME,
 } = require('./emailUtils')
-const { MercadoPagoConfig, Payment } = require('mercadopago')
+const { MercadoPagoConfig, Payment, Preference, PreApproval } = require('mercadopago')
 const axios = require('axios')
 const { generateAiJson } = require('./generation/geminiServer')
 const { collectGeminiApiKeys, collectMotherGeminiApiKey } = require('./generation/geminiKeyPool')
+const {
+  grantCourseAccess,
+  revokeCourseAccess,
+  toMercadoPagoRecurring,
+  computeExpiresAt,
+} = require('./courseAccessExpiry')
+
+function getMercadoPagoAccessToken(options = {}) {
+  const { forPix = false } = options
+  const mode = String(process.env.MERCADOPAGO_MODE || 'test').toLowerCase()
+
+  // Token TEST do MP geralmente não gera PIX (retorna internal_error).
+  // Para PIX preferimos a chave de produção.
+  if (forPix) {
+    return (
+      process.env.MERCADOPAGO_ACCESS_TOKEN_PIX ||
+      process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
+      process.env.MERCADOPAGO_ACCESS_TOKEN ||
+      process.env.MERCADOPAGO_ACCESS_TOKEN_TEST ||
+      ''
+    )
+  }
+
+  if (mode === 'test') {
+    return (
+      process.env.MERCADOPAGO_ACCESS_TOKEN_TEST ||
+      process.env.MERCADOPAGO_ACCESS_TOKEN ||
+      ''
+    )
+  }
+  return (
+    process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
+    process.env.MERCADOPAGO_ACCESS_TOKEN ||
+    functions.config().mercadopago?.access_token_prod ||
+    ''
+  )
+}
+
+function isMercadoPagoTestMode() {
+  return String(process.env.MERCADOPAGO_MODE || 'test').toLowerCase() === 'test'
+}
 
 function assertGeminiConfigured() {
   const keys = collectGeminiApiKeys()
@@ -223,37 +264,54 @@ exports.createPixPayment = functions.https.onRequest((req, res) => {
         })
       }
 
-      // Obter Access Token do Mercado Pago
-      const accessToken = functions.config().mercadopago?.access_token_prod || 
-                         process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
-                         'APP_USR-3743437950896305-112812-559fadd346072c35f8cb81e21d4e562d-2583165550'
+      // Obter Access Token do Mercado Pago (PIX usa token de produção quando disponível)
+      const accessToken = getMercadoPagoAccessToken({ forPix: true })
+      if (!accessToken) {
+        return res.status(500).json({
+          error: 'Mercado Pago não configurado',
+          message:
+            'Access token ausente para PIX. Configure MERCADOPAGO_ACCESS_TOKEN_PROD (PIX não funciona com token TEST).',
+        })
+      }
+
+      console.log('PIX usando token:', String(accessToken).startsWith('TEST') ? 'TEST' : 'PROD/APP_USR')
 
       // Configurar cliente do Mercado Pago
       const client = new MercadoPagoConfig({
         accessToken: accessToken,
-        options: { timeout: 10000 }
+        options: { timeout: 15000 }
       })
 
       const payment = new Payment(client)
 
       // Criar pagamento PIX
       const paymentData = {
-        transaction_amount: amountNumber,
-        description: description,
+        transaction_amount: Number(amountNumber.toFixed(2)),
+        description: String(description).slice(0, 255),
         payment_method_id: 'pix',
         payer: {
           email: userEmail || 'cliente@exemplo.com',
-          first_name: userName || 'Cliente',
+          first_name: (userName || 'Cliente').split(' ')[0] || 'Cliente',
         },
         metadata: {
           transaction_id: transactionId,
         },
-        notification_url: `${functions.config().app?.webhook_url || 'https://us-central1-plegi-d84c2.cloudfunctions.net/webhookMercadoPago'}`,
+        notification_url:
+          process.env.MERCADOPAGO_WEBHOOK_URL ||
+          functions.config().app?.webhook_url ||
+          'https://us-central1-plegi-d84c2.cloudfunctions.net/webhookMercadoPago',
       }
 
-      console.log('Criando pagamento PIX no Mercado Pago:', { amount, description, transactionId })
+      console.log('Criando pagamento PIX no Mercado Pago:', {
+        amount: paymentData.transaction_amount,
+        description: paymentData.description,
+        transactionId,
+      })
       
-      const result = await payment.create({ body: paymentData })
+      const result = await payment.create({
+        body: paymentData,
+        requestOptions: { idempotencyKey: `pix-${transactionId}` },
+      })
       
       console.log('Resposta do Mercado Pago:', JSON.stringify(result, null, 2))
 
@@ -372,8 +430,217 @@ exports.createPixPayment = functions.https.onRequest((req, res) => {
       
       return res.status(500).json({ 
         error: 'Erro ao criar pagamento PIX',
-        message: error.message || 'Erro desconhecido',
+        message: error.message || error.cause?.[0]?.description || 'Erro desconhecido',
+        code: error.cause?.[0]?.code || error.code || 'PIX_CREATE_FAILED',
         details: error.cause || error.response?.data || null
+      })
+    }
+  })
+})
+
+function isPublicHttpsUrl(url) {
+  try {
+    const u = new URL(String(url || ''))
+    if (u.protocol !== 'https:') return false
+    const host = u.hostname.toLowerCase()
+    if (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local')) return false
+    return true
+  } catch {
+    return false
+  }
+}
+
+function resolveMercadoPagoBackUrl(candidate, fallback) {
+  if (isPublicHttpsUrl(candidate)) return String(candidate)
+  return fallback
+}
+
+/** Cria preferência Checkout Pro ou assinatura (renovação automática no cartão) */
+exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Método não permitido' })
+    }
+
+    try {
+      const {
+        amount,
+        description,
+        transactionId,
+        userEmail,
+        userName,
+        courseId,
+        courseDuration,
+        autoRenew,
+        successUrl,
+        failureUrl,
+        pendingUrl,
+      } = req.body || {}
+
+      const amountNumber = parseFloat(amount)
+      if (!transactionId || !description || Number.isNaN(amountNumber) || amountNumber <= 0) {
+        return res.status(400).json({
+          error: 'Dados inválidos',
+          message: 'Informe amount, description e transactionId válidos.',
+        })
+      }
+
+      const accessToken = getMercadoPagoAccessToken()
+      if (!accessToken) {
+        return res.status(500).json({
+          error: 'Mercado Pago não configurado',
+          message: 'Access token ausente.',
+        })
+      }
+
+      const client = new MercadoPagoConfig({
+        accessToken,
+        options: { timeout: 15000 },
+      })
+
+      // MP exige HTTPS público em back_urls quando auto_return está ativo (localhost falha).
+      const siteBase =
+        process.env.PUBLIC_SITE_URL ||
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        'https://www.flashconcards.com.br'
+      const originFallback = String(siteBase).replace(/\/$/, '')
+      const successFallback = `${originFallback}/pagamento?status=success&txn=${encodeURIComponent(transactionId)}${courseId ? `&course=${encodeURIComponent(courseId)}` : ''}`
+      const failureFallback = `${originFallback}/pagamento?status=failure&txn=${encodeURIComponent(transactionId)}${courseId ? `&course=${encodeURIComponent(courseId)}` : ''}`
+      const pendingFallback = `${originFallback}/pagamento?status=pending&txn=${encodeURIComponent(transactionId)}${courseId ? `&course=${encodeURIComponent(courseId)}` : ''}`
+
+      const success = resolveMercadoPagoBackUrl(successUrl, successFallback)
+      const failure = resolveMercadoPagoBackUrl(failureUrl, failureFallback)
+      const pending = resolveMercadoPagoBackUrl(pendingUrl, pendingFallback)
+
+      const wantAutoRenew = Boolean(autoRenew)
+      const recurring = wantAutoRenew
+        ? toMercadoPagoRecurring({
+            courseDuration,
+            courseDurationUnit: req.body?.courseDurationUnit,
+            courseDurationValue: req.body?.courseDurationValue,
+          })
+        : null
+
+      // Assinatura Mercado Pago (cartão com renovação automática)
+      if (wantAutoRenew && recurring) {
+        const preApproval = new PreApproval(client)
+        const preBody = {
+          reason: String(description).slice(0, 256),
+          external_reference: String(transactionId),
+          payer_email: userEmail || undefined,
+          auto_recurring: {
+            frequency: recurring.frequency,
+            frequency_type: recurring.frequency_type,
+            transaction_amount: amountNumber,
+            currency_id: 'BRL',
+          },
+          back_url: success,
+          status: 'pending',
+          metadata: {
+            transaction_id: String(transactionId),
+            course_id: courseId || null,
+            auto_renew: true,
+            course_duration: courseDuration || null,
+          },
+        }
+
+        const result = await preApproval.create({ body: preBody })
+        const testMode = isMercadoPagoTestMode()
+        const checkoutUrl =
+          result.init_point || result.sandbox_init_point || result.sandbox_init_point
+
+        if (!checkoutUrl) {
+          return res.status(500).json({
+            error: 'Assinatura sem URL',
+            message: 'Mercado Pago não retornou init_point da assinatura.',
+            details: result,
+          })
+        }
+
+        return res.status(200).json({
+          success: true,
+          mode: 'subscription',
+          preferenceId: result.id,
+          preapprovalId: result.id,
+          checkoutUrl,
+          initPoint: result.init_point,
+          sandboxInitPoint: result.sandbox_init_point,
+          testMode,
+        })
+      }
+
+      const preference = new Preference(client)
+      const body = {
+        items: [
+          {
+            id: String(courseId || transactionId).slice(0, 256),
+            title: String(description).slice(0, 256),
+            quantity: 1,
+            unit_price: Number(amountNumber.toFixed(2)),
+            currency_id: 'BRL',
+          },
+        ],
+        payer: {
+          email: userEmail || undefined,
+          name: userName || undefined,
+        },
+        external_reference: String(transactionId),
+        metadata: {
+          transaction_id: String(transactionId),
+          course_id: courseId || null,
+          auto_renew: false,
+          course_duration: courseDuration || null,
+        },
+        back_urls: {
+          success,
+          failure,
+          pending,
+        },
+        notification_url:
+          process.env.MERCADOPAGO_WEBHOOK_URL ||
+          'https://us-central1-plegi-d84c2.cloudfunctions.net/webhookMercadoPago',
+        statement_descriptor: 'CONCURSEIRO PRED',
+      }
+
+      // Só usa auto_return se as 3 URLs forem HTTPS públicas (exigência do MP)
+      if (isPublicHttpsUrl(success) && isPublicHttpsUrl(failure) && isPublicHttpsUrl(pending)) {
+        body.auto_return = 'approved'
+      }
+
+      console.log('createCheckoutPreference back_urls:', body.back_urls, 'auto_return:', body.auto_return)
+
+      const result = await preference.create({ body })
+      const testMode = isMercadoPagoTestMode()
+      const checkoutUrl = testMode
+        ? result.sandbox_init_point || result.init_point
+        : result.init_point || result.sandbox_init_point
+
+      if (!checkoutUrl) {
+        return res.status(500).json({
+          error: 'Preferência sem URL',
+          message: 'Mercado Pago não retornou init_point.',
+          details: result,
+        })
+      }
+
+      return res.status(200).json({
+        success: true,
+        mode: 'checkout',
+        preferenceId: result.id,
+        checkoutUrl,
+        initPoint: result.init_point,
+        sandboxInitPoint: result.sandbox_init_point,
+        testMode,
+      })
+    } catch (error) {
+      console.error('Erro createCheckoutPreference:', error)
+      return res.status(500).json({
+        error: 'Erro ao criar preferência',
+        message:
+          error.message ||
+          error.cause?.[0]?.description ||
+          'Erro desconhecido',
+        details: error.cause || error.response?.data || null,
       })
     }
   })
@@ -419,9 +686,7 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
           console.log(`Transação não encontrada para paymentId: ${paymentId}, tentando buscar no Mercado Pago...`)
           
           try {
-            const accessToken = functions.config().mercadopago?.access_token_prod || 
-                               process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
-                               'APP_USR-3743437950896305-112812-559fadd346072c35f8cb81e21d4e562d-2583165550'
+            const accessToken = getMercadoPagoAccessToken()
             
             const client = new MercadoPagoConfig({
               accessToken: accessToken,
@@ -432,7 +697,8 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
             const paymentInfo = await payment.get({ id: paymentId.toString() })
             
             // Buscar transactionId no metadata
-            const transactionId = paymentInfo?.metadata?.transaction_id
+            const transactionId =
+              paymentInfo?.metadata?.transaction_id || paymentInfo?.external_reference
             
             if (transactionId) {
               console.log(`Encontrado transactionId no metadata: ${transactionId}`)
@@ -462,9 +728,7 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
         const transactionData = transactionDoc.data()
         
         // Buscar informações do pagamento no Mercado Pago usando a API
-        const accessToken = functions.config().mercadopago?.access_token_prod || 
-                           process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
-                           'APP_USR-3743437950896305-112812-559fadd346072c35f8cb81e21d4e562d-2583165550'
+        const accessToken = getMercadoPagoAccessToken()
         
         const client = new MercadoPagoConfig({
           accessToken: accessToken,
@@ -540,43 +804,47 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
           console.log(`CourseId da transação: ${courseId}, UserId: ${userId}, UserEmail: ${userEmail}`)
           
           if (userId) {
-            // Usuário já existe - apenas ativar acesso e adicionar curso comprado
+            // Usuário já existe - ativar / renovar acesso ao curso
             const userRef = admin.firestore().collection('users').doc(userId)
             const userDoc = await userRef.get()
             
             if (userDoc.exists) {
-              const userData = userDoc.data()
-              const currentPurchasedCourses = userData.purchasedCourses || []
-              
-              // Adicionar curso se não estiver na lista
-              let updatedPurchasedCourses = [...currentPurchasedCourses]
-              if (courseId && !updatedPurchasedCourses.includes(courseId)) {
-                updatedPurchasedCourses.push(courseId)
-                console.log(`Adicionando curso ${courseId} ao usuário ${userId}. Cursos anteriores: ${currentPurchasedCourses.join(', ')}, Cursos atualizados: ${updatedPurchasedCourses.join(', ')}`)
-              } else if (courseId) {
-                console.log(`Curso ${courseId} já está na lista do usuário ${userId}`)
+              let courseDuration = transactionData.courseDuration || null
+              let courseDurationUnit = transactionData.courseDurationUnit || null
+              let courseDurationValue = transactionData.courseDurationValue ?? null
+              if ((!courseDuration && !courseDurationUnit) && courseId) {
+                try {
+                  const courseSnap = await admin.firestore().collection('courses').doc(courseId).get()
+                  if (courseSnap.exists) {
+                    const c = courseSnap.data() || {}
+                    courseDuration = c.courseDuration || null
+                    courseDurationUnit = c.courseDurationUnit || null
+                    courseDurationValue = c.courseDurationValue ?? null
+                  }
+                } catch (_) { /* ignore */ }
+              }
+
+              if (courseId) {
+                await grantCourseAccess(admin.firestore(), admin.firestore.FieldValue, {
+                  userId,
+                  courseId,
+                  courseDuration,
+                  courseDurationUnit,
+                  courseDurationValue,
+                  autoRenew: Boolean(transactionData.autoRenew),
+                  paymentMethod: transactionData.paymentMethod || null,
+                  transactionId: transactionDoc.id,
+                  amount: transactionData.amount || null,
+                  extendFromCurrent: Boolean(transactionData.isRenewal),
+                  preapprovalId: transactionData.mercadopagoPreapprovalId || null,
+                })
               } else {
-                console.warn(`CourseId é null ou undefined para transação ${transactionDoc.id}`)
+                await userRef.update({
+                  hasActiveSubscription: true,
+                  lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
+                })
               }
-              
-              const updateData = {
-                hasActiveSubscription: true,
-                lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
-                purchasedCourses: updatedPurchasedCourses,
-              }
-              
-              // Adicionar subscriptionStartDate apenas se não existir
-              if (!userData.subscriptionStartDate) {
-                updateData.subscriptionStartDate = admin.firestore.FieldValue.serverTimestamp()
-              }
-              
-              // Se não tem curso selecionado, selecionar o curso comprado
-              if (courseId && !userData.selectedCourseId) {
-                updateData.selectedCourseId = courseId
-              }
-              
-              await userRef.update(updateData)
-              console.log(`✅ Acesso ativado para usuário: ${userId}, curso adicionado: ${courseId}, purchasedCourses: ${updatedPurchasedCourses.join(', ')}`)
+              console.log(`✅ Acesso ativado para usuário: ${userId}, curso: ${courseId}`)
             } else {
               console.error(`Usuário ${userId} não encontrado no Firestore`)
             }
@@ -593,10 +861,8 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
                 emailVerified: false
               })
               
-              // Criar perfil no Firestore com curso comprado
-              const purchasedCourses = courseId ? [courseId] : []
-              
-              console.log(`Criando novo usuário ${userRecord.uid} com curso ${courseId}, purchasedCourses: ${purchasedCourses.join(', ')}`)
+              // Criar perfil no Firestore (acesso ao curso via grantCourseAccess)
+              console.log(`Criando novo usuário ${userRecord.uid} com curso ${courseId}`)
               
               await admin.firestore().collection('users').doc(userRecord.uid).set({
                 uid: userRecord.uid,
@@ -607,9 +873,39 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
                 hasActiveSubscription: true,
                 subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                purchasedCourses: purchasedCourses,
+                purchasedCourses: [],
                 selectedCourseId: courseId || null,
               })
+
+              let courseDuration = transactionData.courseDuration || null
+              let courseDurationUnit = transactionData.courseDurationUnit || null
+              let courseDurationValue = transactionData.courseDurationValue ?? null
+              if ((!courseDuration && !courseDurationUnit) && courseId) {
+                try {
+                  const courseSnap = await admin.firestore().collection('courses').doc(courseId).get()
+                  if (courseSnap.exists) {
+                    const c = courseSnap.data() || {}
+                    courseDuration = c.courseDuration || null
+                    courseDurationUnit = c.courseDurationUnit || null
+                    courseDurationValue = c.courseDurationValue ?? null
+                  }
+                } catch (_) { /* ignore */ }
+              }
+
+              if (courseId) {
+                await grantCourseAccess(admin.firestore(), admin.firestore.FieldValue, {
+                  userId: userRecord.uid,
+                  courseId,
+                  courseDuration,
+                  courseDurationUnit,
+                  courseDurationValue,
+                  autoRenew: Boolean(transactionData.autoRenew),
+                  paymentMethod: transactionData.paymentMethod || null,
+                  transactionId: transactionDoc.id,
+                  amount: transactionData.amount || null,
+                  preapprovalId: transactionData.mercadopagoPreapprovalId || null,
+                })
+              }
               
               console.log(`✅ Novo usuário criado: ${userRecord.uid} com curso ${courseId}`)
               
@@ -1584,6 +1880,130 @@ exports.expireTrialUsers = functions.pubsub.schedule('0 0 * * *').timeZone('Amer
     throw error
   }
 })
+
+/** Expira acessos de curso com expiresAt vencido (sem renovação pendente). */
+exports.expireCourseAccesses = functions.pubsub
+  .schedule('15 0 * * *')
+  .timeZone('America/Sao_Paulo')
+  .onRun(async () => {
+    const db = admin.firestore()
+    const now = admin.firestore.Timestamp.now()
+    const snap = await db
+      .collection('courseEntitlements')
+      .where('status', '==', 'active')
+      .where('lifetime', '==', false)
+      .where('expiresAt', '<=', now)
+      .get()
+
+    let expired = 0
+    for (const docSnap of snap.docs) {
+      const data = docSnap.data()
+      // Auto-renew: deixa o job de renovação tentar primeiro; se já passou 2 dias, expira
+      if (data.autoRenew && data.expiresAt) {
+        const exp = data.expiresAt.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt)
+        const grace = new Date(exp.getTime() + 2 * 24 * 60 * 60 * 1000)
+        if (grace > new Date()) continue
+      }
+      try {
+        await revokeCourseAccess(db, admin.firestore.FieldValue, {
+          userId: data.userId,
+          courseId: data.courseId,
+          reason: 'expired',
+        })
+        expired += 1
+      } catch (err) {
+        console.error('Falha ao expirar entitlement', docSnap.id, err)
+      }
+    }
+    console.log(`expireCourseAccesses: ${expired} acessos expirados`)
+    return null
+  })
+
+/**
+ * Renovações automáticas: cria cobrança Checkout Pro (cartão) e notifica o usuário.
+ * A assinatura MP (PreApproval) renova sozinha; este job cobre quem marcou autoRenew
+ * e ainda precisa renovar via preferência quando a assinatura falhar / não existir.
+ */
+exports.processCourseAutoRenewals = functions.pubsub
+  .schedule('0 8 * * *')
+  .timeZone('America/Sao_Paulo')
+  .onRun(async () => {
+    const db = admin.firestore()
+    const now = new Date()
+    const inThreeDays = admin.firestore.Timestamp.fromDate(
+      new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
+    )
+
+    const snap = await db
+      .collection('courseEntitlements')
+      .where('status', '==', 'active')
+      .where('autoRenew', '==', true)
+      .where('lifetime', '==', false)
+      .where('expiresAt', '<=', inThreeDays)
+      .get()
+
+    let notified = 0
+    for (const docSnap of snap.docs) {
+      const data = docSnap.data()
+      if (!data.userId || !data.courseId) continue
+      if (data.preapprovalId) {
+        // Assinatura MP ativa — cobrança recorrente cuidará da renovação
+        continue
+      }
+
+      try {
+        const userSnap = await db.collection('users').doc(data.userId).get()
+        if (!userSnap.exists) continue
+        const user = userSnap.data()
+        const courseSnap = await db.collection('courses').doc(data.courseId).get()
+        const course = courseSnap.exists ? courseSnap.data() : {}
+        const amount = data.amount || course.price || 99.9
+        const txnId = `REN-${Date.now()}-${data.userId.slice(0, 6)}`
+
+        await db.collection('transactions').doc(txnId).set({
+          userId: data.userId,
+          userEmail: user.email || null,
+          userName: user.displayName || null,
+          productName: course.name || 'Renovação de curso',
+          amount,
+          paymentMethod: 'card',
+          status: 'pending',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          transactionId: txnId,
+          courseId: data.courseId,
+          courseDuration: data.courseDuration || course.courseDuration || null,
+          autoRenew: true,
+          isRenewal: true,
+        })
+
+        await db.collection('users').doc(data.userId).collection('notifications').add({
+          type: 'course_renewal',
+          title: 'Renovação do seu curso',
+          message: `Seu acesso a "${course.name || 'curso'}" vence em breve. Com a renovação automática ativada, conclua o pagamento no Mercado Pago para manter o acesso.`,
+          courseId: data.courseId,
+          transactionId: txnId,
+          href: `/pagamento?course=${encodeURIComponent(data.courseId)}&txn=${encodeURIComponent(txnId)}&renew=1`,
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+
+        await docSnap.ref.set(
+          {
+            renewalNotifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+            pendingRenewalTransactionId: txnId,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
+        notified += 1
+      } catch (err) {
+        console.error('Falha auto-renew', docSnap.id, err)
+      }
+    }
+
+    console.log(`processCourseAutoRenewals: ${notified} avisos/transações de renovação`)
+    return null
+  })
 
 // ============================================
 // IA DE NOTÍCIAS DE CONCURSOS

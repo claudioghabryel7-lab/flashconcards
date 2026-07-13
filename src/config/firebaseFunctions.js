@@ -21,6 +21,7 @@ export const FIREBASE_FUNCTIONS = {
   
   // Função para criar pagamento PIX real no Mercado Pago
   createPixPayment: `${FIREBASE_FUNCTIONS_BASE_URL}/createPixPayment`,
+  createCheckoutPreference: `${FIREBASE_FUNCTIONS_BASE_URL}/createCheckoutPreference`,
   
   // Função para enviar email personalizado de redefinição de senha
   sendPasswordResetEmail: `${FIREBASE_FUNCTIONS_BASE_URL}/sendPasswordResetEmail`,

@@ -63,7 +63,7 @@ const CourseSelector = () => {
 
     const course = courses.find((c) => c.id === selectedCourseId)
     if (course && !hasPurchasedCourse(profile, course.id) && course.id !== 'alego-default') {
-      navigate(`/adquirir/${course.id}`)
+      navigate(`/curso/${course.id}`)
       return
     }
 
@@ -169,7 +169,7 @@ const CourseSelector = () => {
                   type="button"
                   onClick={() => {
                     if (!owned && course.id !== 'alego-default') {
-                      navigate(`/adquirir/${course.id}`)
+                      navigate(`/curso/${course.id}`)
                       return
                     }
                     setSelectedCourseId(course.id)
@@ -210,7 +210,7 @@ const CourseSelector = () => {
                     </div>
                         {!owned && course.id !== 'alego-default' && (
                           <a
-                            href={`/adquirir/${course.id}`}
+                            href={`/curso/${course.id}`}
                             onClick={(e) => e.stopPropagation()}
                             className="shrink-0 rounded-lg bg-accent-orange px-3 py-2 text-xs font-bold text-background-primary hover:bg-accent-orange-dim transition-colors"
                           >

@@ -13,7 +13,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { db } from '../firebase/config'
-import { formatCoursePrice } from '../utils/courseAccess'
+import { formatCoursePrice, getCourseAccessLabel } from '../utils/courseAccess'
 
 const benefits = [
   {
@@ -39,7 +39,8 @@ const benefits = [
 ]
 
 const CourseShare = () => {
-  const { courseId } = useParams()
+  const params = useParams()
+  const courseId = params.courseId || params.id
   const [course, setCourse] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -77,7 +78,7 @@ const CourseShare = () => {
     if (!course || !courseId) return
 
     try {
-      const shareUrl = `${window.location.origin}/adquirir/${courseId}`
+      const shareUrl = `${window.location.origin}/curso/${courseId}`
       const imageUrl = course.imageBase64 || course.imageUrl || ''
       const seoDescription = course.description
         ? `${course.description} Curso completo ${course.name} para ${course.competition || 'concursos públicos'}.`
@@ -136,6 +137,7 @@ const CourseShare = () => {
 
   const imageSrc = course.imageBase64 || course.imageUrl || ''
   const priceLabel = formatCoursePrice(course.price) || `R$ ${(course.price ?? 99.9).toFixed(2).replace('.', ',')}`
+  const accessInfo = getCourseAccessLabel(course)
   const hasDiscount =
     typeof course.originalPrice === 'number' &&
     typeof course.price === 'number' &&
@@ -151,7 +153,7 @@ const CourseShare = () => {
         }}
       />
 
-      <main className="cp-container relative z-10 py-8 sm:py-12">
+      <div className="relative z-10 w-full py-6 sm:py-10">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -160,7 +162,7 @@ const CourseShare = () => {
         >
           <div className="mb-6 flex flex-wrap items-center gap-2">
             <span className="cp-badge cp-badge-accent inline-flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5" /> Acesso vitalício
+              <Zap className="h-3.5 w-3.5" /> {accessInfo.badge}
             </span>
             <span className="cp-badge cp-badge-cyan inline-flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5" /> Engine preditiva
@@ -256,11 +258,10 @@ const CourseShare = () => {
                   <p className="text-4xl font-black tracking-tight text-cp-accent sm:text-5xl">
                     {priceLabel}
                   </p>
-                  {course.courseDuration ? (
-                    <p className="mt-2 text-xs text-cp-muted">Duração: {course.courseDuration}</p>
-                  ) : (
-                    <p className="mt-2 text-xs text-cp-muted">Pagamento único · acesso liberado na hora</p>
-                  )}
+                  <p className="mt-2 text-sm font-semibold text-cp-text">
+                    Tempo de acesso: {accessInfo.short}
+                  </p>
+                  <p className="mt-1 text-xs text-cp-muted">{accessInfo.summary}</p>
                 </div>
 
                 <p className="mt-5 text-sm leading-relaxed text-cp-muted">
@@ -286,7 +287,7 @@ const CourseShare = () => {
             </div>
           </div>
         </motion.div>
-      </main>
+      </div>
     </div>
   )
 }

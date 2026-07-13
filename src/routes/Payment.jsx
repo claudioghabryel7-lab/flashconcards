@@ -15,15 +15,68 @@ import { doc, setDoc, getDoc, collection, serverTimestamp, onSnapshot } from 'fi
 import { db } from '../firebase/config'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { trackGoogleAdsConversion } from '../utils/googleAds'
+import { getCourseAccessLabel } from '../utils/courseAccess'
+
+const PAYMENT_BRANDS = [
+  { src: '/pay-mercadopago.png', alt: 'Mercado Pago' },
+  { src: '/pay-visa.png', alt: 'Visa' },
+  { src: '/pay-mastercard.png', alt: 'Mastercard' },
+  { src: '/pay-elo.png', alt: 'Elo' },
+]
+
+const COURSE_FEATURES = [
+  {
+    title: 'Edital verticalizado',
+    desc: 'Checklist completo por disciplina e tópico',
+    tone: 'from-cyan-500/20 to-blue-500/5',
+  },
+  {
+    title: 'Flashcards com IA',
+    desc: 'Repetição espaçada no padrão da banca',
+    tone: 'from-emerald-500/20 to-teal-500/5',
+  },
+  {
+    title: 'Questões preditivas',
+    desc: 'Treino no estilo real da prova',
+    tone: 'from-orange-500/20 to-amber-500/5',
+  },
+  {
+    title: 'Guia Mentorado',
+    desc: 'Cronograma e revisão guiada',
+    tone: 'from-violet-500/20 to-purple-500/5',
+  },
+  {
+    title: 'Véspera de Prova',
+    desc: 'Revisão final antes do dia D',
+    tone: 'from-pink-500/20 to-rose-500/5',
+  },
+  {
+    title: 'Simulados',
+    desc: 'Métricas e desempenho em tempo real',
+    tone: 'from-lime-500/20 to-green-500/5',
+  },
+  {
+    title: 'Professor IA',
+    desc: 'Dúvidas e correções assistidas',
+    tone: 'from-sky-500/20 to-cyan-500/5',
+  },
+  {
+    title: 'Trilha de estudo',
+    desc: 'Ciclo, metas e foco por matéria',
+    tone: 'from-fuchsia-500/20 to-pink-500/5',
+  },
+]
 
 const Payment = () => {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   
   // Estados
-  const [email, setEmail] = useState(user?.email || '')
-  const [name, setName] = useState('')
+  const [email, setEmail] = useState(user?.email || profile?.email || '')
+  const [name, setName] = useState(user?.displayName || profile?.displayName || '')
+  const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('pix') // 'pix' ou 'card'
   const [installments, setInstallments] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -35,7 +88,15 @@ const Payment = () => {
   const [currentTransactionId, setCurrentTransactionId] = useState('') // ID da transação atual
   const [selectedCourse, setSelectedCourse] = useState(null) // Curso selecionado
   
-  // Dados do cartão
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [reviewRating, setReviewRating] = useState(5)
+  const [reviewComment, setReviewComment] = useState('')
+  const [reviewSending, setReviewSending] = useState(false)
+  const [reviewDone, setReviewDone] = useState(false)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [autoRenew, setAutoRenew] = useState(false)
+  
+  // Dados do cartão (legado — checkout cartão vai para Mercado Pago)
   const [cardData, setCardData] = useState({
     number: '',
     name: '',
@@ -44,6 +105,13 @@ const Payment = () => {
     installments: 1
   })
   
+  // Prefill conta quando o auth carregar
+  useEffect(() => {
+    if (user?.email) setEmail((prev) => prev || user.email)
+    const display = user?.displayName || profile?.displayName
+    if (display) setName((prev) => prev || display)
+  }, [user?.email, user?.displayName, profile?.displayName])
+
   // Carregar curso se houver courseId na URL
   useEffect(() => {
     const courseId = searchParams.get('course')
@@ -63,6 +131,67 @@ const Payment = () => {
         }
       }
       loadCourse()
+    }
+  }, [searchParams])
+
+  // Retorno do Checkout Pro (cartão / Mercado Pago)
+  useEffect(() => {
+    const status = searchParams.get('status')
+    const txn = searchParams.get('txn')
+    if (!status || !txn) return
+
+    setCurrentTransactionId(txn)
+
+    if (status === 'failure') {
+      setPaymentStatus('error')
+      setErrorMessage('Pagamento não concluído. Você pode tentar novamente.')
+      setLoading(false)
+      return
+    }
+
+    if (status === 'pending') {
+      setPaymentMethod('card')
+      setPaymentStatus('pending')
+      setLoading(false)
+      return
+    }
+
+    if (status === 'success') {
+      setPaymentStatus('pending')
+      setLoading(true)
+      const transactionRef = doc(db, 'transactions', txn)
+      const unsubscribe = onSnapshot(transactionRef, async (snapshot) => {
+        if (!snapshot.exists()) return
+        const data = snapshot.data()
+        if (data.status === 'paid') {
+          setPaymentStatus('success')
+          setLoading(false)
+          trackGoogleAdsConversion(null, data.amount || 99.9, txn)
+          if (data.userEmail) {
+            setCreatedCredentials({
+              email: data.userEmail,
+              password: 'Senha enviada por email',
+            })
+          }
+          unsubscribe()
+        } else if (data.status === 'cancelled') {
+          setPaymentStatus('error')
+          setErrorMessage('Pagamento cancelado.')
+          setLoading(false)
+          unsubscribe()
+        }
+      })
+
+      // Se o webhook atrasar, mostrar sucesso otimista após retorno approved
+      const timer = setTimeout(() => {
+        setPaymentStatus((prev) => (prev === 'pending' ? 'success' : prev))
+        setLoading(false)
+      }, 8000)
+
+      return () => {
+        unsubscribe()
+        clearTimeout(timer)
+      }
     }
   }, [searchParams])
   
@@ -272,26 +401,66 @@ const Payment = () => {
     setErrorMessage('')
     
     try {
-      if (paymentMethod === 'card' && !validateCardData()) {
+      if (!acceptedTerms) {
+        setErrorMessage('Aceite os termos de acesso e compra para continuar.')
         setLoading(false)
         return
       }
 
-      // Criar transação no Firestore
-      const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      const transactionRef = doc(db, 'transactions', transactionId)
-      
-      // Validar email
-      if (!email || !email.includes('@')) {
+      const emailTrim = (email || '').toLowerCase().trim()
+      if (!emailTrim || !emailTrim.includes('@')) {
         setErrorMessage('Por favor, informe um email válido.')
         setLoading(false)
         return
       }
 
+      const nameTrim = (name || '').trim()
+      if (!nameTrim || nameTrim.length < 2) {
+        setErrorMessage('Informe seu nome completo.')
+        setLoading(false)
+        return
+      }
+
+      let activeUserId = user?.uid || null
+      if (!user) {
+        if (!password || password.length < 6) {
+          setErrorMessage('Crie uma senha com pelo menos 6 caracteres.')
+          setLoading(false)
+          return
+        }
+        if (password !== passwordConfirm) {
+          setErrorMessage('As senhas não coincidem.')
+          setLoading(false)
+          return
+        }
+        try {
+          const accountResult = await createUserAccount(emailTrim, nameTrim, password, null)
+          activeUserId = accountResult?.uid || accountResult?.userId || null
+          if (!activeUserId) throw new Error('Não foi possível criar a conta.')
+          setCreatedCredentials({ email: emailTrim, password })
+        } catch (accountErr) {
+          console.error('Erro ao criar conta:', accountErr)
+          setErrorMessage(
+            accountErr?.code === 'auth/email-already-in-use' ||
+              String(accountErr?.message || '').includes('email-already-in-use')
+              ? 'Este email já possui conta. Faça login e tente novamente.'
+              : accountErr?.message || 'Erro ao criar conta. Tente outro email ou faça login.',
+          )
+          setLoading(false)
+          return
+        }
+      }
+
+      // Criar transação no Firestore
+      const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      const transactionRef = doc(db, 'transactions', transactionId)
+
+      const accessInfo = getCourseAccessLabel(selectedCourse)
+
       const transactionData = {
-        userId: user?.uid || null,
-        userEmail: email.toLowerCase().trim(),
-        userName: name || email.split('@')[0],
+        userId: activeUserId,
+        userEmail: emailTrim,
+        userName: nameTrim,
         productName: product.name,
         amount: product.price,
         originalAmount: product.originalPrice,
@@ -302,19 +471,20 @@ const Payment = () => {
         status: 'pending',
         createdAt: serverTimestamp(),
         transactionId,
-        courseId: product.courseId, // ID do curso comprado
-        competition: product.competition, // Nome do concurso
-        // Para cartão, salvar últimos 4 dígitos
-        ...(paymentMethod === 'card' && {
-          cardLastDigits: cardData.number.slice(-4)
-        })
+        courseId: product.courseId,
+        competition: product.competition,
+        courseDuration: selectedCourse?.courseDuration || null,
+        courseDurationUnit: selectedCourse?.courseDurationUnit || null,
+        courseDurationValue: selectedCourse?.courseDurationValue ?? null,
+        accessLabel: accessInfo.short,
+        autoRenew: paymentMethod === 'card' && accessInfo.canAutoRenew && autoRenew,
+        termsAcceptedAt: serverTimestamp(),
       }
 
       await setDoc(transactionRef, transactionData)
+      setCurrentTransactionId(transactionId)
 
-      // Processar pagamento baseado no método
       if (paymentMethod === 'pix') {
-        // PIX: criar pagamento real no Mercado Pago
         let pixResponse = null
         try {
           pixResponse = await fetch(FIREBASE_FUNCTIONS.createPixPayment, {
@@ -326,13 +496,12 @@ const Payment = () => {
               amount: product.price,
               description: product.name,
               transactionId: transactionId,
-              userEmail: email.toLowerCase().trim(),
-              userName: name || email.split('@')[0],
+              userEmail: emailTrim,
+              userName: nameTrim,
             })
           })
 
           if (!pixResponse.ok) {
-            // Tentar ler mensagem de erro da resposta
             let errorData = {}
             try {
               errorData = await pixResponse.json()
@@ -340,11 +509,10 @@ const Payment = () => {
               errorData = { message: pixResponse.statusText || 'Erro desconhecido' }
             }
             
-            // Verificar se é erro de PIX não habilitado
             if (errorData.code === 'PIX_NOT_ENABLED' || errorData.message?.includes('PIX não habilitado')) {
-              setErrorMessage('PIX não está habilitado na sua conta do Mercado Pago. Entre em contato com o suporte ou habilite o PIX nas configurações da conta.')
+              setErrorMessage('PIX não está habilitado na conta do Mercado Pago (ambiente de teste). Use cartão no checkout MP ou habilite PIX no painel.')
             } else {
-              setErrorMessage(errorData.message || errorData.error || 'Erro ao gerar código PIX. Tente novamente ou entre em contato com o suporte.')
+              setErrorMessage(errorData.message || errorData.error || 'Erro ao gerar código PIX. Tente novamente.')
             }
             setLoading(false)
             setPaymentStatus('error')
@@ -354,7 +522,6 @@ const Payment = () => {
           const pixData = await pixResponse.json()
 
           if (pixData.success && pixData.pixCopyPaste) {
-            // Atualizar transação com dados do PIX
             await setDoc(transactionRef, {
               mercadopagoPaymentId: pixData.paymentId,
               pixQrCode: pixData.pixQrCode,
@@ -363,30 +530,21 @@ const Payment = () => {
               mercadopagoStatus: pixData.status,
             }, { merge: true })
 
-            // Salvar código PIX copia-e-cola (sempre usar este para gerar QR Code)
             const pixCopyPasteCode = pixData.pixCopyPaste || ''
-            setPixCode(pixCopyPasteCode) // Código PIX copia-e-cola (string que começa com "000201...")
+            setPixCode(pixCopyPasteCode)
             
-            // Validar que pixQrCode é realmente uma imagem base64, não o código PIX
-            // O código PIX copia-e-cola começa com "000201" - NÃO é base64 de imagem
-            // Imagens base64 de PNG começam com "iVBORw0KGgo"
             let qrCodeBase64 = ''
             if (pixData.pixQrCode && typeof pixData.pixQrCode === 'string') {
               const qrCode = pixData.pixQrCode.trim()
-              // Verificar se é código PIX (começa com "000201") - se for, ignorar
               if (qrCode.startsWith('000201')) {
-                console.warn('pixQrCode é código PIX, não imagem base64. Ignorando.')
-                qrCodeBase64 = '' // Não usar, vamos gerar do código PIX
+                qrCodeBase64 = ''
               } else if (qrCode.startsWith('iVBORw0KGgo') || qrCode.startsWith('/9j/')) {
-                // É realmente uma imagem base64 válida
                 qrCodeBase64 = qrCode
               } else if (qrCode.length > 500) {
-                // Muito longo, provavelmente é base64 de imagem
                 qrCodeBase64 = qrCode
               }
             }
-            setPixQrCodeBase64(qrCodeBase64) // Imagem base64 do QR Code (ou vazio)
-            setCurrentTransactionId(transactionId)
+            setPixQrCodeBase64(qrCodeBase64)
             setPaymentStatus('pending')
             setLoading(false)
           } else {
@@ -394,44 +552,43 @@ const Payment = () => {
           }
         } catch (error) {
           console.error('Erro ao criar pagamento PIX:', error)
-          
-          // Tentar ler mensagem de erro da resposta se disponível
-          let errorData = {}
-          if (pixResponse) {
-            try {
-              errorData = await pixResponse.json()
-            } catch (e) {
-              // Se não conseguir fazer parse, usar mensagem padrão
-            }
-          }
-          
-          // Verificar se é erro de PIX não habilitado
-          if (errorData.code === 'PIX_NOT_ENABLED' || 
-              errorData.message?.includes('PIX não habilitado') || 
-              errorData.message?.includes('chave PIX') ||
-              error.message?.includes('PIX não habilitado')) {
-            setErrorMessage(
-              errorData.solution || 
-              errorData.message || 
-              'PIX não está habilitado na sua conta do Mercado Pago. Para habilitar, acesse o painel do Mercado Pago e configure sua chave PIX nas configurações da conta.'
-            )
-          } else {
-            setErrorMessage(errorData.message || errorData.error || error.message || 'Erro ao gerar código PIX. Tente novamente ou entre em contato com o suporte.')
-          }
-          
+          setErrorMessage(error.message || 'Erro ao gerar código PIX. Tente novamente.')
           setLoading(false)
           setPaymentStatus('error')
         }
       } else {
-        // Cartão: processa pagamento
-        // Em produção: integrar com Mercado Pago SDK
         await processCardPayment(transactionData)
       }
     } catch (error) {
       console.error('Erro ao processar pagamento:', error)
-      setErrorMessage('Erro ao processar pagamento. Tente novamente.')
+      setErrorMessage(error.message || 'Erro ao processar pagamento. Tente novamente.')
       setLoading(false)
       setPaymentStatus('error')
+    }
+  }
+
+  const submitPurchaseReview = async () => {
+    if (reviewSending || reviewDone) return
+    setReviewSending(true)
+    try {
+      const reviewId = `${currentTransactionId || Date.now()}-${user?.uid || 'guest'}`
+      await setDoc(doc(db, 'purchaseReviews', reviewId), {
+        transactionId: currentTransactionId || null,
+        courseId: product.courseId || null,
+        courseName: product.name || null,
+        userId: user?.uid || null,
+        userEmail: email || user?.email || null,
+        rating: reviewRating,
+        comment: reviewComment.trim(),
+        createdAt: serverTimestamp(),
+      })
+      setReviewDone(true)
+      setReviewOpen(false)
+    } catch (err) {
+      console.error('Erro ao enviar avaliação:', err)
+      setErrorMessage('Não foi possível enviar a avaliação. Tente de novo.')
+    } finally {
+      setReviewSending(false)
     }
   }
 
@@ -464,7 +621,10 @@ const Payment = () => {
       })
 
       if (!response.ok) {
-        throw new Error('Erro ao criar conta')
+        const errBody = await response.json().catch(() => ({}))
+        throw Object.assign(new Error(errBody.message || 'Erro ao criar conta'), {
+          code: errBody.code,
+        })
       }
 
       return await response.json()
@@ -505,345 +665,365 @@ const Payment = () => {
   }
 
   const processCardPayment = async (transactionData) => {
-    // SIMULAÇÃO: Em produção, aqui você faria a chamada real ao Mercado Pago
-    
-    // Simular delay de processamento
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    // Simular sucesso (em produção, você verifica a resposta do gateway)
-    const success = Math.random() > 0.1 // 90% de sucesso
-    
-    if (success) {
-      // Atualizar transação como paga
-      const transactionRef = doc(db, 'transactions', transactionData.transactionId)
-      await setDoc(transactionRef, {
-        ...transactionData,
-        status: 'paid',
-        paidAt: serverTimestamp()
-      }, { merge: true })
-      
-      // Criar conta automaticamente se usuário não estiver logado
-      if (!user) {
-        try {
-          const password = generateRandomPassword()
-          const accountResult = await createUserAccount(
-            transactionData.userEmail, 
-            transactionData.userName, 
-            password,
-            transactionData.transactionId
-          )
-          
-          // Se a função Firebase falhou, usar fallback e salvar senha para enviar depois
-          if (!accountResult || !accountResult.uid) {
-            throw new Error('Falha ao criar conta')
-          }
-          
-          // Atualizar transação com userId criado
-          await setDoc(transactionRef, {
-            userId: accountResult.uid || accountResult.userId,
-          }, { merge: true })
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const courseQuery = product.courseId ? `&course=${encodeURIComponent(product.courseId)}` : ''
+    const txn = encodeURIComponent(transactionData.transactionId)
 
-          // Ativar acesso ao curso específico
-          const userId = accountResult.uid || accountResult.userId
-          if (userId) {
-            const userRef = doc(db, 'users', userId)
-            const userDoc = await getDoc(userRef)
-            const currentData = userDoc.exists() ? userDoc.data() : {}
-            const purchasedCourses = currentData.purchasedCourses || []
-            
-            // Adicionar curso comprado se não estiver na lista
-            if (transactionData.courseId && !purchasedCourses.includes(transactionData.courseId)) {
-              purchasedCourses.push(transactionData.courseId)
-            }
-            
-            await setDoc(userRef, {
-              hasActiveSubscription: true,
-              subscriptionStartDate: serverTimestamp(),
-              lastPaymentDate: serverTimestamp(),
-              purchasedCourses: purchasedCourses
-            }, { merge: true })
-          }
+    const preferenceResponse = await fetch(FIREBASE_FUNCTIONS.createCheckoutPreference, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: product.price,
+        description: product.name,
+        transactionId: transactionData.transactionId,
+        userEmail: transactionData.userEmail,
+        userName: transactionData.userName,
+        courseId: product.courseId,
+        courseDuration: selectedCourse?.courseDuration || null,
+        courseDurationUnit: selectedCourse?.courseDurationUnit || null,
+        courseDurationValue: selectedCourse?.courseDurationValue ?? null,
+        autoRenew: Boolean(transactionData.autoRenew),
+        successUrl: `${origin}/pagamento?status=success&txn=${txn}${courseQuery}`,
+        failureUrl: `${origin}/pagamento?status=failure&txn=${txn}${courseQuery}`,
+        pendingUrl: `${origin}/pagamento?status=pending&txn=${txn}${courseQuery}`,
+      }),
+    })
 
-          // Salvar credenciais para exibir
-          setCreatedCredentials({
-            email: transactionData.userEmail,
-            password: password
-          })
-        } catch (error) {
-          console.error('Erro ao criar conta:', error)
-          setErrorMessage('Pagamento aprovado, mas houve erro ao criar conta. Entre em contato com o suporte.')
-        }
-      } else {
-        // Usuário já logado - apenas ativar acesso ao curso específico
-        const userRef = doc(db, 'users', user.uid)
-        const userDoc = await getDoc(userRef)
-        if (userDoc.exists()) {
-          const currentData = userDoc.data()
-          const purchasedCourses = currentData.purchasedCourses || []
-          
-          // Adicionar curso comprado se não estiver na lista
-          if (transactionData.courseId && !purchasedCourses.includes(transactionData.courseId)) {
-            purchasedCourses.push(transactionData.courseId)
-          }
-          
-          await setDoc(userRef, {
-            ...currentData,
-            hasActiveSubscription: true,
-            subscriptionStartDate: serverTimestamp(),
-            lastPaymentDate: serverTimestamp(),
-            purchasedCourses: purchasedCourses
-          }, { merge: true })
-        }
-      }
-      
-      // Rastrear conversão no Google Ads
-      trackGoogleAdsConversion(null, transactionData.amount || product.price, transactionData.transactionId)
-      
-      setPaymentStatus('success')
-    } else {
-      setErrorMessage('Pagamento recusado. Verifique os dados do cartão.')
-      setPaymentStatus('error')
+    const preferenceData = await preferenceResponse.json().catch(() => ({}))
+    if (!preferenceResponse.ok || !preferenceData.checkoutUrl) {
+      throw new Error(
+        preferenceData.message ||
+          preferenceData.error ||
+          'Não foi possível abrir o checkout do Mercado Pago.',
+      )
     }
-    
-    setLoading(false)
+
+    await setDoc(doc(db, 'transactions', transactionData.transactionId), {
+      mercadopagoPreferenceId: preferenceData.preferenceId || null,
+      mercadopagoPreapprovalId: preferenceData.preapprovalId || null,
+      mercadopagoCheckoutUrl: preferenceData.checkoutUrl,
+      mercadopagoCheckoutMode: preferenceData.mode || 'checkout',
+      mercadopagoTestMode: preferenceData.testMode === true,
+      autoRenew: Boolean(transactionData.autoRenew),
+    }, { merge: true })
+
+    window.location.href = preferenceData.checkoutUrl
   }
 
+  const inputClass =
+    'w-full rounded-xl border border-cp-border bg-[var(--cp-bg)]/60 px-4 py-3 text-sm text-cp-text outline-none transition placeholder:text-cp-muted focus:border-cp-accent/50 focus:ring-2 focus:ring-cp-accent/20'
+  const labelClass = 'mb-2 block text-sm font-semibold text-cp-text'
+  const courseImage = selectedCourse?.imageBase64 || selectedCourse?.imageUrl || ''
+  const hasDiscount = product.discount > 0 && product.originalPrice > product.price
+  const accessInfo = getCourseAccessLabel(selectedCourse)
+
   return (
-    <div className="min-h-screen py-8 sm:py-12">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6">
-        {/* Header */}
+    <div className="relative w-full overflow-hidden text-cp-text">
+      <div
+        className="pointer-events-none absolute inset-0 -z-10 opacity-40"
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(34,211,238,0.16), transparent), radial-gradient(ellipse 50% 40% at 0% 80%, rgba(251,146,60,0.1), transparent)',
+        }}
+      />
+
+      <div className="relative z-10 w-full py-8 sm:py-12">
         <motion.div
-          initial={{ opacity: 0, y: -20 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
+          transition={{ duration: 0.45 }}
+          className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
         >
-          <h1 className="text-3xl sm:text-4xl font-black mb-2 bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent">
-            Finalizar Compra
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400">
-            Garanta sua promoção e comece a estudar hoje mesmo
-          </p>
+          <div className="max-w-2xl">
+            <span className="cp-badge cp-badge-accent mb-3 inline-flex">Checkout seguro</span>
+            <h1 className="cp-headline text-3xl sm:text-4xl">Finalizar compra</h1>
+            <p className="mt-2 text-sm text-cp-muted sm:text-base">
+              Pagamento único. Acesso liberado assim que a confirmação chegar.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
+            {PAYMENT_BRANDS.map((brand) => (
+              <img
+                key={brand.src}
+                src={brand.src}
+                alt={brand.alt}
+                className="h-9 w-auto object-contain sm:h-11"
+              />
+            ))}
+          </div>
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Resumo do Pedido */}
-          <div className="lg:col-span-1">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="rounded-2xl bg-white dark:bg-slate-800 shadow-xl overflow-hidden"
-            >
-              {/* Imagem do curso */}
-              {selectedCourse && (selectedCourse.imageBase64 || selectedCourse.imageUrl) && (
-                <div className="w-full h-48 overflow-hidden">
-                  <img
-                    src={selectedCourse.imageBase64 || selectedCourse.imageUrl}
-                    alt={selectedCourse.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
-              
-              <div className="p-6">
-                <div className="mb-4">
-                  <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 px-3 py-1 text-xs font-bold text-white mb-3">
-                    <span>🔥 PROMOÇÃO</span>
-                  </div>
-                  <h3 className="text-xl font-bold mb-2 text-slate-900 dark:text-white">{product.name}</h3>
-                  
-                  {/* Descrição do curso */}
-                  {selectedCourse && selectedCourse.description && (
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 line-clamp-3">
-                      {selectedCourse.description}
-                    </p>
-                  )}
-                  
-                  <div className="space-y-1">
-                    <p className="text-sm text-slate-400 line-through">
-                      {formatCurrency(product.originalPrice)}
-                    </p>
-                    <p className="text-3xl font-black text-rose-600 dark:text-rose-400">
-                      {formatCurrency(product.price)}
-                    </p>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      Economize {formatCurrency(product.discount)}
-                    </p>
-                  </div>
-                </div>
-
-              {/* Método de pagamento selecionado */}
-              {paymentMethod === 'card' && installments > 1 && (
-                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">
-                    {installments}x de {formatCurrency(calculateInstallmentValue(product.price, installments))}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-500">
-                    Total: {formatCurrency(calculateInstallmentValue(product.price, installments) * installments)}
-                  </p>
-                </div>
-              )}
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
+          <motion.aside
+            initial={{ opacity: 0, x: -12 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="w-full shrink-0 overflow-hidden rounded-3xl border border-cp-border bg-cp-surface/70 shadow-[0_0_50px_-24px_rgba(34,211,238,0.4)] backdrop-blur-sm lg:w-[420px]"
+          >
+            {courseImage ? (
+              <div className="relative h-44 w-full overflow-hidden sm:h-52">
+                <img src={courseImage} alt={product.name} className="h-full w-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[var(--cp-bg)] via-transparent to-transparent" />
               </div>
-            </motion.div>
-          </div>
+            ) : null}
 
-          {/* Formulário de Pagamento */}
-          <div className="lg:col-span-2">
+            <div className="space-y-4 p-5 sm:p-6">
+              {product.competition ? (
+                <span className="cp-badge cp-badge-cyan inline-flex">{product.competition}</span>
+              ) : (
+                <span className="cp-badge cp-badge-accent inline-flex">Oferta ativa</span>
+              )}
+
+              <div>
+                <h2 className="text-xl font-bold text-cp-text">{product.name}</h2>
+                {selectedCourse?.description ? (
+                  <p className="mt-2 line-clamp-4 text-sm leading-relaxed text-cp-muted">
+                    {selectedCourse.description}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="rounded-2xl border border-cp-accent/20 bg-cp-accent/5 p-4">
+                {hasDiscount ? (
+                  <p className="text-sm text-cp-muted line-through">
+                    {formatCurrency(product.originalPrice)}
+                  </p>
+                ) : null}
+                <p className="text-3xl font-black tracking-tight text-cp-accent">
+                  {formatCurrency(product.price)}
+                </p>
+                <p className="mt-2 text-sm font-semibold text-cp-text">
+                  Tempo de acesso: {accessInfo.short}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-cp-muted">{accessInfo.summary}</p>
+                {!accessInfo.isLifetime ? (
+                  <p className="mt-2 text-xs text-cp-accent">
+                    Expira automaticamente ao fim do período. No cartão, você pode ativar renovação
+                    automática.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4">
+                <h3 className="text-sm font-bold text-emerald-300">Garantia de 7 dias</h3>
+                <p className="mt-1.5 text-xs leading-relaxed text-cp-muted">
+                  Se você não ficar satisfeito, solicite o reembolso integral em até 7 dias após a
+                  compra. Sem burocracia.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 border-t border-cp-border pt-4 sm:gap-3">
+                {PAYMENT_BRANDS.map((brand) => (
+                  <img
+                    key={brand.src}
+                    src={brand.src}
+                    alt={brand.alt}
+                    className="h-8 w-auto object-contain"
+                  />
+                ))}
+              </div>
+            </div>
+          </motion.aside>
+
+          <div className="min-w-0 w-full flex-1">
             <AnimatePresence mode="wait">
               {paymentStatus === 'success' ? (
                 <motion.div
                   key="success"
-                  initial={{ opacity: 0, scale: 0.95 }}
+                  initial={{ opacity: 0, scale: 0.97 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="rounded-2xl bg-white dark:bg-slate-800 p-8 shadow-xl text-center"
+                  exit={{ opacity: 0, scale: 0.97 }}
+                  className="rounded-3xl border border-cp-border bg-cp-surface/80 p-6 text-center sm:p-8"
                 >
-                  <CheckCircleIcon className="h-20 w-20 text-emerald-500 mx-auto mb-4" />
-                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-                    Pagamento Confirmado!
-                  </h2>
-                  <p className="text-slate-600 dark:text-slate-400 mb-6">
-                    Seu pagamento foi processado com sucesso.
+                  <CheckCircleIcon className="mx-auto mb-4 h-16 w-16 text-emerald-400" />
+                  <h2 className="cp-headline text-2xl">Pagamento confirmado</h2>
+                  <p className="mt-2 text-sm text-cp-muted">
+                    Seu acesso foi liberado. Entre e comece a estudar agora.
                   </p>
 
-                  {/* Mostrar credenciais se conta foi criada */}
-                  {createdCredentials && (
-                    <div className="mb-6 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-6 text-left">
-                      <h3 className="font-bold text-blue-900 dark:text-blue-300 mb-3">
-                        ✅ Sua conta foi criada! Confira suas credenciais:
-                      </h3>
+                  {createdCredentials ? (
+                    <div className="mt-6 rounded-2xl border border-cp-accent/25 bg-cp-accent/5 p-5 text-left">
+                      <h3 className="mb-3 text-sm font-bold text-cp-text">Conta criada</h3>
                       <div className="space-y-3">
                         <div>
-                          <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                            Email de acesso:
-                          </p>
+                          <p className="mb-1 text-xs font-semibold text-cp-muted">Email de acesso</p>
                           <div className="flex gap-2">
                             <input
                               type="text"
                               readOnly
                               value={createdCredentials.email}
-                              className="flex-1 rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-slate-800 p-2 text-sm font-mono"
+                              className={`${inputClass} font-mono`}
                             />
                             <button
+                              type="button"
                               onClick={() => {
                                 navigator.clipboard.writeText(createdCredentials.email)
                                 alert('Email copiado!')
                               }}
-                              className="rounded-lg bg-blue-600 px-3 py-2 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+                              className="shrink-0 rounded-xl border border-cp-border px-3 py-2 text-sm font-semibold text-cp-text transition hover:border-cp-accent/40 hover:bg-cp-accent/10"
                             >
                               Copiar
                             </button>
                           </div>
                         </div>
                         <div>
-                          <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                            Senha:
-                          </p>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              readOnly
-                              value={createdCredentials.password || 'Verifique seu email'}
-                              className="flex-1 rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-slate-800 p-2 text-sm"
-                            />
-                            {createdCredentials.password && createdCredentials.password !== 'Senha enviada por email' && (
-                              <button
-                                onClick={() => {
-                                  navigator.clipboard.writeText(createdCredentials.password)
-                                  alert('Senha copiada!')
-                                }}
-                                className="rounded-lg bg-blue-600 px-3 py-2 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
-                              >
-                                Copiar
-                              </button>
-                            )}
-                          </div>
-                          <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
-                            A senha foi enviada para seu email. Verifique sua caixa de entrada (e spam).
+                          <p className="mb-1 text-xs font-semibold text-cp-muted">Senha</p>
+                          <input
+                            type="text"
+                            readOnly
+                            value={createdCredentials.password || 'Verifique seu email'}
+                            className={inputClass}
+                          />
+                          <p className="mt-2 text-xs text-cp-muted">
+                            A senha foi enviada por email. Confira a caixa de entrada e o spam.
                           </p>
                         </div>
                       </div>
-                      <p className="text-xs text-blue-700 dark:text-blue-400 mt-4">
-                        ⚠️ Guarde essas informações com segurança! Um email também foi enviado para {createdCredentials.email}
-                      </p>
                     </div>
-                  )}
+                  ) : null}
 
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
                     <button
+                      type="button"
                       onClick={() => navigate('/login')}
-                      className="rounded-full bg-alego-600 px-8 py-3 text-white font-semibold hover:bg-alego-700 transition-colors"
+                      className="cp-btn-primary justify-center"
                     >
-                      Fazer Login Agora
+                      Fazer login
                     </button>
-                    {user && (
+                    {user ? (
                       <button
+                        type="button"
                         onClick={() => navigate('/dashboard')}
-                        className="rounded-full bg-slate-600 px-8 py-3 text-white font-semibold hover:bg-slate-700 transition-colors"
+                        className="inline-flex items-center justify-center rounded-xl border border-cp-border px-6 py-3 text-sm font-semibold text-cp-text transition hover:bg-cp-surface"
                       >
-                        Ir para Dashboard
+                        Ir ao dashboard
                       </button>
+                    ) : null}
+                    {!reviewDone ? (
+                      <button
+                        type="button"
+                        onClick={() => setReviewOpen(true)}
+                        className="inline-flex items-center justify-center rounded-xl border border-cp-accent/40 bg-cp-accent/10 px-6 py-3 text-sm font-semibold text-cp-accent transition hover:bg-cp-accent/20"
+                      >
+                        Avaliar compra
+                      </button>
+                    ) : (
+                      <p className="inline-flex items-center justify-center text-sm text-emerald-300">
+                        Obrigado pela avaliação!
+                      </p>
                     )}
                   </div>
+
+                  <AnimatePresence>
+                    {reviewOpen && !reviewDone ? (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-6 overflow-hidden text-left"
+                      >
+                        <div className="rounded-2xl border border-cp-border bg-[var(--cp-bg)]/50 p-5">
+                          <p className="mb-3 text-sm font-semibold text-cp-text">
+                            Como foi sua experiência?
+                          </p>
+                          <div className="mb-4 flex gap-2">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <button
+                                key={star}
+                                type="button"
+                                onClick={() => setReviewRating(star)}
+                                className={`text-2xl transition ${
+                                  star <= reviewRating
+                                    ? 'text-amber-400'
+                                    : 'text-cp-muted/40 hover:text-amber-300/70'
+                                }`}
+                                aria-label={`${star} estrela${star > 1 ? 's' : ''}`}
+                              >
+                                ★
+                              </button>
+                            ))}
+                          </div>
+                          <label className={labelClass}>Comentário (opcional)</label>
+                          <textarea
+                            value={reviewComment}
+                            onChange={(e) => setReviewComment(e.target.value)}
+                            rows={3}
+                            placeholder="Conte o que achou..."
+                            className={`${inputClass} resize-none`}
+                          />
+                          <div className="mt-4 flex flex-wrap gap-3">
+                            <button
+                              type="button"
+                              onClick={submitPurchaseReview}
+                              disabled={reviewSending}
+                              className="cp-btn-primary justify-center disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {reviewSending ? 'Enviando...' : 'Enviar avaliação'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setReviewOpen(false)}
+                              className="inline-flex items-center justify-center rounded-xl border border-cp-border px-5 py-2.5 text-sm font-semibold text-cp-muted transition hover:bg-cp-surface"
+                            >
+                              Agora não
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
                 </motion.div>
               ) : paymentStatus === 'pending' && paymentMethod === 'pix' ? (
                 <motion.div
                   key="pix-pending"
-                  initial={{ opacity: 0, scale: 0.95 }}
+                  initial={{ opacity: 0, scale: 0.97 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="rounded-2xl bg-white dark:bg-slate-800 p-8 shadow-xl"
+                  className="rounded-3xl border border-cp-border bg-cp-surface/80 p-6 sm:p-8"
                 >
-                  <div className="text-center mb-6">
-                    <ArrowPathIcon className="h-16 w-16 text-blue-500 mx-auto mb-4 animate-spin" />
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-                      Aguardando Pagamento PIX
-                    </h2>
-                    <p className="text-slate-600 dark:text-slate-400">
+                  <div className="mb-6 text-center">
+                    <ArrowPathIcon className="mx-auto mb-4 h-12 w-12 animate-spin text-cp-accent" />
+                    <h2 className="cp-headline text-2xl">Aguardando PIX</h2>
+                    <p className="mt-2 text-sm text-cp-muted">
                       Escaneie o QR Code ou copie o código para pagar
                     </p>
                   </div>
-                  
-                  {/* QR Code PIX */}
-                  <div className="bg-white p-4 rounded-xl border-2 border-slate-300 mb-4 flex items-center justify-center">
+
+                  <div className="mb-4 flex items-center justify-center rounded-2xl border border-cp-border bg-white p-4">
                     <div className="text-center">
                       {pixQrCodeBase64 || pixCode ? (
                         <>
-                          <p className="text-xs text-slate-500 mb-2">QR Code PIX</p>
-                          <div className="w-48 h-48 bg-slate-100 rounded-lg mx-auto flex items-center justify-center">
-                            {/* Verificar se pixQrCodeBase64 é realmente uma imagem base64 válida */}
-                            {pixQrCodeBase64 && 
-                             (pixQrCodeBase64.startsWith('iVBORw0KGgo') || 
+                          <p className="mb-2 text-xs text-slate-500">QR Code PIX</p>
+                          <div className="mx-auto flex h-48 w-48 items-center justify-center rounded-lg bg-slate-100">
+                            {pixQrCodeBase64 &&
+                            (pixQrCodeBase64.startsWith('iVBORw0KGgo') ||
                               pixQrCodeBase64.startsWith('/9j/') ||
                               pixQrCodeBase64.length > 500) ? (
-                              // Se tiver imagem base64 válida, exibir diretamente
-                              <img 
+                              <img
                                 src={`data:image/png;base64,${pixQrCodeBase64}`}
                                 alt="QR Code PIX"
-                                className="w-full h-full rounded-lg object-contain"
+                                className="h-full w-full rounded-lg object-contain"
                                 onError={(e) => {
-                                  // Se a imagem base64 falhar, gerar do código
-                                  console.warn('Falha ao exibir imagem base64, gerando QR Code do código PIX')
+                                  console.warn(
+                                    'Falha ao exibir imagem base64, gerando QR Code do código PIX',
+                                  )
                                   if (pixCode && !pixCode.startsWith('iVBORw0KGgo')) {
                                     e.target.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`
                                   } else {
                                     e.target.style.display = 'none'
-                                    e.target.nextSibling.style.display = 'block'
                                   }
                                 }}
                               />
                             ) : pixCode && !pixCode.startsWith('iVBORw0KGgo') ? (
-                              // Se não tiver base64 válida OU código PIX não for base64, gerar QR Code do código PIX
-                              <img 
+                              <img
                                 src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCode)}`}
                                 alt="QR Code PIX"
-                                className="w-full h-full rounded-lg object-contain"
+                                className="h-full w-full rounded-lg object-contain"
                                 onError={(e) => {
                                   console.error('Falha ao gerar QR Code')
                                   e.target.style.display = 'none'
-                                  e.target.nextSibling.style.display = 'block'
                                 }}
                               />
                             ) : (
-                              <div className="text-xs text-slate-500 p-4">
+                              <div className="p-4 text-xs text-slate-500">
                                 QR Code não disponível. Use o código abaixo.
                               </div>
                             )}
@@ -851,28 +1031,26 @@ const Payment = () => {
                         </>
                       ) : (
                         <>
-                          <p className="text-xs text-slate-500 mb-2">Gerando QR Code...</p>
-                          <div className="w-48 h-48 bg-slate-100 rounded-lg mx-auto flex items-center justify-center">
-                            <ArrowPathIcon className="h-8 w-8 text-slate-400 animate-spin" />
+                          <p className="mb-2 text-xs text-slate-500">Gerando QR Code...</p>
+                          <div className="mx-auto flex h-48 w-48 items-center justify-center rounded-lg bg-slate-100">
+                            <ArrowPathIcon className="h-8 w-8 animate-spin text-slate-400" />
                           </div>
                         </>
                       )}
                     </div>
                   </div>
 
-                  {/* Código PIX Copia e Cola */}
                   <div className="mb-6">
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                      Código PIX (Copia e Cola)
-                    </label>
+                    <label className={labelClass}>Código PIX (copia e cola)</label>
                     <div className="flex gap-2">
                       <input
                         type="text"
                         readOnly
                         value={pixCode || 'Gerando código...'}
-                        className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 p-3 text-xs font-mono"
+                        className={`${inputClass} font-mono text-xs`}
                       />
                       <button
+                        type="button"
                         onClick={() => {
                           if (pixCode) {
                             navigator.clipboard.writeText(pixCode)
@@ -880,209 +1058,238 @@ const Payment = () => {
                           }
                         }}
                         disabled={!pixCode}
-                        className="rounded-lg bg-blue-600 px-4 py-3 text-white font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="shrink-0 rounded-xl bg-cp-accent px-4 py-3 text-sm font-bold text-slate-950 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Copiar
                       </button>
                     </div>
                   </div>
 
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
-                    <p className="text-sm text-blue-800 dark:text-blue-300">
-                      <ExclamationTriangleIcon className="h-5 w-5 inline mr-2" />
-                      Após o pagamento, você receberá um email de confirmação e seu acesso será ativado automaticamente.
+                  <div className="rounded-2xl border border-cp-accent/20 bg-cp-accent/5 p-4">
+                    <p className="flex items-start gap-2 text-sm text-cp-muted">
+                      <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-cp-accent" />
+                      Após o pagamento, o acesso é ativado automaticamente e você recebe confirmação
+                      por email.
                     </p>
                   </div>
+                </motion.div>
+              ) : paymentStatus === 'pending' && paymentMethod === 'card' ? (
+                <motion.div
+                  key="card-pending"
+                  initial={{ opacity: 0, scale: 0.97 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="rounded-3xl border border-cp-border bg-cp-surface/80 p-6 text-center sm:p-8"
+                >
+                  <ArrowPathIcon className="mx-auto mb-4 h-14 w-14 animate-spin text-cp-accent" />
+                  <h2 className="cp-headline text-2xl">Confirmando pagamento</h2>
+                  <p className="mt-2 text-sm text-cp-muted">
+                    Estamos confirmando seu pagamento no Mercado Pago. Isso pode levar alguns
+                    instantes.
+                  </p>
                 </motion.div>
               ) : (
                 <motion.div
                   key="form"
-                  initial={{ opacity: 0, scale: 0.95 }}
+                  initial={{ opacity: 0, scale: 0.97 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="rounded-2xl bg-white dark:bg-slate-800 p-6 sm:p-8 shadow-xl"
+                  exit={{ opacity: 0, scale: 0.97 }}
+                  className="rounded-3xl border border-cp-border bg-cp-surface/80 p-5 sm:p-8"
                 >
-                  {/* Dados do Cliente */}
-                  {!user && (
-                    <div className="mb-6 space-y-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                          Email *
-                        </label>
-                        <input
-                          type="email"
-                          placeholder="seu@email.com"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
-                          required
-                        />
-                        <p className="text-xs text-slate-500 mt-1">
-                          Você receberá um email com suas credenciais de acesso após o pagamento
+                  <div className="mb-6 space-y-4">
+                    <div>
+                      <p className="mb-3 text-sm font-bold text-cp-text">Dados da conta</p>
+                      {user ? (
+                        <p className="mb-3 text-xs text-cp-muted">
+                          Logado como <span className="text-cp-accent">{user.email}</span>. Confirme os
+                          dados abaixo para o recibo e liberação do curso.
                         </p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                          Nome Completo *
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Seu nome completo"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
-                          required
-                        />
-                      </div>
+                      ) : (
+                        <p className="mb-3 text-xs text-cp-muted">
+                          Crie sua conta agora. Depois do PIX, o acesso é liberado neste email.
+                        </p>
+                      )}
                     </div>
-                  )}
+                    <div>
+                      <label className={labelClass}>Email *</label>
+                      <input
+                        type="email"
+                        placeholder="seu@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className={inputClass}
+                        autoComplete="email"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Nome completo *</label>
+                      <input
+                        type="text"
+                        placeholder="Seu nome completo"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className={inputClass}
+                        autoComplete="name"
+                        required
+                      />
+                    </div>
+                    {!user ? (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className={labelClass}>Senha *</label>
+                          <input
+                            type="password"
+                            placeholder="Mínimo 6 caracteres"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className={inputClass}
+                            autoComplete="new-password"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Confirmar senha *</label>
+                          <input
+                            type="password"
+                            placeholder="Repita a senha"
+                            value={passwordConfirm}
+                            onChange={(e) => setPasswordConfirm(e.target.value)}
+                            className={inputClass}
+                            autoComplete="new-password"
+                            required
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
 
-                  {/* Seleção de Método de Pagamento */}
                   <div className="mb-6">
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
-                      Método de Pagamento
-                    </label>
-                    <div className="grid grid-cols-2 gap-4">
+                    <label className={labelClass}>Método de pagamento</label>
+                    <div className="grid grid-cols-2 gap-3">
                       <button
                         type="button"
-                        onClick={() => setPaymentMethod('pix')}
-                        className={`rounded-xl p-4 border-2 transition-all ${
+                        onClick={() => {
+                          setPaymentMethod('pix')
+                          setAutoRenew(false)
+                        }}
+                        className={`rounded-2xl border p-4 text-left transition ${
                           paymentMethod === 'pix'
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                            ? 'border-cp-accent/50 bg-cp-accent/10 shadow-[0_0_24px_-12px_rgba(34,211,238,0.55)]'
+                            : 'border-cp-border bg-[var(--cp-bg)]/40 hover:border-cp-accent/30'
                         }`}
                       >
-                        <BanknotesIcon className={`h-8 w-8 mx-auto mb-2 ${
-                          paymentMethod === 'pix' ? 'text-blue-500' : 'text-slate-400'
-                        }`} />
-                        <p className={`font-semibold text-sm ${
-                          paymentMethod === 'pix' ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'
-                        }`}>
+                        <BanknotesIcon
+                          className={`mb-2 h-7 w-7 ${
+                            paymentMethod === 'pix' ? 'text-cp-accent' : 'text-cp-muted'
+                          }`}
+                        />
+                        <p
+                          className={`text-sm font-semibold ${
+                            paymentMethod === 'pix' ? 'text-cp-text' : 'text-cp-muted'
+                          }`}
+                        >
                           PIX
                         </p>
-                        <p className="text-xs text-slate-500 mt-1">Aprovação instantânea</p>
+                        <p className="mt-1 text-xs text-cp-muted">Aprovação rápida</p>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('card')}
-                        className={`rounded-xl p-4 border-2 transition-all ${
+                        className={`rounded-2xl border p-4 text-left transition ${
                           paymentMethod === 'card'
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                            ? 'border-cp-accent/50 bg-cp-accent/10 shadow-[0_0_24px_-12px_rgba(34,211,238,0.55)]'
+                            : 'border-cp-border bg-[var(--cp-bg)]/40 hover:border-cp-accent/30'
                         }`}
                       >
-                        <CreditCardIcon className={`h-8 w-8 mx-auto mb-2 ${
-                          paymentMethod === 'card' ? 'text-blue-500' : 'text-slate-400'
-                        }`} />
-                        <p className={`font-semibold text-sm ${
-                          paymentMethod === 'card' ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'
-                        }`}>
+                        <CreditCardIcon
+                          className={`mb-2 h-7 w-7 ${
+                            paymentMethod === 'card' ? 'text-cp-accent' : 'text-cp-muted'
+                          }`}
+                        />
+                        <p
+                          className={`text-sm font-semibold ${
+                            paymentMethod === 'card' ? 'text-cp-text' : 'text-cp-muted'
+                          }`}
+                        >
                           Cartão
                         </p>
-                        <p className="text-xs text-slate-500 mt-1">Até 10x sem juros</p>
+                        <p className="mt-1 text-xs text-cp-muted">Checkout Mercado Pago</p>
                       </button>
                     </div>
                   </div>
 
-                  {/* Formulário do Cartão */}
-                  {paymentMethod === 'card' && (
-                    <div className="space-y-4 mb-6">
-                      {/* Número do Cartão */}
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                          Número do Cartão
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="0000 0000 0000 0000"
-                          value={cardData.number}
-                          onChange={(e) => handleCardInputChange('number', e.target.value)}
-                          maxLength={19}
-                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
-                        />
+                  {paymentMethod === 'card' ? (
+                    <div className="mb-6 space-y-4">
+                      <div className="rounded-2xl border border-cp-border bg-[var(--cp-bg)]/40 p-4">
+                        <p className="flex items-start gap-2 text-sm text-cp-muted">
+                          <CreditCardIcon className="mt-0.5 h-5 w-5 shrink-0 text-cp-accent" />
+                          Você será redirecionado ao checkout seguro do Mercado Pago para concluir o
+                          pagamento com cartão
+                          {accessInfo.canAutoRenew && autoRenew
+                            ? ' e ativar a assinatura de renovação automática'
+                            : ''}
+                          .
+                        </p>
                       </div>
-
-                      {/* Nome do Portador */}
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                          Nome no Cartão
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Nome como está no cartão"
-                          value={cardData.name}
-                          onChange={(e) => handleCardInputChange('name', e.target.value.toUpperCase())}
-                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
-                        />
-                      </div>
-
-                      {/* Validade e CVV */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                            Validade
-                          </label>
+                      {accessInfo.canAutoRenew ? (
+                        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-cp-accent/30 bg-cp-accent/5 p-4">
                           <input
-                            type="text"
-                            placeholder="MM/AA"
-                            value={cardData.expiry}
-                            onChange={(e) => handleCardInputChange('expiry', e.target.value)}
-                            maxLength={5}
-                            className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                            type="checkbox"
+                            checked={autoRenew}
+                            onChange={(e) => setAutoRenew(e.target.checked)}
+                            className="mt-1 h-4 w-4 shrink-0 rounded border-cp-border accent-[var(--cp-accent)]"
                           />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                            CVV
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="123"
-                            value={cardData.cvv}
-                            onChange={(e) => handleCardInputChange('cvv', e.target.value)}
-                            maxLength={4}
-                            className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Parcelas */}
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                          Parcelas
+                          <span className="text-xs leading-relaxed text-cp-muted sm:text-sm">
+                            <strong className="text-cp-text">Renovar automaticamente no cartão</strong>
+                            {' — '}ao fim de {accessInfo.short}, o Mercado Pago cobra de novo e o
+                            acesso é prorrogado sem interrupção. Você pode cancelar a assinatura no
+                            painel do Mercado Pago.
+                          </span>
                         </label>
-                        <select
-                          value={installments}
-                          onChange={(e) => setInstallments(parseInt(e.target.value))}
-                          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
-                        >
-                          {installmentsOptions.map((num) => (
-                            <option key={num} value={num}>
-                              {num}x de {formatCurrency(calculateInstallmentValue(product.price, num))}
-                              {num > 1 && ` - Total: ${formatCurrency(calculateInstallmentValue(product.price, num) * num)}`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      ) : null}
                     </div>
-                  )}
+                  ) : null}
 
-                  {/* Mensagem de Erro */}
-                  {errorMessage && (
-                    <div className="mb-6 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4">
-                      <p className="text-sm text-rose-800 dark:text-rose-300 flex items-center gap-2">
-                        <XCircleIcon className="h-5 w-5" />
+                  {errorMessage ? (
+                    <div className="mb-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4">
+                      <p className="flex items-center gap-2 text-sm text-rose-300">
+                        <XCircleIcon className="h-5 w-5 shrink-0" />
                         {errorMessage}
                       </p>
                     </div>
-                  )}
+                  ) : null}
 
-                  {/* Botão de Pagamento */}
+                  <label className="mb-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-cp-border bg-[var(--cp-bg)]/40 p-4">
+                    <input
+                      type="checkbox"
+                      checked={acceptedTerms}
+                      onChange={(e) => setAcceptedTerms(e.target.checked)}
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-cp-border accent-[var(--cp-accent)]"
+                    />
+                    <span className="text-xs leading-relaxed text-cp-muted sm:text-sm">
+                      Li e aceito os termos: o acesso a este curso é{' '}
+                      <strong className="text-cp-text">
+                        {accessInfo.isLifetime
+                          ? 'vitalício enquanto o curso permanecer disponível'
+                          : `válido pelo período de ${accessInfo.short}`}
+                      </strong>
+                      {accessInfo.isLifetime
+                        ? ', podendo ser encerrado se o administrador remover o curso da plataforma'
+                        : '. Após esse prazo o acesso expira automaticamente'}
+                      {paymentMethod === 'card' && autoRenew && accessInfo.canAutoRenew
+                        ? ', salvo se a renovação automática no cartão estiver ativa e for cobrada com sucesso'
+                        : ''}
+                      . O pagamento é único por ciclo, o conteúdo é liberado após a confirmação e a
+                      garantia de reembolso é de 7 dias em caso de insatisfação.
+                    </span>
+                  </label>
+
                   <button
+                    type="button"
                     onClick={handlePayment}
-                    disabled={loading}
-                    className="w-full rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-4 text-white font-bold text-lg shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+                    disabled={loading || !acceptedTerms}
+                    className="cp-btn-primary flex w-full items-center justify-center gap-2 !py-3.5 !text-base disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {loading ? (
                       <>
@@ -1094,19 +1301,53 @@ const Payment = () => {
                         <LockClosedIcon className="h-5 w-5" />
                         {paymentMethod === 'pix'
                           ? `Pagar ${formatCurrency(product.price)} com PIX`
-                          : `Pagar ${installments}x de ${formatCurrency(calculateInstallmentValue(product.price, installments))}`}
+                          : `Pagar ${formatCurrency(product.price)} no Mercado Pago`}
                       </>
                     )}
                   </button>
 
-                  {/* Segurança */}
-                  <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                    <LockClosedIcon className="h-4 w-4" />
-                    <span>Pagamento seguro e criptografado</span>
+                  <div className="mt-5 flex flex-col items-center justify-center gap-3">
+                    <div className="flex items-center gap-2 text-xs text-cp-muted">
+                      <LockClosedIcon className="h-4 w-4 text-cp-accent" />
+                      <span>Pagamento seguro e criptografado</span>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+                      {PAYMENT_BRANDS.map((brand) => (
+                        <img
+                          key={brand.src}
+                          src={brand.src}
+                          alt={brand.alt}
+                          className="h-8 w-auto object-contain sm:h-9"
+                        />
+                      ))}
+                    </div>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Carrossel dinâmico das funções do curso */}
+            <div className="mt-8 overflow-hidden rounded-3xl border border-cp-border/70 bg-cp-surface/40 py-5">
+              <p className="mb-4 px-5 text-xs font-bold uppercase tracking-wider text-cp-muted">
+                O que você desbloqueia
+                {selectedCourse?.name ? ` em ${selectedCourse.name}` : ''}
+              </p>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-[var(--cp-bg)] to-transparent" />
+                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-[var(--cp-bg)] to-transparent" />
+                <div className="flex w-max gap-3 px-5 animate-[cp-payment-marquee_32s_linear_infinite] hover:[animation-play-state:paused]">
+                  {[...COURSE_FEATURES, ...COURSE_FEATURES].map((feat, idx) => (
+                    <div
+                      key={`${feat.title}-${idx}`}
+                      className={`w-56 shrink-0 rounded-2xl border border-cp-border/80 bg-gradient-to-br ${feat.tone} p-4`}
+                    >
+                      <p className="text-sm font-bold text-cp-text">{feat.title}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-cp-muted">{feat.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
