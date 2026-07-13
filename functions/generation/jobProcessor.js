@@ -1,5 +1,5 @@
 const admin = require('firebase-admin')
-const { generateAiJson } = require('./geminiServer')
+const { generateAiJsonWithJobHeartbeat } = require('./generationJobResume')
 const {
   sanitizeTopicKeyForFirestore,
   normalizeTopicKeyForStorage,
@@ -154,17 +154,23 @@ async function processConteudoCompleto(userId, jobId, courseId, serverPayload) {
   const { hydrateConteudoCompletoMaterial } = require('./materialFormatting')
   await updateJob(userId, jobId, { progress: 15, message: 'Gerando conteúdo com IA…' })
 
-  const parsed = await generateAiJson(prompt, {
-    useRAG: aiOptions.useRAG ?? true,
-    useGoogleSearch: aiOptions.useGoogleSearch ?? true,
-    generationConfig: {
-      maxOutputTokens: 32000,
-      temperature: 0.35,
-      ...(aiOptions.generationConfig || {}),
+  const parsed = await generateAiJsonWithJobHeartbeat(
+    userId,
+    jobId,
+    prompt,
+    {
+      useRAG: aiOptions.useRAG ?? true,
+      useGoogleSearch: aiOptions.useGoogleSearch ?? true,
+      generationConfig: {
+        maxOutputTokens: 32000,
+        temperature: 0.35,
+        ...(aiOptions.generationConfig || {}),
+      },
+      rejectTruncatedJson: true,
+      maxParseAttempts: 4,
     },
-    rejectTruncatedJson: true,
-    maxParseAttempts: 4,
-  })
+    'Gerando conteúdo com IA…',
+  )
 
   const validation = validateConteudoCompletoPayload(parsed)
   if (!validation.ok) {
@@ -197,11 +203,17 @@ async function processQuestoesTopico(userId, jobId, courseId, serverPayload) {
   const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
   await updateJob(userId, jobId, { progress: 15, message: 'Gerando questões com IA…' })
 
-  const parsed = await generateAiJson(prompt, {
-    useRAG: aiOptions.useRAG ?? true,
-    useGoogleSearch: aiOptions.useGoogleSearch ?? true,
-    generationConfig: aiOptions.generationConfig,
-  })
+  const parsed = await generateAiJsonWithJobHeartbeat(
+    userId,
+    jobId,
+    prompt,
+    {
+      useRAG: aiOptions.useRAG ?? true,
+      useGoogleSearch: aiOptions.useGoogleSearch ?? true,
+      generationConfig: aiOptions.generationConfig,
+    },
+    'Gerando questões com IA…',
+  )
 
   await updateJob(userId, jobId, { progress: 85, message: 'Salvando questões…' })
 
@@ -225,11 +237,17 @@ async function processConteudoIncidencia(userId, jobId, courseId, serverPayload)
   const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
   await updateJob(userId, jobId, { progress: 15, message: 'Gerando conteúdo de incidência…' })
 
-  const parsed = await generateAiJson(prompt, {
-    useRAG: aiOptions.useRAG ?? true,
-    useGoogleSearch: aiOptions.useGoogleSearch ?? true,
-    generationConfig: aiOptions.generationConfig,
-  })
+  const parsed = await generateAiJsonWithJobHeartbeat(
+    userId,
+    jobId,
+    prompt,
+    {
+      useRAG: aiOptions.useRAG ?? true,
+      useGoogleSearch: aiOptions.useGoogleSearch ?? true,
+      generationConfig: aiOptions.generationConfig,
+    },
+    'Gerando conteúdo de incidência…',
+  )
 
   await updateJob(userId, jobId, { progress: 85, message: 'Salvando conteúdo…' })
 
@@ -257,11 +275,17 @@ async function processQuestoesIncidencia(userId, jobId, courseId, serverPayload)
   const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
   await updateJob(userId, jobId, { progress: 15, message: 'Gerando questões de incidência…' })
 
-  const parsed = await generateAiJson(prompt, {
-    useRAG: aiOptions.useRAG ?? true,
-    useGoogleSearch: aiOptions.useGoogleSearch ?? true,
-    generationConfig: aiOptions.generationConfig,
-  })
+  const parsed = await generateAiJsonWithJobHeartbeat(
+    userId,
+    jobId,
+    prompt,
+    {
+      useRAG: aiOptions.useRAG ?? true,
+      useGoogleSearch: aiOptions.useGoogleSearch ?? true,
+      generationConfig: aiOptions.generationConfig,
+    },
+    'Gerando questões de incidência…',
+  )
 
   await updateJob(userId, jobId, { progress: 85, message: 'Salvando questões…' })
 
@@ -300,9 +324,19 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
   await updateJob(userId, jobId, { progress: 20, message: 'Gerando flashcards (lote 1)…' })
 
   const batch1Prompt = buildFlashcardPrompt(baseMeta, 1, 2, firstBatchCount, [])
-  const batch1 = await generateAiJson(batch1Prompt, {
-    generationConfig: { maxOutputTokens: 24000, temperature: 0.35, ...(aiOptions.generationConfig || {}) },
-  })
+  const batch1 = await generateAiJsonWithJobHeartbeat(
+    userId,
+    jobId,
+    batch1Prompt,
+    {
+      generationConfig: {
+        maxOutputTokens: 24000,
+        temperature: 0.35,
+        ...(aiOptions.generationConfig || {}),
+      },
+    },
+    'Gerando flashcards (lote 1)…',
+  )
   allItems = dedupeFlashcards(batch1.flashcards || [])
 
   if (allItems.length < MIN_FLASHCARDS) {
@@ -315,9 +349,13 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
       remaining,
       allItems.map((c) => c.frente || c.pergunta),
     )
-    const batch2 = await generateAiJson(batch2Prompt, {
-      generationConfig: { maxOutputTokens: 24000, temperature: 0.35 },
-    })
+    const batch2 = await generateAiJsonWithJobHeartbeat(
+      userId,
+      jobId,
+      batch2Prompt,
+      { generationConfig: { maxOutputTokens: 24000, temperature: 0.35 } },
+      'Gerando flashcards (lote 2)…',
+    )
     allItems = dedupeFlashcards([...allItems, ...(batch2.flashcards || [])])
   }
 
@@ -331,9 +369,13 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
       remaining,
       allItems.map((c) => c.frente || c.pergunta),
     )
-    const batch3 = await generateAiJson(batch3Prompt, {
-      generationConfig: { maxOutputTokens: 24000, temperature: 0.35 },
-    })
+    const batch3 = await generateAiJsonWithJobHeartbeat(
+      userId,
+      jobId,
+      batch3Prompt,
+      { generationConfig: { maxOutputTokens: 24000, temperature: 0.35 } },
+      'Gerando flashcards (lote 3)…',
+    )
     allItems = dedupeFlashcards([...allItems, ...(batch3.flashcards || [])])
   }
 
@@ -493,6 +535,9 @@ async function processGenerationJob(userId, jobId, jobData) {
   if (jobType === 'professor_supervisor' && !serverPayload?.itemType) {
     throw new Error('Payload ausente para professor fiscalizador.')
   }
+  if (jobType === 'vespera_prova' && !serverPayload?.prompt) {
+    throw new Error('Prompt ausente para véspera de prova.')
+  }
   if (!courseId) {
     throw new Error('courseId ausente no job.')
   }
@@ -530,6 +575,11 @@ async function processGenerationJob(userId, jobId, jobData) {
     case 'flashcards_topico':
       outcome = await processFlashcardsTopico(userId, jobId, courseId, serverPayload)
       break
+    case 'vespera_prova': {
+      const { processVesperaProva } = require('./vesperaProvaProcessor')
+      outcome = await processVesperaProva(userId, jobId, courseId, serverPayload)
+      break
+    }
     case 'admin_edital_verticalizado':
       outcome = await processAdminEditalVerticalizado(userId, jobId, courseId, serverPayload)
       break
@@ -613,10 +663,17 @@ async function processGenerationJob(userId, jobId, jobData) {
     case 'admin_materia_revisada': {
       const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
       await updateJob(userId, jobId, { progress: 20, message: 'Gerando matéria revisada…' })
-      const parsed = await generateAiJson(prompt, {
-        useRAG: aiOptions.useRAG ?? true,
-        generationConfig: aiOptions.generationConfig || { maxOutputTokens: 16000, temperature: 0.7 },
-      })
+      const parsed = await generateAiJsonWithJobHeartbeat(
+        userId,
+        jobId,
+        prompt,
+        {
+          useRAG: aiOptions.useRAG ?? true,
+          generationConfig:
+            aiOptions.generationConfig || { maxOutputTokens: 16000, temperature: 0.7 },
+        },
+        'Gerando matéria revisada…',
+      )
       await updateJob(userId, jobId, { progress: 85, message: 'Salvando matéria…' })
       const docId = savePlan.docId || savePlan.materia?.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100)
       const resultRef = await saveMergeDoc(courseId, 'materiasRevisadas', docId, parsed, {

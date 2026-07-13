@@ -202,6 +202,24 @@ export async function fetchSupervisorHistory({ max = 30 } = {}) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
+/** Apaga todo o histórico do Professor IA (admin). */
+export async function clearSupervisorHistory() {
+  if (!db) return { deleted: 0 }
+  const snap = await getDocs(collection(db, 'professorSupervisorHistory'))
+  if (snap.empty) return { deleted: 0 }
+
+  let deleted = 0
+  const docs = snap.docs
+  for (let i = 0; i < docs.length; i += 400) {
+    const batch = writeBatch(db)
+    const chunk = docs.slice(i, i + 400)
+    chunk.forEach((d) => batch.delete(d.ref))
+    await batch.commit()
+    deleted += chunk.length
+  }
+  return { deleted }
+}
+
 export const SUPERVISOR_PHASE_LABELS = {
   idle: 'Ocioso',
   starting: 'Iniciando…',

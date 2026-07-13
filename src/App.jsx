@@ -490,6 +490,8 @@ function App() {
           <Route path="/pagamento" element={<Payment />} />
           {/* Página de Compartilhamento de Curso - Acessível sem login */}
           <Route path="/curso/:courseId" element={<CourseShare />} />
+          <Route path="/adquirir/:courseId" element={<CourseShare />} />
+          <Route path="/curso-share/:courseId" element={<CourseShare />} />
           {/* Página de Leitura de Notícia - Acessível sem login */}
           <Route path="/noticia/:postId" element={<NewsView />} />
           {/* Página de Simulado Compartilhado - Acessível sem login */}

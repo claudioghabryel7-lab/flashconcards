@@ -267,6 +267,37 @@ export async function cancelAllGenerationJobs(userId) {
   }
 }
 
+/** Admin: força parada de TODOS os jobs (todos os usuários). */
+export async function forceStopAllGenerationJobsGlobally() {
+  const user = auth?.currentUser
+  if (!user || !FIREBASE_FUNCTIONS.cancelGenerationJob) {
+    throw new Error('Não autenticado ou função de cancelamento indisponível.')
+  }
+
+  const token = await user.getIdToken()
+  const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ global: true }),
+  })
+
+  let data = {}
+  try {
+    data = await response.json()
+  } catch {
+    data = {}
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Falha ao forçar parada de todos os jobs.')
+  }
+
+  return data
+}
+
 export function subscribeActiveGenerationJobs(userId, onData) {
   if (!userId || !db) return () => {}
 

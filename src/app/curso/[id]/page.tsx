@@ -120,14 +120,19 @@ export default function CursoHubPage() {
           })}
         </div>
 
-        <div className="mt-10 cp-card p-6">
-          <p className="text-sm text-slate-400">
-            Para vincular este curso à sua conta, acesse{' '}
-            <Link href="/select-course" className="text-cp-accent hover:underline">
-              Selecionar curso
-            </Link>
-            {' '}após o login.
-          </p>
+        <div className="mt-10 flex flex-col gap-4 rounded-2xl border border-cp-accent/25 bg-gradient-to-br from-cp-accent/10 via-cp-surface/80 to-transparent p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-cp-text">Ainda não tem este curso?</p>
+            <p className="mt-1 text-sm text-slate-400">
+              Desbloqueie edital, flashcards, questões e Guia Mentorado com acesso imediato.
+            </p>
+          </div>
+          <Link
+            href={`/adquirir/${courseId}`}
+            className="cp-btn-primary inline-flex shrink-0 items-center justify-center gap-2 !px-6 !py-3"
+          >
+            Adquirir Curso
+          </Link>
         </div>
       </div>
     </section>

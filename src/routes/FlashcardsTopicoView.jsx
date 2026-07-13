@@ -25,6 +25,7 @@ import { FEED_POST_TYPES } from '../services/trilhaFeedService'
 import { CONTENT_STATUS, isContentAvailable, toggleContentStatus } from '../utils/contentStatus'
 import { persistCardReview } from '../utils/spacedRepetition'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
+import { loadStudyCheckpoint, saveStudyCheckpoint } from '../utils/studyCheckpoint'
 import toast from 'react-hot-toast'
 
 const FlashcardsTopicoView = () => {
@@ -116,7 +117,13 @@ const FlashcardsTopicoView = () => {
 
         if (!cancelled) {
           setCards(existing)
-          setCurrentIndex(0)
+          const saved = loadStudyCheckpoint('flashcards', {
+            userId: user?.uid,
+            courseId,
+            scopeKey: topicKey,
+          })
+          const max = Math.max(0, existing.length - 1)
+          setCurrentIndex(Math.min(saved, max))
         }
       } catch (err) {
         if (!cancelled) {
@@ -181,9 +188,24 @@ const FlashcardsTopicoView = () => {
 
   useEffect(() => {
     if (currentIndex >= studyCards.length && studyCards.length > 0) {
-      setCurrentIndex(0)
+      const clamped = studyCards.length - 1
+      setCurrentIndex(clamped)
+      saveStudyCheckpoint(
+        'flashcards',
+        { userId: user?.uid, courseId, scopeKey: topicKey },
+        clamped,
+      )
     }
-  }, [studyCards.length, currentIndex])
+  }, [studyCards.length, currentIndex, user?.uid, courseId, topicKey])
+
+  useEffect(() => {
+    if (!topicKey || !user?.uid) return
+    saveStudyCheckpoint(
+      'flashcards',
+      { userId: user.uid, courseId, scopeKey: topicKey },
+      currentIndex,
+    )
+  }, [currentIndex, user?.uid, courseId, topicKey])
 
   const handleRegenerate = async () => {
     if (!isAdmin || regenerating || generating) return

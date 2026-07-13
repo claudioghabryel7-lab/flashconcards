@@ -13,7 +13,7 @@ import {
   serverTimestamp,
   where,
 } from 'firebase/firestore'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { callGeminiWithRetry, extractGeneratedText, hasGeminiApiKeys, isGeminiQuotaError } from '../utils/geminiApi'
 import { PaperAirplaneIcon } from '@heroicons/react/24/solid'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
@@ -176,62 +176,20 @@ const AIChat = () => {
     return () => unsub()
   }, [user, profile])
 
-  // Descobrir qual modelo está disponível
+  // Descobrir qual modelo está disponível (todas as chaves do pool)
   useEffect(() => {
     const findAvailableModel = async () => {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey || availableModel) return
+      if (availableModel) return
+      if (!hasGeminiApiKeys()) {
+        setModelError('API key do Gemini não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env')
+        return
+      }
 
       try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-        )
-        
-        if (!response.ok) {
-          throw new Error('Não foi possível listar modelos')
-        }
-
-        const data = await response.json()
-        const models = data.models || []
-        
-        const generateModels = models.filter((model) => {
-          const methods = model.supportedGenerationMethods || []
-          return methods.includes('generateContent')
-        })
-
-        if (generateModels.length === 0) {
-          setModelError('Nenhum modelo de geração disponível. Verifique sua API key.')
-          return
-        }
-
-        const genAI = new GoogleGenerativeAI(apiKey)
-        const modelName = generateModels[0].name.replace('models/', '')
-        
-        try {
-          const model = genAI.getGenerativeModel({ model: modelName })
-          await model.generateContent({
-            contents: [{ parts: [{ text: 'test' }] }],
-          })
-          setAvailableModel(modelName)
-        } catch (testErr) {
-          for (let i = 1; i < generateModels.length; i++) {
-            try {
-              const testModelName = generateModels[i].name.replace('models/', '')
-              const testModel = genAI.getGenerativeModel({ model: testModelName })
-              await testModel.generateContent({
-                contents: [{ parts: [{ text: 'test' }] }],
-              })
-              setAvailableModel(testModelName)
-              return
-            } catch (err) {
-              continue
-            }
-          }
-          setModelError('Nenhum modelo funcionou. Verifique sua API key e permissões.')
-        }
+        setAvailableModel('gemini-2.5-flash')
       } catch (err) {
         console.error('Erro ao descobrir modelo:', err)
-        setModelError('Erro ao conectar com a API. Verifique sua API key.')
+        setModelError('Erro ao conectar com a API. Verifique suas API keys.')
       }
     }
 
@@ -279,9 +237,7 @@ const AIChat = () => {
   }
 
   const getMentorResponse = async (userMessage) => {
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    
-    if (!apiKey) {
+    if (!hasGeminiApiKeys()) {
       return 'API key não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env'
     }
 
@@ -290,9 +246,6 @@ const AIChat = () => {
     }
 
     try {
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: availableModel })
-
       // Carregar prompt/configuração do edital e texto do PDF (por curso)
       let editalPrompt = null
       let pdfText = null
@@ -471,88 +424,48 @@ Pergunta do aluno: ${userMessage}
         fullPrompt = `${mentorPrompt}\n\nHISTÓRICO RECENTE (últimas 3 mensagens):\n${history}`
       }
 
-      // Tentar gerar resposta com retry em caso de quota (backoff exponencial)
-      let result = null
-      let retries = 0
-      const maxRetries = 3
-      const baseDelay = 2000 // 2 segundos base
-      
-      while (retries <= maxRetries) {
-        try {
-          result = await model.generateContent({
-            contents: [{ parts: [{ text: fullPrompt }] }],
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 300, // Respostas curtas
-              topP: 0.9,
-            },
-          })
-          break // Sucesso
-        } catch (apiErr) {
-          // Capturar erro de forma mais robusta
-          const errorMessage = apiErr.message || String(apiErr) || ''
-          const errorString = JSON.stringify(apiErr) || ''
-          
-          // Verificar se é erro de quota (429 ou mensagens relacionadas)
-          const isQuotaError = 
-            errorMessage.includes('429') || 
-            errorMessage.includes('quota') ||
-            errorMessage.includes('Quota exceeded') ||
-            errorMessage.includes('Too Many Requests') ||
-            errorMessage.includes('RESOURCE_EXHAUSTED') ||
-            errorMessage.includes('rate limit') ||
-            errorString.includes('429') ||
-            errorString.includes('quota') ||
-            errorString.includes('Quota exceeded') ||
-            apiErr.status === 429 ||
-            apiErr.code === 429 ||
-            (apiErr.response && apiErr.response.status === 429)
-          
-          if (!isQuotaError) {
-            // Se não for erro de quota, lança o erro normalmente
-            throw apiErr
-          }
-          
-          // Qualquer erro de quota = tentar Groq imediatamente (sem retry com Gemini)
-          console.warn('⚠️ Erro de quota detectado. Usando Groq como fallback...')
-          setQuotaDailyLimit(true)
-          
-          // Tentar usar Groq se disponível
-          const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-          if (groqApiKey) {
-            try {
-              setUsingGroq(true)
-              const groqResponse = await callGroqAPI(fullPrompt)
-              // Se Groq funcionou, retornar a resposta
-              console.log('✅ Groq respondeu com sucesso!')
-              return groqResponse
-            } catch (groqErr) {
-              console.error('❌ Erro ao usar Groq como fallback:', groqErr)
-              setUsingGroq(false)
-              // Se Groq também falhar, lançar erro
-              throw new Error('QUOTA_DAILY_LIMIT')
-            }
-          } else {
-            // Se não tem Groq configurado, lançar erro
-            console.error('❌ Groq API key não configurada')
+      // Pool de chaves: se uma estiver ocupada/expirada, tenta a próxima automaticamente
+      try {
+        const geminiResponse = await callGeminiWithRetry(fullPrompt, {
+          silent: true,
+          verifyContent: false,
+          useRAG: false,
+          useGoogleSearch: false,
+          models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 300,
+            topP: 0.9,
+          },
+        })
+        return extractGeneratedText(geminiResponse)
+      } catch (apiErr) {
+        if (!isGeminiQuotaError(apiErr)) throw apiErr
+
+        console.warn('⚠️ Todas as chaves Gemini esgotadas. Usando Groq como fallback...')
+        setQuotaDailyLimit(true)
+
+        const groqApiKey = readEnv('VITE_GROQ_API_KEY')
+        if (groqApiKey) {
+          try {
+            setUsingGroq(true)
+            const groqResponse = await callGroqAPI(fullPrompt)
+            console.log('✅ Groq respondeu com sucesso!')
+            return groqResponse
+          } catch (groqErr) {
+            console.error('❌ Erro ao usar Groq como fallback:', groqErr)
+            setUsingGroq(false)
             throw new Error('QUOTA_DAILY_LIMIT')
           }
         }
+        throw new Error('QUOTA_DAILY_LIMIT')
       }
-
-      if (!result) {
-        throw new Error('Quota da API excedida. Aguarde alguns minutos antes de tentar novamente.')
-      }
-
-      const response = result.response
-      const text = response.text()
-      return text
     } catch (err) {
       console.error('Erro ao chamar mentor:', err)
       
       // Mensagens de erro mais específicas para quota
       const errorMessage = err.message || String(err) || ''
-      const isQuotaError = 
+      const isQuotaError = isGeminiQuotaError(err) ||
         errorMessage.includes('429') || 
         errorMessage.includes('quota') || 
         errorMessage.includes('Too Many Requests') ||

@@ -3,15 +3,19 @@ import dayjs from 'dayjs'
 import duration from 'dayjs/plugin/duration'
 import {
   AcademicCapIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   ClockIcon,
   QueueListIcon,
   SignalIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../../hooks/useAuth'
 import {
   subscribeProfessorSupervisorConfig,
   setProfessorSupervisorEnabled,
   fetchSupervisorHistory,
+  clearSupervisorHistory,
   formatDailyStartLabel,
   SUPERVISOR_PHASE_LABELS,
   PROFESSOR_STEP_LABELS,
@@ -21,6 +25,7 @@ import { subscribeGenerationJob } from '../../services/generationJobService'
 dayjs.extend(duration)
 
 const SESSION_HOURS = 8
+const HISTORY_MIN_KEY = 'fcc:profHistoryMinimized'
 
 function formatRemaining(sessionEndsAt) {
   const ends = sessionEndsAt?.toDate?.()
@@ -40,6 +45,15 @@ export default function AdminProfessorSupervisor() {
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState(false)
+  const [clearingHistory, setClearingHistory] = useState(false)
+  const [historyMinimized, setHistoryMinimized] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      return localStorage.getItem(HISTORY_MIN_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
   const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
@@ -83,6 +97,35 @@ export default function AdminProfessorSupervisor() {
       alert('Erro ao alterar o professor fiscalizador.')
     } finally {
       setToggling(false)
+    }
+  }
+
+  const toggleHistoryMinimized = () => {
+    setHistoryMinimized((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem(HISTORY_MIN_KEY, next ? '1' : '0')
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }
+
+  const handleClearHistory = async () => {
+    if (clearingHistory) return
+    if (!window.confirm('Apagar todo o histórico do Professor IA? Esta ação não pode ser desfeita.')) {
+      return
+    }
+    setClearingHistory(true)
+    try {
+      await clearSupervisorHistory()
+      setHistory([])
+    } catch (err) {
+      console.error(err)
+      alert(err?.message || 'Erro ao apagar histórico. Faça deploy das regras do Firestore se necessário.')
+    } finally {
+      setClearingHistory(false)
     }
   }
 
@@ -131,12 +174,11 @@ export default function AdminProfessorSupervisor() {
                   <>
                     às <strong>{dailyLabel}</strong>
                   </>
-                ) : (
-                  ''
-                )}
-                . Sessão de até <strong>{SESSION_HOURS}h</strong> por dia. Corrige automaticamente{' '}
-                <strong>sinalizações</strong> de flashcards, material e questões (sem moderação). Toda{' '}
-                <strong>segunda-feira</strong> publica novo tema de redação.
+                ) : null}
+                . Sessão de até <strong>{SESSION_HOURS}h</strong> por dia. Corrige{' '}
+                <strong>somente</strong> os conteúdos da aba <strong>🚩 Moderação</strong> (sinalizações
+                abertas de flashcards, material e questões). Após corrigir, o aluno que sinalizou recebe
+                notificação <strong className="text-emerald-600">verde</strong> no sino.
               </p>
             </div>
           </div>
@@ -221,29 +263,65 @@ export default function AdminProfessorSupervisor() {
         </div>
       </div>
 
-      {history.length > 0 && (
+      {(history.length > 0 || historyMinimized) && (
         <div className="cp-card !rounded-2xl p-4">
-          <p className="mb-3 text-sm font-semibold text-cp-text">Histórico recente</p>
-          <div className="space-y-2">
-            {history.map((row) => {
-              const when = row.createdAt?.toDate?.()
-                ? dayjs(row.createdAt.toDate()).format('DD/MM HH:mm')
-                : ''
-              return (
-                <div
-                  key={row.id}
-                  className="rounded-lg border border-cp-border px-3 py-2 text-xs text-cp-muted"
-                >
-                  <span className="font-medium text-cp-text">{row.itemType}</span> — {row.courseId} —{' '}
-                  {row.autoApplied || row.skipModeration
-                    ? `${row.appliedCount || 0} correção(ões) auto`
-                    : 'enviado ao admin'}{' '}
-                  —{' '}
-                  {when}
-                </div>
-              )
-            })}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-cp-text">
+              Histórico recente{history.length ? ` (${history.length})` : ''}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleHistoryMinimized}
+                className="inline-flex items-center gap-1 rounded-lg border border-cp-border px-2 py-1 text-[11px] font-medium text-cp-muted hover:bg-cp-surface hover:text-cp-text"
+              >
+                {historyMinimized ? (
+                  <>
+                    <ChevronDownIcon className="h-3.5 w-3.5" /> Expandir
+                  </>
+                ) : (
+                  <>
+                    <ChevronUpIcon className="h-3.5 w-3.5" /> Minimizar
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleClearHistory}
+                disabled={clearingHistory || history.length === 0}
+                className="inline-flex items-center gap-1 rounded-lg border border-red-500/40 px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-500/10 disabled:opacity-50"
+              >
+                <TrashIcon className="h-3.5 w-3.5" />
+                {clearingHistory ? 'Apagando…' : 'Apagar histórico'}
+              </button>
+            </div>
           </div>
+
+          {!historyMinimized && (
+            <div className="max-h-72 space-y-2 overflow-y-auto">
+              {history.length === 0 ? (
+                <p className="py-4 text-center text-xs text-cp-muted">Histórico vazio.</p>
+              ) : (
+                history.map((row) => {
+                  const when = row.createdAt?.toDate?.()
+                    ? dayjs(row.createdAt.toDate()).format('DD/MM HH:mm')
+                    : ''
+                  return (
+                    <div
+                      key={row.id}
+                      className="rounded-lg border border-cp-border px-3 py-2 text-xs text-cp-muted"
+                    >
+                      <span className="font-medium text-cp-text">{row.itemType}</span> — {row.courseId} —{' '}
+                      {row.autoApplied || row.skipModeration
+                        ? `${row.appliedCount || 0} correção(ões) auto`
+                        : 'enviado ao admin'}{' '}
+                      — {when}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          )}
         </div>
       )}
 

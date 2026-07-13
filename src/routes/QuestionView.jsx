@@ -19,7 +19,7 @@ import {
   saveExplanationCache,
   rateExplanationCache
 } from '../utils/cache'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText, hasGeminiApiKeys } from '../utils/geminiApi'
 
 const QuestionView = () => {
   const navigate = useNavigate()
@@ -250,7 +250,9 @@ const QuestionView = () => {
         return
       }
       
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
+      if (!hasGeminiApiKeys() && !readEnv('VITE_GROQ_API_KEY')) {
+        throw new Error('Nenhuma API key Gemini/Groq configurada')
+      }
       const groqApiKey = readEnv('VITE_GROQ_API_KEY')
       
       const prompt = `Você é um professor especialista em concursos públicos.
@@ -306,7 +308,7 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.
         return data.choices[0]?.message?.content || ''
       }
       
-      if (apiKey) {
+      if (hasGeminiApiKeys()) {
         try {
           const response = await callGeminiWithRetry(prompt, {
             courseId: (profile?.selectedCourseId || 'alego-default'),

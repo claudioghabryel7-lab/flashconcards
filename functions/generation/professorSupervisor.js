@@ -352,16 +352,44 @@ async function processDigitacaoItem(courseId, payload, updateJob, userId, jobId)
 
 async function resolveFlagFeedback(courseId, flagId) {
   if (!flagId) return
-  await getDb()
-    .doc(`courses/${courseId}/contentFeedback/${flagId}`)
-    .set(
-      {
-        status: 'resolved',
-        resolvedBy: 'professor_supervisor',
-        resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    )
+  const db = getDb()
+  const flagRef = db.doc(`courses/${courseId}/contentFeedback/${flagId}`)
+  const flagSnap = await flagRef.get()
+  const flagData = flagSnap.exists ? flagSnap.data() : {}
+
+  await flagRef.set(
+    {
+      status: 'resolved',
+      resolvedBy: 'professor_supervisor',
+      resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  )
+
+  const targetUserId = flagData.userId
+  if (!targetUserId) return
+
+  const typeLabel =
+    flagData.contentType === 'flashcard'
+      ? 'flashcard'
+      : flagData.contentType === 'questao'
+        ? 'questão'
+        : flagData.contentType || 'conteúdo'
+
+  await db.collection(`users/${targetUserId}/notifications`).add({
+    type: 'flag_corrected',
+    tone: 'success',
+    title: 'Sinalização corrigida',
+    message: `Seu relatório sobre ${typeLabel} foi revisado e o conteúdo foi corrigido.`,
+    courseId: courseId || null,
+    contentType: flagData.contentType || null,
+    contentId: flagData.contentId || null,
+    topicKey: flagData.topicKey || null,
+    flagId,
+    preview: flagData.preview || '',
+    read: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
 }
 
 async function loadFlaggedContentBlock(courseId, payload = {}) {

@@ -2043,10 +2043,9 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
     setMessage('')
 
     try {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
       const groqApiKey = readEnv('VITE_GROQ_API_KEY')
       
-      if (!apiKey && !groqApiKey) {
+      if (!hasGeminiApiKeys() && !groqApiKey) {
         throw new Error('Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
       }
 
@@ -2140,7 +2139,7 @@ REGRAS CRÍTICAS:
 
       let responseText = ''
       
-      if (apiKey) {
+      if (hasGeminiApiKeys()) {
         try {
           setFlashcardGenProgress('Chamando Gemini API...')
           const response = await callGeminiWithRetry(prompt, {
@@ -3479,73 +3478,13 @@ REGRAS CRÍTICAS:
     setMessage('')
 
     try {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
+      if (!hasGeminiApiKeys()) {
         throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
       }
 
-      const genAI = new GoogleGenerativeAI(apiKey)
-      
-      // Modelos disponíveis na API paga do Gemini (ordem de prioridade: melhor primeiro)
-      // gemini-2.5-flash: Mais recente, rápido e eficiente (recomendado)
-      const modelNames = [
-        'gemini-2.5-flash',           // Modelo mais recente e recomendado
-        'gemini-2.5-pro'              // Fallback para análises complexas
-      ]
-      let model = null
-      let lastError = null
-      
-      // Para API paga, tentar usar o melhor modelo primeiro
-      // Simplificar: apenas criar o modelo e usar (sem teste prévio que pode falhar)
-      for (const modelName of modelNames) {
-        try {
-          model = genAI.getGenerativeModel({ model: modelName })
-          console.log(`✅ Tentando usar modelo: ${modelName}`)
-          // Não testar antes - usar diretamente e deixar falhar na primeira chamada real se necessário
-          // Isso evita falsos negativos no teste
-          break
-        } catch (err) {
-          // Se nem conseguir criar o modelo, tentar próximo
-          const errorMsg = err.message?.toLowerCase() || ''
-          if (errorMsg.includes('not found') || errorMsg.includes('404') || errorMsg.includes('not available')) {
-            console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
-            lastError = err
-            continue
-          } else {
-            // Se for outro erro, ainda tentar usar
-            console.log(`⚠️ Aviso ao criar modelo ${modelName}, mas tentando usar mesmo assim...`)
-            model = genAI.getGenerativeModel({ model: modelName })
-            break
-          }
-        }
-      }
-      
-      if (!model) {
-        // Se nenhum modelo funcionou, tentar listar modelos disponíveis da API
-        try {
-          console.log('🔍 Listando modelos disponíveis da API...')
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-          )
-          
-          if (response.ok) {
-            const data = await response.json()
-            const models = data.models || []
-            const generateModels = models.filter((m) => {
-              return (m.supportedGenerationMethods || []).includes('generateContent')
-            })
-            
-            if (generateModels.length > 0) {
-              // Usar o primeiro modelo disponível
-              const firstModelName = generateModels[0].name.replace('models/', '')
-              model = genAI.getGenerativeModel({ model: firstModelName })
-              console.log(`✅ Usando modelo descoberto: ${firstModelName}`)
-            }
-          }
-        } catch (listErr) {
-          console.warn('Erro ao listar modelos:', listErr)
-        }
-      }
+      // Chamadas reais usam callGeminiWithRetry (pool de chaves com rotação)
+      const model = { modelName: 'gemini-2.5-flash' }
+      console.log('✅ Usando pool de API keys Gemini (rotação automática)')
       
       // Preparar estrutura de matérias e módulos diretamente do edital verticalizado
       setFullCourseProgress('Preparando estrutura do edital verticalizado...')
@@ -3964,12 +3903,14 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     setMessage('')
 
     try {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
+      if (!hasGeminiApiKeys()) {
         throw new Error('VITE_GEMINI_API_KEY não configurada. Configure no arquivo .env')
       }
 
-      const genAI = new GoogleGenerativeAI(apiKey)
+      // Geração real usa callGeminiWithRetry (pool). genAI só mantém compat com código legado.
+      const { collectGeminiApiKeys } = await import('../utils/geminiKeyPool.js')
+      const apiKey = collectGeminiApiKeys()[0]
+      const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null
       
       // Tentar modelos válidos (apenas modelos que funcionam)
       // Modelos disponíveis na API paga do Gemini (ordem de prioridade: melhor primeiro)
@@ -3977,62 +3918,26 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
         'gemini-2.5-flash',           // Modelo mais recente e recomendado
         'gemini-2.5-pro'              // Fallback para análises complexas
       ]
-      let model = null
+      let model = { modelName: modelNames[0] }
       let lastError = null
       
-      // Para API paga, tentar usar o melhor modelo primeiro
-      // Simplificar: apenas criar o modelo e usar (sem teste prévio)
-      for (const modelName of modelNames) {
-        try {
-          model = genAI.getGenerativeModel({ model: modelName })
-          console.log(`✅ Tentando usar modelo: ${modelName}`)
-          // Não testar antes - usar diretamente
-          break
-        } catch (err) {
-          // Se nem conseguir criar o modelo, tentar próximo
-          const errorMsg = err.message?.toLowerCase() || ''
-          if (errorMsg.includes('not found') || errorMsg.includes('404') || errorMsg.includes('not available')) {
-            console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
-            lastError = err
-            continue
-          } else {
-            // Se for outro erro, ainda tentar usar
-            console.log(`⚠️ Aviso ao criar modelo ${modelName}, mas tentando usar mesmo assim...`)
+      if (genAI) {
+        for (const modelName of modelNames) {
+          try {
+            model = genAI.getGenerativeModel({ model: modelName })
+            console.log(`✅ Tentando usar modelo: ${modelName}`)
+            break
+          } catch (err) {
+            const errorMsg = err.message?.toLowerCase() || ''
+            if (errorMsg.includes('not found') || errorMsg.includes('404') || errorMsg.includes('not available')) {
+              console.warn(`⚠️ Modelo ${modelName} não disponível, tentando próximo...`)
+              lastError = err
+              continue
+            }
             model = genAI.getGenerativeModel({ model: modelName })
             break
           }
         }
-      }
-      
-      if (!model) {
-        // Se nenhum modelo funcionou, tentar listar modelos disponíveis da API
-        try {
-          console.log('🔍 Listando modelos disponíveis da API...')
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-          )
-          
-          if (response.ok) {
-            const data = await response.json()
-            const models = data.models || []
-            const generateModels = models.filter((m) => {
-              return (m.supportedGenerationMethods || []).includes('generateContent')
-            })
-            
-            if (generateModels.length > 0) {
-              // Usar o primeiro modelo disponível
-              const firstModelName = generateModels[0].name.replace('models/', '')
-              model = genAI.getGenerativeModel({ model: firstModelName })
-              console.log(`✅ Usando modelo descoberto: ${firstModelName}`)
-            }
-          }
-        } catch (listErr) {
-          console.warn('⚠️ Erro ao listar modelos:', listErr)
-        }
-      }
-      
-      if (!model) {
-        throw new Error(`Nenhum modelo Gemini disponível. Último erro: ${lastError?.message || 'Desconhecido'}`)
       }
 
       // 1. Buscar matérias existentes no curso
@@ -5443,12 +5348,13 @@ CRÍTICO:
     const banca = unifiedData?.banca || ''
     const concursoName = unifiedData?.concursoName || ''
     
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
+    if (!hasGeminiApiKeys()) {
       throw new Error('VITE_GEMINI_API_KEY não configurada')
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey)
+    const { collectGeminiApiKeys } = await import('../utils/geminiKeyPool.js')
+    const apiKey = collectGeminiApiKeys()[0]
+    const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null
     const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
     let lastError = null
     let materiasList = []
@@ -5456,10 +5362,12 @@ CRÍTICO:
     // Identificar matérias (reutilizar lógica completa de handleGenerateAllConteudosCompletos)
     for (const modelName of modelNames) {
       try {
-        const model = genAI.getGenerativeModel({ 
-          model: modelName,
-          generationConfig: { maxOutputTokens: 8000, temperature: 0.3 }
-        })
+        if (genAI) {
+          genAI.getGenerativeModel({ 
+            model: modelName,
+            generationConfig: { maxOutputTokens: 8000, temperature: 0.3 }
+          })
+        }
 
         const analysisPrompt = `Você é um especialista em analisar editais de concursos públicos.
 ${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n` : ''}
@@ -5543,22 +5451,25 @@ CRÍTICO: Retorne APENAS o JSON válido, sem markdown, sem explicações.`
     const banca = unifiedData?.banca || ''
     const concursoName = unifiedData?.concursoName || ''
     
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
+    if (!hasGeminiApiKeys()) {
       throw new Error('VITE_GEMINI_API_KEY não configurada')
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey)
+    const { collectGeminiApiKeys } = await import('../utils/geminiKeyPool.js')
+    const apiKey = collectGeminiApiKeys()[0]
+    const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null
     const modelNames = ['gemini-2.5-flash', 'gemini-2.5-pro']
     let materiasList = []
 
     // Identificar matérias (mesma lógica)
     for (const modelName of modelNames) {
       try {
-        const model = genAI.getGenerativeModel({ 
-          model: modelName,
-          generationConfig: { maxOutputTokens: 8000, temperature: 0.3 }
-        })
+        if (genAI) {
+          genAI.getGenerativeModel({ 
+            model: modelName,
+            generationConfig: { maxOutputTokens: 8000, temperature: 0.3 }
+          })
+        }
 
         const analysisPrompt = `Você é um especialista em analisar editais de concursos públicos.
 ${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n` : ''}
@@ -6298,10 +6209,9 @@ CRÍTICO:
     setMessage('')
 
     try {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
       const groqApiKey = readEnv('VITE_GROQ_API_KEY')
       
-      if (!apiKey && !groqApiKey) {
+      if (!hasGeminiApiKeys() && !groqApiKey) {
         throw new Error('Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
       }
 
@@ -6474,7 +6384,7 @@ CRÍTICO:
       let useGroq = false
 
       // Tentar Gemini primeiro
-      if (apiKey) {
+      if (hasGeminiApiKeys()) {
         try {
           console.log('🤖 Tentando usar Gemini...')
           // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
@@ -9797,10 +9707,9 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                                 try {
                                   setMessage('🤖 Gerando descrição com IA...')
                                   
-                                  const apiKey = readEnv('VITE_GEMINI_API_KEY')
                                   const groqApiKey = readEnv('VITE_GROQ_API_KEY')
                                   
-                                  if (!apiKey && !groqApiKey) {
+                                  if (!hasGeminiApiKeys() && !groqApiKey) {
                                     setMessage('❌ Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
                                     return
                                   }
@@ -9821,7 +9730,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
 
                                   let description = ''
                                   
-                                  if (apiKey) {
+                                  if (hasGeminiApiKeys()) {
                                     try {
                                       const response = await callGeminiWithRetry(prompt, {
                                         courseId: editingCourse || selectedCourseForPrompts || null,

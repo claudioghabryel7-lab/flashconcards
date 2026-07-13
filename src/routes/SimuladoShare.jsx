@@ -2,7 +2,7 @@ import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion, collection, onSnapshot, query, where, getDocs } from 'firebase/firestore'
-import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser, hasGeminiApiKeys } from '../utils/geminiApi'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import ResultExport from '../components/ResultExport'
@@ -351,8 +351,7 @@ const SimuladoShare = () => {
 
       setLoadingStatus('Inicializando gerador de questões...')
       setLoadingProgress(15)
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
+      if (!hasGeminiApiKeys()) {
         throw new Error('VITE_GEMINI_API_KEY não configurada')
       }
 
@@ -598,8 +597,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
   // Gerar tema de redação
   const generateRedacaoTheme = async () => {
     try {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
+      if (!hasGeminiApiKeys()) {
         setRedacaoTema('A importância da eficiência no serviço público')
         return
       }
@@ -614,9 +612,6 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.`
       // Obter contexto do link
       const { getLinkContextForAI } = await import('../utils/linkContent.js')
       const linkContext = referenceLink ? await getLinkContextForAI(referenceLink) : ''
-
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       const themePrompt = `Você é um especialista em criar temas de redação para concursos públicos.
 
@@ -653,8 +648,12 @@ O tema deve ser claro e direto, relacionado APENAS ao concurso ${simuladoData?.c
 
 CRÍTICO: Retorne APENAS o tema, nada mais.`
 
-      const result = await model.generateContent(themePrompt)
-      let theme = result.response.text().trim()
+      const response = await callGeminiWithRetry(themePrompt, {
+        silent: true,
+        verifyContent: false,
+        models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+      })
+      let theme = extractGeneratedText(response).trim()
       theme = theme.replace(/TEMA:/gi, '').trim()
       theme = theme.replace(/"/g, '').trim()
       setRedacaoTema(theme)
@@ -674,14 +673,10 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
     setAnalizingRedacao(true)
 
     try {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
+      if (!hasGeminiApiKeys()) {
         finishSimulado()
         return
       }
-
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
       // Validar tamanho mínimo
       const wordCount = redacaoTexto.trim().split(/\s+/).length
@@ -737,23 +732,9 @@ Retorne APENAS um objeto JSON (NOTA DE 0 A 10):
 
 CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a 2 pontos.`
 
-      const result = await model.generateContent(analysisPrompt)
-      let responseText = result.response.text().trim()
-
-      let jsonText = responseText
-      if (jsonText.includes('```json')) {
-        jsonText = jsonText.split('```json')[1].split('```')[0].trim()
-      } else if (jsonText.includes('```')) {
-        jsonText = jsonText.split('```')[1].split('```')[0].trim()
-      }
-
-      const firstBrace = jsonText.indexOf('{')
-      const lastBrace = jsonText.lastIndexOf('}')
-      if (firstBrace !== -1 && lastBrace !== -1) {
-        jsonText = jsonText.substring(firstBrace, lastBrace + 1)
-      }
-
-      const parsed = JSON.parse(jsonText)
+      const parsed = await generateAiJson(analysisPrompt, {
+        models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+      })
       setRedacaoNota(parsed)
       finishSimulado(parsed)
     } catch (err) {

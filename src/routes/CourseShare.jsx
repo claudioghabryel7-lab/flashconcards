@@ -1,8 +1,42 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
+import { motion } from 'framer-motion'
+import {
+  ArrowRight,
+  BookOpen,
+  Brain,
+  CheckCircle2,
+  HelpCircle,
+  Layers,
+  Sparkles,
+  Zap,
+} from 'lucide-react'
 import { db } from '../firebase/config'
-import { createSlug } from '../utils/slug'
+import { formatCoursePrice } from '../utils/courseAccess'
+
+const benefits = [
+  {
+    icon: Layers,
+    title: 'Edital verticalizado',
+    text: 'Checklist completo por disciplina e tópico — zero ruído.',
+  },
+  {
+    icon: BookOpen,
+    title: 'Flashcards com IA',
+    text: 'Repetição espaçada calibrada no padrão da sua banca.',
+  },
+  {
+    icon: HelpCircle,
+    title: 'Questões preditivas',
+    text: 'Treino no estilo real da prova, com comentários inteligentes.',
+  },
+  {
+    icon: Brain,
+    title: 'Guia Mentorado',
+    text: 'Cronograma e revisão guiada para acelerar sua aprovação.',
+  },
+]
 
 const CourseShare = () => {
   const { courseId } = useParams()
@@ -21,9 +55,7 @@ const CourseShare = () => {
       try {
         setLoading(true)
         setError(null)
-        const courseRef = doc(db, 'courses', courseId)
-        const courseDoc = await getDoc(courseRef)
-        
+        const courseDoc = await getDoc(doc(db, 'courses', courseId))
         if (courseDoc.exists()) {
           setCourse({ id: courseDoc.id, ...courseDoc.data() })
         } else {
@@ -40,172 +72,47 @@ const CourseShare = () => {
     loadCourse()
   }, [courseId])
 
-  // Adicionar meta tags para compartilhamento - TUDO dentro de useEffect para evitar erro #310
   useEffect(() => {
-    // Verificar se está no cliente (não SSR)
     if (typeof window === 'undefined' || typeof document === 'undefined') return
     if (!course || !courseId) return
 
     try {
-      // Obter URL de forma segura
-      let shareUrl = ''
-      try {
-        if (window.location && window.location.origin) {
-          shareUrl = `${window.location.origin}/curso/${courseId}`
-        } else {
-          shareUrl = `/curso/${courseId}`
-        }
-      } catch (err) {
-        console.warn('Erro ao obter URL:', err)
-        shareUrl = `/curso/${courseId}`
-      }
-
+      const shareUrl = `${window.location.origin}/adquirir/${courseId}`
       const imageUrl = course.imageBase64 || course.imageUrl || ''
-      
-      // Criar descrição otimizada para SEO
-      const seoDescription = course.description 
-        ? `${course.description} Curso completo ${course.name} para ${course.competition || 'concursos públicos'}. Aprenda com flashcards interativos, questões e simulados.`
-        : `Curso completo ${course.name} para ${course.competition || 'concursos públicos'}. Aprenda com flashcards interativos, questões e simulados.`
-      
-      // Título otimizado para SEO
-      const seoTitle = `${course.name} - Curso Completo ${course.competition ? `| ${course.competition}` : ''} | FlashConCards`
+      const seoDescription = course.description
+        ? `${course.description} Curso completo ${course.name} para ${course.competition || 'concursos públicos'}.`
+        : `Curso completo ${course.name} para ${course.competition || 'concursos públicos'}.`
+      const seoTitle = `${course.name}${course.competition ? ` | ${course.competition}` : ''} | Concurseiro Preditivo`
 
-      // Remover meta tags antigas
-      const removeOldTags = () => {
-        try {
-          const tags = document.querySelectorAll('meta[property^="og:"], meta[name^="twitter:"], meta[name="description"], script[type="application/ld+json"]')
-          tags.forEach(tag => tag.remove())
-        } catch (err) {
-          console.warn('Erro ao remover meta tags:', err)
-        }
-      }
+      document.title = seoTitle
 
-      removeOldTags()
-
-      // Adicionar novas meta tags
-      const addMetaTag = (property, content) => {
+      const setMeta = (attr, key, content) => {
         if (!content) return
-        try {
-          const tag = document.createElement('meta')
-          if (property.startsWith('og:')) {
-            tag.setAttribute('property', property)
-          } else {
-            tag.setAttribute('name', property)
-          }
-          tag.setAttribute('content', content)
-          document.head.appendChild(tag)
-        } catch (err) {
-          console.warn(`Erro ao adicionar meta tag ${property}:`, err)
+        let el = document.querySelector(`meta[${attr}="${key}"]`)
+        if (!el) {
+          el = document.createElement('meta')
+          el.setAttribute(attr, key)
+          document.head.appendChild(el)
         }
+        el.setAttribute('content', content)
       }
 
-      // Atualizar título e meta description
-      if (course.name) {
-        try {
-          document.title = seoTitle
-          addMetaTag('description', seoDescription.substring(0, 160)) // Limitar a 160 caracteres
-        } catch (err) {
-          console.warn('Erro ao atualizar título:', err)
-        }
-      }
-
-      // Open Graph / Facebook
-      addMetaTag('og:type', 'product')
-      if (shareUrl) addMetaTag('og:url', shareUrl)
-      if (course.name) addMetaTag('og:title', seoTitle)
-      addMetaTag('og:description', seoDescription.substring(0, 200))
-      if (imageUrl) {
-        addMetaTag('og:image', imageUrl)
-        addMetaTag('og:image:width', '1200')
-        addMetaTag('og:image:height', '630')
-        addMetaTag('og:image:alt', `${course.name} - FlashConCards`)
-      }
-
-      // Twitter
-      addMetaTag('twitter:card', 'summary_large_image')
-      if (shareUrl) addMetaTag('twitter:url', shareUrl)
-      if (course.name) addMetaTag('twitter:title', seoTitle)
-      addMetaTag('twitter:description', seoDescription.substring(0, 200))
-      if (imageUrl) {
-        addMetaTag('twitter:image', imageUrl)
-        addMetaTag('twitter:image:alt', `${course.name} - FlashConCards`)
-      }
-
-      // Schema.org JSON-LD para SEO
-      const schemaOrg = {
-        '@context': 'https://schema.org',
-        '@type': 'Product',
-        name: course.name,
-        description: seoDescription,
-        image: imageUrl,
-        brand: {
-          '@type': 'Brand',
-          name: 'FlashConCards'
-        },
-        offers: {
-          '@type': 'Offer',
-          url: shareUrl,
-          priceCurrency: 'BRL',
-          price: course.price?.toFixed(2) || '99.90',
-          availability: 'https://schema.org/InStock',
-          priceValidUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 1 ano
-        },
-        aggregateRating: {
-          '@type': 'AggregateRating',
-          ratingValue: '4.8',
-          reviewCount: '150'
-        }
-      }
-
-      // Adicionar também como EducationalCourse
-      const educationalSchema = {
-        '@context': 'https://schema.org',
-        '@type': 'Course',
-        name: course.name,
-        description: seoDescription,
-        provider: {
-          '@type': 'Organization',
-          name: 'FlashConCards',
-          url: window.location.origin
-        },
-        courseCode: course.competition || '',
-        educationalLevel: 'Professional',
-        teaches: course.description || `Conteúdo completo para ${course.competition || 'concursos públicos'}`,
-        timeRequired: course.courseDuration || 'P6M' // 6 meses padrão
-      }
-
-      // Adicionar schemas ao head
-      try {
-        const schemaScript = document.createElement('script')
-        schemaScript.type = 'application/ld+json'
-        schemaScript.textContent = JSON.stringify([schemaOrg, educationalSchema])
-        document.head.appendChild(schemaScript)
-      } catch (err) {
-        console.warn('Erro ao adicionar Schema.org:', err)
-      }
-
-      // Limpar ao desmontar
-      return () => {
-        try {
-          removeOldTags()
-          if (typeof document !== 'undefined') {
-            document.title = 'FlashConCards'
-          }
-        } catch (err) {
-          console.warn('Erro ao limpar meta tags:', err)
-        }
-      }
+      setMeta('name', 'description', seoDescription)
+      setMeta('property', 'og:title', seoTitle)
+      setMeta('property', 'og:description', seoDescription)
+      setMeta('property', 'og:url', shareUrl)
+      if (imageUrl) setMeta('property', 'og:image', imageUrl)
     } catch (err) {
-      console.error('Erro ao configurar meta tags:', err)
+      console.warn('Erro ao atualizar meta tags:', err)
     }
   }, [course, courseId])
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 p-4">
-        <div className="text-center">
-          <div className="inline-block animate-spin text-blue-500 text-4xl mb-4">⚙️</div>
-          <p className="text-lg font-semibold text-slate-600 dark:text-slate-300">Carregando curso...</p>
+      <div className="flex min-h-[60vh] items-center justify-center text-cp-text">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+          <p className="text-sm text-cp-muted">Carregando oferta do curso…</p>
         </div>
       </div>
     )
@@ -213,134 +120,175 @@ const CourseShare = () => {
 
   if (error || !course) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 p-4">
-        <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 sm:p-8 text-center">
-          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
-            <svg
-              className="h-6 w-6 text-red-600 dark:text-red-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-            {error || 'Curso não encontrado'}
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400 mb-6">
-            O curso que você está procurando não existe ou foi removido.
+      <div className="flex min-h-[60vh] items-center justify-center px-4 text-cp-text">
+        <div className="cp-card max-w-md w-full p-8 text-center space-y-4">
+          <h1 className="cp-headline text-2xl">{error || 'Curso não encontrado'}</h1>
+          <p className="text-sm text-cp-muted">
+            O curso que você procura não existe ou foi removido.
           </p>
-          <Link
-            to="/"
-            className="inline-block rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition"
-          >
-            Voltar para a página inicial
+          <Link to="/cursos" className="cp-btn-primary inline-flex">
+            Ver cursos
           </Link>
         </div>
       </div>
     )
   }
 
-  return (
-    <>
+  const imageSrc = course.imageBase64 || course.imageUrl || ''
+  const priceLabel = formatCoursePrice(course.price) || `R$ ${(course.price ?? 99.9).toFixed(2).replace('.', ',')}`
+  const hasDiscount =
+    typeof course.originalPrice === 'number' &&
+    typeof course.price === 'number' &&
+    course.originalPrice > course.price
 
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30">
-        <div className="max-w-4xl mx-auto px-4 py-6 sm:py-12">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
-            {/* Imagem do curso */}
-            {(course.imageBase64 || course.imageUrl) && (
-              <div className="w-full h-64 md:h-96 overflow-hidden">
+  return (
+    <div className="relative w-full overflow-hidden text-cp-text">
+      <div
+        className="pointer-events-none absolute inset-0 -z-10 opacity-40"
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(34,211,238,0.18), transparent), radial-gradient(ellipse 60% 40% at 100% 50%, rgba(251,146,60,0.12), transparent)',
+        }}
+      />
+
+      <main className="cp-container relative z-10 py-8 sm:py-12">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          className="mx-auto max-w-5xl"
+        >
+          <div className="mb-6 flex flex-wrap items-center gap-2">
+            <span className="cp-badge cp-badge-accent inline-flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5" /> Acesso vitalício
+            </span>
+            <span className="cp-badge cp-badge-cyan inline-flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" /> Engine preditiva
+            </span>
+          </div>
+
+          <div className="overflow-hidden rounded-3xl border border-cp-border bg-cp-surface/70 shadow-[0_0_60px_-20px_rgba(34,211,238,0.35)] backdrop-blur-sm">
+            {imageSrc ? (
+              <div className="relative h-52 w-full overflow-hidden sm:h-72 md:h-80">
                 <img
-                  src={course.imageBase64 || course.imageUrl}
-                  alt={`Curso ${course.name} - ${course.competition || 'Preparatório para Concursos'} - FlashConCards`}
-                  className="w-full h-full object-cover"
+                  src={imageSrc}
+                  alt={course.name}
+                  className="h-full w-full object-cover"
                   loading="eager"
-                  fetchPriority="high"
                 />
+                <div className="absolute inset-0 bg-gradient-to-t from-[var(--cp-bg)] via-[var(--cp-bg)]/40 to-transparent" />
+                <div className="absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6">
+                  {course.competition ? (
+                    <p className="mb-1 text-sm font-semibold text-cp-accent">{course.competition}</p>
+                  ) : null}
+                  <h1 className="cp-headline text-3xl sm:text-4xl md:text-5xl">{course.name}</h1>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 border-b border-cp-border px-5 py-8 sm:px-8">
+                {course.competition ? (
+                  <p className="text-sm font-semibold text-cp-accent">{course.competition}</p>
+                ) : null}
+                <h1 className="cp-headline text-3xl sm:text-4xl">{course.name}</h1>
               </div>
             )}
-            
-            <div className="p-4 sm:p-8">
-              <div className="mb-4">
-                {course.competition && (
-                  <span className="inline-block rounded-full bg-blue-100 dark:bg-blue-900/30 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-blue-700 dark:text-blue-300">
-                    {course.competition}
-                  </span>
-                )}
-              </div>
-              
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-4">
-                {course.name}
-                {course.competition && (
-                  <span className="block text-xl sm:text-2xl text-blue-600 dark:text-blue-400 mt-2">
-                    {course.competition}
-                  </span>
-                )}
-              </h1>
-              
-              {course.description && (
-                <div className="text-base sm:text-lg text-slate-600 dark:text-slate-400 mb-6 space-y-3">
-                  <p className="font-semibold">{course.description}</p>
-                  <p>
-                    Prepare-se para o {course.competition || 'concurso'} com nosso curso completo de {course.name}. 
-                    Aprenda com flashcards interativos, questões comentadas e simulados no estilo da banca examinadora.
+
+            <div className="grid gap-8 p-5 sm:p-8 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="space-y-6">
+                {course.banca ? (
+                  <p className="text-sm text-cp-muted">
+                    Banca: <span className="font-semibold text-cp-text">{course.banca}</span>
                   </p>
-                  <ul className="list-disc list-inside space-y-2 text-sm">
-                    <li>Flashcards inteligentes com sistema de repetição espaçada</li>
-                    <li>Questões comentadas geradas por IA</li>
-                    <li>Simulados completos no estilo da banca</li>
-                    <li>Assistente de IA para tirar dúvidas 24/7</li>
-                    <li>Acesso completo a todo o conteúdo</li>
+                ) : null}
+
+                <p className="text-base leading-relaxed text-cp-muted whitespace-pre-wrap sm:text-lg">
+                  {course.description ||
+                    `Domine ${course.competition || 'seu concurso'} com edital estruturado, flashcards, questões e IA calibrada na banca. Estude com precisão — sem perder tempo com material genérico.`}
+                </p>
+
+                <div>
+                  <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-cp-text">
+                    O que você desbloqueia
+                  </h2>
+                  <ul className="grid gap-3 sm:grid-cols-2">
+                    {benefits.map((item) => {
+                      const Icon = item.icon
+                      return (
+                        <li
+                          key={item.title}
+                          className="rounded-2xl border border-cp-border/80 bg-[var(--cp-bg)]/40 p-4"
+                        >
+                          <div className="mb-2 flex items-center gap-2 text-cp-accent">
+                            <Icon className="h-4 w-4" />
+                            <span className="text-sm font-semibold text-cp-text">{item.title}</span>
+                          </div>
+                          <p className="text-xs leading-relaxed text-cp-muted">{item.text}</p>
+                        </li>
+                      )
+                    })}
                   </ul>
                 </div>
-              )}
-              
-              <div className="mb-6">
-                {course.originalPrice && course.originalPrice > course.price && (
-                  <p className="text-base sm:text-lg text-slate-400 dark:text-slate-500 line-through mb-2">
-                    De R$ {course.originalPrice.toFixed(2)}
-                  </p>
-                )}
-                <p className="text-3xl sm:text-4xl font-black text-blue-600 dark:text-blue-400">
-                  R$ {course.price?.toFixed(2) || '99.90'}
-                </p>
-                {course.courseDuration && (
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-                    ⏱️ Duração: {course.courseDuration}
-                  </p>
-                )}
+
+                <ul className="space-y-2 text-sm text-cp-muted">
+                  {[
+                    'Estudo focado no edital do seu concurso',
+                    'Conteúdo gerado e atualizado com IA',
+                    'Acesso imediato após a confirmação do pagamento',
+                  ].map((line) => (
+                    <li key={line} className="flex items-start gap-2">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cp-accent" />
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+
+              <aside className="h-fit rounded-2xl border border-cp-accent/25 bg-gradient-to-b from-cp-accent/10 to-transparent p-5 sm:p-6">
+                <p className="text-xs font-bold uppercase tracking-widest text-cp-accent">
+                  Oferta do curso
+                </p>
+                <div className="mt-4">
+                  {hasDiscount ? (
+                    <p className="text-sm text-cp-muted line-through">
+                      De {formatCoursePrice(course.originalPrice)}
+                    </p>
+                  ) : null}
+                  <p className="text-4xl font-black tracking-tight text-cp-accent sm:text-5xl">
+                    {priceLabel}
+                  </p>
+                  {course.courseDuration ? (
+                    <p className="mt-2 text-xs text-cp-muted">Duração: {course.courseDuration}</p>
+                  ) : (
+                    <p className="mt-2 text-xs text-cp-muted">Pagamento único · acesso liberado na hora</p>
+                  )}
+                </div>
+
+                <p className="mt-5 text-sm leading-relaxed text-cp-muted">
+                  Pare de estudar no escuro. Ative o modo preditivo e treine exatamente o que a banca
+                  cobra.
+                </p>
+
                 <Link
                   to={`/pagamento?course=${courseId}`}
-                  onClick={() => {
-                    console.log('Navegando para pagamento com courseId:', courseId)
-                  }}
-                  className="flex-1 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-6 sm:px-8 py-3 sm:py-4 text-center text-base sm:text-lg font-bold text-white shadow-lg hover:shadow-xl hover:from-blue-500 hover:to-purple-500 transition-all transform hover:scale-105 active:scale-95"
+                  className="cp-btn-primary mt-6 flex w-full items-center justify-center gap-2 !py-3.5 !text-base"
                 >
-                  Comprar Agora
+                  Adquirir curso agora
+                  <ArrowRight className="h-4 w-4" />
                 </Link>
+
                 <Link
-                  to="/"
-                  className="flex-1 rounded-full border-2 border-slate-300 dark:border-slate-600 px-6 sm:px-8 py-3 sm:py-4 text-center text-base sm:text-lg font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-95"
+                  to="/cursos"
+                  className="mt-3 flex w-full items-center justify-center rounded-xl border border-cp-border px-4 py-3 text-sm font-semibold text-cp-text transition hover:bg-cp-surface"
                 >
-                  Ver Todos os Cursos
+                  Ver outros cursos
                 </Link>
-              </div>
+              </aside>
             </div>
           </div>
-        </div>
-      </div>
-    </>
+        </motion.div>
+      </main>
+    </div>
   )
 }
 
 export default CourseShare
-

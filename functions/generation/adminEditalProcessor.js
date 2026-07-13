@@ -1,5 +1,5 @@
 const admin = require('firebase-admin')
-const { generateAiJson } = require('./geminiServer')
+const { generateAiJsonWithJobHeartbeat } = require('./generationJobResume')
 
 function getDb() {
   return admin.firestore()
@@ -127,9 +127,15 @@ async function processAdminEditalVerticalizado(userId, jobId, courseId, serverPa
     })
 
     const prompt = buildVerticalizadoPrompt(chunk, editalText, chunks)
-    const parsed = await generateAiJson(prompt, {
-      generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
-    })
+    const parsed = await generateAiJsonWithJobHeartbeat(
+      userId,
+      jobId,
+      prompt,
+      {
+        generationConfig: { temperature: 0.3, maxOutputTokens: 32000 },
+      },
+      `Processando parte ${chunk.parte}/${chunk.totalPartes}…`,
+    )
 
     if (parsed?.titulo) tituloComum = parsed.titulo
     if (Array.isArray(parsed?.disciplinas)) {
@@ -165,9 +171,15 @@ Retorne APENAS JSON: {"banca":"","concursoName":"","cargo":"","courseName":"","t
 
   let unifiedData = { banca: '', concursoName: '', cargo: '', courseName: '', tipoProva: 'ABCD' }
   try {
-    unifiedData = await generateAiJson(unifiedPrompt, {
-      generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
-    })
+    unifiedData = await generateAiJsonWithJobHeartbeat(
+      userId,
+      jobId,
+      unifiedPrompt,
+      {
+        generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+      },
+      'Gerando prompt unificado…',
+    )
   } catch {
     // mantém defaults
   }

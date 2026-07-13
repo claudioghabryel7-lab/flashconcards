@@ -4,7 +4,7 @@ import { collection, getDocs, query, where, doc, setDoc } from 'firebase/firesto
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { AcademicCapIcon, CheckCircleIcon, MagnifyingGlassIcon } from '@heroicons/react/24/solid'
-import { buildWhatsAppCourseUrl, formatCoursePrice, hasPurchasedCourse } from '../utils/courseAccess'
+import { formatCoursePrice, hasPurchasedCourse } from '../utils/courseAccess'
 
 const CourseSelector = () => {
   const { user, profile } = useAuth()
@@ -30,7 +30,7 @@ const CourseSelector = () => {
           ...doc.data(),
         }))
 
-        // Todos os cursos ativos (preview gratuito para não comprados)
+        // Todos os cursos ativos
         const purchasedCourses = profile.purchasedCourses || []
         const isAdmin = profile.role === 'admin'
         
@@ -59,7 +59,13 @@ const CourseSelector = () => {
   }, [profile])
 
   const handleSelectCourse = async () => {
-    if (!user || selectedCourseId === undefined) return
+    if (!user || selectedCourseId === undefined || selectedCourseId === null) return
+
+    const course = courses.find((c) => c.id === selectedCourseId)
+    if (course && !hasPurchasedCourse(profile, course.id) && course.id !== 'alego-default') {
+      navigate(`/adquirir/${course.id}`)
+      return
+    }
 
     setSaving(true)
     try {
@@ -71,7 +77,6 @@ const CourseSelector = () => {
       navigate('/dashboard')
     } catch (err) {
       console.error('Erro ao salvar curso selecionado:', err)
-      // Mesmo com erro, tentar navegar
       navigate('/dashboard')
     } finally {
       setSaving(false)
@@ -162,7 +167,13 @@ const CourseSelector = () => {
               >
                 <button
                   type="button"
-                  onClick={() => setSelectedCourseId(course.id)}
+                  onClick={() => {
+                    if (!owned && course.id !== 'alego-default') {
+                      navigate(`/adquirir/${course.id}`)
+                      return
+                    }
+                    setSelectedCourseId(course.id)
+                  }}
                   className="w-full text-left p-4 hover:scale-[1.01] active:scale-[0.99] transition-all"
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -195,22 +206,17 @@ const CourseSelector = () => {
                         {owned && (
                           <p className="mt-1 text-xs font-semibold text-accent-cyan">Curso adquirido</p>
                         )}
-                        {!owned && course.id !== 'alego-default' && (
-                          <p className="mt-0.5 text-xs text-text-muted">Preview: 3 tópicos + Guia Mentorado</p>
-                        )}
                       </div>
                     </div>
-                    {!owned && course.id !== 'alego-default' && (
-                      <a
-                        href={buildWhatsAppCourseUrl(course.name)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="shrink-0 rounded-lg bg-accent-orange px-3 py-2 text-xs font-bold text-background-primary hover:bg-accent-orange-dim transition-colors"
-                      >
-                        Comprar
-                      </a>
-                    )}
+                        {!owned && course.id !== 'alego-default' && (
+                          <a
+                            href={`/adquirir/${course.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="shrink-0 rounded-lg bg-accent-orange px-3 py-2 text-xs font-bold text-background-primary hover:bg-accent-orange-dim transition-colors"
+                          >
+                            Comprar
+                          </a>
+                        )}
                   </div>
                 </button>
               </div>

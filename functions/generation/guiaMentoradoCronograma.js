@@ -1,5 +1,5 @@
 const admin = require('firebase-admin')
-const { generateAiJson } = require('./geminiServer')
+const { generateAiJsonWithJobHeartbeat } = require('./generationJobResume')
 const {
   buildMentoradoCronogramaPrompt,
   getTodayKeyInSaoPaulo,
@@ -290,9 +290,15 @@ async function processGuiaMentoradoCronograma(userId, jobId, courseId, serverPay
 
   await updateJob(userId, jobId, { progress: 15, message: 'Gerando cronograma com IA na nuvem…' })
 
-  const cronogramaIA = await generateAiJson(prompt, {
-    generationConfig: { temperature: 0.35, maxOutputTokens: 65536 },
-  })
+  const cronogramaIA = await generateAiJsonWithJobHeartbeat(
+    userId,
+    jobId,
+    prompt,
+    {
+      generationConfig: { temperature: 0.35, maxOutputTokens: 65536 },
+    },
+    'Gerando cronograma com IA na nuvem…',
+  )
 
   if (!cronogramaIA.cronograma || !Array.isArray(cronogramaIA.cronograma)) {
     throw new Error('Estrutura de JSON inválida: não contém array "cronograma"')

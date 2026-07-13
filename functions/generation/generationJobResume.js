@@ -1,8 +1,9 @@
 const admin = require('firebase-admin')
 const {
-  getGeminiKeysInOrder,
+  getAvailableGeminiKeysInOrder,
   silentProbeGeminiKey,
   collectMotherGeminiApiKey,
+  isKeyUnavailable,
 } = require('./geminiKeyPool')
 
 const JOB_HEARTBEAT_MS = 5 * 1000
@@ -248,13 +249,14 @@ async function pauseJobForApi(params) {
 }
 
 async function hasAvailableGeminiKey() {
-  const keys = getGeminiKeysInOrder()
+  // Só sonda chaves livres — não fica re-testando a mesma expirada/ocupada a cada 5s.
+  const keys = getAvailableGeminiKeysInOrder()
   for (const key of keys) {
     const ok = await silentProbeGeminiKey(key)
     if (ok) return true
   }
   const mother = collectMotherGeminiApiKey()
-  if (mother && !keys.includes(mother)) {
+  if (mother && !keys.includes(mother) && !isKeyUnavailable(mother)) {
     return silentProbeGeminiKey(mother)
   }
   return false
@@ -343,6 +345,52 @@ async function cancelAllGenerationJobs(userId) {
   return { ok: true, cancelled }
 }
 
+/**
+ * Cancela TODOS os jobs ativos (qualquer usuário) via generationActiveJobs + fila de retomada.
+ * Uso admin: força parada global.
+ */
+async function cancelAllActiveJobsGlobally() {
+  const db = getDb()
+  let cancelled = 0
+
+  const activeSnap = await db.collection('generationActiveJobs').get()
+  for (const doc of activeSnap.docs) {
+    const data = doc.data() || {}
+    const userId = data.userId
+    const jobId = data.jobId || doc.id
+    if (!userId || !jobId) {
+      await doc.ref.delete().catch(() => {})
+      continue
+    }
+    try {
+      const result = await cancelGenerationJob(userId, jobId)
+      if (result?.ok) cancelled += 1
+    } catch {
+      await clearResumeQueue(jobId)
+      await clearActiveJob(jobId)
+    }
+  }
+
+  const queueSnap = await db.collection('generationResumeQueue').get()
+  for (const doc of queueSnap.docs) {
+    const data = doc.data() || {}
+    const userId = data.userId
+    const jobId = data.jobId || doc.id
+    if (userId && jobId) {
+      try {
+        const result = await cancelGenerationJob(userId, jobId)
+        if (result?.ok) cancelled += 1
+      } catch {
+        await clearResumeQueue(jobId)
+      }
+    } else {
+      await doc.ref.delete().catch(() => {})
+    }
+  }
+
+  return { ok: true, cancelled }
+}
+
 async function runWithHeartbeat(work, onHeartbeat, intervalMs = JOB_HEARTBEAT_MS, shouldAbort = null) {
   let active = true
   let abortError = null
@@ -378,6 +426,39 @@ async function runWithHeartbeat(work, onHeartbeat, intervalMs = JOB_HEARTBEAT_MS
     active = false
     clearInterval(timer)
   }
+}
+
+/**
+ * Gera JSON com IA mantendo heartbeat do job a cada 5s.
+ * Evita falso "sem sinal" / stall durante chamadas longas ao Gemini.
+ */
+async function generateAiJsonWithJobHeartbeat(
+  userId,
+  jobId,
+  prompt,
+  options = {},
+  keepAliveMessage = null,
+) {
+  const { generateAiJson } = require('./geminiServer')
+  return runWithHeartbeat(
+    () => generateAiJson(prompt, options),
+    async () => {
+      const ts = admin.firestore.FieldValue.serverTimestamp()
+      await Promise.all([
+        touchActiveJob(userId, jobId, { status: 'running' }),
+        getDb()
+          .doc(`users/${userId}/generationJobs/${jobId}`)
+          .update({
+            progressUpdatedAt: ts,
+            updatedAt: ts,
+            ...(keepAliveMessage ? { message: keepAliveMessage } : {}),
+          })
+          .catch(() => {}),
+      ])
+    },
+    JOB_HEARTBEAT_MS,
+    async () => isJobCancelled(userId, jobId),
+  )
 }
 
 function isJobProgressStale(jobData, stallMs = STALL_PROGRESS_MS) {
@@ -831,6 +912,7 @@ module.exports = {
   nudgeStalledGenerationJob,
   cancelGenerationJob,
   cancelAllGenerationJobs,
+  cancelAllActiveJobsGlobally,
   hasAvailableGeminiKey,
   touchActiveJob,
   clearActiveJob,
@@ -838,6 +920,7 @@ module.exports = {
   clearResumeQueue,
   shouldCheckpointTimeout,
   runWithHeartbeat,
+  generateAiJsonWithJobHeartbeat,
   CF_SAFE_MS,
   JOB_HEARTBEAT_MS,
   STALL_PROGRESS_MS,

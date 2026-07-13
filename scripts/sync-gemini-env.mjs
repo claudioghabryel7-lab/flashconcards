@@ -1,5 +1,6 @@
 /**
  * Copia VITE_GEMINI_API_KEY* do .env.local (raiz) para functions/.env como GEMINI_API_KEY*.
+ * Inclui VITE_GEMINI_API_KEY_MAE → GEMINI_API_KEY_MAE (CHAVE MOTHER).
  * Rode antes de `firebase deploy --only functions` se as chaves só existirem no Next.
  */
 import fs from 'fs'
@@ -23,6 +24,17 @@ const seen = new Set()
 for (const line of lines) {
   const trimmed = line.trim()
   if (!trimmed || trimmed.startsWith('#')) continue
+
+  const mother = trimmed.match(/^VITE_GEMINI_API_KEY_MAE=(.+)$/)
+  if (mother) {
+    const value = mother[1].trim().replace(/^["']|["']$/g, '')
+    if (!seen.has('GEMINI_API_KEY_MAE')) {
+      seen.add('GEMINI_API_KEY_MAE')
+      geminiLines.push(`GEMINI_API_KEY_MAE=${value}`)
+    }
+    continue
+  }
+
   const match = trimmed.match(/^VITE_GEMINI_API_KEY(_\d+)?=(.+)$/)
   if (!match) continue
 
@@ -49,7 +61,7 @@ const preserved = existing
   .filter((line) => {
     const t = line.trim()
     if (!t || t.startsWith('#')) return true
-    return !/^GEMINI_API_KEY(_\d+)?=/.test(t)
+    return !/^GEMINI_API_KEY(_\d+)?(=|$)/.test(t) && !/^GEMINI_API_KEY_MAE=/.test(t)
   })
   .join('\n')
   .trimEnd()
@@ -62,4 +74,4 @@ const header = [
 
 const output = [preserved, header, ...geminiLines, ''].filter(Boolean).join('\n')
 fs.writeFileSync(targetPath, output, 'utf8')
-console.log(`✅ ${geminiLines.length} chave(s) Gemini copiada(s) para functions/.env`)
+console.log(`✅ ${geminiLines.length} chave(s) Gemini copiada(s) para functions/.env (inclui CHAVE MOTHER se houver)`)

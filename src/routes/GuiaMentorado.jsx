@@ -64,10 +64,7 @@ const GuiaMentorado = () => {
         const visible = isAdminUser
           ? coursesList
           : coursesList.filter(
-              (c) =>
-                c.id === 'alego-default' ||
-                hasPurchasedCourse(profile, c.id) ||
-                c.id === profile?.selectedCourseId
+              (c) => c.id === 'alego-default' || hasPurchasedCourse(profile, c.id),
             )
 
         setCourses(visible)

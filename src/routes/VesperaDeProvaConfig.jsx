@@ -5,6 +5,7 @@ import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { callGeminiWithRetry, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { startBackgroundGeneration } from '../services/aiGenerationRunner'
 import {
   SparklesIcon,
   ArrowLeftIcon,
@@ -430,129 +431,39 @@ REGRAS:
 - Retorne APENAS o JSON válido, sem texto adicional
 - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
 
-      setGenerationStatus('Enviando solicitação para a IA...')
-      
-      // Usar callGeminiWithRetry que já tem teste silencioso de API keys
-      const response = await callGeminiWithRetry(prompt, {
+      setGenerationStatus('Enviando para geração em segundo plano…')
+
+      if (!user?.uid) {
+        throw new Error('Usuário não autenticado.')
+      }
+
+      const { promise } = await startBackgroundGeneration({
+        userId: user.uid,
         courseId,
-        generationConfig: {
-          temperature: 0.35,
-          maxOutputTokens: 65536,
+        jobType: 'vespera_prova',
+        topicKey: disciplina.nome || `disciplina_${disciplinaIdx}`,
+        metadata: {
+          label: `Véspera — ${disciplina.nome}`,
+          disciplina: disciplina.nome,
         },
-        useGoogleSearch: true,
+        runOnServer: true,
+        serverPayload: {
+          prompt,
+          disciplinaNome: disciplina.nome,
+          banca: bancaExaminadora,
+          concurso,
+        },
       })
-      
-      setGenerationStatus('Processando resposta da IA...')
-      
-      const generatedText = response.candidates[0]?.content?.parts[0]?.text
-      
-      if (!generatedText) {
-        throw new Error('A IA não retornou nenhum conteúdo')
-      }
-      
-      console.log('📝 [RevisaoConfig] Texto gerado, tamanho:', generatedText.length)
-      
-      // Extrair JSON removendo blocos de código markdown
-      let jsonText = generatedText.trim()
-      if (jsonText.includes('```json')) {
-        jsonText = jsonText.split('```json')[1].split('```')[0].trim()
-      } else if (jsonText.includes('```')) {
-        jsonText = jsonText.split('```')[1].split('```')[0].trim()
-      }
-      
-      console.log('📝 [RevisaoConfig] JSON extraído, tamanho:', jsonText.length)
-      
-      // Parsear JSON
-      let materialData = null
-      try {
-        materialData = JSON.parse(jsonText)
-        console.log('✅ [RevisaoConfig] JSON parseado com sucesso')
-      } catch (parseError) {
-        console.error('❌ [RevisaoConfig] Erro ao fazer parse do JSON:', parseError.message)
-        console.error('❌ [RevisaoConfig] JSON que falhou:', jsonText.substring(0, 500))
-        
-        // Tentar completar JSON cortado
-        try {
-          const openBraces = (jsonText.match(/\{/g) || []).length
-          const closeBraces = (jsonText.match(/\}/g) || []).length
-          const openBrackets = (jsonText.match(/\[/g) || []).length
-          const closeBrackets = (jsonText.match(/\]/g) || []).length
-          
-          let completedJson = jsonText
-          
-          // Adicionar chaves/colchetes faltantes
-          for (let i = 0; i < openBraces - closeBraces; i++) {
-            completedJson += '}'
-          }
-          for (let i = 0; i < openBrackets - closeBrackets; i++) {
-            completedJson += ']'
-          }
-          
-          // Remover vírgula no final se houver
-          completedJson = completedJson.replace(/,\s*}/g, '}')
-          completedJson = completedJson.replace(/,\s*]/g, ']')
-          
-          materialData = JSON.parse(completedJson)
-          console.log('✅ [RevisaoConfig] JSON completado com sucesso')
-        } catch (completeError) {
-          console.error('❌ [RevisaoConfig] Erro ao completar JSON:', completeError.message)
-          
-          // Tentar corrigir JSON
-          let fixedJson = jsonText
-          fixedJson = fixedJson.replace(/[\x00-\x1F\x7F-\x9F]/g, '')
-          fixedJson = fixedJson.replace(/[\u2028\u2029\u200B\u200C\u200D\uFEFF]/g, '')
-          fixedJson = fixedJson.replace(/\r\n/g, '\n')
-          fixedJson = fixedJson.replace(/\r/g, '\n')
-          fixedJson = fixedJson.replace(/,\s*}/g, '}')
-          fixedJson = fixedJson.replace(/,\s*]/g, ']')
-          
-          try {
-            materialData = JSON.parse(fixedJson)
-            console.log('✅ [RevisaoConfig] JSON corrigido e parseado')
-          } catch (fixError) {
-            console.error('❌ [RevisaoConfig] Falha ao corrigir JSON:', fixError.message)
-            throw new Error(`JSON inválido ou incompleto: ${fixError.message}. Tente gerar novamente.`)
-          }
-        }
-      }
-      
-      // Salvar no Firestore (adicionar ao material existente ou criar novo)
-      setGenerationStatus('Salvando material...')
-      
-      const materialRef = doc(db, 'courses', courseId, 'vesperaDeProva', 'material')
-      const materialDoc = await getDoc(materialRef)
-      
-      let existingMaterial = []
-      if (materialDoc.exists()) {
-        const materialData = materialDoc.data()
-        existingMaterial = materialData.material || []
-      }
-      
-      // Verificar se a disciplina já existe e atualizar, ou adicionar nova
-      const existingIndex = existingMaterial.findIndex(m => m.disciplina === materialData.disciplina)
-      if (existingIndex !== -1) {
-        existingMaterial[existingIndex] = materialData
-      } else {
-        existingMaterial.push(materialData)
-      }
-      
-      await setDoc(materialRef, {
-        material: existingMaterial,
-        banca: bancaExaminadora,
-        concurso: concurso,
-        generatedAt: serverTimestamp(),
-        generatedBy: user.uid,
-      })
-      
-      console.log('✅ [RevisaoConfig] Material salvo com sucesso')
-      
-      // Atualizar status
-      setMateriasStatus(prev => ({ ...prev, [disciplinaIdx]: 'completed' }))
-      setGenerationStatus(`✅ ${disciplina.nome} gerado com sucesso!`)
-      
+
+      setGenerationStatus('Gerando em segundo plano… (pode fechar a aba)')
+      await promise
+
+      setMateriasStatus((prev) => ({ ...prev, [disciplinaIdx]: 'completed' }))
+      setGenerationStatus(`✅ ${disciplina.nome} enfileirado/concluído!`)
+
       setTimeout(() => {
         setGenerationStatus('')
-      }, 2000)
+      }, 2500)
       
     } catch (error) {
       console.error('❌ [RevisaoConfig] Erro ao gerar material:', error)

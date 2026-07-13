@@ -4,6 +4,7 @@ import {
   PauseCircleIcon,
   PlayCircleIcon,
   RocketLaunchIcon,
+  StopCircleIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../../hooks/useAuth'
@@ -14,6 +15,7 @@ import {
   setMaintenanceMode,
   startMentoradoBackfillAllCourses,
 } from '../../services/adminPlatformService'
+import { forceStopAllGenerationJobsGlobally } from '../../services/generationJobService'
 
 export default function AdminPlatformMaintenance() {
   const { user } = useAuth()
@@ -22,6 +24,7 @@ export default function AdminPlatformMaintenance() {
   const [togglingStandby, setTogglingStandby] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [stoppingJobs, setStoppingJobs] = useState(false)
   const [progress, setProgress] = useState('')
   const [feedback, setFeedback] = useState('')
 
@@ -121,7 +124,26 @@ export default function AdminPlatformMaintenance() {
     }
   }
 
-  const busy = deleting || generating || togglingStandby
+  const handleForceStopAllJobs = async () => {
+    if (stoppingJobs) return
+    const ok = window.confirm(
+      'FORÇAR PARADA de TODOS os jobs de geração (todos os usuários, em segundo plano ou não)?\n\nIsso cancela imediatamente tudo que estiver rodando ou aguardando.',
+    )
+    if (!ok) return
+
+    setStoppingJobs(true)
+    setFeedback('')
+    try {
+      const result = await forceStopAllGenerationJobsGlobally()
+      setFeedback(`✅ Parados ${result.cancelled ?? 0} job(s) em todo o sistema.`)
+    } catch (err) {
+      setFeedback(`❌ ${err.message || 'Erro ao parar jobs.'}`)
+    } finally {
+      setStoppingJobs(false)
+    }
+  }
+
+  const busy = deleting || generating || togglingStandby || stoppingJobs
 
   return (
     <div className="rounded-2xl border-2 border-rose-200 bg-gradient-to-br from-rose-50 to-orange-50 p-6 shadow-lg dark:border-rose-800 dark:from-rose-900/20 dark:to-orange-900/10">
@@ -155,6 +177,16 @@ export default function AdminPlatformMaintenance() {
         >
           <RocketLaunchIcon className={`h-5 w-5 ${generating ? 'animate-pulse' : ''}`} />
           {generating ? 'Iniciando…' : 'Gerar Guia Mentorado (dia 1 → hoje)'}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleForceStopAllJobs}
+          disabled={busy}
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-slate-800 to-red-700 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-slate-900 hover:to-red-800 disabled:opacity-50"
+        >
+          <StopCircleIcon className={`h-5 w-5 ${stoppingJobs ? 'animate-pulse' : ''}`} />
+          {stoppingJobs ? 'Parando…' : 'Forçar parada de TODOS os jobs'}
         </button>
 
         <button

@@ -17,8 +17,19 @@ const {
   DEFAULT_FROM_NAME,
 } = require('./emailUtils')
 const { MercadoPagoConfig, Payment } = require('mercadopago')
-const { GoogleGenerativeAI } = require('@google/generative-ai')
 const axios = require('axios')
+const { generateAiJson } = require('./generation/geminiServer')
+const { collectGeminiApiKeys, collectMotherGeminiApiKey } = require('./generation/geminiKeyPool')
+
+function assertGeminiConfigured() {
+  const keys = collectGeminiApiKeys()
+  const mother = collectMotherGeminiApiKey()
+  if (!keys.length && !mother) {
+    const err = new Error('GEMINI_API_KEY não configurada')
+    err.code = 'gemini_not_configured'
+    throw err
+  }
+}
 
 admin.initializeApp()
 try {
@@ -1442,7 +1453,15 @@ exports.cancelGenerationJob = functions.https.onRequest((req, res) => {
     }
     try {
       const authUser = await verifyAuthRequest(req)
-      const { userId, jobId, all } = req.body || {}
+      const { userId, jobId, all, global } = req.body || {}
+
+      if (global) {
+        await verifyAdminRequest(req)
+        const { cancelAllActiveJobsGlobally } = getResumeModule()
+        const result = await cancelAllActiveJobsGlobally()
+        return res.status(200).json(result)
+      }
+
       if (!userId) {
         return res.status(400).json({ error: 'userId é obrigatório' })
       }
@@ -1586,8 +1605,9 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
     }
 
     try {
-      const apiKey = functions.config().gemini?.api_key || process.env.GEMINI_API_KEY
-      if (!apiKey) {
+      try {
+        assertGeminiConfigured()
+      } catch {
         return res.status(500).json({ error: 'GEMINI_API_KEY não configurada' })
       }
 
@@ -1666,15 +1686,6 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
         date: news.createdAt?.toDate?.()?.toLocaleDateString('pt-BR') || ''
       }))
 
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ 
-        model: 'gemini-2.0-flash',
-        generationConfig: {
-          maxOutputTokens: 8000,
-          temperature: 0.7,
-        }
-      })
-
       // Preparar lista de notícias recentes para a IA evitar repetição
       const recentTitlesText = recentNewsList.length > 0 
         ? `\n\nNOTÍCIAS RECENTES JÁ GERADAS (EVITE REPETIR):\n${recentNewsList.slice(0, 5).map((n, i) => `${i + 1}. "${n.seoTitle || n.text || ''}" - ${n.concursoData?.concursoName || 'N/A'} (${n.createdAt?.toDate?.()?.toLocaleDateString('pt-BR') || ''})`).join('\n')}\n\nIMPORTANTE: NÃO gere uma notícia sobre os mesmos concursos listados acima. Escolha um concurso DIFERENTE ou uma atualização significativa com informações novas.`
@@ -1742,25 +1753,18 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
       - Comece diretamente com { e termine com }`
 
       console.log('🤖 Gerando notícia de concurso com IA...')
-      const result = await model.generateContent(prompt)
-      const aiResponse = result.response.text()
-
-      // Limpar resposta da IA (remover markdown se houver)
-      let jsonText = aiResponse.trim()
-      if (jsonText.startsWith('```json')) {
-        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
-      } else if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/```\n?/g, '')
-      }
-
-      // Parsear JSON
       let newsData
       try {
-        newsData = JSON.parse(jsonText)
-      } catch (parseError) {
-        console.error('Erro ao parsear JSON da IA:', parseError)
-        console.error('Resposta da IA:', aiResponse.substring(0, 500))
-        return res.status(500).json({ error: 'Erro ao processar resposta da IA', raw: aiResponse.substring(0, 500) })
+        newsData = await generateAiJson(prompt, {
+          useGoogleSearch: true,
+          generationConfig: { maxOutputTokens: 8000, temperature: 0.7 },
+        })
+      } catch (aiError) {
+        console.error('Erro ao gerar/parsear JSON da IA:', aiError)
+        return res.status(500).json({
+          error: 'Erro ao processar resposta da IA',
+          message: aiError?.message || 'Falha na geração',
+        })
       }
 
       // Validar dados obrigatórios
@@ -1840,22 +1844,13 @@ exports.scheduledGenerateConcursoNews = functions.pubsub
   .onRun(async (context) => {
     try {
       console.log('🔄 Iniciando geração automática de notícias de concursos...')
-      
-      const apiKey = functions.config().gemini?.api_key || process.env.GEMINI_API_KEY
-      if (!apiKey) {
+
+      try {
+        assertGeminiConfigured()
+      } catch {
         console.error('GEMINI_API_KEY não configurada')
         return null
       }
-
-      // Chamar a função de geração diretamente (sem HTTP)
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ 
-        model: 'gemini-2.0-flash',
-        generationConfig: {
-          maxOutputTokens: 8000,
-          temperature: 0.7,
-        }
-      })
 
       const prompt = `Você é um especialista em concursos públicos brasileiros. 
       Sua tarefa é criar uma notícia completa e atualizada sobre concursos públicos abertos ou iminentes.
@@ -1913,19 +1908,10 @@ exports.scheduledGenerateConcursoNews = functions.pubsub
       - Retorne APENAS o JSON, sem markdown, sem explicações adicionais
       - Comece diretamente com { e termine com }`
 
-      const result = await model.generateContent(prompt)
-      const aiResponse = result.response.text()
-
-      // Limpar resposta da IA
-      let jsonText = aiResponse.trim()
-      if (jsonText.startsWith('```json')) {
-        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
-      } else if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/```\n?/g, '')
-      }
-
-      // Parsear JSON
-      const newsData = JSON.parse(jsonText)
+      const newsData = await generateAiJson(prompt, {
+        useGoogleSearch: true,
+        generationConfig: { maxOutputTokens: 8000, temperature: 0.7 },
+      })
 
       // Validar dados obrigatórios
       if (!newsData.title || !newsData.content) {
@@ -2015,8 +2001,9 @@ exports.generateNewsFromLink = functions.https.onRequest((req, res) => {
         return res.status(400).json({ error: 'URL inválida' })
       }
 
-      const apiKey = functions.config().gemini?.api_key || process.env.GEMINI_API_KEY
-      if (!apiKey) {
+      try {
+        assertGeminiConfigured()
+      } catch {
         return res.status(500).json({ error: 'GEMINI_API_KEY não configurada' })
       }
 
@@ -2063,15 +2050,6 @@ exports.generateNewsFromLink = functions.https.onRequest((req, res) => {
       }
 
       // Gerar notícia com IA baseada no conteúdo
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ 
-        model: 'gemini-2.0-flash',
-        generationConfig: {
-          maxOutputTokens: 8000,
-          temperature: 0.7,
-        }
-      })
-
       const prompt = `Você é um especialista em concursos públicos brasileiros e jornalista de notícias.
 
 CONTEÚDO DA PÁGINA DE REFERÊNCIA (extraído do link fornecido):
@@ -2141,27 +2119,17 @@ IMPORTANTE:
 - Comece diretamente com { e termine com }`
 
       console.log('🤖 Gerando notícia com IA baseada no link...')
-      const result = await model.generateContent(prompt)
-      const aiResponse = result.response.text()
-
-      // Limpar resposta da IA
-      let jsonText = aiResponse.trim()
-      if (jsonText.startsWith('```json')) {
-        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
-      } else if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/```\n?/g, '')
-      }
-
-      // Parsear JSON
       let newsData
       try {
-        newsData = JSON.parse(jsonText)
+        newsData = await generateAiJson(prompt, {
+          useGoogleSearch: false,
+          generationConfig: { maxOutputTokens: 8000, temperature: 0.7 },
+        })
       } catch (parseError) {
         console.error('Erro ao parsear JSON da IA:', parseError)
-        console.error('Resposta da IA:', aiResponse.substring(0, 500))
-        return res.status(500).json({ 
-          error: 'Erro ao processar resposta da IA', 
-          raw: aiResponse.substring(0, 500) 
+        return res.status(500).json({
+          error: 'Erro ao processar resposta da IA',
+          message: parseError?.message || 'Falha na geração',
         })
       }
 

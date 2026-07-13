@@ -2,7 +2,11 @@ const functions = require('firebase-functions')
 const path = require('path')
 const fs = require('fs')
 const { jsonrepair } = require('jsonrepair')
-const { geminiRequestWithKeyFallback, collectGeminiApiKeys } = require('./geminiKeyPool')
+const {
+  geminiRequestWithKeyFallback,
+  collectGeminiApiKeys,
+  collectMotherGeminiApiKey,
+} = require('./geminiKeyPool')
 
 const MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro']
 
@@ -258,7 +262,8 @@ function isRetryableAiError(error) {
 
 async function callGemini(prompt, options = {}) {
   const apiKeys = collectGeminiApiKeys()
-  if (!apiKeys.length) {
+  const motherKey = collectMotherGeminiApiKey()
+  if (!apiKeys.length && !motherKey) {
     throw new Error(
       'GEMINI_API_KEY não configurada nas Cloud Functions. Rode `npm run sync:gemini-env` e faça deploy das functions.',
     )

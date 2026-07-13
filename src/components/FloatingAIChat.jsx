@@ -13,8 +13,7 @@ import {
   serverTimestamp,
   where,
 } from 'firebase/firestore'
-import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
-import { geminiFetch, buildGeminiHeaders } from '../utils/geminiHttp'
+import { callGeminiWithRetry, extractGeneratedText, hasGeminiApiKeys } from '../utils/geminiApi'
 import {
   PaperAirplaneIcon,
   XMarkIcon,
@@ -285,93 +284,18 @@ const FloatingAIChat = () => {
     return () => unsub()
   }, [user, isOpen])
 
-  // Descobrir modelo disponível (executar apenas uma vez)
+  // Modelo padrão — a rotação de chaves acontece em callGeminiWithRetry
   useEffect(() => {
-    if (availableModel) return // Já tem modelo, não precisa procurar novamente
-    
-    const findAvailableModel = async () => {
-      const apiKey = readEnv('VITE_GEMINI_API_KEY')
-      if (!apiKey) {
-        console.warn('⚠️ VITE_GEMINI_API_KEY não configurada')
-        setModelError('API key do Gemini não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env')
-        return
-      }
+    if (availableModel) return
 
-      console.log('🔍 Procurando modelo disponível...')
-      
-      // Tentar modelos conhecidos diretamente (mais rápido) - apenas os que funcionam
-      const knownModels = ['gemini-2.5-flash', 'gemini-2.5-pro']
-      
-      for (const modelName of knownModels) {
-        try {
-          console.log(`🧪 Testando modelo: ${modelName}`)
-          const response = await geminiFetch(modelName, apiKey, {
-            contents: [{ parts: [{ text: 'test' }] }],
-            generationConfig: { maxOutputTokens: 10 },
-          })
-          if (response.ok) {
-            console.log(`✅ Modelo encontrado: ${modelName}`)
-            setAvailableModel(modelName)
-            return
-          }
-        } catch (err) {
-          console.log(`❌ Modelo ${modelName} não disponível:`, err.message)
-        }
-      }
-      
-      // Se nenhum modelo conhecido funcionou, tentar listar da API
-      console.log('🔍 Listando modelos da API...')
-      try {
-        const listUrl = apiKey.startsWith('AQ.')
-          ? 'https://generativelanguage.googleapis.com/v1beta/models'
-          : `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`
-        const listResponse = await fetch(listUrl, { headers: buildGeminiHeaders(apiKey) })
-        
-        if (!listResponse.ok) {
-          console.error('❌ Erro ao listar modelos:', listResponse.status)
-          setModelError('Erro ao conectar com a API do Gemini')
-          return
-        }
-
-        const data = await listResponse.json()
-        const models = data.models || []
-        const generateModels = models.filter((model) => {
-          return (model.supportedGenerationMethods || []).includes('generateContent')
-        })
-
-        if (generateModels.length === 0) {
-          console.warn('⚠️ Nenhum modelo com generateContent encontrado')
-          setModelError('Nenhum modelo disponível')
-          return
-        }
-
-        for (const modelData of generateModels) {
-          const testModelName = modelData.name.replace('models/', '')
-          try {
-            const testResponse = await geminiFetch(testModelName, apiKey, {
-              contents: [{ parts: [{ text: 'test' }] }],
-              generationConfig: { maxOutputTokens: 10 },
-            })
-            if (testResponse.ok) {
-              console.log(`✅ Modelo encontrado: ${testModelName}`)
-              setAvailableModel(testModelName)
-              return
-            }
-          } catch {
-            continue
-          }
-        }
-        
-        console.warn('⚠️ Nenhum modelo funcionou')
-        setModelError('Nenhum modelo disponível funcionou')
-      } catch (err) {
-        console.error('❌ Erro ao descobrir modelo:', err)
-        setModelError('Erro ao conectar com a API do Gemini. Verifique sua conexão e API key.')
-      }
+    if (!hasGeminiApiKeys()) {
+      console.warn('⚠️ Nenhuma VITE_GEMINI_API_KEY configurada')
+      setModelError('API key do Gemini não configurada. Configure VITE_GEMINI_API_KEY no arquivo .env')
+      return
     }
 
-    findAvailableModel()
-  }, []) // Array vazio - executar apenas uma vez
+    setAvailableModel('gemini-2.5-flash')
+  }, [availableModel])
 
   // Gerar análise inicial quando abrir o chat (apenas uma vez)
   useEffect(() => {
@@ -531,8 +455,7 @@ Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestõ
 
   // Enviar mensagem da IA
   const sendAIMessage = async (userMessage, isInitial = false) => {
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
+    if (!hasGeminiApiKeys()) {
       console.error('❌ API key do Gemini não configurada')
       const chatRef = collection(db, 'chats', user.uid, 'messages')
       await addDoc(chatRef, {
@@ -718,7 +641,7 @@ Pergunta do aluno: ${userMessage}
           verifyContent: false,
           useRAG: false,
           useGoogleSearch: false,
-          models: [availableModel],
+          models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 800,

@@ -11,6 +11,7 @@ import { useAuth } from '../hooks/useAuth'
 import {
   dismissGenerationJob,
   cancelAllGenerationJobs,
+  forceStopAllGenerationJobsGlobally,
   GENERATION_JOB_STATUS,
   GENERATION_WAITING_STATUSES,
 } from '../services/generationJobService'
@@ -66,7 +67,7 @@ function saveMinimized(value) {
 }
 
 export default function BackgroundGenerationBanner() {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const { jobs } = useBackgroundGeneration()
   const [dismissing, setDismissing] = useState({})
   const [stoppingAll, setStoppingAll] = useState(false)
@@ -80,10 +81,17 @@ export default function BackgroundGenerationBanner() {
 
   const handleStopAll = async () => {
     if (!user?.uid || stoppingAll) return
-    if (!window.confirm('Parar TODOS os jobs em andamento? A geração será cancelada.')) return
+    const msg = isAdmin
+      ? 'Parar TODOS os jobs do sistema (todos os usuários)?'
+      : 'Parar TODOS os seus jobs em andamento? A geração será cancelada.'
+    if (!window.confirm(msg)) return
     setStoppingAll(true)
     try {
-      await cancelAllGenerationJobs(user.uid)
+      if (isAdmin) {
+        await forceStopAllGenerationJobsGlobally()
+      } else {
+        await cancelAllGenerationJobs(user.uid)
+      }
     } finally {
       setStoppingAll(false)
     }
@@ -149,9 +157,9 @@ export default function BackgroundGenerationBanner() {
           onClick={handleStopAll}
           disabled={stoppingAll}
           className="inline-flex items-center gap-1 rounded-lg border border-red-500/40 bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-600 shadow-sm transition hover:bg-red-500/20 disabled:opacity-50 dark:text-red-300"
-          title="Parar todos os jobs"
+          title={isAdmin ? 'Parar todos os jobs do sistema' : 'Parar todos os seus jobs'}
         >
-          {stoppingAll ? 'Parando…' : 'Parar todas'}
+          {stoppingAll ? 'Parando…' : isAdmin ? 'Parar tudo' : 'Parar todas'}
         </button>
       </div>
       {jobs.map((job) => {

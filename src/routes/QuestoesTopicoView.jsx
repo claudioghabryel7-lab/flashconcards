@@ -17,6 +17,7 @@ import { buildQuestoesTopicoPayload } from '../utils/serverGenerationPayload'
 import { incrementQuestoesStats } from '../utils/questoesStats'
 import { isContentAvailable, toggleContentStatus, CONTENT_STATUS } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
+import { loadStudyCheckpoint, saveStudyCheckpoint } from '../utils/studyCheckpoint'
 import {
   QuestoesLoading,
   QuestoesHeader,
@@ -363,7 +364,12 @@ const QuestoesTopicoView = () => {
       setCarregandoNivel(true)
       setQuestoes(null)
       setError('')
-      setCurrentQuestionIndex(0)
+      const savedIdx = loadStudyCheckpoint('questoes', {
+        userId: user?.uid,
+        courseId: resolvedCourseId,
+        scopeKey: `${trimmedKey}:n${nivelAtual}`,
+      })
+      setCurrentQuestionIndex(savedIdx)
       setSelectedAnswer(null)
       setShowResult(false)
       setAnswers([])
@@ -775,7 +781,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
   const handleNextQuestion = () => {
     if (currentQuestionIndex < (questoesArray.length - 1)) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1)
+      const next = currentQuestionIndex + 1
+      setCurrentQuestionIndex(next)
+      saveStudyCheckpoint(
+        'questoes',
+        {
+          userId: user?.uid,
+          courseId: resolvedCourseId,
+          scopeKey: `${resolvedTopicKey}:n${nivelAtual}`,
+        },
+        next,
+      )
       setSelectedAnswer(null)
       setShowResult(false)
     } else {
@@ -1046,7 +1062,17 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
   const handlePreviousQuestion = () => {
     if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1)
+      const prev = currentQuestionIndex - 1
+      setCurrentQuestionIndex(prev)
+      saveStudyCheckpoint(
+        'questoes',
+        {
+          userId: user?.uid,
+          courseId: resolvedCourseId,
+          scopeKey: `${resolvedTopicKey}:n${nivelAtual}`,
+        },
+        prev,
+      )
       setShowResult(modoAdminNavegacao)
       setSelectedAnswer(null)
     }
