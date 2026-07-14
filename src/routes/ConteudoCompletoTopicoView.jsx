@@ -657,9 +657,9 @@ SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A G
 [DIRETRIZES DE SAÍDA - O QUE EXIBIR]
 Gere o conteúdo estruturado com:
 - Raio-X de Probabilidade (Foco na banca ${banca || 'NÃO DEFINIDA'}) — entre ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} e ${CONTEUDO_COMPLETO_DEPTH.MAX_TOPICOS_QUENTES} assuntos quentes
-- Revisão Turbo (Cronologia real e precisa, sem alucinações de numeração) — um resumo COMPLETO para cada assunto quente (mínimo ${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_POR_RESUMO} palavras cada)
-- Cuidado, Caçapa! (Pegadinhas reais da banca) — 4 a 6 itens detalhados
-- ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} Questões Preditivas inéditas com gabarito comentado fundamentado estritamente na lei real vigente
+- Revisão Turbo (Cronologia real e precisa, sem alucinações de numeração) — um resumo equilibrado para cada assunto quente (${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_POR_RESUMO}–${CONTEUDO_COMPLETO_DEPTH.MAX_PALAVRAS_POR_RESUMO} palavras cada)
+- Cuidado, Caçapa! (Pegadinhas reais da banca) — 3 a 5 itens objetivos
+- ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} Questões Preditivas inéditas com gabarito comentado fundamentado e objetivo
 
 ${getConteudoCompletoDepthInstructions({ banca, concursoName, courseName: courseName || concursoName })}
 
@@ -692,26 +692,27 @@ IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se h�
    - Cada resumo deve corresponder EXATAMENTE a um dos top assuntos quentes listados
    - NÃO PULE nenhum top assunto quente - todos devem ter seu resumo
    - Cada resumo deve:
-     * Explicar o conceito de forma clara e didática (NADA SUPERFICIAL, QUERO BEM COMPLETO)
-     * Ter no mínimo ${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_POR_RESUMO} palavras
+     * Explicar o conceito de forma clara e didática (completo no essencial, sem encher linguiça)
+     * Ter entre ${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_POR_RESUMO} e ${CONTEUDO_COMPLETO_DEPTH.MAX_PALAVRAS_POR_RESUMO} palavras
      * Citar exemplos práticos do concurso ${concursoName || 'mencionado'}
      * Ser específico para o cargo de ${courseName || 'mencionado'}
      * Incluir dicas de memorização (nada genérico e vazio/vago)
      * Formate em HTML organizado: <h4> subtítulos, vários <p>, <b> em termos-chave, <mark> para grifar artigos/prazos, <ul><li> em listas
 
 3. **CUIDADO, CAÇAPA! (PEGADINHAS)** — seção separada da Revisão Turbo:
-   - Gere 4 a 6 pegadinhas ("Cuidado meu querido aluno!"):
+   - Gere 3 a 5 pegadinhas ("Cuidado meu querido aluno!"):
      * Erros comuns que a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar
      * Detalhes que passam despercebidos
      * Armadilhas específicas do concurso ${concursoName || 'mencionado'}
      * HTML com parágrafos <p>, <b> no erro comum e <mark> na pegadinha exata
+     * Cada pegadinha com ${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_PEGADINHA}–${CONTEUDO_COMPLETO_DEPTH.MAX_PALAVRAS_PEGADINHA} palavras
 
 4. **QUESTÕES PREDITIVAS**:
    - Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} questões para este tópico
    - No estilo da banca ${banca || 'NÃO DEFINIDA'} (A, B, C, D, E ou Certo/Errado)
    - Contextualizadas com o concurso ${concursoName || 'mencionado'} e cargo ${courseName || 'mencionado'}
    - Gabarito Comentado: explique o porquê das outras estarem erradas, com <p> separados e <b>/<mark> nos pontos-chave
-   - Seja detalhado e completo nas explicações
+   - Seja fundamentado e objetivo nas explicações (sem dissertação longa)
 
 🚨 INSTRUÇÃO CRÍTICA - CONTEÚDO ATUALIZADO:
 VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -721,13 +722,11 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 - NÃO USE INFORMAÇÕES DESATUALIZADAS OU REVOGADAS
 - CITE SEMPRE A DATA DE ATUALIZAÇÃO QUANDO NECESSÁRIO
 
-📅 CRONOLOGIA TEMPORAL OBRIGATÓRIA:
-- Para CADA lei, decreto ou norma mencionada no conteúdo, você DEVE traçar uma cronologia desde sua criação até a data atual
-- Exemplo: "Lei X, criada em 01/01/2000, alterada em 15/03/2010 pela Lei Y, modificada em 20/06/2015 pelo Decreto Z, atualizada em 10/02/2020 pela Medida Provisória W, vigente até ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}"
-- Liste TODAS as alterações relevantes: leis, decretos, medidas provisórias, emendas constitucionais, súmulas, jurisprudências
-- Sempre indique a data de cada alteração e o instrumento que a causou
-- Se a lei foi revogada, indique a data de revogação e o instrumento que a revogou
-- Mantenha o conteúdo atualizado considerando TODAS as alterações até a data atual
+📅 ATUALIDADE DAS NORMAS (SEM CRONOLOGIA LONGA):
+- Cite a lei/artigo vigente e, se houver alteração relevante recente, mencione-a em 1 frase
+- NÃO faça histórico completo de cada norma (criação + todas as alterações) — isso deixa o material excessivo
+- Foque no que a banca cobra hoje; indique só mudanças que realmente alteram a cobrança em prova
+- Se a lei foi revogada, diga isso de forma breve e objetiva
 
 🚨 TRAVAS DE SEGURANÇA E FIDELIDADE JURÍDICA ABSOLUTA:
 

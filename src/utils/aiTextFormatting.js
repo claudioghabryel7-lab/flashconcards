@@ -154,29 +154,28 @@ export const AI_TEXT_FORMAT_RULES = `FORMATAÇÃO OBRIGATÓRIA:
 /** Instrução para materiais de apoio — HTML organizado, legível e com destaques visuais. */
 export const AI_MATERIAL_FORMAT_RULES = `ORGANIZAÇÃO E FORMATAÇÃO DO MATERIAL (OBRIGATÓRIO):
 
-O material deve parecer uma apostila premium — bem estruturado, fácil de ler e com destaques visuais.
+Material de revisão estratégica: completo, objetivo e fácil de ler — sem apostolão.
 
-ESTRUTURA HTML PERMITIDA (use à vontade):
+ESTRUTURA HTML PERMITIDA:
 - <p> — um parágrafo por ideia (NUNCA um bloco único gigante)
-- <h4> — subtítulos dentro de cada resumo (ex: "Conceito", "Na prática da banca", "Dica de memorização")
-- <b> ou <strong> — termos-chave, artigos de lei, nomes de institutos jurídicos
-- <i> ou <em> — ênfase leve, expressões latinas, observações
-- <mark> — GRIFAR trechos críticos (prazos, números de lei, palavras que caem em prova)
-- <ul><li> — listas de requisitos, etapas, elementos, exceções
-- <br/> — apenas dentro do mesmo parágrafo, quando necessário
+- <h4> — subtítulos (ex: "Conceito", "Na prática da banca", "Dica de memorização")
+- <b> ou <strong> — termos-chave, artigos de lei
+- <i> ou <em> — ênfase leve
+- <mark> — grifar prazos, artigos e pegadinhas
+- <ul><li> — listas curtas de requisitos/exceções
 
 COMO ORGANIZAR CADA RESUMO (revisaoTurbo.conteudo):
-1. Abra com <h4> + <p> explicando o conceito central
-2. Desenvolva em 3–6 parágrafos <p> separados
-3. Use <mark> em pelo menos 2 trechos importantes por resumo (prazo, artigo, pegadinha clássica)
-4. Use <b> em termos técnicos e referências legais
-5. Feche com <h4>Dica de memorização</h4> + <p> ou <ul><li>
+1. <h4> + <p> com o conceito central
+2. 2–4 parágrafos <p> de desenvolvimento (sem repetir a mesma ideia)
+3. <mark> em 1–2 trechos críticos
+4. <b> em termos técnicos essenciais
+5. Feche com <h4>Dica de memorização</h4> + 1 <p> ou lista curta
 
-EXEMPLO DE FORMATO IDEAL:
+EXEMPLO:
 "<h4>Conceito central</h4><p>O <b>inquérito policial</b> é procedimento administrativo...</p><p><mark>Art. 4º do CPP</mark> — o inquérito é dispensável quando...</p><h4>Na prática da banca</h4><ul><li>Costuma cobrar prazos</li><li>Pede distinção entre...</li></ul><h4>Dica de memorização</h4><p>Lembre: <b>I</b>nquérito = <b>I</b>nvestigação inicial.</p>"
 
 REGRAS:
 - PROIBIDO markdown (** * __ #) — somente HTML
-- Mínimo 4 parágrafos <p> por resumo da Revisão Turbo
-- padraoBanca e gabaritoComentado: mesma lógica (parágrafos + <b> + <mark> quando couber)
-- Texto arejado: cada <p> com 2–5 frases, nunca parede de texto`
+- 3–5 parágrafos <p> por resumo (não mais que isso)
+- padraoBanca e gabaritoComentado: objetivos (parágrafos + <b>/<mark>)
+- Cada <p> com 2–4 frases; sem parede de texto nem preenchimento vazio`

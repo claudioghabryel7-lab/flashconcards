@@ -1,30 +1,41 @@
 export const CONTEUDO_COMPLETO_DEPTH = {
-  MIN_TOPICOS_QUENTES: 8,
-  MAX_TOPICOS_QUENTES: 15,
+  MIN_TOPICOS_QUENTES: 6,
+  MAX_TOPICOS_QUENTES: 10,
   MIN_QUESTOES: 8,
-  MIN_PALAVRAS_POR_RESUMO: 600,
+  /** Faixa alvo por resumo da Revisão Turbo — completo sem virar apostolão. */
+  MIN_PALAVRAS_POR_RESUMO: 220,
+  MAX_PALAVRAS_POR_RESUMO: 320,
+  MIN_PALAVRAS_PEGADINHA: 50,
+  MAX_PALAVRAS_PEGADINHA: 90,
 }
 
-/** Instruções reforçadas para evitar material superficial ou truncado. */
+/** Instruções de profundidade: cobre o essencial sem texto excessivo. */
 export function getConteudoCompletoDepthInstructions({ banca, concursoName, courseName } = {}) {
-  const { MIN_TOPICOS_QUENTES, MAX_TOPICOS_QUENTES, MIN_QUESTOES, MIN_PALAVRAS_POR_RESUMO } =
-    CONTEUDO_COMPLETO_DEPTH
+  const {
+    MIN_TOPICOS_QUENTES,
+    MAX_TOPICOS_QUENTES,
+    MIN_QUESTOES,
+    MIN_PALAVRAS_POR_RESUMO,
+    MAX_PALAVRAS_POR_RESUMO,
+    MIN_PALAVRAS_PEGADINHA,
+    MAX_PALAVRAS_PEGADINHA,
+  } = CONTEUDO_COMPLETO_DEPTH
 
   return `
-🚨 PROFUNDIDADE OBRIGATÓRIA — CONTEÚDO FIEL E COMPLETO (NÃO RESUMA):
+⚖️ PROFUNDIDADE EQUILIBRADA — COMPLETO, OBJETIVO E SEM ENCHER LINGUIÇA:
 
-1. PROIBIDO material superficial, telegráfico ou genérico. Cada seção deve ser técnica, densa e aplicável à banca ${banca || 'definida'}.
-2. Raio-X de Probabilidade: gere entre ${MIN_TOPICOS_QUENTES} e ${MAX_TOPICOS_QUENTES} "Top Assuntos Quentes" — quanto maior a disciplina, mais tópicos.
-3. Revisão Turbo: UM bloco completo para CADA assunto quente listado no Raio-X (não pule nenhum).
-4. Cada bloco da Revisão Turbo deve ter NO MÍNIMO ${MIN_PALAVRAS_POR_RESUMO} palavras, com:
-   - conceito técnico desenvolvido (não bullet points vazios)
-   - artigos/leis/jurisprudência quando aplicável
-   - exemplos práticos do concurso ${concursoName || 'mencionado'} e cargo ${courseName || 'mencionado'}
-   - dicas de memorização concretas
-5. Pegadinhas: gere 4 a 6 itens detalhados, cada um com explicação completa (mínimo 120 palavras).
-6. Questões Preditivas: gere EXATAMENTE ${MIN_QUESTOES} questões inéditas, com gabarito comentado longo e fundamentado.
-7. NUNCA corte frases, palavras ou parágrafos no meio — complete todas as ideias até o fim.
-8. Se o JSON ficar grande, priorize completar todas as seções obrigatórias em vez de encurtar textos.
-9. O material deve parecer um capítulo de apostila premium, não um resumo de uma página.
-10. Formate com HTML organizado: parágrafos <p>, subtítulos <h4>, negrito <b>, grifos <mark> em trechos-chave e listas <ul><li>.`
+1. PROIBIDO material superficial/telegráfico. Também PROIBIDO texto excessivo, repetitivo ou "apostolão".
+2. Cubra o que realmente cai na banca ${banca || 'definida'} para ${concursoName || 'o concurso'} / cargo ${courseName || 'mencionado'}.
+3. Raio-X: entre ${MIN_TOPICOS_QUENTES} e ${MAX_TOPICOS_QUENTES} "Top Assuntos Quentes" (prefira ${MIN_TOPICOS_QUENTES}–8; só chegue a ${MAX_TOPICOS_QUENTES} se a disciplina for muito ampla).
+4. Revisão Turbo: UM bloco para CADA assunto quente — sem pular nenhum.
+5. Cada bloco da Revisão Turbo: entre ${MIN_PALAVRAS_POR_RESUMO} e ${MAX_PALAVRAS_POR_RESUMO} palavras (meta ~270). Inclua:
+   - conceito técnico claro
+   - artigo/lei/jurisprudência só quando essencial (sem cronologia longa de cada norma)
+   - 1 exemplo prático do concurso
+   - 1 dica de memorização concreta
+6. Pegadinhas: 3 a 5 itens; cada um com ${MIN_PALAVRAS_PEGADINHA}–${MAX_PALAVRAS_PEGADINHA} palavras (direto ao ponto).
+7. Questões Preditivas: EXATAMENTE ${MIN_QUESTOES}; gabarito comentado fundamentado mas objetivo (não dissertação).
+8. NÃO corte frases no meio. NÃO omita seções. NÃO invente leis.
+9. Se precisar escolher: priorize cobrir TODOS os assuntos quentes com profundidade média — nunca alongue um resumo passando de ~${MAX_PALAVRAS_POR_RESUMO} palavras.
+10. Formato HTML: <p>, <h4>, <b>, <mark>, <ul><li>. Sem markdown.`
 }
