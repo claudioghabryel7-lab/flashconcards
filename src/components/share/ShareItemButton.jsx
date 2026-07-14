@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { useAuth } from '../../hooks/useAuth'
 import { useItemShare } from '../../hooks/useItemShare'
 import { publishFeedPost } from '../../services/trilhaFeedService'
+import { normalizeQuestaoAlternativas } from '../../utils/questaoAlternativas'
 import ItemSharePreview from './ItemSharePreview'
 import ItemShareSheet from './ItemShareSheet'
 
@@ -40,10 +41,7 @@ export default function ShareItemButton({
             type: 'questao',
             enunciado: questao.enunciado,
             text: questao.enunciado || '',
-            alternativas: (questao.alternativas || []).slice(0, 5).map((alt, i) => ({
-              letra: alt.letra || String.fromCharCode(65 + i),
-              texto: alt.texto || alt.text || String(alt),
-            })),
+            alternativas: normalizeQuestaoAlternativas(questao.alternativas, 5),
             assunto: questao.assunto,
           }
         : null

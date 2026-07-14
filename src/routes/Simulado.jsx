@@ -20,6 +20,7 @@ import {
   ArrowDownIcon,
   ShareIcon,
 } from '@heroicons/react/24/outline'
+import { sortAlternativasEntries } from '../utils/questaoAlternativas'
 
 const Simulado = () => {
   const navigate = useNavigate()
@@ -1187,7 +1188,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.
         
         // Caso contrário, embaralhar normalmente
         // Converter alternativas em array de pares [letra, texto]
-        const alternativesArray = Object.entries(question.alternativas)
+        const alternativesArray = sortAlternativasEntries(question.alternativas)
         
         // Embaralhar o array
         const shuffled = [...alternativesArray].sort(() => Math.random() - 0.5)
@@ -1595,7 +1596,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.
                       <h3 className="text-lg font-semibold mb-3 mt-2">{question.enunciado}</h3>
                       
                       <div className="space-y-2 mb-4">
-                        {Object.entries(question.alternativas || {}).map(([letra, texto]) => (
+                        {sortAlternativasEntries(question.alternativas).map(([letra, texto]) => (
                           <div
                             key={letra}
                             className={`p-3 rounded-lg ${
@@ -2462,7 +2463,7 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
               <>
                 {/* Interface para Múltipla Escolha */}
                 <div className="space-y-3">
-                  {currentQuestion.alternativas && Object.entries(currentQuestion.alternativas).map(([letra, texto]) => {
+                  {currentQuestion.alternativas && sortAlternativasEntries(currentQuestion.alternativas).map(([letra, texto]) => {
                     const isSelected = answers[currentQuestionIndex] === letra
                     const isCorrect = letra === currentQuestion.correta
                     const hasAnswered = !!answers[currentQuestionIndex]

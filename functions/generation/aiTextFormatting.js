@@ -111,13 +111,39 @@ function sanitizeQuestaoText(text = '') {
 
 function sanitizeQuestaoAlternativas(alternativas) {
   if (!alternativas) return alternativas
+  const LETTER_ORDER = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+  const letterKey = (letra) => {
+    const u = String(letra || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z]/g, '')
+    if (!u) return 999
+    const idx = LETTER_ORDER.indexOf(u[0])
+    return idx >= 0 ? idx : 100 + u.charCodeAt(0)
+  }
+
   if (Array.isArray(alternativas)) {
-    return alternativas.map((alt) => sanitizeQuestaoText(alt))
+    const entries = alternativas.map((alt, i) => {
+      const letra = LETTER_ORDER[i] || String.fromCharCode(65 + i)
+      if (alt == null) return [letra, '']
+      if (typeof alt === 'string' || typeof alt === 'number') return [letra, sanitizeQuestaoText(alt)]
+      const key =
+        String(alt.letra || alt.key || letra)
+          .trim()
+          .toUpperCase()
+          .replace(/[^A-Z]/g, '') || letra
+      return [key, sanitizeQuestaoText(alt.texto ?? alt.text ?? alt.conteudo ?? '')]
+    })
+    entries.sort((a, b) => letterKey(a[0]) - letterKey(b[0]))
+    return Object.fromEntries(entries)
   }
   if (typeof alternativas === 'object') {
-    return Object.fromEntries(
-      Object.entries(alternativas).map(([key, value]) => [key, sanitizeQuestaoText(value)]),
-    )
+    const entries = Object.entries(alternativas).map(([key, value]) => [
+      key,
+      sanitizeQuestaoText(value),
+    ])
+    entries.sort((a, b) => letterKey(a[0]) - letterKey(b[0]))
+    return Object.fromEntries(entries)
   }
   return alternativas
 }

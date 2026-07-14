@@ -19,6 +19,7 @@ import {
   buildIncidenciaQuestaoContentId,
   buildLegacyIncidenciaQuestaoContentId,
 } from '../utils/contentCommentIds'
+import { sortAlternativasEntries } from '../utils/questaoAlternativas'
 
 const PraticaIncidenciaView = () => {
   const { courseId, disciplinaIdx } = useParams()
@@ -1084,7 +1085,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          {Object.entries(questoesParaExibir[currentQuestionIndex].alternativas).map(([key, value]) => (
+                          {sortAlternativasEntries(questoesParaExibir[currentQuestionIndex].alternativas).map(([key, value]) => (
                             <button
                               key={key}
                               onClick={() => !modoAdminNavegacao && handleAnswer(key)}

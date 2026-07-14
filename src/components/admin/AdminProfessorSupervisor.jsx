@@ -257,8 +257,9 @@ export default function AdminProfessorSupervisor() {
               <p className="mt-1 max-w-xl text-sm text-cp-muted">
                 Agenda <strong>segunda a domingo</strong> com janela de horário. Corrige{' '}
                 <strong>somente</strong> a aba <strong>🚩 Moderação</strong> (sinalizações abertas). Sem
-                report novo, fica em espera — não gasta API à toa. Aluno recebe notificação{' '}
-                <strong className="text-emerald-600">verde</strong> no sino após a correção.
+                report novo, fica em espera — não gasta API à toa. A liberação de incidência e níveis
+                de questões é um script separado (a cada 30 min, na mesma janela De/Até), revezando
+                todos os cursos.
               </p>
             </div>
           </div>

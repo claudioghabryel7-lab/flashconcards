@@ -774,6 +774,7 @@ module.exports = {
   SESSION_MS,
   INTERVAL_MS,
   isSessionActive,
+  isWithinScheduleWindow,
   loadSupervisorConfig,
   patchSupervisorConfig,
   updateSupervisorActivity,

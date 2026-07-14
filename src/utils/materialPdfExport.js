@@ -2,6 +2,7 @@ import { toCanvas } from 'html-to-image'
 import jsPDF from 'jspdf'
 import '../styles/material-pdf-export.css'
 import { materialHasStructuredSections } from './materialFormatting'
+import { sortAlternativasEntries } from './questaoAlternativas'
 
 const PDF_MARGIN_MM = 12
 const A4_CONTENT_WIDTH_PX = 794
@@ -525,7 +526,7 @@ export function buildMaterialPrintHtml(material = {}, options = {}) {
         <h2 class="section-title"><span class="icon">📚</span> Questões Preditivas</h2>
         ${material.questoesPreditivas
           .map((q, idx) => {
-            const alts = Object.entries(q.alternativas || {})
+            const alts = sortAlternativasEntries(q.alternativas)
               .map(
                 ([letter, text]) =>
                   `<div class="alt ${letter === q.correta ? 'correct' : ''}">${escapeHtml(letter)}) ${escapeHtml(text)}</div>`,

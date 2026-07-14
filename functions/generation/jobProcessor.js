@@ -11,13 +11,28 @@ const CONTENT_STATUS = {
   UNAVAILABLE: 'indisponivel',
 }
 
-const { sanitizeFlashcardText, AI_TEXT_FORMAT_RULES } = require('./aiTextFormatting')
+const { sanitizeFlashcardText, AI_TEXT_FORMAT_RULES, sanitizeQuestaoAlternativas } = require('./aiTextFormatting')
 const MIN_FLASHCARDS = 40
 const MAX_FLASHCARDS = 60
 const BATCH_SIZE = 30
 
 function getDb() {
   return admin.firestore()
+}
+
+/** Garante alternativas A→E em cada questão antes de gravar. */
+function normalizeParsedQuestoes(parsed) {
+  if (!parsed || typeof parsed !== 'object') return parsed
+  const list = parsed.questoes || parsed.questions
+  if (!Array.isArray(list)) return parsed
+  const normalized = list.map((q) => {
+    if (!q || typeof q !== 'object') return q
+    if (q.alternativas == null) return q
+    return { ...q, alternativas: sanitizeQuestaoAlternativas(q.alternativas) }
+  })
+  if (Array.isArray(parsed.questoes)) return { ...parsed, questoes: normalized }
+  if (Array.isArray(parsed.questions)) return { ...parsed, questions: normalized }
+  return parsed
 }
 
 async function updateJob(userId, jobId, patch) {
@@ -224,7 +239,7 @@ async function processQuestoesTopico(userId, jobId, courseId, serverPayload) {
     savePlan.status ||
     (await resolveTopicoPublishStatus(courseId, topicKey))
 
-  const resultRef = await saveMergeDoc(courseId, 'questoesTopico', sanitizedKey, parsed, {
+  const resultRef = await saveMergeDoc(courseId, 'questoesTopico', sanitizedKey, normalizeParsedQuestoes(parsed), {
     topico: parsed.topico || savePlan.topicoNome || topicKey,
     nivel,
     status,
@@ -299,7 +314,7 @@ async function processQuestoesIncidencia(userId, jobId, courseId, serverPayload)
   }
   if (!status) status = CONTENT_STATUS.UNAVAILABLE
 
-  const resultRef = await saveMergeDoc(courseId, 'questoesIncidencia', docId, parsed, {
+  const resultRef = await saveMergeDoc(courseId, 'questoesIncidencia', docId, normalizeParsedQuestoes(parsed), {
     disciplinaIdx: savePlan.disciplinaIdx,
     nivel: savePlan.nivel ?? 1,
     status,

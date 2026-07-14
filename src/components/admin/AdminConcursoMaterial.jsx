@@ -7,6 +7,7 @@ import {
   SparklesIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline'
+import { sortAlternativasEntries } from '../../utils/questaoAlternativas'
 import {
   addDoc,
   collection,
@@ -98,7 +99,7 @@ function renderMaterialPreview(material) {
             {idx + 1}. {q.enunciado}
           </p>
           <ul className="mt-2 space-y-1 text-sm text-slate-700">
-            {Object.entries(q.alternativas || {}).map(([letter, text]) => (
+            {sortAlternativasEntries(q.alternativas).map(([letter, text]) => (
               <li key={letter}>
                 <strong>{letter})</strong> {text}
               </li>

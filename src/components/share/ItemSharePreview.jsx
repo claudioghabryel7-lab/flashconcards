@@ -1,4 +1,5 @@
 import { Brain, Layers } from 'lucide-react'
+import { normalizeQuestaoAlternativas } from '../../utils/questaoAlternativas'
 
 function truncate(text = '', max = 280) {
   const t = String(text).replace(/\s+/g, ' ').trim()
@@ -21,7 +22,7 @@ export default function ItemSharePreview({
   const pergunta = flashcard?.pergunta || flashcard?.frente || ''
   const resposta = flashcard?.resposta || flashcard?.verso || ''
   const enunciado = questao?.enunciado || ''
-  const alternativas = questao?.alternativas || []
+  const alternativas = normalizeQuestaoAlternativas(questao?.alternativas, 5)
 
   const gradient = isFlashcard
     ? 'linear-gradient(135deg, #059669 0%, #10b981 50%, #134e4a 100%)'

@@ -1905,6 +1905,24 @@ exports.mentoradoDailyContentRelease = functions.pubsub
     return null
   })
 
+/**
+ * A cada 30 min, só na janela De/Até do Professor:
+ * 1 job por vez, revezando TODOS os cursos (incidência → nível 1 → níveis 2–10).
+ */
+exports.contentAutomationTick = functions.pubsub
+  .schedule('every 30 minutes')
+  .timeZone('America/Sao_Paulo')
+  .onRun(async () => {
+    const { runContentAutomationRelease } = require('./generation/contentAutomationRelease')
+    const result = await runContentAutomationRelease({
+      respectSchedule: true,
+    })
+    if (!result?.skipped || result.reason !== 'outside_professor_window') {
+      console.log('[contentAutomationTick]', result)
+    }
+    return null
+  })
+
 /** Rotação semanal de temas de redação (cursos com hasRedacao no Guia Mentorado). */
 exports.weeklyRedacaoThemeRotation = functions.pubsub
   .schedule('0 3 * * 1')

@@ -1,5 +1,7 @@
 /** Normaliza texto gerado por IA: remove markdown cru e prepara leitura confortável. */
 
+import { alternativasAsOrderedObject } from './questaoAlternativas.js'
+
 function escapeHtml(text = '') {
   return String(text)
     .replace(/&/g, '&amp;')
@@ -120,11 +122,23 @@ export function sanitizeQuestaoText(text = '') {
 export function sanitizeQuestaoAlternativas(alternativas) {
   if (!alternativas) return alternativas
   if (Array.isArray(alternativas)) {
-    return alternativas.map((alt) => sanitizeQuestaoText(alt))
+    return alternativasAsOrderedObject(
+      Object.fromEntries(
+        alternativas.map((alt, i) => {
+          const letra = String.fromCharCode(65 + i)
+          if (alt == null) return [letra, '']
+          if (typeof alt === 'string' || typeof alt === 'number') return [letra, sanitizeQuestaoText(alt)]
+          const key = String(alt.letra || alt.key || letra).trim().toUpperCase() || letra
+          return [key, sanitizeQuestaoText(alt.texto ?? alt.text ?? alt.conteudo ?? '')]
+        }),
+      ),
+    )
   }
   if (typeof alternativas === 'object') {
-    return Object.fromEntries(
-      Object.entries(alternativas).map(([key, value]) => [key, sanitizeQuestaoText(value)]),
+    return alternativasAsOrderedObject(
+      Object.fromEntries(
+        Object.entries(alternativas).map(([key, value]) => [key, sanitizeQuestaoText(value)]),
+      ),
     )
   }
   return alternativas

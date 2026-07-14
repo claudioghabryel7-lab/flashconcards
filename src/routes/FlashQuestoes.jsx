@@ -13,6 +13,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import { sortAlternativasEntries } from '../utils/questaoAlternativas'
 import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder, applyModuleOrder } from '../utils/subjectOrder'
 import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
@@ -910,7 +911,7 @@ Questão:
 ${question.enunciado}
 
 Alternativas:
-${Object.entries(question.alternativas).map(([letra, texto]) => `${letra}) ${texto}`).join('\n')}
+${sortAlternativasEntries(question.alternativas).map(([letra, texto]) => `${letra}) ${texto}`).join('\n')}
 
 Alternativa correta: ${question.correta}
 

@@ -5,6 +5,7 @@ import {
   BookOpenIcon,
 } from '@heroicons/react/24/outline'
 import CommentFormattedText from './CommentFormattedText'
+import { sortAlternativasEntries } from '../../utils/questaoAlternativas'
 
 function RichHtml({ html, className = '' }) {
   if (!html) return null
@@ -139,7 +140,7 @@ export default function MaterialStructuredView({
                 />
                 {questao.alternativas && (
                   <div className="space-y-2 mb-4">
-                    {Object.entries(questao.alternativas).map(([letra, alt]) => (
+                    {sortAlternativasEntries(questao.alternativas).map(([letra, alt]) => (
                       <div
                         key={letra}
                         className={`p-3 rounded-lg text-sm ${

@@ -316,4 +316,6 @@ module.exports = {
   resolveCronogramaMateria,
   resolveTopicFromEdital,
   buildEditalTextFromVerticalizado,
+  makeTopicKey,
+  formatTopicoAsModulo,
 }

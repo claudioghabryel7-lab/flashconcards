@@ -5,6 +5,7 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion, collection
 import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser, hasGeminiApiKeys } from '../utils/geminiApi'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
+import { sortAlternativasEntries } from '../utils/questaoAlternativas'
 import ResultExport from '../components/ResultExport'
 import CourseAdScreen from '../components/CourseAdScreen'
 import {
@@ -56,7 +57,7 @@ const shuffleAlternatives = (question) => {
   if (!question.alternativas || !question.correta) return question
   
   // Converter alternativas em array de pares [letra, texto]
-  const alternativesArray = Object.entries(question.alternativas)
+  const alternativesArray = sortAlternativasEntries(question.alternativas)
   
   // Embaralhar o array
   const shuffled = [...alternativesArray].sort(() => Math.random() - 0.5)
@@ -1271,7 +1272,7 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
             </div>
 
             <div className="space-y-3">
-              {Object.entries(currentQuestion.alternativas).map(([letra, texto]) => {
+              {sortAlternativasEntries(currentQuestion.alternativas).map(([letra, texto]) => {
                 const isSelected = answers[currentQuestionIndex] === letra
                 return (
                   <button
