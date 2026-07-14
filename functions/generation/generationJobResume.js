@@ -65,7 +65,9 @@ function isPermanentGenerationError(error) {
     code === 'invalid_payload' ||
     code === 'unsupported_job_type' ||
     code === 'not_authenticated' ||
-    code === 'permission_denied'
+    code === 'permission_denied' ||
+    // Validação de conteúdo incompleto não melhora com retry — falha permanente
+    code === 'material_incomplete'
   ) {
     return true
   }
@@ -80,7 +82,9 @@ function isPermanentGenerationError(error) {
     msg.includes('tipo de job não suportado') ||
     msg.includes('edital verticalizado não encontrado') ||
     msg.includes('curso não selecionado') ||
-    msg.includes('usuário admin não identificado')
+    msg.includes('usuário admin não identificado') ||
+    msg.includes('material incompleto') ||
+    msg.includes('conteúdo incompleto')
   )
 }
 
@@ -96,7 +100,6 @@ function isTransientGenerationError(error) {
     code === 'ai_json_parse_error' ||
     code === 'ai_json_truncated' ||
     code === 'cf_timeout' ||
-    code === 'material_incomplete' ||
     code === 'concurrency_limit' ||
     code === 'api_not_ready'
   ) {
@@ -1114,7 +1117,7 @@ async function resumeWaitingGenerationJobs() {
   const snap = await db
     .collection('generationResumeQueue')
     .where('nextRetryAt', '<=', now)
-    .limit(20)
+    .limit(50)
     .get()
 
   if (snap.empty) return { resumed: 0, waiting: 0, stalled }
@@ -1166,6 +1169,7 @@ async function resumeWaitingGenerationJobs() {
 module.exports = {
   isApiQuotaError,
   isTransientGenerationError,
+  isPermanentGenerationError,
   isJobCancelled,
   isJobCancelledError,
   isMentoradoJob,

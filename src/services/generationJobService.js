@@ -140,7 +140,10 @@ export function shouldNudgeJob(job, now = Date.now()) {
   return false
 }
 
-/** Marca jobs travados (ex.: aba fechada) como erro para não ficar banner infinito. */
+/**
+ * Jobs travados: locais → marca error; nuvem → cancela via CF (libera slot/fila).
+ * Nunca marca error no cliente enquanto o servidor ainda pode estar processando.
+ */
 export async function reconcileStaleGenerationJobs(userId) {
   if (!userId || !db) return
 
@@ -156,15 +159,13 @@ export async function reconcileStaleGenerationJobs(userId) {
   )
 
   const now = Date.now()
-  const updates = []
+  const localUpdates = []
+  const serverCancels = []
 
   snap.docs.forEach((d) => {
     const data = d.data()
-    // Jobs waiting_* no servidor são gerenciados pelo resume cron — não matar no cliente
-    if (
-      data.runOnServer &&
-      GENERATION_WAITING_STATUSES.includes(data.status)
-    ) {
+    // waiting_* no servidor: resume cron gerencia — não matar no cliente
+    if (data.runOnServer && GENERATION_WAITING_STATUSES.includes(data.status)) {
       return
     }
 
@@ -183,23 +184,52 @@ export async function reconcileStaleGenerationJobs(userId) {
       : STALE_JOB_MS
     if (now - updatedAt.getTime() < staleMs) return
 
-    // Se ainda tem heartbeat fresco, não mata
     const hb = data.lastHeartbeat?.toDate?.() || data.progressUpdatedAt?.toDate?.()
     if (hb && now - hb.getTime() < STALE_PROGRESS_NUDGE_MS) return
 
-    updates.push(
+    if (data.runOnServer) {
+      serverCancels.push(d.id)
+      return
+    }
+
+    localUpdates.push(
       updateDoc(d.ref, {
         status: GENERATION_JOB_STATUS.ERROR,
         progress: 100,
-        message: data.runOnServer
-          ? 'Geração no servidor expirou. Tente novamente.'
-          : 'Geração interrompida. Tente novamente.',
+        message: 'Geração interrompida. Tente novamente.',
         updatedAt: serverTimestamp(),
       }),
     )
   })
 
-  if (updates.length) await Promise.all(updates)
+  if (localUpdates.length) await Promise.all(localUpdates)
+
+  if (serverCancels.length) {
+    const user = auth?.currentUser
+    if (user?.uid === userId && FIREBASE_FUNCTIONS.cancelGenerationJob) {
+      try {
+        const token = await user.getIdToken()
+        await Promise.all(
+          serverCancels.map((jobId) =>
+            fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                userId,
+                jobId,
+                reason: 'client_stale_reconcile',
+              }),
+            }).catch(() => null),
+          ),
+        )
+      } catch {
+        // Sem token / rede — deixa o stall recovery do servidor cuidar
+      }
+    }
+  }
 }
 
 export async function dismissGenerationJob(userId, jobId) {

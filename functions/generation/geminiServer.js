@@ -249,14 +249,15 @@ async function parseAiJsonText(generatedText, { rejectTruncated = false } = {}) 
 function isRetryableAiError(error) {
   const code = error?.code
   const msg = String(error?.message || '').toLowerCase()
+  // material_incomplete = validação de conteúdo (permanente no job); não retentar aqui
+  if (code === 'material_incomplete') return false
   return (
     code === 'ai_empty_response' ||
     code === 'ai_json_parse_error' ||
     code === 'ai_json_truncated' ||
-    code === 'material_incomplete' ||
     msg.includes('json') ||
     msg.includes('reparar') ||
-    msg.includes('incompleto')
+    (msg.includes('incompleto') && !msg.includes('material'))
   )
 }
 

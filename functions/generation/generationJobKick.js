@@ -143,7 +143,7 @@ async function processStuckPendingGenerationJobs() {
     }
   }
 
-  const queueSnap = await db.collection('generationResumeQueue').limit(40).get()
+  const queueSnap = await db.collection('generationResumeQueue').limit(80).get()
   for (const doc of queueSnap.docs) {
     const data = doc.data() || {}
     await tryKick(data.userId, data.jobId || doc.id)
@@ -155,7 +155,7 @@ async function processStuckPendingGenerationJobs() {
       .collectionGroup('generationJobs')
       .where('status', '==', 'pending')
       .where('runOnServer', '==', true)
-      .limit(20)
+      .limit(40)
       .get()
     for (const doc of pendingSnap.docs) {
       const userId = parseUserIdFromJobPath(doc.ref.path)

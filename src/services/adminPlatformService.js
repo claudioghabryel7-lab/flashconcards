@@ -12,7 +12,8 @@ import {
   setDoc,
   where,
 } from 'firebase/firestore'
-import { db } from '../firebase/config'
+import { db, auth } from '../firebase/config'
+import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
 import {
   startMentoradoBackfillJob,
@@ -295,6 +296,31 @@ export async function startMentoradoBackfillAllCourses(userId, onProgress) {
   }
 
   return { jobs, todayKey }
+}
+
+/**
+ * Lista jobs de geração ativos em toda a plataforma (admin, via Cloud Function).
+ */
+export async function listActiveGenerationJobs({ limit = 50 } = {}) {
+  const user = auth?.currentUser
+  if (!user) throw new Error('Não autenticado')
+  if (!FIREBASE_FUNCTIONS.listActiveGenerationJobs) {
+    throw new Error('Endpoint listActiveGenerationJobs não configurado')
+  }
+  const token = await user.getIdToken()
+  const response = await fetch(FIREBASE_FUNCTIONS.listActiveGenerationJobs, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ limit }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.error || 'Falha ao listar jobs ativos')
+  }
+  return data
 }
 
 export { DEFAULT_MAINTENANCE_MESSAGE }

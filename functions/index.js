@@ -2024,7 +2024,7 @@ exports.resumeWaitingGenerationJobs = functions.pubsub
     return null
   })
 
-/** Agenda retomada após pausa — espera curta (≤20s); o cron de 1 min cobre o restante. */
+/** Agenda retomada após pausa — espera curta (≤8s); o cron de 1 min cobre o restante. */
 exports.onGenerationResumeQueueWrite = functions
   .runWith({ timeoutSeconds: 120, memory: '1GB' })
   .firestore.document('generationResumeQueue/{jobId}')
@@ -2034,10 +2034,11 @@ exports.onGenerationResumeQueueWrite = functions
     const jobId = context.params.jobId
     const data = change.after.data() || {}
     const nextMs = data.nextRetryAt?.toMillis?.() || Date.now()
-    const waitMs = Math.min(Math.max(0, nextMs - Date.now()), 20 * 1000)
+    const MAX_INLINE_WAIT_MS = 8 * 1000
+    const waitMs = Math.min(Math.max(0, nextMs - Date.now()), MAX_INLINE_WAIT_MS)
 
-    // Se ainda falta muito tempo, deixa o cron — evita CF bloqueada por até 90s
-    if (nextMs - Date.now() > 20 * 1000) {
+    // Se ainda falta >8s, deixa o cron — evita CF bloqueada
+    if (nextMs - Date.now() > MAX_INLINE_WAIT_MS) {
       return null
     }
 
@@ -2166,6 +2167,60 @@ exports.cancelGenerationJob = functions.https.onRequest((req, res) => {
     } catch (err) {
       console.error('[cancelGenerationJob]', err)
       return res.status(500).json({ error: err.message || 'Erro ao cancelar job' })
+    }
+  })
+})
+
+/**
+ * Lista jobs de geração ativos em toda a plataforma (admin).
+ * Usa collection group — complementa a regra de read admin em generationJobs.
+ */
+exports.listActiveGenerationJobs = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method === 'OPTIONS') return res.status(200).end()
+    if (req.method !== 'GET' && req.method !== 'POST') {
+      return res.status(405).json({ error: 'Método não permitido' })
+    }
+    try {
+      await verifyAdminRequest(req)
+      const limit = Math.min(Number(req.body?.limit || req.query?.limit) || 50, 100)
+      const db = admin.firestore()
+      const ACTIVE = ['pending', 'running', 'waiting_api', 'waiting_retry', 'waiting_timeout']
+
+      const snap = await db
+        .collectionGroup('generationJobs')
+        .where('runOnServer', '==', true)
+        .where('status', 'in', ACTIVE)
+        .limit(limit)
+        .get()
+
+      const jobs = snap.docs.map((d) => {
+        const data = d.data() || {}
+        const pathParts = d.ref.path.split('/')
+        const ownerUserId = pathParts[0] === 'users' ? pathParts[1] : data.userId || null
+        return {
+          id: d.id,
+          path: d.ref.path,
+          userId: ownerUserId,
+          courseId: data.courseId || null,
+          jobType: data.jobType || null,
+          status: data.status || null,
+          progress: data.progress ?? null,
+          message: data.message || null,
+          topicKey: data.topicKey || null,
+          createdAt: data.createdAt?.toMillis?.() || null,
+          updatedAt: data.updatedAt?.toMillis?.() || null,
+          lastHeartbeat: data.lastHeartbeat?.toMillis?.() || null,
+          resumeAttempt: data.resumeAttempt ?? null,
+        }
+      })
+
+      jobs.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+      return res.status(200).json({ ok: true, count: jobs.length, jobs })
+    } catch (err) {
+      console.error('[listActiveGenerationJobs]', err)
+      const status = err?.statusCode || (String(err.message || '').includes('Admin') ? 403 : 500)
+      return res.status(status).json({ error: err.message || 'Erro ao listar jobs' })
     }
   })
 })
@@ -2745,10 +2800,10 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
 
 /**
  * Scheduler para gerar notícias automaticamente
- * Roda diariamente às 8h da manhã
+ * 08:15 SP — evita pico com outros crons das 8h; dedupe 24h igual ao HTTP
  */
 exports.scheduledGenerateConcursoNews = functions.pubsub
-  .schedule('0 8 * * *') // Todo dia às 8h
+  .schedule('15 8 * * *')
   .timeZone('America/Sao_Paulo')
   .onRun(async (context) => {
     try {
@@ -2760,6 +2815,46 @@ exports.scheduledGenerateConcursoNews = functions.pubsub
         console.error('GEMINI_API_KEY não configurada')
         return null
       }
+
+      const db = admin.firestore()
+      // Sem orderBy — evita índice composto; ordena em memória (igual ao HTTP)
+      const recentNews = await db
+        .collection('posts')
+        .where('isConcursoNews', '==', true)
+        .limit(50)
+        .get()
+      const recentNewsList = recentNews.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((news) => news.createdAt)
+        .sort((a, b) => {
+          const dateA = a.createdAt?.toDate?.() || new Date(0)
+          const dateB = b.createdAt?.toDate?.() || new Date(0)
+          return dateB.getTime() - dateA.getTime()
+        })
+        .slice(0, 10)
+
+      if (recentNewsList.length > 0) {
+        const lastNews = recentNewsList[0]
+        const lastNewsDate = lastNews.createdAt?.toDate?.() || new Date(0)
+        const hoursSinceLastNews = (Date.now() - lastNewsDate.getTime()) / (1000 * 60 * 60)
+        if (hoursSinceLastNews < 24) {
+          console.log(
+            `[scheduledGenerateConcursoNews] pulado — última notícia há ${Math.floor(hoursSinceLastNews)}h (<24h)`,
+          )
+          return null
+        }
+      }
+
+      const recentTitlesText =
+        recentNewsList.length > 0
+          ? `\n\nNOTÍCIAS RECENTES JÁ GERADAS (EVITE REPETIR):\n${recentNewsList
+              .slice(0, 5)
+              .map(
+                (n, i) =>
+                  `${i + 1}. "${n.seoTitle || n.text || ''}" - ${n.concursoData?.concursoName || 'N/A'} (${n.createdAt?.toDate?.()?.toLocaleDateString('pt-BR') || ''})`,
+              )
+              .join('\n')}\n\nIMPORTANTE: NÃO gere notícia sobre os mesmos concursos listados acima.`
+          : ''
 
       const prompt = `Você é um especialista em concursos públicos brasileiros. 
       Sua tarefa é criar uma notícia completa e atualizada sobre concursos públicos abertos ou iminentes.
@@ -2773,7 +2868,7 @@ exports.scheduledGenerateConcursoNews = functions.pubsub
       - Polícia Militar (PMGO, PMSP, PMRJ, etc.)
       - Polícia Civil (PC)
       - Guarda Municipal (GCM)
-      - Outros concursos públicos relevantes
+      - Outros concursos públicos relevantes${recentTitlesText}
 
       INFORMAÇÕES OBRIGATÓRIAS A INCLUIR:
       1. Nome do concurso e órgão
@@ -2836,8 +2931,7 @@ exports.scheduledGenerateConcursoNews = functions.pubsub
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '')
 
-      // Salvar no Firestore
-      const db = admin.firestore()
+      // Salvar no Firestore (db já aberto para dedupe)
       const newsRef = db.collection('posts')
       
       const newsDoc = {

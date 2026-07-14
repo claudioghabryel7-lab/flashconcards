@@ -1,15 +1,9 @@
 const admin = require('firebase-admin')
 const { getTodayKeyInSaoPaulo, getSaoPauloClockParts, formatDailyStartLabel } = require('./guiaMentoradoShared')
-const { loadCronogramaDay } = require('./guiaMentoradoDaily')
-const { loadEditalVerticalizado, extractTopicsFromCronogramaDay, resolveTopicFromEdital } = require('./guiaMentoradoEdital')
-const { isTopicContentComplete } = require('./guiaMentoradoAutomation')
-const { sanitizeTopicKeyForFirestore } = require('./topicKeyUtils')
-const { SESSION_HOURS, INTERVAL_MINUTES, REVIEW_COOLDOWN_DAYS } = require('./professorSupervisorShared')
+const { SESSION_HOURS, INTERVAL_MINUTES } = require('./professorSupervisorShared')
 
 const INTERVAL_MS = INTERVAL_MINUTES * 60 * 1000
 const SESSION_MS = SESSION_HOURS * 60 * 60 * 1000
-const BACKLOG_TOPICS_PER_COURSE = null
-const DIGITACAO_INTERVAL_MINUTES = 0
 const REDACAO_ROTATE_DAYS = 7
 const REDACAO_ROTATE_MS = REDACAO_ROTATE_DAYS * 24 * 60 * 60 * 1000
 
@@ -305,102 +299,6 @@ async function enqueueItem(item) {
     updatedAt: ts,
   })
   return ref.id
-}
-
-async function wasRecentlyReviewed(courseId, dedupeKey) {
-  const cutoff = Date.now() - REVIEW_COOLDOWN_DAYS * 24 * 60 * 60 * 1000
-  const snap = await getDb()
-    .collection('professorSupervisorHistory')
-    .where('courseId', '==', courseId)
-    .where('dedupeKey', '==', dedupeKey)
-    .orderBy('createdAt', 'desc')
-    .limit(1)
-    .get()
-  if (snap.empty) return false
-  const reviewedAt = snap.docs[0].data().createdAt?.toDate?.()
-  return reviewedAt && reviewedAt.getTime() > cutoff
-}
-
-function shuffleInPlace(arr = []) {
-  for (let i = arr.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[arr[i], arr[j]] = [arr[j], arr[i]]
-  }
-  return arr
-}
-
-const TOPIC_QUEUE_STEPS = [
-  { itemType: 'topico_flashcards', step: 'flashcards', offset: 2 },
-  { itemType: 'topico_digitacao', step: 'digitacao', offset: 1 },
-  { itemType: 'topico_material', step: 'material', offset: 0 },
-  { itemType: 'topico_questoes', step: 'questoes', offset: -1 },
-]
-
-async function enqueueTopicPipeline(courseId, topic, { priorityBase, targetDate, source }) {
-  let added = 0
-  const basePayload = {
-    topicKey: topic.topicKey,
-    topicoNome: topic.topicoNome,
-    disciplina: topic.disciplina,
-    modulo: topic.modulo,
-    targetDate,
-    source,
-  }
-
-  for (const { itemType, step, offset } of TOPIC_QUEUE_STEPS) {
-    const dedupeKey = `${courseId}:${itemType}:${topic.topicKey}`
-    if (await wasRecentlyReviewed(courseId, dedupeKey)) continue
-    const id = await enqueueItem({
-      courseId,
-      itemType,
-      priority: priorityBase + offset,
-      payload: { ...basePayload, step },
-    })
-    if (id) added += 1
-  }
-
-  return added
-}
-
-async function enqueueBacklogTopics(courseId, todayTopicKeys, edital, todayKey) {
-  const db = getDb()
-  const statusSnap = await db
-    .collection(`courses/${courseId}/topicoStatus`)
-    .where('status', '==', 'disponivel')
-    .limit(80)
-    .get()
-
-  const candidates = []
-  for (const doc of statusSnap.docs) {
-    const data = doc.data()
-    const topicKey = data.topicKey || doc.id
-    if (!topicKey || todayTopicKeys.has(topicKey)) continue
-
-    const resolved = resolveTopicFromEdital(edital, topicKey) || {
-      topicKey,
-      topicoNome: topicKey,
-      disciplina: data.disciplinaNome || '',
-      modulo: topicKey,
-    }
-
-    const readiness = await isTopicContentComplete(courseId, resolved)
-    if (!readiness.complete) continue
-    candidates.push(resolved)
-  }
-
-  shuffleInPlace(candidates)
-  let added = 0
-  const backlogTopics = BACKLOG_TOPICS_PER_COURSE
-    ? candidates.slice(0, BACKLOG_TOPICS_PER_COURSE)
-    : candidates
-  for (const topic of backlogTopics) {
-    added += await enqueueTopicPipeline(courseId, topic, {
-      priorityBase: 40,
-      targetDate: todayKey,
-      source: 'backlog',
-    })
-  }
-  return added
 }
 
 async function shouldEnqueueRedacaoTheme(courseId) {
@@ -791,16 +689,14 @@ async function tickProfessorSupervisor({ force = false } = {}) {
 }
 
 function scheduleNextRunForItem(itemType) {
-  // Encadeia rápido na sessão (não espera 5 min entre itens)
-  if (itemType === 'topico_digitacao' || itemType === 'flag') {
-    return scheduleNextRun(0)
-  }
+  // Encadeia imediatamente na sessão (moderação); cron 1 min cobre falhas
+  void itemType
   return scheduleNextRun(0)
 }
 
 /**
  * Dispara o próximo item imediatamente (após um job terminar).
- * Evita depender só do cron de 5 minutos.
+ * Evita depender só do cron de retomada.
  */
 async function kickNextSupervisorItem() {
   await scheduleNextRun(0)

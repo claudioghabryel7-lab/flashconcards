@@ -47,6 +47,7 @@ export const FIREBASE_FUNCTIONS = {
   nudgeGenerationJobResume: `${FIREBASE_FUNCTIONS_BASE_URL}/nudgeGenerationJobResume`,
   kickGenerationJob: `${FIREBASE_FUNCTIONS_BASE_URL}/kickGenerationJob`,
   cancelGenerationJob: `${FIREBASE_FUNCTIONS_BASE_URL}/cancelGenerationJob`,
+  listActiveGenerationJobs: `${FIREBASE_FUNCTIONS_BASE_URL}/listActiveGenerationJobs`,
   runContentAutomationNow: `${FIREBASE_FUNCTIONS_BASE_URL}/runContentAutomationNow`,
 }
 

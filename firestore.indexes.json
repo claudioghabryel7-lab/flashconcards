@@ -10,6 +10,14 @@
     },
     {
       "collectionGroup": "generationJobs",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "runOnServer", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "generationJobs",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "courseId", "order": "ASCENDING" },

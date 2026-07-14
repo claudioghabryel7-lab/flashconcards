@@ -1,5 +1,10 @@
 import { readEnv, isDevEnv } from '@/lib/env.js'
 import { checkGeminiApiKeysStatus, generateAiJson, formatAiErrorForUser, hasGeminiApiKeys } from '../utils/geminiApi'
+import {
+  generateCourseDescriptionAi,
+  generateCourseCoverImageAi,
+  formatCourseAiError,
+} from '../utils/courseCoverAi'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import {
   DndContext,
@@ -291,6 +296,8 @@ const AdminPanel = () => {
     banca: '', // Banca examinadora (ex: INSTITUTO AOCP, FGV, CESPE, FCC)
   })
   const [uploadingCourse, setUploadingCourse] = useState(false)
+  const [generatingCourseDescription, setGeneratingCourseDescription] = useState(false)
+  const [generatingCourseImage, setGeneratingCourseImage] = useState(false)
   const [editingCourseImage, setEditingCourseImage] = useState(null) // ID do curso sendo editado
   const [newCourseImage, setNewCourseImage] = useState(null) // Nova imagem em base64
   const [editingCourse, setEditingCourse] = useState(null) // ID do curso sendo editado (formulário completo)
@@ -2900,6 +2907,90 @@ REGRAS CRÍTICAS:
       }))
     }
     reader.readAsDataURL(file)
+  }
+
+  const handleGenerateCourseDescription = async () => {
+    if (!courseForm.name || !courseForm.competition) {
+      setMessage('❌ Preencha o nome e o concurso primeiro para gerar a descrição.')
+      return
+    }
+    setGeneratingCourseDescription(true)
+    setMessage('🤖 Gerando descrição com IA…')
+    try {
+      const description = await generateCourseDescriptionAi({
+        name: courseForm.name,
+        competition: courseForm.competition,
+        banca: courseForm.banca,
+        price: courseForm.price,
+        originalPrice: courseForm.originalPrice,
+      })
+      setCourseForm((prev) => ({ ...prev, description }))
+      setMessage('✅ Descrição gerada com sucesso!')
+    } catch (err) {
+      console.error('Erro ao gerar descrição do curso:', err)
+      setMessage(`❌ ${formatCourseAiError(err)}`)
+    } finally {
+      setGeneratingCourseDescription(false)
+    }
+  }
+
+  const handleGenerateCourseCoverImage = async () => {
+    if (!courseForm.name || !courseForm.competition) {
+      setMessage('❌ Preencha o nome e o concurso primeiro para gerar a imagem.')
+      return
+    }
+    setGeneratingCourseImage(true)
+    setMessage('🔎 Buscando brasão/logo oficial e montando capa estúdio…')
+    try {
+      const imageBase64 = await generateCourseCoverImageAi({
+        name: courseForm.name,
+        competition: courseForm.competition,
+        banca: courseForm.banca,
+        price: courseForm.price,
+        referenceLink: courseForm.referenceLink,
+      })
+      setCourseForm((prev) => ({ ...prev, imageBase64, imageUrl: '' }))
+      setMessage('✅ Capa com logo real gerada. Revise o preview.')
+    } catch (err) {
+      console.error('Erro ao gerar capa do curso:', err)
+      setMessage(`❌ ${formatCourseAiError(err)}`)
+    } finally {
+      setGeneratingCourseImage(false)
+    }
+  }
+
+  /** Gera capa para curso já existente (preview → Salvar). */
+  const handleGenerateExistingCourseCoverImage = async (course) => {
+    const data =
+      editingCourse === course.id && editingCourseData
+        ? editingCourseData
+        : course
+    const name = String(data?.name || '').trim()
+    const competition = String(data?.competition || '').trim()
+    if (!name || !competition) {
+      setMessage('❌ O curso precisa ter nome e concurso para gerar a imagem.')
+      return
+    }
+
+    setGeneratingCourseImage(true)
+    setEditingCourseImage(course.id)
+    setMessage(`🔎 Buscando brasão oficial para “${name}”…`)
+    try {
+      const imageBase64 = await generateCourseCoverImageAi({
+        name,
+        competition,
+        banca: data?.banca || '',
+        price: data?.price,
+        referenceLink: data?.referenceLink || '',
+      })
+      setNewCourseImage(imageBase64)
+      setMessage('✅ Capa com logo real gerada. Clique em Salvar para aplicar no curso.')
+    } catch (err) {
+      console.error('Erro ao gerar capa do curso existente:', err)
+      setMessage(`❌ ${formatCourseAiError(err)}`)
+    } finally {
+      setGeneratingCourseImage(false)
+    }
   }
 
   const addCourse = async () => {
@@ -9640,115 +9731,34 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                           <label className="block text-xs font-semibold text-slate-600 mb-2">
                             Descrição
                           </label>
-                          <div className="flex gap-2">
+                          <div className="flex flex-col gap-2 sm:flex-row">
                             <textarea
                               value={courseForm.description}
                               onChange={(e) => setCourseForm(prev => ({ ...prev, description: e.target.value }))}
-                              placeholder="Descrição do curso... (ou clique em 'Gerar com IA' para criar automaticamente)"
-                              rows={4}
-                              className="flex-1 rounded-lg border border-slate-300 p-2 text-sm"
+                              placeholder="Descrição completa do curso… (ou clique em Gerar com IA)"
+                              rows={7}
+                              className="flex-1 min-h-[160px] rounded-lg border border-slate-300 p-2 text-sm"
+                              disabled={generatingCourseDescription}
                             />
                             <button
                               type="button"
-                              onClick={async () => {
-                                if (!courseForm.name || !courseForm.competition) {
-                                  setMessage('❌ Preencha o nome e o concurso primeiro para gerar a descrição.')
-                                  return
-                                }
-                                
-                                try {
-                                  setMessage('🤖 Gerando descrição com IA...')
-                                  
-                                  const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-                                  
-                                  if (!hasGeminiApiKeys() && !groqApiKey) {
-                                    setMessage('❌ Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
-                                    return
-                                  }
-                                  
-                                  const prompt = `Crie uma descrição atrativa e profissional para um curso preparatório online com as seguintes informações:
-
-Nome do Curso: ${courseForm.name}
-Concurso/Competição: ${courseForm.competition}
-
-A descrição deve:
-- Ser concisa (2-4 frases)
-- Destacar os benefícios do curso
-- Mencionar flashcards, questões e IA personalizada
-- Ser atrativa e motivadora
-- Usar linguagem profissional mas acessível
-
-Retorne APENAS a descrição, sem títulos ou formatação adicional.`
-
-                                  let description = ''
-                                  
-                                  if (hasGeminiApiKeys()) {
-                                    try {
-                                      const response = await callGeminiWithRetry(prompt, {
-                                        courseId: editingCourse || selectedCourseForPrompts || null,
-                                        courseContext: {
-                                          name: courseForm.name,
-                                          competition: courseForm.competition,
-                                          banca: courseForm.banca,
-                                        },
-                                        verifyContent: false,
-                                        isLegalContent: false,
-                                        generationConfig: {
-                                          maxOutputTokens: 1024,
-                                          temperature: 0.5,
-                                        },
-                                      })
-                                      description = extractGeneratedText(response).trim()
-                                    } catch (geminiErr) {
-                                      if (groqApiKey) {
-                                        description = await callGroqAPI(prompt)
-                                      } else {
-                                        throw geminiErr
-                                      }
-                                    }
-                                  } else if (groqApiKey) {
-                                    description = await callGroqAPI(prompt)
-                                  }
-                                  
-                                  if (description) {
-                                    setCourseForm(prev => ({ ...prev, description }))
-                                    setMessage('✅ Descrição gerada com sucesso!')
-                                  } else {
-                                    setMessage('❌ Não foi possível gerar a descrição.')
-                                  }
-                                } catch (err) {
-                                  console.error('Erro ao gerar descrição:', err)
-                                  setMessage(`❌ Erro ao gerar descrição: ${err.message}`)
-                                }
-                              }}
-                              disabled={!courseForm.name || !courseForm.competition || uploadingCourse}
-                              className="rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-2 text-xs font-semibold text-white hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition whitespace-nowrap"
-                              title="Gerar descrição automaticamente com IA baseada no nome e concurso"
+                              onClick={handleGenerateCourseDescription}
+                              disabled={
+                                !courseForm.name ||
+                                !courseForm.competition ||
+                                uploadingCourse ||
+                                generatingCourseDescription ||
+                                generatingCourseImage
+                              }
+                              className="rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-2 text-xs font-semibold text-white hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition whitespace-nowrap self-start"
+                              title="Gera descrição com base no nome, concurso, banca e preço"
                             >
-                              ✨ Gerar com IA
+                              {generatingCourseDescription ? 'Gerando…' : '✨ Gerar com IA'}
                             </button>
                           </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-600 mb-2">
-                            Imagem (máximo 2MB) *
-                          </label>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleCourseImageUpload}
-                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
-                          />
-                          {courseForm.imageBase64 && (
-                            <div className="mt-2">
-                              <img
-                                src={courseForm.imageBase64}
-                                alt="Preview"
-                                className="max-h-32 rounded-lg border border-slate-200"
-                              />
-                            </div>
-                          )}
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Usa nome, concurso, banca e preço do formulário. Sem inventar datas de edital.
+                          </p>
                         </div>
 
                         <div>
@@ -9863,6 +9873,48 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                           </div>
                         </div>
 
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-2">
+                            Imagem (máximo 2MB) *
+                          </label>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleCourseImageUpload}
+                              className="w-full flex-1 rounded-lg border border-slate-300 p-2 text-sm"
+                              disabled={generatingCourseImage}
+                            />
+                            <button
+                              type="button"
+                              onClick={handleGenerateCourseCoverImage}
+                              disabled={
+                                !courseForm.name ||
+                                !courseForm.competition ||
+                                uploadingCourse ||
+                                generatingCourseImage ||
+                                generatingCourseDescription
+                              }
+                              className="rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-600 px-4 py-2 text-xs font-semibold text-white hover:from-indigo-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition whitespace-nowrap"
+                              title="Busca o brasão/logo real do órgão e monta capa estúdio limpa (sem marca d’água)"
+                            >
+                              {generatingCourseImage ? 'Buscando brasão…' : '🎨 Gerar capa profissional'}
+                            </button>
+                          </div>
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Usa o brasão/logo real do concurso (ex.: PCGO) centralizado em fundo estúdio — sem inventar logo, sem marcas d’água ou URLs.
+                          </p>
+                          {courseForm.imageBase64 && (
+                            <div className="mt-2">
+                              <img
+                                src={courseForm.imageBase64}
+                                alt="Preview"
+                                className="max-h-40 rounded-lg border border-slate-200 object-contain bg-slate-50"
+                              />
+                            </div>
+                          )}
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center gap-2">
                           <input
@@ -9888,7 +9940,14 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                         <button
                           type="button"
                           onClick={addCourse}
-                          disabled={uploadingCourse || !courseForm.name || !courseForm.competition || (!courseForm.imageBase64 && !courseForm.imageUrl)}
+                          disabled={
+                            uploadingCourse ||
+                            generatingCourseImage ||
+                            generatingCourseDescription ||
+                            !courseForm.name ||
+                            !courseForm.competition ||
+                            (!courseForm.imageBase64 && !courseForm.imageUrl)
+                          }
                           className="w-full rounded-lg bg-alego-600 px-4 py-2 text-sm font-semibold text-white hover:bg-alego-700 disabled:opacity-50"
                         >
                           {uploadingCourse ? 'Adicionando...' : 'Adicionar Curso'}
@@ -9929,14 +9988,24 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                         accept="image/*"
                                         onChange={(e) => handleEditCourseImage(e, course.id)}
                                         className="text-xs"
-                                        disabled={uploadingCourse}
+                                        disabled={uploadingCourse || generatingCourseImage}
                                       />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleGenerateExistingCourseCoverImage(course)}
+                                        disabled={uploadingCourse || generatingCourseImage}
+                                        className="w-full rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-600 px-2 py-1.5 text-xs font-semibold text-white hover:from-indigo-700 hover:to-cyan-700 disabled:opacity-50"
+                                      >
+                                        {generatingCourseImage && editingCourseImage === course.id
+                                          ? 'Gerando capa…'
+                                          : '🎨 Gerar imagem com IA'}
+                                      </button>
                                       {newCourseImage && (
                                         <div className="flex gap-2">
                                           <button
                                             type="button"
                                             onClick={() => saveCourseImage(course.id)}
-                                            disabled={uploadingCourse}
+                                            disabled={uploadingCourse || generatingCourseImage}
                                             className="rounded-lg bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
                                           >
                                             {uploadingCourse ? 'Salvando...' : 'Salvar'}
@@ -9944,7 +10013,7 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                           <button
                                             type="button"
                                             onClick={cancelEditCourseImage}
-                                            disabled={uploadingCourse}
+                                            disabled={uploadingCourse || generatingCourseImage}
                                             className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                                           >
                                             Cancelar
@@ -9953,13 +10022,25 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                       )}
                                     </div>
                                   ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingCourseImage(course.id)}
-                                      className="mt-2 w-full rounded-lg border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                                    >
-                                      📷 Trocar Foto
-                                    </button>
+                                    <div className="mt-2 flex flex-col gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingCourseImage(course.id)}
+                                        className="w-full rounded-lg border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                                      >
+                                        📷 Trocar Foto
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleGenerateExistingCourseCoverImage(course)}
+                                        disabled={generatingCourseImage}
+                                        className="w-full rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-600 px-2 py-1 text-xs font-semibold text-white hover:from-indigo-700 hover:to-cyan-700 disabled:opacity-50"
+                                      >
+                                        {generatingCourseImage && editingCourseImage === course.id
+                                          ? 'Gerando…'
+                                          : '🎨 Gerar com IA'}
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
                                 <div className="flex-1">

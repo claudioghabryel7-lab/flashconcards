@@ -901,7 +901,7 @@ async function processProfessorSupervisor(userId, jobId, courseId, serverPayload
 
     await scheduleNextRunForItem(itemType)
 
-    // Nuvem: inicia o próximo job agora (não espera o cron de 5 min)
+    // Nuvem: inicia o próximo job agora (não espera só o cron)
     try {
       const kick = await kickNextSupervisorItem()
       if (kick?.started) {

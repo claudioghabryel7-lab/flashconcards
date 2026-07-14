@@ -82,16 +82,17 @@ service cloud.firestore {
       }
 
       match /generationJobs/{jobId} {
-        allow read: if isOwner(userId);
-        // Jobs runOnServer gastam Gemini no servidor — só admin pode criar/escalar
+        allow read: if isOwner(userId) || isAdmin();
+        // Jobs runOnServer gastam Gemini no servidor — só admin pode criar/atualizar
         allow create: if isOwner(userId) && (
           !(request.resource.data.keys().hasAll(['runOnServer']) && request.resource.data.runOnServer == true)
           || isAdmin()
         );
-        allow update: if isOwner(userId) && (
-          isAdmin()
-          || request.resource.data.get('runOnServer', false) != true
-          || resource.data.get('runOnServer', false) == true
+        // Non-admin: só jobs locais (sem runOnServer). Nunca alterar jobs de nuvem.
+        allow update: if isAdmin() || (
+          isOwner(userId)
+          && resource.data.get('runOnServer', false) != true
+          && request.resource.data.get('runOnServer', false) != true
         );
         allow delete: if isOwner(userId) || isAdmin();
       }
