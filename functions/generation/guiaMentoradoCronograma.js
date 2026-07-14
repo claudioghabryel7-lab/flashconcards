@@ -250,8 +250,11 @@ async function saveCronogramaMonths(courseId, cronogramaEntries, config) {
 }
 
 async function processGuiaMentoradoCronograma(userId, jobId, courseId, serverPayload, updateJob) {
+  const { normalizeMentoradoAutomationConfig } = require('./guiaMentoradoConfig')
   const config = serverPayload?.config || {}
-  const autoGerarConteudo = Boolean(config.autoGerarConteudo)
+  const automation = normalizeMentoradoAutomationConfig(config)
+  const autoGerarConteudo =
+    automation.enabled && automation.triggers.onCronogramaGenerated
 
   await updateJob(userId, jobId, { progress: 5, message: 'Carregando edital verticalizado…' })
 
@@ -333,15 +336,26 @@ async function processGuiaMentoradoCronograma(userId, jobId, courseId, serverPay
   const monthsCount = await saveCronogramaMonths(courseId, normalized.cronograma, config)
 
   const db = getDb()
-  await db.doc(`courses/${courseId}/config/guiaMentorado`).set(
+  const { buildMentoradoAutomationWrite } = require('./guiaMentoradoConfig')
+  const existingSnap = await db.doc(`courses/${courseId}/config/guiaMentorado`).get()
+  const existingRaw = existingSnap.exists ? existingSnap.data() : {}
+  const writePayload = buildMentoradoAutomationWrite(
     {
-      ...config,
+      _current: { ...existingRaw, ...config },
+      enabled: automation.enabled,
       automationUserId: userId,
+      dataProva: config.dataProva !== undefined ? config.dataProva : existingRaw.dataProva,
+      hasTAF: config.hasTAF !== undefined ? config.hasTAF : existingRaw.hasTAF,
+      tafExercicios:
+        config.tafExercicios !== undefined ? config.tafExercicios : existingRaw.tafExercicios,
+      hasRedacao: config.hasRedacao !== undefined ? config.hasRedacao : existingRaw.hasRedacao,
+    },
+    {
       cronogramaGeradoEm: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     },
-    { merge: true },
   )
+  await db.doc(`courses/${courseId}/config/guiaMentorado`).set(writePayload, { merge: true })
 
   let dayAutomation = null
   if (autoGerarConteudo) {
@@ -350,6 +364,7 @@ async function processGuiaMentoradoCronograma(userId, jobId, courseId, serverPay
       message: `Cronograma salvo. Iniciando geração do dia ${todayKey}…`,
     })
     dayAutomation = await startDayAutomation(courseId, todayKey, userId, {
+      intent: 'cronograma_followup',
       metadata: { triggeredBy: 'cronograma' },
     })
     if (!dayAutomation.started && dayAutomation.reason) {

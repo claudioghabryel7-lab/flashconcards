@@ -3,27 +3,22 @@ import {
   ArrowPathIcon,
   PauseCircleIcon,
   PlayCircleIcon,
-  RocketLaunchIcon,
   StopCircleIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline'
-import { useAuth } from '../../hooks/useAuth'
 import {
   DEFAULT_MAINTENANCE_MESSAGE,
   deleteAllTopicContentAllCourses,
   readPlatformSettings,
   setMaintenanceMode,
-  startMentoradoBackfillAllCourses,
 } from '../../services/adminPlatformService'
 import { forceStopAllGenerationJobsGlobally } from '../../services/generationJobService'
 
 export default function AdminPlatformMaintenance() {
-  const { user } = useAuth()
   const [maintenanceOn, setMaintenanceOn] = useState(false)
   const [loadingSettings, setLoadingSettings] = useState(true)
   const [togglingStandby, setTogglingStandby] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [generating, setGenerating] = useState(false)
   const [stoppingJobs, setStoppingJobs] = useState(false)
   const [progress, setProgress] = useState('')
   const [feedback, setFeedback] = useState('')
@@ -92,38 +87,6 @@ export default function AdminPlatformMaintenance() {
     }
   }
 
-  const handleGenerateAllMentorado = async () => {
-    if (generating || !user?.uid) return
-
-    const confirmed = window.confirm(
-      'Gerar os conteúdos faltantes do Guia Mentorado (do 1º dia até hoje)?\n\nUsa o mesmo fluxo de “Gerar conteúdos de hoje”, dia a dia. Só 1 curso por vez — acompanhe no banner.',
-    )
-    if (!confirmed) return
-
-    setGenerating(true)
-    setFeedback('')
-    setProgress('Preparando dias…')
-
-    try {
-      const { jobs } = await startMentoradoBackfillAllCourses(user.uid, setProgress)
-      const byCourse = jobs.reduce((acc, j) => {
-        acc[j.courseName] = (acc[j.courseName] || 0) + 1
-        return acc
-      }, {})
-      setFeedback(
-        `✅ ${jobs.length} dia(s) enfileirado(s): ${Object.entries(byCourse)
-          .map(([name, n]) => `${name} (${n})`)
-          .join(', ')}. Acompanhe no banner.`,
-      )
-      setProgress('')
-    } catch (err) {
-      setFeedback(`❌ ${err.message || 'Erro ao iniciar geração.'}`)
-      setProgress('')
-    } finally {
-      setGenerating(false)
-    }
-  }
-
   const handleForceStopAllJobs = async () => {
     if (stoppingJobs) return
     const ok = window.confirm(
@@ -143,7 +106,7 @@ export default function AdminPlatformMaintenance() {
     }
   }
 
-  const busy = deleting || generating || togglingStandby || stoppingJobs
+  const busy = deleting || togglingStandby || stoppingJobs
 
   return (
     <div className="rounded-2xl border-2 border-rose-200 bg-gradient-to-br from-rose-50 to-orange-50 p-6 shadow-lg dark:border-rose-800 dark:from-rose-900/20 dark:to-orange-900/10">
@@ -153,7 +116,8 @@ export default function AdminPlatformMaintenance() {
           Manutenção da plataforma
         </p>
         <p className="max-w-3xl text-xs text-rose-900/80 dark:text-rose-200/80">
-          Ações em massa para todos os cursos. O Professor IA continua revisando apenas conteúdos
+          Ações em massa destrutivas. A automação do Guia Mentorado fica na aba{' '}
+          <strong>📅 Guia Mentorado</strong>. O Professor IA continua revisando apenas conteúdos
           sinalizados pelos alunos.
         </p>
       </div>
@@ -167,16 +131,6 @@ export default function AdminPlatformMaintenance() {
         >
           <TrashIcon className={`h-5 w-5 ${deleting ? 'animate-pulse' : ''}`} />
           {deleting ? 'Apagando…' : 'Apagar conteúdos dos tópicos'}
-        </button>
-
-        <button
-          type="button"
-          onClick={handleGenerateAllMentorado}
-          disabled={busy}
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50"
-        >
-          <RocketLaunchIcon className={`h-5 w-5 ${generating ? 'animate-pulse' : ''}`} />
-          {generating ? 'Iniciando…' : 'Gerar Guia Mentorado (dia 1 → hoje)'}
         </button>
 
         <button
@@ -208,32 +162,19 @@ export default function AdminPlatformMaintenance() {
             ? 'Alterando…'
             : maintenanceOn
               ? 'Desativar standby'
-              : 'Standby (manutenção)'}
+              : 'Ativar standby'}
         </button>
       </div>
 
-      {maintenanceOn && (
-        <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-xs font-medium text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
-          ⚠️ Standby ativo — usuários não-admin veem: &quot;{DEFAULT_MAINTENANCE_MESSAGE}&quot;
-        </p>
-      )}
-
-      {progress && (
-        <p className="mt-3 rounded-lg bg-white/80 px-3 py-2 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-          {progress}
-        </p>
-      )}
-
-      {feedback && (
-        <p
-          className={`mt-3 rounded-lg px-3 py-2 text-sm ${
-            feedback.startsWith('✅')
-              ? 'bg-emerald-100 text-emerald-800'
-              : 'bg-rose-100 text-rose-800'
-          }`}
-        >
-          {feedback}
-        </p>
+      {(progress || feedback) && (
+        <div className="mt-4 space-y-1">
+          {progress && (
+            <p className="text-xs font-medium text-rose-800 dark:text-rose-200">{progress}</p>
+          )}
+          {feedback && (
+            <p className="text-sm font-semibold text-rose-900 dark:text-rose-100">{feedback}</p>
+          )}
+        </div>
       )}
     </div>
   )

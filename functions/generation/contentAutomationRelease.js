@@ -1,12 +1,15 @@
 /**
- * Automação de conteúdo (mesmo estilo do Guia Mentorado):
- * - Tick a cada 30 min → 1 job só (não explode a API)
- * - Revezamento round-robin entre TODOS os cursos ativos
- * - Por curso: incidência (1/dia) → níveis 1 → depois 1 nível/dia (2→10)
- * - Só na janela De/Até do Professor (sem usar o Professor IA)
+ * Automação de conteúdo unificada:
+ * - Tick a cada 30 min → 1 job (não explode a API)
+ * - Round-robin entre cursos ativos
+ * - Por curso: incidência (1/dia) → níveis 1 → 1 nível/dia (2→10)
+ * - Janela própria em config/contentAutomation, com fallback para Professor / horário padrão
  */
 const admin = require('firebase-admin')
-const { getTodayKeyInSaoPaulo } = require('./guiaMentoradoShared')
+const {
+  getTodayKeyInSaoPaulo,
+  getSaoPauloClockParts,
+} = require('./guiaMentoradoShared')
 const {
   loadEditalVerticalizado,
   loadMentoradoAutomationContext,
@@ -17,6 +20,17 @@ const { sanitizeTopicKeyForFirestore, sanitizeDisciplinaKey } = require('./topic
 
 const CONTENT_RELEASE_INTERVAL_MINUTES = 30
 const MAX_NIVEL = 10
+/** Janela padrão (Brasília) se não houver config do Professor nem própria. */
+const DEFAULT_WINDOW = { startHour: 6, startMinute: 0, endHour: 23, endMinute: 0 }
+
+const CONTENT_JOB_TYPES = new Set(['conteudo_incidencia', 'questoes_topico'])
+const ACTIVE_JOB_STATUSES = [
+  'pending',
+  'running',
+  'waiting_api',
+  'waiting_retry',
+  'waiting_timeout',
+]
 
 function getDb() {
   return admin.firestore()
@@ -26,22 +40,73 @@ function stateRef() {
   return getDb().doc('config/contentAutomation')
 }
 
-/** Só gera se estiver na mesma janela De/Até do Professor (Brasília). */
+function toMinutes(hour, minute) {
+  return Number(hour || 0) * 60 + Number(minute || 0)
+}
+
+function isClockInWindow(clock, startHour, startMinute, endHour, endMinute) {
+  const nowMin = toMinutes(clock.hour, clock.minute)
+  const startMin = toMinutes(startHour, startMinute)
+  const endMin = toMinutes(endHour, endMinute)
+  if (endMin <= startMin) {
+    // overnight
+    return nowMin >= startMin || nowMin < endMin
+  }
+  return nowMin >= startMin && nowMin < endMin
+}
+
+/**
+ * Janela de liberação de conteúdo (independente do Professor IA por padrão):
+ * 1) enabled === false → fechado
+ * 2) se useProfessorWindow === true → janela do Professor (opcional)
+ * 3) senão janela própria em contentAutomation / DEFAULT 06–23
+ */
+async function isWithinContentAutomationWindow() {
+  const stateSnap = await stateRef().get()
+  const state = stateSnap.exists ? stateSnap.data() || {} : {}
+
+  if (state.enabled === false) {
+    return { open: false, reason: 'content_automation_disabled', source: 'contentAutomation' }
+  }
+
+  const clock = getSaoPauloClockParts()
+
+  // Só compartilha janela com o Professor se o admin pedir explicitamente
+  if (state.useProfessorWindow === true) {
+    const profSnap = await getDb().doc('config/professorFiscalizador').get()
+    const prof = profSnap.exists ? profSnap.data() || {} : {}
+    const hasProfWindow =
+      prof.recurringDaily === true ||
+      prof.windowStartHour != null ||
+      prof.dailyStartHour != null
+
+    if (hasProfWindow) {
+      const { isWithinScheduleWindow } = require('./professorSupervisorQueue')
+      const open = isWithinScheduleWindow(prof)
+      return {
+        open,
+        reason: open ? 'ok' : 'outside_professor_window',
+        source: 'professorFiscalizador',
+      }
+    }
+  }
+
+  const startHour = state.windowStartHour ?? state.dailyStartHour ?? DEFAULT_WINDOW.startHour
+  const startMinute = state.windowStartMinute ?? state.dailyStartMinute ?? DEFAULT_WINDOW.startMinute
+  const endHour = state.windowEndHour ?? DEFAULT_WINDOW.endHour
+  const endMinute = state.windowEndMinute ?? DEFAULT_WINDOW.endMinute
+  const open = isClockInWindow(clock, startHour, startMinute, endHour, endMinute)
+  return {
+    open,
+    reason: open ? 'ok' : 'outside_content_window',
+    source: 'contentAutomation',
+    window: { startHour, startMinute, endHour, endMinute },
+  }
+}
+
+/** Compat: nome antigo usado pelo tick. */
 async function isWithinProfessorScheduleWindow() {
-  const snap = await getDb().doc('config/professorFiscalizador').get()
-  const data = snap.exists ? snap.data() || {} : {}
-  const hasWindow =
-    data.recurringDaily === true ||
-    data.windowStartHour != null ||
-    data.dailyStartHour != null
-  if (!hasWindow) {
-    return { open: false, reason: 'no_professor_schedule' }
-  }
-  const { isWithinScheduleWindow } = require('./professorSupervisorQueue')
-  if (!isWithinScheduleWindow(data)) {
-    return { open: false, reason: 'outside_professor_window' }
-  }
-  return { open: true }
+  return isWithinContentAutomationWindow()
 }
 
 function flattenEditalTopics(edital) {
@@ -82,8 +147,15 @@ function normalizeTopicKey(topicKey = '') {
 async function resolveAutomationUserId(courseId) {
   const db = getDb()
   const guiaSnap = await db.doc(`courses/${courseId}/config/guiaMentorado`).get()
-  if (guiaSnap.exists && guiaSnap.data()?.automationUserId) {
-    return guiaSnap.data().automationUserId
+  if (guiaSnap.exists) {
+    const data = guiaSnap.data() || {}
+    const nested = data.automation?.automationUserId
+    if (nested) return nested
+    if (data.automationUserId) return data.automationUserId
+  }
+  const stateSnap = await stateRef().get()
+  if (stateSnap.exists && stateSnap.data()?.automationUserId) {
+    return stateSnap.data().automationUserId
   }
   const profSnap = await db.doc('config/professorFiscalizador').get()
   return profSnap.exists ? profSnap.data()?.automationUserId || null : null
@@ -94,6 +166,17 @@ async function listActiveCourses() {
   return snap.docs
     .filter((d) => d.data()?.active !== false)
     .map((d) => ({ id: d.id, ...(d.data() || {}) }))
+}
+
+async function hasActiveContentJob(userId, courseId) {
+  if (!userId || !courseId) return false
+  const snap = await getDb()
+    .collection(`users/${userId}/generationJobs`)
+    .where('courseId', '==', courseId)
+    .where('status', 'in', ACTIVE_JOB_STATUSES)
+    .limit(30)
+    .get()
+  return snap.docs.some((d) => CONTENT_JOB_TYPES.has(d.data()?.jobType))
 }
 
 async function hasQuestoesNivel(courseId, topicKey, nivel) {
@@ -108,13 +191,27 @@ async function hasQuestoesNivel(courseId, topicKey, nivel) {
   return Array.isArray(questoes) ? questoes.length > 0 : Boolean(questoes)
 }
 
+/** Incidência só conta se tiver análise real (não só campo disciplina vazio). */
 async function hasIncidencia(courseId, disciplinaNome) {
   const key = sanitizeDisciplinaKey(disciplinaNome)
   if (!key) return false
   const snap = await getDb().doc(`courses/${courseId}/conteudosIncidencia/${key}`).get()
   if (!snap.exists) return false
   const data = snap.data() || {}
-  return Boolean(data.analisePorTopico || data.topAssuntosGerais || data.content || data.disciplina)
+
+  const analise = data.analisePorTopico
+  if (Array.isArray(analise) && analise.length > 0) return true
+
+  const top = data.topAssuntosGerais
+  if (Array.isArray(top) && top.length > 0) return true
+
+  if (typeof data.content === 'string' && data.content.trim().length > 80) return true
+  if (data.content && typeof data.content === 'object') {
+    const keys = Object.keys(data.content)
+    if (keys.length > 0) return true
+  }
+
+  return false
 }
 
 async function findNextMissingNivel1(courseId, topics) {
@@ -269,30 +366,31 @@ async function patchState(patch) {
 
 /**
  * @param {{ force?: boolean, respectSchedule?: boolean }} opts
- * A cada tick (30 min, na janela do Professor): 1 job só, revezando cursos.
  */
 async function runContentAutomationRelease({
   force = false,
   respectSchedule = true,
 } = {}) {
   if (!force && respectSchedule) {
-    const window = await isWithinProfessorScheduleWindow()
+    const window = await isWithinContentAutomationWindow()
     if (!window.open) {
-      return { skipped: true, reason: window.reason }
+      return { skipped: true, reason: window.reason, source: window.source }
     }
   }
 
   const stateSnap = await stateRef().get()
   const state = stateSnap.exists ? stateSnap.data() || {} : {}
-  const todayKey = getTodayKeyInSaoPaulo()
 
+  if (!force && state.enabled === false) {
+    return { skipped: true, reason: 'content_automation_disabled' }
+  }
+
+  const todayKey = getTodayKeyInSaoPaulo()
   const courses = await listActiveCourses()
   if (!courses.length) return { skipped: true, reason: 'no_courses' }
 
   const incidenciaByCourse = { ...(state.incidenciaByCourse || {}) }
   const progressionByCourse = { ...(state.progressionByCourse || {}) }
-
-  // Round-robin: começa no próximo curso após o último atendido
   const startIdx = Math.max(0, Number(state.courseRotateIndex) || 0) % courses.length
 
   for (let offset = 0; offset < courses.length; offset += 1) {
@@ -305,11 +403,18 @@ async function runContentAutomationRelease({
       const userId = await resolveAutomationUserId(courseId)
       if (!userId) continue
 
+      if (await hasActiveContentJob(userId, courseId)) {
+        await patchState({
+          courseRotateIndex: nextRotateIndex,
+          lastMessage: `[${course.name || courseId}] job de conteúdo já ativo — próximo curso`,
+        })
+        continue
+      }
+
       const edital = await loadEditalVerticalizado(courseId)
       if (!edital?.disciplinas?.length) continue
       const topics = flattenEditalTopics(edital)
 
-      // 1) Incidência deste curso (no máx. 1/dia por curso)
       if (incidenciaByCourse[courseId] !== todayKey) {
         const missingInc = await findNextMissingIncidencia(courseId, edital)
         if (missingInc) {
@@ -349,6 +454,7 @@ async function runContentAutomationRelease({
             incidenciaByCourse,
             progressionByCourse,
             lastIncidenciaJobId: jobId,
+            phase: 'incidencia',
             lastMessage: `[${course.name || courseId}] Incidência: ${missingInc.disciplinaNome}`,
           })
 
@@ -361,7 +467,6 @@ async function runContentAutomationRelease({
             rotateNext: nextRotateIndex,
           }
         }
-        // Nada pendente de incidência neste curso hoje
         incidenciaByCourse[courseId] = todayKey
       }
 
@@ -377,7 +482,6 @@ async function runContentAutomationRelease({
       const context = await loadMentoradoAutomationContext(courseId)
       const ready = await foundationComplete(courseId, edital, topics)
 
-      // 2) Fundação: próximo nível 1 faltante
       if (!ready) {
         const missing = await findNextMissingNivel1(courseId, topics)
         if (!missing) {
@@ -436,7 +540,6 @@ async function runContentAutomationRelease({
         }
       }
 
-      // 3) Progressão: 1 nível/dia por curso (2→10)
       if (!force && progressionByCourse[courseId] === todayKey) {
         await patchState({
           courseRotateIndex: nextRotateIndex,
@@ -521,6 +624,9 @@ async function runContentAutomationRelease({
 module.exports = {
   runContentAutomationRelease,
   isWithinProfessorScheduleWindow,
+  isWithinContentAutomationWindow,
+  hasIncidencia,
   CONTENT_RELEASE_INTERVAL_MINUTES,
   MAX_NIVEL,
+  DEFAULT_WINDOW,
 }

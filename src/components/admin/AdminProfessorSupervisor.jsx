@@ -256,10 +256,9 @@ export default function AdminProfessorSupervisor() {
               <h2 className="cp-headline text-lg text-cp-text">Professor IA — correções automáticas</h2>
               <p className="mt-1 max-w-xl text-sm text-cp-muted">
                 Agenda <strong>segunda a domingo</strong> com janela de horário. Corrige{' '}
-                <strong>somente</strong> a aba <strong>🚩 Moderação</strong> (sinalizações abertas). Sem
-                report novo, fica em espera — não gasta API à toa. A liberação de incidência e níveis
-                de questões é um script separado (a cada 30 min, na mesma janela De/Até), revezando
-                todos os cursos.
+                <strong>somente</strong> a aba <strong>🚩 Moderação</strong> (sinalizações abertas).
+                Independente do <strong>📅 Guia Mentorado</strong> (cronograma/dia) — compartilham só
+                a fila global de jobs (máx. 3). Sem report novo, fica em espera — não gasta API à toa.
               </p>
             </div>
           </div>

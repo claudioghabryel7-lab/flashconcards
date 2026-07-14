@@ -1,0 +1,643 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  CalendarDaysIcon,
+  ClockIcon,
+  Cog6ToothIcon,
+  LinkIcon,
+  RocketLaunchIcon,
+  SparklesIcon,
+} from '@heroicons/react/24/outline'
+import { useAuth } from '../../hooks/useAuth'
+import MentoradoDayAutomationStatus from '../guiaMentorado/MentoradoDayAutomationStatus'
+import {
+  formatDailyReleaseLabel,
+  listActiveCoursesForAdmin,
+  runMentoradoBackfill,
+  runMentoradoBackfillAllCourses,
+  runMentoradoCronograma,
+  runMentoradoToday,
+  saveGuiaMentoradoAdminConfig,
+  subscribeGuiaMentoradoConfig,
+} from '../../services/guiaMentoradoAdminService'
+import { DEFAULT_PLANNING_DAYS } from '../../constants/guiaMentorado'
+import { FIREBASE_FUNCTIONS } from '../../config/firebaseFunctions'
+import { auth, db } from '../../firebase/config'
+import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
+
+function padTime(h, m) {
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+function parseTimeInput(value) {
+  const [h, m] = String(value || '00:00').split(':').map((n) => Number(n))
+  return {
+    hour: Number.isFinite(h) ? Math.min(23, Math.max(0, h)) : 0,
+    minute: Number.isFinite(m) ? Math.min(59, Math.max(0, m)) : 0,
+  }
+}
+
+const TAF_OPTIONS = ['Barra', 'Flexão', 'Corrida', 'Abdominal', 'Shut Run', 'Salto']
+
+const emptyForm = {
+  enabled: false,
+  dataProva: '',
+  hasTAF: false,
+  hasRedacao: false,
+  tafExercicios: [],
+  dailyReleaseHour: 0,
+  dailyReleaseMinute: 0,
+  onCronogramaGenerated: true,
+  onDailyCron: true,
+  allowManualDay: true,
+  allowBackfill: true,
+  releaseOnDayComplete: true,
+}
+
+export default function AdminGuiaMentorado() {
+  const { user } = useAuth()
+  const [courses, setCourses] = useState([])
+  const [courseId, setCourseId] = useState('')
+  const [config, setConfig] = useState(null)
+  const [form, setForm] = useState(emptyForm)
+  const [releaseTime, setReleaseTime] = useState('00:00')
+  const [loadingCourses, setLoadingCourses] = useState(true)
+  const [loadingConfig, setLoadingConfig] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [busyAction, setBusyAction] = useState('')
+  const [feedback, setFeedback] = useState('')
+  const [progress, setProgress] = useState('')
+  const [contentAuto, setContentAuto] = useState({
+    enabled: true,
+    lastMessage: '',
+    useProfessorWindow: false,
+  })
+  const [contentBusy, setContentBusy] = useState(false)
+
+  const todayKey = useMemo(
+    () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
+    [],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    listActiveCoursesForAdmin()
+      .then((list) => {
+        if (cancelled) return
+        setCourses(list)
+        if (list.length && !courseId) setCourseId(list[0].id)
+      })
+      .catch((err) => setFeedback(`❌ ${err.message || 'Erro ao listar cursos.'}`))
+      .finally(() => {
+        if (!cancelled) setLoadingCourses(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!db) return undefined
+    return onSnapshot(doc(db, 'config', 'contentAutomation'), (snap) => {
+      const data = snap.exists() ? snap.data() : {}
+      setContentAuto({
+        enabled: data.enabled !== false,
+        lastMessage: data.lastMessage || '',
+        phase: data.phase || '',
+        lastCourseId: data.lastCourseId || '',
+        useProfessorWindow: data.useProfessorWindow === true,
+      })
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!courseId) return undefined
+    setLoadingConfig(true)
+    const unsub = subscribeGuiaMentoradoConfig(courseId, (data) => {
+      setConfig(data)
+      setForm({
+        enabled: data.enabled,
+        dataProva: data.dataProva || '',
+        hasTAF: data.hasTAF,
+        hasRedacao: data.hasRedacao,
+        tafExercicios: data.tafExercicios || [],
+        dailyReleaseHour: data.schedule.dailyReleaseHour,
+        dailyReleaseMinute: data.schedule.dailyReleaseMinute,
+        onCronogramaGenerated: data.triggers.onCronogramaGenerated,
+        onDailyCron: data.triggers.onDailyCron,
+        allowManualDay: data.triggers.allowManualDay,
+        allowBackfill: data.triggers.allowBackfill,
+        releaseOnDayComplete: data.vespera.releaseOnDayComplete,
+      })
+      setReleaseTime(padTime(data.schedule.dailyReleaseHour, data.schedule.dailyReleaseMinute))
+      setLoadingConfig(false)
+    })
+    return () => unsub?.()
+  }, [courseId])
+
+  const courseName = useMemo(() => {
+    const c = courses.find((x) => x.id === courseId)
+    return c?.name || c?.competition || courseId
+  }, [courses, courseId])
+
+  const releaseLabel = formatDailyReleaseLabel({
+    schedule: {
+      dailyReleaseHour: form.dailyReleaseHour,
+      dailyReleaseMinute: form.dailyReleaseMinute,
+    },
+  })
+
+  const patchForm = useCallback((patch) => {
+    setForm((prev) => ({ ...prev, ...patch }))
+  }, [])
+
+  const handleSave = async () => {
+    if (!user?.uid || !courseId || saving) return
+    setSaving(true)
+    setFeedback('')
+    try {
+      const time = parseTimeInput(releaseTime)
+      const saved = await saveGuiaMentoradoAdminConfig(
+        courseId,
+        {
+          ...form,
+          dataProva: form.dataProva || null,
+          dailyReleaseHour: time.hour,
+          dailyReleaseMinute: time.minute,
+        },
+        { userId: user.uid, existing: config },
+      )
+      setFeedback(`✅ Configuração salva. Liberação diária às ${formatDailyReleaseLabel(saved)} (Brasília).`)
+    } catch (err) {
+      setFeedback(`❌ ${err.message || 'Erro ao salvar.'}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleContentAutomationToggle = async () => {
+    if (!db || contentBusy) return
+    setContentBusy(true)
+    try {
+      await setDoc(
+        doc(db, 'config', 'contentAutomation'),
+        {
+          enabled: !contentAuto.enabled,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
+      setFeedback(
+        !contentAuto.enabled
+          ? '✅ Automação de conteúdo (incidência/níveis) ligada.'
+          : '⏸️ Automação de conteúdo desligada.',
+      )
+    } catch (err) {
+      setFeedback(`❌ ${err.message || 'Erro ao alterar automação de conteúdo.'}`)
+    } finally {
+      setContentBusy(false)
+    }
+  }
+
+  const handleContentUseProfessorWindow = async () => {
+    if (!db || contentBusy) return
+    setContentBusy(true)
+    try {
+      await setDoc(
+        doc(db, 'config', 'contentAutomation'),
+        {
+          useProfessorWindow: !contentAuto.useProfessorWindow,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
+    } catch (err) {
+      setFeedback(`❌ ${err.message || 'Erro ao alterar janela.'}`)
+    } finally {
+      setContentBusy(false)
+    }
+  }
+
+  const handleRunContentAutomationNow = async () => {
+    if (contentBusy) return
+    const userAuth = auth?.currentUser
+    if (!userAuth) {
+      setFeedback('❌ Faça login como admin.')
+      return
+    }
+    setContentBusy(true)
+    setFeedback('')
+    try {
+      const token = await userAuth.getIdToken()
+      const response = await fetch(FIREBASE_FUNCTIONS.runContentAutomationNow, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ force: true }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Falha ao disparar automação')
+      if (data.started) {
+        setFeedback(
+          `🚀 Conteúdo: ${data.kind} — ${data.label || data.courseId} (job ${data.jobId})`,
+        )
+      } else {
+        setFeedback(`ℹ️ Automação: ${data.reason || 'nada pendente'} (${data.source || 'ok'})`)
+      }
+    } catch (err) {
+      setFeedback(`❌ ${err.message || 'Erro ao disparar automação de conteúdo.'}`)
+    } finally {
+      setContentBusy(false)
+    }
+  }
+
+  const withAction = async (key, fn) => {
+    if (!user?.uid || !courseId || busyAction) return
+    setBusyAction(key)
+    setFeedback('')
+    setProgress('')
+    try {
+      await fn()
+    } catch (err) {
+      setFeedback(`❌ ${err.message || 'Falha na ação.'}`)
+    } finally {
+      setBusyAction('')
+      setProgress('')
+    }
+  }
+
+  const handleCronograma = () =>
+    withAction('cronograma', async () => {
+      await runMentoradoCronograma({
+        userId: user.uid,
+        courseId,
+        config: {
+          ...form,
+          enabled: form.enabled,
+          schedule: {
+            dailyReleaseHour: form.dailyReleaseHour,
+            dailyReleaseMinute: form.dailyReleaseMinute,
+          },
+          triggers: {
+            onCronogramaGenerated: form.onCronogramaGenerated,
+            onDailyCron: form.onDailyCron,
+            allowManualDay: form.allowManualDay,
+            allowBackfill: form.allowBackfill,
+          },
+          vespera: { releaseOnDayComplete: form.releaseOnDayComplete },
+        },
+      })
+      setFeedback(
+        form.enabled && form.onCronogramaGenerated
+          ? '🚀 Cronograma na nuvem. Ao concluir, inicia o dia de hoje automaticamente.'
+          : '🚀 Cronograma na nuvem. Acompanhe no banner.',
+      )
+    })
+
+  const handleToday = () =>
+    withAction('today', async () => {
+      if (!form.allowManualDay) {
+        throw new Error('Geração manual desabilitada neste curso. Ative em Gatilhos e salve.')
+      }
+      const { topicCount } = await runMentoradoToday({
+        userId: user.uid,
+        courseId,
+        targetDate: todayKey,
+      })
+      setFeedback(`🚀 Gerando ${topicCount} tópico(s) de hoje. Acompanhe abaixo e no banner.`)
+    })
+
+  const handleBackfill = () =>
+    withAction('backfill', async () => {
+      if (!form.allowBackfill) {
+        throw new Error('Backfill desabilitado neste curso. Ative em Gatilhos e salve.')
+      }
+      if (
+        !window.confirm(
+          `Gerar conteúdos faltantes de “${courseName}” (1º dia do cronograma → hoje)?\n\nUm job na nuvem processa dia a dia com retomada automática.`,
+        )
+      ) {
+        return
+      }
+      const { dayCount } = await runMentoradoBackfill({
+        userId: user.uid,
+        courseId,
+        courseName,
+      })
+      setFeedback(`🚀 Backfill iniciado (${dayCount} dia(s)). Acompanhe no banner.`)
+    })
+
+  const handleBackfillAll = () =>
+    withAction('backfillAll', async () => {
+      if (
+        !window.confirm(
+          'Gerar Guia Mentorado em massa (dia 1 → hoje)?\n\nSó cursos com automação ativa. 1 curso por vez.',
+        )
+      ) {
+        return
+      }
+      const { jobs } = await runMentoradoBackfillAllCourses(user.uid, setProgress)
+      setFeedback(`✅ ${jobs.length} job(s) enfileirado(s). Acompanhe no banner.`)
+    })
+
+  const busy = Boolean(busyAction) || saving
+
+  return (
+    <div className="space-y-4">
+      <div className="cp-card !rounded-2xl p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10">
+              <CalendarDaysIcon className="h-6 w-6 text-emerald-600" />
+            </div>
+            <div>
+              <h2 className="cp-headline text-lg text-cp-text">Guia Mentorado — automação unificada</h2>
+              <p className="mt-1 max-w-2xl text-sm text-cp-muted">
+                Um painel por curso: liga/desliga a geração diária, define o horário (Brasília),
+                controla gatilhos (cronograma, cron, backfill, véspera) e dispara ações manuais.
+                O cron horário só processa o curso na hora configurada — sem religar a automação
+                sozinho.
+              </p>
+            </div>
+          </div>
+          <a
+            href="/guia-mentorado"
+            className="inline-flex items-center gap-2 rounded-xl border border-cp-border px-3 py-2 text-sm text-cp-text transition hover:bg-cp-surface"
+          >
+            <LinkIcon className="h-4 w-4" />
+            Abrir calendário
+          </a>
+        </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+          <label className="block text-xs font-semibold uppercase tracking-wide text-cp-muted">
+            Curso
+            <select
+              value={courseId}
+              onChange={(e) => setCourseId(e.target.value)}
+              disabled={loadingCourses}
+              className="mt-1 w-full rounded-xl border border-cp-border bg-cp-bg px-3 py-2.5 text-sm text-cp-text"
+            >
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name || c.competition || c.id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => patchForm({ enabled: !form.enabled })}
+            disabled={loadingConfig}
+            className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${
+              form.enabled
+                ? 'bg-emerald-500/15 text-emerald-800 hover:bg-emerald-500/25 dark:text-emerald-200'
+                : 'bg-slate-500/15 text-slate-700 hover:bg-slate-500/25 dark:text-slate-200'
+            }`}
+          >
+            {form.enabled ? 'Automação ligada' : 'Automação desligada'}
+          </button>
+        </div>
+      </div>
+
+      {feedback && (
+        <div className="rounded-xl border border-cp-border bg-cp-surface/60 px-4 py-3 text-sm text-cp-text">
+          {feedback}
+        </div>
+      )}
+      {progress && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-800 dark:text-amber-200">
+          {progress}
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="cp-card !rounded-2xl space-y-4 p-5">
+          <div className="flex items-center gap-2">
+            <Cog6ToothIcon className="h-5 w-5 text-cp-muted" />
+            <h3 className="text-sm font-semibold text-cp-text">Planejamento</h3>
+          </div>
+
+          <label className="block text-xs text-cp-muted">
+            Data da prova (opcional)
+            <input
+              type="date"
+              value={form.dataProva || ''}
+              onChange={(e) => patchForm({ dataProva: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-cp-border bg-cp-bg px-3 py-2 text-sm text-cp-text"
+            />
+            <span className="mt-1 block text-[11px]">
+              Se vazio, usa {DEFAULT_PLANNING_DAYS} dias a partir de hoje.
+            </span>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-cp-text">
+            <input
+              type="checkbox"
+              checked={form.hasTAF}
+              onChange={(e) => patchForm({ hasTAF: e.target.checked })}
+              className="rounded"
+            />
+            Possui TAF
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-cp-text">
+            <input
+              type="checkbox"
+              checked={form.hasRedacao}
+              onChange={(e) => patchForm({ hasRedacao: e.target.checked })}
+              className="rounded"
+            />
+            Possui redação (rotação semanal de tema)
+          </label>
+
+          {form.hasTAF && (
+            <div className="grid grid-cols-2 gap-2">
+              {TAF_OPTIONS.map((exercicio) => (
+                <label key={exercicio} className="flex items-center gap-2 text-sm text-cp-text">
+                  <input
+                    type="checkbox"
+                    checked={form.tafExercicios?.includes(exercicio)}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? [...(form.tafExercicios || []), exercicio]
+                        : (form.tafExercicios || []).filter((x) => x !== exercicio)
+                      patchForm({ tafExercicios: next })
+                    }}
+                    className="rounded"
+                  />
+                  {exercicio}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="cp-card !rounded-2xl space-y-4 p-5">
+          <div className="flex items-center gap-2">
+            <ClockIcon className="h-5 w-5 text-cp-muted" />
+            <h3 className="text-sm font-semibold text-cp-text">Agenda diária</h3>
+          </div>
+
+          <label className="block text-xs text-cp-muted">
+            Horário de liberação (Brasília)
+            <input
+              type="time"
+              value={releaseTime}
+              onChange={(e) => {
+                setReleaseTime(e.target.value)
+                const t = parseTimeInput(e.target.value)
+                patchForm({ dailyReleaseHour: t.hour, dailyReleaseMinute: t.minute })
+              }}
+              className="mt-1 block rounded-lg border border-cp-border bg-cp-bg px-3 py-2 text-sm text-cp-text"
+            />
+            <span className="mt-1 block text-[11px]">
+              O servidor verifica a cada hora. Na prática dispara perto de {releaseLabel}.
+            </span>
+          </label>
+
+          <div className="space-y-2 rounded-xl border border-cp-border bg-cp-surface/40 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-cp-muted">Gatilhos</p>
+            {[
+              ['onDailyCron', 'Cron diário (no horário)'],
+              ['onCronogramaGenerated', 'Ao gerar cronograma, iniciar o dia de hoje'],
+              ['allowManualDay', 'Permitir “Gerar hoje” manual'],
+              ['allowBackfill', 'Permitir backfill (dias passados)'],
+              ['releaseOnDayComplete', 'Liberar 1 disciplina da Véspera ao concluir o dia'],
+            ].map(([key, label]) => (
+              <label key={key} className="flex items-start gap-2 text-sm text-cp-text">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form[key])}
+                  onChange={(e) => patchForm({ [key]: e.target.checked })}
+                  className="mt-0.5 rounded"
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+
+          {config?.lastDailyRunDayKey && (
+            <p className="text-xs text-cp-muted">
+              Última passagem do cron: <strong>{config.lastDailyRunDayKey}</strong>
+              {config.lastError ? ` — ${config.lastError}` : ''}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={busy || loadingConfig || !courseId}
+          className="cp-btn-primary !text-sm disabled:opacity-50"
+        >
+          {saving ? 'Salvando…' : 'Salvar configuração'}
+        </button>
+        <button
+          type="button"
+          onClick={handleCronograma}
+          disabled={busy || !courseId}
+          className="inline-flex items-center gap-2 rounded-xl border border-cp-border px-4 py-2 text-sm font-semibold text-cp-text transition hover:bg-cp-surface disabled:opacity-50"
+        >
+          <SparklesIcon className={`h-4 w-4 ${busyAction === 'cronograma' ? 'animate-pulse' : ''}`} />
+          {busyAction === 'cronograma' ? 'Gerando…' : 'Gerar cronograma'}
+        </button>
+        <button
+          type="button"
+          onClick={handleToday}
+          disabled={busy || !courseId}
+          className="inline-flex items-center gap-2 rounded-xl border border-cp-border px-4 py-2 text-sm font-semibold text-cp-text transition hover:bg-cp-surface disabled:opacity-50"
+        >
+          <RocketLaunchIcon className={`h-4 w-4 ${busyAction === 'today' ? 'animate-pulse' : ''}`} />
+          {busyAction === 'today' ? 'Iniciando…' : 'Gerar conteúdos de hoje'}
+        </button>
+        <button
+          type="button"
+          onClick={handleBackfill}
+          disabled={busy || !courseId}
+          className="inline-flex items-center gap-2 rounded-xl border border-cp-border px-4 py-2 text-sm font-semibold text-cp-text transition hover:bg-cp-surface disabled:opacity-50"
+        >
+          <RocketLaunchIcon className={`h-4 w-4 ${busyAction === 'backfill' ? 'animate-pulse' : ''}`} />
+          {busyAction === 'backfill' ? 'Iniciando…' : 'Backfill deste curso'}
+        </button>
+        <button
+          type="button"
+          onClick={handleBackfillAll}
+          disabled={busy}
+          className="inline-flex items-center gap-2 rounded-xl bg-violet-600/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50"
+        >
+          {busyAction === 'backfillAll' ? 'Iniciando…' : 'Backfill em massa (1 curso)'}
+        </button>
+      </div>
+
+      {courseId && form.enabled && (
+        <MentoradoDayAutomationStatus
+          courseId={courseId}
+          targetDate={todayKey}
+          userId={user?.uid}
+          onGenerateToday={handleToday}
+          onGeneratePastDays={handleBackfill}
+          generating={busyAction === 'today'}
+          generatingPastDays={busyAction === 'backfill'}
+        />
+      )}
+
+      <div className="cp-card !rounded-2xl space-y-4 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-cp-text">Automação de conteúdo (global)</h3>
+            <p className="mt-1 max-w-2xl text-xs text-cp-muted">
+              Independente do Professor IA. A cada 30 min libera 1 job (incidência → níveis).
+              Janela padrão 06:00–23:00 (Brasília). Não gasta API se o conteúdo já existir.
+            </p>
+            {contentAuto.lastMessage && (
+              <p className="mt-2 text-xs text-cp-muted">
+                Último: {contentAuto.lastMessage}
+                {contentAuto.phase ? ` · fase ${contentAuto.phase}` : ''}
+              </p>
+            )}
+            <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-cp-text">
+              <input
+                type="checkbox"
+                className="mt-0.5 rounded"
+                checked={Boolean(contentAuto.useProfessorWindow)}
+                onChange={handleContentUseProfessorWindow}
+                disabled={contentBusy}
+              />
+              <span>
+                Usar a mesma janela De/Até do <strong>Professor IA</strong> (opcional — desligado por
+                padrão para não conflitar)
+              </span>
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleContentAutomationToggle}
+              disabled={contentBusy}
+              className={`rounded-xl px-3 py-2 text-sm font-semibold transition disabled:opacity-50 ${
+                contentAuto.enabled
+                  ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-200'
+                  : 'bg-slate-500/15 text-slate-700 dark:text-slate-200'
+              }`}
+            >
+              {contentAuto.enabled ? 'Conteúdo ligado' : 'Conteúdo desligado'}
+            </button>
+            <button
+              type="button"
+              onClick={handleRunContentAutomationNow}
+              disabled={contentBusy}
+              className="rounded-xl bg-violet-600/90 px-3 py-2 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:opacity-50"
+            >
+              {contentBusy ? 'Disparando…' : 'Rodar 1 job agora'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

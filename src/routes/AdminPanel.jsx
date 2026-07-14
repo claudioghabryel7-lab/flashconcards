@@ -38,6 +38,7 @@ import {
 import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager'
 import AdminContentModeration from '../components/admin/AdminContentModeration'
 import AdminProfessorSupervisor from '../components/admin/AdminProfessorSupervisor'
+import AdminGuiaMentorado from '../components/admin/AdminGuiaMentorado'
 import AdminEmailBroadcast from '../components/admin/AdminEmailBroadcast'
 import AdminCacheReset from '../components/admin/AdminCacheReset'
 import AdminPlatformMaintenance from '../components/admin/AdminPlatformMaintenance'
@@ -216,7 +217,15 @@ const AdminPanel = () => {
   
   
   // Estado para controle de tabs
-  const [activeTab, setActiveTab] = useState('config')
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === 'undefined') return 'config'
+    try {
+      const tab = new URLSearchParams(window.location.search).get('tab')
+      return tab || 'config'
+    } catch {
+      return 'config'
+    }
+  })
   
   // Estado para gerenciar testes gratuitos
   const [testTrials, setTestTrials] = useState([])
@@ -6797,6 +6806,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
         { id: 'users', label: 'Usuários', icon: '👥' },
         { id: 'courses', label: 'Cursos', icon: '🎓' },
         { id: 'moderacao', label: 'Moderação', icon: '🚩' },
+        { id: 'guia-mentorado', label: 'Guia Mentorado', icon: '📅' },
         { id: 'professor-fiscalizador', label: 'Professor IA', icon: '🎓' },
       ],
     },
@@ -13292,6 +13302,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
             )}
 
             {activeTab === 'moderacao' && <AdminContentModeration />}
+
+            {activeTab === 'guia-mentorado' && <AdminGuiaMentorado />}
 
             {activeTab === 'professor-fiscalizador' && <AdminProfessorSupervisor />}
           </div>

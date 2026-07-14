@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { doc, onSnapshot, getDoc, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, onSnapshot, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore'
 import dayjs from 'dayjs'
 import {
   CalendarIcon,
   PencilIcon,
   XMarkIcon,
   SparklesIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline'
 import { loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
 import { db } from '../firebase/config'
@@ -15,7 +16,7 @@ import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import { hasPurchasedCourse } from '../utils/courseAccess'
 import MentoradoCalendar from '../components/guiaMentorado/MentoradoCalendar'
 import MentoradoDayAutomationStatus from '../components/guiaMentorado/MentoradoDayAutomationStatus'
-import { DEFAULT_PLANNING_DAYS, MENTORADO_DAILY_RELEASE_HOUR } from '../constants/guiaMentorado'
+import { DEFAULT_PLANNING_DAYS } from '../constants/guiaMentorado'
 import {
   isUsingDefaultPlanningWindow,
   resolvePlanningEndDate,
@@ -23,16 +24,22 @@ import {
   startMentoradoDayContentAutomation,
 } from '../services/guiaMentoradoAutomationService'
 import { startMentoradoBackfillForCourse } from '../services/adminPlatformService'
+import {
+  formatDailyReleaseLabel,
+  normalizeMentoradoAutomationConfig,
+  buildMentoradoConfigWrite,
+} from '../utils/guiaMentoradoAutomationConfig'
 
 const GuiaMentorado = () => {
   const { profile, user } = useAuth()
   const navigate = useNavigate()
-  
+
   const [currentMonth, setCurrentMonth] = useState(dayjs())
   const [selectedCourseId, setSelectedCourseId] = useState('')
   const [courses, setCourses] = useState([])
   const [editalVerticalizado, setEditalVerticalizado] = useState(null)
   const [cronograma, setCronograma] = useState(null)
+  const [rawConfig, setRawConfig] = useState({})
   const [config, setConfig] = useState({
     dataProva: null,
     hasTAF: false,
@@ -47,10 +54,14 @@ const GuiaMentorado = () => {
   const [generatingDay, setGeneratingDay] = useState(false)
   const [generatingPastDays, setGeneratingPastDays] = useState(false)
   const [message, setMessage] = useState('')
-  const dailyReleaseLabel =
-    MENTORADO_DAILY_RELEASE_HOUR === 0 ? '00:00 (meia-noite)' : `${MENTORADO_DAILY_RELEASE_HOUR}h`
+
+  const automation = useMemo(
+    () => normalizeMentoradoAutomationConfig(rawConfig),
+    [rawConfig],
+  )
+  const dailyReleaseLabel = formatDailyReleaseLabel(automation)
   const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-  // Carregar cursos (apenas relevantes para o usuário)
+
   useEffect(() => {
     const loadCourses = async () => {
       try {
@@ -81,8 +92,7 @@ const GuiaMentorado = () => {
 
     if (profile) loadCourses()
   }, [profile])
-  
-  // Carregar edital verticalizado
+
   useEffect(() => {
     if (!selectedCourseId) return
 
@@ -99,35 +109,29 @@ const GuiaMentorado = () => {
       cancelled = true
     }
   }, [selectedCourseId])
-  
-  // Carregar configuração do cronograma
+
   useEffect(() => {
-    if (!selectedCourseId) return
-    
-    const loadConfig = async () => {
-      try {
-        const configRef = doc(db, 'courses', selectedCourseId, 'config', 'guiaMentorado')
-        const configDoc = await getDoc(configRef)
-        
-        if (configDoc.exists()) {
-          const data = configDoc.data()
-          setConfig({
-            dataProva: data.dataProva || null,
-            hasTAF: Boolean(data.hasTAF),
-            tafExercicios: data.tafExercicios || [],
-            hasRedacao: Boolean(data.hasRedacao),
-            autoGerarConteudo: Boolean(data.autoGerarConteudo),
-          })
-        }
-      } catch (error) {
-        console.error('Erro ao carregar configuração:', error)
-      }
-    }
-    
-    loadConfig()
+    if (!selectedCourseId || !db) return undefined
+
+    const configRef = doc(db, 'courses', selectedCourseId, 'config', 'guiaMentorado')
+    return onSnapshot(
+      configRef,
+      (configDoc) => {
+        const data = configDoc.exists() ? configDoc.data() : {}
+        setRawConfig(data)
+        const normalized = normalizeMentoradoAutomationConfig(data)
+        setConfig({
+          dataProva: normalized.dataProva,
+          hasTAF: normalized.hasTAF,
+          tafExercicios: normalized.tafExercicios,
+          hasRedacao: normalized.hasRedacao,
+          autoGerarConteudo: normalized.enabled,
+        })
+      },
+      (error) => console.error('Erro ao carregar configuração:', error),
+    )
   }, [selectedCourseId])
-  
-  // Carregar cronograma do mês atual
+
   useEffect(() => {
     if (!selectedCourseId) return
 
@@ -141,17 +145,16 @@ const GuiaMentorado = () => {
         setCronograma(snapshot.exists() ? snapshot.data() : null)
         setCalendarLoading(false)
       },
-      () => setCalendarLoading(false)
+      () => setCalendarLoading(false),
     )
 
     return () => unsubscribe()
   }, [selectedCourseId, currentMonth])
-  
-  // Verificar se é admin
+
   useEffect(() => {
     setIsAdmin(profile?.role === 'admin')
   }, [profile])
-  
+
   const previousMonth = useCallback(() => {
     setCurrentMonth((m) => m.subtract(1, 'month'))
   }, [])
@@ -168,26 +171,44 @@ const GuiaMentorado = () => {
     (dayKey) => {
       navigate(`/guia-mentorado/${selectedCourseId}/${dayKey}`)
     },
-    [navigate, selectedCourseId]
+    [navigate, selectedCourseId],
   )
-  
-  // Salvar configuração
+
   const saveConfig = async (newConfig) => {
     try {
       const configRef = doc(db, 'courses', selectedCourseId, 'config', 'guiaMentorado')
-      await setDoc(configRef, {
-        ...newConfig,
-        automationUserId: user?.uid || null,
-        updatedAt: serverTimestamp(),
-      })
-      setConfig(newConfig)
+      const payload = buildMentoradoConfigWrite(
+        {
+          dataProva: newConfig.dataProva,
+          hasTAF: newConfig.hasTAF,
+          tafExercicios: newConfig.tafExercicios,
+          hasRedacao: newConfig.hasRedacao,
+          // preserva automação existente (não altera neste modal)
+          enabled: automation.enabled,
+          dailyReleaseHour: automation.schedule.dailyReleaseHour,
+          dailyReleaseMinute: automation.schedule.dailyReleaseMinute,
+          onCronogramaGenerated: automation.triggers.onCronogramaGenerated,
+          onDailyCron: automation.triggers.onDailyCron,
+          allowManualDay: automation.triggers.allowManualDay,
+          allowBackfill: automation.triggers.allowBackfill,
+          releaseOnDayComplete: automation.vespera.releaseOnDayComplete,
+        },
+        { userId: user?.uid || automation.automationUserId, existing: rawConfig },
+      )
+      await setDoc(
+        configRef,
+        {
+          ...payload,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
       setShowConfigModal(false)
     } catch (error) {
       console.error('Erro ao salvar configuração:', error)
     }
   }
-  
-  // Gerar cronograma estratégico com IA (na nuvem)
+
   const generateCronograma = async () => {
     if (!editalVerticalizado) {
       alert('É necessário ter um edital verticalizado para gerar o cronograma.')
@@ -222,11 +243,22 @@ const GuiaMentorado = () => {
       await startGuiaMentoradoCronogramaGeneration({
         userId: user.uid,
         courseId: selectedCourseId,
-        config,
+        config: {
+          ...config,
+          autoGerarConteudo: automation.enabled,
+          automation: {
+            enabled: automation.enabled,
+            automationUserId: user.uid,
+            schedule: automation.schedule,
+            triggers: automation.triggers,
+            vespera: automation.vespera,
+          },
+          automationUserId: user.uid,
+        },
       })
 
       setMessage(
-        config.autoGerarConteudo
+        automation.enabled
           ? `✅ Cronograma em geração na nuvem. Hoje libera os tópicos do dia; demais dias às ${dailyReleaseLabel}. Acompanhe o banner.`
           : '✅ Cronograma em geração na nuvem. Acompanhe o banner no canto inferior direito.',
       )
@@ -283,7 +315,7 @@ const GuiaMentorado = () => {
       return
     }
 
-      const confirmed = window.confirm(
+    const confirmed = window.confirm(
       'Gerar os conteúdos faltantes deste curso (do 1º dia do cronograma até hoje)?\n\nUm único job na nuvem processa dia a dia com retomada automática. Acompanhe no banner.',
     )
     if (!confirmed) return
@@ -311,7 +343,7 @@ const GuiaMentorado = () => {
       setGeneratingPastDays(false)
     }
   }
-  
+
   return (
     <div className="space-y-6">
       <CPPageHeader
@@ -323,11 +355,20 @@ const GuiaMentorado = () => {
           isAdmin ? (
             <>
               <button
+                type="button"
+                onClick={() => navigate('/admin?tab=guia-mentorado')}
+                className="cp-btn-ghost !text-sm"
+                title="Abrir painel admin — aba Guia Mentorado"
+              >
+                <Cog6ToothIcon className="h-4 w-4" />
+                Automação
+              </button>
+              <button
                 onClick={() => setShowConfigModal(true)}
                 className="cp-btn-ghost !text-sm"
               >
                 <PencilIcon className="h-4 w-4" />
-                Configurar
+                Planejamento
               </button>
               <button
                 onClick={generateCronograma}
@@ -396,14 +437,22 @@ const GuiaMentorado = () => {
         </div>
       )}
 
-      {isAdmin && config.autoGerarConteudo && (
+      {isAdmin && automation.enabled && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
           Automação ativa: gera <strong>um tópico por vez</strong> (flashcards → material → questões → libera).
-          Hoje dispara na hora; demais dias às <strong>{dailyReleaseLabel}</strong> (Brasília).
+          Liberação diária às <strong>{dailyReleaseLabel}</strong> (Brasília). Configure na aba{' '}
+          <button
+            type="button"
+            onClick={() => navigate('/admin?tab=guia-mentorado')}
+            className="font-semibold underline underline-offset-2"
+          >
+            Admin → Guia Mentorado
+          </button>
+          .
         </div>
       )}
 
-      {isAdmin && config.autoGerarConteudo && cronograma && (
+      {isAdmin && automation.enabled && cronograma && (
         <MentoradoDayAutomationStatus
           courseId={selectedCourseId}
           targetDate={todayKey}
@@ -425,128 +474,121 @@ const GuiaMentorado = () => {
         onGoToday={goToToday}
         onDayClick={handleDayClick}
       />
-        
-        {showConfigModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="cp-card w-full max-w-md !rounded-2xl p-6">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="cp-headline text-lg text-cp-text">Configurar Guia Mentorado</h3>
+
+      {showConfigModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="cp-card w-full max-w-md !rounded-2xl p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="cp-headline text-lg text-cp-text">Planejamento do Guia Mentorado</h3>
+              <button
+                onClick={() => setShowConfigModal(false)}
+                className="text-cp-muted transition hover:text-cp-text"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-xl border border-cp-border bg-cp-surface/60 p-3 text-xs text-cp-muted">
+                Automação (horário, cron, backfill, véspera) fica em{' '}
                 <button
-                  onClick={() => setShowConfigModal(false)}
-                  className="text-cp-muted transition hover:text-cp-text"
+                  type="button"
+                  className="font-semibold text-cp-text underline"
+                  onClick={() => {
+                    setShowConfigModal(false)
+                    navigate('/admin?tab=guia-mentorado')
+                  }}
                 >
-                  <XMarkIcon className="h-6 w-6" />
+                  Admin → Guia Mentorado
                 </button>
+                .
               </div>
-              
-              <div className="space-y-4">
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-cp-muted">
+                  Data da Prova (opcional)
+                </label>
+                <input
+                  type="date"
+                  value={config.dataProva || ''}
+                  onChange={(e) => setConfig({ ...config, dataProva: e.target.value || null })}
+                  className="w-full rounded-lg border border-cp-border bg-cp-surface px-4 py-2 text-cp-text focus:border-[var(--cp-accent)] focus:outline-none"
+                />
+                <p className="mt-1 text-xs text-cp-muted">
+                  Se vazio, o cronograma usa {DEFAULT_PLANNING_DAYS} dias a partir de hoje.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="hasTAF"
+                  checked={config.hasTAF}
+                  onChange={(e) => setConfig({ ...config, hasTAF: e.target.checked })}
+                  className="rounded"
+                />
+                <label htmlFor="hasTAF" className="text-sm text-cp-text">
+                  Possui TAF (Teste de Aptidão Física)
+                </label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="hasRedacao"
+                  checked={config.hasRedacao}
+                  onChange={(e) => setConfig({ ...config, hasRedacao: e.target.checked })}
+                  className="rounded"
+                />
+                <label htmlFor="hasRedacao" className="text-sm text-cp-text">
+                  Possui Redação
+                </label>
+              </div>
+
+              {config.hasTAF && (
                 <div>
                   <label className="mb-2 block text-sm font-medium text-cp-muted">
-                    Data da Prova (opcional)
+                    Exercícios do TAF
                   </label>
-                  <input
-                    type="date"
-                    value={config.dataProva || ''}
-                    onChange={(e) => setConfig({ ...config, dataProva: e.target.value || null })}
-                    className="w-full rounded-lg border border-cp-border bg-cp-surface px-4 py-2 text-cp-text focus:border-[var(--cp-accent)] focus:outline-none"
-                  />
-                  <p className="mt-1 text-xs text-cp-muted">
-                    Se vazio, o cronograma usa {DEFAULT_PLANNING_DAYS} dias a partir de hoje.
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-cp-border bg-cp-surface/60 p-4">
-                  <label className="flex cursor-pointer items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(config.autoGerarConteudo)}
-                      onChange={(e) =>
-                        setConfig({ ...config, autoGerarConteudo: e.target.checked })
-                      }
-                      className="mt-1 rounded"
-                    />
-                    <span>
-                      <span className="block text-sm font-semibold text-cp-text">
-                        Gerar e liberar conteúdos automaticamente
-                      </span>
-                      <span className="mt-1 block text-xs text-cp-muted">
-                        Para cada dia do cronograma, gera e libera flashcards, material e questões só das matérias
-                        daquele dia — às {dailyReleaseLabel} (Brasília). No dia da geração, libera na hora.
-                      </span>
-                    </span>
-                  </label>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="hasTAF"
-                    checked={config.hasTAF}
-                    onChange={(e) => setConfig({ ...config, hasTAF: e.target.checked })}
-                    className="rounded"
-                  />
-                  <label htmlFor="hasTAF" className="text-sm text-cp-text">
-                    Possui TAF (Teste de Aptidão Física)
-                  </label>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="hasRedacao"
-                    checked={config.hasRedacao}
-                    onChange={(e) => setConfig({ ...config, hasRedacao: e.target.checked })}
-                    className="rounded"
-                  />
-                  <label htmlFor="hasRedacao" className="text-sm text-cp-text">
-                    Possui Redação
-                  </label>
-                </div>
-                
-                {config.hasTAF && (
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-cp-muted">
-                      Exercícios do TAF
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {['Barra', 'Flexão', 'Corrida', 'Abdominal', 'Shut Run', 'Salto'].map((exercicio) => (
-                        <label key={exercicio} className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={config.tafExercicios?.includes(exercicio)}
-                            onChange={(e) => {
-                              const updated = e.target.checked
-                                ? [...(config.tafExercicios || []), exercicio]
-                                : config.tafExercicios?.filter((ex) => ex !== exercicio) || []
-                              setConfig({ ...config, tafExercicios: updated })
-                            }}
-                            className="rounded"
-                          />
-                          <span className="text-sm text-cp-text">{exercicio}</span>
-                        </label>
-                      ))}
-                    </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {['Barra', 'Flexão', 'Corrida', 'Abdominal', 'Shut Run', 'Salto'].map((exercicio) => (
+                      <label key={exercicio} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={config.tafExercicios?.includes(exercicio)}
+                          onChange={(e) => {
+                            const updated = e.target.checked
+                              ? [...(config.tafExercicios || []), exercicio]
+                              : config.tafExercicios?.filter((ex) => ex !== exercicio) || []
+                            setConfig({ ...config, tafExercicios: updated })
+                          }}
+                          className="rounded"
+                        />
+                        <span className="text-sm text-cp-text">{exercicio}</span>
+                      </label>
+                    ))}
                   </div>
-                )}
-              </div>
-              
-              <div className="mt-6 flex gap-3">
-                <button
-                  onClick={() => setShowConfigModal(false)}
-                  className="cp-btn-ghost flex-1 !text-sm"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => saveConfig(config)}
-                  className="cp-btn-primary flex-1 !text-sm"
-                >
-                  Salvar
-                </button>
-              </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setShowConfigModal(false)}
+                className="cp-btn-ghost flex-1 !text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => saveConfig(config)}
+                className="cp-btn-primary flex-1 !text-sm"
+              >
+                Salvar
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
     </div>
   )
 }

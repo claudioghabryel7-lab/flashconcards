@@ -97,14 +97,16 @@ export async function updateGenerationJob(userId, jobId, patch) {
 
 const STALE_JOB_MS = 45 * 60 * 1000
 const STALE_SERVER_JOB_MS = 90 * 60 * 1000
+/** Jobs longos (mentorado/professor) — só expira no cliente após 6h sem update. */
+const STALE_LONG_SERVER_JOB_MS = 6 * 60 * 60 * 1000
 const STALE_WAITING_API_MS = 24 * 60 * 60 * 1000
-/** Jobs waiting/pending: nudge a cada 15s. */
-export const STALL_NUDGE_MS = 15 * 1000
+/** Jobs waiting/pending: nudge a cada 30s (cron servidor cobre 1 min). */
+export const STALL_NUDGE_MS = 30 * 1000
 /** Jobs running só são nudgeados após 90s sem progresso — keep-alive do servidor é 15s. */
 export const STALL_PROGRESS_NUDGE_MS = 90 * 1000
 
 function jobProgressTimestamp(job = {}) {
-  return job.progressUpdatedAt || job.updatedAt
+  return job.progressUpdatedAt || job.updatedAt || job.lastHeartbeat
 }
 
 export function secondsSinceJobProgress(job, now = Date.now()) {
@@ -126,7 +128,12 @@ export function shouldNudgeJob(job, now = Date.now()) {
   if (!job?.runOnServer) return false
   if (isJobCancelling(job.id)) return false
   if (job.status === GENERATION_JOB_STATUS.PENDING) return true
-  if (GENERATION_WAITING_STATUSES.includes(job.status)) return true
+  if (GENERATION_WAITING_STATUSES.includes(job.status)) {
+    // Evita spam: só nudge waiting se ficou ≥30s sem progresso
+    const secs = secondsSinceJobProgress(job, now)
+    if (secs != null && secs * 1000 < STALL_NUDGE_MS) return false
+    return true
+  }
   if (job.status === GENERATION_JOB_STATUS.RUNNING) {
     return isJobProgressStalled(job, now)
   }
@@ -153,18 +160,27 @@ export async function reconcileStaleGenerationJobs(userId) {
 
   snap.docs.forEach((d) => {
     const data = d.data()
-    if (MENTORADO_JOB_TYPES.includes(data.jobType)) return
-
-    const updatedAt = data.updatedAt?.toDate?.() || data.createdAt?.toDate?.()
+    const updatedAt =
+      data.progressUpdatedAt?.toDate?.() ||
+      data.lastHeartbeat?.toDate?.() ||
+      data.updatedAt?.toDate?.() ||
+      data.createdAt?.toDate?.()
     if (!updatedAt) return
 
+    const isLongJob = MENTORADO_JOB_TYPES.includes(data.jobType)
     const staleMs =
       data.status === GENERATION_JOB_STATUS.WAITING_API
         ? STALE_WAITING_API_MS
         : data.runOnServer
-          ? STALE_SERVER_JOB_MS
+          ? isLongJob
+            ? STALE_LONG_SERVER_JOB_MS
+            : STALE_SERVER_JOB_MS
           : STALE_JOB_MS
     if (now - updatedAt.getTime() < staleMs) return
+
+    // Se ainda tem heartbeat fresco, não mata
+    const hb = data.lastHeartbeat?.toDate?.() || data.progressUpdatedAt?.toDate?.()
+    if (hb && now - hb.getTime() < STALE_PROGRESS_NUDGE_MS) return
 
     updates.push(
       updateDoc(d.ref, {

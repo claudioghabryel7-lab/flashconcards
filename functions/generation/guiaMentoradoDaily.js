@@ -1,5 +1,13 @@
 const admin = require('firebase-admin')
-const { getTodayKeyInSaoPaulo, collectDayKeysUpToToday } = require('./guiaMentoradoShared')
+const {
+  getTodayKeyInSaoPaulo,
+  getSaoPauloClockParts,
+  collectDayKeysUpToToday,
+} = require('./guiaMentoradoShared')
+const {
+  normalizeMentoradoAutomationConfig,
+  isWithinDailyReleaseWindow,
+} = require('./guiaMentoradoConfig')
 const {
   loadEditalVerticalizado,
   loadMentoradoAutomationContext,
@@ -13,6 +21,14 @@ const {
   markDayContentGenerated,
 } = require('./guiaMentoradoStatus')
 const { sanitizeTopicKeyForFirestore } = require('./topicKeyUtils')
+
+const ACTIVE_JOB_STATUSES = [
+  'pending',
+  'running',
+  'waiting_api',
+  'waiting_timeout',
+  'waiting_retry',
+]
 
 function getDb() {
   return admin.firestore()
@@ -31,11 +47,36 @@ async function loadCronogramaDay(courseId, targetDate) {
   return days[targetDate] || null
 }
 
-async function prepareDayAutomation(courseId, targetDate) {
-  const configSnap = await getDb().doc(`courses/${courseId}/config/guiaMentorado`).get()
-  const config = configSnap.exists ? configSnap.data() : {}
-  if (!config.autoGerarConteudo) {
+async function loadGuiaMentoradoConfig(courseId) {
+  const snap = await getDb().doc(`courses/${courseId}/config/guiaMentorado`).get()
+  const raw = snap.exists ? snap.data() : {}
+  return { snap, raw, automation: normalizeMentoradoAutomationConfig(raw) }
+}
+
+async function hasActiveMentoradoJobs(courseId, userId) {
+  if (!userId) return false
+  const jobsSnap = await getDb()
+    .collection(`users/${userId}/generationJobs`)
+    .where('courseId', '==', courseId)
+    .where('status', 'in', ACTIVE_JOB_STATUSES)
+    .limit(40)
+    .get()
+  return jobsSnap.docs.some((d) => {
+    const type = d.data()?.jobType
+    return type === 'guia_mentorado_automation' || type === 'guia_mentorado_backfill'
+  })
+}
+
+async function prepareDayAutomation(courseId, targetDate, options = {}) {
+  const { raw, automation } = await loadGuiaMentoradoConfig(courseId)
+  const intent = options.intent || 'daily_cron'
+  const isManual = intent === 'manual_day' || options.force === true
+
+  if (!isManual && !automation.enabled) {
     return { ok: false, reason: 'Automação desativada nas configurações.' }
+  }
+  if (isManual && !automation.triggers.allowManualDay && !options.force) {
+    return { ok: false, reason: 'Geração manual desabilitada nas configurações.' }
   }
 
   const dayEntry = await loadCronogramaDay(courseId, targetDate)
@@ -96,7 +137,8 @@ async function prepareDayAutomation(courseId, targetDate) {
 
   return {
     ok: true,
-    config,
+    config: { ...raw, ...automation, autoGerarConteudo: automation.enabled },
+    automation,
     topics: pendingTopics,
     topicPayloads: pendingPayloads,
     totalTopics: topics.length,
@@ -136,15 +178,15 @@ async function spawnDayAutomationJob(userId, courseId, targetDate, topicPayloads
 }
 
 async function hasActiveAutomationJob(courseId, targetDate) {
-  const configSnap = await getDb().doc(`courses/${courseId}/config/guiaMentorado`).get()
-  const userId = configSnap.exists ? configSnap.data().automationUserId : null
+  const { automation } = await loadGuiaMentoradoConfig(courseId)
+  const userId = automation.automationUserId
   if (!userId) return false
 
   const jobsSnap = await getDb()
     .collection(`users/${userId}/generationJobs`)
     .where('courseId', '==', courseId)
     .where('jobType', '==', 'guia_mentorado_automation')
-    .where('status', 'in', ['pending', 'running', 'waiting_api', 'waiting_timeout', 'waiting_retry'])
+    .where('status', 'in', ACTIVE_JOB_STATUSES)
     .limit(20)
     .get()
 
@@ -156,7 +198,7 @@ async function startDayAutomation(courseId, targetDate, userId, options = {}) {
     return { started: false, reason: `Já existe job ativo para o dia ${targetDate}.`, duplicate: true }
   }
 
-  const prepared = await prepareDayAutomation(courseId, targetDate)
+  const prepared = await prepareDayAutomation(courseId, targetDate, options)
   if (!prepared.ok) {
     if (prepared.reason && !prepared.allDone) {
       await initDayStatus(courseId, targetDate, [])
@@ -169,12 +211,31 @@ async function startDayAutomation(courseId, targetDate, userId, options = {}) {
     return { started: false, ...prepared }
   }
 
-  const effectiveUserId = userId || prepared.config.automationUserId
+  const effectiveUserId =
+    userId || prepared.automation?.automationUserId || prepared.config.automationUserId
   if (!effectiveUserId) {
     throw new Error('Usuário admin não identificado para disparar automação.')
   }
 
-  await initDayStatus(courseId, targetDate, prepared.topics)
+  if (await hasActiveMentoradoJobs(courseId, effectiveUserId)) {
+    const stillDay = await hasActiveAutomationJob(courseId, targetDate)
+    if (!stillDay) {
+      const backfillBusy = await getDb()
+        .collection(`users/${effectiveUserId}/generationJobs`)
+        .where('courseId', '==', courseId)
+        .where('status', 'in', ACTIVE_JOB_STATUSES)
+        .limit(40)
+        .get()
+      const hasBackfill = backfillBusy.docs.some(
+        (d) => d.data()?.jobType === 'guia_mentorado_backfill',
+      )
+      if (hasBackfill) {
+        return { started: false, reason: 'Backfill em andamento neste curso.', skipped: true }
+      }
+    }
+  }
+
+  await initDayStatus(courseId, targetDate, prepared.topics, null, effectiveUserId)
 
   const jobId = await spawnDayAutomationJob(
     effectiveUserId,
@@ -184,7 +245,11 @@ async function startDayAutomation(courseId, targetDate, userId, options = {}) {
     options.metadata || {},
   )
 
-  await updateDayStatus(courseId, targetDate, { jobId, status: 'running' })
+  await updateDayStatus(courseId, targetDate, {
+    jobId,
+    status: 'running',
+    automationUserId: effectiveUserId,
+  })
 
   return {
     started: true,
@@ -200,13 +265,51 @@ async function processMentoradoDayAutomation(courseId, targetDate, options = {})
   return startDayAutomation(courseId, targetDate, userId, options)
 }
 
+async function markDailyRun(courseId, todayKey, extra = {}) {
+  const ref = getDb().doc(`courses/${courseId}/config/guiaMentorado`)
+  const updates = {
+    'automation.lastDailyRunDayKey': todayKey,
+    'automation.lastDailyRunAt': admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }
+  if (extra.lastError !== undefined) {
+    updates['automation.lastError'] = extra.lastError
+  }
+  try {
+    await ref.update(updates)
+  } catch (err) {
+    // Doc pode existir sem o mapa automation ainda
+    if (err.code === 5 || /not found|NOT_FOUND/i.test(String(err.message))) {
+      await ref.set(
+        {
+          automation: {
+            lastDailyRunDayKey: todayKey,
+            lastDailyRunAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastError: extra.lastError ?? null,
+          },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      )
+      return
+    }
+    throw err
+  }
+}
+
+/**
+ * Orquestrador diário unificado:
+ * - Cron horário: só processa cursos cujo horário configurado bate com a hora atual (SP)
+ * - Respeita enabled + triggers.onDailyCron (sem auto-ligar a flag)
+ * - 1 dia pendente por curso por execução; backfill tem prioridade
+ */
 async function runDailyMentoradoAutomationForAllCourses() {
   const todayKey = getTodayKeyInSaoPaulo()
+  const clock = getSaoPauloClockParts()
   const db = getDb()
   const coursesSnap = await db.collection('courses').get()
   const results = []
 
-  // Fallback: userId do Professor IA / config global
   let fallbackUserId = null
   try {
     const profSnap = await db.doc('config/professorFiscalizador').get()
@@ -218,40 +321,66 @@ async function runDailyMentoradoAutomationForAllCourses() {
   for (const courseDoc of coursesSnap.docs) {
     const courseId = courseDoc.id
     const courseData = courseDoc.data() || {}
-    // Todos os cursos ativos do seletor (não só os com autoGerarConteudo)
     if (courseData.active === false) continue
 
     try {
-      const configSnap = await db.doc(`courses/${courseId}/config/guiaMentorado`).get()
-      if (!configSnap.exists) {
+      const { snap, automation } = await loadGuiaMentoradoConfig(courseId)
+      if (!snap.exists) {
         results.push({ courseId, skipped: true, reason: 'sem_guia_mentorado' })
         continue
       }
 
-      const config = configSnap.data() || {}
-      const userId = config.automationUserId || fallbackUserId || null
+      if (!automation.enabled) {
+        results.push({ courseId, skipped: true, reason: 'automacao_desligada' })
+        continue
+      }
 
-      // Garante flag de automação para próximas execuções
-      if (config.autoGerarConteudo !== true && userId) {
-        await configSnap.ref.set(
-          {
-            autoGerarConteudo: true,
-            automationUserId: userId,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        )
+      if (!automation.triggers.onDailyCron) {
+        results.push({ courseId, skipped: true, reason: 'cron_diario_desligado' })
+        continue
+      }
+
+      if (!isWithinDailyReleaseWindow(automation, clock)) {
+        results.push({
+          courseId,
+          skipped: true,
+          reason: 'fora_horario',
+          hour: clock.hour,
+          configuredHour: automation.schedule.dailyReleaseHour,
+        })
+        continue
+      }
+
+      if (automation.lastDailyRunDayKey === todayKey) {
+        results.push({ courseId, skipped: true, reason: 'ja_rodou_hoje' })
+        continue
+      }
+
+      const userId = automation.automationUserId || fallbackUserId || null
+      if (!userId) {
+        results.push({ courseId, skipped: true, reason: 'sem_automation_user' })
+        continue
+      }
+
+      if (await hasActiveMentoradoJobs(courseId, userId)) {
+        results.push({ courseId, skipped: true, reason: 'job_ativo' })
+        continue
       }
 
       const dayKeys = await collectDayKeysUpToToday(courseId, getDb)
       let started = false
+      let lastResult = null
 
       for (const dayKey of dayKeys) {
-        const prepared = await prepareDayAutomation(courseId, dayKey)
+        const prepared = await prepareDayAutomation(courseId, dayKey, { intent: 'daily_cron' })
         if (!prepared.ok) continue
 
-        const result = await startDayAutomation(courseId, dayKey, userId)
-        results.push({ courseId, dayKey, ...result })
+        const result = await startDayAutomation(courseId, dayKey, userId, {
+          intent: 'daily_cron',
+          metadata: { triggeredBy: 'daily_cron' },
+        })
+        lastResult = { courseId, dayKey, ...result }
+        results.push(lastResult)
         console.log(`[mentoradoDaily] ${courseId} ${dayKey}:`, result)
         if (result.started) {
           started = true
@@ -260,13 +389,28 @@ async function runDailyMentoradoAutomationForAllCourses() {
       }
 
       if (!started) {
-        const todayResult = await startDayAutomation(courseId, todayKey, userId)
-        results.push({ courseId, dayKey: todayKey, ...todayResult })
+        const todayResult = await startDayAutomation(courseId, todayKey, userId, {
+          intent: 'daily_cron',
+          metadata: { triggeredBy: 'daily_cron' },
+        })
+        lastResult = { courseId, dayKey: todayKey, ...todayResult }
+        results.push(lastResult)
         console.log(`[mentoradoDaily] ${courseId} hoje:`, todayResult)
+        started = Boolean(todayResult.started)
       }
+
+      // Marca o dia mesmo se não havia pendências (evita reprocessar a cada hora)
+      await markDailyRun(courseId, todayKey, {
+        lastError: started ? null : lastResult?.reason || null,
+      })
     } catch (err) {
       console.error(`[mentoradoDaily] erro em ${courseId}:`, err)
       results.push({ courseId, error: err.message })
+      try {
+        await markDailyRun(courseId, todayKey, { lastError: err.message })
+      } catch (_) {
+        /* ignore */
+      }
     }
   }
 
@@ -279,4 +423,6 @@ module.exports = {
   prepareDayAutomation,
   startDayAutomation,
   loadCronogramaDay,
+  loadGuiaMentoradoConfig,
+  hasActiveMentoradoJobs,
 }

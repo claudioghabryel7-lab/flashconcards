@@ -710,8 +710,13 @@ async function processGuiaMentoradoAutomation(
     if (totalPublished >= total) {
       await markDayContentGenerated(courseId, targetDate, totalPublished, total)
       try {
-        const { releaseNextVesperaDisciplina } = require('./vesperaDailyRelease')
-        await releaseNextVesperaDisciplina(courseId)
+        const { normalizeMentoradoAutomationConfig } = require('./guiaMentoradoConfig')
+        const cfgSnap = await getDb().doc(`courses/${courseId}/config/guiaMentorado`).get()
+        const automation = normalizeMentoradoAutomationConfig(cfgSnap.exists ? cfgSnap.data() : {})
+        if (automation.vespera.releaseOnDayComplete) {
+          const { releaseNextVesperaDisciplina } = require('./vesperaDailyRelease')
+          await releaseNextVesperaDisciplina(courseId)
+        }
       } catch (vesperaErr) {
         console.warn(`[mentorado] véspera release ${courseId}:`, vesperaErr.message)
       }

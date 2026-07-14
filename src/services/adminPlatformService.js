@@ -258,8 +258,18 @@ export async function startMentoradoBackfillAllCourses(userId, onProgress) {
     }
 
     const configSnap = await getDoc(doc(db, 'courses', courseId, 'config', 'guiaMentorado'))
-    if (!configSnap.exists() || !configSnap.data().autoGerarConteudo) {
+    const rawCfg = configSnap.exists() ? configSnap.data() : null
+    const enabled =
+      rawCfg?.automation?.enabled !== undefined
+        ? Boolean(rawCfg.automation.enabled)
+        : Boolean(rawCfg?.autoGerarConteudo)
+    const allowBackfill = rawCfg?.automation?.triggers?.allowBackfill !== false
+    if (!rawCfg || !enabled) {
       onProgress?.(`⏭️ ${courseName}: automação do Guia Mentorado desativada — pulando`)
+      continue
+    }
+    if (!allowBackfill) {
+      onProgress?.(`⏭️ ${courseName}: backfill desabilitado na config — pulando`)
       continue
     }
 

@@ -1893,20 +1893,33 @@ exports.sendAdminBroadcastEmail = functions.https.onRequest((req, res) => {
 
 const { MENTORADO_DAILY_RELEASE_HOUR } = require('./generation/guiaMentoradoShared')
 
-/** Libera conteúdos do Guia Mentorado dia a dia (só matérias do dia). */
+/**
+ * Tick horário do Guia Mentorado (Brasília).
+ * Cada curso só gera na hora configurada em config/guiaMentorado.automation.schedule.
+ * (MENTORADO_DAILY_RELEASE_HOUR = 0 permanece como default por curso.)
+ */
 exports.mentoradoDailyContentRelease = functions.pubsub
-  .schedule(`0 ${MENTORADO_DAILY_RELEASE_HOUR} * * *`)
+  .schedule('0 * * * *')
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
-    console.log('[mentoradoDailyContentRelease] Iniciando liberação diária…')
+    console.log(
+      `[mentoradoDailyContentRelease] Tick horário (default ${MENTORADO_DAILY_RELEASE_HOUR}h)…`,
+    )
     const { runDailyMentoradoAutomationForAllCourses } = getDailyModule()
     const results = await runDailyMentoradoAutomationForAllCourses()
-    console.log('[mentoradoDailyContentRelease] Concluído:', results.length, 'curso(s)')
+    const actionable = results.filter((r) => r.started || r.error)
+    console.log(
+      '[mentoradoDailyContentRelease] Concluído:',
+      results.length,
+      'curso(s),',
+      actionable.length,
+      'ação(ões)',
+    )
     return null
   })
 
 /**
- * A cada 30 min, só na janela De/Até do Professor:
+ * A cada 30 min, na janela de conteúdo (própria / Professor / padrão 06–23):
  * 1 job por vez, revezando TODOS os cursos (incidência → nível 1 → níveis 2–10).
  */
 exports.contentAutomationTick = functions.pubsub
@@ -1917,11 +1930,39 @@ exports.contentAutomationTick = functions.pubsub
     const result = await runContentAutomationRelease({
       respectSchedule: true,
     })
-    if (!result?.skipped || result.reason !== 'outside_professor_window') {
+    if (
+      !result?.skipped ||
+      !['outside_professor_window', 'outside_content_window', 'outside_default_window'].includes(
+        result.reason,
+      )
+    ) {
       console.log('[contentAutomationTick]', result)
     }
     return null
   })
+
+/** Disparo manual (admin) da automação de conteúdo — ignora janela se force=true. */
+exports.runContentAutomationNow = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    try {
+      if (req.method === 'OPTIONS') return res.status(204).send('')
+      if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Método não permitido' })
+      }
+      await verifyAdminRequest(req)
+      const force = req.body?.force !== false
+      const { runContentAutomationRelease } = require('./generation/contentAutomationRelease')
+      const result = await runContentAutomationRelease({
+        force,
+        respectSchedule: !force,
+      })
+      return res.status(200).json({ ok: true, ...result })
+    } catch (error) {
+      const status = error.status || 500
+      return res.status(status).json({ error: error.message || 'Erro na automação de conteúdo' })
+    }
+  })
+})
 
 /** Rotação semanal de temas de redação (cursos com hasRedacao no Guia Mentorado). */
 exports.weeklyRedacaoThemeRotation = functions.pubsub
@@ -1982,9 +2023,9 @@ exports.resumeWaitingGenerationJobs = functions.pubsub
     return null
   })
 
-/** Agenda retomada ~15s após pausa — só o job afetado (não interfere nos outros). */
+/** Agenda retomada após pausa — espera curta (≤20s); o cron de 1 min cobre o restante. */
 exports.onGenerationResumeQueueWrite = functions
-  .runWith({ timeoutSeconds: 540, memory: '1GB' })
+  .runWith({ timeoutSeconds: 120, memory: '1GB' })
   .firestore.document('generationResumeQueue/{jobId}')
   .onWrite(async (change, context) => {
     if (!change.after.exists) return null
@@ -1992,7 +2033,12 @@ exports.onGenerationResumeQueueWrite = functions
     const jobId = context.params.jobId
     const data = change.after.data() || {}
     const nextMs = data.nextRetryAt?.toMillis?.() || Date.now()
-    const waitMs = Math.min(Math.max(0, nextMs - Date.now()), 90 * 1000)
+    const waitMs = Math.min(Math.max(0, nextMs - Date.now()), 20 * 1000)
+
+    // Se ainda falta muito tempo, deixa o cron — evita CF bloqueada por até 90s
+    if (nextMs - Date.now() > 20 * 1000) {
+      return null
+    }
 
     if (waitMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, waitMs))
@@ -2008,7 +2054,7 @@ exports.onGenerationResumeQueueWrite = functions
       const result = await resumeSingleGenerationJob(jobId, data)
       if (result.resumed) {
         console.log('[onGenerationResumeQueueWrite] retomado:', jobId, result.jobType)
-      } else if (result.reason && result.reason !== 'not_due') {
+      } else if (result.reason && !['not_due', 'already_claimed'].includes(result.reason)) {
         console.log('[onGenerationResumeQueueWrite]', jobId, result.reason)
       }
     } catch (err) {

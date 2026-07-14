@@ -101,6 +101,11 @@ async function kickGenerationJob(userId, jobId, { wait = true } = {}) {
   }
 
   if (data.status !== 'pending') {
+    // Waiting: encaminha para retomada com claim (kick antigo só cobria pending)
+    if (['waiting_api', 'waiting_retry', 'waiting_timeout'].includes(data.status)) {
+      const { nudgeStalledGenerationJob } = require('./generationJobResume')
+      return nudgeStalledGenerationJob(userId, jobId)
+    }
     return { ok: true, reason: 'already_started', status: data.status }
   }
 

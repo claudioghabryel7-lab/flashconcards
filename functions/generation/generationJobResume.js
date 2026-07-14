@@ -52,10 +52,38 @@ function isJobCancelledError(err) {
   return err?.code === 'job_cancelled'
 }
 
-/** Erros que devem pausar e retentar (não marcar job como error). */
+/** Erros permanentes — nunca retentar (evita loop infinito de API). */
+function isPermanentGenerationError(error) {
+  if (isJobCancelledError(error)) return true
+  const code = error?.code
+  const msg = String(error?.message || '').toLowerCase()
+  if (
+    code === 'invalid_payload' ||
+    code === 'unsupported_job_type' ||
+    code === 'not_authenticated' ||
+    code === 'permission_denied'
+  ) {
+    return true
+  }
+  return (
+    msg.includes('payload') ||
+    msg.includes('ausente') ||
+    msg.includes('não suportado') ||
+    msg.includes('nao suportado') ||
+    msg.includes('não autenticado') ||
+    msg.includes('nao autenticado') ||
+    msg.includes('tipo de job não suportado') ||
+    msg.includes('edital verticalizado não encontrado') ||
+    msg.includes('curso não selecionado') ||
+    msg.includes('usuário admin não identificado')
+  )
+}
+
+/** Erros que devem pausar e retentar (não marcar job como error). Default: false. */
 function isTransientGenerationError(error) {
+  if (!error) return false
+  if (isPermanentGenerationError(error)) return false
   if (isApiQuotaError(error)) return true
-  if (isJobCancelledError(error)) return false
   const code = error?.code
   const msg = String(error?.message || '').toLowerCase()
   if (
@@ -63,11 +91,13 @@ function isTransientGenerationError(error) {
     code === 'ai_json_parse_error' ||
     code === 'ai_json_truncated' ||
     code === 'cf_timeout' ||
-    code === 'material_incomplete'
+    code === 'material_incomplete' ||
+    code === 'concurrency_limit' ||
+    code === 'api_not_ready'
   ) {
     return true
   }
-  if (
+  return (
     msg.includes('temporár') ||
     msg.includes('timeout') ||
     msg.includes('timed out') ||
@@ -81,26 +111,16 @@ function isTransientGenerationError(error) {
     msg.includes('500') ||
     msg.includes('504') ||
     msg.includes('unavailable') ||
-    msg.includes('internal') ||
     msg.includes('overloaded') ||
     msg.includes('try again') ||
     msg.includes('tente novamente') ||
     msg.includes('falha na geração') ||
-    msg.includes('empty') ||
-    msg.includes('json')
-  ) {
-    return true
-  }
-  if (
-    msg.includes('payload') ||
-    msg.includes('ausente') ||
-    msg.includes('não suportado') ||
-    msg.includes('nao suportado') ||
-    msg.includes('não autenticado')
-  ) {
-    return false
-  }
-  return true
+    msg.includes('empty response') ||
+    msg.includes('json') ||
+    msg.includes('resource has been exhausted') ||
+    msg.includes('deadline') ||
+    msg.includes('aborted')
+  )
 }
 
 function isResumableJob(jobType) {
@@ -221,7 +241,13 @@ async function hasFreshActiveHeartbeat(jobId, freshMs = ACTIVE_HEARTBEAT_FRESH_M
 }
 
 async function clearActiveJob(jobId) {
-  await getDb().doc(`generationActiveJobs/${jobId}`).delete().catch(() => {})
+  if (!jobId) return
+  try {
+    const { releaseServerJobSlot } = require('./generationJobConcurrency')
+    await releaseServerJobSlot(jobId)
+  } catch {
+    await getDb().doc(`generationActiveJobs/${jobId}`).delete().catch(() => {})
+  }
 }
 
 async function pauseJobForResume({
@@ -855,7 +881,7 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
     return { resumed: false, reason: 'missing_job' }
   }
 
-  const jobData = jobSnap.data()
+  let jobData = jobSnap.data()
   if (!WAITING_STATUSES.includes(jobData.status)) {
     await clearResumeQueue(jobId)
     return { resumed: false, reason: 'not_waiting' }
@@ -878,15 +904,36 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
   const serverPayload = mergeResumeServerPayload(jobData, data, resumeFromTopicIndex)
   const ts = admin.firestore.FieldValue.serverTimestamp()
 
-  await jobRef.update(
-    stripUndefinedDeep({
-      status: 'running',
-      message: 'Retomando geração automaticamente…',
-      serverPayload,
-      updatedAt: ts,
-      progressUpdatedAt: ts,
-    }),
-  )
+  // Claim atômico: só 1 worker (cron / onWrite / nudge) retoma o job
+  const claimed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(jobRef)
+    if (!snap.exists) return false
+    const current = snap.data() || {}
+    if (!WAITING_STATUSES.includes(current.status)) return false
+    if (current.resumeClaimToken && current.status === 'running') return false
+    const claimToken = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    tx.update(
+      jobRef,
+      stripUndefinedDeep({
+        status: 'running',
+        message: 'Retomando geração automaticamente…',
+        serverPayload,
+        resumeClaimToken: claimToken,
+        resumeClaimedAt: ts,
+        updatedAt: ts,
+        progressUpdatedAt: ts,
+      }),
+    )
+    return claimToken
+  })
+
+  if (!claimed) {
+    return { resumed: false, reason: 'already_claimed' }
+  }
+
+  // Releitura pós-claim (payload pode ter mudado)
+  const claimedSnap = await jobRef.get()
+  jobData = claimedSnap.exists ? claimedSnap.data() : jobData
 
   await touchActiveJob(userId, jobId, { status: 'running', jobType: effectiveJobType })
 
@@ -897,7 +944,7 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
       ...jobData,
       courseId: courseId || jobData.courseId,
       jobType: effectiveJobType,
-      serverPayload,
+      serverPayload: jobData.serverPayload || serverPayload,
     })
     if (!outcome?.paused) {
       await clearResumeQueue(jobId)
@@ -920,14 +967,17 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
         jobId,
         courseId: courseId || jobData.courseId,
         jobType: effectiveJobType,
-        serverPayload,
+        serverPayload: jobData.serverPayload || serverPayload,
         resumeFromTopicIndex,
         topicLabel: jobData.resumeState?.topicLabel || '',
         updateJob: async (uid, jid, patch) => {
           await db.doc(`users/${uid}/generationJobs/${jid}`).update(
             stripUndefinedDeep({
               ...patch,
-              serverPayload: stripUndefinedDeep(patch.serverPayload || serverPayload),
+              serverPayload: stripUndefinedDeep(
+                patch.serverPayload || jobData.serverPayload || serverPayload,
+              ),
+              resumeClaimToken: admin.firestore.FieldValue.delete(),
               updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             }),
           )
@@ -936,7 +986,7 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
         waitReason: isApiQuotaError(err) ? 'api' : 'error',
         message: isApiQuotaError(err)
           ? 'API indisponível — trocando chave e retomando…'
-          : `Erro temporário — tentando outra API em 5s… (${err.message || 'erro'})`,
+          : `Erro temporário — retomando em ${Math.round(RETRY_INTERVAL_MS / 1000)}s… (${err.message || 'erro'})`,
       })
       return { resumed: false, reason: 'error', error: err.message }
     }
@@ -945,10 +995,12 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
       status: 'error',
       progress: 100,
       message: err.message || 'Falha ao retomar geração.',
+      resumeClaimToken: admin.firestore.FieldValue.delete(),
       finishedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     })
     await clearResumeQueue(jobId)
+    await clearActiveJob(jobId)
     return { resumed: false, reason: 'fatal', error: err.message }
   }
 }
@@ -991,9 +1043,17 @@ async function resumeWaitingGenerationJobs() {
     return { resumed: 0, waiting: snap.size, stalled, slotsFull: true }
   }
 
-  const results = await Promise.allSettled(
-    candidates.map((doc) => resumeSingleGenerationJob(doc.id, doc.data())),
-  )
+  const results = []
+  for (const doc of candidates) {
+    // Serial: evita corrida de slots; claim atômico cobre o resto
+    try {
+      const value = await resumeSingleGenerationJob(doc.id, doc.data())
+      results.push({ status: 'fulfilled', value })
+      if (value?.resumed) activeCount += 1
+    } catch (err) {
+      results.push({ status: 'rejected', reason: err })
+    }
+  }
 
   let resumed = 0
   results.forEach((result) => {
