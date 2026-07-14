@@ -14,6 +14,10 @@ const STALL_PROGRESS_MS = 5 * 60 * 1000
 /** Heartbeat a cada 15s → fresco se < 60s. */
 const ACTIVE_HEARTBEAT_FRESH_MS = 60 * 1000
 const CF_SAFE_MS = 7 * 60 * 1000
+/** ~30 min a cada 15s — evita loop infinito de Gemini em waiting_*. */
+const MAX_RESUME_ATTEMPTS = 120
+/** Espera de API pode durar mais (~2h) sem martelar se chaves voltam. */
+const MAX_API_WAIT_ATTEMPTS = 480
 
 const WAITING_STATUSES = ['waiting_api', 'waiting_retry', 'waiting_timeout']
 
@@ -72,6 +76,7 @@ function isPermanentGenerationError(error) {
     msg.includes('nao suportado') ||
     msg.includes('não autenticado') ||
     msg.includes('nao autenticado') ||
+    msg.includes('apenas administradores') ||
     msg.includes('tipo de job não suportado') ||
     msg.includes('edital verticalizado não encontrado') ||
     msg.includes('curso não selecionado') ||
@@ -267,6 +272,22 @@ async function pauseJobForResume({
   const ts = admin.firestore.FieldValue.serverTimestamp()
   const nextRetryAt = new Date(Date.now() + Math.max(0, retryDelayMs))
 
+  const jobSnap = await getDb().doc(`users/${userId}/generationJobs/${jobId}`).get()
+  const queueSnap = await getDb().doc(`generationResumeQueue/${jobId}`).get()
+  const prevJob = jobSnap.exists ? Number(jobSnap.data()?.resumeAttempt) || 0 : 0
+  const prevQueue = queueSnap.exists ? Number(queueSnap.data()?.resumeAttempt) || 0 : 0
+  const prevAttempt = Math.max(prevJob, prevQueue)
+  const nextAttempt = prevAttempt + 1
+  const maxAttempts = maxAttemptsForWaitReason(waitReason, status)
+  if (nextAttempt > maxAttempts) {
+    await markJobExhaustedRetries(
+      userId,
+      jobId,
+      `Limite de ${maxAttempts} tentativas (${status}) atingido`,
+    )
+    return { exhausted: true, resumeAttempt: nextAttempt }
+  }
+
   const resumeState = {
     resumeFromTopicIndex,
     targetDate: serverPayload?.targetDate || null,
@@ -301,7 +322,9 @@ async function pauseJobForResume({
     message: finalMessage,
     resumeState,
     waitReason,
+    resumeAttempt: nextAttempt,
     nextRetryAt: admin.firestore.Timestamp.fromDate(nextRetryAt),
+    resumeClaimToken: admin.firestore.FieldValue.delete(),
     ...(lastError ? { lastError } : {}),
   })
 
@@ -315,6 +338,7 @@ async function pauseJobForResume({
       resumeState,
       status,
       waitReason,
+      resumeAttempt: nextAttempt,
       nextRetryAt: admin.firestore.Timestamp.fromDate(nextRetryAt),
       updatedAt: ts,
       createdAt: ts,
@@ -323,6 +347,7 @@ async function pauseJobForResume({
 
   // Jobs aguardando retomada não ocupam slot de concorrência.
   await clearActiveJob(jobId)
+  return { exhausted: false, resumeAttempt: nextAttempt }
 }
 
 async function touchJobHeartbeat(userId, jobId, patch = {}) {
@@ -395,12 +420,57 @@ async function hasAvailableGeminiKey() {
 }
 
 async function bumpResumeRetry(jobId, delayMs = RETRY_INTERVAL_MS) {
+  const db = getDb()
   const nextRetryAt = new Date(Date.now() + Math.max(0, delayMs))
   const ts = admin.firestore.Timestamp.fromDate(nextRetryAt)
-  await getDb().doc(`generationResumeQueue/${jobId}`).set(
-    { nextRetryAt: ts, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+  const queueRef = db.doc(`generationResumeQueue/${jobId}`)
+  const queueSnap = await queueRef.get()
+  const userId = queueSnap.exists ? queueSnap.data()?.userId : null
+
+  await queueRef.set(
+    {
+      nextRetryAt: ts,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      resumeAttempt: admin.firestore.FieldValue.increment(1),
+    },
     { merge: true },
   )
+
+  // Mantém o contador no doc do job alinhado à fila (evita reset no próximo pauseJobForResume)
+  if (userId) {
+    await db
+      .doc(`users/${userId}/generationJobs/${jobId}`)
+      .set(
+        {
+          resumeAttempt: admin.firestore.FieldValue.increment(1),
+          nextRetryAt: ts,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      )
+      .catch(() => {})
+  }
+}
+
+async function markJobExhaustedRetries(userId, jobId, reason = 'Limite de tentativas de retomada atingido') {
+  const db = getDb()
+  await db.doc(`users/${userId}/generationJobs/${jobId}`).set(
+    {
+      status: 'error',
+      progress: 100,
+      message: `${reason}. Tente novamente mais tarde.`,
+      lastError: reason,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      progressUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  )
+  await clearResumeQueue(jobId)
+}
+
+function maxAttemptsForWaitReason(waitReason, status) {
+  if (status === 'waiting_api' || waitReason === 'api') return MAX_API_WAIT_ATTEMPTS
+  return MAX_RESUME_ATTEMPTS
 }
 
 async function clearResumeQueue(jobId) {
@@ -772,7 +842,8 @@ async function recoverStalledRunningJobs() {
     const { userId, jobId } = data
     if (!userId || !jobId) continue
 
-    const jobSnap = await db.doc(`users/${userId}/generationJobs/${jobId}`).get()
+    const jobRef = db.doc(`users/${userId}/generationJobs/${jobId}`)
+    const jobSnap = await jobRef.get()
     if (!jobSnap.exists) {
       await clearActiveJob(jobId)
       continue
@@ -784,6 +855,21 @@ async function recoverStalledRunningJobs() {
       await handleGenerationJobCancelled(userId, jobId, jobData)
       continue
     }
+
+    // Claim atômico: evita dois workers forçarem o mesmo job stalled
+    const claimed = await db.runTransaction(async (tx) => {
+      const snapTx = await tx.get(jobRef)
+      if (!snapTx.exists) return false
+      const current = snapTx.data() || {}
+      if (current.status !== 'running') return false
+      if (current.stallRecoveryToken) return false
+      tx.update(jobRef, {
+        stallRecoveryToken: `${Date.now()}_stall`,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      return true
+    })
+    if (!claimed) continue
 
     const resumeFromTopicIndex =
       jobData.resumeState?.resumeFromTopicIndex ??
@@ -804,6 +890,7 @@ async function recoverStalledRunningJobs() {
       updateJob: async (uid, jid, patch) => {
         await db.doc(`users/${uid}/generationJobs/${jid}`).update({
           ...patch,
+          stallRecoveryToken: admin.firestore.FieldValue.delete(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         })
       },
@@ -887,6 +974,17 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
     return { resumed: false, reason: 'not_waiting' }
   }
 
+  const attempt = Number(jobData.resumeAttempt) || Number(data.resumeAttempt) || 0
+  const maxAttempts = maxAttemptsForWaitReason(jobData.waitReason || data.waitReason, jobData.status)
+  if (attempt > maxAttempts) {
+    await markJobExhaustedRetries(
+      userId,
+      jobId,
+      `Limite de ${maxAttempts} tentativas (${jobData.status}) atingido`,
+    )
+    return { resumed: false, reason: 'max_attempts' }
+  }
+
   if (jobData.status === 'waiting_api') {
     const apiReady = await hasAvailableGeminiKey()
     if (!apiReady) {
@@ -910,7 +1008,8 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
     if (!snap.exists) return false
     const current = snap.data() || {}
     if (!WAITING_STATUSES.includes(current.status)) return false
-    if (current.resumeClaimToken && current.status === 'running') return false
+    // Já claimado por outro worker nesta janela
+    if (current.status === 'running' && current.resumeClaimToken) return false
     const claimToken = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     tx.update(
       jobRef,
@@ -920,6 +1019,7 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
         serverPayload,
         resumeClaimToken: claimToken,
         resumeClaimedAt: ts,
+        stallRecoveryToken: admin.firestore.FieldValue.delete(),
         updatedAt: ts,
         progressUpdatedAt: ts,
       }),
@@ -1092,6 +1192,8 @@ module.exports = {
   CF_SAFE_MS,
   JOB_HEARTBEAT_MS,
   STALL_PROGRESS_MS,
+  MAX_RESUME_ATTEMPTS,
+  MAX_API_WAIT_ATTEMPTS,
   WAITING_STATUSES,
   stripUndefinedDeep,
 }

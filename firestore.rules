@@ -36,14 +36,12 @@ service cloud.firestore {
     
     match /users/{userId} {
       allow read: if isAuthenticated() || (request.auth != null && request.auth.uid == userId);
-      allow create: if isAuthenticated() && isOwner(userId);
-      allow update: if isAuthenticated() && (
-        (isOwner(userId) && 
-        (request.resource.data.role == resource.data.role ||
-          !resource.data.hasAny(['role']) ||
-          (request.resource.data.role == 'admin' && 
-           resource.data.role != 'admin'))) ||
-        isAdmin()
+      allow create: if isAuthenticated() && isOwner(userId)
+        && (!('role' in request.resource.data) || request.resource.data.role != 'admin');
+      // Owner NÃO pode alterar role (anti auto-promoção a admin)
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        request.resource.data.get('role', null) == resource.data.get('role', null)
       );
       allow delete: if isAdmin();
       
@@ -84,7 +82,17 @@ service cloud.firestore {
       }
 
       match /generationJobs/{jobId} {
-        allow read, create, update: if isOwner(userId);
+        allow read: if isOwner(userId);
+        // Jobs runOnServer gastam Gemini no servidor — só admin pode criar/escalar
+        allow create: if isOwner(userId) && (
+          !(request.resource.data.keys().hasAll(['runOnServer']) && request.resource.data.runOnServer == true)
+          || isAdmin()
+        );
+        allow update: if isOwner(userId) && (
+          isAdmin()
+          || request.resource.data.get('runOnServer', false) != true
+          || resource.data.get('runOnServer', false) == true
+        );
         allow delete: if isOwner(userId) || isAdmin();
       }
 
@@ -345,8 +353,8 @@ service cloud.firestore {
       match /conteudosCompletos/{docId} {
         allow get: if canGetPublishedContent();
         allow list: if canReadPublishedContent();
-        allow create: if isAuthenticated();
-        allow update: if isAuthenticated();
+        allow create: if isAdmin();
+        allow update: if isAdmin();
         allow delete: if isAdmin();
       }
 
@@ -422,15 +430,15 @@ service cloud.firestore {
       match /conteudosIncidencia/{docId} {
         allow get: if canGetPublishedContent();
         allow list: if canReadPublishedContent();
-        allow create: if isAuthenticated();
-        allow update: if isAuthenticated();
+        allow create: if isAdmin();
+        allow update: if isAdmin();
         allow delete: if isAdmin();
       }
       
       match /questoesIncidencia/{docId} {
         allow get: if canGetPublishedContent();
         allow list: if canReadPublishedContent();
-        allow create, update: if isAdmin() || isAuthenticated();
+        allow create, update: if isAdmin();
         allow delete: if isAdmin();
       }
       

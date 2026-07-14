@@ -160,6 +160,14 @@ export async function reconcileStaleGenerationJobs(userId) {
 
   snap.docs.forEach((d) => {
     const data = d.data()
+    // Jobs waiting_* no servidor são gerenciados pelo resume cron — não matar no cliente
+    if (
+      data.runOnServer &&
+      GENERATION_WAITING_STATUSES.includes(data.status)
+    ) {
+      return
+    }
+
     const updatedAt =
       data.progressUpdatedAt?.toDate?.() ||
       data.lastHeartbeat?.toDate?.() ||
@@ -168,14 +176,11 @@ export async function reconcileStaleGenerationJobs(userId) {
     if (!updatedAt) return
 
     const isLongJob = MENTORADO_JOB_TYPES.includes(data.jobType)
-    const staleMs =
-      data.status === GENERATION_JOB_STATUS.WAITING_API
-        ? STALE_WAITING_API_MS
-        : data.runOnServer
-          ? isLongJob
-            ? STALE_LONG_SERVER_JOB_MS
-            : STALE_SERVER_JOB_MS
-          : STALE_JOB_MS
+    const staleMs = data.runOnServer
+      ? isLongJob
+        ? STALE_LONG_SERVER_JOB_MS
+        : STALE_SERVER_JOB_MS
+      : STALE_JOB_MS
     if (now - updatedAt.getTime() < staleMs) return
 
     // Se ainda tem heartbeat fresco, não mata

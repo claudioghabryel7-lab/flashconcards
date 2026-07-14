@@ -893,10 +893,19 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                   )}
 
                   {/* Botão de ação */}
+                  {isAdmin ? (
                     <button type="button" onClick={handleGenerateQuestoes} disabled={generating} className="cp-btn-primary w-full justify-center">
                       <FireIcon className="h-5 w-5" />
                       {generating ? 'Gerando questões…' : 'Gerar questões'}
                     </button>
+                  ) : (
+                    <div className="cp-card p-6 text-center">
+                      <p className="font-medium text-cp-text">Questões ainda não liberadas</p>
+                      <p className="mt-2 text-sm text-cp-muted">
+                        O administrador ainda não gerou as questões deste nível.
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-6">

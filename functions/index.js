@@ -2511,6 +2511,8 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
     }
 
     try {
+      await verifyAdminRequest(req)
+
       try {
         assertGeminiConfigured()
       } catch {
@@ -2732,8 +2734,9 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
 
     } catch (error) {
       console.error('Erro ao gerar notícia de concurso:', error)
-      return res.status(500).json({ 
-        error: 'Erro ao gerar notícia', 
+      const status = error.status || 500
+      return res.status(status).json({ 
+        error: status === 401 || status === 403 ? error.message : 'Erro ao gerar notícia', 
         message: error.message 
       })
     }
@@ -2893,6 +2896,8 @@ exports.generateNewsFromLink = functions.https.onRequest((req, res) => {
     }
 
     try {
+      await verifyAdminRequest(req)
+
       const { referenceLink, category } = req.body
 
       if (!referenceLink) {
@@ -3102,8 +3107,9 @@ IMPORTANTE:
 
     } catch (error) {
       console.error('Erro ao gerar notícia do link:', error)
-      return res.status(500).json({ 
-        error: 'Erro ao gerar notícia', 
+      const status = error.status || 500
+      return res.status(status).json({ 
+        error: status === 401 || status === 403 ? error.message : 'Erro ao gerar notícia', 
         message: error.message 
       })
     }

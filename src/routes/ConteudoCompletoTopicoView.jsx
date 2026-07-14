@@ -523,6 +523,10 @@ ONDE:
   }
 
   const handleGenerateContent = async () => {
+    if (!isAdmin) {
+      setError('Apenas administradores podem gerar conteúdo na nuvem.')
+      return false
+    }
     if (!resolvedCourseId || !resolvedTopicKey) return false
     if (!user?.uid && !hasGeminiApiKeys()) {
       setError('Nenhuma API Key Gemini configurada.')
@@ -922,6 +926,23 @@ REGRAS:
     )
   }
 
+  if (!isAdmin && !hasTopicAccess) {
+    return (
+      <div className="max-w-lg mx-auto p-8">
+        <div className="cp-card p-10 text-center">
+          <p className="text-4xl mb-3">🔒</p>
+          <p className="font-medium text-cp-text">Acesso não disponível</p>
+          <p className="mt-2 text-sm text-cp-muted">
+            Este tópico não está no seu preview gratuito ou ainda não foi liberado pelo administrador.
+          </p>
+          <Link to="/edital-verticalizado" className="cp-btn-ghost mt-6 inline-flex">
+            Voltar ao edital
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   if (error || !conteudo) {
     return (
       <div className="max-w-4xl mx-auto p-4">
@@ -946,24 +967,26 @@ REGRAS:
             </div>
           )}
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button
-              type="button"
-              onClick={handleGenerateContent}
-              disabled={generating}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-alego-600 text-white rounded-lg hover:bg-alego-700 transition disabled:opacity-60"
-            >
-              {generating ? (
-                <>
-                  <span className="inline-block h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Gerando conteúdo...
-                </>
-              ) : (
-                <>
-                  <span role="img" aria-label="raio">⚡</span>
-                  Chamar o professor!
-                </>
-              )}
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleGenerateContent}
+                disabled={generating}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-alego-600 text-white rounded-lg hover:bg-alego-700 transition disabled:opacity-60"
+              >
+                {generating ? (
+                  <>
+                    <span className="inline-block h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Gerando conteúdo...
+                  </>
+                ) : (
+                  <>
+                    <span role="img" aria-label="raio">⚡</span>
+                    Chamar o professor!
+                  </>
+                )}
+              </button>
+            )}
             <Link
               to="/conteudo-completo"
               className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition"
@@ -972,23 +995,6 @@ REGRAS:
               Biblioteca de Conteúdos
             </Link>
           </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!isAdmin && !hasTopicAccess) {
-    return (
-      <div className="max-w-lg mx-auto p-8">
-        <div className="cp-card p-10 text-center">
-          <p className="text-4xl mb-3">🔒</p>
-          <p className="font-medium text-cp-text">Acesso não disponível</p>
-          <p className="mt-2 text-sm text-cp-muted">
-            Este tópico não está no seu preview gratuito ou ainda não foi liberado pelo administrador.
-          </p>
-          <Link to="/edital-verticalizado" className="cp-btn-ghost mt-6 inline-flex">
-            Voltar ao edital
-          </Link>
         </div>
       </div>
     )

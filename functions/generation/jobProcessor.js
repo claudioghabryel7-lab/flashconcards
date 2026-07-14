@@ -534,6 +534,20 @@ async function processGenerationJob(userId, jobId, jobData) {
   if (!serverPayload?.prompt && !noPromptJobs.includes(jobType)) {
     throw new Error('Payload de geração inválido.')
   }
+  if (serverPayload?.prompt != null) {
+    const promptLen = String(serverPayload.prompt).length
+    if (promptLen < 20) {
+      const err = new Error('Prompt de geração inválido ou muito curto.')
+      err.code = 'invalid_payload'
+      throw err
+    }
+    // ~200k chars — evita abuso / estouro de contexto
+    if (promptLen > 200000) {
+      const err = new Error('Prompt de geração excede o tamanho máximo permitido.')
+      err.code = 'invalid_payload'
+      throw err
+    }
+  }
   if (jobType === 'flashcards_topico' && !serverPayload?.savePlan?.flashcardMeta) {
     throw new Error('Metadados de flashcards ausentes.')
   }
@@ -559,19 +573,12 @@ async function processGenerationJob(userId, jobId, jobData) {
     throw new Error('courseId ausente no job.')
   }
 
-  const ADMIN_ONLY_JOBS = new Set([
-    'guia_mentorado_automation',
-    'guia_mentorado_cronograma',
-    'guia_mentorado_backfill',
-    'professor_supervisor',
-    'admin_edital_verticalizado',
-  ])
-  if (ADMIN_ONLY_JOBS.has(jobType)) {
-    const userSnap = await db.doc(`users/${userId}`).get()
-    const role = userSnap.exists ? userSnap.data()?.role : null
-    if (role !== 'admin') {
-      throw new Error('Apenas administradores podem executar este tipo de job.')
-    }
+  // Todos os jobs processados aqui usam Gemini no servidor (custo).
+  // Cron/automação já gravam sob users/{adminUid}/generationJobs.
+  const userSnap = await db.doc(`users/${userId}`).get()
+  const role = userSnap.exists ? userSnap.data()?.role : null
+  if (role !== 'admin') {
+    throw new Error('Apenas administradores podem executar jobs de geração na nuvem.')
   }
 
   if (jobType === 'guia_mentorado_automation') {

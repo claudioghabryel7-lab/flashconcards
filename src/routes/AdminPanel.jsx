@@ -12371,10 +12371,13 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                       setMessage('🤖 Gerando notícia com IA... Isso pode levar alguns segundos.')
                       
                       try {
+                        const token = await auth.currentUser?.getIdToken()
+                        if (!token) throw new Error('Faça login como administrador.')
                         const response = await fetch(FIREBASE_FUNCTIONS.generateConcursoNews, {
                           method: 'POST',
                           headers: {
                             'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`,
                           },
                           body: JSON.stringify({
                             concursoEspecifico: concursoEspecifico

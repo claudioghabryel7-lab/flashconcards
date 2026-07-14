@@ -327,10 +327,6 @@ async function generateAiJson(prompt, options = {}) {
       lastError = error
       // Sempre tenta de novo em erros transitórios / JSON — callGemini já roda o pool de chaves
       if (attempt < maxAttempts && isRetryableAiError(error)) continue
-      if (attempt < maxAttempts) {
-        // Mesmo erros não classificados: mais uma chance (outra chave pode ter respondido mal)
-        continue
-      }
       break
     }
   }

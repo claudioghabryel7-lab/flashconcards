@@ -6,7 +6,7 @@ import { ArrowLeftIcon, FireIcon, TrashIcon, PencilIcon } from '@heroicons/react
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { formatAiErrorForUser, hasGeminiApiKeys } from '../utils/geminiApi'
+import { formatAiErrorForUser } from '../utils/geminiApi'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
 import { buildConteudoIncidenciaPayload } from '../utils/serverGenerationPayload'
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
@@ -122,6 +122,10 @@ const ConteudoIncidenciaView = () => {
   }, [courseId, disciplinaIdx])
 
   const handleGenerate = async () => {
+    if (!isAdmin) {
+      setStatus('❌ Apenas administradores podem gerar conteúdo de incidência.')
+      return
+    }
     if (!courseId || !editalVerticalizado?.disciplinas || disciplinaIndex === undefined) return
 
     const disciplina = editalVerticalizado.disciplinas[disciplinaIndex]
@@ -130,8 +134,8 @@ const ConteudoIncidenciaView = () => {
       return
     }
 
-    if (!hasGeminiApiKeys()) {
-      setStatus('❌ Nenhuma API Key Gemini configurada.')
+    if (!user?.uid) {
+      setStatus('❌ Faça login como administrador para gerar.')
       return
     }
 
@@ -520,25 +524,34 @@ Retorne APENAS o JSON válido, sem texto adicional.`
             </div>
           </div>
 
-          <div className="cp-card p-5 space-y-4">
-            <p className="text-sm text-cp-text">
-              A IA analisa todos os tópicos, atribui probabilidade de incidência e gera o conteúdo de revisão para cada assunto.
-            </p>
-            {status && (
-              <div>
-                <p className="text-xs text-cp-muted">{status}</p>
-                {progress > 0 && (
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-cp-border">
-                    <div className="h-full rounded-full bg-gradient-to-r from-cp-accent to-red-500 transition-all" style={{ width: `${progress}%` }} />
-                  </div>
-                )}
-              </div>
-            )}
-            <button type="button" onClick={handleGenerate} disabled={generating} className="cp-btn-primary w-full justify-center">
-              <FireIcon className="h-5 w-5" />
-              {generating ? 'Gerando análise…' : 'Gerar conteúdo de incidência'}
-            </button>
-          </div>
+          {isAdmin ? (
+            <div className="cp-card p-5 space-y-4">
+              <p className="text-sm text-cp-text">
+                A IA analisa todos os tópicos, atribui probabilidade de incidência e gera o conteúdo de revisão para cada assunto.
+              </p>
+              {status && (
+                <div>
+                  <p className="text-xs text-cp-muted">{status}</p>
+                  {progress > 0 && (
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-cp-border">
+                      <div className="h-full rounded-full bg-gradient-to-r from-cp-accent to-red-500 transition-all" style={{ width: `${progress}%` }} />
+                    </div>
+                  )}
+                </div>
+              )}
+              <button type="button" onClick={handleGenerate} disabled={generating} className="cp-btn-primary w-full justify-center">
+                <FireIcon className="h-5 w-5" />
+                {generating ? 'Gerando análise…' : 'Gerar conteúdo de incidência'}
+              </button>
+            </div>
+          ) : (
+            <div className="cp-card p-8 text-center">
+              <p className="font-medium text-cp-text">Conteúdo ainda não liberado</p>
+              <p className="mt-2 text-sm text-cp-muted">
+                O administrador ainda não gerou a análise de incidência desta matéria.
+              </p>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-4">

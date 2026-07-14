@@ -76,13 +76,25 @@ Retorne APENAS JSON válido.`
 }
 
 async function hasFlashcards(courseId, topicKey, disciplina, modulo) {
-  const snap = await getDb().collection(`courses/${courseId}/flashcards`).get()
+  const db = getDb()
+  const flashcardsRef = db.collection(`courses/${courseId}/flashcards`)
   const normalized = normalizeTopicKeyForStorage(topicKey)
-  return snap.docs.some((d) => {
-    const data = d.data()
-    if (normalizeTopicKeyForStorage(data.topicKey) === normalized) return true
-    return data.materia === disciplina && data.modulo === modulo
-  })
+
+  if (normalized) {
+    const byTopic = await flashcardsRef.where('topicKey', '==', normalized).limit(1).get()
+    if (!byTopic.empty) return true
+  }
+
+  if (disciplina && modulo) {
+    const byModule = await flashcardsRef
+      .where('materia', '==', disciplina)
+      .where('modulo', '==', modulo)
+      .limit(1)
+      .get()
+    if (!byModule.empty) return true
+  }
+
+  return false
 }
 
 async function hasConteudo(courseId, topicKey) {
@@ -109,23 +121,27 @@ async function isTopicContentComplete(courseId, topic) {
 }
 
 async function deleteExistingFlashcards(courseId, topicKey, disciplina, modulo) {
-  const snap = await getDb().collection(`courses/${courseId}/flashcards`).get()
+  const db = getDb()
+  const flashcardsRef = db.collection(`courses/${courseId}/flashcards`)
   const normalized = normalizeTopicKeyForStorage(topicKey)
-  const batch = getDb().batch()
-  let count = 0
 
-  snap.docs.forEach((d) => {
-    const data = d.data()
-    const match =
-      normalizeTopicKeyForStorage(data.topicKey) === normalized ||
-      (data.materia === disciplina && data.modulo === modulo)
-    if (match) {
-      batch.delete(d.ref)
-      count += 1
-    }
-  })
+  let docs = []
+  if (normalized) {
+    const byTopic = await flashcardsRef.where('topicKey', '==', normalized).get()
+    docs = byTopic.docs
+  }
+  if (!docs.length && disciplina && modulo) {
+    const byModule = await flashcardsRef
+      .where('materia', '==', disciplina)
+      .where('modulo', '==', modulo)
+      .get()
+    docs = byModule.docs
+  }
+  if (!docs.length) return
 
-  if (count) await batch.commit()
+  const batch = db.batch()
+  docs.forEach((d) => batch.delete(d.ref))
+  await batch.commit()
 }
 
 async function generateAndSaveFlashcards(courseId, topic, onHeartbeat, shouldAbort) {
