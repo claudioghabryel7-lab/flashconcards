@@ -139,6 +139,12 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Interruptor público dos comentários mocados (home)
+    match /config/mockReviews {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
     match /professorSupervisorReviews/{reviewId} {
       allow read, create, update, delete: if isAdmin();
     }
@@ -478,6 +484,12 @@ service cloud.firestore {
       allow update, delete: if isAuthenticated() && 
                               exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
                               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Comentários mocados (admin) — leitura pública para a home
+    match /mockReviews/{reviewId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
     
     match /deletedUsers/{userId} {

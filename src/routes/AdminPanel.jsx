@@ -39,6 +39,7 @@ import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager
 import AdminContentModeration from '../components/admin/AdminContentModeration'
 import AdminProfessorSupervisor from '../components/admin/AdminProfessorSupervisor'
 import AdminGuiaMentorado from '../components/admin/AdminGuiaMentorado'
+import AdminMockReviews from '../components/admin/AdminMockReviews'
 import AdminEmailBroadcast from '../components/admin/AdminEmailBroadcast'
 import AdminCacheReset from '../components/admin/AdminCacheReset'
 import AdminPlatformMaintenance from '../components/admin/AdminPlatformMaintenance'
@@ -10579,6 +10580,8 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
             {/* Tab: Avaliações */}
             {activeTab === 'reviews' && (
               <div className="space-y-6">
+                <AdminMockReviews />
+
                 {/* Gerenciar Avaliações */}
                 <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
                   <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-24 -mt-24"></div>

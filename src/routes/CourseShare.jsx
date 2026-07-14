@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { db } from '../firebase/config'
 import { formatCoursePrice, getCourseAccessLabel } from '../utils/courseAccess'
+import CoursePageReviews from '../components/CoursePageReviews'
 
 const benefits = [
   {
@@ -284,6 +285,10 @@ const CourseShare = () => {
                   Ver outros cursos
                 </Link>
               </aside>
+            </div>
+
+            <div className="border-t border-cp-border px-5 pb-6 pt-2 sm:px-8 sm:pb-8">
+              <CoursePageReviews title="Alunos que estudam com a gente" />
             </div>
           </div>
         </motion.div>

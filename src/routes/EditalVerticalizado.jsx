@@ -1371,7 +1371,7 @@ REGRAS IMPORTANTES:
           ) : (
             <>
               <Link
-                to={`/flashcards/topico/${courseId || 'alego-default'}?disciplina=${encodeURIComponent(disciplina.nome || '')}&modulo=${encodeURIComponent(moduloLabel)}&topicKey=${topicKeyParam}`}
+                to="/flashcards"
                 className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 font-mono text-[10px] transition ${topicLinkClass(
                   'border-cp-accent/25 bg-cp-accent/10 text-cp-accent hover:bg-cp-accent/20'
                 )}`}
@@ -1385,7 +1385,7 @@ REGRAS IMPORTANTES:
                 <span className="hidden sm:inline">Flash</span>
               </Link>
               <Link
-                to={`/conteudo-completo/topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
+                to="/resolver-material"
                 className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 font-mono text-[10px] transition ${topicLinkClass(
                   'border-cp-border bg-cp-surface text-cp-text hover:border-cp-accent/30'
                 )}`}
@@ -1399,7 +1399,7 @@ REGRAS IMPORTANTES:
                 <span className="hidden sm:inline">Estudar</span>
               </Link>
               <Link
-                to={`/questoes-topic/${courseId || 'alego-default'}/${topicKey}?nome=${encodeURIComponent(topico.nome || '')}`}
+                to="/resolver-questoes"
                 className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 font-mono text-[10px] transition ${topicLinkClass(
                   'border-cp-accent2/25 bg-cp-accent2/10 text-cp-accent2 hover:bg-cp-accent2/20'
                 )}`}
@@ -1640,7 +1640,7 @@ REGRAS IMPORTANTES:
                               </span>
                               <div className="flex items-center gap-1">
                                 <Link
-                                  to={`/conteudo-incidencia/${courseId || 'alego-default'}/${idx}`}
+                                  to="/resolver-incidencia"
                                   className="rounded-lg border border-red-500/25 bg-red-500/10 p-2 text-red-400 transition hover:bg-red-500/20"
                                   title="Conteúdo e prática por incidência"
                                   onClick={(e) => e.stopPropagation()}

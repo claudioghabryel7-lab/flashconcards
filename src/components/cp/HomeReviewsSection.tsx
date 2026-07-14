@@ -5,6 +5,7 @@ import { collection, getDocs, limit, query, where } from 'firebase/firestore'
 import { motion } from 'framer-motion'
 import { Star } from 'lucide-react'
 import { db } from '@/firebase/config'
+import { fetchActiveMockReviewsForPublic } from '@/services/mockReviewsService'
 
 type Review = {
   id: string
@@ -12,12 +13,13 @@ type Review = {
   rating?: number
   comment?: string
   approved?: boolean
-  createdAt?: { toDate?: () => Date }
+  photoUrl?: string
+  isMock?: boolean
+  createdAt?: { toDate?: () => Date; toMillis?: () => number }
 }
 
 /**
- * Comentários públicos aprovados (mesma coleção `reviews` da aba Avaliações do admin).
- * Só aparece se houver pelo menos um comentário aprovado.
+ * Comentários públicos: avaliações reais aprovadas + mocados ativos (com foto).
  */
 export default function HomeReviewsSection() {
   const [reviews, setReviews] = useState<Review[]>([])
@@ -32,28 +34,47 @@ export default function HomeReviewsSection() {
       }
       try {
         const reviewsRef = collection(db, 'reviews')
-        let rows: Review[] = []
+        let real: Review[] = []
         try {
           const q = query(reviewsRef, where('approved', '==', true), limit(24))
           const snap = await getDocs(q)
-          rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Review, 'id'>) }))
+          real = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Review, 'id'>) }))
         } catch {
           const snap = await getDocs(reviewsRef)
-          rows = snap.docs
+          real = snap.docs
             .map((d) => ({ id: d.id, ...(d.data() as Omit<Review, 'id'>) }))
             .filter((r) => r.approved === true)
         }
 
-        rows = rows
+        real = real
           .filter((r) => String(r.comment || '').trim().length > 0)
+          .map((r) => ({ ...r, isMock: false }))
+
+        let mocks: Review[] = []
+        try {
+          const mockRows = await fetchActiveMockReviewsForPublic()
+          mocks = mockRows.map((r) => ({
+            id: `mock-${r.id}`,
+            userName: r.userName,
+            comment: r.comment,
+            rating: r.rating,
+            photoUrl: r.photoUrl,
+            isMock: true,
+            createdAt: r.createdAt,
+          }))
+        } catch (err) {
+          console.warn('[HomeReviewsSection] mocks:', err)
+        }
+
+        const merged = [...mocks, ...real]
           .sort((a, b) => {
-            const da = a.createdAt?.toDate?.()?.getTime?.() || 0
-            const dbTs = b.createdAt?.toDate?.()?.getTime?.() || 0
+            const da = a.createdAt?.toDate?.()?.getTime?.() || a.createdAt?.toMillis?.() || 0
+            const dbTs = b.createdAt?.toDate?.()?.getTime?.() || b.createdAt?.toMillis?.() || 0
             return dbTs - da
           })
           .slice(0, 12)
 
-        if (!cancelled) setReviews(rows)
+        if (!cancelled) setReviews(merged)
       } catch (err) {
         console.error('[HomeReviewsSection]', err)
       } finally {
@@ -83,13 +104,14 @@ export default function HomeReviewsSection() {
           O que os alunos estão dizendo
         </h2>
         <p className="mx-auto mt-2 max-w-lg text-sm text-cp-muted">
-          Comentários aprovados no painel administrativo — só aparecem quando há avaliações públicas.
+          Depoimentos de quem usa a plataforma no dia a dia.
         </p>
       </div>
 
       <div className="relative mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {reviews.map((review, idx) => {
           const rating = Math.min(5, Math.max(0, Number(review.rating) || 0))
+          const initial = String(review.userName || 'A').trim().charAt(0).toUpperCase()
           return (
             <motion.article
               key={review.id}
@@ -99,20 +121,36 @@ export default function HomeReviewsSection() {
               transition={{ delay: Math.min(idx * 0.05, 0.3) }}
               className="rounded-2xl border border-cp-border/60 bg-cp-bg/50 p-5 text-left"
             >
-              <div className="mb-3 flex items-center gap-1">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`h-4 w-4 ${
-                      i < rating ? 'fill-amber-400 text-amber-400' : 'text-cp-muted/40'
-                    }`}
+              <div className="mb-3 flex items-center gap-3">
+                {review.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={review.photoUrl}
+                    alt=""
+                    className="h-11 w-11 rounded-full object-cover ring-2 ring-cp-border/80"
                   />
-                ))}
+                ) : (
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-cp-accent/15 text-sm font-bold text-cp-accent">
+                    {initial}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-cp-text">
+                    {review.userName || 'Aluno'}
+                  </p>
+                  <div className="mt-0.5 flex items-center gap-1">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star
+                        key={i}
+                        className={`h-3.5 w-3.5 ${
+                          i < rating ? 'fill-amber-400 text-amber-400' : 'text-cp-muted/40'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
               <p className="text-sm leading-relaxed text-cp-text">“{review.comment}”</p>
-              <p className="mt-4 text-xs font-semibold text-cp-muted">
-                {review.userName || 'Aluno'}
-              </p>
             </motion.article>
           )
         })}

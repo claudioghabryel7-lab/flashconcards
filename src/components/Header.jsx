@@ -74,6 +74,7 @@ const Header = () => {
           { to: '/vespera-de-prova', label: 'Revisão', auth: true },
           { to: '/flashcards', label: 'Flashcards com IA', auth: true },
           { to: '/resolver-questoes', label: 'Resolver Questões', auth: true },
+          { to: '/resolver-incidencia', label: 'Incidência', auth: true },
           { to: '/edital-verticalizado', label: 'Edital Verticalizado', auth: true },
           { to: '/calendario', label: 'Calendário de Progresso', auth: true },
           { to: '/treino-redacao', label: 'Treino Redação', auth: true },
