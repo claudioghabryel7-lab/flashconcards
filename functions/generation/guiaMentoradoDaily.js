@@ -78,6 +78,9 @@ async function prepareDayAutomation(courseId, targetDate, options = {}) {
   if (isManual && !automation.triggers.allowManualDay && !options.force) {
     return { ok: false, reason: 'Geração manual desabilitada nas configurações.' }
   }
+  if (intent === 'backfill' && !automation.triggers.allowBackfill && !options.force) {
+    return { ok: false, reason: 'Backfill desabilitado nas configurações.' }
+  }
 
   const dayEntry = await loadCronogramaDay(courseId, targetDate)
   if (!dayEntry) {
@@ -85,7 +88,7 @@ async function prepareDayAutomation(courseId, targetDate, options = {}) {
   }
 
   const tipo = dayEntry.type || dayEntry.tipo || 'estudo'
-  if (tipo === 'simulado' || tipo === 'descanso') {
+  if (tipo === 'simulado' || tipo === 'descanso' || tipo === 'taf' || tipo === 'redacao') {
     return { ok: false, reason: `Dia marcado como ${tipo} — sem conteúdos para gerar.` }
   }
 
@@ -399,15 +402,61 @@ async function runDailyMentoradoAutomationForAllCourses() {
         started = Boolean(todayResult.started)
       }
 
-      // Marca o dia mesmo se não havia pendências (evita reprocessar a cada hora)
-      await markDailyRun(courseId, todayKey, {
-        lastError: started ? null : lastResult?.reason || null,
-      })
+      // Só marca o dia se já está completo ou skip permanente.
+      // Job iniciado NÃO marca — se falhar, o próximo tick pode retry
+      // (hasActiveAutomationJob evita duplicata enquanto roda).
+      const allDone = Boolean(lastResult?.allDone)
+      const softSkip =
+        lastResult?.duplicate ||
+        lastResult?.skipped ||
+        /backfill|job ativo|não encontrado|indisponível/i.test(
+          String(lastResult?.reason || ''),
+        )
+      if (allDone) {
+        await markDailyRun(courseId, todayKey, {
+          lastError: lastResult?.reason || null,
+        })
+      } else if (started) {
+        console.log(
+          `[mentoradoDaily] ${courseId}: job iniciado — não marca o dia até concluir (retry se falhar)`,
+        )
+      } else if (softSkip) {
+        console.log(
+          `[mentoradoDaily] ${courseId}: não marca o dia (${lastResult?.reason || 'skip'}) — retry no próximo tick`,
+        )
+        try {
+          await getDb()
+            .doc(`courses/${courseId}/config/guiaMentorado`)
+            .set(
+              {
+                automation: { lastError: lastResult?.reason || 'skip_sem_mark' },
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true },
+            )
+        } catch (_) {
+          /* ignore */
+        }
+      } else {
+        // Dia simulado/descanso / sem conteúdo permanente: marca para não martelar o tick
+        await markDailyRun(courseId, todayKey, {
+          lastError: lastResult?.reason || null,
+        })
+      }
     } catch (err) {
       console.error(`[mentoradoDaily] erro em ${courseId}:`, err)
       results.push({ courseId, error: err.message })
+      // Não marca o dia em erro inesperado — permite retry
       try {
-        await markDailyRun(courseId, todayKey, { lastError: err.message })
+        await getDb()
+          .doc(`courses/${courseId}/config/guiaMentorado`)
+          .set(
+            {
+              automation: { lastError: err.message },
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          )
       } catch (_) {
         /* ignore */
       }
@@ -425,4 +474,5 @@ module.exports = {
   loadCronogramaDay,
   loadGuiaMentoradoConfig,
   hasActiveMentoradoJobs,
+  markDailyRun,
 }

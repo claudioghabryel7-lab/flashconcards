@@ -24,7 +24,8 @@ function getSaoPauloClockParts(date = new Date()) {
     minute: 'numeric',
     hour12: false,
   }).formatToParts(date)
-  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0)
+  let hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0)
+  if (hour === 24) hour = 0
   const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? 0)
   return { hour, minute }
 }

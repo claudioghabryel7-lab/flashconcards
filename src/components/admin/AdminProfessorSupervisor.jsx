@@ -14,6 +14,7 @@ import { useAuth } from '../../hooks/useAuth'
 import {
   subscribeProfessorSupervisorConfig,
   setProfessorSupervisorEnabled,
+  updateProfessorSupervisorWindow,
   fetchSupervisorHistory,
   clearSupervisorHistory,
   clearSupervisorQueue,
@@ -23,6 +24,7 @@ import {
   SUPERVISOR_PHASE_LABELS,
   PROFESSOR_STEP_LABELS,
   getSaoPauloClockParts,
+  defaultWindowEndHour,
 } from '../../services/professorSupervisorService'
 import { subscribeGenerationJob } from '../../services/generationJobService'
 
@@ -73,21 +75,23 @@ export default function AdminProfessorSupervisor() {
     }
   })
   const [now, setNow] = useState(Date.now())
+  const [windowDirty, setWindowDirty] = useState(false)
 
   useEffect(() => {
     const unsub = subscribeProfessorSupervisorConfig((data) => {
       setConfig(data)
       setLoading(false)
+      if (windowDirty) return
       const sh = data.windowStartHour ?? data.dailyStartHour
       const sm = data.windowStartMinute ?? data.dailyStartMinute ?? 0
       const eh = data.windowEndHour
       const em = data.windowEndMinute ?? 0
       if (sh != null) setStartTime(padTime(sh, sm))
       if (eh != null) setEndTime(padTime(eh, em))
-      else if (sh != null) setEndTime(padTime(Math.min(23, Number(sh) + 8), 0))
+      else if (sh != null) setEndTime(padTime(defaultWindowEndHour(Number(sh)), 0))
     })
     return () => unsub?.()
-  }, [])
+  }, [windowDirty])
 
   const jobUserId = config.automationUserId || user?.uid
   const jobId = config.currentActivity?.jobId
@@ -101,10 +105,9 @@ export default function AdminProfessorSupervisor() {
   }, [jobUserId, jobId])
 
   useEffect(() => {
-    if (!config.enabled && !config.recurringDaily) return undefined
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
-  }, [config.enabled, config.recurringDaily])
+  }, [])
 
   useEffect(() => {
     fetchSupervisorHistory({ max: 15 })
@@ -131,6 +134,7 @@ export default function AdminProfessorSupervisor() {
           endHour: end.hour,
           endMinute: end.minute,
         })
+        setWindowDirty(false)
         if (result && result.within === false) {
           alert(
             `Agenda ativada (${result.windowLabel}).\n\nAgora está fora do horário — o Professor entra sozinho quando a janela abrir (tick a cada 1 min).`,
@@ -155,12 +159,13 @@ export default function AdminProfessorSupervisor() {
         alert('Horário de início e fim precisam ser diferentes.')
         return
       }
-      await setProfessorSupervisorEnabled(user.uid, true, {
+      await updateProfessorSupervisorWindow(user.uid, {
         startHour: start.hour,
         startMinute: start.minute,
         endHour: end.hour,
         endMinute: end.minute,
       })
+      setWindowDirty(false)
     } catch (err) {
       console.error(err)
       alert('Erro ao salvar horário.')
@@ -248,7 +253,7 @@ export default function AdminProfessorSupervisor() {
   const isSessionLive =
     config.enabled && config.sessionEndsAt?.toDate?.() && config.sessionEndsAt.toDate().getTime() > now
 
-  const clock = getSaoPauloClockParts()
+  const clock = useMemo(() => getSaoPauloClockParts(new Date(now)), [now])
   const scheduleInfo = useMemo(
     () => getProfessorNextWindowInfo(config, new Date(now)),
     [config, now],
@@ -336,7 +341,10 @@ export default function AdminProfessorSupervisor() {
               <input
                 type="time"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={(e) => {
+                  setWindowDirty(true)
+                  setStartTime(e.target.value)
+                }}
                 className="mt-1 block rounded-lg border border-cp-border bg-cp-bg px-3 py-2 text-sm text-cp-text"
               />
             </label>
@@ -345,7 +353,10 @@ export default function AdminProfessorSupervisor() {
               <input
                 type="time"
                 value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
+                onChange={(e) => {
+                  setWindowDirty(true)
+                  setEndTime(e.target.value)
+                }}
                 className="mt-1 block rounded-lg border border-cp-border bg-cp-bg px-3 py-2 text-sm text-cp-text"
               />
             </label>

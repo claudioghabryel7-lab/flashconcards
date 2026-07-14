@@ -90,8 +90,8 @@ export default function AdminGuiaMentorado() {
   const [nowTick, setNowTick] = useState(() => Date.now())
 
   const todayKey = useMemo(
-    () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
-    [],
+    () => new Date(nowTick).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
+    [nowTick],
   )
 
   useEffect(() => {
@@ -134,7 +134,10 @@ export default function AdminGuiaMentorado() {
   useEffect(() => {
     if (!courseId) return undefined
     setLoadingConfig(true)
-    const unsub = subscribeGuiaMentoradoConfig(courseId, (data) => {
+    let active = true
+    const subscribedId = courseId
+    const unsub = subscribeGuiaMentoradoConfig(subscribedId, (data) => {
+      if (!active || subscribedId !== courseId) return
       setConfig(data)
       setForm({
         enabled: data.enabled,
@@ -153,7 +156,10 @@ export default function AdminGuiaMentorado() {
       setReleaseTime(padTime(data.schedule.dailyReleaseHour, data.schedule.dailyReleaseMinute))
       setLoadingConfig(false)
     })
-    return () => unsub?.()
+    return () => {
+      active = false
+      unsub?.()
+    }
   }, [courseId])
 
   const courseName = useMemo(() => {
@@ -175,10 +181,10 @@ export default function AdminGuiaMentorado() {
     () =>
       getMentoradoNextRunInfo({
         enabled: cloudEnabled,
-        onDailyCron: config?.triggers?.onDailyCron !== false && form.onDailyCron,
-        automationUserId: config?.automationUserId || user?.uid,
-        dailyReleaseHour: form.dailyReleaseHour,
-        dailyReleaseMinute: form.dailyReleaseMinute,
+        onDailyCron: config?.triggers?.onDailyCron !== false,
+        automationUserId: config?.automationUserId || null,
+        dailyReleaseHour: config?.schedule?.dailyReleaseHour ?? form.dailyReleaseHour,
+        dailyReleaseMinute: config?.schedule?.dailyReleaseMinute ?? form.dailyReleaseMinute,
         lastDailyRunDayKey: config?.lastDailyRunDayKey,
         now: new Date(nowTick),
       }),
@@ -187,10 +193,10 @@ export default function AdminGuiaMentorado() {
       config?.triggers?.onDailyCron,
       config?.automationUserId,
       config?.lastDailyRunDayKey,
-      form.onDailyCron,
+      config?.schedule?.dailyReleaseHour,
+      config?.schedule?.dailyReleaseMinute,
       form.dailyReleaseHour,
       form.dailyReleaseMinute,
-      user?.uid,
       nowTick,
     ],
   )

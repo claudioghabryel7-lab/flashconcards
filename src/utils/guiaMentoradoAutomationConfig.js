@@ -16,7 +16,11 @@ export function normalizeMentoradoAutomationConfig(raw = {}) {
   const vesperaIn = nested.vespera && typeof nested.vespera === 'object' ? nested.vespera : {}
 
   const enabled = Boolean(
-    nested.enabled !== undefined ? nested.enabled : raw.autoGerarConteudo,
+    nested.enabled !== undefined
+      ? nested.enabled
+      : raw.enabled !== undefined
+        ? raw.enabled
+        : raw.autoGerarConteudo,
   )
   const automationUserId = nested.automationUserId || raw.automationUserId || null
 
@@ -68,10 +72,15 @@ export function formatDailyReleaseLabel(automation) {
 /**
  * Payload de merge para Firestore (automation + espelhos legados + planejamento).
  */
-export function buildMentoradoConfigWrite(form, { userId, existing } = {}) {
+export function buildMentoradoConfigWrite(
+  form,
+  { userId, existing, preserveAutomationUserId = false } = {},
+) {
   const current = normalizeMentoradoAutomationConfig(existing || {})
   const enabled = form.enabled !== undefined ? Boolean(form.enabled) : current.enabled
-  const automationUserId = userId || form.automationUserId || current.automationUserId || null
+  const automationUserId = preserveAutomationUserId
+    ? current.automationUserId || userId || form.automationUserId || null
+    : userId || form.automationUserId || current.automationUserId || null
 
   const schedule = {
     dailyReleaseHour: clampInt(

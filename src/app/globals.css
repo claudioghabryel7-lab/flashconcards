@@ -140,6 +140,28 @@ body {
 .cp-card-accent-pink { border-top: 2px solid var(--cp-accent-3); }
 .cp-card-accent-amber { border-top: 2px solid var(--cp-accent-4); }
 
+/* Cards tech (dashboard + hubs) — grade sutil + superfície elevada */
+.cp-tech-card {
+  position: relative;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--cp-bg-elevated) 92%, transparent), var(--cp-bg-elevated)),
+    var(--cp-bg-elevated);
+  border: 1px solid var(--cp-border);
+  border-radius: 16px;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.cp-tech-card:hover {
+  border-color: var(--cp-border-hover);
+}
+
+.cp-tech-panel {
+  background: var(--cp-bg-elevated);
+  border: 1px solid var(--cp-border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
 .cp-btn-primary {
   @apply inline-flex items-center justify-center gap-2 rounded-full px-7 py-3 text-sm font-medium transition-all duration-300;
   font-family: var(--font-sans);

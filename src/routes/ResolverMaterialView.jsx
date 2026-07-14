@@ -4,10 +4,11 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   MagnifyingGlassIcon,
-  BookOpenIcon,
+  FolderOpenIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
 import { useResolverMaterial } from '../hooks/useResolverMaterial'
+import TechHubHeader from '../components/cp/TechHubHeader'
 
 const ResolverMaterialView = () => {
   const { user, profile } = useAuth()
@@ -61,21 +62,30 @@ const ResolverMaterialView = () => {
   }
 
   return (
-    <div className="space-y-6 pb-10">
-      <section className="cp-card p-4 sm:p-6">
-        <div className="mb-2 flex items-center gap-2">
-          <BookOpenIcon className="h-6 w-6 text-cp-accent" />
-          <span className="cp-badge cp-badge-accent">Material de apoio</span>
-        </div>
-        <h2 className="cp-headline text-xl sm:text-2xl">Estudar material</h2>
-        <p className="mt-1 text-sm text-cp-muted">
-          {totalMateriais} material(is) liberado(s) no seu curso
-        </p>
-      </section>
+    <div className="relative space-y-6 pb-10">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 opacity-50"
+        style={{
+          backgroundImage:
+            'linear-gradient(var(--cp-grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--cp-grid-line) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+          maskImage: 'radial-gradient(ellipse 90% 60% at 50% 0%, black 20%, transparent 75%)',
+        }}
+      />
+
+      <TechHubHeader
+        badge="Material de apoio"
+        code="03"
+        title="Estudar material"
+        description={`${totalMateriais} material(is) liberado(s) no seu curso`}
+        icon={FolderOpenIcon}
+        tone="violet"
+      />
 
       {totalMateriais === 0 && (
-        <div className="cp-card p-8 text-center">
-          <p className="font-medium text-cp-text">Nenhum material liberado ainda</p>
+        <div className="cp-tech-card p-8 text-center">
+          <p className="font-display font-semibold text-cp-text">Nenhum material liberado ainda</p>
           <p className="mt-2 text-sm text-cp-muted">
             O administrador precisa gerar e liberar os tópicos no Edital Verticalizado.
           </p>
@@ -87,10 +97,12 @@ const ResolverMaterialView = () => {
 
       {totalMateriais > 0 && (
         <div className="mx-auto w-full max-w-2xl">
-          <div className="cp-study-sidebar noji-deck-panel cp-card flex flex-col overflow-hidden max-h-[calc(100vh-10rem)]">
+          <div className="cp-study-sidebar noji-deck-panel cp-tech-panel flex max-h-[calc(100vh-10rem)] flex-col overflow-hidden">
             <div className="border-b border-cp-border p-4">
-              <p className="text-sm font-semibold text-cp-text">Materiais por matéria</p>
-              <p className="mb-3 text-[11px] text-cp-muted">Escolha um tópico para estudar</p>
+              <p className="font-display text-sm font-semibold tracking-tight text-cp-text">
+                Materiais por matéria
+              </p>
+              <p className="mb-3 font-mono text-[11px] text-cp-muted">Escolha um tópico para estudar</p>
               <div className="relative">
                 <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cp-muted" />
                 <input

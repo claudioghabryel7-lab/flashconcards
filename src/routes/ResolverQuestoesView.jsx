@@ -6,6 +6,7 @@ import {
   MagnifyingGlassIcon,
   ChartBarIcon,
   ChartPieIcon,
+  CommandLineIcon,
   ListBulletIcon,
   CheckCircleIcon,
   XCircleIcon,
@@ -25,6 +26,7 @@ import {
 } from '../components/QuestoesPraticaCP'
 import QuestaoFloatingComments from '../components/QuestaoFloatingComments'
 import { buildQuestaoContentId } from '../utils/contentCommentIds'
+import TechHubHeader from '../components/cp/TechHubHeader'
 
 const CHART_TYPES = [
   { id: 'pie', label: 'Pizza', icon: ChartPieIcon },
@@ -458,32 +460,54 @@ const ResolverQuestoesView = () => {
   }
 
   return (
-    <div className="space-y-6 pb-10">
-      <section className="cp-card p-4 sm:p-6">
+    <div className="relative space-y-6 pb-10">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 opacity-50"
+        style={{
+          backgroundImage:
+            'linear-gradient(var(--cp-grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--cp-grid-line) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+          maskImage: 'radial-gradient(ellipse 90% 60% at 50% 0%, black 20%, transparent 75%)',
+        }}
+      />
+
+      <TechHubHeader
+        badge="Desempenho"
+        code="02"
+        title="Resolução de questões"
+        description={`${totalQuestoes} questões disponíveis · ${totalAnswered} resolvidas no total`}
+        icon={CommandLineIcon}
+        tone="cyan"
+      >
+        <div className="mt-4 flex flex-wrap rounded-xl border border-cp-border bg-cp-surface p-1">
+          {CHART_TYPES.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setChartType(id)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 font-mono text-xs font-medium transition-colors ${
+                chartType === id
+                  ? 'bg-cp-accent text-white shadow-cp-glow'
+                  : 'text-cp-muted hover:bg-cp-surface hover:text-cp-text'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </TechHubHeader>
+
+      <section className="cp-tech-card p-4 sm:p-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <span className="cp-badge cp-badge-accent">Desempenho</span>
-            <h2 className="cp-headline mt-3 text-xl sm:text-2xl">Resolução de questões</h2>
-            <p className="mt-1 text-sm text-cp-muted">
-              {totalQuestoes} questões disponíveis · {totalAnswered} resolvidas no total
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-cp-muted">
+              Painel de métricas
+            </span>
+            <p className="mt-1 font-display text-sm font-semibold text-cp-text">
+              Acurácia geral · {accuracy}%
             </p>
-          </div>
-          <div className="flex rounded-lg border border-cp-border bg-cp-surface p-1">
-            {CHART_TYPES.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setChartType(id)}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  chartType === id
-                    ? 'bg-cp-accent text-white shadow-cp-glow'
-                    : 'text-cp-muted hover:bg-cp-surface hover:text-cp-text'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </button>
-            ))}
           </div>
         </div>
 
@@ -525,8 +549,8 @@ const ResolverQuestoesView = () => {
       </section>
 
       {totalQuestoes === 0 && (
-        <div className="cp-card p-8 text-center">
-          <p className="font-medium text-cp-text">Nenhuma questão liberada ainda</p>
+        <div className="cp-tech-card p-8 text-center">
+          <p className="font-display font-semibold text-cp-text">Nenhuma questão liberada ainda</p>
           <p className="mt-2 text-sm text-cp-muted">
             O administrador precisa gerar e liberar questões no Edital Verticalizado.
           </p>

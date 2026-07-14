@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FireIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { BoltIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
 import { useResolverIncidencia } from '../hooks/useResolverIncidencia'
+import TechHubHeader from '../components/cp/TechHubHeader'
 
 const ResolverIncidenciaView = () => {
   const { user, profile } = useAuth()
@@ -26,28 +27,37 @@ const ResolverIncidenciaView = () => {
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
           <div className="inline-block h-10 w-10 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
-          <p className="mt-4 text-sm text-cp-muted">Carregando incidências…</p>
+          <p className="mt-4 font-mono text-sm text-cp-muted">Carregando incidências…</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6 pb-10">
-      <section className="cp-card p-4 sm:p-6">
-        <div className="mb-2 flex items-center gap-2">
-          <FireIcon className="h-6 w-6 text-red-400" />
-          <span className="cp-badge cp-badge-accent">Incidência</span>
-        </div>
-        <h2 className="cp-headline text-xl sm:text-2xl">Estudar por incidência</h2>
-        <p className="mt-1 text-sm text-cp-muted">
-          {totalMaterias} matéria(s) com revisão e prática por incidência
-        </p>
-      </section>
+    <div className="relative space-y-6 pb-10">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 opacity-50"
+        style={{
+          backgroundImage:
+            'linear-gradient(var(--cp-grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--cp-grid-line) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+          maskImage: 'radial-gradient(ellipse 90% 60% at 50% 0%, black 20%, transparent 75%)',
+        }}
+      />
+
+      <TechHubHeader
+        badge="Incidência"
+        code="04"
+        title="Estudar por incidência"
+        description={`${totalMaterias} matéria(s) com revisão e prática por incidência`}
+        icon={BoltIcon}
+        tone="red"
+      />
 
       {totalMaterias === 0 && (
-        <div className="cp-card p-8 text-center">
-          <p className="font-medium text-cp-text">Nenhuma incidência liberada ainda</p>
+        <div className="cp-tech-card p-8 text-center">
+          <p className="font-display font-semibold text-cp-text">Nenhuma incidência liberada ainda</p>
           <p className="mt-2 text-sm text-cp-muted">
             {hasEdital
               ? 'O administrador precisa gerar e liberar a incidência das matérias no Edital Verticalizado.'
@@ -61,10 +71,12 @@ const ResolverIncidenciaView = () => {
 
       {totalMaterias > 0 && (
         <div className="mx-auto w-full max-w-2xl">
-          <div className="cp-card overflow-hidden">
+          <div className="cp-tech-panel">
             <div className="border-b border-cp-border p-4">
-              <p className="text-sm font-semibold text-cp-text">Matérias por incidência</p>
-              <p className="mb-3 text-[11px] text-cp-muted">
+              <p className="font-display text-sm font-semibold tracking-tight text-cp-text">
+                Matérias por incidência
+              </p>
+              <p className="mb-3 font-mono text-[11px] text-cp-muted">
                 Escolha uma matéria para estudar conteúdo e prática
               </p>
               <div className="relative">
@@ -74,7 +86,7 @@ const ResolverIncidenciaView = () => {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar matéria..."
-                  className="w-full rounded-xl border border-cp-border bg-cp-bg/60 py-2.5 pl-9 pr-3 text-sm text-cp-text placeholder:text-cp-muted focus:border-cp-accent/50 focus:outline-none focus:ring-2 focus:ring-cp-accent/20"
+                  className="w-full rounded-xl border border-cp-border bg-cp-bg/60 py-2.5 pl-9 pr-3 font-mono text-sm text-cp-text placeholder:text-cp-muted focus:border-cp-accent/50 focus:outline-none focus:ring-2 focus:ring-cp-accent/20"
                 />
               </div>
             </div>
@@ -103,7 +115,7 @@ const ResolverIncidenciaView = () => {
                       </span>
                     </span>
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-red-500/25 bg-red-500/10 px-2.5 py-1.5 font-mono text-[10px] text-red-400">
-                      <FireIcon className="h-3.5 w-3.5" />
+                      <BoltIcon className="h-3.5 w-3.5" />
                       Estudar
                     </span>
                   </Link>

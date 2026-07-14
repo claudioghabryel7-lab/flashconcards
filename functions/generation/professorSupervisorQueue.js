@@ -477,24 +477,7 @@ async function buildQueueItems() {
 
   // Cancela itens legados que não são moderação
   try {
-    const staleSnap = await db
-      .collection('professorSupervisorQueue')
-      .where('status', 'in', ['pending', 'error'])
-      .limit(100)
-      .get()
-    for (const staleDoc of staleSnap.docs) {
-      const type = staleDoc.data()?.itemType
-      if (type && type !== 'flag') {
-        await staleDoc.ref.set(
-          {
-            status: 'cancelled',
-            cancelReason: 'professor_moderation_only',
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        )
-      }
-    }
+    await cancelLegacyNonFlagQueueItems()
   } catch (err) {
     console.warn('[buildQueueItems] limpeza legado:', err?.message || err)
   }
@@ -502,10 +485,36 @@ async function buildQueueItems() {
   const pendingSnap = await db
     .collection('professorSupervisorQueue')
     .where('status', '==', 'pending')
+    .where('itemType', '==', 'flag')
     .get()
 
   await patchSupervisorConfig({ queueSize: pendingSnap.size })
   return { added, queueSize: pendingSnap.size }
+}
+
+async function cancelLegacyNonFlagQueueItems() {
+  const db = getDb()
+  const staleSnap = await db
+    .collection('professorSupervisorQueue')
+    .where('status', 'in', ['pending', 'error'])
+    .limit(100)
+    .get()
+  let cancelled = 0
+  for (const staleDoc of staleSnap.docs) {
+    const type = staleDoc.data()?.itemType
+    if (type && type !== 'flag') {
+      await staleDoc.ref.set(
+        {
+          status: 'cancelled',
+          cancelReason: 'professor_moderation_only',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      )
+      cancelled += 1
+    }
+  }
+  return cancelled
 }
 
 async function popNextQueueItem() {
@@ -553,6 +562,7 @@ async function finishQueueItem(itemId, status = 'done') {
   const pendingSnap = await getDb()
     .collection('professorSupervisorQueue')
     .where('status', '==', 'pending')
+    .where('itemType', '==', 'flag')
     .get()
   await patchSupervisorConfig({ queueSize: pendingSnap.size })
 }
@@ -683,9 +693,17 @@ async function tickProfessorSupervisor({ force = false } = {}) {
     }
   }
 
+  // Limpa legado sempre — pending não-flag bloqueava rebuild e gerava pop_failed
+  try {
+    await cancelLegacyNonFlagQueueItems()
+  } catch (err) {
+    console.warn('[tickProfessorSupervisor] limpeza legado:', err?.message || err)
+  }
+
   let pendingSnap = await getDb()
     .collection('professorSupervisorQueue')
     .where('status', '==', 'pending')
+    .where('itemType', '==', 'flag')
     .limit(1)
     .get()
 
@@ -696,6 +714,7 @@ async function tickProfessorSupervisor({ force = false } = {}) {
       pendingSnap = await getDb()
         .collection('professorSupervisorQueue')
         .where('status', '==', 'pending')
+        .where('itemType', '==', 'flag')
         .limit(1)
         .get()
     }
@@ -710,6 +729,7 @@ async function tickProfessorSupervisor({ force = false } = {}) {
     pendingSnap = await getDb()
       .collection('professorSupervisorQueue')
       .where('status', '==', 'pending')
+      .where('itemType', '==', 'flag')
       .limit(1)
       .get()
   }
@@ -722,7 +742,7 @@ async function tickProfessorSupervisor({ force = false } = {}) {
         phase: 'idle',
         message: 'Nenhuma sinalização na Moderação — aguardando novos reports…',
       })
-      await scheduleNextRun(INTERVAL_MINUTES)
+      await scheduleNextRun(1)
       return { skipped: true, reason: 'empty_queue_waiting_flags' }
     }
 
@@ -737,12 +757,15 @@ async function tickProfessorSupervisor({ force = false } = {}) {
       phase: 'idle',
       message: 'Fila vazia — nada a fiscalizar agora.',
     })
-    await scheduleNextRun(INTERVAL_MINUTES)
+    await scheduleNextRun(1)
     return { skipped: true, reason: 'empty_queue' }
   }
 
   const item = await popNextQueueItem()
-  if (!item) return { skipped: true, reason: 'pop_failed' }
+  if (!item) {
+    await cancelLegacyNonFlagQueueItems().catch(() => {})
+    return { skipped: true, reason: 'pop_failed' }
+  }
 
   const label = itemLabel(item)
   const jobId = await spawnSupervisorJob(data.automationUserId, item.courseId, item)

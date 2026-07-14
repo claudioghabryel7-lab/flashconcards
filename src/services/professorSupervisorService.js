@@ -25,8 +25,10 @@ export function getSaoPauloClockParts(date = new Date()) {
     minute: 'numeric',
     hour12: false,
   }).formatToParts(date)
+  let hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0)
+  if (hour === 24) hour = 0
   return {
-    hour: Number(parts.find((p) => p.type === 'hour')?.value ?? 0),
+    hour,
     minute: Number(parts.find((p) => p.type === 'minute')?.value ?? 0),
   }
 }
@@ -39,9 +41,20 @@ export function formatDailyStartLabel(hour = 0, minute = 0) {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
 
+/** Default alinhado ao servidor: start + 8h (SESSION_HOURS), pode atravessar meia-noite. */
+const PROFESSOR_SESSION_HOURS = 8
+
+export function defaultWindowEndHour(startHour) {
+  return (Number(startHour || 0) + PROFESSOR_SESSION_HOURS) % 24
+}
+
 export function formatScheduleWindowLabel(cfg = {}) {
-  const start = formatDailyStartLabel(cfg.windowStartHour ?? cfg.dailyStartHour ?? 0, cfg.windowStartMinute ?? cfg.dailyStartMinute ?? 0)
-  const end = formatDailyStartLabel(cfg.windowEndHour ?? 18, cfg.windowEndMinute ?? 0)
+  const startH = cfg.windowStartHour ?? cfg.dailyStartHour ?? 0
+  const startM = cfg.windowStartMinute ?? cfg.dailyStartMinute ?? 0
+  const endH = cfg.windowEndHour ?? defaultWindowEndHour(startH)
+  const endM = cfg.windowEndMinute ?? 0
+  const start = formatDailyStartLabel(startH, startM)
+  const end = formatDailyStartLabel(endH, endM)
   return `${start}–${end}`
 }
 
@@ -53,7 +66,7 @@ function toMinutes(hour, minute) {
 export function isWithinProfessorWindow(cfg = {}, date = new Date()) {
   const startH = cfg.windowStartHour ?? cfg.dailyStartHour ?? 0
   const startM = cfg.windowStartMinute ?? cfg.dailyStartMinute ?? 0
-  const endH = cfg.windowEndHour ?? 18
+  const endH = cfg.windowEndHour ?? defaultWindowEndHour(startH)
   const endM = cfg.windowEndMinute ?? 0
   const now = getSaoPauloClockParts(date)
   const nowMin = toMinutes(now.hour, now.minute)
@@ -71,7 +84,7 @@ export function isWithinProfessorWindow(cfg = {}, date = new Date()) {
 export function getProfessorNextWindowInfo(cfg = {}, date = new Date()) {
   const startH = Number(cfg.windowStartHour ?? cfg.dailyStartHour ?? 0)
   const startM = Number(cfg.windowStartMinute ?? cfg.dailyStartMinute ?? 0)
-  const endH = Number(cfg.windowEndHour ?? 18)
+  const endH = Number(cfg.windowEndHour ?? defaultWindowEndHour(startH))
   const endM = Number(cfg.windowEndMinute ?? 0)
   const within = isWithinProfessorWindow(cfg, date)
   const label = formatScheduleWindowLabel(cfg)
@@ -158,7 +171,7 @@ export function computeSessionEndsAtFromWindow(cfg = {}, date = new Date()) {
 
   const startH = cfg.windowStartHour ?? cfg.dailyStartHour ?? 0
   const startM = cfg.windowStartMinute ?? cfg.dailyStartMinute ?? 0
-  const endH = cfg.windowEndHour ?? ((startH + 8) % 24)
+  const endH = cfg.windowEndHour ?? defaultWindowEndHour(startH)
   const endM = cfg.windowEndMinute ?? 0
   const now = getSaoPauloClockParts(date)
   const nowMin = toMinutes(now.hour, now.minute)
@@ -200,7 +213,7 @@ export async function setProfessorSupervisorEnabled(userId, enabled, schedule = 
     const clock = getSaoPauloClockParts()
     const startHour = schedule.startHour ?? clock.hour
     const startMinute = schedule.startMinute ?? 0
-    const endHour = schedule.endHour ?? Math.min(23, startHour + 8)
+    const endHour = schedule.endHour ?? defaultWindowEndHour(startHour)
     const endMinute = schedule.endMinute ?? 0
     const todayKey = getTodayKeyInSaoPaulo()
     const windowCfg = {
@@ -272,7 +285,7 @@ export async function setProfessorSupervisorEnabled(userId, enabled, schedule = 
     {
       enabled: false,
       recurringDaily: false,
-      automationUserId: null,
+      // Mantém automationUserId — fallback do cron Mentorado depende dele
       phase: 'idle',
       currentActivity: {
         phase: 'idle',
@@ -284,6 +297,74 @@ export async function setProfessorSupervisorEnabled(userId, enabled, schedule = 
     },
     { merge: true },
   )
+}
+
+/**
+ * Atualiza só a janela De/Até sem reiniciar sessão nem zerar contadores.
+ * Força nextRunAt para o tick reagir na hora.
+ */
+export async function updateProfessorSupervisorWindow(userId, schedule = {}) {
+  if (!db || !userId) throw new Error('Não autenticado.')
+  const ref = doc(db, ...CONFIG_PATH)
+  const snap = await getDoc(ref)
+  const current = snap.exists() ? snap.data() : {}
+
+  const startHour = schedule.startHour ?? current.windowStartHour ?? 9
+  const startMinute = schedule.startMinute ?? current.windowStartMinute ?? 0
+  const endHour = schedule.endHour ?? current.windowEndHour ?? defaultWindowEndHour(startHour)
+  const endMinute = schedule.endMinute ?? current.windowEndMinute ?? 0
+
+  if (startHour === endHour && startMinute === endMinute) {
+    throw new Error('Horário de início e fim precisam ser diferentes.')
+  }
+
+  const windowCfg = {
+    windowStartHour: startHour,
+    windowStartMinute: startMinute,
+    windowEndHour: endHour,
+    windowEndMinute: endMinute,
+    dailyStartHour: startHour,
+    dailyStartMinute: startMinute,
+  }
+  const windowLabel = formatScheduleWindowLabel(windowCfg)
+  const within = isWithinProfessorWindow(windowCfg)
+  const patch = {
+    ...windowCfg,
+    automationUserId: current.automationUserId || userId,
+    recurringDaily: true,
+    nextRunAt: serverTimestamp(),
+    windowUpdatedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    lastMessage: `Janela atualizada: ${windowLabel}`,
+  }
+
+  if (within) {
+    patch.sessionEndsAt = computeSessionEndsAtFromWindow(windowCfg)
+    if (!current.enabled) {
+      patch.enabled = true
+      patch.phase = 'starting'
+      patch.lastAutoStartDate = getTodayKeyInSaoPaulo()
+      patch.sessionStartedAt = serverTimestamp()
+      patch.itemsProcessedSession = current.itemsProcessedSession || 0
+      patch.currentActivity = {
+        phase: 'starting',
+        message: `Agenda ${windowLabel} — retomando na nova janela…`,
+        updatedAt: serverTimestamp(),
+      }
+    }
+  } else {
+    patch.enabled = false
+    patch.phase = 'waiting_daily'
+    patch.sessionEndsAt = null
+    patch.currentActivity = {
+      phase: 'waiting_daily',
+      message: `Agenda ${windowLabel} (seg–dom) — fora do horário agora. Volta às ${formatDailyStartLabel(startHour, startMinute)}.`,
+      updatedAt: serverTimestamp(),
+    }
+  }
+
+  await setDoc(ref, patch, { merge: true })
+  return { windowLabel, within }
 }
 
 export function subscribePendingSupervisorReviews(onData, { max = 40 } = {}) {
@@ -431,11 +512,6 @@ export async function clearSupervisorQueue() {
     doc(db, ...CONFIG_PATH),
     {
       queueSize: 0,
-      currentActivity: {
-        phase: 'idle',
-        message: 'Fila limpa pelo admin — aguardando novas sinalizações da Moderação',
-        updatedAt: serverTimestamp(),
-      },
       lastMessage: `Fila limpa (${deleted} item(ns) removido(s))`,
       updatedAt: serverTimestamp(),
     },

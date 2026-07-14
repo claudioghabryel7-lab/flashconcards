@@ -559,6 +559,41 @@ async function processGenerationJob(userId, jobId, jobData) {
     throw new Error('courseId ausente no job.')
   }
 
+  const ADMIN_ONLY_JOBS = new Set([
+    'guia_mentorado_automation',
+    'guia_mentorado_cronograma',
+    'guia_mentorado_backfill',
+    'professor_supervisor',
+    'admin_edital_verticalizado',
+  ])
+  if (ADMIN_ONLY_JOBS.has(jobType)) {
+    const userSnap = await db.doc(`users/${userId}`).get()
+    const role = userSnap.exists ? userSnap.data()?.role : null
+    if (role !== 'admin') {
+      throw new Error('Apenas administradores podem executar este tipo de job.')
+    }
+  }
+
+  if (jobType === 'guia_mentorado_automation') {
+    const triggeredBy =
+      jobData.metadata?.triggeredBy || serverPayload?.triggeredBy || serverPayload?.metadata?.triggeredBy
+    if (triggeredBy !== 'daily_cron' && triggeredBy !== 'cronograma') {
+      const { loadGuiaMentoradoConfig } = require('./guiaMentoradoDaily')
+      const { automation } = await loadGuiaMentoradoConfig(courseId)
+      if (!automation.triggers.allowManualDay) {
+        throw new Error('Geração manual desabilitada nas configurações do Guia Mentorado.')
+      }
+    }
+  }
+
+  if (jobType === 'guia_mentorado_backfill') {
+    const { loadGuiaMentoradoConfig } = require('./guiaMentoradoDaily')
+    const { automation } = await loadGuiaMentoradoConfig(courseId)
+    if (!automation.triggers.allowBackfill) {
+      throw new Error('Backfill desabilitado nas configurações do Guia Mentorado.')
+    }
+  }
+
   let stopKeepAlive = () => {}
   try {
     if (jobData.status !== 'pending') {
@@ -620,6 +655,16 @@ async function processGenerationJob(userId, jobId, jobData) {
           return outcome
         }
         await clearResumeQueue(jobId)
+        // Marca o dia só após sucesso — permite retry no cron se o job falhar antes
+        try {
+          const targetDate = serverPayload?.targetDate
+          if (targetDate) {
+            const { markDailyRun } = require('./guiaMentoradoDaily')
+            await markDailyRun(courseId, targetDate, { lastError: null })
+          }
+        } catch (markErr) {
+          console.warn('[jobProcessor] markDailyRun:', markErr?.message || markErr)
+        }
         await updateJob(userId, jobId, {
           status: 'done',
           progress: 100,

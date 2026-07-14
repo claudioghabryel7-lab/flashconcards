@@ -59,9 +59,10 @@ function resolveCronSlot(releaseHour, releaseMinute) {
     minute = 0
     hour += 1
   }
+  // Alinhado ao servidor: último slot do dia é 23:45 (não vira 00:00 do dia seguinte).
   if (hour >= 24) {
-    hour = 0
-    return { hour, minute, extraDay: 1 }
+    hour = 23
+    minute = 45
   }
   return { hour, minute, extraDay: 0 }
 }
@@ -159,17 +160,17 @@ export function getMentoradoNextRunInfo({
     }
   }
 
+  const slot = resolveCronSlot(dailyReleaseHour, dailyReleaseMinute)
   const inWindow =
-    sp.hour === Number(dailyReleaseHour) &&
-    sp.minute >= Number(dailyReleaseMinute || 0)
+    sp.hour * 60 + sp.minute >= slot.hour * 60 + slot.minute
 
-  if (inWindow) {
+  if (inWindow && !alreadyToday) {
     return {
       status: 'due',
-      label: `Janela ativa (${timeLabel}) — o cron pode disparar a qualquer tick (até ${CRON_STEP_MINUTES} min)`,
-      countdown: formatCountdown(remainingMs),
-      nextAtLabel,
-      remainingMs,
+      label: `Janela ativa (a partir de ${timeLabel}) — o cron pode disparar a qualquer tick (até ${CRON_STEP_MINUTES} min)`,
+      countdown: null,
+      nextAtLabel: timeLabel,
+      remainingMs: 0,
       ready: true,
       blockers: [],
     }

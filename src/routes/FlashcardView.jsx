@@ -1092,6 +1092,7 @@ IMPORTANTE:
     <div className="space-y-6">
       <CPPageHeader
         badge="Noji · SRS"
+        code="01"
         title="Flashcards"
         subtitle={
           isStudying

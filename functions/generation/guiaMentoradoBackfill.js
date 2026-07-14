@@ -96,7 +96,7 @@ async function processGuiaMentoradoBackfill(userId, jobId, courseId, serverPaylo
       },
     })
 
-    const prepared = await prepareDayAutomation(courseId, dayKey)
+    const prepared = await prepareDayAutomation(courseId, dayKey, { intent: 'backfill' })
     if (!prepared.ok) {
       continue
     }

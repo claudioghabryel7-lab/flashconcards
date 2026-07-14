@@ -2193,7 +2193,15 @@ exports.onProfessorFiscalizadorConfigUpdated = functions.firestore
   .onUpdate(async (change) => {
     const before = change.before.data() || {}
     const after = change.after.data() || {}
-    if (!after.enabled || before.enabled === after.enabled) return null
+    const enabledTurnedOn = Boolean(after.enabled) && before.enabled !== after.enabled
+    const windowChanged =
+      before.windowStartHour !== after.windowStartHour ||
+      before.windowStartMinute !== after.windowStartMinute ||
+      before.windowEndHour !== after.windowEndHour ||
+      before.windowEndMinute !== after.windowEndMinute ||
+      Boolean(after.windowUpdatedAt && before.windowUpdatedAt !== after.windowUpdatedAt)
+    if (!enabledTurnedOn && !windowChanged) return null
+    if (!after.recurringDaily && !after.enabled) return null
     try {
       const { tickProfessorSupervisor } = getSupervisorQueueModule()
       const result = await tickProfessorSupervisor({ force: true })

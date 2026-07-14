@@ -222,6 +222,12 @@ async function saveCronogramaMonths(courseId, cronogramaEntries, config) {
   })
 
   for (const monthKey of monthsToSave) {
+    const existingSnap = await db.doc(`courses/${courseId}/cronograma/${monthKey}`).get()
+    const existingDays =
+      existingSnap.exists && existingSnap.data()?.days && typeof existingSnap.data().days === 'object'
+        ? existingSnap.data().days
+        : {}
+
     const cronogramaData = {
       month: monthKey,
       generatedAt: ts,
@@ -232,14 +238,19 @@ async function saveCronogramaMonths(courseId, cronogramaEntries, config) {
 
     cronogramaEntries.forEach((dia) => {
       if (!dia.data || monthKeyFromDateKey(dia.data) !== monthKey) return
+      const prev = existingDays[dia.data] || {}
       cronogramaData.days[dia.data] = {
         type: dia.tipo,
         fase: dia.fase,
         materias: dia.materias || [],
         tafExercicio: dia.taf_exercicio || '',
         descricao: dia.descricao || '',
-        completed: false,
-        contentGenerated: false,
+        // Preserva progresso se o dia já existia
+        completed: Boolean(prev.completed),
+        contentGenerated: Boolean(prev.contentGenerated),
+        contentGeneratedAt: prev.contentGeneratedAt || null,
+        topicsCount: prev.topicsCount ?? null,
+        publishedCount: prev.publishedCount ?? null,
       }
     })
 
@@ -252,9 +263,6 @@ async function saveCronogramaMonths(courseId, cronogramaEntries, config) {
 async function processGuiaMentoradoCronograma(userId, jobId, courseId, serverPayload, updateJob) {
   const { normalizeMentoradoAutomationConfig } = require('./guiaMentoradoConfig')
   const config = serverPayload?.config || {}
-  const automation = normalizeMentoradoAutomationConfig(config)
-  const autoGerarConteudo =
-    automation.enabled && automation.triggers.onCronogramaGenerated
 
   await updateJob(userId, jobId, { progress: 5, message: 'Carregando edital verticalizado…' })
 
@@ -339,11 +347,29 @@ async function processGuiaMentoradoCronograma(userId, jobId, courseId, serverPay
   const { buildMentoradoAutomationWrite } = require('./guiaMentoradoConfig')
   const existingSnap = await db.doc(`courses/${courseId}/config/guiaMentorado`).get()
   const existingRaw = existingSnap.exists ? existingSnap.data() : {}
+  // Merge profundo de automation — evita apagar lastDailyRun* com o snapshot do job
+  const mergedForNormalize = {
+    ...existingRaw,
+    ...config,
+    automation: {
+      ...(existingRaw.automation && typeof existingRaw.automation === 'object'
+        ? existingRaw.automation
+        : {}),
+      ...(config.automation && typeof config.automation === 'object' ? config.automation : {}),
+    },
+    autoGerarConteudo:
+      config.autoGerarConteudo !== undefined
+        ? config.autoGerarConteudo
+        : existingRaw.autoGerarConteudo,
+  }
+  const automationFresh = normalizeMentoradoAutomationConfig(mergedForNormalize)
+  const shouldAutoGenerate =
+    automationFresh.enabled && automationFresh.triggers.onCronogramaGenerated
   const writePayload = buildMentoradoAutomationWrite(
     {
-      _current: { ...existingRaw, ...config },
-      enabled: automation.enabled,
-      automationUserId: userId,
+      _current: mergedForNormalize,
+      enabled: automationFresh.enabled,
+      automationUserId: userId || automationFresh.automationUserId,
       dataProva: config.dataProva !== undefined ? config.dataProva : existingRaw.dataProva,
       hasTAF: config.hasTAF !== undefined ? config.hasTAF : existingRaw.hasTAF,
       tafExercicios:
@@ -358,7 +384,7 @@ async function processGuiaMentoradoCronograma(userId, jobId, courseId, serverPay
   await db.doc(`courses/${courseId}/config/guiaMentorado`).set(writePayload, { merge: true })
 
   let dayAutomation = null
-  if (autoGerarConteudo) {
+  if (shouldAutoGenerate) {
     await updateJob(userId, jobId, {
       progress: 88,
       message: `Cronograma salvo. Iniciando geração do dia ${todayKey}…`,
@@ -380,7 +406,7 @@ async function processGuiaMentoradoCronograma(userId, jobId, courseId, serverPay
     expectedDays: normalized.expectedDays,
     filledDays: normalized.filledDays,
     dayAutomation,
-    autoGerarConteudo,
+    autoGerarConteudo: shouldAutoGenerate,
   }
 }
 

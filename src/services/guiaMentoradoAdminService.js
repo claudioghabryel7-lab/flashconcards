@@ -53,11 +53,11 @@ export async function listActiveCoursesForAdmin() {
 /**
  * Salva planejamento + automação unificada (espelha campos legados).
  */
-export async function saveGuiaMentoradoAdminConfig(courseId, form, { userId, existing } = {}) {
+export async function saveGuiaMentoradoAdminConfig(courseId, form, { userId, existing, preserveAutomationUserId = false } = {}) {
   if (!db || !courseId) throw new Error('Curso não selecionado.')
-  if (!userId) throw new Error('Usuário não autenticado.')
+  if (!userId && !preserveAutomationUserId) throw new Error('Usuário não autenticado.')
 
-  const payload = buildMentoradoConfigWrite(form, { userId, existing })
+  const payload = buildMentoradoConfigWrite(form, { userId, existing, preserveAutomationUserId })
   await setDoc(
     doc(db, 'courses', courseId, 'config', 'guiaMentorado'),
     {
@@ -87,7 +87,11 @@ export async function applyGuiaMentoradoConfigToAllCourses(form, { userId, onPro
       onProgress?.(`Aplicando em ${label}… (${ok + 1}/${courses.length})`)
       const snap = await getDoc(doc(db, 'courses', course.id, 'config', 'guiaMentorado'))
       const existing = snap.exists() ? snap.data() : {}
-      await saveGuiaMentoradoAdminConfig(course.id, form, { userId, existing })
+      await saveGuiaMentoradoAdminConfig(course.id, form, {
+        userId,
+        existing,
+        preserveAutomationUserId: true,
+      })
       ok += 1
     } catch (err) {
       errors.push({

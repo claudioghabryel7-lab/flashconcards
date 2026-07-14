@@ -11,7 +11,11 @@ function normalizeMentoradoAutomationConfig(raw = {}) {
   const vesperaIn = nested.vespera && typeof nested.vespera === 'object' ? nested.vespera : {}
 
   const enabled = Boolean(
-    nested.enabled !== undefined ? nested.enabled : raw.autoGerarConteudo,
+    nested.enabled !== undefined
+      ? nested.enabled
+      : raw.enabled !== undefined
+        ? raw.enabled
+        : raw.autoGerarConteudo,
   )
   const automationUserId =
     nested.automationUserId || raw.automationUserId || null
@@ -144,16 +148,42 @@ function buildMentoradoAutomationWrite(partial = {}, extras = {}) {
   }
 }
 
+/**
+ * Cron a cada 15 min (:00/:15/:30/:45).
+ * Dispara se o tick atual já passou do horário configurado (mesmo dia),
+ * arredondando o minuto alvo para o próximo slot de 15 min (ex.: 08:50 → 09:00).
+ */
 function isWithinDailyReleaseWindow(automation, clock) {
   const hour = Number(
     automation?.schedule?.dailyReleaseHour ?? MENTORADO_DAILY_RELEASE_HOUR,
   )
   const minute = Number(automation?.schedule?.dailyReleaseMinute ?? 0)
-  const h = Number(clock?.hour)
-  const m = Number(clock?.minute ?? 0)
-  if (h !== hour) return false
-  // Cron a cada 15 min: libera a partir do minuto configurado naquela hora
-  return m >= minute
+  let h = Number(clock?.hour)
+  let m = Number(clock?.minute ?? 0)
+  if (h === 24) h = 0
+
+  const STEP = 15
+  let targetHour = Math.min(23, Math.max(0, Number(hour) || 0))
+  let targetMinute = Math.min(59, Math.max(0, Number(minute) || 0))
+  if (targetMinute % STEP !== 0) {
+    targetMinute = Math.ceil(targetMinute / STEP) * STEP
+  }
+  if (targetMinute >= 60) {
+    targetMinute = 0
+    targetHour += 1
+  }
+  // Cron só tem slots até 23:45. 23:46–23:59 NÃO podem virar 00:00
+  // (senão nowMins >= 0 libera o dia inteiro desde a madrugada).
+  if (targetHour >= 24) {
+    targetHour = 23
+    targetMinute = 45
+  }
+
+  const nowMins = h * 60 + m
+  const releaseMins = targetHour * 60 + targetMinute
+  // Na mesma "volta" do dia: a partir do slot efetivo até o fim do dia
+  // (1× por dia via lastDailyRunDayKey).
+  return nowMins >= releaseMins
 }
 
 module.exports = {
