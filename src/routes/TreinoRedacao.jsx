@@ -1,13 +1,13 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { canAccessRedacao, isTrialMode } from '../utils/trialLimits'
+import { Link } from 'react-router-dom'
+import { canAccessRedacao } from '../utils/trialLimits'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
-import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import ContentPublishButton from '../components/ContentPublishButton'
-import { isContentAvailable, toggleContentStatus, defaultContentStatus, CONTENT_STATUS } from '../utils/contentStatus'
+import TechHubHeader from '../components/cp/TechHubHeader'
+import { isContentAvailable, toggleContentStatus, defaultContentStatus } from '../utils/contentStatus'
 import {
   ClockIcon,
   PlayIcon,
@@ -16,11 +16,33 @@ import {
   DocumentTextIcon,
   ArrowPathIcon,
   PencilSquareIcon,
+  PencilIcon,
 } from '@heroicons/react/24/outline'
 
+/** Linhas que começam com exatamente 4 espaços = novo parágrafo (padrão do módulo). */
+function detectParagraphs(text) {
+  if (!text) return 0
+  let paragraphCount = 0
+  for (const line of text.split('\n')) {
+    if (line.length >= 4 && line.substring(0, 4) === '    ' && (line.length === 4 || line[4] !== ' ')) {
+      paragraphCount++
+    }
+  }
+  return paragraphCount
+}
+
+function formatTime(seconds) {
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = seconds % 60
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+  return `${minutes}:${secs.toString().padStart(2, '0')}`
+}
+
 const TreinoRedacao = () => {
-  const navigate = useNavigate()
-  const { user, profile, isAdmin } = useAuth()
+  const { profile, isAdmin } = useAuth()
   const [loading, setLoading] = useState(false)
   const [configLoading, setConfigLoading] = useState(true)
   const [redacaoTema, setRedacaoTema] = useState('')
@@ -29,7 +51,7 @@ const TreinoRedacao = () => {
   const [editingTema, setEditingTema] = useState(false)
   const [savingTema, setSavingTema] = useState(false)
   const [redacaoTexto, setRedacaoTexto] = useState('')
-  const [timeLeft, setTimeLeft] = useState(3600) // 1 hora em segundos
+  const [timeLeft, setTimeLeft] = useState(3600)
   const [isRunning, setIsRunning] = useState(false)
   const [resultado, setResultado] = useState(null)
   const [analizing, setAnalizing] = useState(false)
@@ -38,8 +60,15 @@ const TreinoRedacao = () => {
   const [courseCompetition, setCourseCompetition] = useState('')
   const [courseBanca, setCourseBanca] = useState('')
   const textareaRef = useRef(null)
+  const redacaoTextoRef = useRef('')
+  const handleAnalyzeRef = useRef(null)
 
   const getCourseId = () => selectedCourseId || 'alego-default'
+  const trialBlocked = !canAccessRedacao()
+
+  useEffect(() => {
+    redacaoTextoRef.current = redacaoTexto
+  }, [redacaoTexto])
 
   const loadEditalText = async (courseId) => {
     const editalRef = doc(db, 'courses', courseId, 'prompts', 'edital')
@@ -52,34 +81,26 @@ const TreinoRedacao = () => {
   const generateRedacaoModelo = async (tema) => {
     const courseId = getCourseId()
     const editalText = await loadEditalText(courseId)
-
-    const prompt = await (await import('../utils/unifiedPrompt')).buildRedacaoModeloPrompt(
-      courseId,
-      tema,
-      editalText ? editalText.substring(0, 30000) : ''
-    )
+    const prompt = await (
+      await import('../utils/unifiedPrompt')
+    ).buildRedacaoModeloPrompt(courseId, tema, editalText ? editalText.substring(0, 30000) : '')
 
     const response = await callGeminiWithRetry(prompt, {
-      courseId: getCourseId(),
-      generationConfig: {
-        maxOutputTokens: 4096,
-        temperature: 0.5,
-      },
+      courseId,
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.5 },
     })
     return extractGeneratedText(response).trim()
   }
 
-  // Carregar curso do perfil — banca e cargo sempre do documento do curso
   useEffect(() => {
     if (!profile) return
-    
+
     const courseFromProfile = profile.selectedCourseId !== undefined ? profile.selectedCourseId : null
     setSelectedCourseId(courseFromProfile)
-    
+
     const loadCourse = async () => {
       const courseId = courseFromProfile || 'alego-default'
-      const courseRef = doc(db, 'courses', courseId)
-      const docSnap = await getDoc(courseRef)
+      const docSnap = await getDoc(doc(db, 'courses', courseId))
       if (docSnap.exists()) {
         const data = docSnap.data()
         setCourseName(data.name || '')
@@ -91,14 +112,13 @@ const TreinoRedacao = () => {
     loadCourse()
   }, [profile])
 
-  // Carregar tema configurado pelo admin (ou gerar se admin sem tema)
   useEffect(() => {
     if (selectedCourseId === null && profile === undefined) return
 
     const loadConfig = async () => {
       setConfigLoading(true)
       try {
-        const courseId = getCourseId()
+        const courseId = selectedCourseId || 'alego-default'
         const configSnap = await getDoc(doc(db, 'courses', courseId, 'config', 'redacao'))
         if (configSnap.exists()) {
           const data = configSnap.data()
@@ -108,7 +128,7 @@ const TreinoRedacao = () => {
         } else {
           setRedacaoStatus(defaultContentStatus())
           if (isAdmin) {
-            await generateTheme()
+            await generateTheme({ persist: true, startTimer: false })
           }
         }
       } catch (err) {
@@ -119,22 +139,18 @@ const TreinoRedacao = () => {
     }
 
     loadConfig()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- carrega config ao trocar curso/admin
   }, [selectedCourseId, profile, isAdmin])
 
-  // Timer
+  // Timer: depende só de isRunning (evita recriar intervalo a cada segundo)
   useEffect(() => {
-    if (!isRunning || timeLeft <= 0) {
-      if (timeLeft === 0 && isRunning) {
-        handleFinish()
-      }
-      return
-    }
+    if (!isRunning) return undefined
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           setIsRunning(false)
-          handleFinish()
+          queueMicrotask(() => handleAnalyzeRef.current?.())
           return 0
         }
         return prev - 1
@@ -142,106 +158,7 @@ const TreinoRedacao = () => {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [isRunning, timeLeft])
-
-  // Função para detectar parágrafos (4 espaços no início da linha)
-  const detectParagraphs = (text) => {
-    if (!text) return 0
-    const lines = text.split('\n')
-    let paragraphCount = 0
-    lines.forEach((line) => {
-      // Verifica se a linha começa com exatamente 4 espaços (não mais, não menos)
-      if (line.length >= 4 && line.substring(0, 4) === '    ' && (line.length === 4 || line[4] !== ' ')) {
-        paragraphCount++
-      }
-    })
-    return paragraphCount
-  }
-
-  // Gerar tema + material de apoio (salvo uma vez no config do curso)
-  const generateTheme = async () => {
-    setLoading(true)
-    try {
-      const courseId = getCourseId()
-      const editalText = await loadEditalText(courseId)
-
-      // Garantir banca/cargo frescos do documento do curso
-      const courseSnap = await getDoc(doc(db, 'courses', courseId))
-      const courseData = courseSnap.exists() ? courseSnap.data() || {} : {}
-      const banca = String(courseData.banca || courseBanca || '').trim()
-      const cargo = String(courseData.competition || courseCompetition || '').trim()
-      if (banca) setCourseBanca(banca)
-      if (cargo) setCourseCompetition(cargo)
-
-      const { buildRedacaoPrompt } = await import('../utils/unifiedPrompt')
-      const baseThemePrompt = await buildRedacaoPrompt(
-        courseId,
-        editalText ? editalText.substring(0, 30000) : ''
-      )
-
-      const themePrompt = `${baseThemePrompt}
-
-BANCA EXAMINADORA (use EXATAMENTE esta — campo do curso no admin): ${banca || 'banca do concurso'}
-CARGO (use para calibrar a dificuldade e o enfoque do tema): ${cargo || courseName || 'Cargo público'}
-
-Gere:
-1) UM tema de redação dissertativa-argumentativa com alta probabilidade de cair nesta banca para este cargo (específico, atual, alinhado ao cargo). A dificuldade deve refletir o nível típico do cargo informado.
-2) Um MATERIAL DE APOIO (guiaNota1000) explicando como fazer redação nota máxima segundo os critérios típicos da banca "${banca || 'informada'}" (estrutura, coerência, repertório, o que a banca valoriza/pune). Texto claro para o aluno estudar antes de escrever.
-
-PROIBIDO: inventar flashcards, questões ou material de edital de disciplinas.
-PROIBIDO: trocar a banca por órgão/secretaria/instituição — a banca é "${banca || 'a do curso'}".
-
-Retorne APENAS JSON válido:
-{
-  "tema": "texto do tema",
-  "guiaNota1000": "material de apoio em texto corrido ou markdown curto"
-}`
-
-      const response = await callGeminiWithRetry(themePrompt, {
-        courseId: getCourseId(),
-        generationConfig: {
-          maxOutputTokens: 4096,
-          temperature: 0.5,
-        },
-      })
-      let raw = extractGeneratedText(response).trim()
-
-      let theme = ''
-      let guia = ''
-      try {
-        const cleaned = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim()
-        const parsed = JSON.parse(cleaned)
-        theme = String(parsed.tema || '').trim()
-        guia = String(parsed.guiaNota1000 || '').trim()
-      } catch {
-        theme = raw
-          .replace(/TEMA:/gi, '')
-          .replace(/"/g, '')
-          .replace(/^[-•]\s*/, '')
-          .trim()
-      }
-
-      if (!theme) {
-        throw new Error('Tema vazio')
-      }
-
-      setRedacaoTema(theme)
-      if (guia) setGuiaNota1000(guia)
-
-      if (isAdmin) {
-        await saveRedacaoConfig(theme, redacaoStatus, guia || guiaNota1000)
-      }
-      setIsRunning(true)
-    } catch (err) {
-      console.error('Erro ao gerar tema:', err)
-      setRedacaoTema(
-        `A importância da eficiência no serviço público para o cargo de ${courseCompetition || courseName || 'servidor público'}`,
-      )
-      setIsRunning(true)
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [isRunning])
 
   const saveRedacaoConfig = async (tema = redacaoTema, status = redacaoStatus, guia = guiaNota1000) => {
     setSavingTema(true)
@@ -266,62 +183,127 @@ Retorne APENAS JSON válido:
     }
   }
 
+  const generateTheme = async ({ persist = isAdmin, startTimer = false } = {}) => {
+    setLoading(true)
+    try {
+      const courseId = getCourseId()
+      const editalText = await loadEditalText(courseId)
+
+      const courseSnap = await getDoc(doc(db, 'courses', courseId))
+      const courseData = courseSnap.exists() ? courseSnap.data() || {} : {}
+      const banca = String(courseData.banca || courseBanca || '').trim()
+      const cargo = String(courseData.competition || courseCompetition || '').trim()
+      if (banca) setCourseBanca(banca)
+      if (cargo) setCourseCompetition(cargo)
+
+      const { buildRedacaoPrompt } = await import('../utils/unifiedPrompt')
+      const baseThemePrompt = await buildRedacaoPrompt(
+        courseId,
+        editalText ? editalText.substring(0, 30000) : '',
+      )
+
+      const themePrompt = `${baseThemePrompt}
+
+BANCA EXAMINADORA (use EXATAMENTE esta — campo do curso no admin): ${banca || 'banca do concurso'}
+CARGO (use para calibrar a dificuldade e o enfoque do tema): ${cargo || courseName || 'Cargo público'}
+
+Gere:
+1) UM tema de redação dissertativa-argumentativa com alta probabilidade de cair nesta banca para este cargo (específico, atual, alinhado ao cargo). A dificuldade deve refletir o nível típico do cargo informado.
+2) Um MATERIAL DE APOIO (guiaNota1000) explicando como fazer redação nota máxima segundo os critérios típicos da banca "${banca || 'informada'}" (estrutura, coerência, repertório, o que a banca valoriza/pune). Texto claro para o aluno estudar antes de escrever.
+
+PROIBIDO: inventar flashcards, questões ou material de edital de disciplinas.
+PROIBIDO: trocar a banca por órgão/secretaria/instituição — a banca é "${banca || 'a do curso'}".
+
+Retorne APENAS JSON válido:
+{
+  "tema": "texto do tema",
+  "guiaNota1000": "material de apoio em texto corrido ou markdown curto"
+}`
+
+      const response = await callGeminiWithRetry(themePrompt, {
+        courseId,
+        generationConfig: { maxOutputTokens: 4096, temperature: 0.5 },
+      })
+      let raw = extractGeneratedText(response).trim()
+
+      let theme = ''
+      let guia = ''
+      try {
+        const cleaned = raw
+          .replace(/^```json\s*/i, '')
+          .replace(/^```\s*/i, '')
+          .replace(/```$/i, '')
+          .trim()
+        const parsed = JSON.parse(cleaned)
+        theme = String(parsed.tema || '').trim()
+        guia = String(parsed.guiaNota1000 || '').trim()
+      } catch {
+        theme = raw
+          .replace(/TEMA:/gi, '')
+          .replace(/"/g, '')
+          .replace(/^[-•]\s*/, '')
+          .trim()
+      }
+
+      if (!theme) throw new Error('Tema vazio')
+
+      setRedacaoTema(theme)
+      if (guia) setGuiaNota1000(guia)
+
+      if (persist) {
+        await saveRedacaoConfig(theme, redacaoStatus, guia || guiaNota1000)
+      }
+      if (startTimer) setIsRunning(true)
+    } catch (err) {
+      console.error('Erro ao gerar tema:', err)
+      setRedacaoTema(
+        `A importância da eficiência no serviço público para o cargo de ${courseCompetition || courseName || 'servidor público'}`,
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleToggleRedacaoStatus = async () => {
     const novo = toggleContentStatus(redacaoStatus)
     setRedacaoStatus(novo)
     await saveRedacaoConfig(redacaoTema, novo)
   }
 
-  // Gerar novo tema
-  const handleNewTheme = () => {
+  const resetWritingSession = () => {
+    setResultado(null)
     setRedacaoTexto('')
     setTimeLeft(3600)
     setIsRunning(false)
-    setResultado(null) // Limpar resultado anterior
-    setAnalizing(false) // Limpar estado de análise
-    generateTheme()
+    setAnalizing(false)
   }
 
-  // Finalizar redação e analisar
+  const handleNewTheme = async () => {
+    resetWritingSession()
+    if (isAdmin) {
+      await generateTheme({ persist: true, startTimer: false })
+    }
+  }
+
   const handleFinish = () => {
-    console.log('🚨 handleFinish iniciado - analizing antes:', analizing)
     setIsRunning(false)
-    setAnalizing(true)
-    console.log('🚨 handleFinish - setAnalizing(true) aplicado')
     handleAnalyze()
   }
 
-  // Analisar e avaliar redação
   const handleAnalyze = async () => {
-    console.log('🚨 INÍCIO DA FUNÇÃO handleAnalyze - DEBUG INICIAL')
-    console.log('🚨 analizing no início do handleAnalyze:', analizing)
-    
-    // Garantir que analizing seja true no início
     setAnalizing(true)
-    console.log('🚨 setAnalizing(true) garantido no handleAnalyze')
-    
-    console.log('🚨 redacaoTexto:', redacaoTexto)
-    console.log('🚨 redacaoTema:', redacaoTema)
-    console.log('🚨 VITE_GEMINI_API_KEY existe:', !!readEnv('VITE_GEMINI_API_KEY'))
-    
-    if (!redacaoTexto.trim()) {
-      console.log('🚨 Saindo - redação vazia')
+    const texto = redacaoTextoRef.current || redacaoTexto
+
+    if (!texto.trim()) {
       setAnalizing(false)
       alert('Digite sua redação antes de analisar.')
       return
     }
 
-    // Validar tamanho mínimo da redação
-    const wordCount = redacaoTexto.trim().split(/\s+/).length
-    const charCount = redacaoTexto.trim().length
-    
-    console.log('🚨 DEBUG - wordCount:', wordCount, 'charCount:', charCount)
-    console.log('🚨 DEBUG - wordCount < 50:', wordCount < 50, 'charCount < 200:', charCount < 200)
-    
-    if (wordCount < 50 || charCount < 200) {
-      console.log('🚨 ENTRANDO NA VALIDAÇÃO DE TEXTO CURTO - VAI GERAR RESULTADO SEM REDAÇÃO MODELO')
-      
-      // Para textos muito curtos, atribuir nota zero automaticamente MAS GERAR REDAÇÃO MODELO
+    const wordCountLocal = texto.trim().split(/\s+/).length
+    const charCountLocal = texto.trim().length
+
+    if (wordCountLocal < 50 || charCountLocal < 200) {
       const resultadoComModelo = {
         nota: 0,
         criterios: {
@@ -329,26 +311,25 @@ Retorne APENAS JSON válido:
           compreensao: 0,
           argumentacao: 0,
           estrutura: 0,
-          conhecimento: 0
+          conhecimento: 0,
         },
-        feedback: `Esta redação está muito curta (${wordCount} palavras, ${charCount} caracteres). Uma redação de concurso público deve ter no mínimo 200 palavras e desenvolver adequadamente o tema proposto. Por isso, a nota foi zerada.`,
+        feedback: `Esta redação está muito curta (${wordCountLocal} palavras, ${charCountLocal} caracteres). Uma redação de concurso público deve ter no mínimo 200 palavras e desenvolver adequadamente o tema proposto. Por isso, a nota foi zerada.`,
         dicas: [
           'Escreva pelo menos 200 palavras para uma redação completa',
           'Desenvolva o tema com argumentos e exemplos',
           'Estruture sua redação com introdução, desenvolvimento e conclusão',
-          'Use parágrafos (4 espaços no início da linha) para organizar suas ideias'
+          'Use parágrafos (4 espaços no início da linha) para organizar suas ideias',
         ],
-        paragraphCount: detectParagraphs(redacaoTexto),
-        lines: redacaoTexto.split('\n').length,
-        wordCount: wordCount,
-        redacaoModelo: await generateRedacaoModelo(redacaoTema).catch((error) => {
-          console.error('Erro ao gerar redação modelo:', error)
+        paragraphCount: detectParagraphs(texto),
+        lines: texto.split('\n').length,
+        wordCount: wordCountLocal,
+        redacaoModelo: await generateRedacaoModelo(redacaoTema).catch(() => {
           return `Não foi possível gerar a redação modelo. Tema: "${redacaoTema}". Tente novamente.`
         }),
         tema: redacaoTema,
         courseId: getCourseId(),
       }
-      
+
       setResultado(resultadoComModelo)
       setIsRunning(false)
       setAnalizing(false)
@@ -356,25 +337,20 @@ Retorne APENAS JSON válido:
     }
 
     setIsRunning(false)
-    setAnalizing(true)
 
     try {
       const courseId = getCourseId()
       const editalText = await loadEditalText(courseId)
+      const paragraphCountLocal = detectParagraphs(texto)
+      const linesLocal = texto.split('\n').length
 
-      // Contar parágrafos (linhas que começam com 4 espaços)
-      const paragraphCount = detectParagraphs(redacaoTexto)
-      const lines = redacaoTexto.split('\n').length
-      const wordCount = redacaoTexto.trim() ? redacaoTexto.trim().split(/\s+/).length : 0
-
-      // Usar prompt unificado
       const { buildRedacaoAnalysisPrompt } = await import('../utils/unifiedPrompt')
       const baseAnalysisPrompt = await buildRedacaoAnalysisPrompt(
         courseId,
         redacaoTema,
-        editalText ? editalText.substring(0, 30000) : ''
+        editalText ? editalText.substring(0, 30000) : '',
       )
-      
+
       const analysisPrompt = `${baseAnalysisPrompt}
 
 ⚠️⚠️⚠️ INSTRUÇÕES CRÍTICAS ⚠️⚠️⚠️
@@ -388,15 +364,15 @@ Retorne APENAS JSON válido:
 IMPORTANTE: Esta redação usa 4 espaços no início da linha para indicar parágrafos. Linhas que começam com 4 espaços são parágrafos.
 
 INFORMAÇÕES DA REDAÇÃO:
-- Número de parágrafos (linhas com 4 espaços no início): ${paragraphCount}
-- Total de linhas: ${lines}
-- Total de palavras: ${wordCount}
-- Tamanho do texto: ${redacaoTexto.length} caracteres
+- Número de parágrafos (linhas com 4 espaços no início): ${paragraphCountLocal}
+- Total de linhas: ${linesLocal}
+- Total de palavras: ${wordCountLocal}
+- Tamanho do texto: ${texto.length} caracteres
 
-${wordCount < 200 ? '⚠️⚠️⚠️ CRÍTICO: Esta redação está MUITO CURTA (menos de 200 palavras). Uma redação de concurso deve ter no mínimo 200 palavras. Isso deve resultar em NOTA MUITO BAIXA ou ZERO, especialmente em estrutura e argumentação.' : ''}
-${wordCount < 100 ? '⚠️⚠️⚠️ CRÍTICO: Esta redação está EXTREMAMENTE CURTA (menos de 100 palavras). Isso deve resultar em NOTA ZERO ou MUITO PRÓXIMA DE ZERO em TODOS os critérios.' : ''}
-${paragraphCount < 3 ? '⚠️ ATENÇÃO: Esta redação tem poucos parágrafos. Isso deve impactar NEGATIVAMENTE a nota em estrutura textual.' : ''}
-${paragraphCount === 0 ? '⚠️⚠️⚠️ CRÍTICO: Esta redação NÃO TEM PARÁGRAFOS. Isso deve resultar em NOTA ZERO em estrutura textual.' : ''}
+${wordCountLocal < 200 ? '⚠️⚠️⚠️ CRÍTICO: Esta redação está MUITO CURTA (menos de 200 palavras). Uma redação de concurso deve ter no mínimo 200 palavras. Isso deve resultar em NOTA MUITO BAIXA ou ZERO, especialmente em estrutura e argumentação.' : ''}
+${wordCountLocal < 100 ? '⚠️⚠️⚠️ CRÍTICO: Esta redação está EXTREMAMENTE CURTA (menos de 100 palavras). Isso deve resultar em NOTA ZERO ou MUITO PRÓXIMA DE ZERO em TODOS os critérios.' : ''}
+${paragraphCountLocal < 3 ? '⚠️ ATENÇÃO: Esta redação tem poucos parágrafos. Isso deve impactar NEGATIVAMENTE a nota em estrutura textual.' : ''}
+${paragraphCountLocal === 0 ? '⚠️⚠️⚠️ CRÍTICO: Esta redação NÃO TEM PARÁGRAFOS. Isso deve resultar em NOTA ZERO em estrutura textual.' : ''}
 
 REGRAS DE AVALIAÇÃO RIGOROSAS:
 - Se a redação tiver menos de 200 palavras: NOTA MUITO BAIXA (máximo 200 pontos no total)
@@ -410,51 +386,15 @@ Analise a seguinte redação e atribua uma nota de 0 a 1000, seguindo os critér
 
 CRITÉRIOS DE AVALIAÇÃO (seja EXTREMAMENTE RIGOROSO):
 1. Domínio da modalidade escrita (0-200 pontos): ortografia, acentuação, pontuação, uso adequado da língua
-   - Texto sem sentido ou palavras soltas: NOTA ZERO
-   - Erros graves de ortografia: reduzir drasticamente (máximo 50 pontos)
-   - Pontuação incorreta: reduzir significativamente
-   - Uso inadequado da língua: reduzir
-   - Texto muito curto: NOTA ZERO ou muito baixa
-   
 2. Compreensão do tema (0-200 pontos): adequação ao tema proposto, compreensão da proposta
-   - Se não desenvolver o tema: NOTA ZERO
-   - Se fugir do tema: NOTA ZERO
-   - Se for apenas texto sem sentido: NOTA ZERO
-   - Se abordar parcialmente: nota muito baixa (máximo 50 pontos)
-   - Se abordar completamente: nota alta
-   
 3. Argumentação (0-200 pontos): qualidade dos argumentos, coerência, capacidade de defender pontos de vista
-   - Sem argumentos: NOTA ZERO
-   - Texto sem sentido: NOTA ZERO
-   - Argumentos fracos ou ausentes: nota muito baixa (máximo 30 pontos)
-   - Argumentos sólidos e bem desenvolvidos: nota alta
-   - Falta de coerência: NOTA ZERO ou muito baixa
-   
 4. Estrutura textual (0-200 pontos): organização do texto, parágrafos (linhas com 4 espaços), introdução, desenvolvimento, conclusão
-   - Sem parágrafos: NOTA ZERO
-   - Texto muito curto: NOTA ZERO
-   - Sem introdução/desenvolvimento/conclusão: NOTA ZERO
-   - Estrutura bem organizada: nota alta
-   
 5. Conhecimento sobre o cargo/concurso (0-200 pontos): demonstração de conhecimento sobre a área, atualidade, relevância
-   - Texto sem sentido: NOTA ZERO
-   - Sem conhecimento específico: NOTA ZERO
-   - Conhecimento superficial: nota muito baixa (máximo 40 pontos)
-   - Conhecimento profundo e atualizado: nota alta
 
 REDAÇÃO DO CANDIDATO (ANALISE ESTE TEXTO ESPECÍFICO):
 ═══════════════════════════════════════════════════════════════════════════════
-${redacaoTexto}
+${texto}
 ═══════════════════════════════════════════════════════════════════════════════
-
-⚠️ AVALIAÇÃO REALISTA E INDIVIDUAL ⚠️:
-- Esta é uma redação ÚNICA - analise o CONTEÚDO REAL apresentado
-- Seja rigoroso: notas de 600+ são EXCELENTES e raras
-- Notas de 400-599 são BOAS (acima da média)
-- Notas de 200-399 são MÉDIAS (dentro do esperado)
-- Notas abaixo de 200 são FRACAS (com muitos problemas)
-- NOTA ZERO para textos sem sentido, fora do tema ou muito curtos
-- A nota deve refletir EXATAMENTE a qualidade do texto específico
 
 TABELA DE REFERÊNCIA REALISTA:
 - 900-1000: Redação exemplar, perfeita ou quase perfeita
@@ -479,46 +419,30 @@ Retorne APENAS um objeto JSON válido no seguinte formato:
     "estrutura": 90,
     "conhecimento": 90
   },
-  "feedback": "Feedback DETALHADO e ESPECÍFICO sobre esta redação. Mencione os erros reais encontrados, pontos fortes específicos, e explique PORQUE a nota foi X. Seja rigoroso e honesto (máximo 300 palavras).",
+  "feedback": "Feedback DETALHADO e ESPECÍFICO sobre esta redação (máximo 300 palavras).",
   "dicas": [
-    "Dica específica 1 baseada nos erros reais desta redação",
-    "Dica específica 2 baseada nos erros reais desta redação",
-    "Dica específica 3 para melhorar esta redação específica"
+    "Dica específica 1",
+    "Dica específica 2",
+    "Dica específica 3"
   ]
 }
 
-CRÍTICO: 
+CRÍTICO:
 - Retorne APENAS o JSON, sem markdown, sem explicações
-- A nota DEVE ser realista baseada na qualidade REAL do texto
-- NÃO inclua redação modelo no JSON — será gerada separadamente
-- Analise o CONTEÚDO REAL e específico desta redação`
+- NÃO inclua redação modelo no JSON — será gerada separadamente`
 
-      // Garantir que estamos analisando o texto atual (não um cache)
-      const contentHash = redacaoTexto.substring(0, 50) + redacaoTexto.length + wordCount + paragraphCount
-      console.log('📝 Analisando redação única:', {
-        tema: redacaoTema,
-        tamanho: redacaoTexto.length,
-        palavras: wordCount,
-        paragrafos: paragraphCount,
-        hash: contentHash.substring(0, 20),
-        preview: redacaoTexto.substring(0, 100) + '...'
-      })
+      const contentHash = texto.substring(0, 50) + texto.length + wordCountLocal + paragraphCountLocal
 
-      // Usar configuração com temperatura mais alta para variabilidade
       const response = await callGeminiWithRetry(analysisPrompt, {
-        courseId: getCourseId(),
+        courseId,
         generationConfig: {
           temperature: 0.35,
           maxOutputTokens: 4000,
           topP: 0.95,
         },
       })
-      
-      let responseText = extractGeneratedText(response).trim()
-      
-      console.log('🤖 Resposta da IA recebida (primeiros 300 chars):', responseText.substring(0, 300))
 
-      // Extrair JSON
+      let responseText = extractGeneratedText(response).trim()
       let jsonText = responseText
       if (jsonText.includes('```json')) {
         jsonText = jsonText.split('```json')[1].split('```')[0].trim()
@@ -532,56 +456,41 @@ CRÍTICO:
         jsonText = jsonText.substring(firstBrace, lastBrace + 1)
       }
 
-      // Tentar reparar JSON se necessário
       let parsed
       try {
         parsed = JSON.parse(jsonText)
-      } catch (parseError) {
-        console.warn('⚠️ Erro ao parsear JSON, tentando reparar...', parseError)
-        try {
-          // Tentar usar jsonrepair se disponível
-          const { default: jsonrepair } = await import('jsonrepair')
-          const repaired = jsonrepair(jsonText)
-          parsed = JSON.parse(repaired)
-        } catch (repairError) {
-          console.error('❌ Erro ao reparar JSON:', repairError)
-          throw new Error('Erro ao processar resposta da IA. Tente novamente.')
-        }
+      } catch {
+        const { default: jsonrepair } = await import('jsonrepair')
+        parsed = JSON.parse(jsonrepair(jsonText))
       }
 
-      // Validar que a nota faz sentido
       if (parsed.nota < 0 || parsed.nota > 1000) {
-        console.warn('⚠️ Nota fora do range esperado, ajustando...', parsed.nota)
         parsed.nota = Math.max(0, Math.min(1000, parsed.nota))
       }
 
-      // Validar critérios
-      Object.keys(parsed.criterios || {}).forEach(key => {
+      Object.keys(parsed.criterios || {}).forEach((key) => {
         if (parsed.criterios[key] < 0 || parsed.criterios[key] > 200) {
-          console.warn(`⚠️ Critério ${key} fora do range, ajustando...`, parsed.criterios[key])
           parsed.criterios[key] = Math.max(0, Math.min(200, parsed.criterios[key]))
         }
       })
 
-      // Sempre gerar redação modelo nova para o curso e tema atuais
       let redacaoModelo = ''
       try {
         redacaoModelo = await generateRedacaoModelo(redacaoTema)
-      } catch (modeloError) {
-        console.error('Erro ao gerar redação modelo:', modeloError)
+      } catch {
         redacaoModelo = `Não foi possível gerar a redação modelo para o tema "${redacaoTema}". Tente novamente.`
       }
 
       setResultado({
         ...parsed,
         redacaoModelo,
-        paragraphCount,
-        lines,
-        wordCount,
+        paragraphCount: paragraphCountLocal,
+        lines: linesLocal,
+        wordCount: wordCountLocal,
         analyzedAt: new Date().toISOString(),
         contentHash: contentHash.substring(0, 30),
         tema: redacaoTema,
-        courseId: getCourseId(),
+        courseId,
       })
     } catch (err) {
       console.error('Erro ao analisar redação:', err)
@@ -591,79 +500,119 @@ CRÍTICO:
     }
   }
 
-  // Formatação do tempo
-  const formatTime = (seconds) => {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    const secs = seconds % 60
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-    }
-    return `${minutes}:${secs.toString().padStart(2, '0')}`
-  }
+  handleAnalyzeRef.current = handleAnalyze
 
-  // Contadores
   const wordCount = redacaoTexto.trim() ? redacaoTexto.trim().split(/\s+/).length : 0
   const charCount = redacaoTexto.length
   const paragraphCount = detectParagraphs(redacaoTexto)
   const lines = redacaoTexto.split('\n').length
 
-  // Tela de resultados
+  const courseMeta = [
+    courseName,
+    courseBanca ? `Banca ${courseBanca}` : '',
+    courseCompetition || '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  const gridBg = (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 -z-10 opacity-50"
+      style={{
+        backgroundImage:
+          'linear-gradient(var(--cp-grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--cp-grid-line) 1px, transparent 1px)',
+        backgroundSize: '28px 28px',
+        maskImage: 'radial-gradient(ellipse 90% 60% at 50% 0%, black 20%, transparent 75%)',
+      }}
+    />
+  )
+
+  if (trialBlocked) {
+    return (
+      <div className="relative space-y-6 pb-10">
+        {gridBg}
+        <TechHubHeader
+          badge="Redação"
+          code="08"
+          title="Treino de Redação"
+          description="Disponível apenas para assinantes — o modo teste não inclui redação com IA."
+          icon={PencilIcon}
+          tone="violet"
+        />
+        <div className="cp-tech-card mx-auto max-w-lg p-8 text-center">
+          <p className="font-display font-semibold text-cp-text">Modo teste ativo</p>
+          <p className="mt-2 text-sm text-cp-muted">
+            Faça upgrade da sua conta para praticar redações com correção por IA.
+          </p>
+          <Link to="/dashboard" className="cp-btn-primary mt-6 inline-flex">
+            Voltar ao dashboard
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   if (resultado) {
     return (
-      <div className="space-y-6 pb-10">
-        <div className="max-w-4xl mx-auto space-y-4">
-          <div>
-            <span className="cp-badge cp-badge-accent">Resultado</span>
-            <h1 className="cp-headline mt-3 text-2xl">Treino de Redação</h1>
-          </div>
+      <div className="relative space-y-6 pb-10">
+        {gridBg}
+        <TechHubHeader
+          badge="Resultado"
+          code="08"
+          title="Treino de Redação"
+          description="Correção por IA · nota de 0 a 1000"
+          icon={SparklesIcon}
+          tone="violet"
+        />
 
-          <div className="cp-card overflow-hidden p-0">
-            <div className="bg-gradient-to-r from-cp-accent to-cp-accent2 p-6 text-white">
-              <p className="font-mono text-[10px] uppercase tracking-wider opacity-80">Sua nota</p>
-              <p className="mt-1 text-5xl font-black">{resultado.nota}</p>
+        <div className="mx-auto max-w-4xl space-y-4 animate-fade-in">
+          <div className="cp-tech-card overflow-hidden">
+            <div className="relative bg-gradient-to-r from-[var(--cp-accent)] to-[var(--cp-accent-2)] p-6 text-white">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] opacity-80">Sua nota</p>
+              <p className="mt-1 font-display text-5xl font-black tracking-tight">{resultado.nota}</p>
               <p className="mt-1 text-sm opacity-80">de 1000 pontos</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-5">
               {[
-                { label: 'Domínio', value: resultado.criterios.dominio },
-                { label: 'Compreensão', value: resultado.criterios.compreensao },
-                { label: 'Argumentação', value: resultado.criterios.argumentacao },
-                { label: 'Estrutura', value: resultado.criterios.estrutura },
-                { label: 'Conhecimento', value: resultado.criterios.conhecimento },
+                { label: 'Domínio', value: resultado.criterios?.dominio },
+                { label: 'Compreensão', value: resultado.criterios?.compreensao },
+                { label: 'Argumentação', value: resultado.criterios?.argumentacao },
+                { label: 'Estrutura', value: resultado.criterios?.estrutura },
+                { label: 'Conhecimento', value: resultado.criterios?.conhecimento },
               ].map((c) => (
-                <div key={c.label} className="cp-card !p-3 text-center">
+                <div key={c.label} className="rounded-xl border border-cp-border bg-cp-bg/40 p-3 text-center">
                   <p className="font-mono text-[10px] uppercase text-cp-muted">{c.label}</p>
-                  <p className="mt-1 text-xl font-semibold text-cp-accent">{c.value}</p>
+                  <p className="mt-1 text-xl font-semibold text-[var(--cp-accent)]">{c.value ?? '—'}</p>
                 </div>
               ))}
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <div className="cp-card p-4 text-center">
-              <p className="font-mono text-[10px] uppercase text-cp-muted">Parágrafos</p>
-              <p className="mt-1 text-xl font-semibold text-cp-text">{resultado.paragraphCount}</p>
-            </div>
-            <div className="cp-card p-4 text-center">
-              <p className="font-mono text-[10px] uppercase text-cp-muted">Linhas</p>
-              <p className="mt-1 text-xl font-semibold text-cp-text">{resultado.lines}</p>
-            </div>
-            <div className="cp-card p-4 text-center">
-              <p className="font-mono text-[10px] uppercase text-cp-muted">Palavras</p>
-              <p className="mt-1 text-xl font-semibold text-cp-text">{resultado.wordCount}</p>
-            </div>
+            {[
+              { label: 'Parágrafos', value: resultado.paragraphCount },
+              { label: 'Linhas', value: resultado.lines },
+              { label: 'Palavras', value: resultado.wordCount },
+            ].map((s) => (
+              <div key={s.label} className="cp-tech-card p-4 text-center">
+                <p className="font-mono text-[10px] uppercase text-cp-muted">{s.label}</p>
+                <p className="mt-1 text-xl font-semibold text-cp-text">{s.value}</p>
+              </div>
+            ))}
           </div>
 
-          <div className="cp-card border-cp-accent/30 p-5 sm:p-6">
-            <p className="font-mono text-[11px] uppercase tracking-wider text-cp-accent mb-3">Feedback geral</p>
-            <p className="text-sm leading-relaxed text-cp-text whitespace-pre-wrap">{resultado.feedback}</p>
+          <div className="cp-tech-card border-[color-mix(in_srgb,var(--cp-accent)_35%,transparent)] p-5 sm:p-6">
+            <p className="mb-3 font-mono text-[11px] uppercase tracking-wider text-[var(--cp-accent)]">
+              Feedback geral
+            </p>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-cp-text">{resultado.feedback}</p>
           </div>
 
-          {resultado.dicas && resultado.dicas.length > 0 && (
-            <div className="cp-card p-5 sm:p-6">
-              <p className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-emerald-600">
+          {resultado.dicas?.length > 0 && (
+            <div className="cp-tech-card p-5 sm:p-6">
+              <p className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-emerald-500">
                 <SparklesIcon className="h-4 w-4" />
                 Dicas de melhoria
               </p>
@@ -678,8 +627,8 @@ CRÍTICO:
             </div>
           )}
 
-          <div className="cp-card border-amber-500/30 p-5 sm:p-6">
-            <p className="mb-2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-amber-600">
+          <div className="cp-tech-card border-amber-500/30 p-5 sm:p-6">
+            <p className="mb-2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-amber-500">
               <DocumentTextIcon className="h-4 w-4" />
               Redação nota 1000
             </p>
@@ -687,27 +636,23 @@ CRÍTICO:
               <p className="mb-3 text-xs font-medium text-cp-muted">Tema: {resultado.tema}</p>
             )}
             <div className="rounded-xl border border-cp-border bg-cp-bg/40 p-4">
-              <p className="font-serif text-sm leading-relaxed text-cp-text whitespace-pre-wrap">
+              <p className="whitespace-pre-wrap font-serif text-sm leading-relaxed text-cp-text">
                 {resultado?.redacaoModelo || 'Redação modelo não disponível. Tente analisar novamente.'}
               </p>
             </div>
           </div>
 
-          <div className="flex gap-3">
-            <button type="button" onClick={handleNewTheme} className="cp-btn-primary flex-1 !py-3">
-              Novo tema
-            </button>
+          <div className="flex flex-wrap gap-3">
+            {isAdmin && (
+              <button type="button" onClick={handleNewTheme} disabled={loading} className="cp-btn-primary flex-1 !py-3">
+                <ArrowPathIcon className="h-4 w-4" />
+                {loading ? 'Gerando…' : 'Novo tema (IA)'}
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => {
-                setResultado(null)
-                setRedacaoTexto('')
-                setTimeLeft(3600)
-                setIsRunning(false)
-                setAnalizing(false)
-                generateTheme()
-              }}
-              className="cp-btn-ghost flex-1 !py-3"
+              onClick={resetWritingSession}
+              className={`cp-btn-ghost flex-1 !py-3 ${isAdmin ? '' : 'cp-btn-primary'}`}
             >
               Treinar novamente
             </button>
@@ -718,188 +663,240 @@ CRÍTICO:
   }
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="relative space-y-6 pb-10">
+      {gridBg}
+
       {configLoading ? (
-        <div className="cp-card flex min-h-[40vh] items-center justify-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
+        <div className="cp-tech-card flex min-h-[40vh] items-center justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--cp-accent)] border-t-transparent" />
         </div>
       ) : !isContentAvailable(redacaoStatus, isAdmin) ? (
-        <div className="cp-card p-12 text-center max-w-lg mx-auto">
-          <p className="text-4xl mb-3">🔒</p>
-          <p className="font-medium text-cp-text">Redação em preparação</p>
-          <p className="mt-2 text-sm text-cp-muted">O administrador ainda não disponibilizou o treino de redação.</p>
-        </div>
+        <>
+          <TechHubHeader
+            badge="Redação"
+            code="08"
+            title="Treino de Redação"
+            description="Módulo ainda não liberado pelo administrador."
+            icon={PencilIcon}
+            tone="violet"
+          />
+          <div className="cp-tech-card mx-auto max-w-lg p-10 text-center">
+            <p className="text-3xl mb-3">🔒</p>
+            <p className="font-display font-semibold text-cp-text">Redação em preparação</p>
+            <p className="mt-2 text-sm text-cp-muted">
+              O administrador ainda não disponibilizou o treino de redação deste curso.
+            </p>
+          </div>
+        </>
       ) : (
-      <div className="max-w-4xl mx-auto space-y-4">
-        <div>
-          <span className="cp-badge cp-badge-accent">Redação</span>
-          <h1 className="cp-headline mt-3 text-2xl">Treino de Redação</h1>
-          {courseName && (
-            <p className="mt-1 text-sm text-cp-muted">
-              {courseName}
-              {courseBanca ? ` · Banca ${courseBanca}` : ''}
-              {courseCompetition ? ` · ${courseCompetition}` : ''}
-            </p>
-          )}
-        </div>
+        <div className="mx-auto max-w-4xl space-y-4 animate-fade-in">
+          <TechHubHeader
+            badge="Redação"
+            code="08"
+            title="Treino de Redação"
+            description={
+              courseMeta || 'Dissertação argumentativa com correção por IA · 0 a 1000 pontos'
+            }
+            icon={PencilIcon}
+            tone="violet"
+          />
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="cp-card p-4">
-            <p className="font-mono text-[10px] uppercase text-cp-muted">Tempo</p>
-            <p className={`mt-1 text-xl font-semibold ${timeLeft < 600 ? 'text-red-500' : 'text-cp-text'}`}>
-              {formatTime(timeLeft)}
-            </p>
-            <button type="button" onClick={() => setIsRunning(!isRunning)} className="mt-2 cp-btn-ghost !py-1 !text-xs">
-              {isRunning ? <><PauseIcon className="h-3 w-3" /> Pausar</> : <><PlayIcon className="h-3 w-3" /> Iniciar</>}
-            </button>
-          </div>
-          <div className="cp-card p-4">
-            <p className="font-mono text-[10px] uppercase text-cp-muted">Palavras</p>
-            <p className="mt-1 text-xl font-semibold text-cp-text">{wordCount}</p>
-          </div>
-          <div className="cp-card p-4">
-            <p className="font-mono text-[10px] uppercase text-cp-muted">Parágrafos</p>
-            <p className="mt-1 text-xl font-semibold text-cp-text">{paragraphCount}</p>
-          </div>
-          <div className="cp-card p-4">
-            <p className="font-mono text-[10px] uppercase text-cp-muted">Linhas</p>
-            <p className="mt-1 text-xl font-semibold text-cp-text">{lines}</p>
-          </div>
-        </div>
-
-        {guiaNota1000 ? (
-          <div className="cp-card p-4 sm:p-5">
-            <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Material de Apoio</p>
-            <p className="mt-1 text-sm font-semibold text-cp-text">
-              Como fazer redação nota máxima ({courseBanca || 'sua banca'})
-            </p>
-            <div className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-cp-muted">
-              {guiaNota1000}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="cp-tech-card p-4">
+              <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase text-cp-muted">
+                <ClockIcon className="h-3.5 w-3.5" />
+                Tempo
+              </p>
+              <p
+                className={`mt-1 font-display text-xl font-semibold tracking-tight ${
+                  timeLeft < 600 ? 'text-red-500' : 'text-cp-text'
+                }`}
+              >
+                {formatTime(timeLeft)}
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsRunning(!isRunning)}
+                className="mt-2 cp-btn-ghost !py-1 !text-xs"
+              >
+                {isRunning ? (
+                  <>
+                    <PauseIcon className="h-3 w-3" /> Pausar
+                  </>
+                ) : (
+                  <>
+                    <PlayIcon className="h-3 w-3" /> Iniciar
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="cp-tech-card p-4">
+              <p className="font-mono text-[10px] uppercase text-cp-muted">Palavras</p>
+              <p className="mt-1 font-display text-xl font-semibold text-cp-text">{wordCount}</p>
+            </div>
+            <div className="cp-tech-card p-4">
+              <p className="font-mono text-[10px] uppercase text-cp-muted">Parágrafos</p>
+              <p className="mt-1 font-display text-xl font-semibold text-cp-text">{paragraphCount}</p>
+            </div>
+            <div className="cp-tech-card p-4">
+              <p className="font-mono text-[10px] uppercase text-cp-muted">Linhas</p>
+              <p className="mt-1 font-display text-xl font-semibold text-cp-text">{lines}</p>
             </div>
           </div>
-        ) : null}
 
-        <div className="cp-card border-cp-accent/30 p-5 sm:p-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <p className="font-mono text-[11px] uppercase tracking-wider text-cp-accent">Tema proposto</p>
-            <div className="flex flex-wrap gap-2">
+          {guiaNota1000 ? (
+            <div className="cp-tech-card p-4 sm:p-5">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">
+                Material de apoio
+              </p>
+              <p className="mt-1 text-sm font-semibold text-cp-text">
+                Como fazer redação nota máxima ({courseBanca || 'sua banca'})
+              </p>
+              <div className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-cp-muted">
+                {guiaNota1000}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="cp-tech-card border-[color-mix(in_srgb,var(--cp-accent)_35%,transparent)] p-5 sm:p-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <p className="font-mono text-[11px] uppercase tracking-wider text-[var(--cp-accent)]">
+                Tema proposto
+              </p>
               {isAdmin && (
-                <>
-                  <ContentPublishButton status={redacaoStatus} onToggle={handleToggleRedacaoStatus} size="xs" />
-                  <button type="button" onClick={() => setEditingTema(!editingTema)} className="cp-btn-ghost !py-1 !text-xs">
+                <div className="flex flex-wrap gap-2">
+                  <ContentPublishButton
+                    status={redacaoStatus}
+                    onToggle={handleToggleRedacaoStatus}
+                    size="xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEditingTema(!editingTema)}
+                    className="cp-btn-ghost !py-1 !text-xs"
+                  >
                     <PencilSquareIcon className="h-3.5 w-3.5" />
                     Editar tema
                   </button>
-                </>
-              )}
-              {isAdmin && (
-                <button type="button" onClick={generateTheme} disabled={loading} className="cp-btn-ghost !py-1 !text-xs">
-                  <ArrowPathIcon className="h-3.5 w-3.5" />
-                  {loading ? 'Gerando...' : 'Gerar com IA'}
-                </button>
-              )}
-            </div>
-          </div>
-          {editingTema && isAdmin ? (
-            <div className="space-y-3">
-              <textarea
-                value={redacaoTema}
-                onChange={(e) => setRedacaoTema(e.target.value)}
-                rows={4}
-                className="w-full rounded-xl border border-cp-border bg-cp-bg/60 p-3 text-sm text-cp-text"
-              />
-              <button type="button" onClick={() => saveRedacaoConfig()} disabled={savingTema} className="cp-btn-primary !py-2 !text-sm">
-                {savingTema ? 'Salvando...' : 'Salvar tema'}
-              </button>
-            </div>
-          ) : (
-            <p className="text-base font-medium leading-relaxed text-cp-text sm:text-lg">
-              {loading ? 'Gerando tema...' : redacaoTema || 'Tema não definido'}
-            </p>
-          )}
-          <p className="mt-3 text-xs text-cp-muted">Dissertação argumentativa · 25–30 linhas · 4 espaços = novo parágrafo</p>
-        </div>
-
-        <div className="cp-card p-5 sm:p-6">
-          <label className="mb-3 block text-sm font-medium text-cp-text">Sua redação</label>
-          <textarea
-            ref={textareaRef}
-            value={redacaoTexto}
-            onChange={(e) => setRedacaoTexto(e.target.value)}
-            placeholder="Comece a escrever sua redação aqui..."
-            className="min-h-[360px] w-full resize-none rounded-xl border border-cp-border bg-cp-bg/40 p-4 font-serif text-base leading-relaxed text-cp-text focus:border-cp-accent/40 focus:outline-none focus:ring-2 focus:ring-cp-accent/20"
-            disabled={analizing || timeLeft === 0}
-          />
-          <div className="mt-3 flex items-center justify-between text-xs text-cp-muted">
-            <span>{charCount} caracteres</span>
-            <span className={wordCount < 200 ? 'text-amber-500' : 'text-emerald-500'}>
-              {wordCount < 200 ? 'Muito curta' : 'Tamanho ok'}
-            </span>
-          </div>
-        </div>
-
-        {/* Overlay de carregamento */}
-        {analizing && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-slate-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-alego-600 border-t-transparent mx-auto mb-4"></div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">
-                  Analisando sua redação
-                </h3>
-                <p className="text-slate-600 dark:text-slate-400 mb-4">
-                  A IA está avaliando sua redação e gerando o modelo exemplar...
-                </p>
-                
-                {/* Barra de progresso animada */}
-                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-4">
-                  <div className="bg-alego-600 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
+                  <button
+                    type="button"
+                    onClick={() => generateTheme({ persist: true, startTimer: false })}
+                    disabled={loading}
+                    className="cp-btn-ghost !py-1 !text-xs"
+                  >
+                    <ArrowPathIcon className="h-3.5 w-3.5" />
+                    {loading ? 'Gerando…' : 'Gerar com IA'}
+                  </button>
                 </div>
-                
-                <div className="space-y-2 text-sm text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span>Analisando estrutura e argumentação</span>
+              )}
+            </div>
+            {editingTema && isAdmin ? (
+              <div className="space-y-3">
+                <textarea
+                  value={redacaoTema}
+                  onChange={(e) => setRedacaoTema(e.target.value)}
+                  rows={4}
+                  className="w-full rounded-xl border border-cp-border bg-cp-bg/60 p-3 text-sm text-cp-text focus:border-[var(--cp-accent)]/40 focus:outline-none focus:ring-2 focus:ring-[var(--cp-accent)]/20"
+                />
+                <button
+                  type="button"
+                  onClick={() => saveRedacaoConfig()}
+                  disabled={savingTema}
+                  className="cp-btn-primary !py-2 !text-sm"
+                >
+                  {savingTema ? 'Salvando…' : 'Salvar tema'}
+                </button>
+              </div>
+            ) : (
+              <p className="text-base font-medium leading-relaxed text-cp-text sm:text-lg">
+                {loading ? 'Gerando tema…' : redacaoTema || 'Tema não definido'}
+              </p>
+            )}
+            <p className="mt-3 font-mono text-[10px] uppercase tracking-wider text-cp-muted">
+              Dissertação argumentativa · 25–30 linhas · 4 espaços = novo parágrafo
+            </p>
+          </div>
+
+          <div className="cp-tech-card p-5 sm:p-6">
+            <label className="mb-3 block text-sm font-medium text-cp-text">Sua redação</label>
+            <textarea
+              ref={textareaRef}
+              value={redacaoTexto}
+              onChange={(e) => setRedacaoTexto(e.target.value)}
+              placeholder="Comece a escrever sua redação aqui…"
+              className="min-h-[360px] w-full resize-none rounded-xl border border-cp-border bg-cp-bg/40 p-4 font-serif text-base leading-relaxed text-cp-text focus:border-[var(--cp-accent)]/40 focus:outline-none focus:ring-2 focus:ring-[var(--cp-accent)]/20"
+              disabled={analizing || timeLeft === 0}
+            />
+            <div className="mt-3 flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-cp-muted">
+              <span>{charCount} caracteres</span>
+              <span className={wordCount < 200 ? 'text-amber-500' : 'text-emerald-500'}>
+                {wordCount < 200 ? 'Muito curta' : 'Tamanho ok'}
+              </span>
+            </div>
+          </div>
+
+          {analizing && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+              <div className="cp-tech-card mx-4 w-full max-w-md p-8 shadow-2xl">
+                <div className="text-center">
+                  <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-[var(--cp-accent)] border-t-transparent" />
+                  <h3 className="font-display text-xl font-semibold text-cp-text">Analisando sua redação</h3>
+                  <p className="mt-2 text-sm text-cp-muted">
+                    A IA está avaliando o texto e gerando o modelo exemplar…
+                  </p>
+                  <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-cp-border">
+                    <div
+                      className="h-2 animate-pulse rounded-full bg-[var(--cp-accent)]"
+                      style={{ width: '60%' }}
+                    />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{animationDelay: '0.5s'}}></div>
-                    <span>Calculando nota realista</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{animationDelay: '1s'}}></div>
-                    <span>Gerando redação modelo personalizada</span>
+                  <div className="mt-4 space-y-2 text-left text-sm text-cp-muted">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                      <span>Analisando estrutura e argumentação</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="h-2 w-2 animate-pulse rounded-full bg-[var(--cp-accent-2)]"
+                        style={{ animationDelay: '0.5s' }}
+                      />
+                      <span>Calculando nota realista</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="h-2 w-2 animate-pulse rounded-full bg-[var(--cp-accent)]"
+                        style={{ animationDelay: '1s' }}
+                      />
+                      <span>Gerando redação modelo personalizada</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Botões */}
-        <div className="flex gap-4">
           <button
+            type="button"
             onClick={handleFinish}
             disabled={analizing || !redacaoTexto.trim()}
-            className="cp-btn-primary flex-1 !py-3"
+            className="cp-btn-primary w-full !py-3"
           >
             {analizing ? (
               <>
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                <span>Analisando redação...</span>
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <span>Analisando redação…</span>
               </>
             ) : (
               <>
                 <SparklesIcon className="h-5 w-5" />
-                <span>Finalizar e Ver Resultado</span>
+                <span>Finalizar e ver resultado</span>
               </>
             )}
           </button>
         </div>
-      </div>
       )}
     </div>
   )
 }
 
 export default TreinoRedacao
-
