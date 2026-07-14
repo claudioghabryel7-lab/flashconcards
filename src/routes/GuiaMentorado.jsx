@@ -10,7 +10,7 @@ import {
   Cog6ToothIcon,
 } from '@heroicons/react/24/outline'
 import { loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
-import { db } from '../firebase/config'
+import { auth, db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import { hasPurchasedCourse } from '../utils/courseAccess'
@@ -30,14 +30,21 @@ import {
   buildMentoradoConfigWrite,
 } from '../utils/guiaMentoradoAutomationConfig'
 
+function hasUsableEdital(edital) {
+  return Array.isArray(edital?.disciplinas) && edital.disciplinas.length > 0
+}
+
 const GuiaMentorado = () => {
   const { profile, user } = useAuth()
   const navigate = useNavigate()
+  const uid = user?.uid || auth?.currentUser?.uid || ''
 
   const [currentMonth, setCurrentMonth] = useState(dayjs())
   const [selectedCourseId, setSelectedCourseId] = useState('')
   const [courses, setCourses] = useState([])
   const [editalVerticalizado, setEditalVerticalizado] = useState(null)
+  const [editalLoading, setEditalLoading] = useState(false)
+  const [editalError, setEditalError] = useState('')
   const [cronograma, setCronograma] = useState(null)
   const [rawConfig, setRawConfig] = useState({})
   const [config, setConfig] = useState({
@@ -61,6 +68,7 @@ const GuiaMentorado = () => {
   )
   const dailyReleaseLabel = formatDailyReleaseLabel(automation)
   const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+  const editalReady = hasUsableEdital(editalVerticalizado)
 
   useEffect(() => {
     const loadCourses = async () => {
@@ -83,7 +91,9 @@ const GuiaMentorado = () => {
         if (profile?.selectedCourseId && visible.some((c) => c.id === profile.selectedCourseId)) {
           setSelectedCourseId(profile.selectedCourseId)
         } else if (visible.length > 0) {
-          setSelectedCourseId(visible[0].id)
+          setSelectedCourseId((prev) =>
+            prev && visible.some((c) => c.id === prev) ? prev : visible[0].id,
+          )
         }
       } catch (error) {
         console.error('Erro ao carregar cursos:', error)
@@ -94,15 +104,37 @@ const GuiaMentorado = () => {
   }, [profile])
 
   useEffect(() => {
-    if (!selectedCourseId) return
+    if (!selectedCourseId) {
+      setEditalVerticalizado(null)
+      setEditalError('')
+      setEditalLoading(false)
+      return
+    }
 
     let cancelled = false
+    setEditalLoading(true)
+    setEditalError('')
+    setEditalVerticalizado(null)
+
     loadEditalVerticalizado(selectedCourseId)
       .then((data) => {
-        if (!cancelled) setEditalVerticalizado(data)
+        if (cancelled) return
+        setEditalVerticalizado(data)
+        if (!hasUsableEdital(data)) {
+          setEditalError(
+            'Edital verticalizado ausente ou sem disciplinas neste curso. Gere o edital no Admin.',
+          )
+        }
       })
       .catch((error) => {
         console.error('Erro ao carregar edital verticalizado:', error)
+        if (!cancelled) {
+          setEditalVerticalizado(null)
+          setEditalError(error?.message || 'Falha ao carregar edital verticalizado.')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setEditalLoading(false)
       })
 
     return () => {
@@ -183,7 +215,6 @@ const GuiaMentorado = () => {
           hasTAF: newConfig.hasTAF,
           tafExercicios: newConfig.tafExercicios,
           hasRedacao: newConfig.hasRedacao,
-          // preserva automação existente (não altera neste modal)
           enabled: automation.enabled,
           dailyReleaseHour: automation.schedule.dailyReleaseHour,
           dailyReleaseMinute: automation.schedule.dailyReleaseMinute,
@@ -193,7 +224,7 @@ const GuiaMentorado = () => {
           allowBackfill: automation.triggers.allowBackfill,
           releaseOnDayComplete: automation.vespera.releaseOnDayComplete,
         },
-        { userId: user?.uid || automation.automationUserId, existing: rawConfig },
+        { userId: uid || automation.automationUserId, existing: rawConfig },
       )
       await setDoc(
         configRef,
@@ -206,67 +237,77 @@ const GuiaMentorado = () => {
       setShowConfigModal(false)
     } catch (error) {
       console.error('Erro ao salvar configuração:', error)
+      alert(error?.message || 'Erro ao salvar configuração.')
     }
   }
 
   const generateCronograma = async () => {
-    if (!editalVerticalizado) {
-      alert('É necessário ter um edital verticalizado para gerar o cronograma.')
+    if (!selectedCourseId) {
+      alert('Selecione um curso.')
       return
     }
-
-    if (!user?.uid) {
+    if (!uid) {
       alert('Faça login como administrador para gerar o cronograma.')
       return
     }
 
-    const planningEnd = resolvePlanningEndDate(config)
-    const today = dayjs().startOf('day')
-    const daysUntilProva = planningEnd.diff(today, 'day')
-
-    if (daysUntilProva <= 0) {
-      alert('O período de planejamento deve ser no futuro.')
-      return
-    }
-
-    const usingDefaultWindow = isUsingDefaultPlanningWindow(config)
-
     setGenerating(true)
+    setMessage('🔎 Verificando edital verticalizado…')
 
     try {
+      // Recarrega na hora do clique (evita estado stale / falso “sem edital”)
+      const freshEdital = await loadEditalVerticalizado(selectedCourseId)
+      setEditalVerticalizado(freshEdital)
+
+      if (!hasUsableEdital(freshEdital)) {
+        throw new Error(
+          'É necessário ter um edital verticalizado com disciplinas neste curso. Gere o edital no Admin → Edital Verticalizado.',
+        )
+      }
+
+      const planningEnd = resolvePlanningEndDate(config)
+      const today = dayjs().startOf('day')
+      const daysUntilProva = planningEnd.diff(today, 'day')
+
+      if (daysUntilProva <= 0) {
+        throw new Error('O período de planejamento deve ser no futuro. Ajuste a data da prova em Planejamento.')
+      }
+
+      const usingDefaultWindow = isUsingDefaultPlanningWindow(config)
+
       setMessage(
         usingDefaultWindow
           ? `🤖 Gerando cronograma na nuvem (${DEFAULT_PLANNING_DAYS} dias)… Pode fechar o site.`
           : '🤖 Gerando cronograma na nuvem… Pode fechar o site.',
       )
 
-      await startGuiaMentoradoCronogramaGeneration({
-        userId: user.uid,
+      const { jobId } = await startGuiaMentoradoCronogramaGeneration({
+        userId: uid,
         courseId: selectedCourseId,
         config: {
           ...config,
           autoGerarConteudo: automation.enabled,
           automation: {
             enabled: automation.enabled,
-            automationUserId: user.uid,
+            automationUserId: uid,
             schedule: automation.schedule,
             triggers: automation.triggers,
             vespera: automation.vespera,
           },
-          automationUserId: user.uid,
+          automationUserId: uid,
         },
       })
 
       setMessage(
         automation.enabled
-          ? `✅ Cronograma em geração na nuvem. Hoje libera os tópicos do dia; demais dias às ${dailyReleaseLabel}. Acompanhe o banner.`
-          : '✅ Cronograma em geração na nuvem. Acompanhe o banner no canto inferior direito.',
+          ? `✅ Cronograma enfileirado (job ${String(jobId).slice(0, 8)}…). Hoje libera os tópicos do dia; demais dias às ${dailyReleaseLabel}. Acompanhe o banner.`
+          : `✅ Cronograma enfileirado (job ${String(jobId).slice(0, 8)}…). Acompanhe o banner no canto inferior direito.`,
       )
 
-      setTimeout(() => setMessage(''), 10000)
+      setTimeout(() => setMessage(''), 12000)
     } catch (error) {
       console.error('Erro ao gerar cronograma:', error)
-      alert('Erro ao gerar cronograma: ' + error.message)
+      alert('Erro ao gerar cronograma: ' + (error.message || String(error)))
       setMessage('')
     } finally {
       setGenerating(false)
@@ -274,11 +315,11 @@ const GuiaMentorado = () => {
   }
 
   const generateTodayContents = async () => {
-    if (!user?.uid) {
+    if (!uid) {
       alert('Faça login como administrador.')
       return
     }
-    if (!editalVerticalizado) {
+    if (!editalReady) {
       alert('Edital verticalizado não carregado.')
       return
     }
@@ -286,7 +327,7 @@ const GuiaMentorado = () => {
     setGeneratingDay(true)
     try {
       const { topicCount } = await startMentoradoDayContentAutomation({
-        userId: user.uid,
+        userId: uid,
         courseId: selectedCourseId,
         targetDate: todayKey,
         editalVerticalizado,
@@ -302,7 +343,7 @@ const GuiaMentorado = () => {
   }
 
   const generatePastDaysContents = async () => {
-    if (!user?.uid) {
+    if (!uid) {
       alert('Faça login como administrador.')
       return
     }
@@ -310,7 +351,7 @@ const GuiaMentorado = () => {
       alert('Selecione um curso.')
       return
     }
-    if (!editalVerticalizado) {
+    if (!editalReady) {
       alert('Edital verticalizado não carregado.')
       return
     }
@@ -327,7 +368,7 @@ const GuiaMentorado = () => {
         courses.find((c) => c.id === selectedCourseId)?.competition ||
         selectedCourseId
       const { jobs, dayCount } = await startMentoradoBackfillForCourse({
-        userId: user.uid,
+        userId: uid,
         courseId: selectedCourseId,
         courseName,
         editalVerticalizado,
@@ -343,6 +384,12 @@ const GuiaMentorado = () => {
       setGeneratingPastDays(false)
     }
   }
+
+  const cronogramaBtnTitle = editalLoading
+    ? 'Carregando edital…'
+    : editalReady
+      ? 'Gerar cronograma na nuvem'
+      : editalError || 'Sem edital verticalizado — o clique verifica de novo e avisa'
 
   return (
     <div className="space-y-6">
@@ -364,6 +411,7 @@ const GuiaMentorado = () => {
                 Automação
               </button>
               <button
+                type="button"
                 onClick={() => setShowConfigModal(true)}
                 className="cp-btn-ghost !text-sm"
               >
@@ -371,12 +419,14 @@ const GuiaMentorado = () => {
                 Planejamento
               </button>
               <button
+                type="button"
                 onClick={generateCronograma}
-                disabled={generating || !editalVerticalizado}
+                disabled={generating || editalLoading || !selectedCourseId}
+                title={cronogramaBtnTitle}
                 className="cp-btn-primary !text-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <SparklesIcon className="h-4 w-4" />
-                {generating ? 'Gerando...' : 'Gerar Cronograma'}
+                {generating ? 'Gerando...' : editalLoading ? 'Carregando edital…' : 'Gerar Cronograma'}
               </button>
             </>
           ) : undefined
@@ -400,11 +450,18 @@ const GuiaMentorado = () => {
         >
           {courses.map((course) => (
             <option key={course.id} value={course.id}>
-              {course.name}
+              {course.name || course.competition || course.id}
             </option>
           ))}
         </select>
       </div>
+
+      {isAdmin && selectedCourseId && !editalLoading && !editalReady && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+          {editalError ||
+            'Este curso ainda não tem edital verticalizado com disciplinas. Gere o edital no Admin antes do cronograma.'}
+        </div>
+      )}
 
       {config.dataProva ? (
         <div className="cp-card flex items-center gap-4 !rounded-2xl p-4">
@@ -456,7 +513,7 @@ const GuiaMentorado = () => {
         <MentoradoDayAutomationStatus
           courseId={selectedCourseId}
           targetDate={todayKey}
-          userId={user?.uid}
+          userId={uid}
           onGenerateToday={generateTodayContents}
           onGeneratePastDays={generatePastDaysContents}
           generating={generatingDay}

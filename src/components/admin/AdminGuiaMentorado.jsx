@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CalendarDaysIcon,
   ClockIcon,
@@ -7,6 +7,7 @@ import {
   RocketLaunchIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline'
+import { doc, getDoc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
 import { useAuth } from '../../hooks/useAuth'
 import MentoradoDayAutomationStatus from '../guiaMentorado/MentoradoDayAutomationStatus'
 import {
@@ -23,11 +24,11 @@ import {
 import { DEFAULT_PLANNING_DAYS } from '../../constants/guiaMentorado'
 import { FIREBASE_FUNCTIONS } from '../../config/firebaseFunctions'
 import { auth, db } from '../../firebase/config'
-import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
 import {
   CRON_STEP_MINUTES,
   getMentoradoNextRunInfo,
 } from '../../utils/mentoradoNextRun'
+import { loadEditalVerticalizado } from '../../utils/editalVerticalizadoLoader'
 
 function padTime(h, m) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
@@ -39,6 +40,43 @@ function parseTimeInput(value) {
     hour: Number.isFinite(h) ? Math.min(23, Math.max(0, h)) : 0,
     minute: Number.isFinite(m) ? Math.min(59, Math.max(0, m)) : 0,
   }
+}
+
+function courseLabel(c) {
+  if (!c) return ''
+  const name = String(c.name || '').trim()
+  const competition = String(c.competition || '').trim()
+  if (name && competition && name !== competition) return `${name} — ${competition}`
+  return name || competition || c.id
+}
+
+function formFromConfig(data) {
+  return {
+    enabled: data.enabled,
+    dataProva: data.dataProva || '',
+    hasTAF: data.hasTAF,
+    hasRedacao: data.hasRedacao,
+    tafExercicios: data.tafExercicios || [],
+    dailyReleaseHour: data.schedule.dailyReleaseHour,
+    dailyReleaseMinute: data.schedule.dailyReleaseMinute,
+    onCronogramaGenerated: data.triggers.onCronogramaGenerated,
+    onDailyCron: data.triggers.onDailyCron,
+    allowManualDay: data.triggers.allowManualDay,
+    allowBackfill: data.triggers.allowBackfill,
+    releaseOnDayComplete: data.vespera.releaseOnDayComplete,
+  }
+}
+
+async function assertCronogramaDayExists(courseId, dayKey) {
+  const monthKey = String(dayKey).slice(0, 7)
+  const snap = await getDoc(doc(db, 'courses', courseId, 'cronograma', monthKey))
+  const day = snap.exists() ? snap.data()?.days?.[dayKey] : null
+  if (!day) {
+    throw new Error(
+      `Dia ${dayKey} não existe no cronograma deste curso. Gere o cronograma primeiro.`,
+    )
+  }
+  return day
 }
 
 const TAF_OPTIONS = ['Barra', 'Flexão', 'Corrida', 'Abdominal', 'Shut Run', 'Salto']
@@ -88,6 +126,10 @@ export default function AdminGuiaMentorado() {
   })
   const [contentBusy, setContentBusy] = useState(false)
   const [nowTick, setNowTick] = useState(() => Date.now())
+  const dirtyRef = useRef(false)
+  const courseIdRef = useRef(courseId)
+
+  const uid = user?.uid || auth?.currentUser?.uid || ''
 
   const todayKey = useMemo(
     () => new Date(nowTick).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
@@ -105,7 +147,6 @@ export default function AdminGuiaMentorado() {
       .then((list) => {
         if (cancelled) return
         setCourses(list)
-        if (list.length && !courseId) setCourseId(list[0].id)
       })
       .catch((err) => setFeedback(`❌ ${err.message || 'Erro ao listar cursos.'}`))
       .finally(() => {
@@ -114,8 +155,19 @@ export default function AdminGuiaMentorado() {
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Garante courseId válido sempre que a lista mudar (evita select “falso” com value="")
+  useEffect(() => {
+    if (!courses.length) return
+    if (!courseId || !courses.some((c) => c.id === courseId)) {
+      setCourseId(courses[0].id)
+    }
+  }, [courses, courseId])
+
+  useEffect(() => {
+    courseIdRef.current = courseId
+  }, [courseId])
 
   useEffect(() => {
     if (!db) return undefined
@@ -133,27 +185,18 @@ export default function AdminGuiaMentorado() {
 
   useEffect(() => {
     if (!courseId) return undefined
+    dirtyRef.current = false
     setLoadingConfig(true)
     let active = true
     const subscribedId = courseId
     const unsub = subscribeGuiaMentoradoConfig(subscribedId, (data) => {
-      if (!active || subscribedId !== courseId) return
+      if (!active || subscribedId !== courseIdRef.current) return
       setConfig(data)
-      setForm({
-        enabled: data.enabled,
-        dataProva: data.dataProva || '',
-        hasTAF: data.hasTAF,
-        hasRedacao: data.hasRedacao,
-        tafExercicios: data.tafExercicios || [],
-        dailyReleaseHour: data.schedule.dailyReleaseHour,
-        dailyReleaseMinute: data.schedule.dailyReleaseMinute,
-        onCronogramaGenerated: data.triggers.onCronogramaGenerated,
-        onDailyCron: data.triggers.onDailyCron,
-        allowManualDay: data.triggers.allowManualDay,
-        allowBackfill: data.triggers.allowBackfill,
-        releaseOnDayComplete: data.vespera.releaseOnDayComplete,
-      })
-      setReleaseTime(padTime(data.schedule.dailyReleaseHour, data.schedule.dailyReleaseMinute))
+      // Não sobrescreve edição local não salva (ex.: lastDailyRun* chegando da nuvem)
+      if (!dirtyRef.current) {
+        setForm(formFromConfig(data))
+        setReleaseTime(padTime(data.schedule.dailyReleaseHour, data.schedule.dailyReleaseMinute))
+      }
       setLoadingConfig(false)
     })
     return () => {
@@ -164,7 +207,7 @@ export default function AdminGuiaMentorado() {
 
   const courseName = useMemo(() => {
     const c = courses.find((x) => x.id === courseId)
-    return c?.name || c?.competition || courseId
+    return courseLabel(c) || courseId
   }, [courses, courseId])
 
   const releaseLabel = formatDailyReleaseLabel({
@@ -202,22 +245,31 @@ export default function AdminGuiaMentorado() {
   )
 
   const patchForm = useCallback((patch) => {
+    dirtyRef.current = true
     setForm((prev) => ({ ...prev, ...patch }))
   }, [])
 
   const persistConfig = async (nextForm, { successMessage } = {}) => {
-    if (!user?.uid || !courseId) throw new Error('Selecione um curso e faça login.')
+    if (!uid || !courseId) throw new Error('Selecione um curso e faça login.')
     const payload = buildSavePayload(nextForm, releaseTime)
     const saved = await saveGuiaMentoradoAdminConfig(courseId, payload, {
-      userId: user.uid,
+      userId: uid,
       existing: config,
     })
+    dirtyRef.current = false
+    setConfig(saved)
+    setForm(formFromConfig(saved))
+    setReleaseTime(padTime(saved.schedule.dailyReleaseHour, saved.schedule.dailyReleaseMinute))
     if (successMessage) setFeedback(successMessage)
     return saved
   }
 
   const handleSave = async () => {
-    if (!user?.uid || !courseId || saving) return
+    if (!courseId || saving) return
+    if (!uid) {
+      setFeedback('❌ Faça login como administrador para salvar.')
+      return
+    }
     setSaving(true)
     setFeedback('')
     try {
@@ -236,9 +288,12 @@ export default function AdminGuiaMentorado() {
     }
   }
 
-  /** Liga/desliga e grava imediatamente — necessário para o cron em nuvem. */
   const handleToggleAutomation = async () => {
-    if (!user?.uid || !courseId || saving || loadingConfig) return
+    if (!courseId || saving || loadingConfig) return
+    if (!uid) {
+      setFeedback('❌ Faça login como administrador.')
+      return
+    }
     const next = !form.enabled
     const nextForm = { ...form, enabled: next }
     patchForm({ enabled: next })
@@ -248,7 +303,7 @@ export default function AdminGuiaMentorado() {
       await persistConfig(nextForm)
       setFeedback(
         next
-          ? `✅ Automação ligada na nuvem para “${courseName}”. O cron horário (mentoradoDailyContentRelease) gera no horário ${releaseLabel} (Brasília), se o gatilho “Cron diário” estiver ativo.`
+          ? `✅ Automação ligada na nuvem para “${courseName}”. O cron horário gera no horário ${releaseLabel} (Brasília), se o gatilho “Cron diário” estiver ativo.`
           : `⏸️ Automação desligada na nuvem para “${courseName}”. O cron não processa este curso.`,
       )
     } catch (err) {
@@ -260,7 +315,11 @@ export default function AdminGuiaMentorado() {
   }
 
   const handleApplyToAll = async () => {
-    if (!user?.uid || busyAction || saving) return
+    if (busyAction || saving) return
+    if (!uid) {
+      setFeedback('❌ Faça login como administrador.')
+      return
+    }
     const n = courses.length
     if (
       !window.confirm(
@@ -275,9 +334,10 @@ export default function AdminGuiaMentorado() {
     try {
       const payload = buildSavePayload(form, releaseTime)
       const result = await applyGuiaMentoradoConfigToAllCourses(payload, {
-        userId: user.uid,
+        userId: uid,
         onProgress: setProgress,
       })
+      dirtyRef.current = false
       const errText =
         result.errors.length > 0
           ? ` Falhas: ${result.errors.map((e) => e.name).join(', ')}.`
@@ -372,13 +432,25 @@ export default function AdminGuiaMentorado() {
   }
 
   const withAction = async (key, fn) => {
-    if (!user?.uid || !courseId || busyAction) return
+    if (!uid) {
+      setFeedback('❌ Faça login como administrador para continuar.')
+      return
+    }
+    if (!courseId) {
+      setFeedback('❌ Selecione um curso antes de continuar.')
+      return
+    }
+    if (busyAction) {
+      setFeedback('⏳ Aguarde a ação em andamento terminar.')
+      return
+    }
     setBusyAction(key)
     setFeedback('')
     setProgress('')
     try {
-      await fn()
+      await fn(uid)
     } catch (err) {
+      console.error(`[AdminGuiaMentorado] ${key}:`, err)
       setFeedback(`❌ ${err.message || 'Falha na ação.'}`)
     } finally {
       setBusyAction('')
@@ -387,14 +459,25 @@ export default function AdminGuiaMentorado() {
   }
 
   const handleCronograma = () =>
-    withAction('cronograma', async () => {
-      // Garante automationUserId + flags atuais na nuvem antes do job
+    withAction('cronograma', async (userId) => {
+      setProgress('Verificando edital verticalizado…')
+      const edital = await loadEditalVerticalizado(courseId)
+      if (!edital?.disciplinas?.length) {
+        throw new Error(
+          'Edital verticalizado não encontrado neste curso. Gere o edital primeiro (Admin → Edital) e tente de novo.',
+        )
+      }
+
+      setProgress('Salvando configuração…')
       await persistConfig(form)
-      await runMentoradoCronograma({
-        userId: user.uid,
+
+      setProgress('Enfileirando geração do cronograma na nuvem…')
+      const { jobId } = await runMentoradoCronograma({
+        userId,
         courseId,
         config: {
           ...form,
+          dataProva: form.dataProva || null,
           enabled: form.enabled,
           schedule: {
             dailyReleaseHour: form.dailyReleaseHour,
@@ -409,20 +492,28 @@ export default function AdminGuiaMentorado() {
           vespera: { releaseOnDayComplete: form.releaseOnDayComplete },
         },
       })
+
       setFeedback(
         form.enabled && form.onCronogramaGenerated
-          ? '🚀 Cronograma na nuvem. Ao concluir, inicia o dia de hoje automaticamente.'
-          : '🚀 Cronograma na nuvem. Acompanhe no banner.',
+          ? `🚀 Cronograma enfileirado (job ${String(jobId).slice(0, 8)}…). Ao concluir, inicia o dia de hoje. Acompanhe o banner.`
+          : `🚀 Cronograma enfileirado (job ${String(jobId).slice(0, 8)}…). Acompanhe o banner no canto.`,
       )
     })
 
   const handleToday = () =>
-    withAction('today', async () => {
+    withAction('today', async (userId) => {
       if (!form.allowManualDay) {
         throw new Error('Geração manual desabilitada neste curso. Ative em Gatilhos e salve.')
       }
+      setProgress('Verificando cronograma de hoje…')
+      await assertCronogramaDayExists(courseId, todayKey)
+      setProgress('Verificando edital…')
+      const edital = await loadEditalVerticalizado(courseId)
+      if (!edital?.disciplinas?.length) {
+        throw new Error('Edital verticalizado não encontrado. Gere o edital primeiro.')
+      }
       const { topicCount } = await runMentoradoToday({
-        userId: user.uid,
+        userId,
         courseId,
         targetDate: todayKey,
       })
@@ -430,7 +521,7 @@ export default function AdminGuiaMentorado() {
     })
 
   const handleBackfill = () =>
-    withAction('backfill', async () => {
+    withAction('backfill', async (userId) => {
       if (!form.allowBackfill) {
         throw new Error('Backfill desabilitado neste curso. Ative em Gatilhos e salve.')
       }
@@ -441,8 +532,13 @@ export default function AdminGuiaMentorado() {
       ) {
         return
       }
+      setProgress('Verificando edital e cronograma…')
+      const edital = await loadEditalVerticalizado(courseId)
+      if (!edital?.disciplinas?.length) {
+        throw new Error('Edital verticalizado não encontrado. Gere o edital primeiro.')
+      }
       const { dayCount } = await runMentoradoBackfill({
-        userId: user.uid,
+        userId,
         courseId,
         courseName,
       })
@@ -450,7 +546,7 @@ export default function AdminGuiaMentorado() {
     })
 
   const handleBackfillAll = () =>
-    withAction('backfillAll', async () => {
+    withAction('backfillAll', async (userId) => {
       if (
         !window.confirm(
           'Gerar Guia Mentorado em massa (dia 1 → hoje)?\n\nSó cursos com automação ativa. 1 curso por vez.',
@@ -458,7 +554,7 @@ export default function AdminGuiaMentorado() {
       ) {
         return
       }
-      const { jobs } = await runMentoradoBackfillAllCourses(user.uid, setProgress)
+      const { jobs } = await runMentoradoBackfillAllCourses(userId, setProgress)
       setFeedback(`✅ ${jobs.length} job(s) enfileirado(s). Acompanhe no banner.`)
     })
 
@@ -478,7 +574,7 @@ export default function AdminGuiaMentorado() {
                 Um painel por curso: liga/desliga a geração diária, define o horário (Brasília),
                 controla gatilhos (cronograma, cron, backfill, véspera) e dispara ações manuais.
                 O cron horário só processa o curso na hora configurada — sem religar a automação
-                sozinho.
+                sozinha.
               </p>
             </div>
           </div>
@@ -500,9 +596,10 @@ export default function AdminGuiaMentorado() {
               disabled={loadingCourses}
               className="mt-1 w-full rounded-xl border border-cp-border bg-cp-bg px-3 py-2.5 text-sm text-cp-text"
             >
+              {!courses.length && <option value="">Nenhum curso ativo</option>}
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name || c.competition || c.id}
+                  {courseLabel(c)}
                 </option>
               ))}
             </select>
@@ -510,7 +607,7 @@ export default function AdminGuiaMentorado() {
           <button
             type="button"
             onClick={handleToggleAutomation}
-            disabled={loadingConfig || saving || !courseId}
+            disabled={loadingConfig || saving || !courseId || !uid}
             className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${
               form.enabled
                 ? 'bg-emerald-500/15 text-emerald-800 hover:bg-emerald-500/25 dark:text-emerald-200'
@@ -688,6 +785,7 @@ export default function AdminGuiaMentorado() {
               type="time"
               value={releaseTime}
               onChange={(e) => {
+                dirtyRef.current = true
                 setReleaseTime(e.target.value)
                 const t = parseTimeInput(e.target.value)
                 patchForm({ dailyReleaseHour: t.hour, dailyReleaseMinute: t.minute })
@@ -752,8 +850,15 @@ export default function AdminGuiaMentorado() {
         <button
           type="button"
           onClick={handleCronograma}
-          disabled={busy || !courseId}
-          className="inline-flex items-center gap-2 rounded-xl border border-cp-border px-4 py-2 text-sm font-semibold text-cp-text transition hover:bg-cp-surface disabled:opacity-50"
+          disabled={busy || !courseId || loadingCourses}
+          title={
+            !courseId
+              ? 'Selecione um curso'
+              : busy
+                ? 'Aguarde a ação em andamento'
+                : 'Gerar cronograma na nuvem'
+          }
+          className="inline-flex items-center gap-2 rounded-xl border border-cp-border px-4 py-2 text-sm font-semibold text-cp-text transition hover:bg-cp-surface disabled:cursor-not-allowed disabled:opacity-50"
         >
           <SparklesIcon className={`h-4 w-4 ${busyAction === 'cronograma' ? 'animate-pulse' : ''}`} />
           {busyAction === 'cronograma' ? 'Gerando…' : 'Gerar cronograma'}
@@ -786,17 +891,17 @@ export default function AdminGuiaMentorado() {
         </button>
       </div>
 
-      {courseId && (form.enabled || cloudEnabled) && (
+      {courseId ? (
         <MentoradoDayAutomationStatus
           courseId={courseId}
           targetDate={todayKey}
-          userId={user?.uid}
+          userId={uid}
           onGenerateToday={handleToday}
           onGeneratePastDays={handleBackfill}
           generating={busyAction === 'today'}
           generatingPastDays={busyAction === 'backfill'}
         />
-      )}
+      ) : null}
 
       <div className="cp-card !rounded-2xl space-y-4 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">

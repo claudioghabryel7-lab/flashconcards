@@ -82,9 +82,13 @@ export async function startBackgroundGeneration({
   })
 
   if (useServer) {
-    kickGenerationJob(userId, jobId).catch((err) => {
-      console.warn('[kickGenerationJob]', jobId, err?.message || err)
-    })
+    const kick = await kickGenerationJob(userId, jobId)
+    if (!kick?.ok && kick?.reason !== 'already_started' && kick?.reason !== 'already_finished') {
+      const reason = kick?.reason || kick?.error || 'kick_failed'
+      throw new Error(
+        `Job criado (${jobId}), mas o servidor não iniciou o processamento (${reason}). Tente de novo em alguns segundos.`,
+      )
+    }
 
     const promise = waitForGenerationJob(userId, jobId).then((job) => {
       if (job?.cancelled || job?.status === GENERATION_JOB_STATUS.CANCELLED) {
