@@ -2940,7 +2940,7 @@ REGRAS CRÍTICAS:
       return
     }
     setGeneratingCourseImage(true)
-    setMessage('🔎 Buscando brasão/logo oficial e montando capa estúdio…')
+    setMessage('🎨 Gerando capa no visual tech do site…')
     try {
       const imageBase64 = await generateCourseCoverImageAi({
         name: courseForm.name,
@@ -2950,7 +2950,7 @@ REGRAS CRÍTICAS:
         referenceLink: courseForm.referenceLink,
       })
       setCourseForm((prev) => ({ ...prev, imageBase64, imageUrl: '' }))
-      setMessage('✅ Capa com logo real gerada. Revise o preview.')
+      setMessage('✅ Capa tech gerada (fontes e fundo do site). Revise o preview.')
     } catch (err) {
       console.error('Erro ao gerar capa do curso:', err)
       setMessage(`❌ ${formatCourseAiError(err)}`)
@@ -2974,7 +2974,7 @@ REGRAS CRÍTICAS:
 
     setGeneratingCourseImage(true)
     setEditingCourseImage(course.id)
-    setMessage(`🔎 Buscando brasão oficial para “${name}”…`)
+    setMessage(`🎨 Gerando capa tech para “${name}”…`)
     try {
       const imageBase64 = await generateCourseCoverImageAi({
         name,
@@ -2984,7 +2984,7 @@ REGRAS CRÍTICAS:
         referenceLink: data?.referenceLink || '',
       })
       setNewCourseImage(imageBase64)
-      setMessage('✅ Capa com logo real gerada. Clique em Salvar para aplicar no curso.')
+      setMessage('✅ Capa tech gerada. Clique em Salvar para aplicar.')
     } catch (err) {
       console.error('Erro ao gerar capa do curso existente:', err)
       setMessage(`❌ ${formatCourseAiError(err)}`)
@@ -9896,13 +9896,13 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                                 generatingCourseDescription
                               }
                               className="rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-600 px-4 py-2 text-xs font-semibold text-white hover:from-indigo-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition whitespace-nowrap"
-                              title="Busca o brasão/logo real do órgão e monta capa estúdio limpa (sem marca d’água)"
+                              title="Capa no visual tech do site: aurora + grid + fontes Syne/Geist"
                             >
-                              {generatingCourseImage ? 'Buscando brasão…' : '🎨 Gerar capa profissional'}
+                              {generatingCourseImage ? 'Gerando capa…' : '🎨 Gerar capa profissional'}
                             </button>
                           </div>
                           <p className="mt-1 text-[11px] text-slate-500">
-                            Usa o brasão/logo real do concurso (ex.: PCGO) centralizado em fundo estúdio — sem inventar logo, sem marcas d’água ou URLs.
+                            Fundo tech do site (aurora violeta/ciano + grid) e tipografia Syne / Geist — PREPARAÇÃO + nome + concurso.
                           </p>
                           {courseForm.imageBase64 && (
                             <div className="mt-2">

@@ -262,17 +262,33 @@ function wrapText(ctx, text, maxWidth) {
     }
   }
   if (line) lines.push(line)
-  return lines.slice(0, 3)
+  return lines.slice(0, 4)
 }
 
 /** Extrai sigla curta para o banner (ex.: PMAL → PM AL). */
 function buildBannerHeadline(title = '', subtitle = '') {
   const source = `${title} ${subtitle}`.toUpperCase()
   const known = source.match(
-    /\b(PM|PC|BM|GCM|CBM|PRF|PF|PFN)[\s-]?([A-Z]{2}|AL|GO|SP|RJ|MG|BA|PE|CE|PR|RS|SC|DF|ES|PB|RN|PI|MA|PA|AM|RO|AC|RR|AP|TO|MT|MS|SE)\b/,
+    /\b(PM|PC|PP|BM|GCM|CBM|PRF|PF|PFN|PPRN|PCGO)[\s-]?([A-Z]{2}|AL|GO|SP|RJ|MG|BA|PE|CE|PR|RS|SC|DF|ES|PB|RN|PI|MA|PA|AM|RO|AC|RR|AP|TO|MT|MS|SE)?\b/,
   )
   if (known) {
-    return { left: known[1], right: known[2], full: `${known[1]} ${known[2]}`, acronym: `${known[1]}${known[2]}` }
+    const left = known[1]
+    const right = known[2] || ''
+    // Já veio completo (PPRN, PCGO)
+    if (!right && left.length >= 4) {
+      return {
+        left: left.slice(0, 2),
+        right: left.slice(2),
+        full: left,
+        acronym: left,
+      }
+    }
+    return {
+      left,
+      right,
+      full: right ? `${left} ${right}` : left,
+      acronym: `${left}${right}`,
+    }
   }
   const acronym = source.match(/\b([A-Z]{3,6})\b/)
   if (acronym) {
@@ -312,6 +328,7 @@ function buildBannerHeadline(title = '', subtitle = '') {
 
 function inferInstitutionKind(text = '') {
   const t = text.toLowerCase()
+  if (/pol[ií]cia penal|\bpp\b|pprn/.test(t)) return 'prison police / polícia penal'
   if (/bombeiro|cbm|corpo de bombeiros/.test(t)) return 'fire department / bombeiros'
   if (/guarda municipal|gcm/.test(t)) return 'municipal guard'
   if (/pol[ií]cia civil|\bpc\b/.test(t)) return 'civil police'
@@ -322,61 +339,164 @@ function inferInstitutionKind(text = '') {
 }
 
 /**
- * Template Louvart-style — só troca órgão/cargo. Sem watermark/URL.
- * Quando há emblema oficial anexado, a IA NÃO inventa brasão.
+ * Textos da capa = mesmos campos do admin (nome + concurso).
+ * Ex.: nome "PPRN" + concurso "Polícia Penal Rio Grande do Norte"
+ */
+function resolveCoverTexts(name = '', competition = '') {
+  const courseName = String(name || '').trim()
+  const contest = String(competition || '').trim()
+  const shortName =
+    courseName &&
+    (courseName.length <= 14 || /^[A-Z0-9]{2,10}$/i.test(courseName.replace(/\s+/g, '')))
+
+  const headline = shortName
+    ? courseName.toUpperCase()
+    : buildBannerHeadline(contest, courseName).full || courseName.toUpperCase()
+
+  const institution = contest || courseName
+  const subtitle =
+    shortName && contest && contest.toUpperCase() !== headline
+      ? contest
+      : !shortName && courseName && courseName.toUpperCase() !== institution.toUpperCase()
+        ? courseName
+        : ''
+
+  return { headline, institution, subtitle, courseName, contest }
+}
+
+/**
+ * Cores/tipografia do site (FlashConCards / Concurseiro Preditivo — modo dark tech).
+ */
+const SITE_COVER = {
+  bg: '#09090b',
+  text: '#fafafa',
+  muted: '#a1a1aa',
+  accent: '#a78bfa',
+  accent2: '#22d3ee',
+  accent3: '#f472b6',
+  aurora1: 'rgba(124, 58, 237, 0.28)',
+  aurora2: 'rgba(34, 211, 238, 0.18)',
+  aurora3: 'rgba(244, 114, 182, 0.14)',
+  gridDot: 'rgba(167, 139, 250, 0.16)',
+}
+
+function getSiteFonts() {
+  if (typeof document === 'undefined') {
+    return {
+      display: 'Syne, system-ui, sans-serif',
+      sans: 'system-ui, sans-serif',
+      mono: 'ui-monospace, monospace',
+    }
+  }
+  const root = getComputedStyle(document.documentElement)
+  return {
+    display: root.getPropertyValue('--font-display').trim() || 'Syne, system-ui, sans-serif',
+    sans: root.getPropertyValue('--font-sans').trim() || 'system-ui, sans-serif',
+    mono: root.getPropertyValue('--font-mono').trim() || 'ui-monospace, monospace',
+  }
+}
+
+async function ensureSiteFonts() {
+  if (typeof document === 'undefined') return getSiteFonts()
+  try {
+    await Promise.all([
+      document.fonts.load(`700 64px Syne`),
+      document.fonts.load(`600 40px Syne`),
+      document.fonts.ready,
+    ])
+  } catch {
+    // segue com fallback do sistema
+  }
+  return getSiteFonts()
+}
+
+/** Fundo tech do site: zinc escuro + aurora violeta/ciano/rosa + dot grid. */
+function drawTechSiteBackground(ctx, W, H) {
+  ctx.fillStyle = SITE_COVER.bg
+  ctx.fillRect(0, 0, W, H)
+
+  const a1 = ctx.createRadialGradient(W * 0.18, H * 0.12, 0, W * 0.18, H * 0.12, W * 0.55)
+  a1.addColorStop(0, SITE_COVER.aurora1)
+  a1.addColorStop(1, 'transparent')
+  ctx.fillStyle = a1
+  ctx.fillRect(0, 0, W, H)
+
+  const a2 = ctx.createRadialGradient(W * 0.88, H * 0.22, 0, W * 0.88, H * 0.22, W * 0.45)
+  a2.addColorStop(0, SITE_COVER.aurora2)
+  a2.addColorStop(1, 'transparent')
+  ctx.fillStyle = a2
+  ctx.fillRect(0, 0, W, H)
+
+  const a3 = ctx.createRadialGradient(W * 0.4, H * 0.92, 0, W * 0.4, H * 0.92, W * 0.5)
+  a3.addColorStop(0, SITE_COVER.aurora3)
+  a3.addColorStop(1, 'transparent')
+  ctx.fillStyle = a3
+  ctx.fillRect(0, 0, W, H)
+
+  // dot grid (cp-dot-grid)
+  const step = Math.max(18, Math.round(W / 90))
+  ctx.fillStyle = SITE_COVER.gridDot
+  for (let x = step; x < W; x += step) {
+    for (let y = step; y < H; y += step) {
+      ctx.beginPath()
+      ctx.arc(x, y, 1.1, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+
+  // vinheta central → borda (igual TechBackground)
+  const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.15, W / 2, H / 2, H * 0.78)
+  vignette.addColorStop(0, 'transparent')
+  vignette.addColorStop(1, SITE_COVER.bg)
+  ctx.fillStyle = vignette
+  ctx.fillRect(0, 0, W, H)
+}
+
+/**
+ * Template tipográfico no visual tech do site (Syne / Geist / aurora).
+ * Subtítulo longo do concurso NÃO é gerado pela IA — aplicado depois em fonte real.
  */
 export function buildCourseCoverSystemPrompt({
   name,
   competition,
   banca = '',
-  hasOfficialEmblem = false,
 } = {}) {
-  const courseName = String(name || '').trim()
-  const contest = String(competition || '').trim()
-  const board = String(banca || '').trim()
-  const headline = buildBannerHeadline(contest, courseName)
-  const kind = inferInstitutionKind(`${contest} ${courseName}`)
+  const texts = resolveCoverTexts(name, competition)
+  void competition
+  void banca
 
-  const emblemBlock = hasOfficialEmblem
-    ? `OFFICIAL EMBLEM (CRITICAL):
-- An official emblem/logo image is ATTACHED.
-- Place THAT EXACT emblem as the centered hero. Do NOT redraw, reinvent, or "improve" the heraldry.
-- Keep colors, ribbons, text and symbols of the attached emblem intact and recognizable.
-- You may only adjust lighting/background around it (studio dark backdrop, soft glow).`
-    : `EMBLEM:
-- Prefer the REAL well-known official emblem of "${contest}" if you know it accurately.
-- If unsure, use a clean generic premium seal for a ${kind} — NEVER invent a wrong state coat of arms.`
+  return `You are the brand art director for FlashConCards / Concurseiro Preditivo (Brazilian concurso study platform).
 
-  return `You are a senior art director for premium Brazilian "concurso público" education brands (quality bar: Louvart / high-end academy posters).
+Create ONE 16:9 landscape cover image that matches the SITE visual system.
 
-Create ONE 16:9 landscape cover image.
+BRAND LOOK (mandatory — copy the product UI):
+- Dark tech background like zinc-950 (#09090b)
+- Soft aurora glows: violet (#7c3aed), cyan (#22d3ee), pink (#f472b6) — same as the site TechBackground
+- Subtle purple/violet DOT GRID overlay (tech dashboard feel)
+- Soft center vignette
+- Premium SaaS / edtech aesthetic — NOT gold classical academic, NOT stock photo
 
-VARIABLES (replace only these — keep the design system fixed):
-- COMPETITION / INSTITUTION: "${contest}"
-- COURSE / ROLE: "${courseName}"
-- SHORT HEADLINE: "${headline.full}"
-- INSTITUTION TYPE: ${kind}
-${board ? `- EXAMINING BOARD (context only, do NOT print the board name): ${board}` : ''}
+TYPOGRAPHY (site fonts):
+- Eyebrow "PREPARAÇÃO": small, uppercase, letter-spaced, cyan/violet tech accent, mono/tech label style (Geist Mono vibe)
+- Headline "${texts.headline}": huge, bold, white (#fafafa), geometric display sans like Syne — centered hero
+- Sharp, modern, product-UI typography — NOT serif, NOT decorative script
 
-${emblemBlock}
+VARIABLES (print EXACTLY):
+- EYEBROW: "PREPARAÇÃO"
+- HEADLINE: "${texts.headline}"
 
-DESIGN SYSTEM (mandatory):
-1) Minimalist hierarchy. One focus: the official emblem, large and centered (like product photography of a metallic badge).
-2) Background: deep charcoal/black studio, soft radial glow behind the emblem, dramatic rim light, HD finish.
-3) Typography: modern clean sans-serif only. Keep text minimal — the emblem already carries identity.
-   - Optional small gold "CONCURSO" above
-   - Optional short white headline "${headline.full}" below only if it does not clutter
-4) Extreme negative space. No collage. No crowds. No UI chrome.
+CRITICAL — DO NOT RENDER ANY OTHER TEXT:
+- Do NOT print institution/role long sentences (added later in post with real site fonts)
+- Leave the lower ~35% mostly empty (clean tech background)
 
 STRICT PROHIBITIONS:
-- NO watermarks / URLs / QR codes
-- NO platform logos (FlashConCards, Louvart, DSO, etc.)
-- NO fake/wrong institutional logos
-- NO sticker clutter / stock collage look
+- NO brasão / logo / badge / shield / coat of arms
+- NO watermarks / URLs / QR / platform wordmarks
+- NO people, vehicles, buildings, collage
+- NO cream/paper/classic gold "concurso poster" look — must feel like the dark tech site
+- Do NOT invent another acronym instead of "${texts.headline}"
 
-Quality bar: official premium academy cover, studio render, safe for object-cover cropping.
-
-Output a single polished poster-quality image.`
+Output a single polished 16:9 cover.`
 }
 
 function extractImageDataUrl(response) {
@@ -423,35 +543,78 @@ async function compressDataUrl(dataUrl, { maxBytes = 1.95 * 1024 * 1024, maxSide
   return out
 }
 
-async function generateStudioCoverWithGemini({ name, competition, banca, emblemDataUrl = null }) {
+/** Desenha o texto do concurso com fontes do site (Geist / Syne). */
+async function overlayCompetitionSubtitle(dataUrl, { name, competition }) {
+  if (!dataUrl || typeof document === 'undefined') return dataUrl
+
+  const fonts = await ensureSiteFonts()
+  const texts = resolveCoverTexts(name, competition)
+  const sub = String(texts.subtitle || texts.institution || '').trim()
+  const hl = texts.headline
+  if (!sub || sub.toUpperCase() === hl) return dataUrl
+
+  const img = await loadImage(dataUrl)
+  const W = img.width
+  const H = img.height
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const ctx = canvas.getContext('2d')
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(img, 0, 0, W, H)
+
+  const bandTop = H * 0.58
+  const fade = ctx.createLinearGradient(0, bandTop - H * 0.06, 0, H)
+  fade.addColorStop(0, 'rgba(9,9,11,0)')
+  fade.addColorStop(0.3, 'rgba(9,9,11,0.75)')
+  fade.addColorStop(1, 'rgba(9,9,11,0.94)')
+  ctx.fillStyle = fade
+  ctx.fillRect(0, bandTop - H * 0.06, W, H - bandTop + H * 0.06)
+
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = SITE_COVER.muted
+
+  let fontSize = Math.round(H * 0.03)
+  if (sub.length > 48) fontSize = Math.round(H * 0.026)
+  if (sub.length > 72) fontSize = Math.round(H * 0.022)
+  ctx.font = `500 ${fontSize}px ${fonts.sans}`
+
+  const maxWidth = W * 0.78
+  const lines = wrapText(ctx, sub, maxWidth)
+  const lineGap = Math.round(fontSize * 1.4)
+  const blockH = lines.length * lineGap
+  let y = H * 0.72 - blockH / 2 + lineGap / 2
+  for (const line of lines) {
+    ctx.fillText(line, W / 2, y)
+    y += lineGap
+  }
+
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  return compressDataUrl(canvas.toDataURL('image/jpeg', 0.92))
+}
+
+async function generateStudioCoverWithGemini({ name, competition, banca }) {
   if (!hasGeminiApiKeys()) {
     throw new Error('VITE_GEMINI_API_KEY necessária para gerar capa profissional.')
   }
 
-  const hasOfficialEmblem = Boolean(emblemDataUrl && splitDataUrl(emblemDataUrl))
   const prompt = buildCourseCoverSystemPrompt({
     name,
     competition,
     banca,
-    hasOfficialEmblem,
   })
-
-  const parts = [{ text: prompt }]
-  if (hasOfficialEmblem) {
-    const { mimeType, data } = splitDataUrl(emblemDataUrl)
-    parts.push({
-      inlineData: { mimeType: mimeType || 'image/png', data },
-    })
-  }
 
   const { data } = await geminiRequestWithKeyFallback({
     models: IMAGE_MODELS,
     silent: false,
     buildBody: () => ({
-      contents: [{ role: 'user', parts }],
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: {
         responseModalities: ['TEXT', 'IMAGE'],
-        temperature: 0.25,
+        temperature: 0.3,
       },
     }),
   })
@@ -460,18 +623,19 @@ async function generateStudioCoverWithGemini({ name, competition, banca, emblemD
   if (!dataUrl) {
     throw new Error('A IA não retornou imagem. Verifique acesso aos modelos de imagem Gemini.')
   }
-  return compressDataUrl(dataUrl)
+
+  const compressed = await compressDataUrl(dataUrl)
+  return overlayCompetitionSubtitle(compressed, { name, competition })
 }
 
 /**
- * Capa estilo referência Louvart/PCGO: brasão REAL centralizado em fundo estúdio.
- * Sem watermark, sem URL, sem inventar logo.
+ * Capa tipográfica com fundo tech + fontes do site (Syne / Geist / Geist Mono).
  */
 async function composeMinimalStudioCover({
-  emblemDataUrl,
-  title,
-  subtitle,
+  name,
+  competition,
 }) {
+  const fonts = await ensureSiteFonts()
   const W = 1920
   const H = 1080
   const canvas = document.createElement('canvas')
@@ -481,63 +645,59 @@ async function composeMinimalStudioCover({
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
 
-  const headline = buildBannerHeadline(title, subtitle)
-  const emblem = emblemDataUrl ? await loadImage(emblemDataUrl).catch(() => null) : null
+  const texts = resolveCoverTexts(name, competition)
+  drawTechSiteBackground(ctx, W, H)
 
-  // fundo charcoal como na referência
-  const bg = ctx.createRadialGradient(W / 2, H * 0.48, 40, W / 2, H / 2, H * 0.72)
-  bg.addColorStop(0, '#2a2a2e')
-  bg.addColorStop(0.4, '#141416')
-  bg.addColorStop(1, '#050506')
-  ctx.fillStyle = bg
-  ctx.fillRect(0, 0, W, H)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
 
-  // glow de estúdio atrás do emblema
-  const spot = ctx.createRadialGradient(W / 2, H * 0.46, 30, W / 2, H * 0.46, 380)
-  spot.addColorStop(0, 'rgba(255,255,255,0.14)')
-  spot.addColorStop(0.45, 'rgba(212,175,55,0.06)')
-  spot.addColorStop(1, 'rgba(255,255,255,0)')
-  ctx.fillStyle = spot
-  ctx.fillRect(0, 0, W, H)
-
-  if (emblem) {
-    // Emblema oficial grande e central — prioridade absoluta
-    const maxW = W * 0.42
-    const maxH = H * 0.72
-    const scale = Math.min(maxW / emblem.width, maxH / emblem.height)
-    const dw = emblem.width * scale
-    const dh = emblem.height * scale
-    const dx = (W - dw) / 2
-    const dy = (H - dh) / 2 - H * 0.02
-    ctx.drawImage(emblem, dx, dy, dw, dh)
-
-    // subtítulo discreto só se o cargo for diferente do concurso
-    const sub = String(subtitle || '').trim()
-    if (sub && sub.toUpperCase() !== String(title || '').toUpperCase()) {
-      ctx.textAlign = 'center'
-      ctx.fillStyle = 'rgba(226,232,240,0.75)'
-      ctx.font = '500 28px Inter, Segoe UI, Arial, sans-serif'
-      const lines = wrapText(ctx, sub, W * 0.55)
-      let y = dy + dh + 48
-      for (const line of lines.slice(0, 1)) {
-        ctx.fillText(line, W / 2, y)
-        y += 36
-      }
-      ctx.textAlign = 'left'
-    }
-  } else {
-    // sem logo real: tipografia mínima (último recurso)
-    ctx.textAlign = 'center'
-    ctx.fillStyle = '#f5c518'
-    ctx.font = '700 42px Inter, Segoe UI, Arial, sans-serif'
-    ctx.fillText('CONCURSO', W / 2, H * 0.38)
-    ctx.fillStyle = '#ffffff'
-    ctx.font = '800 88px Inter, Segoe UI, Arial, sans-serif'
-    ctx.fillText(headline.full, W / 2, H * 0.52)
-    ctx.textAlign = 'left'
+  // PREPARAÇÃO — label mono do site (tracking largo, accent cyan)
+  ctx.fillStyle = SITE_COVER.accent2
+  ctx.font = `600 42px ${fonts.mono}`
+  const prep = 'PREPARAÇÃO'
+  // letter-spacing manual (canvas não aplica CSS letter-spacing de forma confiável)
+  const prepSize = 42
+  ctx.font = `600 ${prepSize}px ${fonts.mono}`
+  const spacing = 10
+  let prepWidth = 0
+  for (const ch of prep) prepWidth += ctx.measureText(ch).width + spacing
+  prepWidth -= spacing
+  let px = W / 2 - prepWidth / 2
+  for (const ch of prep) {
+    ctx.fillText(ch, px + ctx.measureText(ch).width / 2, H * 0.28)
+    px += ctx.measureText(ch).width + spacing
   }
 
-  return compressDataUrl(canvas.toDataURL('image/jpeg', 0.94))
+  // Headline — Syne (font-display do site)
+  ctx.fillStyle = SITE_COVER.text
+  const hl = texts.headline
+  let headlineSize = 168
+  if (hl.length > 8) headlineSize = 128
+  if (hl.length > 14) headlineSize = 96
+  if (hl.length > 22) headlineSize = 72
+  ctx.font = `700 ${headlineSize}px ${fonts.display}`
+  ctx.fillText(hl, W / 2, H * 0.48)
+
+  // Subtítulo — Geist sans
+  const sub = texts.subtitle || texts.institution || ''
+  if (sub && sub.toUpperCase() !== hl) {
+    ctx.fillStyle = SITE_COVER.muted
+    let fontSize = 34
+    if (sub.length > 48) fontSize = 30
+    if (sub.length > 72) fontSize = 26
+    ctx.font = `500 ${fontSize}px ${fonts.sans}`
+    const lines = wrapText(ctx, sub, W * 0.78)
+    const lineGap = Math.round(fontSize * 1.4)
+    let y = H * 0.66
+    for (const line of lines) {
+      ctx.fillText(line, W / 2, y)
+      y += lineGap
+    }
+  }
+
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  return compressDataUrl(canvas.toDataURL('image/jpeg', 0.92))
 }
 
 async function fetchOfficialEmblemDataUrl({ name, competition, banca, referenceLink }) {
@@ -804,10 +964,8 @@ async function downloadFirstWorking(candidates, { preferOfficial = true, maxTrie
 }
 
 /**
- * Capa profissional estilo Louvart com LOGO REAL do órgão:
- * 1) Busca brasão/logo oficial
- * 2) Monta capa estúdio com o emblema real (pixel-perfect)
- * 3) Opcional: Gemini só para polish, sempre com o emblema anexado
+ * Capa tipográfica no visual tech do site:
+ * fundo aurora + dot grid + fontes Syne / Geist / Geist Mono.
  */
 export async function generateCourseCoverImageAi({
   name,
@@ -823,40 +981,23 @@ export async function generateCourseCoverImageAi({
   }
 
   void price
+  void referenceLink
+  void banca
 
-  // 1) Logo/brasão REAL primeiro (ex.: PCGO)
-  const emblemDataUrl = await fetchOfficialEmblemDataUrl({
+  // Primário: canvas com tokens/fontes do site (fiel ao produto)
+  try {
+    return await composeMinimalStudioCover({
+      name: courseName,
+      competition: contest,
+    })
+  } catch (err) {
+    console.warn('[courseCover] composição tech falhou, tentando Gemini:', err?.message || err)
+  }
+
+  return generateStudioCoverWithGemini({
     name: courseName,
     competition: contest,
     banca,
-    referenceLink,
-  })
-
-  if (emblemDataUrl) {
-    // Composição com emblema oficial = garantia de logo real
-    return composeMinimalStudioCover({
-      emblemDataUrl,
-      title: contest,
-      subtitle: courseName !== contest ? courseName : '',
-    })
-  }
-
-  // 2) Sem emblema baixado: tenta Gemini (pode errar brasões — último recurso)
-  try {
-    return await generateStudioCoverWithGemini({
-      name: courseName,
-      competition: contest,
-      banca,
-      emblemDataUrl: null,
-    })
-  } catch (err) {
-    console.warn('[courseCover] Gemini Image falhou:', err?.message || err)
-  }
-
-  return composeMinimalStudioCover({
-    emblemDataUrl: null,
-    title: contest,
-    subtitle: courseName !== contest ? courseName : '',
   })
 }
 
