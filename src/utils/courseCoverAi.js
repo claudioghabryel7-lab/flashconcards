@@ -374,10 +374,13 @@ const SITE_COVER = {
   accent: '#a78bfa',
   accent2: '#22d3ee',
   accent3: '#f472b6',
-  aurora1: 'rgba(124, 58, 237, 0.28)',
-  aurora2: 'rgba(34, 211, 238, 0.18)',
-  aurora3: 'rgba(244, 114, 182, 0.14)',
-  gridDot: 'rgba(167, 139, 250, 0.16)',
+  aurora1: 'rgba(124, 58, 237, 0.38)',
+  aurora2: 'rgba(34, 211, 238, 0.26)',
+  aurora3: 'rgba(244, 114, 182, 0.2)',
+  aurora1b: 'rgba(99, 102, 241, 0.22)',
+  aurora2b: 'rgba(8, 145, 178, 0.16)',
+  gridDot: 'rgba(167, 139, 250, 0.2)',
+  gridLine: 'rgba(167, 139, 250, 0.07)',
 }
 
 function getSiteFonts() {
@@ -410,42 +413,84 @@ async function ensureSiteFonts() {
   return getSiteFonts()
 }
 
-/** Fundo tech do site: zinc escuro + aurora violeta/ciano/rosa + dot grid. */
+/** Texto centralizado com tracking (gap entre letras). trackingPx negativo = mais junto. */
+function fillCenteredTightText(ctx, text, centerX, y, trackingPx = 0) {
+  const chars = Array.from(String(text || ''))
+  if (!chars.length) return
+  let total = 0
+  const widths = chars.map((ch) => {
+    const w = ctx.measureText(ch).width
+    total += w
+    return w
+  })
+  total += trackingPx * Math.max(0, chars.length - 1)
+  let x = centerX - total / 2
+  const prevAlign = ctx.textAlign
+  ctx.textAlign = 'left'
+  for (let i = 0; i < chars.length; i += 1) {
+    ctx.fillText(chars[i], x, y)
+    x += widths[i] + trackingPx
+  }
+  ctx.textAlign = prevAlign
+}
+
+/** Fundo tech do site com mais volume: auroras, grid, linhas e feixes. */
 function drawTechSiteBackground(ctx, W, H) {
   ctx.fillStyle = SITE_COVER.bg
   ctx.fillRect(0, 0, W, H)
 
-  const a1 = ctx.createRadialGradient(W * 0.18, H * 0.12, 0, W * 0.18, H * 0.12, W * 0.55)
-  a1.addColorStop(0, SITE_COVER.aurora1)
-  a1.addColorStop(1, 'transparent')
-  ctx.fillStyle = a1
-  ctx.fillRect(0, 0, W, H)
+  // auroras grandes (volume) — sem feixe branco forte
+  const blobs = [
+    [W * 0.12, H * 0.08, W * 0.62, SITE_COVER.aurora1],
+    [W * 0.9, H * 0.18, W * 0.5, SITE_COVER.aurora2],
+    [W * 0.35, H * 0.95, W * 0.55, SITE_COVER.aurora3],
+    [W * 0.55, H * 0.35, W * 0.4, SITE_COVER.aurora1b],
+    [W * 0.75, H * 0.7, W * 0.35, SITE_COVER.aurora2b],
+  ]
+  for (const [cx, cy, r, color] of blobs) {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r)
+    g.addColorStop(0, color)
+    g.addColorStop(1, 'transparent')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, W, H)
+  }
 
-  const a2 = ctx.createRadialGradient(W * 0.88, H * 0.22, 0, W * 0.88, H * 0.22, W * 0.45)
-  a2.addColorStop(0, SITE_COVER.aurora2)
-  a2.addColorStop(1, 'transparent')
-  ctx.fillStyle = a2
-  ctx.fillRect(0, 0, W, H)
+  // grid de linhas bem sutis
+  const lineStep = Math.max(48, Math.round(W / 28))
+  ctx.strokeStyle = SITE_COVER.gridLine
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  for (let x = 0; x <= W; x += lineStep) {
+    ctx.moveTo(x, 0)
+    ctx.lineTo(x, H)
+  }
+  for (let y = 0; y <= H; y += lineStep) {
+    ctx.moveTo(0, y)
+    ctx.lineTo(W, y)
+  }
+  ctx.stroke()
 
-  const a3 = ctx.createRadialGradient(W * 0.4, H * 0.92, 0, W * 0.4, H * 0.92, W * 0.5)
-  a3.addColorStop(0, SITE_COVER.aurora3)
-  a3.addColorStop(1, 'transparent')
-  ctx.fillStyle = a3
-  ctx.fillRect(0, 0, W, H)
-
-  // dot grid (cp-dot-grid)
-  const step = Math.max(18, Math.round(W / 90))
+  // dot grid
+  const step = Math.max(16, Math.round(W / 95))
   ctx.fillStyle = SITE_COVER.gridDot
   for (let x = step; x < W; x += step) {
     for (let y = step; y < H; y += step) {
       ctx.beginPath()
-      ctx.arc(x, y, 1.1, 0, Math.PI * 2)
+      ctx.arc(x, y, 1.15, 0, Math.PI * 2)
       ctx.fill()
     }
   }
 
-  // vinheta central → borda (igual TechBackground)
-  const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.15, W / 2, H / 2, H * 0.78)
+  // glow central suave (sem branco forte)
+  const core = ctx.createRadialGradient(W / 2, H * 0.45, 20, W / 2, H * 0.45, H * 0.42)
+  core.addColorStop(0, 'rgba(124,58,237,0.08)')
+  core.addColorStop(0.45, 'rgba(34,211,238,0.04)')
+  core.addColorStop(1, 'transparent')
+  ctx.fillStyle = core
+  ctx.fillRect(0, 0, W, H)
+
+  // vinheta
+  const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.12, W / 2, H / 2, H * 0.82)
   vignette.addColorStop(0, 'transparent')
   vignette.addColorStop(1, SITE_COVER.bg)
   ctx.fillStyle = vignette
@@ -653,30 +698,29 @@ async function composeMinimalStudioCover({
 
   // PREPARAÇÃO — label mono do site (tracking largo, accent cyan)
   ctx.fillStyle = SITE_COVER.accent2
-  ctx.font = `600 42px ${fonts.mono}`
   const prep = 'PREPARAÇÃO'
-  // letter-spacing manual (canvas não aplica CSS letter-spacing de forma confiável)
-  const prepSize = 42
+  const prepSize = 40
   ctx.font = `600 ${prepSize}px ${fonts.mono}`
-  const spacing = 10
+  const spacing = 8
   let prepWidth = 0
   for (const ch of prep) prepWidth += ctx.measureText(ch).width + spacing
   prepWidth -= spacing
   let px = W / 2 - prepWidth / 2
   for (const ch of prep) {
-    ctx.fillText(ch, px + ctx.measureText(ch).width / 2, H * 0.28)
+    ctx.fillText(ch, px + ctx.measureText(ch).width / 2, H * 0.26)
     px += ctx.measureText(ch).width + spacing
   }
 
-  // Headline — Syne (font-display do site)
+  // Headline — maior e mais junta (tracking negativo)
   ctx.fillStyle = SITE_COVER.text
   const hl = texts.headline
-  let headlineSize = 168
-  if (hl.length > 8) headlineSize = 128
-  if (hl.length > 14) headlineSize = 96
-  if (hl.length > 22) headlineSize = 72
+  let headlineSize = 220
+  if (hl.length > 5) headlineSize = 200
+  if (hl.length > 8) headlineSize = 160
+  if (hl.length > 12) headlineSize = 120
+  if (hl.length > 18) headlineSize = 88
   ctx.font = `700 ${headlineSize}px ${fonts.display}`
-  ctx.fillText(hl, W / 2, H * 0.48)
+  fillCenteredTightText(ctx, hl, W / 2, H * 0.48, headlineSize * -0.06)
 
   // Subtítulo — Geist sans
   const sub = texts.subtitle || texts.institution || ''
@@ -964,8 +1008,8 @@ async function downloadFirstWorking(candidates, { preferOfficial = true, maxTrie
 }
 
 /**
- * Capa tipográfica no visual tech do site:
- * fundo aurora + dot grid + fontes Syne / Geist / Geist Mono.
+ * Capa tipográfica no visual tech do site (sem IA):
+ * fundo aurora + grid + fontes Syne / Geist / Geist Mono.
  */
 export async function generateCourseCoverImageAi({
   name,
@@ -980,24 +1024,13 @@ export async function generateCourseCoverImageAi({
     throw new Error('Preencha o nome do curso e o concurso/competição.')
   }
 
+  void banca
   void price
   void referenceLink
-  void banca
 
-  // Primário: canvas com tokens/fontes do site (fiel ao produto)
-  try {
-    return await composeMinimalStudioCover({
-      name: courseName,
-      competition: contest,
-    })
-  } catch (err) {
-    console.warn('[courseCover] composição tech falhou, tentando Gemini:', err?.message || err)
-  }
-
-  return generateStudioCoverWithGemini({
+  return composeMinimalStudioCover({
     name: courseName,
     competition: contest,
-    banca,
   })
 }
 

@@ -9896,13 +9896,13 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                                 generatingCourseDescription
                               }
                               className="rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-600 px-4 py-2 text-xs font-semibold text-white hover:from-indigo-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition whitespace-nowrap"
-                              title="Capa no visual tech do site: aurora + grid + fontes Syne/Geist"
+                              title="Gera capa tech do site (canvas, sem IA): Syne/Geist + aurora"
                             >
                               {generatingCourseImage ? 'Gerando capa…' : '🎨 Gerar capa profissional'}
                             </button>
                           </div>
                           <p className="mt-1 text-[11px] text-slate-500">
-                            Fundo tech do site (aurora violeta/ciano + grid) e tipografia Syne / Geist — PREPARAÇÃO + nome + concurso.
+                            Sem IA — composição local com fundo tech do site. Nos cards, a aurora se move suavemente em CSS.
                           </p>
                           {courseForm.imageBase64 && (
                             <div className="mt-2">

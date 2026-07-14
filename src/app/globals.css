@@ -262,6 +262,76 @@ body {
 .cp-aurora-2 { background: var(--cp-aurora-2); }
 .cp-aurora-3 { background: var(--cp-aurora-3); }
 
+/* Capa de curso: aurora tech suave (sem feixe branco forte) */
+.cp-course-cover-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(36px);
+  mix-blend-mode: soft-light;
+  opacity: 0.28;
+  will-change: transform, opacity;
+}
+
+.cp-course-cover-blob-1 {
+  left: -18%;
+  top: -30%;
+  width: 70%;
+  height: 70%;
+  background: var(--cp-aurora-1);
+  animation-duration: 14s;
+}
+
+.cp-course-cover-blob-2 {
+  right: -20%;
+  top: -10%;
+  width: 65%;
+  height: 65%;
+  background: var(--cp-aurora-2);
+  animation-duration: 18s;
+  animation-delay: -6s;
+}
+
+.cp-course-cover-blob-3 {
+  left: 10%;
+  bottom: -35%;
+  width: 75%;
+  height: 70%;
+  background: var(--cp-aurora-3);
+  animation-duration: 22s;
+  animation-delay: -11s;
+}
+
+.cp-course-cover-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.18;
+  background-image:
+    linear-gradient(var(--cp-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cp-grid-line) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 20%, transparent 75%);
+  animation: cp-course-grid-drift 28s linear infinite;
+}
+
+.cp-course-cover-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(9, 9, 11, 0.22) 100%);
+  pointer-events: none;
+}
+
+@keyframes cp-course-grid-drift {
+  0% { background-position: 0 0, 0 0; }
+  100% { background-position: 28px 14px, 14px 28px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-course-cover-blob,
+  .cp-course-cover-grid {
+    animation: none !important;
+  }
+}
+
 @keyframes cp-blink {
   50% { opacity: 0; }
 }

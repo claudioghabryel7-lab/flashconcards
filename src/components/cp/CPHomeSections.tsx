@@ -15,7 +15,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { db, initFirebase, firebaseInitialized } from '@/firebase/config'
-import LazyImage from '@/components/LazyImage'
+import CourseCoverMedia from '@/components/cp/CourseCoverMedia'
 
 const BANCAS = ['Cebraspe', 'FGV', 'VUNESP', 'FCC', 'Instituto AOCP', 'IBFC', 'Consulplan', 'Quadrix']
 
@@ -254,14 +254,13 @@ export function FeaturedCourses() {
                 >
                   <div className="relative h-32 overflow-hidden bg-cp-surface">
                     {(course.imageUrl || course.imageBase64) && (
-                      <LazyImage
+                      <CourseCoverMedia
                         src={course.imageUrl || course.imageBase64 || ''}
                         alt={course.name || 'Curso'}
-                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                       />
                     )}
                     {course.banca && (
-                      <span className="absolute bottom-2 left-2 cp-badge cp-badge-cyan text-[10px]">
+                      <span className="absolute bottom-2 left-2 z-10 cp-badge cp-badge-cyan text-[10px]">
                         {course.banca}
                       </span>
                     )}

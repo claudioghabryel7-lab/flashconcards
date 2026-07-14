@@ -12,7 +12,7 @@ import {
   Clock,
 } from 'lucide-react'
 import { db, initFirebase, firebaseInitialized } from '@/firebase/config'
-import LazyImage from '@/components/LazyImage'
+import CourseCoverMedia from '@/components/cp/CourseCoverMedia'
 import OnlineNowBadge from '@/components/cp/OnlineNowBadge'
 
 type Course = {
@@ -179,11 +179,10 @@ export default function CursosPage() {
                 <div className="relative h-48 overflow-hidden">
                   {course.imageUrl || course.imageBase64 ? (
                     <>
-                      <div className="absolute inset-0 z-10 bg-gradient-to-t from-cp-bg via-transparent to-transparent" />
-                      <LazyImage
+                      <div className="absolute inset-0 z-10 bg-gradient-to-t from-cp-bg/80 via-transparent to-transparent" />
+                      <CourseCoverMedia
                         src={course.imageUrl || course.imageBase64 || ''}
                         alt={course.name || 'Curso'}
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                         priority={index < 3}
                       />
                     </>

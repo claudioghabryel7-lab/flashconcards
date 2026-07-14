@@ -16,6 +16,7 @@ import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { trackGoogleAdsConversion } from '../utils/googleAds'
 import { getCourseAccessLabel } from '../utils/courseAccess'
 import MercadoPagoPaymentBrick from '../components/MercadoPagoPaymentBrick'
+import CourseCoverMedia from '@/components/cp/CourseCoverMedia'
 
 const PAYMENT_BRANDS = [
   { src: '/pay-mercadopago.png', alt: 'Mercado Pago' },
@@ -730,8 +731,12 @@ const Payment = () => {
           >
             {courseImage ? (
               <div className="relative h-44 w-full overflow-hidden sm:h-52">
-                <img src={courseImage} alt={product.name} className="h-full w-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-[var(--cp-bg)] via-transparent to-transparent" />
+                <CourseCoverMedia
+                  src={courseImage}
+                  alt={product.name}
+                  imgClassName="h-full w-full object-cover"
+                />
+                <div className="absolute inset-0 z-10 bg-gradient-to-t from-[var(--cp-bg)]/80 via-transparent to-transparent" />
               </div>
             ) : null}
 
