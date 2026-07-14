@@ -5,8 +5,8 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import Providers from './providers'
 import AppShell from '@/components/cp/AppShell'
-import GoogleAdsTag from '@/components/GoogleAdsTag'
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_URL } from '@/lib/site'
+import { GOOGLE_ADS_ID } from '@/utils/googleAds'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -69,8 +69,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} h-full`} suppressHydrationWarning>
+      <head>
+        {/* Google Ads — precisa estar no HTML inicial (Assistente de Tags / Google) */}
+        <script async src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_ID}`} />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              window.gtag = gtag;
+              gtag('js', new Date());
+              gtag('config', '${GOOGLE_ADS_ID}');
+            `,
+          }}
+        />
+      </head>
       <body className="min-h-full bg-cp-bg text-cp-text antialiased" suppressHydrationWarning>
-        <GoogleAdsTag />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
