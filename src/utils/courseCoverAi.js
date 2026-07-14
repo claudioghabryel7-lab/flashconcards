@@ -368,19 +368,22 @@ function resolveCoverTexts(name = '', competition = '') {
  * Cores/tipografia do site (FlashConCards / Concurseiro Preditivo — modo dark tech).
  */
 const SITE_COVER = {
-  bg: '#09090b',
+  bg: '#07070c',
   text: '#fafafa',
   muted: '#a1a1aa',
   accent: '#a78bfa',
   accent2: '#22d3ee',
   accent3: '#f472b6',
-  aurora1: 'rgba(124, 58, 237, 0.38)',
-  aurora2: 'rgba(34, 211, 238, 0.26)',
-  aurora3: 'rgba(244, 114, 182, 0.2)',
-  aurora1b: 'rgba(99, 102, 241, 0.22)',
-  aurora2b: 'rgba(8, 145, 178, 0.16)',
-  gridDot: 'rgba(167, 139, 250, 0.2)',
-  gridLine: 'rgba(167, 139, 250, 0.07)',
+  accent4: '#fbbf24',
+  aurora1: 'rgba(124, 58, 237, 0.55)',
+  aurora2: 'rgba(34, 211, 238, 0.42)',
+  aurora3: 'rgba(244, 114, 182, 0.38)',
+  aurora1b: 'rgba(99, 102, 241, 0.4)',
+  aurora2b: 'rgba(6, 182, 212, 0.32)',
+  aurora4: 'rgba(251, 191, 36, 0.18)',
+  aurora5: 'rgba(168, 85, 247, 0.35)',
+  gridDot: 'rgba(167, 139, 250, 0.28)',
+  gridLine: 'rgba(34, 211, 238, 0.1)',
 }
 
 function getSiteFonts() {
@@ -434,29 +437,81 @@ function fillCenteredTightText(ctx, text, centerX, y, trackingPx = 0) {
   ctx.textAlign = prevAlign
 }
 
-/** Fundo tech do site com mais volume: auroras, grid, linhas e feixes. */
+/** Fundo tech mais colorido: auroras, anéis, orbs e grid. */
 function drawTechSiteBackground(ctx, W, H) {
-  ctx.fillStyle = SITE_COVER.bg
+  // base com leve gradiente colorido (não flat cinza)
+  const base = ctx.createLinearGradient(0, 0, W, H)
+  base.addColorStop(0, '#0b0618')
+  base.addColorStop(0.35, '#07070c')
+  base.addColorStop(0.7, '#061018')
+  base.addColorStop(1, '#12061a')
+  ctx.fillStyle = base
   ctx.fillRect(0, 0, W, H)
 
-  // auroras grandes (volume) — sem feixe branco forte
+  // auroras grandes e saturadas
   const blobs = [
-    [W * 0.12, H * 0.08, W * 0.62, SITE_COVER.aurora1],
-    [W * 0.9, H * 0.18, W * 0.5, SITE_COVER.aurora2],
-    [W * 0.35, H * 0.95, W * 0.55, SITE_COVER.aurora3],
-    [W * 0.55, H * 0.35, W * 0.4, SITE_COVER.aurora1b],
-    [W * 0.75, H * 0.7, W * 0.35, SITE_COVER.aurora2b],
+    [W * 0.08, H * 0.05, W * 0.7, SITE_COVER.aurora1],
+    [W * 0.95, H * 0.12, W * 0.58, SITE_COVER.aurora2],
+    [W * 0.25, H * 0.98, W * 0.65, SITE_COVER.aurora3],
+    [W * 0.6, H * 0.28, W * 0.48, SITE_COVER.aurora1b],
+    [W * 0.82, H * 0.75, W * 0.42, SITE_COVER.aurora2b],
+    [W * 0.15, H * 0.55, W * 0.38, SITE_COVER.aurora5],
+    [W * 0.7, H * 0.55, W * 0.3, SITE_COVER.aurora4],
   ]
   for (const [cx, cy, r, color] of blobs) {
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r)
     g.addColorStop(0, color)
+    g.addColorStop(0.55, 'transparent')
     g.addColorStop(1, 'transparent')
     ctx.fillStyle = g
     ctx.fillRect(0, 0, W, H)
   }
 
-  // grid de linhas bem sutis
-  const lineStep = Math.max(48, Math.round(W / 28))
+  // anéis concêntricos tech (detalhe)
+  ctx.save()
+  ctx.translate(W * 0.78, H * 0.22)
+  for (let i = 1; i <= 4; i += 1) {
+    ctx.beginPath()
+    ctx.arc(0, 0, 70 * i, 0, Math.PI * 2)
+    ctx.strokeStyle = `rgba(34, 211, 238, ${0.14 - i * 0.025})`
+    ctx.lineWidth = 1.5
+    ctx.stroke()
+  }
+  ctx.restore()
+
+  ctx.save()
+  ctx.translate(W * 0.18, H * 0.78)
+  for (let i = 1; i <= 3; i += 1) {
+    ctx.beginPath()
+    ctx.arc(0, 0, 90 * i, Math.PI * 0.1, Math.PI * 1.4)
+    ctx.strokeStyle = `rgba(167, 139, 250, ${0.16 - i * 0.03})`
+    ctx.lineWidth = 2
+    ctx.stroke()
+  }
+  ctx.restore()
+
+  // orbs/detalhes pontuais coloridos
+  const orbs = [
+    [W * 0.22, H * 0.2, 8, 'rgba(34,211,238,0.9)'],
+    [W * 0.85, H * 0.35, 6, 'rgba(167,139,250,0.9)'],
+    [W * 0.12, H * 0.42, 5, 'rgba(244,114,182,0.85)'],
+    [W * 0.9, H * 0.62, 7, 'rgba(34,211,238,0.8)'],
+    [W * 0.35, H * 0.85, 5, 'rgba(251,191,36,0.75)'],
+    [W * 0.68, H * 0.15, 4, 'rgba(244,114,182,0.8)'],
+  ]
+  for (const [ox, oy, r, color] of orbs) {
+    const og = ctx.createRadialGradient(ox, oy, 0, ox, oy, r * 5)
+    og.addColorStop(0, color)
+    og.addColorStop(0.4, color.replace(/[\d.]+\)$/, '0.35)'))
+    og.addColorStop(1, 'transparent')
+    ctx.fillStyle = og
+    ctx.beginPath()
+    ctx.arc(ox, oy, r * 5, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  // grid de linhas
+  const lineStep = Math.max(44, Math.round(W / 30))
   ctx.strokeStyle = SITE_COVER.gridLine
   ctx.lineWidth = 1
   ctx.beginPath()
@@ -471,30 +526,69 @@ function drawTechSiteBackground(ctx, W, H) {
   ctx.stroke()
 
   // dot grid
-  const step = Math.max(16, Math.round(W / 95))
+  const step = Math.max(15, Math.round(W / 100))
   ctx.fillStyle = SITE_COVER.gridDot
   for (let x = step; x < W; x += step) {
     for (let y = step; y < H; y += step) {
       ctx.beginPath()
-      ctx.arc(x, y, 1.15, 0, Math.PI * 2)
+      ctx.arc(x, y, 1.2, 0, Math.PI * 2)
       ctx.fill()
     }
   }
 
-  // glow central suave (sem branco forte)
-  const core = ctx.createRadialGradient(W / 2, H * 0.45, 20, W / 2, H * 0.45, H * 0.42)
-  core.addColorStop(0, 'rgba(124,58,237,0.08)')
-  core.addColorStop(0.45, 'rgba(34,211,238,0.04)')
+  // glow central colorido atrás do texto
+  const core = ctx.createRadialGradient(W / 2, H * 0.45, 30, W / 2, H * 0.45, H * 0.5)
+  core.addColorStop(0, 'rgba(167,139,250,0.16)')
+  core.addColorStop(0.35, 'rgba(34,211,238,0.1)')
+  core.addColorStop(0.7, 'rgba(244,114,182,0.06)')
   core.addColorStop(1, 'transparent')
   ctx.fillStyle = core
   ctx.fillRect(0, 0, W, H)
 
-  // vinheta
-  const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.12, W / 2, H / 2, H * 0.82)
+  // vinheta (mais leve para manter cor nas bordas)
+  const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.9)
   vignette.addColorStop(0, 'transparent')
-  vignette.addColorStop(1, SITE_COVER.bg)
+  vignette.addColorStop(1, 'rgba(7,7,12,0.72)')
   ctx.fillStyle = vignette
   ctx.fillRect(0, 0, W, H)
+}
+
+/**
+ * Ícone Concurseiro Preditivo (/course-icons/logo.png) centralizado, bem opaco.
+ * Desenhar ANTES dos textos para a tipografia ficar por cima.
+ */
+async function drawCenteredBrandLogo(ctx, W, H) {
+  const logoDataUrl = await fetchBrandLogoDataUrl()
+  if (!logoDataUrl) return
+
+  try {
+    const logo = await loadImage(logoDataUrl)
+    const size = Math.min(W, H) * 0.48
+    const x = (W - size) / 2
+    const y = (H - size) / 2 - H * 0.02
+
+    ctx.save()
+    ctx.globalAlpha = 0.42
+    // cantos arredondados como no header (rounded-2xl)
+    const radius = size * 0.18
+    roundRectPath(ctx, x, y, size, size, radius)
+    ctx.clip()
+    ctx.drawImage(logo, x, y, size, size)
+    ctx.restore()
+  } catch (err) {
+    console.warn('[courseCover] logo central falhou:', err?.message || err)
+  }
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2)
+  ctx.beginPath()
+  ctx.moveTo(x + radius, y)
+  ctx.arcTo(x + w, y, x + w, y + h, radius)
+  ctx.arcTo(x + w, y + h, x, y + h, radius)
+  ctx.arcTo(x, y + h, x, y, radius)
+  ctx.arcTo(x, y, x + w, y, radius)
+  ctx.closePath()
 }
 
 /**
@@ -692,6 +786,7 @@ async function composeMinimalStudioCover({
 
   const texts = resolveCoverTexts(name, competition)
   drawTechSiteBackground(ctx, W, H)
+  await drawCenteredBrandLogo(ctx, W, H)
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -732,7 +827,7 @@ async function composeMinimalStudioCover({
     ctx.font = `500 ${fontSize}px ${fonts.sans}`
     const lines = wrapText(ctx, sub, W * 0.78)
     const lineGap = Math.round(fontSize * 1.4)
-    let y = H * 0.66
+    let y = H * 0.64
     for (const line of lines) {
       ctx.fillText(line, W / 2, y)
       y += lineGap
