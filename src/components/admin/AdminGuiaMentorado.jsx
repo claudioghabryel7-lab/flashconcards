@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../../hooks/useAuth'
 import MentoradoDayAutomationStatus from '../guiaMentorado/MentoradoDayAutomationStatus'
 import {
+  applyGuiaMentoradoConfigToAllCourses,
   formatDailyReleaseLabel,
   listActiveCoursesForAdmin,
   runMentoradoBackfill,
@@ -51,6 +52,16 @@ const emptyForm = {
   allowManualDay: true,
   allowBackfill: true,
   releaseOnDayComplete: true,
+}
+
+function buildSavePayload(form, releaseTime) {
+  const time = parseTimeInput(releaseTime)
+  return {
+    ...form,
+    dataProva: form.dataProva || null,
+    dailyReleaseHour: time.hour,
+    dailyReleaseMinute: time.minute,
+  }
 }
 
 export default function AdminGuiaMentorado() {
@@ -147,31 +158,98 @@ export default function AdminGuiaMentorado() {
     },
   })
 
+  const cloudEnabled = Boolean(config?.enabled)
+  const cloudHasUser = Boolean(config?.automationUserId)
+
   const patchForm = useCallback((patch) => {
     setForm((prev) => ({ ...prev, ...patch }))
   }, [])
+
+  const persistConfig = async (nextForm, { successMessage } = {}) => {
+    if (!user?.uid || !courseId) throw new Error('Selecione um curso e faça login.')
+    const payload = buildSavePayload(nextForm, releaseTime)
+    const saved = await saveGuiaMentoradoAdminConfig(courseId, payload, {
+      userId: user.uid,
+      existing: config,
+    })
+    if (successMessage) setFeedback(successMessage)
+    return saved
+  }
 
   const handleSave = async () => {
     if (!user?.uid || !courseId || saving) return
     setSaving(true)
     setFeedback('')
     try {
-      const time = parseTimeInput(releaseTime)
-      const saved = await saveGuiaMentoradoAdminConfig(
-        courseId,
-        {
-          ...form,
-          dataProva: form.dataProva || null,
-          dailyReleaseHour: time.hour,
-          dailyReleaseMinute: time.minute,
-        },
-        { userId: user.uid, existing: config },
+      const saved = await persistConfig(form)
+      setFeedback(
+        `✅ Configuração salva na nuvem. Liberação diária às ${formatDailyReleaseLabel(saved)} (Brasília).${
+          saved.enabled
+            ? ' Cron horário ativo neste curso.'
+            : ' Automação desligada — o cron ignora este curso.'
+        }`,
       )
-      setFeedback(`✅ Configuração salva. Liberação diária às ${formatDailyReleaseLabel(saved)} (Brasília).`)
     } catch (err) {
       setFeedback(`❌ ${err.message || 'Erro ao salvar.'}`)
     } finally {
       setSaving(false)
+    }
+  }
+
+  /** Liga/desliga e grava imediatamente — necessário para o cron em nuvem. */
+  const handleToggleAutomation = async () => {
+    if (!user?.uid || !courseId || saving || loadingConfig) return
+    const next = !form.enabled
+    const nextForm = { ...form, enabled: next }
+    patchForm({ enabled: next })
+    setSaving(true)
+    setFeedback('')
+    try {
+      await persistConfig(nextForm)
+      setFeedback(
+        next
+          ? `✅ Automação ligada na nuvem para “${courseName}”. O cron horário (mentoradoDailyContentRelease) gera no horário ${releaseLabel} (Brasília), se o gatilho “Cron diário” estiver ativo.`
+          : `⏸️ Automação desligada na nuvem para “${courseName}”. O cron não processa este curso.`,
+      )
+    } catch (err) {
+      patchForm({ enabled: !next })
+      setFeedback(`❌ ${err.message || 'Erro ao alterar automação.'}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleApplyToAll = async () => {
+    if (!user?.uid || busyAction || saving) return
+    const n = courses.length
+    if (
+      !window.confirm(
+        `Aplicar a configuração atual (automação ${form.enabled ? 'LIGADA' : 'DESLIGADA'}, horário ${releaseLabel}, gatilhos e planejamento) a TODOS os ${n} cursos ativos?\n\nIsso sobrescreve a config de cada curso na nuvem.`,
+      )
+    ) {
+      return
+    }
+    setBusyAction('applyAll')
+    setFeedback('')
+    setProgress('')
+    try {
+      const payload = buildSavePayload(form, releaseTime)
+      const result = await applyGuiaMentoradoConfigToAllCourses(payload, {
+        userId: user.uid,
+        onProgress: setProgress,
+      })
+      const errText =
+        result.errors.length > 0
+          ? ` Falhas: ${result.errors.map((e) => e.name).join(', ')}.`
+          : ''
+      setFeedback(
+        `✅ Configuração aplicada a ${result.count}/${result.total} curso(s) na nuvem.${errText}`,
+      )
+    } catch (err) {
+      setFeedback(`❌ ${err.message || 'Erro ao aplicar em todos.'}`)
+    } finally {
+      setBusyAction('')
+      setProgress('')
     }
   }
 
@@ -270,6 +348,8 @@ export default function AdminGuiaMentorado() {
 
   const handleCronograma = () =>
     withAction('cronograma', async () => {
+      // Garante automationUserId + flags atuais na nuvem antes do job
+      await persistConfig(form)
       await runMentoradoCronograma({
         userId: user.uid,
         courseId,
@@ -389,16 +469,45 @@ export default function AdminGuiaMentorado() {
           </label>
           <button
             type="button"
-            onClick={() => patchForm({ enabled: !form.enabled })}
-            disabled={loadingConfig}
+            onClick={handleToggleAutomation}
+            disabled={loadingConfig || saving || !courseId}
             className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${
               form.enabled
                 ? 'bg-emerald-500/15 text-emerald-800 hover:bg-emerald-500/25 dark:text-emerald-200'
                 : 'bg-slate-500/15 text-slate-700 hover:bg-slate-500/25 dark:text-slate-200'
             }`}
+            title="Grava imediatamente na nuvem (Firestore)"
           >
-            {form.enabled ? 'Automação ligada' : 'Automação desligada'}
+            {saving && !busyAction
+              ? 'Salvando…'
+              : form.enabled
+                ? 'Automação ligada'
+                : 'Automação desligada'}
           </button>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+          <span
+            className={`rounded-full px-2.5 py-1 font-semibold ${
+              cloudEnabled
+                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                : 'bg-slate-500/15 text-slate-600 dark:text-slate-300'
+            }`}
+          >
+            Nuvem: {cloudEnabled ? 'ATIVA' : 'OFF'}
+          </span>
+          <span
+            className={`rounded-full px-2.5 py-1 font-semibold ${
+              cloudHasUser
+                ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
+                : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+            }`}
+          >
+            {cloudHasUser ? 'Usuário de automação OK' : 'Sem usuário — clique em Ligar/Salvar'}
+          </span>
+          <span className="rounded-full bg-cp-surface px-2.5 py-1 text-cp-muted">
+            Cron: mentoradoDailyContentRelease (a cada hora)
+          </span>
         </div>
       </div>
 
@@ -535,7 +644,17 @@ export default function AdminGuiaMentorado() {
           disabled={busy || loadingConfig || !courseId}
           className="cp-btn-primary !text-sm disabled:opacity-50"
         >
-          {saving ? 'Salvando…' : 'Salvar configuração'}
+          {saving && !busyAction ? 'Salvando…' : 'Salvar configuração'}
+        </button>
+        <button
+          type="button"
+          onClick={handleApplyToAll}
+          disabled={busy || loadingConfig || courses.length === 0}
+          className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-200"
+        >
+          {busyAction === 'applyAll'
+            ? 'Aplicando…'
+            : `Aplicar a todos os cursos (${courses.length})`}
         </button>
         <button
           type="button"
@@ -574,7 +693,7 @@ export default function AdminGuiaMentorado() {
         </button>
       </div>
 
-      {courseId && form.enabled && (
+      {courseId && (form.enabled || cloudEnabled) && (
         <MentoradoDayAutomationStatus
           courseId={courseId}
           targetDate={todayKey}

@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   serverTimestamp,
@@ -42,7 +43,11 @@ export async function listActiveCoursesForAdmin() {
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() }))
     .filter((c) => c.active !== false)
-    .sort((a, b) => String(a.name || a.competition || a.id).localeCompare(String(b.name || b.competition || b.id)))
+    .sort((a, b) =>
+      String(a.name || a.competition || a.id).localeCompare(
+        String(b.name || b.competition || b.id),
+      ),
+    )
 }
 
 /**
@@ -62,6 +67,38 @@ export async function saveGuiaMentoradoAdminConfig(courseId, form, { userId, exi
     { merge: true },
   )
   return normalizeMentoradoAutomationConfig(payload)
+}
+
+/**
+ * Aplica a mesma configuração (planejamento + agenda + gatilhos) a todos os cursos ativos.
+ * Preserva lastDailyRun* de cada curso.
+ */
+export async function applyGuiaMentoradoConfigToAllCourses(form, { userId, onProgress } = {}) {
+  if (!userId) throw new Error('Usuário não autenticado.')
+  const courses = await listActiveCoursesForAdmin()
+  if (!courses.length) throw new Error('Nenhum curso ativo encontrado.')
+
+  let ok = 0
+  const errors = []
+
+  for (const course of courses) {
+    const label = course.name || course.competition || course.id
+    try {
+      onProgress?.(`Aplicando em ${label}… (${ok + 1}/${courses.length})`)
+      const snap = await getDoc(doc(db, 'courses', course.id, 'config', 'guiaMentorado'))
+      const existing = snap.exists() ? snap.data() : {}
+      await saveGuiaMentoradoAdminConfig(course.id, form, { userId, existing })
+      ok += 1
+    } catch (err) {
+      errors.push({
+        courseId: course.id,
+        name: label,
+        message: err.message || String(err),
+      })
+    }
+  }
+
+  return { count: ok, total: courses.length, errors }
 }
 
 export async function runMentoradoCronograma({ userId, courseId, config }) {

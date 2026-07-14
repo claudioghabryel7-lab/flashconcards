@@ -88,7 +88,8 @@ export function useResolverIncidencia(courseId, user, profile) {
           available,
         }
       })
-      .filter((m) => m.available && (isAdmin || m.hasContent))
+      // Aluno: só liberadas com conteúdo. Admin: todas (pode abrir/gerar).
+      .filter((m) => isAdmin || (m.available && m.hasContent))
   }, [edital, statusByKey, incidenciaDocs, isAdmin])
 
   return {
