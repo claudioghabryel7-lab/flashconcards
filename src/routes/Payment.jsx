@@ -168,7 +168,8 @@ const Payment = () => {
       const unsubscribe = onSnapshot(transactionRef, async (snapshot) => {
         if (!snapshot.exists()) return
         const data = snapshot.data()
-        if (data.status === 'paid') {
+        // Só conversão quando o pagamento está realmente confirmado no Firestore
+        if (data.status === 'paid' || data.status === 'approved') {
           setPaymentStatus('success')
           setLoading(false)
           trackGoogleAdsConversion(null, data.amount || 99.9, txn)
@@ -187,7 +188,7 @@ const Payment = () => {
         }
       })
 
-      // Se o webhook atrasar, mostrar sucesso otimista após retorno approved
+      // Se o webhook atrasar, mostrar sucesso otimista na UI — sem disparar conversão
       const timer = setTimeout(() => {
         setPaymentStatus((prev) => (prev === 'pending' ? 'success' : prev))
         setLoading(false)
@@ -243,7 +244,7 @@ const Payment = () => {
         console.log('Status da transação atualizado:', status)
 
         // Se o pagamento foi confirmado
-        if (status === 'paid') {
+        if (status === 'paid' || status === 'approved') {
           console.log('Pagamento confirmado! Atualizando página...')
           
           // Atualizar acesso ao curso no perfil do usuário
@@ -301,7 +302,7 @@ const Payment = () => {
           setPaymentStatus('success')
           setLoading(false)
           
-          // Rastrear conversão no Google Ads
+          // Conversão Google Ads somente com compra confirmada (+ dedupe por transaction_id)
           trackGoogleAdsConversion(null, transactionData.amount || product.price, currentTransactionId)
           
           // Parar de monitorar
@@ -503,6 +504,7 @@ const Payment = () => {
   }
 
   const handleBrickSuccess = useCallback((data) => {
+    // Brick só chama onSuccess quando Mercado Pago retorna status === 'approved' (compra confirmada).
     setPaymentStatus('success')
     setShowBrick(false)
     setLoading(false)
@@ -513,10 +515,8 @@ const Payment = () => {
         { merge: true },
       ).catch(() => {})
     }
-    try {
-      trackGoogleAdsConversion({ value: product.price, currency: 'BRL' })
-    } catch (_) {
-      /* ignore */
+    if (currentTransactionId) {
+      trackGoogleAdsConversion(null, product.price, currentTransactionId)
     }
   }, [currentTransactionId, product.price])
 
