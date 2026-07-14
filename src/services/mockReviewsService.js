@@ -10,8 +10,8 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore'
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
-import { db, storage } from '../firebase/config'
+import { db } from '../firebase/config'
+import { readImageAsBase64 } from '../utils/imageBase64'
 
 const CONFIG_PATH = ['config', 'mockReviews']
 const COLLECTION = 'mockReviews'
@@ -93,14 +93,13 @@ export async function setMockReviewsEnabled(enabled) {
   )
 }
 
+/**
+ * Converte a foto em data URL (base64) e salva no Firestore —
+ * mesmo padrão do avatar do perfil, sem depender do Storage.
+ */
 export async function uploadMockReviewPhoto(file) {
-  if (!storage) throw new Error('Storage indisponível.')
   if (!file) throw new Error('Selecione uma foto.')
-  const safe = String(file.name || 'foto').replace(/[^\w.\-]+/g, '_')
-  const path = `mockReviews/${Date.now()}_${safe}`
-  const storageRef = ref(storage, path)
-  await uploadBytes(storageRef, file)
-  return getDownloadURL(storageRef)
+  return readImageAsBase64(file, 320)
 }
 
 export async function createMockReview({
@@ -132,10 +131,23 @@ export async function createMockReview({
 
 export async function updateMockReview(id, patch) {
   if (!db || !id) throw new Error('ID inválido.')
-  await updateDoc(doc(db, COLLECTION, id), {
-    ...patch,
-    updatedAt: serverTimestamp(),
-  })
+  const data = { ...patch, updatedAt: serverTimestamp() }
+  if (data.userName != null) {
+    data.userName = String(data.userName).trim()
+    if (!data.userName) throw new Error('Informe o nome.')
+  }
+  if (data.comment != null) {
+    data.comment = String(data.comment).trim()
+    if (!data.comment) throw new Error('Informe o comentário.')
+  }
+  if (data.photoUrl != null) {
+    data.photoUrl = String(data.photoUrl).trim()
+    if (!data.photoUrl) throw new Error('Adicione uma foto (obrigatória).')
+  }
+  if (data.rating != null) {
+    data.rating = Math.min(5, Math.max(1, Number(data.rating) || 5))
+  }
+  await updateDoc(doc(db, COLLECTION, id), data)
 }
 
 export async function setMockReviewActive(id, active) {

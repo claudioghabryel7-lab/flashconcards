@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   PhotoIcon,
   PlusIcon,
@@ -27,6 +27,8 @@ const emptyForm = {
 }
 
 export default function AdminMockReviews() {
+  const formRef = useRef(null)
+  const fileRef = useRef(null)
   const [enabled, setEnabled] = useState(false)
   const [items, setItems] = useState([])
   const [form, setForm] = useState(emptyForm)
@@ -49,6 +51,7 @@ export default function AdminMockReviews() {
   const resetForm = () => {
     setForm(emptyForm)
     setEditingId(null)
+    if (fileRef.current) fileRef.current.value = ''
   }
 
   const handleToggleMaster = async () => {
@@ -75,21 +78,25 @@ export default function AdminMockReviews() {
     setUploading(true)
     setFeedback('')
     try {
-      const url = await uploadMockReviewPhoto(file)
-      setForm((prev) => ({ ...prev, photoUrl: url }))
+      const dataUrl = await uploadMockReviewPhoto(file)
+      setForm((prev) => ({ ...prev, photoUrl: dataUrl }))
+      setFeedback('✅ Foto carregada. Clique em salvar para aplicar.')
     } catch (err) {
-      setFeedback(`❌ ${err.message || 'Falha no upload da foto.'}`)
+      setFeedback(`❌ ${err.message || 'Falha ao carregar a foto.'}`)
     } finally {
       setUploading(false)
-      e.target.value = ''
+      if (fileRef.current) fileRef.current.value = ''
     }
   }
 
   const handleSave = async () => {
-    if (busy) return
+    if (busy || uploading) return
     setBusy(true)
     setFeedback('')
     try {
+      if (!form.photoUrl?.trim()) {
+        throw new Error('Adicione uma foto (obrigatória).')
+      }
       if (editingId) {
         await updateMockReview(editingId, {
           userName: form.userName.trim(),
@@ -119,6 +126,10 @@ export default function AdminMockReviews() {
       rating: item.rating || 5,
       photoUrl: item.photoUrl || '',
       active: item.active !== false,
+    })
+    setFeedback('✏️ Editando — troque a foto se quiser e clique em Salvar edição.')
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
   }
 
@@ -196,7 +207,10 @@ export default function AdminMockReviews() {
           </div>
         )}
 
-        <div className="grid gap-4 rounded-2xl border border-violet-200/80 bg-white/70 p-4 dark:border-violet-800 dark:bg-slate-900/40 lg:grid-cols-[140px_1fr]">
+        <div
+          ref={formRef}
+          className="grid gap-4 rounded-2xl border border-violet-200/80 bg-white/70 p-4 dark:border-violet-800 dark:bg-slate-900/40 lg:grid-cols-[140px_1fr]"
+        >
           <div className="flex flex-col items-center gap-2">
             <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-violet-300 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/40">
               {form.photoUrl ? (
@@ -206,9 +220,16 @@ export default function AdminMockReviews() {
                 <PhotoIcon className="h-10 w-10 text-violet-400" />
               )}
             </div>
-            <label className="cursor-pointer rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700">
-              {uploading ? 'Enviando…' : 'Foto'}
+            <label
+              className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-semibold text-white ${
+                uploading || busy
+                  ? 'bg-violet-400 opacity-70'
+                  : 'bg-violet-600 hover:bg-violet-700'
+              }`}
+            >
+              {uploading ? 'Processando…' : form.photoUrl ? 'Trocar foto' : 'Escolher foto'}
               <input
+                ref={fileRef}
                 type="file"
                 accept="image/*"
                 className="hidden"
@@ -216,6 +237,9 @@ export default function AdminMockReviews() {
                 disabled={uploading || busy}
               />
             </label>
+            <p className="text-center text-[10px] text-violet-800/60 dark:text-violet-200/60">
+              JPG/PNG · salva junto com o comentário
+            </p>
           </div>
 
           <div className="space-y-3">
@@ -253,6 +277,16 @@ export default function AdminMockReviews() {
                 rows={3}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
                 placeholder="Depoimento que aparece na home…"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+              Ou cole uma URL de foto
+              <input
+                type="url"
+                value={form.photoUrl?.startsWith('data:') ? '' : form.photoUrl || ''}
+                onChange={(e) => setForm({ ...form, photoUrl: e.target.value.trim() })}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+                placeholder="https://…"
               />
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
