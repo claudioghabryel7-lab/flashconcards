@@ -19,6 +19,7 @@ import {
   clearSupervisorQueue,
   formatDailyStartLabel,
   formatScheduleWindowLabel,
+  getProfessorNextWindowInfo,
   SUPERVISOR_PHASE_LABELS,
   PROFESSOR_STEP_LABELS,
   getSaoPauloClockParts,
@@ -124,16 +125,21 @@ export default function AdminProfessorSupervisor() {
           alert('Horário de início e fim precisam ser diferentes.')
           return
         }
-        await setProfessorSupervisorEnabled(user.uid, true, {
+        const result = await setProfessorSupervisorEnabled(user.uid, true, {
           startHour: start.hour,
           startMinute: start.minute,
           endHour: end.hour,
           endMinute: end.minute,
         })
+        if (result && result.within === false) {
+          alert(
+            `Agenda ativada (${result.windowLabel}).\n\nAgora está fora do horário — o Professor entra sozinho quando a janela abrir (tick a cada 1 min).`,
+          )
+        }
       }
     } catch (err) {
       console.error(err)
-      alert('Erro ao alterar o professor fiscalizador.')
+      alert(err?.message || 'Erro ao alterar o professor fiscalizador.')
     } finally {
       setToggling(false)
     }
@@ -243,6 +249,10 @@ export default function AdminProfessorSupervisor() {
     config.enabled && config.sessionEndsAt?.toDate?.() && config.sessionEndsAt.toDate().getTime() > now
 
   const clock = getSaoPauloClockParts()
+  const scheduleInfo = useMemo(
+    () => getProfessorNextWindowInfo(config, new Date(now)),
+    [config, now],
+  )
 
   return (
     <div className="space-y-4">
@@ -274,6 +284,46 @@ export default function AdminProfessorSupervisor() {
           >
             {toggling ? 'Salvando…' : isScheduleOn ? 'Desativar agenda' : 'Ativar agenda (seg–dom)'}
           </button>
+        </div>
+
+        <div
+          className={`mt-4 rounded-2xl border px-4 py-3 ${
+            scheduleInfo.status === 'live' || scheduleInfo.status === 'in_window_idle'
+              ? 'border-emerald-500/30 bg-emerald-500/10'
+              : scheduleInfo.status === 'waiting'
+                ? 'border-amber-500/30 bg-amber-500/10'
+                : 'border-cp-border bg-cp-surface/40'
+          }`}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <ClockIcon className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600" />
+              <div>
+                <p className="text-sm font-semibold text-cp-text">{scheduleInfo.label}</p>
+                {scheduleInfo.countdown && (
+                  <p className="mt-0.5 font-mono text-lg font-bold tabular-nums text-cp-text">
+                    ⏱ {scheduleInfo.countdown}
+                    {scheduleInfo.nextAtLabel ? (
+                      <span className="ml-2 text-xs font-medium text-cp-muted">
+                        (≈ {scheduleInfo.nextAtLabel} BRT)
+                      </span>
+                    ) : null}
+                  </p>
+                )}
+                <p className="mt-1 text-[11px] text-cp-muted">
+                  Tick a cada 1 min (`professorSupervisorTick`). Agora em SP:{' '}
+                  {formatDailyStartLabel(clock.hour, clock.minute)}.
+                </p>
+              </div>
+            </div>
+            <span
+              className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase ${
+                isScheduleOn ? 'bg-indigo-600 text-white' : 'bg-slate-500 text-white'
+              }`}
+            >
+              {isScheduleOn ? 'Programada' : 'Off'}
+            </span>
+          </div>
         </div>
 
         <div className="mt-4 rounded-2xl border border-cp-border bg-cp-surface/40 p-4">

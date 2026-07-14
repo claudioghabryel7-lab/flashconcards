@@ -1894,16 +1894,17 @@ exports.sendAdminBroadcastEmail = functions.https.onRequest((req, res) => {
 const { MENTORADO_DAILY_RELEASE_HOUR } = require('./generation/guiaMentoradoShared')
 
 /**
- * Tick horário do Guia Mentorado (Brasília).
- * Cada curso só gera na hora configurada em config/guiaMentorado.automation.schedule.
- * (MENTORADO_DAILY_RELEASE_HOUR = 0 permanece como default por curso.)
+ * Tick do Guia Mentorado (Brasília), a cada 15 min.
+ * Cada curso só gera a partir do horário configurado (hora+minuto) em
+ * config/guiaMentorado.automation.schedule — 1× por dia.
  */
-exports.mentoradoDailyContentRelease = functions.pubsub
-  .schedule('0 * * * *')
+exports.mentoradoDailyContentRelease = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('every 15 minutes')
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
     console.log(
-      `[mentoradoDailyContentRelease] Tick horário (default ${MENTORADO_DAILY_RELEASE_HOUR}h)…`,
+      `[mentoradoDailyContentRelease] Tick 15min (default ${MENTORADO_DAILY_RELEASE_HOUR}h)…`,
     )
     const { runDailyMentoradoAutomationForAllCourses } = getDailyModule()
     const results = await runDailyMentoradoAutomationForAllCourses()

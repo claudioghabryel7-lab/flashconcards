@@ -50,11 +50,112 @@ function toMinutes(hour, minute) {
   return Number(hour || 0) * 60 + Number(minute || 0)
 }
 
+export function isWithinProfessorWindow(cfg = {}, date = new Date()) {
+  const startH = cfg.windowStartHour ?? cfg.dailyStartHour ?? 0
+  const startM = cfg.windowStartMinute ?? cfg.dailyStartMinute ?? 0
+  const endH = cfg.windowEndHour ?? 18
+  const endM = cfg.windowEndMinute ?? 0
+  const now = getSaoPauloClockParts(date)
+  const nowMin = toMinutes(now.hour, now.minute)
+  const startMin = toMinutes(startH, startM)
+  const endMin = toMinutes(endH, endM)
+  if (endMin > startMin) {
+    return nowMin >= startMin && nowMin < endMin
+  }
+  return nowMin >= startMin || nowMin < endMin
+}
+
+/**
+ * Próximo início da janela (Brasília) e countdown legível.
+ */
+export function getProfessorNextWindowInfo(cfg = {}, date = new Date()) {
+  const startH = Number(cfg.windowStartHour ?? cfg.dailyStartHour ?? 0)
+  const startM = Number(cfg.windowStartMinute ?? cfg.dailyStartMinute ?? 0)
+  const endH = Number(cfg.windowEndHour ?? 18)
+  const endM = Number(cfg.windowEndMinute ?? 0)
+  const within = isWithinProfessorWindow(cfg, date)
+  const label = formatScheduleWindowLabel(cfg)
+
+  if (!cfg.recurringDaily) {
+    return {
+      status: 'off',
+      label: 'Agenda desativada',
+      countdown: null,
+      within: false,
+      windowLabel: label,
+    }
+  }
+
+  if (within && cfg.enabled) {
+    const ends = cfg.sessionEndsAt?.toDate?.()
+    const rem = ends ? Math.max(0, ends.getTime() - date.getTime()) : 0
+    return {
+      status: 'live',
+      label: `Online agora (${label})`,
+      countdown: rem > 0 ? formatDurationMs(rem) : null,
+      within: true,
+      windowLabel: label,
+    }
+  }
+
+  if (within && !cfg.enabled) {
+    return {
+      status: 'in_window_idle',
+      label: `Dentro da janela ${label} — o tick deve iniciar em até ~1 min`,
+      countdown: null,
+      within: true,
+      windowLabel: label,
+    }
+  }
+
+  // Fora da janela: tempo até o próximo início
+  const now = getSaoPauloClockParts(date)
+  const nowMin = toMinutes(now.hour, now.minute)
+  const startMin = toMinutes(startH, startM)
+  const endMin = toMinutes(endH, endM)
+  const overnight = endMin <= startMin
+
+  let minutesUntilStart
+  if (!overnight) {
+    if (nowMin < startMin) minutesUntilStart = startMin - nowMin
+    else minutesUntilStart = 24 * 60 - nowMin + startMin
+  } else if (nowMin >= endMin && nowMin < startMin) {
+    minutesUntilStart = startMin - nowMin
+  } else {
+    // Já na parte overnight ativa ou após início — tratado por within acima
+    minutesUntilStart = startMin > nowMin ? startMin - nowMin : 24 * 60 - nowMin + startMin
+  }
+
+  const ms = minutesUntilStart * 60 * 1000
+  const nextLabel = formatDailyStartLabel(startH, startM)
+  return {
+    status: 'waiting',
+    label: `Fora do horário — próxima abertura às ${nextLabel} (Brasília)`,
+    countdown: formatDurationMs(ms),
+    within: false,
+    windowLabel: label,
+    nextAtLabel: nextLabel,
+  }
+}
+
+function formatDurationMs(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000))
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}min`
+  if (m > 0) return `${m}min ${String(s).padStart(2, '0')}s`
+  return `${s}s`
+}
+
 /**
  * Calcula fim da janela de hoje (America/Sao_Paulo) como Timestamp.
  * Suporta janela overnight (ex.: 22:00 → 06:00).
+ * Fora da janela, retorna null (não inventa sessão de 1 minuto).
  */
 export function computeSessionEndsAtFromWindow(cfg = {}, date = new Date()) {
+  if (!isWithinProfessorWindow(cfg, date)) return null
+
   const startH = cfg.windowStartHour ?? cfg.dailyStartHour ?? 0
   const startM = cfg.windowStartMinute ?? cfg.dailyStartMinute ?? 0
   const endH = cfg.windowEndHour ?? ((startH + 8) % 24)
@@ -69,10 +170,8 @@ export function computeSessionEndsAtFromWindow(cfg = {}, date = new Date()) {
   if (!overnight) {
     minutesLeft = Math.max(1, endMin - nowMin)
   } else if (nowMin >= startMin) {
-    // Depois do início → até meia-noite + até o fim
     minutesLeft = Math.max(1, 24 * 60 - nowMin + endMin)
   } else {
-    // Antes do fim (madrugada)
     minutesLeft = Math.max(1, endMin - nowMin)
   }
 
@@ -112,8 +211,35 @@ export async function setProfessorSupervisorEnabled(userId, enabled, schedule = 
       dailyStartHour: startHour,
       dailyStartMinute: startMinute,
     }
-    const sessionEndsAt = computeSessionEndsAtFromWindow(windowCfg)
     const windowLabel = formatScheduleWindowLabel(windowCfg)
+    const within = isWithinProfessorWindow(windowCfg)
+
+    // Fora da janela: agenda o dia, sem sessão fantasma de 1 minuto
+    if (!within) {
+      await setDoc(
+        ref,
+        {
+          enabled: false,
+          recurringDaily: true,
+          automationUserId: userId,
+          ...windowCfg,
+          phase: 'waiting_daily',
+          sessionEndsAt: null,
+          nextRunAt: null,
+          currentActivity: {
+            phase: 'waiting_daily',
+            message: `Agenda ${windowLabel} (seg–dom) — fora do horário agora. Volta às ${formatDailyStartLabel(startHour, startMinute)}.`,
+            updatedAt: serverTimestamp(),
+          },
+          lastMessage: `Agenda ativa ${windowLabel} — aguardando janela`,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
+      return { scheduled: true, within: false, windowLabel }
+    }
+
+    const sessionEndsAt = computeSessionEndsAtFromWindow(windowCfg)
 
     await setDoc(
       ref,
@@ -138,7 +264,7 @@ export async function setProfessorSupervisorEnabled(userId, enabled, schedule = 
       },
       { merge: true },
     )
-    return
+    return { scheduled: true, within: true, windowLabel }
   }
 
   await setDoc(

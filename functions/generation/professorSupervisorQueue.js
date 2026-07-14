@@ -53,6 +53,8 @@ function isWithinScheduleWindow(data = {}) {
 }
 
 function computeSessionEndsAtFromWindow(data = {}) {
+  if (!isWithinScheduleWindow(data)) return null
+
   const w = getWindowBounds(data)
   const now = getSaoPauloClockParts()
   const nowMin = toMinutes(now.hour, now.minute)
@@ -105,8 +107,20 @@ async function startSupervisorSession(userId, { auto = false, dailyStartHour, da
     dailyStartHour: startHour,
     dailyStartMinute: startMinute,
   }
-  const sessionEndsAt = computeSessionEndsAtFromWindow(windowCfg)
   const label = formatWindowLabel(windowCfg)
+  const sessionEndsAt = computeSessionEndsAtFromWindow(windowCfg)
+  if (!sessionEndsAt) {
+    // Não deveria acontecer (shouldStart só na janela); marca waiting
+    await patchSupervisorConfig({
+      enabled: false,
+      recurringDaily: true,
+      automationUserId: userId,
+      ...windowCfg,
+      phase: 'waiting_daily',
+      lastMessage: `Fora da janela ${label} — aguardando`,
+    })
+    return
+  }
   const ts = admin.firestore.FieldValue.serverTimestamp()
 
   await patchSupervisorConfig({

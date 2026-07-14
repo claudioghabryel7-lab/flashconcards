@@ -145,9 +145,15 @@ function buildMentoradoAutomationWrite(partial = {}, extras = {}) {
 }
 
 function isWithinDailyReleaseWindow(automation, clock) {
-  const hour = automation?.schedule?.dailyReleaseHour ?? MENTORADO_DAILY_RELEASE_HOUR
-  // Cron horário: dispara na hora configurada (minuto do schedule só informativo na UI)
-  return Number(clock?.hour) === Number(hour)
+  const hour = Number(
+    automation?.schedule?.dailyReleaseHour ?? MENTORADO_DAILY_RELEASE_HOUR,
+  )
+  const minute = Number(automation?.schedule?.dailyReleaseMinute ?? 0)
+  const h = Number(clock?.hour)
+  const m = Number(clock?.minute ?? 0)
+  if (h !== hour) return false
+  // Cron a cada 15 min: libera a partir do minuto configurado naquela hora
+  return m >= minute
 }
 
 module.exports = {

@@ -24,6 +24,10 @@ import { DEFAULT_PLANNING_DAYS } from '../../constants/guiaMentorado'
 import { FIREBASE_FUNCTIONS } from '../../config/firebaseFunctions'
 import { auth, db } from '../../firebase/config'
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
+import {
+  CRON_STEP_MINUTES,
+  getMentoradoNextRunInfo,
+} from '../../utils/mentoradoNextRun'
 
 function padTime(h, m) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
@@ -83,11 +87,17 @@ export default function AdminGuiaMentorado() {
     useProfessorWindow: false,
   })
   const [contentBusy, setContentBusy] = useState(false)
+  const [nowTick, setNowTick] = useState(() => Date.now())
 
   const todayKey = useMemo(
     () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
     [],
   )
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTick(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -160,6 +170,30 @@ export default function AdminGuiaMentorado() {
 
   const cloudEnabled = Boolean(config?.enabled)
   const cloudHasUser = Boolean(config?.automationUserId)
+
+  const nextRun = useMemo(
+    () =>
+      getMentoradoNextRunInfo({
+        enabled: cloudEnabled,
+        onDailyCron: config?.triggers?.onDailyCron !== false && form.onDailyCron,
+        automationUserId: config?.automationUserId || user?.uid,
+        dailyReleaseHour: form.dailyReleaseHour,
+        dailyReleaseMinute: form.dailyReleaseMinute,
+        lastDailyRunDayKey: config?.lastDailyRunDayKey,
+        now: new Date(nowTick),
+      }),
+    [
+      cloudEnabled,
+      config?.triggers?.onDailyCron,
+      config?.automationUserId,
+      config?.lastDailyRunDayKey,
+      form.onDailyCron,
+      form.dailyReleaseHour,
+      form.dailyReleaseMinute,
+      user?.uid,
+      nowTick,
+    ],
+  )
 
   const patchForm = useCallback((patch) => {
     setForm((prev) => ({ ...prev, ...patch }))
@@ -506,8 +540,60 @@ export default function AdminGuiaMentorado() {
             {cloudHasUser ? 'Usuário de automação OK' : 'Sem usuário — clique em Ligar/Salvar'}
           </span>
           <span className="rounded-full bg-cp-surface px-2.5 py-1 text-cp-muted">
-            Cron: mentoradoDailyContentRelease (a cada hora)
+            Cron a cada {CRON_STEP_MINUTES} min (Brasília)
           </span>
+        </div>
+
+        <div
+          className={`mt-4 rounded-2xl border px-4 py-3 ${
+            nextRun.ready
+              ? 'border-emerald-500/30 bg-emerald-500/10'
+              : 'border-amber-500/30 bg-amber-500/10'
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <ClockIcon
+                className={`mt-0.5 h-5 w-5 shrink-0 ${
+                  nextRun.ready ? 'text-emerald-600' : 'text-amber-600'
+                }`}
+              />
+              <div>
+                <p className="text-sm font-semibold text-cp-text">{nextRun.label}</p>
+                {nextRun.countdown && nextRun.status !== 'due' && (
+                  <p className="mt-0.5 font-mono text-lg font-bold tabular-nums text-cp-text">
+                    ⏱ {nextRun.countdown}
+                    {nextRun.nextAtLabel ? (
+                      <span className="ml-2 text-xs font-medium text-cp-muted">
+                        (≈ {nextRun.nextAtLabel} BRT)
+                      </span>
+                    ) : null}
+                  </p>
+                )}
+                {nextRun.blockers.length > 0 && (
+                  <ul className="mt-1 list-inside list-disc text-[11px] text-amber-800 dark:text-amber-200">
+                    {nextRun.blockers.map((b) => (
+                      <li key={b}>{b}</li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-1 text-[11px] text-cp-muted">
+                  Com automação ligada + “Cron diário” + Salvar/Aplicar, o servidor
+                  `mentoradoDailyContentRelease` gera o dia (e pendências) sozinho. Precisa de
+                  cronograma no curso.
+                </p>
+              </div>
+            </div>
+            <span
+              className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase ${
+                nextRun.ready
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-amber-600 text-white'
+              }`}
+            >
+              {nextRun.ready ? 'Programada' : 'Incompleta'}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -603,7 +689,8 @@ export default function AdminGuiaMentorado() {
               className="mt-1 block rounded-lg border border-cp-border bg-cp-bg px-3 py-2 text-sm text-cp-text"
             />
             <span className="mt-1 block text-[11px]">
-              O servidor verifica a cada hora. Na prática dispara perto de {releaseLabel}.
+              O servidor verifica a cada {CRON_STEP_MINUTES} min. Dispara a partir de {releaseLabel}{' '}
+              (Brasília), 1 vez por dia.
             </span>
           </label>
 
