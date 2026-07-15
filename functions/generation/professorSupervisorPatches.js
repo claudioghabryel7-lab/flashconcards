@@ -29,10 +29,193 @@ function normalizeFlashcardDocId(refId) {
   return raw
 }
 
-/**
- * Aplica correções e retorna patches para rollback.
- * patch: { collection, docId, before: {}, after: {} }
- */
+/** Normaliza field da IA → schema real da questão. */
+function normalizeQuestaoField(rawField) {
+  const f = String(rawField || '').trim()
+  const compact = f.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+  if (
+    ['gabarito', 'resposta', 'respostacorreta', 'correta', 'answer', 'letra']
+      .map((x) => x.toLowerCase().replace(/[^a-z0-9]/g, ''))
+      .includes(compact)
+  ) {
+    return { kind: 'scalar', field: 'correta' }
+  }
+
+  if (
+    ['comentario', 'explicacao', 'gabaritocomentado', 'comentariogabarito', 'feedback'].includes(
+      compact,
+    )
+  ) {
+    return { kind: 'scalar', field: 'gabaritoComentado' }
+  }
+
+  const altMatch =
+    f.match(/^(?:alternativa[_.:\s-]*|alternativas[_.:\s-]*)([A-Ea-e])$/i) ||
+    f.match(/^alternativas\.([A-Ea-e])$/i)
+  if (altMatch) {
+    return { kind: 'alternativa', letter: altMatch[1].toUpperCase() }
+  }
+
+  if (compact === 'enunciado' || compact === 'pergunta' || compact === 'texto') {
+    return { kind: 'scalar', field: 'enunciado' }
+  }
+
+  return { kind: 'scalar', field: f || 'enunciado' }
+}
+
+function normalizeMaterialField(rawField) {
+  const f = String(rawField || '').trim()
+  const compact = f.toLowerCase().replace(/[^a-z0-9]/g, '')
+  if (['resumo', 'conteudo', 'texto', 'material', 'materia', 'corpo'].includes(compact) || !f) {
+    return 'materia'
+  }
+  return f
+}
+
+function normalizeCorretaValue(text) {
+  const raw = String(text || '').trim()
+  const letter = raw.match(/\b([A-Ea-e])\b/)
+  if (letter) return letter[1].toUpperCase()
+  if (/^[A-Ea-e]$/.test(raw)) return raw.toUpperCase()
+  return raw
+}
+
+function parseQuestaoContentId(contentId = '') {
+  const id = String(contentId || '')
+  const packMatch = id.match(/_p([A-Za-z0-9_-]{1,80})$/)
+  const qWithSuffix = id.match(/_q(\d+)_/)
+  const qAtEnd = id.match(/_q(\d+)$/)
+  const eHash = id.match(/_e([a-z0-9]+)/i)
+  const iIndex = id.match(/_i(\d+)/)
+  return {
+    packFromId: packMatch?.[1] || '',
+    qNumero: qWithSuffix ? Number(qWithSuffix[1]) : null,
+    qIndexLegacy: !qWithSuffix && qAtEnd ? Number(qAtEnd[1]) : null,
+    eHash: eHash?.[1] || '',
+    iIndex: iIndex ? Number(iIndex[1]) : null,
+  }
+}
+
+function simpleHash(text = '') {
+  let h = 0
+  const s = String(text)
+  for (let i = 0; i < s.length; i += 1) {
+    h = (h << 5) - h + s.charCodeAt(i)
+    h |= 0
+  }
+  return Math.abs(h).toString(36)
+}
+
+function resolveQuestaoIndex(questoes, contentId, fix = {}, packId = '') {
+  if (!Array.isArray(questoes) || !questoes.length) return -1
+
+  const parsed = parseQuestaoContentId(contentId)
+  const fixRef = fix.refId != null ? String(fix.refId) : ''
+
+  if (parsed.qIndexLegacy != null && questoes[parsed.qIndexLegacy]) {
+    return parsed.qIndexLegacy
+  }
+
+  if (parsed.qNumero != null) {
+    const asOneBased = parsed.qNumero - 1
+    if (asOneBased >= 0 && questoes[asOneBased]) return asOneBased
+    if (questoes[parsed.qNumero]) return parsed.qNumero
+    const byNumero = questoes.findIndex(
+      (q) => Number(q?.numero) === parsed.qNumero || Number(q?.number) === parsed.qNumero,
+    )
+    if (byNumero >= 0) return byNumero
+  }
+
+  if (parsed.iIndex != null && questoes[parsed.iIndex]) return parsed.iIndex
+
+  if (parsed.eHash) {
+    const byHash = questoes.findIndex((q) => {
+      const enunciado = String(q?.enunciado || '').slice(0, 240)
+      return enunciado && simpleHash(enunciado) === parsed.eHash
+    })
+    if (byHash >= 0) return byHash
+  }
+
+  if (/^\d+$/.test(fixRef)) {
+    const n = Number(fixRef)
+    if (questoes[n]) return n
+    if (n > 0 && questoes[n - 1]) return n - 1
+  }
+
+  const byLegacyId = questoes.findIndex((_, i) => {
+    const id = `${packId}_q${i}`
+    return (
+      contentId === id ||
+      String(contentId).includes(id) ||
+      fixRef === id ||
+      String(contentId).endsWith(`_q${i}`)
+    )
+  })
+  if (byLegacyId >= 0) return byLegacyId
+
+  const byOwnId = questoes.findIndex((q) => {
+    const qid = q?.id || q?.uid
+    return qid && String(contentId).includes(String(qid))
+  })
+  if (byOwnId >= 0) return byOwnId
+
+  return -1
+}
+
+async function findFlaggedQuestao(courseId, payload = {}) {
+  const db = getDb()
+  const contentId = String(payload.contentId || '')
+  const topicKey = payload.topicKey
+  const parsed = parseQuestaoContentId(contentId)
+
+  const tryPack = async (packId) => {
+    if (!packId) return null
+    const snap = await db.doc(`courses/${courseId}/questoesTopico/${packId}`).get()
+    if (!snap.exists) return null
+    const data = snap.data() || {}
+    const questoes = data.questoes || data.questions || []
+    const idx = resolveQuestaoIndex(questoes, contentId, {}, packId)
+    if (idx < 0) return null
+    return { packSnap: snap, packId, questoes, idx, questao: questoes[idx] }
+  }
+
+  if (parsed.packFromId) {
+    const hit = await tryPack(parsed.packFromId)
+    if (hit) return hit
+  }
+
+  if (topicKey) {
+    const sanitized = sanitizeTopicKeyForFirestore(topicKey)
+    for (const packId of [
+      `${sanitized}_nivel_1`,
+      `${sanitized}_nivel_2`,
+      `${sanitized}_nivel_3`,
+      sanitized,
+    ]) {
+      const hit = await tryPack(packId)
+      if (hit) return hit
+    }
+  }
+
+  const packsSnap = await db.collection(`courses/${courseId}/questoesTopico`).limit(60).get()
+  for (const packDoc of packsSnap.docs) {
+    const data = packDoc.data() || {}
+    const questoes = data.questoes || data.questions || []
+    const idx = resolveQuestaoIndex(questoes, contentId, {}, packDoc.id)
+    if (idx >= 0) {
+      return {
+        packSnap: packDoc,
+        packId: packDoc.id,
+        questoes,
+        idx,
+        questao: questoes[idx],
+      }
+    }
+  }
+  return null
+}
+
 async function applyCorrectionsWithSnapshot(courseId, itemType, payload, corrections = []) {
   const db = getDb()
   const ts = admin.firestore.FieldValue.serverTimestamp()
@@ -43,7 +226,7 @@ async function applyCorrectionsWithSnapshot(courseId, itemType, payload, correct
     if (!fix.newText && fix.newText !== '') continue
     const target = String(fix.target || '')
       .toLowerCase()
-      .replace(/s$/, '') // flashcards -> flashcard, questoes -> questoe (oops)
+      .replace(/s$/, '')
     const normalizedTarget =
       target === 'questoe' || target === 'questoes' || target === 'question'
         ? 'questao'
@@ -61,19 +244,39 @@ async function applyCorrectionsWithSnapshot(courseId, itemType, payload, correct
           : ''
       const docId = normalizeFlashcardDocId(fix.refId) || preferredId
       if (!docId) continue
-      const field =
-        fix.field === 'frente' || fix.field === 'pergunta'
-          ? 'frente'
-          : fix.field === 'verso' || fix.field === 'resposta'
-            ? 'verso'
-            : 'verso'
+
+      const rawField = String(fix.field || '').toLowerCase()
+      const fieldsToPatch = []
+      if (rawField === 'ambos' || rawField === 'both' || rawField === 'frente_verso') {
+        let frente = ''
+        let verso = ''
+        try {
+          const parsed = JSON.parse(fix.newText)
+          frente = parsed.frente || parsed.pergunta || ''
+          verso = parsed.verso || parsed.resposta || ''
+        } catch {
+          const parts = String(fix.newText).split('|||')
+          frente = (parts[0] || '').trim()
+          verso = (parts[1] || '').trim()
+        }
+        if (frente) fieldsToPatch.push({ field: 'frente', text: frente })
+        if (verso) fieldsToPatch.push({ field: 'verso', text: verso })
+      } else {
+        const field =
+          rawField === 'frente' || rawField === 'pergunta'
+            ? 'frente'
+            : rawField === 'verso' || rawField === 'resposta'
+              ? 'verso'
+              : 'verso'
+        fieldsToPatch.push({ field, text: fix.newText })
+      }
+
       let before = await readDocFields(courseId, collection, docId, [
         'frente',
         'verso',
         'resposta',
         'pergunta',
       ])
-      // fallback: tenta contentId da flag
       if (!before && preferredId && preferredId !== docId) {
         before = await readDocFields(courseId, collection, preferredId, [
           'frente',
@@ -82,7 +285,7 @@ async function applyCorrectionsWithSnapshot(courseId, itemType, payload, correct
           'pergunta',
         ])
       }
-      if (!before) continue
+      if (!before || !fieldsToPatch.length) continue
       const finalDocId = before.__docId || docId
 
       const after = {
@@ -90,15 +293,27 @@ async function applyCorrectionsWithSnapshot(courseId, itemType, payload, correct
         verso: before.verso,
         pergunta: before.pergunta,
         resposta: before.resposta,
-        [field]: fix.newText,
-        ...(field === 'verso' ? { resposta: fix.newText } : {}),
-        ...(field === 'frente' ? { pergunta: fix.newText } : {}),
         supervisorReviewed: true,
         updatedAt: ts,
       }
+      const beforePatch = {}
+      const afterPatch = {}
+      for (const { field, text } of fieldsToPatch) {
+        beforePatch[field] = before[field]
+        after[field] = text
+        afterPatch[field] = text
+        if (field === 'verso') {
+          after.resposta = text
+          afterPatch.resposta = text
+        }
+        if (field === 'frente') {
+          after.pergunta = text
+          afterPatch.pergunta = text
+        }
+      }
 
       await db.doc(docPath(courseId, collection, finalDocId)).set(after, { merge: true })
-      patches.push({ collection, docId: finalDocId, before, after: { [field]: fix.newText } })
+      patches.push({ collection, docId: finalDocId, before: beforePatch, after: afterPatch })
       applied += 1
       continue
     }
@@ -106,19 +321,32 @@ async function applyCorrectionsWithSnapshot(courseId, itemType, payload, correct
     if (normalizedTarget === 'material' && (payload?.topicKey || fix.refId)) {
       const collection = 'conteudosCompletos'
       const docId = sanitizeTopicKeyForFirestore(payload.topicKey || fix.refId)
-      const field = fix.field || 'resumo'
-      const before = await readDocFields(courseId, collection, docId, [field])
+      const field = normalizeMaterialField(fix.field)
+      const before = await readDocFields(courseId, collection, docId, [
+        field,
+        'materia',
+        'resumo',
+        'conteudo',
+      ])
       if (!before) continue
+      let finalField = field
+      if (
+        field === 'materia' &&
+        before.materia == null &&
+        (before.resumo != null || before.conteudo != null)
+      ) {
+        finalField = before.resumo != null ? 'resumo' : 'conteudo'
+      }
       const afterVal = fix.newText
       await db.doc(docPath(courseId, collection, docId)).set(
-        { [field]: afterVal, supervisorReviewed: true, updatedAt: ts },
+        { [finalField]: afterVal, supervisorReviewed: true, updatedAt: ts },
         { merge: true },
       )
       patches.push({
         collection,
         docId,
-        before: { [field]: before[field] },
-        after: { [field]: afterVal },
+        before: { [finalField]: before[finalField] },
+        after: { [finalField]: afterVal },
       })
       applied += 1
       continue
@@ -183,52 +411,48 @@ async function applyCorrectionsWithSnapshot(courseId, itemType, payload, correct
 
 async function applyQuestaoCorrection(courseId, payload, fix, ts, patches) {
   const db = getDb()
-  const field = fix.field || 'enunciado'
   const contentId = String(payload?.contentId || fix.refId || '')
-  const topicKey = payload?.topicKey
+  const mapped = normalizeQuestaoField(fix.field || 'enunciado')
 
-  // Conteúdo em array dentro de packs questoesTopico
-  let packsQuery = db.collection(`courses/${courseId}/questoesTopico`)
-  if (topicKey) {
-    const sanitized = sanitizeTopicKeyForFirestore(topicKey)
-    const preferred = [
-      `${sanitized}_nivel_1`,
-      sanitized,
-    ]
-    for (const packId of preferred) {
-      const snap = await db.doc(`courses/${courseId}/questoesTopico/${packId}`).get()
-      if (!snap.exists) continue
-      const ok = await tryPatchQuestaoInPack(snap, contentId, fix, field, ts, patches)
-      if (ok) return true
-    }
+  const found = await findFlaggedQuestao(courseId, {
+    ...payload,
+    contentId,
+  })
+
+  if (found) {
+    return tryPatchQuestaoInPack(
+      found.packSnap,
+      contentId,
+      fix,
+      mapped,
+      ts,
+      patches,
+      found.idx,
+    )
   }
 
-  // Busca ampla por contentId / refId
-  const packsSnap = await packsQuery.limit(40).get()
-  for (const packDoc of packsSnap.docs) {
-    const ok = await tryPatchQuestaoInPack(packDoc, contentId, fix, field, ts, patches)
-    if (ok) return true
-  }
-
-  // Legado: documento flat com o campo
   const flatId = String(fix.refId || '').trim()
-  if (flatId) {
+  if (flatId && mapped.kind === 'scalar') {
+    const field = mapped.field
     const before = await readDocFields(courseId, 'questoesTopico', flatId, [
       field,
       'comentario',
       'gabarito',
+      'gabaritoComentado',
+      'correta',
       'enunciado',
     ])
     if (before) {
+      const value = field === 'correta' ? normalizeCorretaValue(fix.newText) : fix.newText
       await db.doc(docPath(courseId, 'questoesTopico', flatId)).set(
-        { [field]: fix.newText, supervisorReviewed: true, updatedAt: ts },
+        { [field]: value, supervisorReviewed: true, updatedAt: ts },
         { merge: true },
       )
       patches.push({
         collection: 'questoesTopico',
         docId: flatId,
         before: { [field]: before[field] },
-        after: { [field]: fix.newText },
+        after: { [field]: value },
       })
       return true
     }
@@ -236,47 +460,72 @@ async function applyQuestaoCorrection(courseId, payload, fix, ts, patches) {
   return false
 }
 
-async function tryPatchQuestaoInPack(packSnap, contentId, fix, field, ts, patches) {
+async function tryPatchQuestaoInPack(
+  packSnap,
+  contentId,
+  fix,
+  mappedOrField,
+  ts,
+  patches,
+  forcedIdx = null,
+) {
   if (!packSnap?.exists) return false
   const data = packSnap.data() || {}
   const questoes = [...(data.questoes || data.questions || [])]
   if (!questoes.length) return false
 
   const packId = packSnap.id
-  let idx = -1
+  const mapped =
+    typeof mappedOrField === 'string'
+      ? normalizeQuestaoField(mappedOrField)
+      : mappedOrField || normalizeQuestaoField(fix.field)
 
-  const qMatch = String(contentId || '').match(/_q(\d+)$/)
-  if (qMatch) {
-    const candidate = Number(qMatch[1])
-    if (questoes[candidate]) idx = candidate
-  }
-  if (idx < 0 && fix.refId != null && /^\d+$/.test(String(fix.refId))) {
-    const candidate = Number(fix.refId)
-    if (questoes[candidate]) idx = candidate
-  }
-  if (idx < 0) {
-    idx = questoes.findIndex((_, i) => {
-      const id = `${packId}_q${i}`
-      return contentId === id || String(contentId).includes(id) || String(fix.refId) === id
-    })
-  }
+  let idx =
+    forcedIdx != null && forcedIdx >= 0
+      ? forcedIdx
+      : resolveQuestaoIndex(questoes, contentId, fix, packId)
   if (idx < 0) return false
 
-  const beforeVal = questoes[idx][field]
-  questoes[idx] = { ...questoes[idx], [field]: fix.newText }
-  const payload = {
+  const previous = { ...questoes[idx] }
+  const next = { ...previous }
+  let beforePatch = {}
+  let afterPatch = {}
+
+  if (mapped.kind === 'alternativa') {
+    const letter = mapped.letter
+    const alts = { ...(previous.alternativas || {}) }
+    beforePatch = { [`alternativas.${letter}`]: alts[letter] }
+    alts[letter] = fix.newText
+    next.alternativas = alts
+    afterPatch = { [`alternativas.${letter}`]: fix.newText }
+  } else {
+    const field = mapped.field
+    const value = field === 'correta' ? normalizeCorretaValue(fix.newText) : fix.newText
+    beforePatch = { [field]: previous[field] }
+    next[field] = value
+    afterPatch = { [field]: value }
+    if (field === 'correta' && Object.prototype.hasOwnProperty.call(next, 'gabarito')) {
+      delete next.gabarito
+    }
+    if (field === 'gabaritoComentado' && Object.prototype.hasOwnProperty.call(next, 'comentario')) {
+      delete next.comentario
+    }
+  }
+
+  questoes[idx] = next
+  const payloadWrite = {
     questoes,
     supervisorReviewed: true,
     updatedAt: ts,
   }
-  if (data.questions) payload.questions = questoes
-  await packSnap.ref.set(payload, { merge: true })
+  if (data.questions) payloadWrite.questions = questoes
+  await packSnap.ref.set(payloadWrite, { merge: true })
   patches.push({
     collection: 'questoesTopico',
     docId: packId,
     questaoIndex: idx,
-    before: { [field]: beforeVal },
-    after: { [field]: fix.newText },
+    before: beforePatch,
+    after: afterPatch,
   })
   return true
 }
@@ -303,8 +552,31 @@ async function rollbackPatches(courseId, patches = []) {
       continue
     }
 
-    const { collection, docId, before } = patch
+    const { collection, docId, before, questaoIndex } = patch
     if (!collection || !docId || !before) continue
+
+    if (collection === 'questoesTopico' && questaoIndex != null) {
+      const snap = await db.doc(docPath(courseId, collection, docId)).get()
+      if (!snap.exists) continue
+      const data = snap.data() || {}
+      const questoes = [...(data.questoes || data.questions || [])]
+      if (!questoes[questaoIndex]) continue
+      const q = { ...questoes[questaoIndex] }
+      for (const [key, val] of Object.entries(before)) {
+        if (key.startsWith('alternativas.')) {
+          const letter = key.split('.')[1]
+          q.alternativas = { ...(q.alternativas || {}), [letter]: val }
+        } else {
+          q[key] = val
+        }
+      }
+      questoes[questaoIndex] = q
+      const payloadWrite = { questoes, updatedAt: ts, supervisorReviewed: false }
+      if (data.questions) payloadWrite.questions = questoes
+      await snap.ref.set(payloadWrite, { merge: true })
+      continue
+    }
+
     await db.doc(docPath(courseId, collection, docId)).set(
       { ...before, updatedAt: ts, supervisorReviewed: false },
       { merge: true },
@@ -332,4 +604,8 @@ module.exports = {
   applyCorrectionsWithSnapshot,
   rollbackPatches,
   buildDiffSummary,
+  findFlaggedQuestao,
+  normalizeQuestaoField,
+  normalizeFlashcardDocId,
+  resolveQuestaoIndex,
 }

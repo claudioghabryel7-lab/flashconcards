@@ -25,11 +25,16 @@ Se houver dúvida factual ou conflito entre fontes, marque needsAdminReview: tru
 const REVIEW_JSON_SCHEMA = `Retorne APENAS JSON válido:
 {
   "issues": [{ "type": "factual|incomplete|weak|structure", "detail": "...", "target": "flashcards|material|questoes|vespera|redacao" }],
-  "corrections": [{ "target": "material|flashcard|questao|vespera|redacao", "refId": "id ou índice", "field": "campo", "newText": "texto corrigido", "confidence": 0.0 }],
+  "corrections": [{ "target": "material|flashcard|questao|vespera|redacao", "refId": "id ou índice", "field": "campo do schema real", "newText": "texto corrigido", "confidence": 0.0 }],
   "confidence": 0.0,
   "needsAdminReview": false,
   "summary": "resumo curto"
-}`
+}
+Campos válidos por target:
+- flashcard: frente | verso | ambos
+- questao: correta | gabaritoComentado | enunciado | alternativas.A | alternativas.B | alternativas.C | alternativas.D | alternativas.E
+- material: materia
+Se houver erro concreto, corrections NÃO pode ficar vazio — o sistema aplica newText no Firestore.`
 
 module.exports = {
   SESSION_HOURS,

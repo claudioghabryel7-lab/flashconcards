@@ -496,9 +496,13 @@ async function loadFlaggedContentBlock(courseId, payload = {}) {
   const db = getDb()
   const { contentType, contentId, topicKey } = payload
   const { sanitizeTopicKeyForFirestore } = require('./topicKeyUtils')
+  const {
+    findFlaggedQuestao,
+    normalizeFlashcardDocId,
+  } = require('./professorSupervisorPatches')
 
   if (contentType === 'flashcard') {
-    const cardId = String(contentId || '').replace(/^[^_]+_fc_/, '')
+    const cardId = normalizeFlashcardDocId(contentId)
     const snap = await db.doc(`courses/${courseId}/flashcards/${cardId}`).get()
     if (snap.exists) {
       const c = snap.data()
@@ -523,17 +527,18 @@ async function loadFlaggedContentBlock(courseId, payload = {}) {
   }
 
   if (contentType === 'questao') {
-    const packsSnap = await db.collection(`courses/${courseId}/questoesTopico`).get()
-    for (const packDoc of packsSnap.docs) {
-      const pack = packDoc.data()
-      const questoes = pack.questoes || []
-      const idx = questoes.findIndex((q, i) => {
-        const id = `${packDoc.id}_q${i}`
-        return contentId?.includes(id) || contentId === id
-      })
-      if (idx >= 0) {
-        return `QUESTÃO COMPLETA (pack ${packDoc.id}, índice ${idx}):\n${JSON.stringify(questoes[idx], null, 2)}`
-      }
+    const found = await findFlaggedQuestao(courseId, payload)
+    if (found) {
+      return `QUESTÃO COMPLETA (pack ${found.packId}, índice ${found.idx}, numero=${found.questao?.numero ?? found.idx + 1}):\n${JSON.stringify(
+        {
+          enunciado: found.questao?.enunciado,
+          alternativas: found.questao?.alternativas,
+          correta: found.questao?.correta,
+          gabaritoComentado: found.questao?.gabaritoComentado,
+        },
+        null,
+        2,
+      )}`
     }
   }
 
@@ -556,11 +561,13 @@ RELATO DO ALUNO: ${payload.reportText || ''}
 ${contentBlock ? `CONTEÚDO INTEGRAL:\n${contentBlock}` : 'ATENÇÃO: não foi possível carregar o conteúdo — use o preview e o relato.'}
 
 INSTRUÇÕES OBRIGATÓRIAS:
-- Corrija somente o que está errado conforme o relato — não reescreva o material inteiro
+- Se o aluno apontar erro concreto (gabarito, explicação, frente/verso, texto), você DEVE emitir corrections com newText já corrigido — não basta concordar em summary
+- Corrija SOMENTE a parte errada — não reescreva o item inteiro sem necessidade
 - Em corrections use target exatamente: flashcard | material | questao
-- Para flashcard: refId = "${flashcardId || payload.contentId}", field = frente|verso
-- Para questao: refId = índice numérico ou contentId "${payload.contentId}", field = enunciado|comentario|gabarito|alternativa_*
-- Para material: target material, field do campo a corrigir, newText com o texto corrigido
+- Para flashcard: refId = "${flashcardId || payload.contentId}", field = frente | verso | ambos (se os dois estiverem errados; newText = JSON {"frente":"...","verso":"..."} ou "frente|||verso")
+- Para questao: refId = índice 0-based da questão no pack (veja CONTEÚDO INTEGRAL), field EXATAMENTE um de:
+  correta (letra A-E do gabarito), gabaritoComentado (explicação), enunciado, alternativas.A | alternativas.B | alternativas.C | alternativas.D | alternativas.E
+- Para material: target material, field = materia, newText = trecho/conteúdo corrigido
 - Sempre inclua pelo menos 1 correction se o relato apontar erro concreto`
 
   const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
@@ -600,24 +607,67 @@ INSTRUÇÕES OBRIGATÓRIAS:
     professorsUsed: chain.professorsUsed,
     appliedCount: applied,
     reviewId: null,
-    autoApplied: true,
+    autoApplied: applied > 0,
     skipModeration: true,
     diffSummary,
   })
 
-  // Notifica o aluno mesmo se applied=0 (revisão feita); marca flag resolvida
-  await resolveFlagFeedback(courseId, payload.flagId, {
-    applied,
-    summary: final.summary || '',
-  })
+  if (applied > 0) {
+    await resolveFlagFeedback(courseId, payload.flagId, {
+      applied,
+      summary: final.summary || '',
+    })
+    return {
+      summary: final.summary,
+      applied,
+      needsAdmin: false,
+      reviewId: null,
+      professorsUsed: chain.professorsUsed,
+      flagResolved: true,
+    }
+  }
+
+  // Nada alterado: incrementa tentativa; após 3, resolve com aviso (evita loop infinito de IA)
+  let attemptCount = 0
+  if (payload.flagId) {
+    const flagRef = getDb().doc(`courses/${courseId}/contentFeedback/${payload.flagId}`)
+    const flagSnap = await flagRef.get()
+    attemptCount = Number(flagSnap.exists ? flagSnap.data()?.attemptCount || 0 : 0) + 1
+    await flagRef.set(
+      {
+        lastProfessorAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastProfessorSummary: final.summary || 'Revisão sem alteração aplicada',
+        lastProfessorApplied: 0,
+        attemptCount,
+      },
+      { merge: true },
+    )
+  }
+
+  if (attemptCount >= 3) {
+    await resolveFlagFeedback(courseId, payload.flagId, {
+      applied: 0,
+      summary:
+        final.summary ||
+        'O professor analisou, mas não conseguiu aplicar a correção automaticamente. Um admin fará a revisão.',
+    })
+    return {
+      summary: final.summary || 'Falha ao aplicar correção após 3 tentativas.',
+      applied: 0,
+      needsAdmin: true,
+      reviewId: null,
+      professorsUsed: chain.professorsUsed,
+      flagResolved: true,
+    }
+  }
 
   return {
-    summary: final.summary,
-    applied,
-    needsAdmin: false,
+    summary: final.summary || 'Sinalização analisada, mas nenhuma alteração foi aplicada ao conteúdo.',
+    applied: 0,
+    needsAdmin: true,
     reviewId: null,
     professorsUsed: chain.professorsUsed,
-    flagResolved: true,
+    flagResolved: false,
   }
 }
 

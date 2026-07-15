@@ -341,17 +341,23 @@ async function enqueueOpenFlagsForAllCourses() {
       .get()
 
     for (const flagDoc of flagsSnap.docs) {
+      const data = flagDoc.data() || {}
+      // Evita reprocessar imediatamente a mesma flag sem correção aplicada
+      if (Number(data.attemptCount || 0) >= 3) continue
+      const lastAt = data.lastProfessorAttemptAt?.toDate?.() || null
+      if (lastAt && Date.now() - lastAt.getTime() < 8 * 60 * 1000) continue
+
       const id = await enqueueItem({
         courseId,
         itemType: 'flag',
         priority: 100,
         payload: {
           flagId: flagDoc.id,
-          contentType: flagDoc.data().contentType,
-          contentId: flagDoc.data().contentId,
-          topicKey: flagDoc.data().topicKey || null,
-          preview: flagDoc.data().preview || '',
-          reportText: flagDoc.data().text || '',
+          contentType: data.contentType,
+          contentId: data.contentId,
+          topicKey: data.topicKey || null,
+          preview: data.preview || '',
+          reportText: data.text || '',
         },
       })
       if (id) added += 1
