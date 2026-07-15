@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
+import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
+import { db } from '../firebase/config'
 
 function loadMercadoPagoSdk() {
   if (typeof window === 'undefined') return Promise.reject(new Error('SSR'))
@@ -67,6 +68,91 @@ function formatBrickError(err) {
   )
 }
 
+/** Public key same-origin — evita CORS / Rate exceeded das Cloud Functions. */
+async function fetchMercadoPagoPublicConfig() {
+  const res = await fetch('/api/mercadopago/public-config', { method: 'GET' })
+  const cfg = await res.json().catch(() => ({}))
+  if (!res.ok || !cfg.publicKey) {
+    throw new Error(cfg.message || 'Public key do Mercado Pago indisponível.')
+  }
+  return cfg
+}
+
+/**
+ * Processa pagamento via Firestore trigger (não usa cloudfunctions.net HTTPS).
+ * Contorna 429 Rate exceeded / falso erro de CORS.
+ */
+function processBrickViaFirestore({
+  transactionId,
+  formData,
+  amount,
+  description,
+  userEmail,
+  userName,
+  courseId,
+}) {
+  const requestId = `${String(transactionId).slice(0, 40)}_${Date.now().toString(36)}`
+  const ref = doc(db, 'paymentBrickRequests', requestId)
+
+  return new Promise(async (resolve, reject) => {
+    let settled = false
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      unsub()
+      reject(new Error('Tempo esgotado ao processar o pagamento. Tente novamente.'))
+    }, 90000)
+
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (!snap.exists() || settled) return
+        const data = snap.data() || {}
+        if (data.state === 'done' && data.result) {
+          settled = true
+          clearTimeout(timeout)
+          unsub()
+          resolve(data.result)
+          return
+        }
+        if (data.state === 'error') {
+          settled = true
+          clearTimeout(timeout)
+          unsub()
+          reject(new Error(data.errorMessage || 'Falha ao processar pagamento.'))
+        }
+      },
+      (err) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        reject(err)
+      },
+    )
+
+    try {
+      await setDoc(ref, {
+        transactionId: String(transactionId),
+        formData,
+        amount: Number(amount),
+        description: description || null,
+        userEmail: userEmail || null,
+        userName: userName || null,
+        courseId: courseId || null,
+        state: 'pending',
+        createdAt: serverTimestamp(),
+      })
+    } catch (err) {
+      if (!settled) {
+        settled = true
+        clearTimeout(timeout)
+        unsub()
+        reject(err)
+      }
+    }
+  })
+}
+
 /**
  * Payment Brick — Checkout Transparente.
  * method: 'pix' | 'card'
@@ -99,7 +185,6 @@ export default function MercadoPagoPaymentBrick({
   const [bootError, setBootError] = useState('')
   const [domReady, setDomReady] = useState(false)
 
-  // Garante que o container exista no DOM (evita container_not_found no Strict Mode)
   useEffect(() => {
     setDomReady(true)
   }, [])
@@ -133,18 +218,12 @@ export default function MercadoPagoPaymentBrick({
           throw new Error('Valor do pagamento inválido.')
         }
 
-        const cfgRes = await fetch(FIREBASE_FUNCTIONS.getMercadoPagoPublicConfig, {
-          method: 'GET',
-        })
-        const cfg = await cfgRes.json().catch(() => ({}))
-        if (!cfgRes.ok || !cfg.publicKey) {
-          throw new Error(cfg.message || 'Public key do Mercado Pago indisponível.')
-        }
+        const cfg = await fetchMercadoPagoPublicConfig()
+        if (cancelled || token !== mountToken) return
 
         const MercadoPago = await loadMercadoPagoSdk()
         if (cancelled || token !== mountToken) return
 
-        // Aguarda 2 frames para o div do container estar no DOM
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
         if (cancelled || token !== mountToken) return
 
@@ -199,23 +278,15 @@ export default function MercadoPagoPaymentBrick({
             onSubmit: ({ formData }) =>
               new Promise(async (resolve, reject) => {
                 try {
-                  const res = await fetch(FIREBASE_FUNCTIONS.processBrickPayment, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      transactionId,
-                      formData,
-                      amount: amountNumber,
-                      description,
-                      userEmail,
-                      userName,
-                      courseId,
-                    }),
+                  const data = await processBrickViaFirestore({
+                    transactionId,
+                    formData,
+                    amount: amountNumber,
+                    description,
+                    userEmail,
+                    userName,
+                    courseId,
                   })
-                  const data = await res.json().catch(() => ({}))
-                  if (!res.ok) {
-                    throw new Error(data.message || data.error || 'Falha ao processar pagamento.')
-                  }
 
                   if (data.status === 'approved') {
                     onSuccessRef.current?.(data)

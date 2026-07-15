@@ -635,6 +635,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Checkout Brick: client cria; só Cloud Functions atualiza o resultado
+    match /paymentBrickRequests/{requestId} {
+      allow create: if request.resource.data.keys().hasAll([
+                       'transactionId', 'formData', 'amount', 'state'
+                     ])
+                     && request.resource.data.state == 'pending';
+      allow read: if true;
+      allow update, delete: if false;
+    }
+
     match /purchaseReviews/{reviewId} {
       allow create: if true;
       allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
