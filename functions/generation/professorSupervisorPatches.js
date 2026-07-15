@@ -22,6 +22,63 @@ function textsEqual(a, b) {
   )
 }
 
+function stripHtmlLite(value = '') {
+  return String(value || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function getByPath(obj, path) {
+  if (!obj || !path) return undefined
+  return String(path)
+    .split('.')
+    .reduce((acc, key) => {
+      if (acc == null) return undefined
+      const idx = /^\d+$/.test(key) ? Number(key) : key
+      return acc[idx]
+    }, obj)
+}
+
+function setByPath(obj, path, value) {
+  const parts = String(path).split('.')
+  const root = Array.isArray(obj) ? [...obj] : { ...obj }
+  let cursor = root
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const key = /^\d+$/.test(parts[i]) ? Number(parts[i]) : parts[i]
+    const nextKey = parts[i + 1]
+    const nextIsIndex = /^\d+$/.test(nextKey)
+    const current = cursor[key]
+    const clone = Array.isArray(current)
+      ? [...current]
+      : current && typeof current === 'object'
+        ? { ...current }
+        : nextIsIndex
+          ? []
+          : {}
+    cursor[key] = clone
+    cursor = clone
+  }
+  const last = /^\d+$/.test(parts[parts.length - 1])
+    ? Number(parts[parts.length - 1])
+    : parts[parts.length - 1]
+  cursor[last] = value
+  return root
+}
+
+async function readDocFields(courseId, collection, docId, fields = []) {
+  const snap = await getDb().doc(docPath(courseId, collection, docId)).get()
+  if (!snap.exists) return null
+  const data = snap.data()
+  if (!fields.length) return { ...data, __docId: snap.id }
+  const out = { __docId: snap.id }
+  fields.forEach((f) => {
+    out[f] = data[f]
+  })
+  return out
+}
+
 async function loadFlashcardBefore(courseId, docId, preferredId = '') {
   let before = await readDocFields(courseId, 'flashcards', docId, [
     'frente',
@@ -127,13 +184,17 @@ function normalizeCorretaValue(text) {
 
 function parseQuestaoContentId(contentId = '') {
   const id = String(contentId || '')
-  const packMatch = id.match(/_p([A-Za-z0-9_-]{1,80})$/)
+  // pack suffix: tudo após o último _p (pode estar truncado em 40 chars)
+  const packIdx = id.lastIndexOf('_p')
+  const packFromId = packIdx >= 0 ? id.slice(packIdx + 2) : ''
+  const nivelMatch = id.match(/_n(\d+)(?:_|$)/)
   const qWithSuffix = id.match(/_q(\d+)_/)
   const qAtEnd = id.match(/_q(\d+)$/)
   const eHash = id.match(/_e([a-z0-9]+)/i)
   const iIndex = id.match(/_i(\d+)/)
   return {
-    packFromId: packMatch?.[1] || '',
+    packFromId,
+    nivel: nivelMatch ? Number(nivelMatch[1]) : null,
     qNumero: qWithSuffix ? Number(qWithSuffix[1]) : null,
     qIndexLegacy: !qWithSuffix && qAtEnd ? Number(qAtEnd[1]) : null,
     eHash: eHash?.[1] || '',
@@ -181,6 +242,16 @@ function resolveQuestaoIndex(questoes, contentId, fix = {}, packId = '') {
     if (byHash >= 0) return byHash
   }
 
+  // Match por preview/enunciado (quando hash diverge por HTML)
+  const preview = stripHtmlLite(fix.preview || '').slice(0, 100).toLowerCase()
+  if (preview.length >= 20) {
+    const byPreview = questoes.findIndex((q) => {
+      const hay = stripHtmlLite(q?.enunciado || '').toLowerCase()
+      return hay.includes(preview) || preview.includes(hay.slice(0, 100))
+    })
+    if (byPreview >= 0) return byPreview
+  }
+
   if (/^\d+$/.test(fixRef)) {
     const n = Number(fixRef)
     if (questoes[n]) return n
@@ -211,7 +282,9 @@ async function findFlaggedQuestao(courseId, payload = {}) {
   const db = getDb()
   const contentId = String(payload.contentId || '')
   const topicKey = payload.topicKey
+  const preview = payload.preview || ''
   const parsed = parseQuestaoContentId(contentId)
+  const fixHint = { preview, refId: null }
 
   const tryPack = async (packId) => {
     if (!packId) return null
@@ -219,34 +292,59 @@ async function findFlaggedQuestao(courseId, payload = {}) {
     if (!snap.exists) return null
     const data = snap.data() || {}
     const questoes = data.questoes || data.questions || []
-    const idx = resolveQuestaoIndex(questoes, contentId, {}, packId)
+    const idx = resolveQuestaoIndex(questoes, contentId, fixHint, packId)
     if (idx < 0) return null
     return { packSnap: snap, packId, questoes, idx, questao: questoes[idx] }
   }
 
-  if (parsed.packFromId) {
-    const hit = await tryPack(parsed.packFromId)
-    if (hit) return hit
-  }
-
+  // 1) topicKey + nível do contentId (caminho mais confiável)
   if (topicKey) {
     const sanitized = sanitizeTopicKeyForFirestore(topicKey)
-    for (const packId of [
-      `${sanitized}_nivel_1`,
-      `${sanitized}_nivel_2`,
-      `${sanitized}_nivel_3`,
-      sanitized,
-    ]) {
-      const hit = await tryPack(packId)
+    const niveis = parsed.nivel
+      ? [parsed.nivel]
+      : [1, 2, 3, 4, 5]
+    for (const nivel of niveis) {
+      const hit = await tryPack(`${sanitized}_nivel_${nivel}`)
       if (hit) return hit
+    }
+    const hitPlain = await tryPack(sanitized)
+    if (hitPlain) return hitPlain
+  }
+
+  // 2) packId do suffix _p… (pode estar truncado)
+  if (parsed.packFromId) {
+    const hitExact = await tryPack(parsed.packFromId)
+    if (hitExact) return hitExact
+
+    const packsSnap = await db.collection(`courses/${courseId}/questoesTopico`).limit(80).get()
+    for (const packDoc of packsSnap.docs) {
+      const id = packDoc.id
+      if (
+        id === parsed.packFromId ||
+        id.startsWith(parsed.packFromId) ||
+        parsed.packFromId.startsWith(id.slice(0, 40))
+      ) {
+        const questoes = packDoc.data()?.questoes || packDoc.data()?.questions || []
+        const idx = resolveQuestaoIndex(questoes, contentId, fixHint, id)
+        if (idx >= 0) {
+          return {
+            packSnap: packDoc,
+            packId: id,
+            questoes,
+            idx,
+            questao: questoes[idx],
+          }
+        }
+      }
     }
   }
 
-  const packsSnap = await db.collection(`courses/${courseId}/questoesTopico`).limit(60).get()
+  // 3) Varredura ampla por enunciado/preview
+  const packsSnap = await db.collection(`courses/${courseId}/questoesTopico`).limit(80).get()
   for (const packDoc of packsSnap.docs) {
     const data = packDoc.data() || {}
     const questoes = data.questoes || data.questions || []
-    const idx = resolveQuestaoIndex(questoes, contentId, {}, packDoc.id)
+    const idx = resolveQuestaoIndex(questoes, contentId, fixHint, packDoc.id)
     if (idx >= 0) {
       return {
         packSnap: packDoc,
@@ -257,7 +355,114 @@ async function findFlaggedQuestao(courseId, payload = {}) {
       }
     }
   }
+
+  // 4) Questões de incidência
+  try {
+    const incSnap = await db.collection(`courses/${courseId}/questoesIncidencia`).limit(40).get()
+    for (const packDoc of incSnap.docs) {
+      const data = packDoc.data() || {}
+      const questoes = data.questoes || data.questions || []
+      const idx = resolveQuestaoIndex(questoes, contentId, fixHint, packDoc.id)
+      if (idx >= 0) {
+        return {
+          packSnap: packDoc,
+          packId: packDoc.id,
+          questoes,
+          idx,
+          questao: questoes[idx],
+          collection: 'questoesIncidencia',
+        }
+      }
+    }
+  } catch (_) {
+    /* ignore */
+  }
+
   return null
+}
+
+function listMaterialEditablePaths(data = {}) {
+  const paths = ['materia (título do material)']
+  if (data.content) paths.push('content (HTML legado)')
+  if (data.raioXProbabilidade?.padraoBanca) paths.push('raioXProbabilidade.padraoBanca')
+  ;(data.revisaoTurbo || []).forEach((item, i) => {
+    paths.push(`revisaoTurbo.${i}.conteudo — ${item?.titulo || `bloco ${i + 1}`}`)
+  })
+  ;(data.pegadinhas || []).forEach((item, i) => {
+    paths.push(`pegadinhas.${i}.conteudo — ${item?.titulo || `pegadinha ${i + 1}`}`)
+  })
+  ;(data.secoes || []).forEach((item, i) => {
+    paths.push(`secoes.${i}.conteudo — ${item?.titulo || `seção ${i + 1}`}`)
+  })
+  ;(data.questoesPreditivas || []).forEach((item, i) => {
+    paths.push(`questoesPreditivas.${i}.enunciado`)
+    paths.push(`questoesPreditivas.${i}.correta`)
+    paths.push(`questoesPreditivas.${i}.gabaritoComentado`)
+  })
+  return paths
+}
+
+function findMaterialPathByPreview(data, preview) {
+  const needle = stripHtmlLite(preview).slice(0, 120).toLowerCase()
+  if (needle.length < 8) return null
+
+  const candidates = []
+  ;(data.revisaoTurbo || []).forEach((item, i) => {
+    candidates.push({ path: `revisaoTurbo.${i}.conteudo`, text: item?.conteudo })
+  })
+  ;(data.pegadinhas || []).forEach((item, i) => {
+    candidates.push({ path: `pegadinhas.${i}.conteudo`, text: item?.conteudo })
+  })
+  ;(data.secoes || []).forEach((item, i) => {
+    candidates.push({ path: `secoes.${i}.conteudo`, text: item?.conteudo })
+  })
+  if (data.content) candidates.push({ path: 'content', text: data.content })
+  if (data.raioXProbabilidade?.padraoBanca) {
+    candidates.push({ path: 'raioXProbabilidade.padraoBanca', text: data.raioXProbabilidade.padraoBanca })
+  }
+  ;(data.questoesPreditivas || []).forEach((item, i) => {
+    candidates.push({ path: `questoesPreditivas.${i}.enunciado`, text: item?.enunciado })
+    candidates.push({
+      path: `questoesPreditivas.${i}.gabaritoComentado`,
+      text: item?.gabaritoComentado || item?.explicacao,
+    })
+  })
+
+  for (const cand of candidates) {
+    const hay = stripHtmlLite(cand.text).toLowerCase()
+    if (!hay) continue
+    if (hay.includes(needle) || needle.includes(hay.slice(0, 120))) return cand.path
+  }
+  return null
+}
+
+function normalizeMaterialFieldPath(rawField, data, preview) {
+  const f = String(rawField || '').trim()
+  const compact = f.toLowerCase().replace(/[^a-z0-9.]/g, '')
+
+  // Path explícito já no schema
+  if (f.includes('.')) {
+    if (getByPath(data, f) !== undefined || /\.\d+\./.test(f)) return f
+  }
+
+  if (
+    !f ||
+    ['resumo', 'conteudo', 'texto', 'material', 'corpo', 'explicacao', 'trecho'].includes(compact)
+  ) {
+    return findMaterialPathByPreview(data, preview) || 'revisaoTurbo.0.conteudo'
+  }
+
+  if (compact === 'materia' || compact === 'titulo') {
+    // "materia" no schema é o título — só usar se o relato for claramente sobre o título
+    const previewHit = findMaterialPathByPreview(data, preview)
+    if (previewHit) return previewHit
+    return 'materia'
+  }
+
+  if (compact === 'padraobanca') return 'raioXProbabilidade.padraoBanca'
+  if (compact === 'content') return 'content'
+
+  return findMaterialPathByPreview(data, preview) || f
 }
 
 async function applyCorrectionsWithSnapshot(courseId, itemType, payload, corrections = []) {
@@ -357,36 +562,49 @@ async function applyCorrectionsWithSnapshot(courseId, itemType, payload, correct
       continue
     }
 
-    if (normalizedTarget === 'material' && (payload?.topicKey || fix.refId)) {
+    if (normalizedTarget === 'material' && (payload?.topicKey || fix.refId || payload?.contentId)) {
       const collection = 'conteudosCompletos'
-      const docId = sanitizeTopicKeyForFirestore(payload.topicKey || fix.refId)
-      const field = normalizeMaterialField(fix.field)
-      const before = await readDocFields(courseId, collection, docId, [
-        field,
-        'materia',
-        'resumo',
-        'conteudo',
-      ])
-      if (!before) continue
-      let finalField = field
-      if (
-        field === 'materia' &&
-        before.materia == null &&
-        (before.resumo != null || before.conteudo != null)
-      ) {
-        finalField = before.resumo != null ? 'resumo' : 'conteudo'
+      let docId = ''
+      if (payload.topicKey) {
+        docId = sanitizeTopicKeyForFirestore(payload.topicKey)
+      } else {
+        const cid = String(payload.contentId || '')
+        const m = cid.match(/_mat_(?:completo|incidencia)_(.+)$/)
+        docId = sanitizeTopicKeyForFirestore(m?.[1] || fix.refId || '')
       }
-      const afterVal = fix.newText
-      if (textsEqual(before[finalField], afterVal)) continue
-      await db.doc(docPath(courseId, collection, docId)).set(
-        { [finalField]: afterVal, supervisorReviewed: true, updatedAt: ts },
+      if (!docId) continue
+      const snap = await db.doc(docPath(courseId, collection, docId)).get()
+      if (!snap.exists) continue
+      const data = snap.data() || {}
+
+      const path = normalizeMaterialFieldPath(fix.field, data, payload.preview || '')
+      if (!path) continue
+
+      const beforeVal = getByPath(data, path)
+      if (beforeVal !== undefined && textsEqual(beforeVal, fix.newText)) continue
+
+      let patchPayload = {}
+      if (path.includes('.')) {
+        const rootKey = path.split('.')[0]
+        const nextRoot = setByPath({ [rootKey]: data[rootKey] }, path, fix.newText)[rootKey]
+        patchPayload = { [rootKey]: nextRoot }
+      } else {
+        patchPayload = { [path]: fix.newText }
+      }
+
+      await snap.ref.set(
+        {
+          ...patchPayload,
+          supervisorReviewed: true,
+          updatedAt: ts,
+        },
         { merge: true },
       )
       patches.push({
         collection,
         docId,
-        before: { [finalField]: before[finalField] },
-        after: { [finalField]: afterVal },
+        before: { [path]: beforeVal },
+        after: { [path]: fix.newText },
       })
       applied += 1
       continue
@@ -542,15 +760,26 @@ async function tryPatchQuestaoInPack(
   } else {
     const field = mapped.field
     const value = field === 'correta' ? normalizeCorretaValue(fix.newText) : fix.newText
-    if (textsEqual(previous[field], value)) return false
-    beforePatch = { [field]: previous[field] }
+    const current =
+      field === 'correta'
+        ? previous.respostaCorreta || previous.correta || previous.gabarito
+        : field === 'gabaritoComentado'
+          ? previous.gabaritoComentado || previous.explicacao || previous.comentario
+          : previous[field]
+    if (textsEqual(current, value)) return false
+    beforePatch = { [field]: current }
     next[field] = value
     afterPatch = { [field]: value }
-    if (field === 'correta' && Object.prototype.hasOwnProperty.call(next, 'gabarito')) {
-      delete next.gabarito
+    // Espelha aliases lidos pela UI
+    if (field === 'correta') {
+      next.respostaCorreta = value
+      next.gabarito = value
+      afterPatch.respostaCorreta = value
     }
-    if (field === 'gabaritoComentado' && Object.prototype.hasOwnProperty.call(next, 'comentario')) {
-      delete next.comentario
+    if (field === 'gabaritoComentado') {
+      next.explicacao = value
+      next.comentario = value
+      afterPatch.explicacao = value
     }
   }
 
@@ -650,4 +879,6 @@ module.exports = {
   normalizeQuestaoField,
   normalizeFlashcardDocId,
   resolveQuestaoIndex,
+  listMaterialEditablePaths,
+  findMaterialPathByPreview,
 }

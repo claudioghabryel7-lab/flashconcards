@@ -41,7 +41,7 @@ Regras:
 - Campos válidos:
   flashcard: frente | verso | ambos
   questao: correta | gabaritoComentado | enunciado | alternativas.A | alternativas.B | alternativas.C | alternativas.D | alternativas.E
-  material: materia
+  material: path do bloco (revisaoTurbo.N.conteudo | pegadinhas.N.conteudo | secoes.N.conteudo | raioXProbabilidade.padraoBanca | content | questoesPreditivas.N.enunciado|correta|gabaritoComentado). "materia" = título apenas.
 - newText deve ser diferente do texto atual.`
 
 module.exports = {

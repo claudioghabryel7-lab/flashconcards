@@ -519,22 +519,42 @@ async function loadFlaggedContentBlock(courseId, payload = {}) {
   }
 
   if (contentType === 'material' || contentType === 'materia') {
-    const docId = sanitizeTopicKeyForFirestore(topicKey || contentId)
-    const snap = await db.doc(`courses/${courseId}/conteudosCompletos/${docId}`).get()
+    const docId = sanitizeTopicKeyForFirestore(topicKey || '')
+    const snap = docId
+      ? await db.doc(`courses/${courseId}/conteudosCompletos/${docId}`).get()
+      : { exists: false }
     if (snap.exists) {
-      return `MATERIAL COMPLETO:\n${JSON.stringify(snap.data(), null, 2).slice(0, 28000)}`
+      const data = snap.data() || {}
+      const {
+        listMaterialEditablePaths,
+      } = require('./professorSupervisorPatches')
+      const paths = listMaterialEditablePaths(data)
+      return `MATERIAL COMPLETO (já estruturado — corrija o PATH do bloco errado, NÃO o título "materia" a menos que o erro seja só no título):
+PATHS EDITÁVEIS:
+${paths.join('\n')}
+
+PREVIEW DO ALUNO (use para achar o bloco): ${payload.preview || '—'}
+
+DADOS:
+${JSON.stringify(data, null, 2).slice(0, 26000)}`
     }
   }
 
   if (contentType === 'questao') {
     const found = await findFlaggedQuestao(courseId, payload)
     if (found) {
-      return `QUESTÃO COMPLETA (pack ${found.packId}, índice ${found.idx}, numero=${found.questao?.numero ?? found.idx + 1}):\n${JSON.stringify(
+      return `QUESTÃO COMPLETA (pack ${found.packId}, índice ${found.idx}, numero=${found.questao?.numero ?? found.idx + 1}):
+Use refId="${found.idx}" e field um de: correta | gabaritoComentado | enunciado | alternativas.A|B|C|D|E
+
+${JSON.stringify(
         {
           enunciado: found.questao?.enunciado,
           alternativas: found.questao?.alternativas,
-          correta: found.questao?.correta,
-          gabaritoComentado: found.questao?.gabaritoComentado,
+          correta: found.questao?.respostaCorreta || found.questao?.correta || found.questao?.gabarito,
+          gabaritoComentado:
+            found.questao?.gabaritoComentado ||
+            found.questao?.explicacao ||
+            found.questao?.comentario,
         },
         null,
         2,
@@ -625,8 +645,8 @@ INSTRUÇÕES OBRIGATÓRIAS:
 - Se estiver ERRADO: emita corrections com newText já corrigido (só a parte errada).
 - target exatamente: flashcard | material | questao
 - flashcard: field = frente | verso | ambos (ambos → newText JSON {"frente":"...","verso":"..."} ou "frente|||verso"); refId = "${flashcardId || payload.contentId}"
-- questao: field = correta | gabaritoComentado | enunciado | alternativas.A..E ; refId = índice 0-based do pack
-- material: field = materia
+- questao: field = correta | gabaritoComentado | enunciado | alternativas.A..E ; refId = índice 0-based do pack (veja CONTEÚDO INTEGRAL)
+- material: field = path real do bloco (ex.: revisaoTurbo.0.conteudo, pegadinhas.1.conteudo, secoes.0.conteudo, raioXProbabilidade.padraoBanca, questoesPreditivas.0.gabaritoComentado). NÃO use "materia" se o erro for no texto do bloco — "materia" é só o título.
 - newText deve ser diferente do texto atual`
 
   const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
