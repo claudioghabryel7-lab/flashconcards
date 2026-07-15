@@ -1078,7 +1078,14 @@ REGRAS:
                     kind: 'completo',
                   })}
                   topicKey={resolvedTopicKey}
-                  preview={stripHtml(conteudo.materia || conteudo.titulo || '').slice(0, 200)}
+                  preview={stripHtml(
+                    conteudo.revisaoTurbo?.[0]?.conteudo ||
+                      conteudo.secoes?.[0]?.conteudo ||
+                      conteudo.content ||
+                      conteudo.materia ||
+                      conteudo.titulo ||
+                      '',
+                  ).slice(0, 280)}
                   materia={conteudo.materia || conteudo.titulo || ''}
                   assunto={effectiveTopicNome || resolvedTopicKey}
                   contextLabel="este material"

@@ -304,21 +304,31 @@ async function enqueueItem(item) {
     const ref = getDb()
       .collection('professorSupervisorQueue')
       .doc(flagQueueDocId(item.courseId, item.payload.flagId))
-    const existing = await ref.get()
-    if (existing.exists) {
-      const st = existing.data()?.status
-      if (st === 'pending' || st === 'processing') return null
-      // Já processada (done/skipped/error/cancelled): não reabre sozinha
-      return null
-    }
-    await ref.set({
-      ...item,
-      dedupeKey,
-      status: 'pending',
-      createdAt: ts,
-      updatedAt: ts,
+    const forceRequeue = Boolean(item._forceRequeue)
+    const { _forceRequeue, ...cleanItem } = item
+
+    const claimed = await getDb().runTransaction(async (tx) => {
+      const existing = await tx.get(ref)
+      if (existing.exists) {
+        const st = existing.data()?.status
+        if (st === 'pending' || st === 'processing' || st === 'paused') return null
+        if (st === 'done' && !forceRequeue) return null
+      }
+      tx.set(
+        ref,
+        {
+          ...cleanItem,
+          dedupeKey,
+          status: 'pending',
+          createdAt: existing.exists ? existing.data()?.createdAt || ts : ts,
+          updatedAt: ts,
+          requeuedAt: existing.exists ? ts : null,
+        },
+        { merge: true },
+      )
+      return ref.id
     })
-    return ref.id
+    return claimed
   }
 
   if (await queueItemExists(dedupeKey)) return null
@@ -332,6 +342,32 @@ async function enqueueItem(item) {
     updatedAt: ts,
   })
   return ref.id
+}
+
+/** Reabre item de fila da flag para nova tentativa (após erro / needs_admin → open). */
+async function requeueFlagItem(courseId, flagId, payload = {}) {
+  return enqueueItem({
+    courseId,
+    itemType: 'flag',
+    priority: 100,
+    _forceRequeue: true,
+    payload: {
+      flagId,
+      ...payload,
+    },
+  })
+}
+
+async function setQueueItemStatus(itemId, status, extra = {}) {
+  if (!itemId) return
+  await queueRef(itemId).set(
+    {
+      status,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...extra,
+    },
+    { merge: true },
+  )
 }
 
 async function shouldEnqueueRedacaoTheme(courseId) {
@@ -366,22 +402,51 @@ async function enqueueOpenFlagsForAllCourses() {
     const courseId = courseDoc.id
     if (courseDoc.data()?.active === false) continue
 
-    const flagsSnap = await db
-      .collection(`courses/${courseId}/contentFeedback`)
-      .where('kind', '==', 'flag')
-      .where('status', '==', 'open')
-      .limit(20)
-      .get()
+    // open = nova; needs_admin = patch falhou e admin ainda não fechou (não reenfileira em loop)
+    // Também recupera in_review stale (>30min) devolvendo para open
+    let flagsSnap
+    try {
+      flagsSnap = await db
+        .collection(`courses/${courseId}/contentFeedback`)
+        .where('kind', '==', 'flag')
+        .where('status', 'in', ['open', 'in_review'])
+        .limit(40)
+        .get()
+    } catch (err) {
+      flagsSnap = await db
+        .collection(`courses/${courseId}/contentFeedback`)
+        .where('kind', '==', 'flag')
+        .where('status', '==', 'open')
+        .limit(20)
+        .get()
+    }
 
     for (const flagDoc of flagsSnap.docs) {
       const data = flagDoc.data() || {}
-      // Só enfileira flags realmente abertas (in_review / resolved ficam de fora)
-      if (data.status && data.status !== 'open') continue
+      let status = data.status || 'open'
+
+      if (status === 'in_review') {
+        const at = data.inReviewAt?.toDate?.() || null
+        const stale = !at || Date.now() - at.getTime() > 30 * 60 * 1000
+        if (!stale) continue
+        await flagDoc.ref.set(
+          {
+            status: 'open',
+            recoveredFromStaleReview: true,
+            recoveredAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
+        status = 'open'
+      }
+
+      if (status !== 'open') continue
 
       const id = await enqueueItem({
         courseId,
         itemType: 'flag',
         priority: 100,
+        _forceRequeue: true,
         payload: {
           flagId: flagDoc.id,
           contentType: data.contentType,
@@ -432,7 +497,7 @@ async function cancelLegacyNonFlagQueueItems() {
   const staleSnap = await db
     .collection('professorSupervisorQueue')
     .where('status', 'in', ['pending', 'error'])
-    .limit(100)
+    .limit(200)
     .get()
   let cancelled = 0
   const seenFlagKeys = new Set()
@@ -455,7 +520,7 @@ async function cancelLegacyNonFlagQueueItems() {
     }
 
     // Cancela cópias duplicadas da mesma sinalização (legado com ID aleatório)
-    if (type === 'flag' && data.status === 'pending') {
+    if (type === 'flag' && (data.status === 'pending' || data.status === 'error')) {
       const flagId = data.payload?.flagId
       const courseId = data.courseId
       if (!flagId || !courseId) continue
@@ -741,7 +806,7 @@ async function tickProfessorSupervisor({ force = false } = {}) {
 
   const label = itemLabel(item)
   const jobId = await spawnSupervisorJob(data.automationUserId, item.courseId, item)
-  await incrementSessionCounter()
+  // Contador só após spawn bem-sucedido; o done real fica no processor
 
   await updateSupervisorActivity({
     phase: 'running',
@@ -797,4 +862,8 @@ module.exports = {
   tickProfessorSupervisor,
   spawnSupervisorJob,
   startSupervisorSession,
+  requeueFlagItem,
+  setQueueItemStatus,
+  flagQueueDocId,
+  incrementSessionCounter,
 }

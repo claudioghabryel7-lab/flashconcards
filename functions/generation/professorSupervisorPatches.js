@@ -136,6 +136,12 @@ function normalizeQuestaoField(rawField) {
   const compact = f.toLowerCase().replace(/[^a-z0-9]/g, '')
 
   if (
+    ['aligned', 'completo', 'questao', 'questaocompleta', 'bloco', 'pacote'].includes(compact)
+  ) {
+    return { kind: 'aligned', field: 'aligned' }
+  }
+
+  if (
     ['gabarito', 'resposta', 'respostacorreta', 'correta', 'answer', 'letra']
       .map((x) => x.toLowerCase().replace(/[^a-z0-9]/g, ''))
       .includes(compact)
@@ -163,6 +169,86 @@ function normalizeQuestaoField(rawField) {
   }
 
   return { kind: 'scalar', field: f || 'enunciado' }
+}
+
+/**
+ * Consolida várias correções da mesma questão em um pacote alinhado
+ * (enunciado + gabarito + explicação).
+ */
+function consolidateQuestaoCorrections(corrections = []) {
+  const others = []
+  const byRef = new Map()
+
+  for (const c of corrections) {
+    const t = String(c.target || '')
+      .toLowerCase()
+      .replace(/s$/, '')
+    const isQuestao =
+      t === 'questao' || t === 'questoe' || t === 'question' || t === 'questoes'
+    if (!isQuestao) {
+      others.push(c)
+      continue
+    }
+    const ref = String(c.refId ?? '0')
+    if (!byRef.has(ref)) {
+      byRef.set(ref, {
+        refId: c.refId ?? ref,
+        confidence: Number(c.confidence) || 0,
+        fields: {},
+        alignedRaw: null,
+      })
+    }
+    const bucket = byRef.get(ref)
+    bucket.confidence = Math.max(bucket.confidence, Number(c.confidence) || 0)
+    const mapped = normalizeQuestaoField(c.field)
+    if (mapped.kind === 'aligned') {
+      bucket.alignedRaw = c.newText
+      continue
+    }
+    if (mapped.kind === 'alternativa') {
+      if (!bucket.fields.alternativas) bucket.fields.alternativas = {}
+      bucket.fields.alternativas[mapped.letter] = c.newText
+      continue
+    }
+    bucket.fields[mapped.field] = c.newText
+  }
+
+  for (const bucket of byRef.values()) {
+    let pack = { ...bucket.fields }
+    if (bucket.alignedRaw) {
+      try {
+        const parsed = JSON.parse(bucket.alignedRaw)
+        if (parsed && typeof parsed === 'object') {
+          pack = { ...pack, ...parsed }
+          if (parsed.alternativas && typeof parsed.alternativas === 'object') {
+            pack.alternativas = { ...(pack.alternativas || {}), ...parsed.alternativas }
+          }
+        }
+      } catch {
+        // se não for JSON, trata como explicação
+        if (!pack.gabaritoComentado) pack.gabaritoComentado = bucket.alignedRaw
+      }
+    }
+
+    const touchesGabarito =
+      pack.correta != null ||
+      pack.respostaCorreta != null ||
+      (pack.alternativas && Object.keys(pack.alternativas).length > 0)
+    const hasExpl =
+      pack.gabaritoComentado != null || pack.explicacao != null || pack.comentario != null
+    const incompleteAlignment = Boolean(touchesGabarito && !hasExpl)
+
+    others.push({
+      target: 'questao',
+      refId: bucket.refId,
+      field: 'aligned',
+      newText: JSON.stringify(pack),
+      confidence: bucket.confidence || 0.85,
+      incompleteAlignment,
+    })
+  }
+
+  return others
 }
 
 function normalizeMaterialField(rawField) {
@@ -563,9 +649,13 @@ async function applyCorrectionsWithSnapshot(courseId, itemType, payload, correct
     }
 
     if (normalizedTarget === 'material' && (payload?.topicKey || fix.refId || payload?.contentId)) {
-      const collection = 'conteudosCompletos'
+      const isIncidencia = payload.contentType === 'incidencia'
+      const collection = isIncidencia ? 'conteudosIncidencia' : 'conteudosCompletos'
       let docId = ''
-      if (payload.topicKey) {
+      if (isIncidencia) {
+        const { sanitizeDisciplinaKey } = require('./topicKeyUtils')
+        docId = sanitizeDisciplinaKey(payload.topicKey || '')
+      } else if (payload.topicKey) {
         docId = sanitizeTopicKeyForFirestore(payload.topicKey)
       } else {
         const cid = String(payload.contentId || '')
@@ -757,6 +847,86 @@ async function tryPatchQuestaoInPack(
     alts[letter] = fix.newText
     next.alternativas = alts
     afterPatch = { [`alternativas.${letter}`]: fix.newText }
+  } else if (mapped.kind === 'aligned') {
+    let pack = {}
+    try {
+      pack = JSON.parse(fix.newText)
+    } catch {
+      return false
+    }
+    if (!pack || typeof pack !== 'object') return false
+
+    // Gabarito mudou sem explicação → não aplica parcialmente
+    const touchesGabarito =
+      pack.correta != null ||
+      pack.respostaCorreta != null ||
+      (pack.alternativas && Object.keys(pack.alternativas).length > 0)
+    const expl =
+      pack.gabaritoComentado != null
+        ? pack.gabaritoComentado
+        : pack.explicacao != null
+          ? pack.explicacao
+          : pack.comentario
+    if (touchesGabarito && (expl == null || !String(expl).trim())) {
+      return false
+    }
+    if (fix.incompleteAlignment) return false
+
+    let changed = false
+    beforePatch = {}
+    afterPatch = {}
+
+    if (pack.enunciado != null && !textsEqual(previous.enunciado, pack.enunciado)) {
+      beforePatch.enunciado = previous.enunciado
+      next.enunciado = pack.enunciado
+      afterPatch.enunciado = pack.enunciado
+      changed = true
+    }
+
+    const corretaVal = normalizeCorretaValue(
+      pack.correta != null ? pack.correta : pack.respostaCorreta,
+    )
+    if (pack.correta != null || pack.respostaCorreta != null) {
+      const current =
+        previous.respostaCorreta || previous.correta || previous.gabarito || ''
+      if (!textsEqual(current, corretaVal)) {
+        beforePatch.correta = current
+        next.correta = corretaVal
+        next.respostaCorreta = corretaVal
+        next.gabarito = corretaVal
+        afterPatch.correta = corretaVal
+        changed = true
+      }
+    }
+
+    if (expl != null && String(expl).trim()) {
+      const currentExpl =
+        previous.gabaritoComentado || previous.explicacao || previous.comentario || ''
+      if (!textsEqual(currentExpl, expl)) {
+        beforePatch.gabaritoComentado = currentExpl
+        next.gabaritoComentado = expl
+        next.explicacao = expl
+        next.comentario = expl
+        afterPatch.gabaritoComentado = expl
+        changed = true
+      }
+    }
+
+    if (pack.alternativas && typeof pack.alternativas === 'object') {
+      const alts = { ...(previous.alternativas || {}) }
+      for (const [letter, text] of Object.entries(pack.alternativas)) {
+        const L = String(letter).toUpperCase()
+        if (!textsEqual(alts[L], text)) {
+          beforePatch[`alternativas.${L}`] = alts[L]
+          alts[L] = text
+          afterPatch[`alternativas.${L}`] = text
+          changed = true
+        }
+      }
+      next.alternativas = alts
+    }
+
+    if (!changed) return false
   } else {
     const field = mapped.field
     const value = field === 'correta' ? normalizeCorretaValue(fix.newText) : fix.newText
@@ -767,15 +937,11 @@ async function tryPatchQuestaoInPack(
           ? previous.gabaritoComentado || previous.explicacao || previous.comentario
           : previous[field]
     if (textsEqual(current, value)) return false
+    // Não aplicar gabarito sozinho sem explicação no mesmo fix
+    if (field === 'correta') return false
     beforePatch = { [field]: current }
     next[field] = value
     afterPatch = { [field]: value }
-    // Espelha aliases lidos pela UI
-    if (field === 'correta') {
-      next.respostaCorreta = value
-      next.gabarito = value
-      afterPatch.respostaCorreta = value
-    }
     if (field === 'gabaritoComentado') {
       next.explicacao = value
       next.comentario = value
@@ -881,4 +1047,6 @@ module.exports = {
   resolveQuestaoIndex,
   listMaterialEditablePaths,
   findMaterialPathByPreview,
+  loadFlashcardBefore,
+  consolidateQuestaoCorrections,
 }

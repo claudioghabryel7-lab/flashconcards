@@ -32,14 +32,14 @@ export default function AdminContentModeration() {
     return () => unsub?.()
   }, [])
 
-  const handleResolve = async (flag) => {
+  const handleResolve = async (flag, contentCorrected = false) => {
     if (!flag.courseId) {
       alert('Sinalização sem courseId — não é possível marcar.')
       return
     }
     setBusyId(flag.id)
     try {
-      await resolveContentFlag(flag.courseId, flag.id)
+      await resolveContentFlag(flag.courseId, flag.id, { contentCorrected })
     } catch (e) {
       console.error(e)
       alert('Erro ao marcar como resolvido.')
@@ -65,8 +65,15 @@ export default function AdminContentModeration() {
   const typeLabel = (t) => {
     if (t === 'questao') return 'Questão'
     if (t === 'flashcard') return 'Flashcard'
-    if (t === 'material') return 'Material'
+    if (t === 'material' || t === 'materia') return 'Material'
+    if (t === 'incidencia') return 'Incidência'
     return t || 'Conteúdo'
+  }
+
+  const statusLabel = (s) => {
+    if (s === 'needs_admin') return 'Precisa admin'
+    if (s === 'in_review') return 'Em revisão IA'
+    return 'Aberta'
   }
 
   return (
@@ -84,7 +91,7 @@ export default function AdminContentModeration() {
           </div>
         </div>
         <p className="mt-3 text-xs text-cp-muted">
-          {loading ? 'Carregando…' : `${flags.length} sinalização(ões) aberta(s)`}
+          {loading ? 'Carregando…' : `${flags.length} sinalização(ões) pendente(s)`}
         </p>
       </div>
 
@@ -113,6 +120,7 @@ export default function AdminContentModeration() {
                     <span className="cp-badge cp-badge-accent !text-[10px]">
                       {typeLabel(flag.contentType)}
                     </span>
+                    <span className="cp-badge !text-[10px]">{statusLabel(flag.status)}</span>
                     <span className="cp-badge !text-[10px]">Curso: {flag.courseId || '—'}</span>
                     {flag.topicKey && (
                       <span className="cp-badge cp-badge-cyan !text-[10px] max-w-[220px] truncate">
@@ -140,15 +148,31 @@ export default function AdminContentModeration() {
                   {flag.text || 'Sem descrição'}
                 </p>
 
+                {flag.lastProfessorSummary && (
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    Professor IA: {flag.lastProfessorSummary}
+                  </p>
+                )}
+
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => handleResolve(flag)}
+                    onClick={() => handleResolve(flag, true)}
                     disabled={busyId === flag.id || !flag.courseId}
                     className="cp-btn-primary !text-xs"
+                    title="Use se você já corrigiu o conteúdo"
                   >
                     <CheckIcon className="h-4 w-4" />
-                    {busyId === flag.id ? 'Salvando…' : 'Marcar como corrigido'}
+                    {busyId === flag.id ? 'Salvando…' : 'Conteúdo corrigido'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleResolve(flag, false)}
+                    disabled={busyId === flag.id || !flag.courseId}
+                    className="cp-btn-ghost !text-xs"
+                    title="Fecha sem afirmar que o conteúdo foi alterado"
+                  >
+                    {busyId === flag.id ? 'Salvando…' : 'Marcar como revisado'}
                   </button>
                   <button
                     type="button"

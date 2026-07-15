@@ -404,8 +404,67 @@ export async function rollbackSupervisorPatches(courseId, patches = []) {
       continue
     }
 
-    const { collection: coll, docId, before } = patch
+    const { collection: coll, docId, before, questaoIndex } = patch
     if (!coll || !docId || !before) continue
+
+    // Questão dentro do array do pack
+    if ((coll === 'questoesTopico' || coll === 'questoesIncidencia') && questaoIndex != null) {
+      const ref = doc(db, 'courses', courseId, coll, docId)
+      const snap = await getDoc(ref)
+      if (!snap.exists()) continue
+      const data = snap.data() || {}
+      const questoes = [...(data.questoes || data.questions || [])]
+      if (!questoes[questaoIndex]) continue
+      const q = { ...questoes[questaoIndex] }
+      for (const [key, val] of Object.entries(before)) {
+        if (key.startsWith('alternativas.')) {
+          const letter = key.split('.')[1]
+          q.alternativas = { ...(q.alternativas || {}), [letter]: val }
+        } else {
+          q[key] = val
+        }
+      }
+      questoes[questaoIndex] = q
+      const payload = { questoes, updatedAt: serverTimestamp(), supervisorReviewed: false }
+      if (data.questions) payload.questions = questoes
+      await setDoc(ref, payload, { merge: true })
+      continue
+    }
+
+    // Paths aninhados de material (ex.: revisaoTurbo.0.conteudo)
+    const nestedKeys = Object.keys(before).filter((k) => k.includes('.'))
+    if (nestedKeys.length) {
+      const ref = doc(db, 'courses', courseId, coll, docId)
+      const snap = await getDoc(ref)
+      if (!snap.exists()) continue
+      let data = { ...snap.data() }
+      for (const path of nestedKeys) {
+        const parts = path.split('.')
+        let cursor = data
+        for (let i = 0; i < parts.length - 1; i += 1) {
+          const key = /^\d+$/.test(parts[i]) ? Number(parts[i]) : parts[i]
+          const next = cursor[key]
+          cursor[key] = Array.isArray(next)
+            ? [...next]
+            : next && typeof next === 'object'
+              ? { ...next }
+              : {}
+          cursor = cursor[key]
+        }
+        const last = /^\d+$/.test(parts[parts.length - 1])
+          ? Number(parts[parts.length - 1])
+          : parts[parts.length - 1]
+        cursor[last] = before[path]
+      }
+      const rootKeys = [...new Set(nestedKeys.map((k) => k.split('.')[0]))]
+      const patchPayload = { updatedAt: serverTimestamp(), supervisorReviewed: false }
+      rootKeys.forEach((rk) => {
+        patchPayload[rk] = data[rk]
+      })
+      await setDoc(ref, patchPayload, { merge: true })
+      continue
+    }
+
     await setDoc(
       doc(db, 'courses', courseId, coll, docId),
       { ...before, supervisorReviewed: false, updatedAt: serverTimestamp() },

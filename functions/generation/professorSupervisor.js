@@ -4,6 +4,7 @@ const { loadMentoradoAutomationContext } = require('./guiaMentoradoEdital')
 const {
   PROFESSOR_ROLES,
   REVIEW_JSON_SCHEMA,
+  MIN_CONFIDENCE_AUTO_APPLY,
 } = require('./professorSupervisorShared')
 const {
   scriptCheckTopicStep,
@@ -14,8 +15,16 @@ const {
 const {
   applyCorrectionsWithSnapshot,
   buildDiffSummary,
+  consolidateQuestaoCorrections,
 } = require('./professorSupervisorPatches')
-const { finishQueueItem, updateSupervisorActivity, scheduleNextRunForItem, kickNextSupervisorItem } = require('./professorSupervisorQueue')
+const {
+  finishQueueItem,
+  updateSupervisorActivity,
+  scheduleNextRunForItem,
+  kickNextSupervisorItem,
+  setQueueItemStatus,
+  incrementSessionCounter,
+} = require('./professorSupervisorQueue')
 const {
   scanMaterialTypos,
   buildDigitacaoVerdict,
@@ -495,22 +504,23 @@ async function resolveFlagFeedback(courseId, flagId, { applied = 0, summary = ''
 async function loadFlaggedContentBlock(courseId, payload = {}) {
   const db = getDb()
   const { contentType, contentId, topicKey } = payload
-  const { sanitizeTopicKeyForFirestore } = require('./topicKeyUtils')
+  const { sanitizeTopicKeyForFirestore, sanitizeDisciplinaKey } = require('./topicKeyUtils')
   const {
     findFlaggedQuestao,
     normalizeFlashcardDocId,
+    loadFlashcardBefore,
+    listMaterialEditablePaths,
   } = require('./professorSupervisorPatches')
 
   if (contentType === 'flashcard') {
     const cardId = normalizeFlashcardDocId(contentId)
-    const snap = await db.doc(`courses/${courseId}/flashcards/${cardId}`).get()
-    if (snap.exists) {
-      const c = snap.data()
+    const before = await loadFlashcardBefore(courseId, cardId, cardId)
+    if (before) {
       return `FLASHCARD COMPLETO:\n${JSON.stringify(
         {
-          id: snap.id,
-          frente: c.frente || c.pergunta,
-          verso: c.verso || c.resposta,
+          id: before.__docId || cardId,
+          frente: before.frente || before.pergunta,
+          verso: before.verso || before.resposta,
         },
         null,
         2,
@@ -518,22 +528,27 @@ async function loadFlaggedContentBlock(courseId, payload = {}) {
     }
   }
 
-  if (contentType === 'material' || contentType === 'materia') {
-    const docId = sanitizeTopicKeyForFirestore(topicKey || '')
-    const snap = docId
-      ? await db.doc(`courses/${courseId}/conteudosCompletos/${docId}`).get()
-      : { exists: false }
-    if (snap.exists) {
+  if (contentType === 'material' || contentType === 'materia' || contentType === 'incidencia') {
+    let snap = null
+    if (contentType === 'incidencia') {
+      const key = sanitizeDisciplinaKey(topicKey || '')
+      if (key) {
+        snap = await db.doc(`courses/${courseId}/conteudosIncidencia/${key}`).get()
+      }
+    } else {
+      const docId = sanitizeTopicKeyForFirestore(topicKey || '')
+      if (docId) {
+        snap = await db.doc(`courses/${courseId}/conteudosCompletos/${docId}`).get()
+      }
+    }
+    if (snap?.exists) {
       const data = snap.data() || {}
-      const {
-        listMaterialEditablePaths,
-      } = require('./professorSupervisorPatches')
       const paths = listMaterialEditablePaths(data)
-      return `MATERIAL COMPLETO (já estruturado — corrija o PATH do bloco errado, NÃO o título "materia" a menos que o erro seja só no título):
+      return `MATERIAL COMPLETO (corrija o PATH do bloco errado; "materia" é só título):
 PATHS EDITÁVEIS:
 ${paths.join('\n')}
 
-PREVIEW DO ALUNO (use para achar o bloco): ${payload.preview || '—'}
+PREVIEW DO ALUNO: ${payload.preview || '—'}
 
 DADOS:
 ${JSON.stringify(data, null, 2).slice(0, 26000)}`
@@ -544,7 +559,10 @@ ${JSON.stringify(data, null, 2).slice(0, 26000)}`
     const found = await findFlaggedQuestao(courseId, payload)
     if (found) {
       return `QUESTÃO COMPLETA (pack ${found.packId}, índice ${found.idx}, numero=${found.questao?.numero ?? found.idx + 1}):
-Use refId="${found.idx}" e field um de: correta | gabaritoComentado | enunciado | alternativas.A|B|C|D|E
+Use refId="${found.idx}" e field="aligned" com newText JSON contendo TODOS os campos alinhados:
+{"correta":"A"|"B"|...,"gabaritoComentado":"explicação coerente com o gabarito","enunciado":"(só se precisar corrigir)","alternativas":{"A":"..."} (só se precisar)}
+
+Nunca altere só o enunciado/gabarito sem atualizar a explicação quando o sentido da resposta muda.
 
 ${JSON.stringify(
         {
@@ -565,7 +583,21 @@ ${JSON.stringify(
   return ''
 }
 
-async function claimFlagInReview(courseId, flagId) {
+async function releaseFlagStatus(courseId, flagId, status, extra = {}) {
+  if (!flagId) return
+  await getDb()
+    .doc(`courses/${courseId}/contentFeedback/${flagId}`)
+    .set(
+      {
+        status,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...extra,
+      },
+      { merge: true },
+    )
+}
+
+async function claimFlagInReview(courseId, flagId, jobId = '') {
   if (!flagId) return { ok: false, reason: 'no_flag' }
   const ref = getDb().doc(`courses/${courseId}/contentFeedback/${flagId}`)
   try {
@@ -575,19 +607,26 @@ async function claimFlagInReview(courseId, flagId) {
       const data = snap.data() || {}
       const status = data.status
       if (status === 'resolved') return { ok: false, reason: 'already_resolved' }
+
       if (status === 'in_review') {
+        // Resume do mesmo job (API pause) — permite retomar
+        if (jobId && data.inReviewJobId && data.inReviewJobId === jobId) {
+          return { ok: true, data, resumed: true }
+        }
         const at = data.inReviewAt?.toDate?.() || null
         const stale = !at || Date.now() - at.getTime() > 30 * 60 * 1000
         if (!stale) return { ok: false, reason: 'already_in_review' }
-      } else if (status !== 'open') {
+      } else if (status !== 'open' && status !== 'needs_admin') {
         return { ok: false, reason: `status_${status || 'unknown'}` }
       }
+
       tx.set(
         ref,
         {
           status: 'in_review',
           inReviewAt: admin.firestore.FieldValue.serverTimestamp(),
           inReviewBy: 'professor_supervisor',
+          inReviewJobId: jobId || null,
         },
         { merge: true },
       )
@@ -601,17 +640,33 @@ async function claimFlagInReview(courseId, flagId) {
 
 function filterActionableCorrections(corrections = [], verdict = {}) {
   if (verdict.reportValid === false) return []
+  if (verdict.needsAdminReview === true) return []
+  const minConf = Number(MIN_CONFIDENCE_AUTO_APPLY) || 0.78
   return (corrections || []).filter((c) => {
     if (!c || c.newText == null) return false
     const conf = Number(c.confidence)
-    if (Number.isFinite(conf) && conf < 0.7) return false
+    if (Number.isFinite(conf) && conf < minConf) return false
     if (!String(c.newText).trim()) return false
     return true
   })
 }
 
+function resolveContentTarget(contentType, target) {
+  if (target) return target
+  if (contentType === 'flashcard') return 'flashcard'
+  if (contentType === 'questao') return 'questao'
+  if (
+    contentType === 'material' ||
+    contentType === 'materia' ||
+    contentType === 'incidencia'
+  ) {
+    return 'material'
+  }
+  return target
+}
+
 async function processFlagItem(courseId, payload, updateJob, userId, jobId) {
-  const claim = await claimFlagInReview(courseId, payload.flagId)
+  const claim = await claimFlagInReview(courseId, payload.flagId, jobId)
   if (!claim.ok) {
     return {
       skipped: true,
@@ -628,6 +683,21 @@ async function processFlagItem(courseId, payload, updateJob, userId, jobId) {
       ? String(payload.contentId || '').replace(/^.*_fc_/, '')
       : ''
 
+  if (!contentBlock) {
+    await releaseFlagStatus(courseId, payload.flagId, 'needs_admin', {
+      lastProfessorSummary: 'Conteúdo sinalizado não foi encontrado para correção automática.',
+      lastProfessorApplied: 0,
+      inReviewJobId: null,
+    })
+    return {
+      summary: 'Conteúdo não carregado — sinalização enviada para revisão admin.',
+      applied: 0,
+      needsAdmin: true,
+      flagResolved: false,
+      professorsUsed: 0,
+    }
+  }
+
   const contextBlock = `TIPO: conteúdo sinalizado por aluno — revise com rigor e só corrija erro REAL
 CURSO: ${courseId}
 TIPO CONTEÚDO: ${payload.contentType}
@@ -637,41 +707,50 @@ TÓPICO: ${payload.topicKey || '—'}
 PREVIEW: ${payload.preview || ''}
 RELATO DO ALUNO: ${payload.reportText || ''}
 
-${contentBlock ? `CONTEÚDO INTEGRAL:\n${contentBlock}` : 'ATENÇÃO: não foi possível carregar o conteúdo — use o preview e o relato com cautela.'}
+CONTEÚDO INTEGRAL:
+${contentBlock}
 
 INSTRUÇÕES OBRIGATÓRIAS:
 - Primeiro verifique se o CONTEÚDO INTEGRAL está realmente errado conforme o relato.
 - Se estiver CORRETO: corrections=[], issues=[], reportValid=false. NÃO invente erro. NÃO reescreva por estilo.
-- Se estiver ERRADO: emita corrections com newText já corrigido (só a parte errada).
+- Se estiver ERRADO: emita corrections com newText já corrigido.
+- Se houver dúvida factual: needsAdminReview=true e corrections=[] (não invente patch).
 - target exatamente: flashcard | material | questao
-- flashcard: field = frente | verso | ambos (ambos → newText JSON {"frente":"...","verso":"..."} ou "frente|||verso"); refId = "${flashcardId || payload.contentId}"
-- questao: field = correta | gabaritoComentado | enunciado | alternativas.A..E ; refId = índice 0-based do pack (veja CONTEÚDO INTEGRAL)
-- material: field = path real do bloco (ex.: revisaoTurbo.0.conteudo, pegadinhas.1.conteudo, secoes.0.conteudo, raioXProbabilidade.padraoBanca, questoesPreditivas.0.gabaritoComentado). NÃO use "materia" se o erro for no texto do bloco — "materia" é só o título.
+- flashcard: field = frente | verso | ambos; refId = "${flashcardId || payload.contentId}"
+- questao (OBRIGATÓRIO alinhamento): field = "aligned" e newText = JSON:
+  {"correta":"A-E","gabaritoComentado":"explicação alinhada ao gabarito","enunciado":"se precisar","alternativas":{}}
+  • Se o gabarito ou alternativas mudarem, gabaritoComentado É OBRIGATÓRIO e deve justificar a resposta correta.
+  • Nunca corrija só o enunciado deixando gabarito/explicação desalinhados.
+  • refId = índice 0-based da questão no pack.
+- material: field = path real (revisaoTurbo.N.conteudo…). "materia" = só título.
 - newText deve ser diferente do texto atual`
 
   const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
-  const final = chain.final
+  const final = chain.final || {}
   let corrections = filterActionableCorrections(final.corrections || [], final)
 
   corrections = corrections.map((c) => ({
     ...c,
     refId: c.refId || flashcardId || payload.contentId || null,
-    target:
-      c.target ||
-      (payload.contentType === 'flashcard'
-        ? 'flashcard'
-        : payload.contentType === 'questao'
-          ? 'questao'
-          : payload.contentType === 'material' || payload.contentType === 'materia'
-            ? 'material'
-            : c.target),
+    target: resolveContentTarget(payload.contentType, c.target),
   }))
+
+  corrections = consolidateQuestaoCorrections(corrections)
+
+  const incompleteQuestao = corrections.some((c) => c.incompleteAlignment)
+  if (incompleteQuestao) {
+    corrections = corrections.filter((c) => !c.incompleteAlignment)
+  }
 
   const dedupeKey = `flag:${courseId}:${payload.flagId}`
   const { applied, patches } = await applyCorrectionsWithSnapshot(
     courseId,
     'flag',
-    payload,
+    {
+      ...payload,
+      contentType:
+        payload.contentType === 'incidencia' ? 'incidencia' : payload.contentType,
+    },
     corrections,
   )
   const diffSummary = buildDiffSummary(patches, corrections)
@@ -690,27 +769,82 @@ INSTRUÇÕES OBRIGATÓRIAS:
     diffSummary,
   })
 
-  const contentOk = applied === 0 && (final.reportValid === false || corrections.length === 0)
-  const summary =
-    applied > 0
-      ? final.summary || 'Conteúdo corrigido.'
-      : contentOk
-        ? final.summary || 'Conteúdo analisado: sem erro a corrigir (sinalização encerrada).'
-        : final.summary ||
-          'Professor não conseguiu aplicar alteração automática; sinalização encerrada para revisão admin.'
+  const studentWrong = final.reportValid === false
+  const contentOk =
+    applied === 0 &&
+    !incompleteQuestao &&
+    (studentWrong || (corrections.length === 0 && !final.needsAdminReview))
+  const patchFailed =
+    applied === 0 &&
+    !contentOk &&
+    (corrections.length > 0 || final.needsAdminReview === true || incompleteQuestao)
 
-  await resolveFlagFeedback(courseId, payload.flagId, {
-    applied,
-    summary,
+  if (applied > 0 && !incompleteQuestao) {
+    const summary = final.summary || 'Conteúdo corrigido (questão/gabarito/explicação alinhados).'
+    await resolveFlagFeedback(courseId, payload.flagId, { applied, summary })
+    return {
+      summary,
+      applied,
+      needsAdmin: false,
+      professorsUsed: chain.professorsUsed,
+      flagResolved: true,
+    }
+  }
+
+  // Se aplicou algo mas ficou alinhamento incompleto — ainda precisa admin (caso raro)
+  if (applied > 0 && incompleteQuestao) {
+    const summary =
+      final.summary ||
+      'Correção parcial aplicada, mas gabarito/explicação ficaram incompletos — revisar admin.'
+    await releaseFlagStatus(courseId, payload.flagId, 'needs_admin', {
+      lastProfessorSummary: summary,
+      lastProfessorApplied: applied,
+      inReviewJobId: null,
+      needsAdminReason: 'incomplete_questao_alignment',
+    })
+    return {
+      summary,
+      applied,
+      needsAdmin: true,
+      professorsUsed: chain.professorsUsed,
+      flagResolved: false,
+    }
+  }
+
+  if (contentOk) {
+    const summary =
+      final.summary || 'Conteúdo analisado: sem erro a corrigir (sinalização encerrada).'
+    await resolveFlagFeedback(courseId, payload.flagId, { applied: 0, summary })
+    return {
+      summary,
+      applied: 0,
+      needsAdmin: false,
+      professorsUsed: chain.professorsUsed,
+      flagResolved: true,
+    }
+  }
+
+  const summary =
+    incompleteQuestao
+      ? final.summary ||
+        'Gabarito/enunciado sem explicação alinhada — sinalização enviada para admin.'
+      : final.summary ||
+        (patchFailed
+          ? 'Professor não conseguiu aplicar a correção automaticamente — aguardando admin.'
+          : 'Sinalização pendente de revisão admin.')
+  await releaseFlagStatus(courseId, payload.flagId, 'needs_admin', {
+    lastProfessorSummary: summary,
+    lastProfessorApplied: 0,
+    inReviewJobId: null,
+    needsAdminReason: incompleteQuestao ? 'incomplete_questao_alignment' : 'patch_failed',
   })
 
   return {
     summary,
-    applied,
-    needsAdmin: applied === 0 && !contentOk,
-    reviewId: null,
+    applied: 0,
+    needsAdmin: true,
     professorsUsed: chain.professorsUsed,
-    flagResolved: true,
+    flagResolved: false,
   }
 }
 
@@ -975,12 +1109,20 @@ async function processProfessorSupervisor(userId, jobId, courseId, serverPayload
 
     await clearActiveJob(jobId)
 
+    if (!outcome.skipped && !outcome.cancelled) {
+      await incrementSessionCounter().catch(() => {})
+    }
+
     const msg = outcome.skipped
       ? outcome.digitacaoOnly || outcome.reason === 'digitacao_ok'
         ? outcome.summary || 'Digitação OK'
         : `Checagem OK — ${outcome.reason || 'sem IA'}`
       : itemType === 'flag'
-        ? `Correção aplicada automaticamente (${outcome.applied || 0} alteração(ões))`
+        ? outcome.applied > 0
+          ? `Correção aplicada (${outcome.applied} alteração(ões))`
+          : outcome.needsAdmin
+            ? `Sinalização enviada para revisão admin (${outcome.summary || 'sem patch automático'})`
+            : outcome.summary || 'Sinalização revisada sem alteração'
         : outcome.digitacaoOnly
           ? `Digitação corrigida — aguardando moderação (${outcome.applied || 0} campo(s))`
           : `Correções aplicadas — aguardando moderação (${outcome.applied || 0} alteração(ões), ${outcome.professorsUsed} professor(es))`
@@ -1006,15 +1148,29 @@ async function processProfessorSupervisor(userId, jobId, courseId, serverPayload
 
     return outcome
   } catch (err) {
-    if (queueItemId) {
-      await finishQueueItem(queueItemId, isJobCancelledError(err) ? 'cancelled' : 'error')
-    }
-    await clearActiveJob(jobId)
+    const flagId = serverPayload?.payload?.flagId
 
     if (isJobCancelledError(err) || (await isJobCancelled(userId, jobId))) {
+      if (queueItemId) await finishQueueItem(queueItemId, 'cancelled')
+      if (flagId) {
+        await releaseFlagStatus(courseId, flagId, 'open', {
+          lastProfessorSummary: 'Job cancelado — sinalização reaberta.',
+          inReviewJobId: null,
+        })
+      }
+      await clearActiveJob(jobId)
       await updateSupervisorActivity({ phase: 'idle', message: 'Cancelado pelo admin' })
       return { cancelled: true }
     }
+
+    // Pause por API/erro: NÃO mata a fila; marca paused e mantém flag com jobId para resume
+    if (queueItemId) {
+      await setQueueItemStatus(queueItemId, 'paused', {
+        pauseReason: isApiQuotaError(err) ? 'api' : 'error',
+        pauseMessage: err.message || String(err),
+      })
+    }
+    await clearActiveJob(jobId)
 
     if (isApiQuotaError(err)) {
       await updateSupervisorActivity({

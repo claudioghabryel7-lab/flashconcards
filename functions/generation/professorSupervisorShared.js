@@ -40,8 +40,10 @@ Regras:
 - Só corrija se houver erro concreto no CONTEÚDO INTEGRAL alinhado ao RELATO.
 - Campos válidos:
   flashcard: frente | verso | ambos
-  questao: correta | gabaritoComentado | enunciado | alternativas.A | alternativas.B | alternativas.C | alternativas.D | alternativas.E
-  material: path do bloco (revisaoTurbo.N.conteudo | pegadinhas.N.conteudo | secoes.N.conteudo | raioXProbabilidade.padraoBanca | content | questoesPreditivas.N.enunciado|correta|gabaritoComentado). "materia" = título apenas.
+  questao: preferir field="aligned" com newText JSON {"correta":"A-E","gabaritoComentado":"...","enunciado":"...","alternativas":{}}.
+    Se mudar gabarito/alternativas, gabaritoComentado é OBRIGATÓRIO e deve ficar alinhado.
+    Nunca envie só enunciado quando o gabarito/explicação também estiverem errados.
+  material: path do bloco (revisaoTurbo.N.conteudo | pegadinhas.N.conteudo | secoes.N.conteudo | raioXProbabilidade.padraoBanca | content | questoesPreditivas.N.*). "materia" = título apenas.
 - newText deve ser diferente do texto atual.`
 
 module.exports = {

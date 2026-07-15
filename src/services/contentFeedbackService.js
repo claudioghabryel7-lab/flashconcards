@@ -92,19 +92,20 @@ export async function submitContentFlag({
  */
 export function subscribeOpenFlags(onData, onError) {
   const mapDocs = (snap) => snap.docs.map(mapFlagDoc)
-  const isVisible = (row) => row.status === 'open' || row.status === 'in_review'
+  const isVisible = (row) =>
+    row.status === 'open' || row.status === 'in_review' || row.status === 'needs_admin'
 
   const unsubPrimary = subscribeWithFallback(
     query(
       collectionGroup(db, 'contentFeedback'),
       where('kind', '==', 'flag'),
-      where('status', 'in', ['open', 'in_review']),
+      where('status', 'in', ['open', 'in_review', 'needs_admin']),
       orderBy('createdAt', 'desc'),
     ),
     query(
       collectionGroup(db, 'contentFeedback'),
       where('kind', '==', 'flag'),
-      where('status', 'in', ['open', 'in_review']),
+      where('status', 'in', ['open', 'in_review', 'needs_admin']),
     ),
     (snap) => mapDocs(snap).filter(isVisible),
     onData,
@@ -117,7 +118,7 @@ export function subscribeOpenFlags(onData, onError) {
             const q = query(
               collection(db, 'courses', courseDoc.id, 'contentFeedback'),
               where('kind', '==', 'flag'),
-              where('status', 'in', ['open', 'in_review']),
+              where('status', 'in', ['open', 'in_review', 'needs_admin']),
             )
             const snap = await getDocs(q)
             snap.docs.forEach((d) => all.push(mapFlagDoc(d)))
@@ -135,7 +136,7 @@ export function subscribeOpenFlags(onData, onError) {
   return unsubPrimary
 }
 
-export async function resolveContentFlag(courseId, flagDocId) {
+export async function resolveContentFlag(courseId, flagDocId, { contentCorrected = false } = {}) {
   const flagRef = doc(db, 'courses', courseId, 'contentFeedback', flagDocId)
   const snap = await getDoc(flagRef)
   const flagData = snap.exists() ? snap.data() : {}
@@ -144,6 +145,7 @@ export async function resolveContentFlag(courseId, flagDocId) {
     status: 'resolved',
     resolvedAt: serverTimestamp(),
     resolvedBy: 'admin',
+    appliedCorrections: contentCorrected ? 1 : 0,
   })
 
   if (flagData.userId) {
@@ -156,8 +158,10 @@ export async function resolveContentFlag(courseId, flagDocId) {
     await addDoc(collection(db, 'users', flagData.userId, 'notifications'), {
       type: 'flag_corrected',
       tone: 'success',
-      title: 'Sinalização corrigida',
-      message: `Seu relatório sobre ${typeLabel} foi revisado e o conteúdo foi corrigido.`,
+      title: contentCorrected ? 'Sinalização corrigida' : 'Sinalização revisada',
+      message: contentCorrected
+        ? `Seu relatório sobre ${typeLabel} foi revisado e o conteúdo foi corrigido.`
+        : `Seu relatório sobre ${typeLabel} foi revisado pela equipe.`,
       courseId,
       contentType: flagData.contentType || null,
       contentId: flagData.contentId || null,
@@ -170,6 +174,7 @@ export async function resolveContentFlag(courseId, flagDocId) {
         contentId: flagData.contentId,
         topicKey: flagData.topicKey,
       }),
+      appliedCorrections: contentCorrected ? 1 : 0,
       read: false,
       createdAt: serverTimestamp(),
     })
