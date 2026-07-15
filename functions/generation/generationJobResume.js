@@ -1038,8 +1038,7 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
   const claimedSnap = await jobRef.get()
   jobData = claimedSnap.exists ? claimedSnap.data() : jobData
 
-  await touchActiveJob(userId, jobId, { status: 'running', jobType: effectiveJobType })
-
+  // NÃO chamar touchActiveJob aqui — burlaria tryAcquireServerJobSlot (alreadyActive)
   const { processGenerationJob } = require('./jobProcessor')
 
   try {

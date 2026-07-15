@@ -473,29 +473,14 @@ async function processGenerationJob(userId, jobId, jobData) {
   const db = admin.firestore()
   const jobRef = db.doc(`users/${userId}/generationJobs/${jobId}`)
 
-  if (jobData.status === 'pending') {
-    const claimed = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(jobRef)
-      if (!snap.exists || snap.data().status !== 'pending') return false
-      tx.update(jobRef, {
-        status: 'running',
-        message: 'Processando no servidor…',
-        startedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        progressUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
-      return true
-    })
-    if (!claimed) return { skipped: true, reason: 'already_claimed' }
-  }
-
+  // Slot ANTES de marcar running — evita N "running" sem vaga e bypass no resume
   const slot = await tryAcquireServerJobSlot(userId, jobId, jobData.jobType)
   if (!slot.acquired) {
     if (slot.reason === 'limit' || slot.reason === 'backfill_limit') {
       const waitMessage =
         slot.reason === 'backfill_limit'
           ? 'Aguardando outro backfill terminar (1 por vez)…'
-          : `Aguardando vaga (${MAX_CONCURRENT_SERVER_JOBS} jobs simultâneos no máximo)…`
+          : `Aguardando vaga (${MAX_CONCURRENT_SERVER_JOBS} job por vez no servidor)…`
       await updateJob(userId, jobId, {
         status: 'waiting_timeout',
         message: waitMessage,
@@ -520,6 +505,26 @@ async function processGenerationJob(userId, jobId, jobData) {
       return { paused: true, reason: slot.reason }
     }
     return { skipped: true, reason: slot.reason || 'no_slot' }
+  }
+
+  if (jobData.status === 'pending') {
+    const claimed = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(jobRef)
+      if (!snap.exists || snap.data().status !== 'pending') return false
+      tx.update(jobRef, {
+        status: 'running',
+        message: 'Processando no servidor…',
+        startedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        progressUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      return true
+    })
+    if (!claimed) {
+      const { releaseServerJobSlot } = require('./generationJobConcurrency')
+      await releaseServerJobSlot(jobId)
+      return { skipped: true, reason: 'already_claimed' }
+    }
   }
 
   const { courseId, jobType, serverPayload } = jobData

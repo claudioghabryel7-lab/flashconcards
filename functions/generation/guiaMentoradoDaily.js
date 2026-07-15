@@ -305,6 +305,7 @@ async function markDailyRun(courseId, todayKey, extra = {}) {
  * - Cron horário: só processa cursos cujo horário configurado bate com a hora atual (SP)
  * - Respeita enabled + triggers.onDailyCron (sem auto-ligar a flag)
  * - 1 dia pendente por curso por execução; backfill tem prioridade
+ * - No máximo 1 job spawnado por tick (serial global — evita fan-out N cursos)
  */
 async function runDailyMentoradoAutomationForAllCourses() {
   const todayKey = getTodayKeyInSaoPaulo()
@@ -313,6 +314,14 @@ async function runDailyMentoradoAutomationForAllCourses() {
   const coursesSnap = await db.collection('courses').get()
   const results = []
 
+  const { countActiveServerJobs, MAX_CONCURRENT_SERVER_JOBS } = require('./generationJobConcurrency')
+  const activeCount = await countActiveServerJobs()
+  if (activeCount >= MAX_CONCURRENT_SERVER_JOBS) {
+    console.log('[mentoradoDaily] slot ocupado — não spawna neste tick', { activeCount })
+    return [{ skipped: true, reason: 'slot_ocupado', activeCount }]
+  }
+
+  let spawnedThisTick = 0
   let fallbackUserId = null
   try {
     const profSnap = await db.doc('config/professorFiscalizador').get()
@@ -322,6 +331,15 @@ async function runDailyMentoradoAutomationForAllCourses() {
   }
 
   for (const courseDoc of coursesSnap.docs) {
+    if (spawnedThisTick >= 1) {
+      results.push({
+        courseId: courseDoc.id,
+        skipped: true,
+        reason: 'aguardando_proximo_tick_serial',
+      })
+      continue
+    }
+
     const courseId = courseDoc.id
     const courseData = courseDoc.data() || {}
     if (courseData.active === false) continue
@@ -387,11 +405,12 @@ async function runDailyMentoradoAutomationForAllCourses() {
         console.log(`[mentoradoDaily] ${courseId} ${dayKey}:`, result)
         if (result.started) {
           started = true
+          spawnedThisTick += 1
           break
         }
       }
 
-      if (!started) {
+      if (!started && spawnedThisTick < 1) {
         const todayResult = await startDayAutomation(courseId, todayKey, userId, {
           intent: 'daily_cron',
           metadata: { triggeredBy: 'daily_cron' },
@@ -400,6 +419,7 @@ async function runDailyMentoradoAutomationForAllCourses() {
         results.push(lastResult)
         console.log(`[mentoradoDaily] ${courseId} hoje:`, todayResult)
         started = Boolean(todayResult.started)
+        if (started) spawnedThisTick += 1
       }
 
       // Só marca o dia se já está completo ou skip permanente.

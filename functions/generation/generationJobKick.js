@@ -126,7 +126,15 @@ async function processStuckPendingGenerationJobs() {
   let kicked = 0
   const seen = new Set()
 
+  const { countActiveServerJobs, MAX_CONCURRENT_SERVER_JOBS } = require('./generationJobConcurrency')
+  const activeCount = await countActiveServerJobs()
+  let slotsLeft = Math.max(0, MAX_CONCURRENT_SERVER_JOBS - activeCount)
+  if (slotsLeft <= 0) {
+    return { kicked: 0, scanned: 0, skipped: 'no_slots', activeCount }
+  }
+
   const tryKick = async (userId, jobId) => {
+    if (slotsLeft <= 0) return
     if (!userId || !jobId || seen.has(jobId)) return
     const jobSnap = await db.doc(`users/${userId}/generationJobs/${jobId}`).get()
     if (!jobSnap.exists) return
@@ -137,7 +145,10 @@ async function processStuckPendingGenerationJobs() {
     seen.add(jobId)
     try {
       const result = await kickGenerationJob(userId, jobId)
-      if (result.ok || result.paused) kicked += 1
+      if (result.ok || result.paused) {
+        kicked += 1
+        if (result.ok) slotsLeft -= 1
+      }
     } catch (err) {
       console.error(`[processStuckPending] ${jobId}:`, err)
     }
@@ -145,27 +156,31 @@ async function processStuckPendingGenerationJobs() {
 
   const queueSnap = await db.collection('generationResumeQueue').limit(80).get()
   for (const doc of queueSnap.docs) {
+    if (slotsLeft <= 0) break
     const data = doc.data() || {}
     await tryKick(data.userId, data.jobId || doc.id)
   }
 
   // Pending sem fila (onCreate falhou)
-  try {
-    const pendingSnap = await db
-      .collectionGroup('generationJobs')
-      .where('status', '==', 'pending')
-      .where('runOnServer', '==', true)
-      .limit(40)
-      .get()
-    for (const doc of pendingSnap.docs) {
-      const userId = parseUserIdFromJobPath(doc.ref.path)
-      await tryKick(userId, doc.id)
+  if (slotsLeft > 0) {
+    try {
+      const pendingSnap = await db
+        .collectionGroup('generationJobs')
+        .where('status', '==', 'pending')
+        .where('runOnServer', '==', true)
+        .limit(40)
+        .get()
+      for (const doc of pendingSnap.docs) {
+        if (slotsLeft <= 0) break
+        const userId = parseUserIdFromJobPath(doc.ref.path)
+        await tryKick(userId, doc.id)
+      }
+    } catch (err) {
+      console.warn('[processStuckPending] collectionGroup:', err.message)
     }
-  } catch (err) {
-    console.warn('[processStuckPending] collectionGroup:', err.message)
   }
 
-  return { kicked, scanned: seen.size }
+  return { kicked, scanned: seen.size, activeCount, slotsLeft }
 }
 
 module.exports = {

@@ -1,8 +1,10 @@
 const admin = require('firebase-admin')
 
-const MAX_CONCURRENT_SERVER_JOBS = 3
+/** 1 job Gemini por vez no servidor (conteúdo, mentorado, professor, backfill). */
+const MAX_CONCURRENT_SERVER_JOBS = 1
 const MAX_CONCURRENT_BACKFILL_JOBS = 1
-const CONCURRENCY_EXEMPT_JOB_TYPES = new Set(['guia_mentorado_backfill'])
+/** Vazio: backfill também compete no slot global (evita 1+N no Gemini). */
+const CONCURRENCY_EXEMPT_JOB_TYPES = new Set()
 const STALE_ACTIVE_JOB_MS = 15 * 60 * 1000
 const META_DOC = 'generationConcurrency/global'
 
