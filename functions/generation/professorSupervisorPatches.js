@@ -9,16 +9,60 @@ function docPath(courseId, collection, docId) {
   return `courses/${courseId}/${collection}/${docId}`
 }
 
-async function readDocFields(courseId, collection, docId, fields = []) {
-  const snap = await getDb().doc(docPath(courseId, collection, docId)).get()
-  if (!snap.exists) return null
-  const data = snap.data()
-  if (!fields.length) return { ...data, __docId: snap.id }
-  const out = { __docId: snap.id }
-  fields.forEach((f) => {
-    out[f] = data[f]
-  })
-  return out
+function textsEqual(a, b) {
+  return (
+    String(a || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase() ===
+    String(b || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase()
+  )
+}
+
+async function loadFlashcardBefore(courseId, docId, preferredId = '') {
+  let before = await readDocFields(courseId, 'flashcards', docId, [
+    'frente',
+    'verso',
+    'resposta',
+    'pergunta',
+  ])
+  if (!before && preferredId && preferredId !== docId) {
+    before = await readDocFields(courseId, 'flashcards', preferredId, [
+      'frente',
+      'verso',
+      'resposta',
+      'pergunta',
+    ])
+  }
+  if (before) return before
+
+  const candidates = [...new Set([docId, preferredId].filter(Boolean))]
+  for (const cand of candidates) {
+    try {
+      const byField = await getDb()
+        .collection(`courses/${courseId}/flashcards`)
+        .where('id', '==', cand)
+        .limit(1)
+        .get()
+      if (!byField.empty) {
+        const d = byField.docs[0]
+        const data = d.data() || {}
+        return {
+          __docId: d.id,
+          frente: data.frente,
+          verso: data.verso,
+          pergunta: data.pergunta,
+          resposta: data.resposta,
+        }
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }
+  return null
 }
 
 function normalizeFlashcardDocId(refId) {
@@ -271,35 +315,28 @@ async function applyCorrectionsWithSnapshot(courseId, itemType, payload, correct
         fieldsToPatch.push({ field, text: fix.newText })
       }
 
-      let before = await readDocFields(courseId, collection, docId, [
-        'frente',
-        'verso',
-        'resposta',
-        'pergunta',
-      ])
-      if (!before && preferredId && preferredId !== docId) {
-        before = await readDocFields(courseId, collection, preferredId, [
-          'frente',
-          'verso',
-          'resposta',
-          'pergunta',
-        ])
-      }
+      let before = await loadFlashcardBefore(courseId, docId, preferredId)
       if (!before || !fieldsToPatch.length) continue
       const finalDocId = before.__docId || docId
 
       const after = {
-        frente: before.frente,
-        verso: before.verso,
-        pergunta: before.pergunta,
-        resposta: before.resposta,
+        frente: before.frente ?? before.pergunta,
+        verso: before.verso ?? before.resposta,
+        pergunta: before.pergunta ?? before.frente,
+        resposta: before.resposta ?? before.verso,
         supervisorReviewed: true,
         updatedAt: ts,
       }
       const beforePatch = {}
       const afterPatch = {}
+      let changed = false
       for (const { field, text } of fieldsToPatch) {
-        beforePatch[field] = before[field]
+        const current =
+          field === 'frente'
+            ? before.frente ?? before.pergunta
+            : before.verso ?? before.resposta
+        if (textsEqual(current, text)) continue
+        beforePatch[field] = current
         after[field] = text
         afterPatch[field] = text
         if (field === 'verso') {
@@ -310,7 +347,9 @@ async function applyCorrectionsWithSnapshot(courseId, itemType, payload, correct
           after.pergunta = text
           afterPatch.pergunta = text
         }
+        changed = true
       }
+      if (!changed) continue
 
       await db.doc(docPath(courseId, collection, finalDocId)).set(after, { merge: true })
       patches.push({ collection, docId: finalDocId, before: beforePatch, after: afterPatch })
@@ -338,6 +377,7 @@ async function applyCorrectionsWithSnapshot(courseId, itemType, payload, correct
         finalField = before.resumo != null ? 'resumo' : 'conteudo'
       }
       const afterVal = fix.newText
+      if (textsEqual(before[finalField], afterVal)) continue
       await db.doc(docPath(courseId, collection, docId)).set(
         { [finalField]: afterVal, supervisorReviewed: true, updatedAt: ts },
         { merge: true },
@@ -494,6 +534,7 @@ async function tryPatchQuestaoInPack(
   if (mapped.kind === 'alternativa') {
     const letter = mapped.letter
     const alts = { ...(previous.alternativas || {}) }
+    if (textsEqual(alts[letter], fix.newText)) return false
     beforePatch = { [`alternativas.${letter}`]: alts[letter] }
     alts[letter] = fix.newText
     next.alternativas = alts
@@ -501,6 +542,7 @@ async function tryPatchQuestaoInPack(
   } else {
     const field = mapped.field
     const value = field === 'correta' ? normalizeCorretaValue(fix.newText) : fix.newText
+    if (textsEqual(previous[field], value)) return false
     beforePatch = { [field]: previous[field] }
     next[field] = value
     afterPatch = { [field]: value }

@@ -92,23 +92,23 @@ export async function submitContentFlag({
  */
 export function subscribeOpenFlags(onData, onError) {
   const mapDocs = (snap) => snap.docs.map(mapFlagDoc)
+  const isVisible = (row) => row.status === 'open' || row.status === 'in_review'
 
   const unsubPrimary = subscribeWithFallback(
     query(
       collectionGroup(db, 'contentFeedback'),
       where('kind', '==', 'flag'),
-      where('status', '==', 'open'),
+      where('status', 'in', ['open', 'in_review']),
       orderBy('createdAt', 'desc'),
     ),
     query(
       collectionGroup(db, 'contentFeedback'),
       where('kind', '==', 'flag'),
-      where('status', '==', 'open'),
+      where('status', 'in', ['open', 'in_review']),
     ),
-    mapDocs,
+    (snap) => mapDocs(snap).filter(isVisible),
     onData,
     async (err) => {
-      // Último recurso: varrer cursos
       try {
         const coursesSnap = await getDocs(collection(db, 'courses'))
         const all = []
@@ -117,14 +117,14 @@ export function subscribeOpenFlags(onData, onError) {
             const q = query(
               collection(db, 'courses', courseDoc.id, 'contentFeedback'),
               where('kind', '==', 'flag'),
-              where('status', '==', 'open'),
+              where('status', 'in', ['open', 'in_review']),
             )
             const snap = await getDocs(q)
             snap.docs.forEach((d) => all.push(mapFlagDoc(d)))
           }),
         )
         all.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
-        onData(all)
+        onData(all.filter(isVisible))
       } catch (scanErr) {
         console.error('[contentFeedback] scan por curso falhou:', scanErr)
         onError?.(err || scanErr)

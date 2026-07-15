@@ -545,11 +545,70 @@ async function loadFlaggedContentBlock(courseId, payload = {}) {
   return ''
 }
 
+async function claimFlagInReview(courseId, flagId) {
+  if (!flagId) return { ok: false, reason: 'no_flag' }
+  const ref = getDb().doc(`courses/${courseId}/contentFeedback/${flagId}`)
+  try {
+    return await getDb().runTransaction(async (tx) => {
+      const snap = await tx.get(ref)
+      if (!snap.exists) return { ok: false, reason: 'missing' }
+      const data = snap.data() || {}
+      const status = data.status
+      if (status === 'resolved') return { ok: false, reason: 'already_resolved' }
+      if (status === 'in_review') {
+        const at = data.inReviewAt?.toDate?.() || null
+        const stale = !at || Date.now() - at.getTime() > 30 * 60 * 1000
+        if (!stale) return { ok: false, reason: 'already_in_review' }
+      } else if (status !== 'open') {
+        return { ok: false, reason: `status_${status || 'unknown'}` }
+      }
+      tx.set(
+        ref,
+        {
+          status: 'in_review',
+          inReviewAt: admin.firestore.FieldValue.serverTimestamp(),
+          inReviewBy: 'professor_supervisor',
+        },
+        { merge: true },
+      )
+      return { ok: true, data }
+    })
+  } catch (err) {
+    console.warn('[claimFlagInReview]', err?.message || err)
+    return { ok: false, reason: 'tx_failed' }
+  }
+}
+
+function filterActionableCorrections(corrections = [], verdict = {}) {
+  if (verdict.reportValid === false) return []
+  return (corrections || []).filter((c) => {
+    if (!c || c.newText == null) return false
+    const conf = Number(c.confidence)
+    if (Number.isFinite(conf) && conf < 0.7) return false
+    if (!String(c.newText).trim()) return false
+    return true
+  })
+}
+
 async function processFlagItem(courseId, payload, updateJob, userId, jobId) {
+  const claim = await claimFlagInReview(courseId, payload.flagId)
+  if (!claim.ok) {
+    return {
+      skipped: true,
+      reason: claim.reason || 'flag_not_claimable',
+      summary: `Sinalização ignorada (${claim.reason || 'já em andamento/resolvida'}).`,
+      applied: 0,
+      flagResolved: claim.reason === 'already_resolved',
+    }
+  }
+
   const contentBlock = await loadFlaggedContentBlock(courseId, payload)
   const flashcardId =
-    payload.contentType === 'flashcard' ? String(payload.contentId || '').replace(/^.*_fc_/, '') : ''
-  const contextBlock = `TIPO: conteúdo sinalizado por aluno — corrija APENAS o trecho errado apontado no relato
+    payload.contentType === 'flashcard'
+      ? String(payload.contentId || '').replace(/^.*_fc_/, '')
+      : ''
+
+  const contextBlock = `TIPO: conteúdo sinalizado por aluno — revise com rigor e só corrija erro REAL
 CURSO: ${courseId}
 TIPO CONTEÚDO: ${payload.contentType}
 CONTENT_ID: ${payload.contentId}
@@ -558,23 +617,22 @@ TÓPICO: ${payload.topicKey || '—'}
 PREVIEW: ${payload.preview || ''}
 RELATO DO ALUNO: ${payload.reportText || ''}
 
-${contentBlock ? `CONTEÚDO INTEGRAL:\n${contentBlock}` : 'ATENÇÃO: não foi possível carregar o conteúdo — use o preview e o relato.'}
+${contentBlock ? `CONTEÚDO INTEGRAL:\n${contentBlock}` : 'ATENÇÃO: não foi possível carregar o conteúdo — use o preview e o relato com cautela.'}
 
 INSTRUÇÕES OBRIGATÓRIAS:
-- Se o aluno apontar erro concreto (gabarito, explicação, frente/verso, texto), você DEVE emitir corrections com newText já corrigido — não basta concordar em summary
-- Corrija SOMENTE a parte errada — não reescreva o item inteiro sem necessidade
-- Em corrections use target exatamente: flashcard | material | questao
-- Para flashcard: refId = "${flashcardId || payload.contentId}", field = frente | verso | ambos (se os dois estiverem errados; newText = JSON {"frente":"...","verso":"..."} ou "frente|||verso")
-- Para questao: refId = índice 0-based da questão no pack (veja CONTEÚDO INTEGRAL), field EXATAMENTE um de:
-  correta (letra A-E do gabarito), gabaritoComentado (explicação), enunciado, alternativas.A | alternativas.B | alternativas.C | alternativas.D | alternativas.E
-- Para material: target material, field = materia, newText = trecho/conteúdo corrigido
-- Sempre inclua pelo menos 1 correction se o relato apontar erro concreto`
+- Primeiro verifique se o CONTEÚDO INTEGRAL está realmente errado conforme o relato.
+- Se estiver CORRETO: corrections=[], issues=[], reportValid=false. NÃO invente erro. NÃO reescreva por estilo.
+- Se estiver ERRADO: emita corrections com newText já corrigido (só a parte errada).
+- target exatamente: flashcard | material | questao
+- flashcard: field = frente | verso | ambos (ambos → newText JSON {"frente":"...","verso":"..."} ou "frente|||verso"); refId = "${flashcardId || payload.contentId}"
+- questao: field = correta | gabaritoComentado | enunciado | alternativas.A..E ; refId = índice 0-based do pack
+- material: field = materia
+- newText deve ser diferente do texto atual`
 
   const chain = await runProfessorChain(contextBlock, updateJob, userId, jobId)
   const final = chain.final
-  let corrections = final.corrections || []
+  let corrections = filterActionableCorrections(final.corrections || [], final)
 
-  // Se a IA não trouxe refId, força o contentId da flag
   corrections = corrections.map((c) => ({
     ...c,
     refId: c.refId || flashcardId || payload.contentId || null,
@@ -589,7 +647,7 @@ INSTRUÇÕES OBRIGATÓRIAS:
             : c.target),
   }))
 
-  const dedupeKey = `${courseId}:flag:${payload.flagId}`
+  const dedupeKey = `flag:${courseId}:${payload.flagId}`
   const { applied, patches } = await applyCorrectionsWithSnapshot(
     courseId,
     'flag',
@@ -612,62 +670,27 @@ INSTRUÇÕES OBRIGATÓRIAS:
     diffSummary,
   })
 
-  if (applied > 0) {
-    await resolveFlagFeedback(courseId, payload.flagId, {
-      applied,
-      summary: final.summary || '',
-    })
-    return {
-      summary: final.summary,
-      applied,
-      needsAdmin: false,
-      reviewId: null,
-      professorsUsed: chain.professorsUsed,
-      flagResolved: true,
-    }
-  }
+  const contentOk = applied === 0 && (final.reportValid === false || corrections.length === 0)
+  const summary =
+    applied > 0
+      ? final.summary || 'Conteúdo corrigido.'
+      : contentOk
+        ? final.summary || 'Conteúdo analisado: sem erro a corrigir (sinalização encerrada).'
+        : final.summary ||
+          'Professor não conseguiu aplicar alteração automática; sinalização encerrada para revisão admin.'
 
-  // Nada alterado: incrementa tentativa; após 3, resolve com aviso (evita loop infinito de IA)
-  let attemptCount = 0
-  if (payload.flagId) {
-    const flagRef = getDb().doc(`courses/${courseId}/contentFeedback/${payload.flagId}`)
-    const flagSnap = await flagRef.get()
-    attemptCount = Number(flagSnap.exists ? flagSnap.data()?.attemptCount || 0 : 0) + 1
-    await flagRef.set(
-      {
-        lastProfessorAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastProfessorSummary: final.summary || 'Revisão sem alteração aplicada',
-        lastProfessorApplied: 0,
-        attemptCount,
-      },
-      { merge: true },
-    )
-  }
-
-  if (attemptCount >= 3) {
-    await resolveFlagFeedback(courseId, payload.flagId, {
-      applied: 0,
-      summary:
-        final.summary ||
-        'O professor analisou, mas não conseguiu aplicar a correção automaticamente. Um admin fará a revisão.',
-    })
-    return {
-      summary: final.summary || 'Falha ao aplicar correção após 3 tentativas.',
-      applied: 0,
-      needsAdmin: true,
-      reviewId: null,
-      professorsUsed: chain.professorsUsed,
-      flagResolved: true,
-    }
-  }
+  await resolveFlagFeedback(courseId, payload.flagId, {
+    applied,
+    summary,
+  })
 
   return {
-    summary: final.summary || 'Sinalização analisada, mas nenhuma alteração foi aplicada ao conteúdo.',
-    applied: 0,
-    needsAdmin: true,
+    summary,
+    applied,
+    needsAdmin: applied === 0 && !contentOk,
     reviewId: null,
     professorsUsed: chain.professorsUsed,
-    flagResolved: false,
+    flagResolved: true,
   }
 }
 

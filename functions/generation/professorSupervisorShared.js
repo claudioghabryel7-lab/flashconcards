@@ -7,18 +7,21 @@ const PROFESSOR_ROLES = {
   1: {
     name: 'Professor 1 — Fiscalização',
     instruction: `Você é professor de cursinho preparatório para concursos. Analise o conteúdo com rigor.
-Identifique erros factuais, lacunas, textos fracos ou fora do edital. Use tom de cursinho (objetivo, técnico, completo).
-Cite apenas o que está no material fornecido e nas fontes. Não invente legislação.`,
+Identifique APENAS erros factuais reais, lacunas graves ou contradições com o edital/fonte.
+Se o conteúdo estiver correto, diga isso claramente: corrections=[], issues=[], reportValid=false.
+Não invente erro. Não reescreva por estilo. Cite apenas o que está no material fornecido.`,
   },
   2: {
     name: 'Professor 2 — Revisão da correção',
-    instruction: `Você revisa a análise do Professor 1. Corrija correções erradas ou superficiais.
-Mantenha padrão de cursinho. Se a correção do P1 estiver certa, confirme. Se estiver errada, ajuste.`,
+    instruction: `Você revisa a análise do Professor 1.
+Se P1 inventou erro ou propôs correção desnecessária, remova (corrections=[], reportValid=false).
+Só mantenha correções com erro factual claro.`,
   },
   3: {
     name: 'Professor 3 — Veredito final',
-    instruction: `Veredito final de cursinho. Consolide P1 e P2. Só proponha correções com alta confiança.
-Se houver dúvida factual ou conflito entre fontes, marque needsAdminReview: true.`,
+    instruction: `Veredito final de cursinho. Consolide P1 e P2.
+Na dúvida, NÃO altere o conteúdo (corrections=[], reportValid=false ou needsAdminReview:true).
+Só proponha correções com alta confiança e newText diferente do atual.`,
   },
 }
 
@@ -28,13 +31,18 @@ const REVIEW_JSON_SCHEMA = `Retorne APENAS JSON válido:
   "corrections": [{ "target": "material|flashcard|questao|vespera|redacao", "refId": "id ou índice", "field": "campo do schema real", "newText": "texto corrigido", "confidence": 0.0 }],
   "confidence": 0.0,
   "needsAdminReview": false,
-  "summary": "resumo curto"
+  "summary": "resumo curto",
+  "reportValid": true
 }
-Campos válidos por target:
-- flashcard: frente | verso | ambos
-- questao: correta | gabaritoComentado | enunciado | alternativas.A | alternativas.B | alternativas.C | alternativas.D | alternativas.E
-- material: materia
-Se houver erro concreto, corrections NÃO pode ficar vazio — o sistema aplica newText no Firestore.`
+Regras:
+- Se o conteúdo estiver CORRETO (relato do aluno equivocado ou sem erro real): corrections=[], issues=[], reportValid=false, summary explicando que está ok.
+- NÃO invente erro. NÃO “melhore” texto só por preferência de estilo.
+- Só corrija se houver erro concreto no CONTEÚDO INTEGRAL alinhado ao RELATO.
+- Campos válidos:
+  flashcard: frente | verso | ambos
+  questao: correta | gabaritoComentado | enunciado | alternativas.A | alternativas.B | alternativas.C | alternativas.D | alternativas.E
+  material: materia
+- newText deve ser diferente do texto atual.`
 
 module.exports = {
   SESSION_HOURS,

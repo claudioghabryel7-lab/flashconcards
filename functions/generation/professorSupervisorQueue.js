@@ -272,7 +272,17 @@ function queueRef(itemId) {
 }
 
 function buildDedupeKey(item) {
+  if (item.itemType === 'flag' && item.payload?.flagId) {
+    return `flag:${item.courseId}:${item.payload.flagId}`
+  }
   return `${item.courseId}:${item.itemType}:${item.payload?.topicKey || item.payload?.flagId || item.payload?.scope || 'all'}`
+}
+
+function flagQueueDocId(courseId, flagId) {
+  // ID determinístico → no máx. 1 item de fila por sinalização
+  const safeCourse = String(courseId || 'course').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60)
+  const safeFlag = String(flagId || 'flag').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80)
+  return `flag_${safeCourse}_${safeFlag}`.slice(0, 700)
 }
 
 async function queueItemExists(dedupeKey) {
@@ -287,10 +297,33 @@ async function queueItemExists(dedupeKey) {
 
 async function enqueueItem(item) {
   const dedupeKey = buildDedupeKey(item)
+  const ts = admin.firestore.FieldValue.serverTimestamp()
+
+  // Flags: doc ID fixo evita race (cron + kick) criando vários jobs da mesma sinalização
+  if (item.itemType === 'flag' && item.payload?.flagId) {
+    const ref = getDb()
+      .collection('professorSupervisorQueue')
+      .doc(flagQueueDocId(item.courseId, item.payload.flagId))
+    const existing = await ref.get()
+    if (existing.exists) {
+      const st = existing.data()?.status
+      if (st === 'pending' || st === 'processing') return null
+      // Já processada (done/skipped/error/cancelled): não reabre sozinha
+      return null
+    }
+    await ref.set({
+      ...item,
+      dedupeKey,
+      status: 'pending',
+      createdAt: ts,
+      updatedAt: ts,
+    })
+    return ref.id
+  }
+
   if (await queueItemExists(dedupeKey)) return null
 
   const ref = getDb().collection('professorSupervisorQueue').doc()
-  const ts = admin.firestore.FieldValue.serverTimestamp()
   await ref.set({
     ...item,
     dedupeKey,
@@ -342,10 +375,8 @@ async function enqueueOpenFlagsForAllCourses() {
 
     for (const flagDoc of flagsSnap.docs) {
       const data = flagDoc.data() || {}
-      // Evita reprocessar imediatamente a mesma flag sem correção aplicada
-      if (Number(data.attemptCount || 0) >= 3) continue
-      const lastAt = data.lastProfessorAttemptAt?.toDate?.() || null
-      if (lastAt && Date.now() - lastAt.getTime() < 8 * 60 * 1000) continue
+      // Só enfileira flags realmente abertas (in_review / resolved ficam de fora)
+      if (data.status && data.status !== 'open') continue
 
       const id = await enqueueItem({
         courseId,
@@ -404,8 +435,12 @@ async function cancelLegacyNonFlagQueueItems() {
     .limit(100)
     .get()
   let cancelled = 0
+  const seenFlagKeys = new Set()
+
   for (const staleDoc of staleSnap.docs) {
-    const type = staleDoc.data()?.itemType
+    const data = staleDoc.data() || {}
+    const type = data.itemType
+
     if (type && type !== 'flag') {
       await staleDoc.ref.set(
         {
@@ -416,6 +451,29 @@ async function cancelLegacyNonFlagQueueItems() {
         { merge: true },
       )
       cancelled += 1
+      continue
+    }
+
+    // Cancela cópias duplicadas da mesma sinalização (legado com ID aleatório)
+    if (type === 'flag' && data.status === 'pending') {
+      const flagId = data.payload?.flagId
+      const courseId = data.courseId
+      if (!flagId || !courseId) continue
+      const canonical = flagQueueDocId(courseId, flagId)
+      const key = `${courseId}:${flagId}`
+      if (staleDoc.id !== canonical || seenFlagKeys.has(key)) {
+        await staleDoc.ref.set(
+          {
+            status: 'cancelled',
+            cancelReason: 'duplicate_flag_queue',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
+        cancelled += 1
+        continue
+      }
+      seenFlagKeys.add(key)
     }
   }
   return cancelled
@@ -424,7 +482,6 @@ async function cancelLegacyNonFlagQueueItems() {
 async function popNextQueueItem() {
   const db = getDb()
 
-  // Somente sinalizações da Moderação
   let snap = { empty: true, docs: [] }
   try {
     snap = await db
@@ -447,11 +504,22 @@ async function popNextQueueItem() {
   if (snap.empty) return null
 
   const doc = snap.docs[0]
-  await doc.ref.update({
-    status: 'processing',
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  return { id: doc.id, ...doc.data() }
+  // Claim atômico: evita dois ticks pegarem o mesmo item
+  try {
+    const claimed = await db.runTransaction(async (tx) => {
+      const fresh = await tx.get(doc.ref)
+      if (!fresh.exists || fresh.data()?.status !== 'pending') return null
+      tx.update(doc.ref, {
+        status: 'processing',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      return { id: fresh.id, ...fresh.data(), status: 'processing' }
+    })
+    return claimed
+  } catch (err) {
+    console.warn('[popNextQueueItem] claim failed:', err?.message || err)
+    return null
+  }
 }
 
 async function finishQueueItem(itemId, status = 'done') {
