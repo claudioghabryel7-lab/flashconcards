@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { EnvelopeIcon, ArrowPathIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
+import { auth } from '../firebase/config'
 import {
   requestEmailVerificationCode,
   submitEmailVerificationCode,
 } from '../utils/emailVerificationApi'
 
 export default function VerifyEmail() {
-  const { user, profile, isEmailVerified, logout, refreshProfile } = useAuth()
+  const { user, profile, loading, isEmailVerified, logout, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [code, setCode] = useState('')
   const [sending, setSending] = useState(false)
@@ -24,24 +25,62 @@ export default function VerifyEmail() {
   }, [isEmailVerified, navigate])
 
   useEffect(() => {
-    if (!user || autoSentRef.current || isEmailVerified) return
-    autoSentRef.current = true
-    handleSendCode()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, isEmailVerified])
+    if (loading || !user || isEmailVerified || autoSentRef.current) return
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        await user.getIdToken(true)
+      } catch {
+        return
+      }
+      if (cancelled || autoSentRef.current) return
+      autoSentRef.current = true
+      setSending(true)
+      setError('')
+      setMessage('')
+      try {
+        const result = await requestEmailVerificationCode()
+        if (cancelled) return
+        if (result.alreadyVerified) {
+          await refreshProfile?.()
+          navigate('/select-course', { replace: true })
+          return
+        }
+        setMessage(`Código enviado para ${result.email || profile?.email || user.email || 'seu email'}! Confira a caixa de entrada.`)
+      } catch (err) {
+        if (!cancelled) {
+          autoSentRef.current = false
+          setError(err.message || 'Erro ao enviar código.')
+        }
+      } finally {
+        if (!cancelled) setSending(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [loading, user, isEmailVerified, navigate, profile?.email, refreshProfile])
+
+  const email = profile?.email || user?.email || ''
 
   const handleSendCode = async () => {
     setSending(true)
     setError('')
     setMessage('')
     try {
+      if (auth?.currentUser) {
+        await auth.currentUser.getIdToken(true)
+      }
       const result = await requestEmailVerificationCode()
       if (result.alreadyVerified) {
         await refreshProfile?.()
         navigate('/select-course', { replace: true })
         return
       }
-      setMessage('Código enviado! Confira sua caixa de entrada.')
+      autoSentRef.current = true
+      setMessage(`Código enviado para ${result.email || email}! Confira sua caixa de entrada.`)
     } catch (err) {
       setError(err.message || 'Erro ao enviar código.')
     } finally {
@@ -68,8 +107,6 @@ export default function VerifyEmail() {
       setVerifying(false)
     }
   }
-
-  const email = profile?.email || user?.email || ''
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-lg flex-col justify-center px-4 py-10">

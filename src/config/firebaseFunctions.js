@@ -22,6 +22,8 @@ export const FIREBASE_FUNCTIONS = {
   sendAdminBroadcastEmail: `${FIREBASE_FUNCTIONS_BASE_URL}/sendAdminBroadcastEmail`,
   sendEmailVerificationCode: `${FIREBASE_FUNCTIONS_BASE_URL}/sendEmailVerificationCode`,
   verifyEmailCode: `${FIREBASE_FUNCTIONS_BASE_URL}/verifyEmailCode`,
+  sendEmailVerificationCodeV2: `${FIREBASE_FUNCTIONS_BASE_URL}/sendEmailVerificationCodeV2`,
+  verifyEmailCodeV2: `${FIREBASE_FUNCTIONS_BASE_URL}/verifyEmailCodeV2`,
   sendRetroactiveWelcomeEmails: `${FIREBASE_FUNCTIONS_BASE_URL}/sendRetroactiveWelcomeEmails`,
 
   generateConcursoNews: `${FIREBASE_FUNCTIONS_BASE_URL}/generateConcursoNews`,

@@ -78,6 +78,10 @@ exports.healthCheckV2 = onRequest(
       checks.auth = 'error'
     }
 
+    const { getEmailCredentials, createEmailTransporter } = require('./emailUtils')
+    const { pass } = getEmailCredentials()
+    checks.email = pass && createEmailTransporter() ? 'configured' : 'missing'
+
     const healthy = checks.firestore === 'ok' && checks.auth === 'ok'
     const body = {
       status: healthy ? 'ok' : 'degraded',
@@ -149,6 +153,37 @@ exports.processBrickPaymentV2 = onRequest(
       })
     }
   }),
+)
+
+const {
+  handleSendEmailVerificationCode,
+  handleVerifyEmailCode,
+} = require('./handlers/emailVerificationHandlers')
+
+/** Verificação de email v2 — envio do código de 6 dígitos. */
+exports.sendEmailVerificationCodeV2 = onRequest(
+  {
+    minInstances: 0,
+    maxInstances: 5,
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    concurrency: 20,
+    cors: false,
+  },
+  withCors(handleSendEmailVerificationCode),
+)
+
+/** Verificação de email v2 — validação do código. */
+exports.verifyEmailCodeV2 = onRequest(
+  {
+    minInstances: 0,
+    maxInstances: 5,
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    concurrency: 40,
+    cors: false,
+  },
+  withCors(handleVerifyEmailCode),
 )
 
 /** Job de geração v2 — aguardando permissões Eventarc (desabilitado; v1 ativo). */

@@ -138,6 +138,7 @@ const Login = () => {
           }
         }
 
+        await user.getIdToken(true)
         navigate('/verify-email')
       } else {
         // Login
@@ -188,6 +189,7 @@ const Login = () => {
           }
         }
 
+        await loggedInUser.getIdToken(true)
         navigate('/verify-email')
       }
     } catch (err) {
