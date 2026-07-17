@@ -44,6 +44,7 @@ import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager
 import AdminContentModeration from '../components/admin/AdminContentModeration'
 import AdminProfessorSupervisor from '../components/admin/AdminProfessorSupervisor'
 import AdminGuiaMentorado from '../components/admin/AdminGuiaMentorado'
+import AdminGenerationJobs from '../components/admin/AdminGenerationJobs'
 import AdminMockReviews from '../components/admin/AdminMockReviews'
 import AdminEmailBroadcast from '../components/admin/AdminEmailBroadcast'
 import AdminCacheReset from '../components/admin/AdminCacheReset'
@@ -95,6 +96,7 @@ const ADMIN_TAB_IDS = new Set([
   'moderacao',
   'guia-mentorado',
   'professor-fiscalizador',
+  'generation-jobs',
   'flashcards',
   'edital',
   'material-concurso',
@@ -6937,6 +6939,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
         { id: 'moderacao', label: 'Moderação', icon: '🚩' },
         { id: 'guia-mentorado', label: 'Guia Mentorado', icon: '📅' },
         { id: 'professor-fiscalizador', label: 'Professor IA', icon: '🎓' },
+        { id: 'generation-jobs', label: 'Jobs nuvem', icon: '⚡' },
       ],
     },
     {
@@ -13430,6 +13433,8 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
             {activeTab === 'guia-mentorado' && <AdminGuiaMentorado />}
 
             {activeTab === 'professor-fiscalizador' && <AdminProfessorSupervisor />}
+
+            {activeTab === 'generation-jobs' && <AdminGenerationJobs />}
           </div>
         </div>
 

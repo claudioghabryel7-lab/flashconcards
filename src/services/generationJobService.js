@@ -100,7 +100,7 @@ const STALE_SERVER_JOB_MS = 90 * 60 * 1000
 /** Jobs longos (mentorado/professor) — só expira no cliente após 6h sem update. */
 const STALE_LONG_SERVER_JOB_MS = 6 * 60 * 60 * 1000
 const STALE_WAITING_API_MS = 24 * 60 * 60 * 1000
-/** Jobs waiting/pending: nudge a cada 30s (cron servidor cobre 1 min). */
+/** Jobs waiting/pending: nudge a cada 30s (cron servidor retoma a cada 10 min). */
 export const STALL_NUDGE_MS = 30 * 1000
 /** Jobs running só são nudgeados após 90s sem progresso — keep-alive do servidor é 15s. */
 export const STALL_PROGRESS_NUDGE_MS = 90 * 1000

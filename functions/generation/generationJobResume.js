@@ -1116,7 +1116,7 @@ async function resumeWaitingGenerationJobs() {
   const snap = await db
     .collection('generationResumeQueue')
     .where('nextRetryAt', '<=', now)
-    .limit(50)
+    .limit(80)
     .get()
 
   if (snap.empty) return { resumed: 0, waiting: 0, stalled }

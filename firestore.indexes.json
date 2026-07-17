@@ -177,6 +177,13 @@
         { "fieldPath": "lifetime", "order": "ASCENDING" },
         { "fieldPath": "expiresAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "generationResumeQueue",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "nextRetryAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

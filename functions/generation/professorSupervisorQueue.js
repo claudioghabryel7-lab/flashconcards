@@ -828,7 +828,7 @@ async function tickProfessorSupervisor({ force = false } = {}) {
 }
 
 function scheduleNextRunForItem(itemType) {
-  // Encadeia imediatamente na sessão (moderação); cron 1 min cobre falhas
+  // Encadeia imediatamente na sessão (moderação); cron de 10 min cobre falhas
   void itemType
   return scheduleNextRun(0)
 }

@@ -304,8 +304,7 @@ async function markDailyRun(courseId, todayKey, extra = {}) {
  * Orquestrador diário unificado:
  * - Cron horário: só processa cursos cujo horário configurado bate com a hora atual (SP)
  * - Respeita enabled + triggers.onDailyCron (sem auto-ligar a flag)
- * - 1 dia pendente por curso por execução; backfill tem prioridade
- * - No máximo 1 job spawnado por tick (serial global — evita fan-out N cursos)
+ * - Até 3 jobs spawnados por tick quando há slots livres (round-robin entre cursos)
  */
 async function runDailyMentoradoAutomationForAllCourses() {
   const todayKey = getTodayKeyInSaoPaulo()
@@ -316,7 +315,10 @@ async function runDailyMentoradoAutomationForAllCourses() {
 
   const { countActiveServerJobs, MAX_CONCURRENT_SERVER_JOBS } = require('./generationJobConcurrency')
   const activeCount = await countActiveServerJobs()
-  if (activeCount >= MAX_CONCURRENT_SERVER_JOBS) {
+  const slotsAvailable = Math.max(0, MAX_CONCURRENT_SERVER_JOBS - activeCount)
+  const maxSpawnThisTick = Math.min(3, slotsAvailable)
+
+  if (maxSpawnThisTick <= 0) {
     console.log('[mentoradoDaily] slot ocupado — não spawna neste tick', { activeCount })
     return [{ skipped: true, reason: 'slot_ocupado', activeCount }]
   }
@@ -331,7 +333,7 @@ async function runDailyMentoradoAutomationForAllCourses() {
   }
 
   for (const courseDoc of coursesSnap.docs) {
-    if (spawnedThisTick >= 1) {
+    if (spawnedThisTick >= maxSpawnThisTick) {
       results.push({
         courseId: courseDoc.id,
         skipped: true,
@@ -410,7 +412,7 @@ async function runDailyMentoradoAutomationForAllCourses() {
         }
       }
 
-      if (!started && spawnedThisTick < 1) {
+      if (!started && spawnedThisTick < maxSpawnThisTick) {
         const todayResult = await startDayAutomation(courseId, todayKey, userId, {
           intent: 'daily_cron',
           metadata: { triggeredBy: 'daily_cron' },

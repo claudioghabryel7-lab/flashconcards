@@ -54,7 +54,18 @@ exports.healthCheckV2 = onRequest(
     const { pass } = getEmailCredentials()
     checks.email = pass && createEmailTransporter() ? 'configured' : 'missing'
 
-    const healthy = checks.firestore === 'ok' && checks.auth === 'ok'
+    const { collectGeminiApiKeys } = require('./generation/geminiKeyPool')
+    const geminiKeys = collectGeminiApiKeys()
+    checks.gemini = geminiKeys.length > 0 ? 'configured' : 'missing'
+
+    const { getMercadoPagoAccessToken } = require('./mercadopagoConfig')
+    const mpToken = getMercadoPagoAccessToken({ forPix: true })
+    checks.mercadopago = mpToken ? 'configured' : 'missing'
+
+    const healthy =
+      checks.firestore === 'ok' &&
+      checks.auth === 'ok' &&
+      checks.gemini === 'configured'
     const body = {
       status: healthy ? 'ok' : 'degraded',
       checks,
@@ -166,7 +177,7 @@ exports.verifyEmailCodeV2 = onRequest(
   withCors(handleVerifyEmailCode),
 )
 
-/** Job de geração v2 — aguardando permissões Eventarc (desabilitado; v1 ativo). */
+/** Job de geração v2 — desabilitado (v1 ativo; migrar quando Eventarc estiver ok). */
 /*
 exports.onGenerationJobCreatedV2 = onDocumentCreated(
   {

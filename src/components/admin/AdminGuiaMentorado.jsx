@@ -29,6 +29,7 @@ import {
   getMentoradoNextRunInfo,
 } from '../../utils/mentoradoNextRun'
 import { loadEditalVerticalizado } from '../../utils/editalVerticalizadoLoader'
+import { validateGuiaMentoradoAutomation } from '../../utils/automationValidation'
 
 function padTime(h, m) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
@@ -179,6 +180,7 @@ export default function AdminGuiaMentorado() {
         phase: data.phase || '',
         lastCourseId: data.lastCourseId || '',
         useProfessorWindow: data.useProfessorWindow === true,
+        automationUserId: data.automationUserId || null,
       })
     })
   }, [])
@@ -249,8 +251,12 @@ export default function AdminGuiaMentorado() {
     setForm((prev) => ({ ...prev, ...patch }))
   }, [])
 
-  const persistConfig = async (nextForm, { successMessage } = {}) => {
+  const persistConfig = async (nextForm, { successMessage, skipValidation = false } = {}) => {
     if (!uid || !courseId) throw new Error('Selecione um curso e faça login.')
+    if (!skipValidation) {
+      const validationError = await validateGuiaMentoradoAutomation(courseId, nextForm)
+      if (validationError) throw new Error(validationError)
+    }
     const payload = buildSavePayload(nextForm, releaseTime)
     const saved = await saveGuiaMentoradoAdminConfig(courseId, payload, {
       userId: uid,
@@ -300,7 +306,13 @@ export default function AdminGuiaMentorado() {
     setSaving(true)
     setFeedback('')
     try {
-      await persistConfig(nextForm)
+      const validationError = await validateGuiaMentoradoAutomation(courseId, nextForm)
+      if (validationError) {
+        patchForm({ enabled: !next })
+        setFeedback(`❌ ${validationError}`)
+        return
+      }
+      await persistConfig(nextForm, { skipValidation: true })
       setFeedback(
         next
           ? `✅ Automação ligada na nuvem para “${courseName}”. O cron horário gera no horário ${releaseLabel} (Brasília), se o gatilho “Cron diário” estiver ativo.`
@@ -361,6 +373,7 @@ export default function AdminGuiaMentorado() {
         doc(db, 'config', 'contentAutomation'),
         {
           enabled: !contentAuto.enabled,
+          automationUserId: uid,
           updatedAt: serverTimestamp(),
         },
         { merge: true },
@@ -911,6 +924,15 @@ export default function AdminGuiaMentorado() {
               Independente do Professor IA. A cada 30 min libera 1 job (incidência → níveis).
               Janela padrão 06:00–23:00 (Brasília). Não gasta API se o conteúdo já existir.
             </p>
+            {contentAuto.automationUserId ? (
+              <p className="mt-1 text-xs text-cp-muted">
+                Usuário dos jobs: <code>{contentAuto.automationUserId.slice(0, 12)}…</code>
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-amber-600">
+                ⚠️ Sem automationUserId — ligue o toggle estando logado como admin.
+              </p>
+            )}
             {contentAuto.lastMessage && (
               <p className="mt-2 text-xs text-cp-muted">
                 Último: {contentAuto.lastMessage}

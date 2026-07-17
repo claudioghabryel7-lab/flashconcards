@@ -304,6 +304,12 @@ const {
   reconcilePendingTransactions,
 } = require('./pixReconciliation')
 const { syncTransactionPaymentStatus } = require('./mercadopagoPaymentFulfillment')
+const {
+  runExpireTrialUsers,
+  runPurgeUnverifiedEmails,
+  runExpireCourseAccesses,
+  runProcessCourseAutoRenewals,
+} = require('./jobs/lifecycleJobs')
 
 // processBrickPayment migrado para processBrickPaymentV2 (v2Exports.js)
 
@@ -317,6 +323,14 @@ exports.onPaymentBrickRequestCreated = functions
   .onCreate(async (snap) => {
     const data = snap.data() || {}
     if (data.state === 'done' || data.state === 'error') return null
+
+    if (data.state === 'processing') {
+      const processingMs = data.processingAt?.toMillis?.() || 0
+      if (processingMs && Date.now() - processingMs < 3 * 60 * 1000) {
+        return null
+      }
+      console.warn('[onPaymentBrickRequestCreated] recuperando request preso em processing', snap.id)
+    }
 
     try {
       await snap.ref.set(
@@ -691,8 +705,9 @@ exports.webhookMercadoPago = functions.https.onRequest(withCors(async (req, res)
 
 
 /** Reconcilia pagamentos pendentes a cada 5 min (fallback quando webhook falha). */
-exports.reconcilePendingPixPayments = functions.pubsub
-  .schedule('every 5 minutes')
+exports.reconcilePendingPixPayments = functions
+  .runWith({ timeoutSeconds: 120, memory: '256MB' })
+  .pubsub.schedule('every 5 minutes')
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
     try {
@@ -1252,8 +1267,9 @@ exports.runContentAutomationNow = functions.https.onRequest(withCors(async (req,
 
 
 /** Rotação semanal de temas de redação (cursos com hasRedacao no Guia Mentorado). */
-exports.weeklyRedacaoThemeRotation = functions.pubsub
-  .schedule('0 3 * * 1')
+exports.weeklyRedacaoThemeRotation = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('0 3 * * 1')
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
     console.log('[weeklyRedacaoThemeRotation] Iniciando rotação semanal…')
@@ -1267,8 +1283,9 @@ exports.weeklyRedacaoThemeRotation = functions.pubsub
  * Push motivacional personalizado para alunos inativos (FCM).
  * 10h e 18h (Brasília) — só quem ativou notificações e está 24h+ sem estudar.
  */
-exports.motivationalInactivityPush = functions.pubsub
-  .schedule('0 10,18 * * *')
+exports.motivationalInactivityPush = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('0 10,18 * * *')
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
     console.log('[motivationalInactivityPush] Iniciando…')
@@ -1410,7 +1427,9 @@ exports.kickGenerationJob = functions
 }))
 
 /** Cancela job no servidor — para retomadas e libera slot. */
-exports.cancelGenerationJob = functions.https.onRequest(withCors(async (req, res) => {
+exports.cancelGenerationJob = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .https.onRequest(withCors(async (req, res) => {
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' })
     }
@@ -1456,7 +1475,9 @@ exports.cancelGenerationJob = functions.https.onRequest(withCors(async (req, res
  * Lista jobs de geração ativos em toda a plataforma (admin).
  * Usa collection group — complementa a regra de read admin em generationJobs.
  */
-exports.listActiveGenerationJobs = functions.https.onRequest(withCors(async (req, res) => {
+exports.listActiveGenerationJobs = functions
+  .runWith({ timeoutSeconds: 120, memory: '512MB' })
+  .https.onRequest(withCors(async (req, res) => {
     if (req.method === 'OPTIONS') return res.status(200).end()
     if (req.method !== 'GET' && req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' })
@@ -1496,7 +1517,22 @@ exports.listActiveGenerationJobs = functions.https.onRequest(withCors(async (req
       })
 
       jobs.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-      return res.status(200).json({ ok: true, count: jobs.length, jobs })
+
+      let concurrency = { runningCount: 0, maxConcurrent: 2 }
+      try {
+        const metaSnap = await db.doc('generationConcurrency/global').get()
+        if (metaSnap.exists) {
+          const meta = metaSnap.data() || {}
+          concurrency = {
+            runningCount: meta.runningCount ?? 0,
+            maxConcurrent: meta.maxConcurrent ?? 2,
+          }
+        }
+      } catch (_) {
+        /* ignore */
+      }
+
+      return res.status(200).json({ ok: true, count: jobs.length, jobs, concurrency })
     } catch (err) {
       console.error('[listActiveGenerationJobs]', err)
       const status = err?.statusCode || (String(err.message || '').includes('Admin') ? 403 : 500)
@@ -1549,284 +1585,39 @@ exports.onProfessorFiscalizadorConfigUpdated = functions
     return null
   })
 
-exports.expireTrialUsers = functions.pubsub.schedule('0 0 * * *').timeZone('America/Sao_Paulo').onRun(async (context) => {
-  console.log('Iniciando verificação de usuários trial expirados...')
-  
-  try {
-    const now = new Date()
-    const db = admin.firestore()
-    
-    // Buscar todos os usuários com trialExpiresAt
-    const usersRef = db.collection('users')
-    const usersSnapshot = await usersRef
-      .where('trialExpiresAt', '!=', null)
-      .get()
-    
-    let deletedCount = 0
-    let errorCount = 0
-    
-    for (const userDoc of usersSnapshot.docs) {
-      try {
-        const userData = userDoc.data()
-        const trialExpiresAt = userData.trialExpiresAt
-        
-        if (!trialExpiresAt) continue
-        
-        // Converter para Date se for string
-        const expiresAt = typeof trialExpiresAt === 'string' 
-          ? new Date(trialExpiresAt) 
-          : trialExpiresAt.toDate()
-        
-        // Se expirou, deletar usuário
-        if (expiresAt < now) {
-          const userId = userDoc.id
-          console.log(`Deletando usuário trial expirado: ${userId} (${userData.email})`)
-          
-          // Deletar do Firebase Authentication
-          try {
-            await admin.auth().deleteUser(userId)
-            console.log(`Usuário ${userId} deletado do Authentication`)
-          } catch (authError) {
-            console.error(`Erro ao deletar usuário ${userId} do Authentication:`, authError)
-            // Continuar mesmo se falhar no Auth, pois pode já ter sido deletado
-          }
-          
-          // Deletar do Firestore
-          await userDoc.ref.delete()
-          console.log(`Usuário ${userId} deletado do Firestore`)
-          
-          deletedCount++
-        }
-      } catch (err) {
-        console.error(`Erro ao processar usuário ${userDoc.id}:`, err)
-        errorCount++
-      }
-    }
-    
-    console.log(`Verificação concluída. ${deletedCount} usuários deletados, ${errorCount} erros`)
-    return null
-  } catch (error) {
-    console.error('Erro na função de expiração de trial:', error)
-    throw error
-  }
-})
-
-const UNVERIFIED_EMAIL_TTL_MS = 24 * 60 * 60 * 1000
-const PROTECTED_ADMIN_EMAILS = new Set(['claudioghabryel.cg@gmail.com'])
+exports.expireTrialUsers = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('0 0 * * *')
+  .timeZone('America/Sao_Paulo')
+  .onRun(async () => runExpireTrialUsers())
 
 /**
- * Remove contas com email não verificado há mais de 24h (Auth + Firestore + código pendente).
- * Roda a cada hora. Admins são preservados.
+ * Remove contas com email não verificado há mais de 7 dias (Auth + Firestore + código pendente).
+ * Roda a cada hora. Admins são preservados. Máx. 40 deletes por execução.
  */
-exports.purgeUnverifiedEmails = functions.pubsub
-  .schedule('20 * * * *')
+exports.purgeUnverifiedEmails = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('20 * * * *')
   .timeZone('America/Sao_Paulo')
-  .onRun(async () => {
-    const db = admin.firestore()
-    const cutoffMs = Date.now() - UNVERIFIED_EMAIL_TTL_MS
-    let nextPageToken
-    let scanned = 0
-    let deleted = 0
-    let skipped = 0
-    let errors = 0
-
-    console.log('[purgeUnverifiedEmails] Iniciando limpeza de emails não verificados (>24h)...')
-
-    do {
-      const listed = await admin.auth().listUsers(1000, nextPageToken)
-      for (const authUser of listed.users) {
-        scanned += 1
-        try {
-          if (authUser.emailVerified) {
-            skipped += 1
-            continue
-          }
-
-          const email = String(authUser.email || '').toLowerCase().trim()
-          if (email && PROTECTED_ADMIN_EMAILS.has(email)) {
-            skipped += 1
-            continue
-          }
-
-          const createdMs = new Date(authUser.metadata.creationTime).getTime()
-          if (!Number.isFinite(createdMs) || createdMs > cutoffMs) {
-            skipped += 1
-            continue
-          }
-
-          const userRef = db.collection('users').doc(authUser.uid)
-          const userSnap = await userRef.get()
-          const userData = userSnap.exists ? userSnap.data() || {} : {}
-
-          if (userData.role === 'admin' || PROTECTED_ADMIN_EMAILS.has(String(userData.email || '').toLowerCase())) {
-            skipped += 1
-            continue
-          }
-
-          // Firestore já marcado como verificado: não apaga (possível dessincronia Auth)
-          if (userData.emailVerified === true) {
-            skipped += 1
-            continue
-          }
-
-          console.log(
-            `[purgeUnverifiedEmails] Removendo ${authUser.uid} (${email || 'sem-email'}) criado em ${authUser.metadata.creationTime}`,
-          )
-
-          try {
-            await admin.auth().deleteUser(authUser.uid)
-          } catch (authErr) {
-            if (authErr?.code !== 'auth/user-not-found') throw authErr
-          }
-
-          if (userSnap.exists) {
-            await userRef.delete()
-          }
-
-          await db
-            .collection('emailVerificationCodes')
-            .doc(authUser.uid)
-            .delete()
-            .catch(() => {})
-
-          deleted += 1
-        } catch (err) {
-          errors += 1
-          console.error(`[purgeUnverifiedEmails] Erro em ${authUser.uid}:`, err)
-        }
-      }
-      nextPageToken = listed.pageToken
-    } while (nextPageToken)
-
-    console.log(
-      `[purgeUnverifiedEmails] Concluído. scanned=${scanned} deleted=${deleted} skipped=${skipped} errors=${errors}`,
-    )
-    return null
-  })
+  .onRun(async () => runPurgeUnverifiedEmails())
 
 /** Expira acessos de curso com expiresAt vencido (sem renovação pendente). */
-exports.expireCourseAccesses = functions.pubsub
-  .schedule('15 0 * * *')
+exports.expireCourseAccesses = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('15 0 * * *')
   .timeZone('America/Sao_Paulo')
-  .onRun(async () => {
-    const db = admin.firestore()
-    const now = admin.firestore.Timestamp.now()
-    const snap = await db
-      .collection('courseEntitlements')
-      .where('status', '==', 'active')
-      .where('lifetime', '==', false)
-      .where('expiresAt', '<=', now)
-      .get()
-
-    let expired = 0
-    for (const docSnap of snap.docs) {
-      const data = docSnap.data()
-      // Auto-renew: deixa o job de renovação tentar primeiro; se já passou 2 dias, expira
-      if (data.autoRenew && data.expiresAt) {
-        const exp = data.expiresAt.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt)
-        const grace = new Date(exp.getTime() + 2 * 24 * 60 * 60 * 1000)
-        if (grace > new Date()) continue
-      }
-      try {
-        await revokeCourseAccess(db, admin.firestore.FieldValue, {
-          userId: data.userId,
-          courseId: data.courseId,
-          reason: 'expired',
-        })
-        expired += 1
-      } catch (err) {
-        console.error('Falha ao expirar entitlement', docSnap.id, err)
-      }
-    }
-    console.log(`expireCourseAccesses: ${expired} acessos expirados`)
-    return null
-  })
+  .onRun(async () => runExpireCourseAccesses())
 
 /**
  * Renovações automáticas: cria cobrança Checkout Pro (cartão) e notifica o usuário.
  * A assinatura MP (PreApproval) renova sozinha; este job cobre quem marcou autoRenew
  * e ainda precisa renovar via preferência quando a assinatura falhar / não existir.
  */
-exports.processCourseAutoRenewals = functions.pubsub
-  .schedule('0 8 * * *')
+exports.processCourseAutoRenewals = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('0 8 * * *')
   .timeZone('America/Sao_Paulo')
-  .onRun(async () => {
-    const db = admin.firestore()
-    const now = new Date()
-    const inThreeDays = admin.firestore.Timestamp.fromDate(
-      new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
-    )
-
-    const snap = await db
-      .collection('courseEntitlements')
-      .where('status', '==', 'active')
-      .where('autoRenew', '==', true)
-      .where('lifetime', '==', false)
-      .where('expiresAt', '<=', inThreeDays)
-      .get()
-
-    let notified = 0
-    for (const docSnap of snap.docs) {
-      const data = docSnap.data()
-      if (!data.userId || !data.courseId) continue
-      if (data.preapprovalId) {
-        // Assinatura MP ativa — cobrança recorrente cuidará da renovação
-        continue
-      }
-
-      try {
-        const userSnap = await db.collection('users').doc(data.userId).get()
-        if (!userSnap.exists) continue
-        const user = userSnap.data()
-        const courseSnap = await db.collection('courses').doc(data.courseId).get()
-        const course = courseSnap.exists ? courseSnap.data() : {}
-        const amount = data.amount || course.price || 99.9
-        const txnId = `REN-${Date.now()}-${data.userId.slice(0, 6)}`
-
-        await db.collection('transactions').doc(txnId).set({
-          userId: data.userId,
-          userEmail: user.email || null,
-          userName: user.displayName || null,
-          productName: course.name || 'Renovação de curso',
-          amount,
-          paymentMethod: 'card',
-          status: 'pending',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          transactionId: txnId,
-          courseId: data.courseId,
-          courseDuration: data.courseDuration || course.courseDuration || null,
-          autoRenew: true,
-          isRenewal: true,
-        })
-
-        await db.collection('users').doc(data.userId).collection('notifications').add({
-          type: 'course_renewal',
-          title: 'Renovação do seu curso',
-          message: `Seu acesso a "${course.name || 'curso'}" vence em breve. Com a renovação automática ativada, conclua o pagamento no Mercado Pago para manter o acesso.`,
-          courseId: data.courseId,
-          transactionId: txnId,
-          href: `/pagamento?course=${encodeURIComponent(data.courseId)}&txn=${encodeURIComponent(txnId)}&renew=1`,
-          read: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        })
-
-        await docSnap.ref.set(
-          {
-            renewalNotifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-            pendingRenewalTransactionId: txnId,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        )
-        notified += 1
-      } catch (err) {
-        console.error('Falha auto-renew', docSnap.id, err)
-      }
-    }
-
-    console.log(`processCourseAutoRenewals: ${notified} avisos/transações de renovação`)
-    return null
-  })
+  .onRun(async () => runProcessCourseAutoRenewals())
 
 // ============================================
 // IA DE NOTÍCIAS DE CONCURSOS
