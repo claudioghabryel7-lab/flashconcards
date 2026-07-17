@@ -304,11 +304,11 @@ export default function SalesAssistantChat({
                   style={{ minHeight: 0 }}
                 >
                   {messages.length <= 1 ? (
-                    <div className="overflow-hidden rounded-xl border border-cp-border/50">
+                    <div className="flex items-center justify-center overflow-hidden rounded-xl border border-cp-border/50 bg-gradient-to-br from-cp-accent/10 via-cp-bg/20 to-cp-bg/40 p-2">
                       <img
                         src={CONSULTANT_IMAGE}
                         alt="Estude com IA — Concurseiro Preditivo"
-                        className="h-28 w-full object-cover object-top"
+                        className="mx-auto h-auto max-h-36 w-full object-contain object-center"
                       />
                     </div>
                   ) : null}
