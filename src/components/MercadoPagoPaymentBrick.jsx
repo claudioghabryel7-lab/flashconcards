@@ -4,9 +4,10 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import {
+  ensurePixCopyPaste,
   isValidPixCopyPaste,
   normalizePixPayload,
-  requestPixPayment,
+  processBrickPayment,
 } from '@/utils/pixCheckout'
 
 function loadMercadoPagoSdk() {
@@ -67,24 +68,39 @@ function isIgnorableBrickError(err) {
   return false
 }
 
-async function ensurePixCheckoutData(data, ctx) {
-  const normalized = normalizePixPayload(data || {})
-  if (ctx.method !== 'pix' || isValidPixCopyPaste(normalized.pixCopyPaste)) {
-    return normalized
+async function processCheckoutViaHttpOrFirestore(ctx) {
+  const payload = {
+    transactionId: ctx.transactionId,
+    formData: ctx.formData,
+    amount: ctx.amount,
+    description: ctx.description,
+    userEmail: ctx.userEmail,
+    userName: ctx.userName,
+    courseId: ctx.courseId,
   }
 
   try {
-    return await requestPixPayment({
-      amount: ctx.amount,
-      description: ctx.description,
-      transactionId: ctx.transactionId,
-      userEmail: ctx.userEmail,
-      userName: ctx.userName,
-    })
-  } catch (err) {
-    console.warn('[Payment Brick] fallback PIX indisponível', err?.message || err)
-    return normalized
+    return await processBrickPayment(payload)
+  } catch (httpErr) {
+    console.warn('[Payment Brick] HTTP falhou, tentando Firestore', httpErr?.message || httpErr)
+    return normalizePixPayload(await processBrickViaFirestore(payload))
   }
+}
+
+async function finalizePixIfNeeded(data, ctx) {
+  if (ctx.method !== 'pix') return normalizePixPayload(data || {})
+  const normalized = normalizePixPayload(data || {})
+  if (isValidPixCopyPaste(normalized.pixCopyPaste)) return normalized
+
+  return ensurePixCopyPaste({
+    existing: normalized,
+    amount: ctx.amount,
+    description: ctx.description,
+    transactionId: ctx.transactionId,
+    userEmail: ctx.userEmail,
+    userName: ctx.userName,
+    courseId: ctx.courseId,
+  })
 }
 
 function formatBrickError(err) {
@@ -299,9 +315,11 @@ export default function MercadoPagoPaymentBrick({
               console.error('[Payment Brick]', err?.cause || err?.message || err)
               if (!cancelled && token === mountToken) {
                 setLoadingBrick(false)
-                const msg = formatBrickError(err)
-                setBootError(msg)
-                onErrorRef.current?.(msg)
+                if (safeMethod !== 'pix') {
+                  const msg = formatBrickError(err)
+                  setBootError(msg)
+                  onErrorRef.current?.(msg)
+                }
               }
             },
             onSubmit: ({ formData }) =>
@@ -313,6 +331,8 @@ export default function MercadoPagoPaymentBrick({
                   transactionId,
                   userEmail,
                   userName,
+                  courseId,
+                  formData,
                 }
 
                 const finishPending = (payload) => {
@@ -321,17 +341,8 @@ export default function MercadoPagoPaymentBrick({
                 }
 
                 try {
-                  let data = await processBrickViaFirestore({
-                    transactionId,
-                    formData,
-                    amount: amountNumber,
-                    description,
-                    userEmail,
-                    userName,
-                    courseId,
-                  })
-
-                  data = await ensurePixCheckoutData(data, pixCtx)
+                  let data = await processCheckoutViaHttpOrFirestore(pixCtx)
+                  data = await finalizePixIfNeeded(data, pixCtx)
 
                   if (data.status === 'approved') {
                     onSuccessRef.current?.(data)
@@ -345,7 +356,7 @@ export default function MercadoPagoPaymentBrick({
                   }
 
                   if (safeMethod === 'pix') {
-                    const fallback = await ensurePixCheckoutData({}, pixCtx)
+                    const fallback = await finalizePixIfNeeded({}, pixCtx)
                     if (isValidPixCopyPaste(fallback.pixCopyPaste)) {
                       finishPending({ ...data, ...fallback })
                       return
@@ -356,7 +367,7 @@ export default function MercadoPagoPaymentBrick({
                 } catch (submitErr) {
                   if (safeMethod === 'pix') {
                     try {
-                      const fallback = await ensurePixCheckoutData({}, pixCtx)
+                      const fallback = await finalizePixIfNeeded({}, pixCtx)
                       if (isValidPixCopyPaste(fallback.pixCopyPaste)) {
                         finishPending(fallback)
                         return
@@ -365,7 +376,11 @@ export default function MercadoPagoPaymentBrick({
                       console.warn('[Payment Brick] fallback PIX falhou', fallbackErr)
                     }
                   }
-                  onErrorRef.current?.(submitErr.message || 'Erro ao processar pagamento.')
+                  onErrorRef.current?.(
+                    safeMethod === 'pix'
+                      ? 'Não foi possível gerar o PIX. Aguarde ou tente novamente.'
+                      : submitErr.message || 'Erro ao processar pagamento.',
+                  )
                   reject()
                 }
               }),

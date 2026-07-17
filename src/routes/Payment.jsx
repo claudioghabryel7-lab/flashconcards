@@ -16,10 +16,10 @@ import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { trackPurchaseConversion } from '../utils/googleAds'
 import { getCourseAccessLabel } from '../utils/courseAccess'
 import {
+  ensurePixCopyPaste,
   isValidPixCopyPaste,
   isValidPixQrBase64,
   normalizePixPayload,
-  requestPixPayment,
 } from '../utils/pixCheckout'
 import MercadoPagoPaymentBrick from '../components/MercadoPagoPaymentBrick'
 import CourseCoverMedia from '@/components/cp/CourseCoverMedia'
@@ -195,15 +195,8 @@ const Payment = () => {
         }
       })
 
-      // Se o webhook atrasar, mostrar sucesso otimista na UI — sem disparar conversão
-      const timer = setTimeout(() => {
-        setPaymentStatus((prev) => (prev === 'pending' ? 'success' : prev))
-        setLoading(false)
-      }, 8000)
-
       return () => {
         unsubscribe()
-        clearTimeout(timer)
       }
     }
   }, [searchParams])
@@ -528,64 +521,19 @@ const Payment = () => {
     }
   }, [pixQrCodeBase64])
 
-  useEffect(() => {
-    if (
-      paymentStatus !== 'pending' ||
-      paymentMethod !== 'pix' ||
-      pixCode ||
-      !currentTransactionId ||
-      !product?.price
-    ) {
-      return undefined
-    }
-
-    let cancelled = false
-    requestPixPayment({
-      amount: product.price,
-      description: product.name,
-      transactionId: currentTransactionId,
-      userEmail: email || user?.email || '',
-      userName: name || user?.displayName || '',
-    })
-      .then((data) => {
-        if (cancelled || !isValidPixCopyPaste(data.pixCopyPaste)) return
-        applyPixCheckout(data)
-      })
-      .catch(() => {})
-
-    return () => {
-      cancelled = true
-    }
-  }, [
-    applyPixCheckout,
-    currentTransactionId,
-    email,
-    name,
-    paymentMethod,
-    paymentStatus,
-    pixCode,
-    product.name,
-    product.price,
-    user?.displayName,
-    user?.email,
-  ])
-
   const handleBrickSuccess = useCallback((data) => {
-    // Brick só chama onSuccess quando Mercado Pago retorna status === 'approved' (compra confirmada).
-    setPaymentStatus('success')
     setShowBrick(false)
     setLoading(false)
+    setErrorMessage('')
     if (data?.paymentId && currentTransactionId) {
       setDoc(
         doc(db, 'transactions', currentTransactionId),
-        { mercadopagoPaymentId: String(data.paymentId), status: 'approved' },
+        { mercadopagoPaymentId: String(data.paymentId) },
         { merge: true },
       ).catch(() => {})
     }
-    if (currentTransactionId) {
-      trackPurchaseConversion(null, product.price, currentTransactionId)
-    }
-  }, [currentTransactionId, product.price])
+    setPaymentStatus(data?.status === 'approved' ? 'success' : 'pending')
+  }, [currentTransactionId])
 
   const handleBrickPending = useCallback((data) => {
     setShowBrick(false)
@@ -599,12 +547,13 @@ const Payment = () => {
   const handleBrickError = useCallback(async (msg) => {
     if (paymentMethod === 'pix' && currentTransactionId && product?.price) {
       try {
-        const data = await requestPixPayment({
+        const data = await ensurePixCopyPaste({
           amount: product.price,
           description: product.name,
           transactionId: currentTransactionId,
           userEmail: email || user?.email || '',
           userName: name || user?.displayName || '',
+          courseId: product.courseId || null,
         })
         if (isValidPixCopyPaste(data.pixCopyPaste)) {
           applyPixCheckout(data)
@@ -627,6 +576,7 @@ const Payment = () => {
     email,
     name,
     paymentMethod,
+    product.courseId,
     product.name,
     product.price,
     user?.displayName,

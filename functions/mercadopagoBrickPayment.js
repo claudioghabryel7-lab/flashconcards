@@ -4,30 +4,15 @@
  */
 
 const admin = require('firebase-admin')
-const { MercadoPagoConfig, Payment } = require('mercadopago')
 const { createMercadoPagoPayment } = require('./mercadopagoUtils')
-const { extractPixFromMercadoPagoPayment } = require('./pixExtract')
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function resolvePixFromPayment(payment, result, { retries = 2 } = {}) {
-  let current = result
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
-    const pix = extractPixFromMercadoPagoPayment(current)
-    if (pix.pixCopyPaste || pix.pixQrCode) return { result: current, ...pix }
-    if (!current?.id || attempt >= retries) break
-    await sleep(1200)
-    try {
-      current = await payment.get({ id: current.id })
-    } catch (err) {
-      console.warn('resolvePixFromPayment (brick):', err?.message || err)
-      break
-    }
-  }
-  return { result: current, ...extractPixFromMercadoPagoPayment(current) }
-}
+const {
+  createDedicatedPixPayment,
+  createPaymentClient,
+  isPixMethod,
+  isEmvPixCode,
+  persistPixOnTransaction,
+  resolvePixFromPayment,
+} = require('./pixPaymentService')
 
 async function processBrickPaymentPayload(
   {
@@ -52,7 +37,8 @@ async function processBrickPaymentPayload(
     throw err
   }
 
-  const accessToken = getMercadoPagoAccessToken({ forPix: true })
+  const pixPayment = isPixMethod(formData)
+  const accessToken = getMercadoPagoAccessToken({ forPix: pixPayment })
   if (!accessToken) {
     const err = new Error('Access token ausente.')
     err.statusCode = 500
@@ -60,11 +46,7 @@ async function processBrickPaymentPayload(
     throw err
   }
 
-  const client = new MercadoPagoConfig({
-    accessToken,
-    options: { timeout: 20000 },
-  })
-  const payment = new Payment(client)
+  const payment = createPaymentClient(accessToken)
 
   const payerFromBrick = formData.payer || {}
   const paymentBody = {
@@ -114,12 +96,36 @@ async function processBrickPaymentPayload(
     maxAttempts: 3,
   })
 
-  const {
+  let {
     result: resolvedResult,
     pixCopyPaste,
     pixQrCode,
     ticketUrl,
-  } = await resolvePixFromPayment(payment, result)
+  } = await resolvePixFromPayment(payment, result, { retries: 3 })
+
+  if (pixPayment && !isEmvPixCode(pixCopyPaste)) {
+    console.warn('processBrickPaymentPayload: PIX sem EMV — fallback dedicado', transactionId)
+    try {
+      const dedicated = await createDedicatedPixPayment(payment, {
+        amount: amountNumber,
+        description,
+        transactionId,
+        userEmail,
+        userName,
+        courseId,
+      })
+      if (isEmvPixCode(dedicated.pixCopyPaste)) {
+        pixCopyPaste = dedicated.pixCopyPaste
+        pixQrCode = dedicated.pixQrCode || pixQrCode
+        ticketUrl = dedicated.ticketUrl || ticketUrl
+        if (dedicated.paymentId) {
+          resolvedResult = { ...resolvedResult, id: dedicated.paymentId, status: dedicated.status }
+        }
+      }
+    } catch (fallbackErr) {
+      console.error('processBrickPaymentPayload: fallback PIX falhou', fallbackErr?.message || fallbackErr)
+    }
+  }
 
   const status = resolvedResult.status || 'pending'
   const statusDetail = resolvedResult.status_detail || null
@@ -144,6 +150,24 @@ async function processBrickPaymentPayload(
     )
   } catch (txErr) {
     console.warn('processBrickPaymentPayload: falha ao atualizar transaction', txErr?.message || txErr)
+  }
+
+  if (pixPayment && isEmvPixCode(pixCopyPaste)) {
+    await persistPixOnTransaction(transactionId, {
+      paymentId: resolvedResult.id,
+      status,
+      statusDetail,
+      pixCopyPaste,
+      pixQrCode,
+      ticketUrl,
+    })
+  }
+
+  if (pixPayment && !isEmvPixCode(pixCopyPaste)) {
+    const err = new Error('Não foi possível gerar o código PIX. Tente novamente.')
+    err.statusCode = 502
+    err.code = 'pix_emv_missing'
+    throw err
   }
 
   return {

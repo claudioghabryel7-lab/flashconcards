@@ -2,31 +2,12 @@
  * Handler compartilhado para createPixPayment (v1 e v2).
  */
 
-const functions = require('firebase-functions')
-const { MercadoPagoConfig, Payment } = require('mercadopago')
-const { createMercadoPagoPayment } = require('../mercadopagoUtils')
-const { extractPixFromMercadoPagoPayment } = require('../pixExtract')
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function resolvePixFromPayment(payment, result, { retries = 2 } = {}) {
-  let current = result
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
-    const pix = extractPixFromMercadoPagoPayment(current)
-    if (pix.pixCopyPaste) return { result: current, ...pix }
-    if (!current?.id || attempt >= retries) break
-    await sleep(1200)
-    try {
-      current = await payment.get({ id: current.id })
-    } catch (err) {
-      console.warn('resolvePixFromPayment: falha ao reconsultar pagamento', err?.message || err)
-      break
-    }
-  }
-  return { result: current, ...extractPixFromMercadoPagoPayment(current) }
-}
+const {
+  createDedicatedPixPayment,
+  createPaymentClient,
+  isEmvPixCode,
+  readCachedPixFromTransaction,
+} = require('../pixPaymentService')
 
 /**
  * @param {import('express').Request} req
@@ -39,9 +20,15 @@ async function handleCreatePixPayment(req, res, { getMercadoPagoAccessToken }) {
   }
 
   try {
-    const { amount, description, transactionId, userEmail, userName } = req.body
+    const { amount, description, transactionId, userEmail, userName, courseId } = req.body
 
-    console.log('Recebido no createPixPayment:', { amount, description, transactionId, userEmail, userName })
+    console.log('Recebido no createPixPayment:', {
+      amount,
+      description,
+      transactionId,
+      userEmail,
+      userName,
+    })
 
     if (!amount && amount !== 0) {
       return res.status(400).json({
@@ -72,6 +59,19 @@ async function handleCreatePixPayment(req, res, { getMercadoPagoAccessToken }) {
       })
     }
 
+    const cached = await readCachedPixFromTransaction(transactionId)
+    if (cached?.pixCopyPaste) {
+      return res.status(200).json({
+        success: true,
+        paymentId: cached.paymentId,
+        status: cached.status,
+        pixQrCode: cached.pixQrCode,
+        pixCopyPaste: cached.pixCopyPaste,
+        ticketUrl: cached.ticketUrl,
+        cached: true,
+      })
+    }
+
     const accessToken = getMercadoPagoAccessToken({ forPix: true })
     if (!accessToken) {
       return res.status(500).json({
@@ -83,52 +83,30 @@ async function handleCreatePixPayment(req, res, { getMercadoPagoAccessToken }) {
 
     console.log('PIX usando token:', String(accessToken).startsWith('TEST') ? 'TEST' : 'PROD/APP_USR')
 
-    const client = new MercadoPagoConfig({
-      accessToken,
-      options: { timeout: 15000 },
+    const payment = createPaymentClient(accessToken)
+    const result = await createDedicatedPixPayment(payment, {
+      amount: amountNumber,
+      description,
+      transactionId,
+      userEmail,
+      userName,
+      courseId: courseId || null,
     })
-    const payment = new Payment(client)
 
-    const paymentData = {
-      transaction_amount: Number(amountNumber.toFixed(2)),
-      description: String(description).slice(0, 255),
-      payment_method_id: 'pix',
-      payer: {
-        email: userEmail || 'cliente@exemplo.com',
-        first_name: (userName || 'Cliente').split(' ')[0] || 'Cliente',
-      },
-      metadata: {
-        transaction_id: transactionId,
-      },
-      notification_url:
-        process.env.MERCADOPAGO_WEBHOOK_URL ||
-        functions.config().app?.webhook_url ||
-        'https://us-central1-plegi-d84c2.cloudfunctions.net/webhookMercadoPago',
-    }
-
-    const { result, pixCopyPaste, pixQrCode, ticketUrl } = await resolvePixFromPayment(
-      payment,
-      await createMercadoPagoPayment(payment, {
-        body: paymentData,
-        idempotencyKey: `pix-${transactionId}`,
-        maxAttempts: 3,
-      }),
-    )
-
-    if (!result || !result.id) {
+    if (!result?.paymentId) {
       return res.status(500).json({
         error: 'Erro ao gerar PIX',
         message: 'Pagamento não foi criado no Mercado Pago',
       })
     }
 
-    if (!pixCopyPaste) {
+    if (!isEmvPixCode(result.pixCopyPaste)) {
       return res.status(400).json({
         error: 'PIX não gerado',
         message:
-          result.status_detail ||
+          result.statusDetail ||
           'Não foi possível gerar o código PIX. Verifique as configurações da conta do Mercado Pago.',
-        paymentId: result.id,
+        paymentId: result.paymentId,
         status: result.status,
         details:
           'O código PIX não foi retornado pelo Mercado Pago. Verifique se a chave PIX está habilitada na sua conta.',
@@ -137,11 +115,11 @@ async function handleCreatePixPayment(req, res, { getMercadoPagoAccessToken }) {
 
     return res.status(200).json({
       success: true,
-      paymentId: result.id,
+      paymentId: result.paymentId,
       status: result.status,
-      pixQrCode,
-      pixCopyPaste,
-      ticketUrl,
+      pixQrCode: result.pixQrCode,
+      pixCopyPaste: result.pixCopyPaste,
+      ticketUrl: result.ticketUrl,
     })
   } catch (error) {
     console.error('Erro ao criar pagamento PIX:', error)

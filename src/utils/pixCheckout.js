@@ -42,6 +42,43 @@ export function normalizePixPayload(data = {}) {
   }
 }
 
+async function parseJsonResponse(res) {
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(data.message || data.error || 'Falha ao processar pagamento.')
+  }
+  return data
+}
+
+/**
+ * Processa pagamento do Brick via HTTPS (preferencial).
+ */
+export async function processBrickPayment({
+  transactionId,
+  formData,
+  amount,
+  description,
+  userEmail,
+  userName,
+  courseId,
+}) {
+  const res = await fetch(FIREBASE_FUNCTIONS.processBrickPayment, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      transactionId,
+      formData,
+      amount,
+      description,
+      userEmail,
+      userName,
+      courseId,
+    }),
+  })
+
+  return normalizePixPayload(await parseJsonResponse(res))
+}
+
 /**
  * Gera PIX direto (fallback quando o Brick falha ou não retorna copia e cola).
  */
@@ -51,6 +88,7 @@ export async function requestPixPayment({
   transactionId,
   userEmail,
   userName,
+  courseId,
 }) {
   const res = await fetch(FIREBASE_FUNCTIONS.createPixPayment, {
     method: 'POST',
@@ -61,13 +99,11 @@ export async function requestPixPayment({
       transactionId,
       userEmail,
       userName,
+      courseId,
     }),
   })
 
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    throw new Error(data.message || data.error || 'Não foi possível gerar o PIX.')
-  }
+  const data = await parseJsonResponse(res)
 
   return normalizePixPayload({
     paymentId: data.paymentId,
@@ -76,5 +112,24 @@ export async function requestPixPayment({
     pixCopyPaste: data.pixCopyPaste,
     pixQrCode: data.pixQrCode,
     ticketUrl: data.ticketUrl,
+  })
+}
+
+/**
+ * Garante copia e cola PIX — tenta cache local via createPix se necessário.
+ */
+export async function ensurePixCopyPaste(ctx) {
+  const normalized = normalizePixPayload(ctx.existing || {})
+  if (isValidPixCopyPaste(normalized.pixCopyPaste)) {
+    return normalized
+  }
+
+  return requestPixPayment({
+    amount: ctx.amount,
+    description: ctx.description,
+    transactionId: ctx.transactionId,
+    userEmail: ctx.userEmail,
+    userName: ctx.userName,
+    courseId: ctx.courseId,
   })
 }
