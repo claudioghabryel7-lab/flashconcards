@@ -42,6 +42,41 @@ export function normalizePixPayload(data = {}) {
   }
 }
 
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504])
+const DEFAULT_TIMEOUT_MS = 45000
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchWithRetry(url, options = {}, { maxAttempts = 4, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  let lastError = null
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal })
+      clearTimeout(timer)
+
+      if (!res.ok && RETRYABLE_STATUS.has(res.status) && attempt < maxAttempts) {
+        await sleep(600 * 2 ** (attempt - 1))
+        continue
+      }
+
+      return res
+    } catch (err) {
+      clearTimeout(timer)
+      lastError = err
+      if (attempt >= maxAttempts) break
+      await sleep(600 * 2 ** (attempt - 1))
+    }
+  }
+
+  throw lastError || new Error('Falha de rede ao processar pagamento.')
+}
+
 async function parseJsonResponse(res) {
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
@@ -62,7 +97,7 @@ export async function processBrickPayment({
   userName,
   courseId,
 }) {
-  const res = await fetch(FIREBASE_FUNCTIONS.processBrickPayment, {
+  const res = await fetchWithRetry(FIREBASE_FUNCTIONS.processBrickPayment, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -90,7 +125,7 @@ export async function requestPixPayment({
   userName,
   courseId,
 }) {
-  const res = await fetch(FIREBASE_FUNCTIONS.createPixPayment, {
+  const res = await fetchWithRetry(FIREBASE_FUNCTIONS.createPixPayment, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -113,6 +148,25 @@ export async function requestPixPayment({
     pixQrCode: data.pixQrCode,
     ticketUrl: data.ticketUrl,
   })
+}
+
+/**
+ * Consulta Mercado Pago via backend (fallback quando webhook demora).
+ */
+export async function reconcilePaymentStatus(transactionId) {
+  if (!transactionId) return null
+
+  const res = await fetchWithRetry(
+    FIREBASE_FUNCTIONS.reconcilePayment,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transactionId }),
+    },
+    { maxAttempts: 2, timeoutMs: 30000 },
+  )
+
+  return parseJsonResponse(res)
 }
 
 /**

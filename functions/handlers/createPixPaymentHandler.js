@@ -59,19 +59,6 @@ async function handleCreatePixPayment(req, res, { getMercadoPagoAccessToken }) {
       })
     }
 
-    const cached = await readCachedPixFromTransaction(transactionId)
-    if (cached?.pixCopyPaste) {
-      return res.status(200).json({
-        success: true,
-        paymentId: cached.paymentId,
-        status: cached.status,
-        pixQrCode: cached.pixQrCode,
-        pixCopyPaste: cached.pixCopyPaste,
-        ticketUrl: cached.ticketUrl,
-        cached: true,
-      })
-    }
-
     const accessToken = getMercadoPagoAccessToken({ forPix: true })
     if (!accessToken) {
       return res.status(500).json({
@@ -84,6 +71,19 @@ async function handleCreatePixPayment(req, res, { getMercadoPagoAccessToken }) {
     console.log('PIX usando token:', String(accessToken).startsWith('TEST') ? 'TEST' : 'PROD/APP_USR')
 
     const payment = createPaymentClient(accessToken)
+    const cached = await readCachedPixFromTransaction(transactionId, payment)
+    if (cached?.pixCopyPaste) {
+      return res.status(200).json({
+        success: true,
+        paymentId: cached.paymentId,
+        status: cached.status,
+        pixQrCode: cached.pixQrCode,
+        pixCopyPaste: cached.pixCopyPaste,
+        ticketUrl: cached.ticketUrl,
+        cached: true,
+      })
+    }
+
     const result = await createDedicatedPixPayment(payment, {
       amount: amountNumber,
       description,

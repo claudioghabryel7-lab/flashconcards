@@ -101,7 +101,20 @@ async function processBrickPaymentPayload(
     pixCopyPaste,
     pixQrCode,
     ticketUrl,
-  } = await resolvePixFromPayment(payment, result, { retries: 3 })
+  } = await resolvePixFromPayment(payment, result, { retries: 6, delayMs: 2000 })
+
+  if (pixPayment && !isEmvPixCode(pixCopyPaste)) {
+    console.warn('processBrickPaymentPayload: PIX sem EMV — aguardando mais tentativas', transactionId)
+    await new Promise((r) => setTimeout(r, 3000))
+    const retryResolved = await resolvePixFromPayment(payment, resolvedResult, {
+      retries: 4,
+      delayMs: 2000,
+    })
+    pixCopyPaste = retryResolved.pixCopyPaste || pixCopyPaste
+    pixQrCode = retryResolved.pixQrCode || pixQrCode
+    ticketUrl = retryResolved.ticketUrl || ticketUrl
+    resolvedResult = retryResolved.result || resolvedResult
+  }
 
   if (pixPayment && !isEmvPixCode(pixCopyPaste)) {
     console.warn('processBrickPaymentPayload: PIX sem EMV — fallback dedicado', transactionId)

@@ -10,10 +10,15 @@ import {
   processBrickPayment,
 } from '@/utils/pixCheckout'
 
+let sdkLoadPromise = null
+
 function loadMercadoPagoSdk() {
   if (typeof window === 'undefined') return Promise.reject(new Error('SSR'))
   if (window.MercadoPago) return Promise.resolve(window.MercadoPago)
-  return new Promise((resolve, reject) => {
+
+  if (sdkLoadPromise) return sdkLoadPromise
+
+  sdkLoadPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector('script[data-mp-sdk="v2"]')
     if (existing) {
       const done = () =>
@@ -24,8 +29,10 @@ function loadMercadoPagoSdk() {
         done()
         return
       }
-      existing.addEventListener('load', done)
-      existing.addEventListener('error', () => reject(new Error('Falha ao carregar SDK MP')))
+      existing.addEventListener('load', done, { once: true })
+      existing.addEventListener('error', () => reject(new Error('Falha ao carregar SDK MP')), {
+        once: true,
+      })
       return
     }
     const script = document.createElement('script')
@@ -36,6 +43,8 @@ function loadMercadoPagoSdk() {
     script.onerror = () => reject(new Error('Falha ao carregar SDK do Mercado Pago'))
     document.body.appendChild(script)
   })
+
+  return sdkLoadPromise
 }
 
 function buildPaymentMethods(method) {
@@ -68,7 +77,7 @@ function isIgnorableBrickError(err) {
   return false
 }
 
-async function processCheckoutViaHttpOrFirestore(ctx) {
+async function processCheckoutViaFirestoreFirst(ctx) {
   const payload = {
     transactionId: ctx.transactionId,
     formData: ctx.formData,
@@ -80,10 +89,10 @@ async function processCheckoutViaHttpOrFirestore(ctx) {
   }
 
   try {
-    return await processBrickPayment(payload)
-  } catch (httpErr) {
-    console.warn('[Payment Brick] HTTP falhou, tentando Firestore', httpErr?.message || httpErr)
-    return normalizePixPayload(await processBrickViaFirestore(payload))
+    return normalizePixPayload(await processBrickViaFirestore(payload, ctx.abortSignal))
+  } catch (firestoreErr) {
+    console.warn('[Payment Brick] Firestore falhou, tentando HTTP', firestoreErr?.message || firestoreErr)
+    return processBrickPayment(payload)
   }
 }
 
@@ -113,7 +122,6 @@ function formatBrickError(err) {
   )
 }
 
-/** Public key same-origin — evita CORS / Rate exceeded das Cloud Functions. */
 async function fetchMercadoPagoPublicConfig() {
   const res = await fetch('/api/mercadopago/public-config', { method: 'GET' })
   const cfg = await res.json().catch(() => ({}))
@@ -123,54 +131,70 @@ async function fetchMercadoPagoPublicConfig() {
   return cfg
 }
 
-/**
- * Processa pagamento via Firestore trigger (não usa cloudfunctions.net HTTPS).
- * Contorna 429 Rate exceeded / falso erro de CORS.
- */
-function processBrickViaFirestore({
-  transactionId,
-  formData,
-  amount,
-  description,
-  userEmail,
-  userName,
-  courseId,
-}) {
+function processBrickViaFirestore(
+  { transactionId, formData, amount, description, userEmail, userName, courseId },
+  abortSignal,
+) {
   const requestId = `${String(transactionId).slice(0, 40)}_${Date.now().toString(36)}`
   const ref = doc(db, 'paymentBrickRequests', requestId)
 
   return new Promise(async (resolve, reject) => {
     let settled = false
+    let unsub = () => {}
+
+    const cleanup = () => {
+      clearTimeout(timeout)
+      try {
+        unsub()
+      } catch (_) {
+        /* ignore */
+      }
+    }
+
     const timeout = setTimeout(() => {
       if (settled) return
       settled = true
-      unsub()
+      cleanup()
       reject(new Error('Tempo esgotado ao processar o pagamento. Tente novamente.'))
     }, 90000)
 
-    const unsub = onSnapshot(
+    const onAbort = () => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(new Error('Pagamento cancelado.'))
+    }
+
+    if (abortSignal?.aborted) {
+      onAbort()
+      return
+    }
+    abortSignal?.addEventListener('abort', onAbort, { once: true })
+
+    unsub = onSnapshot(
       ref,
       (snap) => {
         if (!snap.exists() || settled) return
         const data = snap.data() || {}
         if (data.state === 'done' && data.result) {
           settled = true
-          clearTimeout(timeout)
-          unsub()
+          cleanup()
+          abortSignal?.removeEventListener('abort', onAbort)
           resolve(data.result)
           return
         }
         if (data.state === 'error') {
           settled = true
-          clearTimeout(timeout)
-          unsub()
+          cleanup()
+          abortSignal?.removeEventListener('abort', onAbort)
           reject(new Error(data.errorMessage || 'Falha ao processar pagamento.'))
         }
       },
       (err) => {
         if (settled) return
         settled = true
-        clearTimeout(timeout)
+        cleanup()
+        abortSignal?.removeEventListener('abort', onAbort)
         reject(err)
       },
     )
@@ -190,18 +214,14 @@ function processBrickViaFirestore({
     } catch (err) {
       if (!settled) {
         settled = true
-        clearTimeout(timeout)
-        unsub()
+        cleanup()
+        abortSignal?.removeEventListener('abort', onAbort)
         reject(err)
       }
     }
   })
 }
 
-/**
- * Payment Brick — Checkout Transparente.
- * method: 'pix' | 'card'
- */
 export default function MercadoPagoPaymentBrick({
   amount,
   description,
@@ -216,9 +236,11 @@ export default function MercadoPagoPaymentBrick({
 }) {
   const reactId = useId().replace(/:/g, '')
   const safeMethod = method === 'card' ? 'card' : 'pix'
-  const containerId = `mp_brick_${reactId}_${safeMethod}`
+  const txnSuffix = String(transactionId || 'new').slice(-12)
+  const containerId = `mp_brick_${reactId}_${safeMethod}_${txnSuffix}`
 
   const controllerRef = useRef(null)
+  const submitAbortRef = useRef(null)
   const onSuccessRef = useRef(onSuccess)
   const onPendingRef = useRef(onPending)
   const onErrorRef = useRef(onError)
@@ -241,6 +263,8 @@ export default function MercadoPagoPaymentBrick({
     let mountToken = 0
 
     const unmountController = () => {
+      submitAbortRef.current?.abort()
+      submitAbortRef.current = null
       try {
         controllerRef.current?.unmount?.()
       } catch (_) {
@@ -310,13 +334,22 @@ export default function MercadoPagoPaymentBrick({
             onError: (err) => {
               if (isIgnorableBrickError(err)) {
                 console.warn('[Payment Brick] aviso ignorado', err)
+                if (!cancelled && token === mountToken) {
+                  setTimeout(() => {
+                    if (!cancelled && token === mountToken) setLoadingBrick(false)
+                  }, 2000)
+                }
                 return
               }
               console.error('[Payment Brick]', err?.cause || err?.message || err)
               if (!cancelled && token === mountToken) {
                 setLoadingBrick(false)
-                if (safeMethod !== 'pix') {
-                  const msg = formatBrickError(err)
+                const msg = formatBrickError(err)
+                if (safeMethod === 'pix') {
+                  onErrorRef.current?.(
+                    'Checkout PIX indisponível. Gerando código alternativo…',
+                  )
+                } else {
                   setBootError(msg)
                   onErrorRef.current?.(msg)
                 }
@@ -324,6 +357,10 @@ export default function MercadoPagoPaymentBrick({
             },
             onSubmit: ({ formData }) =>
               new Promise(async (resolve, reject) => {
+                submitAbortRef.current?.abort()
+                const abortController = new AbortController()
+                submitAbortRef.current = abortController
+
                 const pixCtx = {
                   method: safeMethod,
                   amount: amountNumber,
@@ -333,6 +370,7 @@ export default function MercadoPagoPaymentBrick({
                   userName,
                   courseId,
                   formData,
+                  abortSignal: abortController.signal,
                 }
 
                 const finishPending = (payload) => {
@@ -341,7 +379,7 @@ export default function MercadoPagoPaymentBrick({
                 }
 
                 try {
-                  let data = await processCheckoutViaHttpOrFirestore(pixCtx)
+                  let data = await processCheckoutViaFirestoreFirst(pixCtx)
                   data = await finalizePixIfNeeded(data, pixCtx)
 
                   if (data.status === 'approved') {
@@ -365,6 +403,10 @@ export default function MercadoPagoPaymentBrick({
 
                   throw new Error('Não foi possível gerar o PIX agora. Tente novamente em instantes.')
                 } catch (submitErr) {
+                  if (abortController.signal.aborted) {
+                    reject()
+                    return
+                  }
                   if (safeMethod === 'pix') {
                     try {
                       const fallback = await finalizePixIfNeeded({}, pixCtx)
@@ -396,7 +438,11 @@ export default function MercadoPagoPaymentBrick({
           const msg = err?.message || 'Não foi possível carregar o checkout.'
           setBootError(msg)
           setLoadingBrick(false)
-          onErrorRef.current?.(msg)
+          if (safeMethod === 'pix') {
+            onErrorRef.current?.('Gerando PIX alternativo…')
+          } else {
+            onErrorRef.current?.(msg)
+          }
         }
       }
     }

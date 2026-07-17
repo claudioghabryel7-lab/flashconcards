@@ -20,6 +20,7 @@ import {
   isValidPixCopyPaste,
   isValidPixQrBase64,
   normalizePixPayload,
+  reconcilePaymentStatus,
 } from '../utils/pixCheckout'
 import MercadoPagoPaymentBrick from '../components/MercadoPagoPaymentBrick'
 import CourseCoverMedia from '@/components/cp/CourseCoverMedia'
@@ -75,6 +76,8 @@ const COURSE_FEATURES = [
   },
 ]
 
+const PENDING_TXN_STORAGE_KEY = 'cp_pending_payment_txn'
+
 const Payment = () => {
   const { user, profile } = useAuth()
   const navigate = useNavigate()
@@ -124,6 +127,20 @@ const Payment = () => {
     if (display) setName((prev) => prev || display)
   }, [user?.email, user?.displayName, profile?.displayName])
 
+  // Restaurar checkout PIX pendente após refresh
+  useEffect(() => {
+    try {
+      const savedTxn = sessionStorage.getItem(PENDING_TXN_STORAGE_KEY)
+      if (savedTxn && !currentTransactionId) {
+        setCurrentTransactionId(savedTxn)
+        setPaymentStatus('pending')
+        setPaymentMethod('pix')
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }, [])
+
   // Carregar curso se houver courseId na URL
   useEffect(() => {
     const courseId = searchParams.get('course')
@@ -153,51 +170,28 @@ const Payment = () => {
     if (!status || !txn) return
 
     setCurrentTransactionId(txn)
+    try {
+      sessionStorage.setItem(PENDING_TXN_STORAGE_KEY, txn)
+    } catch (_) {
+      /* ignore */
+    }
 
     if (status === 'failure') {
       setPaymentStatus('error')
       setErrorMessage('Pagamento não concluído. Você pode tentar novamente.')
       setLoading(false)
+      try {
+        sessionStorage.removeItem(PENDING_TXN_STORAGE_KEY)
+      } catch (_) {
+        /* ignore */
+      }
       return
     }
 
-    if (status === 'pending') {
+    if (status === 'pending' || status === 'success') {
       setPaymentMethod('card')
       setPaymentStatus('pending')
       setLoading(false)
-      return
-    }
-
-    if (status === 'success') {
-      setPaymentStatus('pending')
-      setLoading(true)
-      const transactionRef = doc(db, 'transactions', txn)
-      const unsubscribe = onSnapshot(transactionRef, async (snapshot) => {
-        if (!snapshot.exists()) return
-        const data = snapshot.data()
-        // Só conversão quando o pagamento está realmente confirmado no Firestore
-        if (data.status === 'paid' || data.status === 'approved') {
-          setPaymentStatus('success')
-          setLoading(false)
-          trackPurchaseConversion(null, data.amount || 99.9, txn)
-          if (data.userEmail) {
-            setCreatedCredentials({
-              email: data.userEmail,
-              password: 'Senha enviada por email',
-            })
-          }
-          unsubscribe()
-        } else if (data.status === 'cancelled') {
-          setPaymentStatus('error')
-          setErrorMessage('Pagamento cancelado.')
-          setLoading(false)
-          unsubscribe()
-        }
-      })
-
-      return () => {
-        unsubscribe()
-      }
     }
   }, [searchParams])
   
@@ -301,6 +295,11 @@ const Payment = () => {
           // Atualizar status para success
           setPaymentStatus('success')
           setLoading(false)
+          try {
+            sessionStorage.removeItem(PENDING_TXN_STORAGE_KEY)
+          } catch (_) {
+            /* ignore */
+          }
           
           // Conversão Google Ads somente com compra confirmada (+ dedupe por transaction_id)
           trackPurchaseConversion(null, transactionData.amount || product.price, currentTransactionId)
@@ -311,20 +310,36 @@ const Payment = () => {
           setErrorMessage('Pagamento cancelado. Tente novamente.')
           setPaymentStatus('error')
           setLoading(false)
+          try {
+            sessionStorage.removeItem(PENDING_TXN_STORAGE_KEY)
+          } catch (_) {
+            /* ignore */
+          }
           unsubscribe()
         }
       },
       (error) => {
         console.error('Erro ao monitorar transação:', error)
-        // Não parar o monitoramento por erros de permissão
-      }
+      },
     )
+
+    let pollCount = 0
+    const pollInterval = setInterval(async () => {
+      pollCount += 1
+      if (pollCount > 30) return
+      try {
+        await reconcilePaymentStatus(currentTransactionId)
+      } catch (err) {
+        console.warn('Reconciliação de pagamento:', err?.message || err)
+      }
+    }, 20000)
 
     // Cleanup: parar de monitorar quando componente desmontar ou transação mudar
     return () => {
       unsubscribe()
+      clearInterval(pollInterval)
     }
-  }, [currentTransactionId, paymentStatus])
+  }, [currentTransactionId, paymentStatus, product.price])
 
   // Calcular valor das parcelas
   const calculateInstallmentValue = (total, installments) => {
@@ -491,6 +506,11 @@ const Payment = () => {
 
       await setDoc(transactionRef, transactionData)
       setCurrentTransactionId(transactionId)
+      try {
+        sessionStorage.setItem(PENDING_TXN_STORAGE_KEY, transactionId)
+      } catch (_) {
+        /* ignore */
+      }
       setBrickTxn(transactionData)
       setShowBrick(true)
       setLoading(false)
@@ -542,7 +562,27 @@ const Payment = () => {
     setErrorMessage('')
     setPaymentMethod(data?.paymentMethodId === 'pix' ? 'pix' : paymentMethod === 'card' ? 'card' : 'pix')
     applyPixCheckout(data)
-  }, [applyPixCheckout, paymentMethod])
+
+    if (currentTransactionId) {
+      try {
+        sessionStorage.setItem(PENDING_TXN_STORAGE_KEY, currentTransactionId)
+      } catch (_) {
+        /* ignore */
+      }
+      setDoc(
+        doc(db, 'transactions', currentTransactionId),
+        {
+          mercadopagoPaymentId: data?.paymentId ? String(data.paymentId) : null,
+          mercadopagoStatus: data?.status || 'pending',
+          pixCopyPaste: data?.pixCopyPaste || null,
+          pixQrCode: data?.pixQrCode || null,
+          ticketUrl: data?.ticketUrl || null,
+          paymentMethodId: data?.paymentMethodId || 'pix',
+        },
+        { merge: true },
+      ).catch(() => {})
+    }
+  }, [applyPixCheckout, currentTransactionId, paymentMethod])
 
   const handleBrickError = useCallback(async (msg) => {
     if (paymentMethod === 'pix' && currentTransactionId && product?.price) {

@@ -13,6 +13,7 @@ export const FIREBASE_FUNCTIONS = {
 
   createPixPayment: `${FIREBASE_FUNCTIONS_BASE_URL}/createPixPaymentV2`,
   processBrickPayment: `${FIREBASE_FUNCTIONS_BASE_URL}/processBrickPaymentV2`,
+  reconcilePayment: `${FIREBASE_FUNCTIONS_BASE_URL}/reconcilePaymentV2`,
 
   createCheckoutPreference: `${FIREBASE_FUNCTIONS_BASE_URL}/createCheckoutPreference`,
   getMercadoPagoPublicConfig: `${FIREBASE_FUNCTIONS_BASE_URL}/getMercadoPagoPublicConfig`,

@@ -7,6 +7,7 @@ const { setGlobalOptions } = require('firebase-functions/v2')
 const admin = require('firebase-admin')
 const { withCors } = require('./corsConfig')
 const { handleCreatePixPayment } = require('./handlers/createPixPaymentHandler')
+const { handleReconcilePayment } = require('./handlers/reconcilePaymentHandler')
 const { processBrickPaymentPayload } = require('./mercadopagoBrickPayment')
 
 setGlobalOptions({
@@ -97,31 +98,30 @@ exports.healthCheckV2 = onRequest(
 )
 
 /**
- * PIX v2 — minInstances=0 (sem custo fixo).
- * concurrency=40: múltiplas requisições PIX por instância (I/O bound).
+ * PIX v2 — instância mínima quente + timeout amplo para cold start / polling EMV.
  */
 exports.createPixPaymentV2 = onRequest(
   {
-    minInstances: 0,
+    minInstances: 1,
     maxInstances: 10,
-    timeoutSeconds: 30,
-    memory: '256MiB',
-    concurrency: 40,
+    timeoutSeconds: 60,
+    memory: '512MiB',
+    concurrency: 15,
     cors: false,
   },
   withCors((req, res) => handleCreatePixPayment(req, res, { getMercadoPagoAccessToken })),
 )
 
 /**
- * Payment Brick v2 — minInstances=0, retry no SDK via mercadopagoUtils.
+ * Payment Brick v2 — mesma configuração resiliente do PIX.
  */
 exports.processBrickPaymentV2 = onRequest(
   {
-    minInstances: 0,
+    minInstances: 1,
     maxInstances: 10,
-    timeoutSeconds: 30,
-    memory: '256MiB',
-    concurrency: 40,
+    timeoutSeconds: 60,
+    memory: '512MiB',
+    concurrency: 15,
     cors: false,
   },
   withCors(async (req, res) => {
@@ -153,6 +153,25 @@ exports.processBrickPaymentV2 = onRequest(
       })
     }
   }),
+)
+
+/** Reconcilia status de pagamento (cliente consulta enquanto aguarda PIX). */
+exports.reconcilePaymentV2 = onRequest(
+  {
+    minInstances: 0,
+    maxInstances: 5,
+    timeoutSeconds: 30,
+    memory: '256MiB',
+    concurrency: 30,
+    cors: false,
+  },
+  withCors((req, res) =>
+    handleReconcilePayment(req, res, {
+      getMercadoPagoAccessToken,
+      admin,
+      functions: require('firebase-functions'),
+    }),
+  ),
 )
 
 const {

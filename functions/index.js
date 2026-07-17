@@ -297,6 +297,13 @@ exports.getMercadoPagoPublicConfig = functions.https.onRequest(
 )
 
 const { processBrickPaymentPayload } = require('./mercadopagoBrickPayment')
+const {
+  findTransactionByPaymentId,
+  resolveTransactionDoc,
+  fetchPaymentInfo,
+  reconcilePendingTransactions,
+} = require('./pixReconciliation')
+const { syncTransactionPaymentStatus } = require('./mercadopagoPaymentFulfillment')
 
 // processBrickPayment migrado para processBrickPaymentV2 (v2Exports.js)
 
@@ -631,377 +638,78 @@ exports.createCheckoutPreference = functions
 // Função para processar webhook do Mercado Pago
 exports.webhookMercadoPago = functions.https.onRequest(withCors(async (req, res) => {
     try {
-      // O Mercado Pago envia os dados no body
       const { type, data } = req.body
-      
+
       console.log('Webhook recebido:', { type, data })
-      
-      // Verificar se é um evento de pagamento
-      if (type === 'payment' || type === 'payment.updated') {
-        const paymentId = data?.id
-        
-        if (!paymentId) {
-          console.error('Payment ID não encontrado')
-          return res.status(400).json({ error: 'Payment ID não encontrado' })
-        }
-        
-        // Buscar transação no Firestore pelo paymentId do Mercado Pago
-        const transactionsRef = admin.firestore().collection('transactions')
-        
-        // Tentar buscar com diferentes formatos do paymentId
-        let snapshot = await transactionsRef
-          .where('mercadopagoPaymentId', '==', paymentId.toString())
-          .limit(1)
-          .get()
-        
-        // Se não encontrou, tentar com número
-        if (snapshot.empty) {
-          snapshot = await transactionsRef
-            .where('mercadopagoPaymentId', '==', parseInt(paymentId))
-            .limit(1)
-            .get()
-        }
-        
-        // Se ainda não encontrou, buscar por metadata no Mercado Pago e usar transactionId
-        if (snapshot.empty) {
-          console.log(`Transação não encontrada para paymentId: ${paymentId}, tentando buscar no Mercado Pago...`)
-          
-          try {
-            const accessToken = getMercadoPagoAccessToken()
-            
-            const client = new MercadoPagoConfig({
-              accessToken: accessToken,
-              options: { timeout: 10000 }
-            })
-            
-            const payment = new Payment(client)
-            const paymentInfo = await payment.get({ id: paymentId.toString() })
-            
-            // Buscar transactionId no metadata
-            const transactionId =
-              paymentInfo?.metadata?.transaction_id || paymentInfo?.external_reference
-            
-            if (transactionId) {
-              console.log(`Encontrado transactionId no metadata: ${transactionId}`)
-              const transactionDoc = await transactionsRef.doc(transactionId).get()
-              
-              if (transactionDoc.exists) {
-                // Processar com este documento
-                snapshot = {
-                  docs: [transactionDoc],
-                  empty: false
-                }
-              }
-            }
-          } catch (error) {
-            console.error('Erro ao buscar pagamento no Mercado Pago:', error)
-          }
-        }
-        
-        if (snapshot.empty) {
-          console.log(`Transação não encontrada para paymentId: ${paymentId}`)
-          console.log('Webhook completo recebido:', JSON.stringify(req.body, null, 2))
-          // Retornar OK mesmo assim para o Mercado Pago não tentar reenviar
-          return res.status(200).json({ received: true, message: 'Transação não encontrada' })
-        }
-        
-        const transactionDoc = snapshot.docs[0]
-        const transactionData = transactionDoc.data()
-        
-        // Buscar informações do pagamento no Mercado Pago usando a API
-        const accessToken = getMercadoPagoAccessToken()
-        
-        const client = new MercadoPagoConfig({
-          accessToken: accessToken,
-          options: { timeout: 10000 }
-        })
-        
-        const payment = new Payment(client)
-        
-        // Buscar status real do pagamento no Mercado Pago
-        let paymentInfo = null
-        try {
-          paymentInfo = await payment.get({ id: paymentId.toString() })
-          console.log('Status do pagamento no Mercado Pago:', paymentInfo.status)
-        } catch (error) {
-          console.error('Erro ao buscar pagamento no Mercado Pago:', error)
-          // Continuar com os dados do webhook se falhar
-        }
-        
-        // Usar status do pagamento buscado ou do webhook
-        const paymentStatus = paymentInfo?.status || data?.status || 'pending'
-        
-        // Mapear status do Mercado Pago para nosso sistema
-        let newStatus = 'pending'
-        if (paymentStatus === 'approved') {
-          newStatus = 'paid'
-        } else if (paymentStatus === 'rejected' || paymentStatus === 'cancelled') {
-          newStatus = 'cancelled'
-        }
-        
-        // Atualizar transação no Firestore
-        await transactionDoc.ref.update({
-          status: newStatus,
-          mercadopagoStatus: paymentStatus,
-          mercadopagoPaymentId: paymentId.toString(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          ...(newStatus === 'paid' && {
-            paidAt: admin.firestore.FieldValue.serverTimestamp()
-          })
-        })
-        
-        console.log(`Transação ${transactionDoc.id} atualizada para status: ${newStatus}`)
-        console.log(`Dados da transação:`, {
-          userId: transactionData.userId,
-          userEmail: transactionData.userEmail,
-          courseId: transactionData.courseId,
-          productName: transactionData.productName
-        })
-        
-        // Se pagamento foi aprovado, criar usuário e enviar email
-        if (newStatus === 'paid') {
-          const userId = transactionData.userId
-          const userEmail = transactionData.userEmail
-          const userName = transactionData.userName || userEmail?.split('@')[0] || 'Cliente'
-          
-          // Verificar se courseId existe
-          if (!transactionData.courseId) {
-            console.warn(`⚠️ ATENÇÃO: Transação ${transactionDoc.id} não tem courseId! Verifique se o curso foi selecionado corretamente.`)
-          }
-          
-          // Função auxiliar para gerar senha
-          const generatePassword = () => {
-            const length = 12
-            const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%'
-            let password = ''
-            for (let i = 0; i < length; i++) {
-              password += charset.charAt(Math.floor(Math.random() * charset.length))
-            }
-            return password
-          }
-          
-          // Obter courseId da transação
-          const courseId = transactionData.courseId || null
-          console.log(`CourseId da transação: ${courseId}, UserId: ${userId}, UserEmail: ${userEmail}`)
-          
-          if (userId) {
-            // Usuário já existe - ativar / renovar acesso ao curso
-            const userRef = admin.firestore().collection('users').doc(userId)
-            const userDoc = await userRef.get()
-            
-            if (userDoc.exists) {
-              let courseDuration = transactionData.courseDuration || null
-              let courseDurationUnit = transactionData.courseDurationUnit || null
-              let courseDurationValue = transactionData.courseDurationValue ?? null
-              if ((!courseDuration && !courseDurationUnit) && courseId) {
-                try {
-                  const courseSnap = await admin.firestore().collection('courses').doc(courseId).get()
-                  if (courseSnap.exists) {
-                    const c = courseSnap.data() || {}
-                    courseDuration = c.courseDuration || null
-                    courseDurationUnit = c.courseDurationUnit || null
-                    courseDurationValue = c.courseDurationValue ?? null
-                  }
-                } catch (_) { /* ignore */ }
-              }
 
-              if (courseId) {
-                await grantCourseAccess(admin.firestore(), admin.firestore.FieldValue, {
-                  userId,
-                  courseId,
-                  courseDuration,
-                  courseDurationUnit,
-                  courseDurationValue,
-                  autoRenew: Boolean(transactionData.autoRenew),
-                  paymentMethod: transactionData.paymentMethod || null,
-                  transactionId: transactionDoc.id,
-                  amount: transactionData.amount || null,
-                  extendFromCurrent: Boolean(transactionData.isRenewal),
-                  preapprovalId: transactionData.mercadopagoPreapprovalId || null,
-                })
-              } else {
-                await userRef.update({
-                  hasActiveSubscription: true,
-                  lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
-                })
-              }
-              console.log(`✅ Acesso ativado para usuário: ${userId}, curso: ${courseId}`)
-            } else {
-              console.error(`Usuário ${userId} não encontrado no Firestore`)
-            }
-          } else if (userEmail) {
-            // Usuário não existe - criar usuário e enviar email
-            try {
-              const password = generatePassword()
-              
-              // Criar usuário no Firebase Authentication
-              const userRecord = await admin.auth().createUser({
-                email: userEmail.toLowerCase().trim(),
-                password: password,
-                displayName: userName,
-                emailVerified: false
-              })
-              
-              // Criar perfil no Firestore (acesso ao curso via grantCourseAccess)
-              console.log(`Criando novo usuário ${userRecord.uid} com curso ${courseId}`)
-              
-              await admin.firestore().collection('users').doc(userRecord.uid).set({
-                uid: userRecord.uid,
-                email: userEmail.toLowerCase().trim(),
-                displayName: userName,
-                role: 'student',
-                favorites: [],
-                hasActiveSubscription: true,
-                subscriptionStartDate: admin.firestore.FieldValue.serverTimestamp(),
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                purchasedCourses: [],
-                selectedCourseId: courseId || null,
-              })
-
-              let courseDuration = transactionData.courseDuration || null
-              let courseDurationUnit = transactionData.courseDurationUnit || null
-              let courseDurationValue = transactionData.courseDurationValue ?? null
-              if ((!courseDuration && !courseDurationUnit) && courseId) {
-                try {
-                  const courseSnap = await admin.firestore().collection('courses').doc(courseId).get()
-                  if (courseSnap.exists) {
-                    const c = courseSnap.data() || {}
-                    courseDuration = c.courseDuration || null
-                    courseDurationUnit = c.courseDurationUnit || null
-                    courseDurationValue = c.courseDurationValue ?? null
-                  }
-                } catch (_) { /* ignore */ }
-              }
-
-              if (courseId) {
-                await grantCourseAccess(admin.firestore(), admin.firestore.FieldValue, {
-                  userId: userRecord.uid,
-                  courseId,
-                  courseDuration,
-                  courseDurationUnit,
-                  courseDurationValue,
-                  autoRenew: Boolean(transactionData.autoRenew),
-                  paymentMethod: transactionData.paymentMethod || null,
-                  transactionId: transactionDoc.id,
-                  amount: transactionData.amount || null,
-                  preapprovalId: transactionData.mercadopagoPreapprovalId || null,
-                })
-              }
-              
-              console.log(`✅ Novo usuário criado: ${userRecord.uid} com curso ${courseId}`)
-              
-              // Atualizar transação com userId
-              await transactionDoc.ref.update({
-                userId: userRecord.uid
-              })
-              
-              // Enviar email com credenciais
-              const transporter = createEmailTransporter()
-              if (transporter) {
-                const mailOptions = {
-                  from: `"Plegimentoria ALEGO" <${functions.config().email?.user || process.env.EMAIL_USER || 'flashconcards@gmail.com'}>`,
-                  to: userEmail.toLowerCase().trim(),
-                  subject: '✅ Pagamento Confirmado - Suas Credenciais de Acesso',
-                  html: `
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                      <meta charset="utf-8">
-                      <style>
-                        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-                        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-                        .credentials { background: white; border: 2px solid #667eea; border-radius: 8px; padding: 20px; margin: 20px 0; }
-                        .credential-item { margin: 15px 0; }
-                        .label { font-weight: bold; color: #667eea; }
-                        .value { font-family: monospace; font-size: 16px; color: #333; background: #f5f5f5; padding: 10px; border-radius: 4px; margin-top: 5px; }
-                        .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-                        .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; }
-                      </style>
-                    </head>
-                    <body>
-                      <div class="container">
-                        <div class="header">
-                          <h1>🎉 Pagamento Confirmado!</h1>
-                          <p>Sua compra foi processada com sucesso</p>
-                        </div>
-                        <div class="content">
-                          <p>Olá, <strong>${userName}</strong>!</p>
-                          
-                          <p>Seu pagamento foi confirmado e sua conta foi criada automaticamente. Abaixo estão suas credenciais de acesso:</p>
-                          
-                          <div class="credentials">
-                            <div class="credential-item">
-                              <div class="label">📧 Email de Acesso:</div>
-                              <div class="value">${userEmail.toLowerCase().trim()}</div>
-                            </div>
-                            <div class="credential-item">
-                              <div class="label">🔑 Senha:</div>
-                              <div class="value">${password}</div>
-                            </div>
-                          </div>
-
-                          <div class="warning">
-                            <strong>⚠️ Importante:</strong> Guarde essas informações com segurança! Você pode alterar sua senha após o primeiro login.
-                          </div>
-
-                          <div style="text-align: center;">
-                            <a href="https://flashconcards.vercel.app/login" class="button">Acessar Plataforma Agora</a>
-                          </div>
-
-                          <p>Com sua conta, você terá acesso a:</p>
-                          <ul>
-                            <li>📚 Flashcards Inteligentes de todas as matérias</li>
-                            <li>❓ FlashQuestões geradas por IA</li>
-                            <li>🤖 Flash Mentor - Assistente de IA personalizado</li>
-                            <li>📊 Dashboard de progresso</li>
-                            <li>🏆 Ranking de alunos</li>
-                          </ul>
-
-                          <p>Se tiver dúvidas, entre em contato conosco!</p>
-                          
-                          <p>Atenciosamente,<br><strong>Equipe Plegimentoria ALEGO</strong></p>
-                        </div>
-                      </div>
-                    </body>
-                    </html>
-                  `
-                }
-                
-                await transporter.sendMail(mailOptions)
-                console.log(`Email enviado para ${userEmail} com credenciais`)
-              } else {
-                console.warn('Transporter não configurado - email não enviado')
-              }
-              
-              console.log(`Usuário criado e email enviado para: ${userEmail}`)
-            } catch (error) {
-              console.error('Erro ao criar usuário:', error)
-              // Não bloquear o webhook mesmo se falhar criar usuário
-            }
-          }
-        }
-        
-        return res.status(200).json({ 
-          received: true, 
-          transactionId: transactionDoc.id,
-          status: newStatus
-        })
+      if (type !== 'payment' && type !== 'payment.updated') {
+        return res.status(200).json({ received: true, message: 'Evento não processado' })
       }
-      
-      // Se não for um evento de pagamento, apenas confirmar recebimento
-      return res.status(200).json({ received: true, message: 'Evento não processado' })
-      
+
+      const paymentId = data?.id
+      if (!paymentId) {
+        return res.status(400).json({ error: 'Payment ID não encontrado' })
+      }
+
+      const paymentInfo = await fetchPaymentInfo(paymentId, getMercadoPagoAccessToken)
+
+      let transactionDoc = await findTransactionByPaymentId(paymentId)
+      if (!transactionDoc) {
+        transactionDoc = await resolveTransactionDoc(paymentId, paymentInfo, getMercadoPagoAccessToken)
+      }
+
+      if (!transactionDoc) {
+        console.log(`Transação não encontrada para paymentId: ${paymentId}`)
+        return res.status(200).json({ received: true, message: 'Transação não encontrada' })
+      }
+
+      const transactionData = transactionDoc.data()
+      const paymentStatus = paymentInfo?.status || data?.status || 'pending'
+
+      const result = await syncTransactionPaymentStatus(admin, functions, {
+        transactionDoc,
+        transactionData,
+        paymentId,
+        paymentStatus,
+      })
+
+      console.log(`Transação ${transactionDoc.id} → ${result.newStatus}`)
+
+      return res.status(200).json({
+        received: true,
+        transactionId: transactionDoc.id,
+        status: result.newStatus,
+      })
     } catch (error) {
       console.error('Erro ao processar webhook do Mercado Pago:', error)
-      // Sempre retornar 200 para o Mercado Pago não tentar reenviar
-      return res.status(200).json({ 
-        received: true, 
-        error: error.message 
+      return res.status(503).json({
+        received: false,
+        error: error.message,
       })
     }
 }))
+
+
+/** Reconcilia pagamentos pendentes a cada 5 min (fallback quando webhook falha). */
+exports.reconcilePendingPixPayments = functions.pubsub
+  .schedule('every 5 minutes')
+  .timeZone('America/Sao_Paulo')
+  .onRun(async () => {
+    try {
+      const result = await reconcilePendingTransactions({
+        getMercadoPagoAccessToken,
+        adminSdk: admin,
+        functions,
+        limit: 50,
+      })
+      if (result.paid > 0 || result.errors > 0) {
+        console.log('[reconcilePendingPixPayments]', result)
+      }
+    } catch (err) {
+      console.error('[reconcilePendingPixPayments]', err)
+    }
+    return null
+  })
 
 
 // Função para enviar email com resultado do simulado compartilhado

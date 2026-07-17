@@ -37,4 +37,17 @@ async function mercadoPagoSdkCall(fn, { maxAttempts = 3 } = {}) {
   })
 }
 
-module.exports = { createMercadoPagoPayment, mercadoPagoSdkCall }
+/** Consulta pagamento no MP com retry (GET). */
+async function getMercadoPagoPaymentWithRetry(payment, paymentId, { maxAttempts = 4 } = {}) {
+  return retryWithBackoff(() => payment.get({ id: String(paymentId) }), {
+    maxAttempts,
+    baseDelayMs: 600,
+    shouldRetry: isTransientMercadoPagoError,
+  })
+}
+
+module.exports = {
+  createMercadoPagoPayment,
+  mercadoPagoSdkCall,
+  getMercadoPagoPaymentWithRetry,
+}
