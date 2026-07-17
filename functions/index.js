@@ -2,7 +2,8 @@ require('dotenv').config()
 const functions = require('firebase-functions')
 const admin = require('firebase-admin')
 const nodemailer = require('nodemailer')
-const { corsMiddleware: cors } = require('./corsConfig')
+const { corsMiddleware: cors, withCors } = require('./corsConfig')
+const { handleCreatePixPayment } = require('./handlers/createPixPaymentHandler')
 const {
   createEmailTransporter,
   buildBrandedEmailHtml,
@@ -17,6 +18,7 @@ const {
   DEFAULT_FROM_NAME,
 } = require('./emailUtils')
 const { MercadoPagoConfig, Payment, Preference, PreApproval } = require('mercadopago')
+const { mercadoPagoSdkCall } = require('./mercadopagoUtils')
 const axios = require('axios')
 const { generateAiJson } = require('./generation/geminiServer')
 const { collectGeminiApiKeys, collectMotherGeminiApiKey } = require('./generation/geminiKeyPool')
@@ -128,6 +130,46 @@ try {
   /* já configurado */
 }
 
+/** Health check para Cloud Run / uptime monitors — sem CORS, resposta rápida. */
+exports.healthCheck = functions.https.onRequest(async (req, res) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return res.status(405).json({ error: 'Método não permitido' })
+  }
+
+  const started = Date.now()
+  const checks = { firestore: 'unknown', auth: 'unknown' }
+
+  try {
+    await admin.firestore().collection('_health').doc('ping').get()
+    checks.firestore = 'ok'
+  } catch (err) {
+    checks.firestore = 'error'
+    console.error('[healthCheck] firestore:', err?.message || err)
+  }
+
+  try {
+    await admin.auth().listUsers(1)
+    checks.auth = 'ok'
+  } catch (err) {
+    checks.auth = 'error'
+    console.error('[healthCheck] auth:', err?.message || err)
+  }
+
+  const healthy = checks.firestore === 'ok' && checks.auth === 'ok'
+  const body = {
+    status: healthy ? 'ok' : 'degraded',
+    checks,
+    latencyMs: Date.now() - started,
+    timestamp: new Date().toISOString(),
+    region: process.env.FUNCTION_REGION || 'us-central1',
+  }
+
+  if (req.method === 'HEAD') {
+    return res.status(healthy ? 200 : 503).end()
+  }
+  return res.status(healthy ? 200 : 503).json(body)
+})
+
 const {
   getResumeModule,
   getDailyModule,
@@ -172,8 +214,7 @@ exports.onGenerationJobUpdated = functions.firestore
 // createEmailTransporter movido para emailUtils.js
 
 // Função para criar usuário e enviar email com credenciais
-exports.createUserAndSendEmail = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+exports.createUserAndSendEmail = functions.https.onRequest(withCors(async (req, res) => {
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' })
     }
@@ -263,250 +304,41 @@ exports.createUserAndSendEmail = functions.https.onRequest((req, res) => {
         message: error.message
       })
     }
-  })
-})
+}))
+
 
 // Função para criar pagamento PIX real no Mercado Pago
-exports.createPixPayment = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Método não permitido' })
-    }
-
-    try {
-      const { amount, description, transactionId, userEmail, userName } = req.body
-
-      console.log('Recebido no createPixPayment:', { amount, description, transactionId, userEmail, userName })
-
-      // Validação mais detalhada
-      if (!amount && amount !== 0) {
-        console.error('Campo amount não fornecido')
-        return res.status(400).json({ 
-          error: 'Campo obrigatório faltando: amount',
-          message: 'O valor do pagamento é obrigatório'
-        })
-      }
-      
-      if (!description) {
-        console.error('Campo description não fornecido')
-        return res.status(400).json({ 
-          error: 'Campo obrigatório faltando: description',
-          message: 'A descrição do pagamento é obrigatória'
-        })
-      }
-      
-      if (!transactionId) {
-        console.error('Campo transactionId não fornecido')
-        return res.status(400).json({ 
-          error: 'Campo obrigatório faltando: transactionId',
-          message: 'O ID da transação é obrigatório'
-        })
-      }
-
-      // Validar que amount é um número válido
-      const amountNumber = parseFloat(amount)
-      if (isNaN(amountNumber) || amountNumber <= 0) {
-        console.error('Valor inválido:', amount)
-        return res.status(400).json({ 
-          error: 'Valor inválido',
-          message: `O valor do pagamento deve ser um número positivo. Recebido: ${amount}`
-        })
-      }
-
-      // Obter Access Token do Mercado Pago (PIX usa token de produção quando disponível)
-      const accessToken = getMercadoPagoAccessToken({ forPix: true })
-      if (!accessToken) {
-        return res.status(500).json({
-          error: 'Mercado Pago não configurado',
-          message:
-            'Access token ausente para PIX. Configure MERCADOPAGO_ACCESS_TOKEN_PROD (PIX não funciona com token TEST).',
-        })
-      }
-
-      console.log('PIX usando token:', String(accessToken).startsWith('TEST') ? 'TEST' : 'PROD/APP_USR')
-
-      // Configurar cliente do Mercado Pago
-      const client = new MercadoPagoConfig({
-        accessToken: accessToken,
-        options: { timeout: 15000 }
-      })
-
-      const payment = new Payment(client)
-
-      // Criar pagamento PIX
-      const paymentData = {
-        transaction_amount: Number(amountNumber.toFixed(2)),
-        description: String(description).slice(0, 255),
-        payment_method_id: 'pix',
-        payer: {
-          email: userEmail || 'cliente@exemplo.com',
-          first_name: (userName || 'Cliente').split(' ')[0] || 'Cliente',
-        },
-        metadata: {
-          transaction_id: transactionId,
-        },
-        notification_url:
-          process.env.MERCADOPAGO_WEBHOOK_URL ||
-          functions.config().app?.webhook_url ||
-          'https://us-central1-plegi-d84c2.cloudfunctions.net/webhookMercadoPago',
-      }
-
-      console.log('Criando pagamento PIX no Mercado Pago:', {
-        amount: paymentData.transaction_amount,
-        description: paymentData.description,
-        transactionId,
-      })
-      
-      const result = await payment.create({
-        body: paymentData,
-        requestOptions: { idempotencyKey: `pix-${transactionId}` },
-      })
-      
-      console.log('Resposta do Mercado Pago:', JSON.stringify(result, null, 2))
-
-      // Verificar se o pagamento foi criado com sucesso
-      if (!result || !result.id) {
-        console.error('Pagamento não criado:', result)
-        return res.status(500).json({ 
-          error: 'Erro ao gerar PIX',
-          message: 'Pagamento não foi criado no Mercado Pago',
-          details: result
-        })
-      }
-
-      // Extrair dados do PIX de várias formas possíveis
-      const pixData = result.point_of_interaction?.transaction_data || {}
-      
-      // Código PIX copia-e-cola (string longa que começa com 000201...)
-      // NÃO usar qr_code_base64 aqui, pois esse é a imagem, não o código
-      let pixCopyPaste = pixData.qr_code || null
-      
-      // Imagem do QR Code em base64 (para exibir diretamente)
-      // Este é um PNG em base64, NÃO é o código PIX copia-e-cola
-      let pixQrCodeBase64 = pixData.qr_code_base64 || null
-      
-      // URL do ticket (link para pagamento)
-      const ticketUrl = pixData.ticket_url || null
-
-      // Se não tem código PIX copia-e-cola, verificar outros campos possíveis
-      if (!pixCopyPaste) {
-        // Tentar extrair de outros lugares possíveis
-        if (result.transaction_details?.transaction_data?.qr_code) {
-          pixCopyPaste = result.transaction_details.transaction_data.qr_code
-        }
-        
-        // Tentar do próprio result
-        if (!pixCopyPaste && result.qr_code) {
-          pixCopyPaste = result.qr_code
-        }
-      }
-      
-      // Validar que pixCopyPaste não é uma imagem base64
-      // O código PIX copia-e-cola começa com "000201" (EMV QR Code)
-      if (pixCopyPaste && pixCopyPaste.startsWith('iVBORw0KGgo')) {
-        // Isso é uma imagem PNG base64, não o código PIX
-        console.warn('pixCopyPaste parece ser uma imagem base64, não um código PIX. Tentando encontrar o código correto...')
-        pixCopyPaste = null
-      }
-      
-      // Se não tem imagem base64, mas tem código PIX, podemos gerar a imagem depois
-      // ou usar o ticket_url para exibir o QR Code
-      
-      console.log('Dados PIX extraídos:', {
-        hasCopyPaste: !!pixCopyPaste,
-        hasQrCodeBase64: !!pixQrCodeBase64,
-        copyPasteLength: pixCopyPaste?.length || 0,
-        copyPasteStart: pixCopyPaste?.substring(0, 20) || 'N/A'
-      })
-
-      // Se não tem código PIX, retornar erro mais descritivo
-      if (!pixCopyPaste) {
-        console.warn('Resposta do Mercado Pago sem código PIX:', {
-          status: result.status,
-          payment_method_id: result.payment_method_id,
-          point_of_interaction: result.point_of_interaction,
-          status_detail: result.status_detail
-        })
-        
-        // Retornar erro mais claro
-        return res.status(400).json({
-          error: 'PIX não gerado',
-          message: result.status_detail || 'Não foi possível gerar o código PIX. Verifique as configurações da conta do Mercado Pago.',
-          paymentId: result.id,
-          status: result.status,
-          details: 'O código PIX não foi retornado pelo Mercado Pago. Verifique se a chave PIX está habilitada na sua conta.',
-          rawResponse: result
-        })
-      }
-
-      // Retornar sucesso com dados do PIX
-      return res.status(200).json({
-        success: true,
-        paymentId: result.id,
-        status: result.status,
-        pixQrCode: pixQrCodeBase64, // Imagem base64 do QR Code
-        pixCopyPaste: pixCopyPaste, // Código PIX copia-e-cola (string)
-        ticketUrl: ticketUrl,
-        // Incluir resposta completa para debug
-        rawResponse: result
-      })
-
-    } catch (error) {
-      console.error('Erro ao criar pagamento PIX:', error)
-      console.error('Stack:', error.stack)
-      console.error('Response:', error.response?.data || error.response || error.cause || 'Sem resposta')
-      
-      // Verificar se é erro de PIX não habilitado
-      const errorMessage = error.message || ''
-      const errorCause = JSON.stringify(error.cause || {})
-      const errorString = errorMessage + ' ' + errorCause
-      
-      console.log('Analisando erro:', { errorMessage, errorCause, errorString })
-      
-      if (errorString.includes('Collector user without key enabled for QR') || 
-          errorString.includes('key enabled for QR') ||
-          errorString.includes('13253') || // Código de erro do Mercado Pago
-          errorString.includes('Financial Identity Use Case')) {
-        console.log('Erro detectado: PIX não habilitado na conta')
-        return res.status(400).json({ 
-          error: 'PIX não habilitado na conta',
-          message: 'Sua conta do Mercado Pago não tem a chave PIX habilitada. Para habilitar, acesse o painel do Mercado Pago e configure sua chave PIX.',
-          code: 'PIX_NOT_ENABLED',
-          solution: 'Habilite o PIX nas configurações da sua conta do Mercado Pago. Acesse: https://www.mercadopago.com.br/account/settings ou entre em contato com o suporte do Mercado Pago.',
-          details: error.message || 'Chave PIX não configurada na conta'
-        })
-      }
-      
-      return res.status(500).json({ 
-        error: 'Erro ao criar pagamento PIX',
-        message: error.message || error.cause?.[0]?.description || 'Erro desconhecido',
-        code: error.cause?.[0]?.code || error.code || 'PIX_CREATE_FAILED',
-        details: error.cause || error.response?.data || null
-      })
-    }
-  })
-})
+exports.createPixPayment = functions
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onRequest(
+    withCors((req, res) => handleCreatePixPayment(req, res, { getMercadoPagoAccessToken })),
+  )
 
 /** Public Key para Checkout Transparente (Payment Brick) — sem secrets. */
-exports.getMercadoPagoPublicConfig = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+exports.getMercadoPagoPublicConfig = functions.https.onRequest(
+  withCors(async (req, res) => {
     if (req.method !== 'GET' && req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' })
     }
-    const publicKey = getMercadoPagoPublicKey()
-    if (!publicKey) {
-      return res.status(500).json({
-        error: 'Public key ausente',
-        message: 'Configure MERCADOPAGO_PUBLIC_KEY_PROD no ambiente das functions.',
+    try {
+      const publicKey = getMercadoPagoPublicKey()
+      if (!publicKey) {
+        return res.status(500).json({
+          error: 'Public key ausente',
+          message: 'Configure MERCADOPAGO_PUBLIC_KEY_PROD no ambiente das functions.',
+        })
+      }
+      return res.status(200).json({
+        publicKey,
+        testMode: isMercadoPagoTestMode(),
+        locale: 'pt-BR',
       })
+    } catch (error) {
+      console.error('Erro getMercadoPagoPublicConfig:', error)
+      return res.status(500).json({ error: 'Erro ao obter configuração', message: error.message })
     }
-    return res.status(200).json({
-      publicKey,
-      testMode: isMercadoPagoTestMode(),
-      locale: 'pt-BR',
-    })
-  })
-})
+  }),
+)
 
 const { processBrickPaymentPayload } = require('./mercadopagoBrickPayment')
 
@@ -514,8 +346,10 @@ const { processBrickPaymentPayload } = require('./mercadopagoBrickPayment')
  * Checkout Transparente — processa formData do Payment Brick (cartão / PIX / boleto).
  * Pagamento acontece no site; sem redirecionar ao login do MP.
  */
-exports.processBrickPayment = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+exports.processBrickPayment = functions
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onRequest(
+    withCors(async (req, res) => {
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' })
     }
@@ -538,15 +372,15 @@ exports.processBrickPayment = functions.https.onRequest((req, res) => {
         details: error.cause || error.response?.data || null,
       })
     }
-  })
-})
+  }),
+)
 
 /**
  * Bypass do Rate exceeded no HTTPS cloudfunctions.net:
  * o client grava em paymentBrickRequests e esta function processa via trigger Firestore.
  */
 exports.onPaymentBrickRequestCreated = functions
-  .runWith({ timeoutSeconds: 60, memory: '512MB' })
+  .runWith({ timeoutSeconds: 120, memory: '512MB' })
   .firestore.document('paymentBrickRequests/{requestId}')
   .onCreate(async (snap) => {
     const data = snap.data() || {}
@@ -623,8 +457,9 @@ function resolveMercadoPagoBackUrl(candidate, fallback) {
 }
 
 /** Cria preferência Checkout Pro ou assinatura (renovação automática no cartão) */
-exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+exports.createCheckoutPreference = functions
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onRequest(withCors(async (req, res) => {
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' })
     }
@@ -720,7 +555,7 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
           },
         }
 
-        const result = await preApproval.create({ body: preBody })
+        const result = await mercadoPagoSdkCall(() => preApproval.create({ body: preBody }))
         const testMode = isMercadoPagoTestMode()
         const checkoutUrl = resolveCheckoutInitPoint(result, { testMode })
 
@@ -819,7 +654,7 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
         body.auto_return,
       )
 
-      const result = await preference.create({ body })
+      const result = await mercadoPagoSdkCall(() => preference.create({ body }))
       const testMode = isMercadoPagoTestMode()
       const checkoutUrl = resolveCheckoutInitPoint(result, { testMode })
 
@@ -865,12 +700,11 @@ exports.createCheckoutPreference = functions.https.onRequest((req, res) => {
         details: error.cause || error.response?.data || null,
       })
     }
-  })
-})
+}))
+
 
 // Função para processar webhook do Mercado Pago
-exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+exports.webhookMercadoPago = functions.https.onRequest(withCors(async (req, res) => {
     try {
       // O Mercado Pago envia os dados no body
       const { type, data } = req.body
@@ -1242,12 +1076,11 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
         error: error.message 
       })
     }
-  })
-})
+}))
+
 
 // Função para enviar email com resultado do simulado compartilhado
-exports.sendSimuladoResultEmail = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+exports.sendSimuladoResultEmail = functions.https.onRequest(withCors(async (req, res) => {
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' })
     }
@@ -1355,12 +1188,11 @@ exports.sendSimuladoResultEmail = functions.https.onRequest((req, res) => {
       console.error('Erro ao enviar email de resultado:', error)
       return res.status(500).json({ error: 'Erro ao enviar email', details: error.message })
     }
-  })
-})
+}))
+
 
 // Função para enviar email personalizado de redefinição de senha
-exports.sendPasswordResetEmail = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+exports.sendPasswordResetEmail = functions.https.onRequest(withCors(async (req, res) => {
     // Tratar preflight request
     if (req.method === 'OPTIONS') {
       return res.status(204).send('')
@@ -1443,11 +1275,10 @@ exports.sendPasswordResetEmail = functions.https.onRequest((req, res) => {
         details: error.message,
       })
     }
-  })
-})
+}))
 
-exports.sendEmailVerificationCode = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+
+exports.sendEmailVerificationCode = functions.https.onRequest(withCors(async (req, res) => {
     if (req.method === 'OPTIONS') return res.status(204).send('')
     if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
 
@@ -1509,11 +1340,10 @@ exports.sendEmailVerificationCode = functions.https.onRequest((req, res) => {
       const status = error.status || 500
       return res.status(status).json({ error: error.message || 'Erro ao enviar código.' })
     }
-  })
-})
+}))
 
-exports.verifyEmailCode = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+
+exports.verifyEmailCode = functions.https.onRequest(withCors(async (req, res) => {
     if (req.method === 'OPTIONS') return res.status(204).send('')
     if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
 
@@ -1572,14 +1402,13 @@ exports.verifyEmailCode = functions.https.onRequest((req, res) => {
       const status = error.status || 500
       return res.status(status).json({ error: error.message || 'Erro ao verificar código.' })
     }
-  })
-})
+}))
+
 
 // Envia email de boas-vindas retroativo para usuários já verificados
 exports.sendRetroactiveWelcomeEmails = functions
   .runWith({ timeoutSeconds: 540, memory: '512MB' })
-  .https.onRequest((req, res) => {
-    cors(req, res, async () => {
+  .https.onRequest(withCors(async (req, res) => {
       if (req.method === 'OPTIONS') return res.status(204).send('')
       if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido' })
 
@@ -1631,12 +1460,10 @@ exports.sendRetroactiveWelcomeEmails = functions
         const status = error.status || 500
         return res.status(status).json({ error: error.message || 'Erro ao enviar emails.' })
       }
-    })
-  })
+}))
 
 // Função para atualizar senha do usuário (usado na página de reset)
-exports.updateUserPassword = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+exports.updateUserPassword = functions.https.onRequest(withCors(async (req, res) => {
     // Tratar preflight request
     if (req.method === 'OPTIONS') {
       return res.status(204).send('')
@@ -1706,12 +1533,11 @@ exports.updateUserPassword = functions.https.onRequest((req, res) => {
       console.error('Erro na função updateUserPassword:', error)
       return res.status(500).json({ error: 'Erro ao processar', details: error.message })
     }
-  })
-})
+}))
+
 
 // Envio de email formatado pelo admin (1, vários ou todos)
-exports.sendAdminBroadcastEmail = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+exports.sendAdminBroadcastEmail = functions.https.onRequest(withCors(async (req, res) => {
     if (req.method === 'OPTIONS') {
       return res.status(204).send('')
     }
@@ -1833,8 +1659,8 @@ exports.sendAdminBroadcastEmail = functions.https.onRequest((req, res) => {
         details: error.message,
       })
     }
-  })
-})
+}))
+
 
 const { MENTORADO_DAILY_RELEASE_HOUR } = require('./generation/guiaMentoradoShared')
 
@@ -1868,8 +1694,9 @@ exports.mentoradoDailyContentRelease = functions
  * A cada 30 min, na janela de conteúdo (própria / Professor / padrão 06–23):
  * 1 job por vez, revezando TODOS os cursos (incidência → nível 1 → níveis 2–10).
  */
-exports.contentAutomationTick = functions.pubsub
-  .schedule('every 30 minutes')
+exports.contentAutomationTick = functions
+  .runWith({ timeoutSeconds: 120, memory: '512MB' })
+  .pubsub.schedule('every 30 minutes')
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
     const { runContentAutomationRelease } = require('./generation/contentAutomationRelease')
@@ -1888,8 +1715,7 @@ exports.contentAutomationTick = functions.pubsub
   })
 
 /** Disparo manual (admin) da automação de conteúdo — ignora janela se force=true. */
-exports.runContentAutomationNow = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+exports.runContentAutomationNow = functions.https.onRequest(withCors(async (req, res) => {
     try {
       if (req.method === 'OPTIONS') return res.status(204).send('')
       if (req.method !== 'POST') {
@@ -1907,8 +1733,8 @@ exports.runContentAutomationNow = functions.https.onRequest((req, res) => {
       const status = error.status || 500
       return res.status(status).json({ error: error.message || 'Erro na automação de conteúdo' })
     }
-  })
-})
+}))
+
 
 /** Rotação semanal de temas de redação (cursos com hasRedacao no Guia Mentorado). */
 exports.weeklyRedacaoThemeRotation = functions.pubsub
@@ -1938,8 +1764,7 @@ exports.motivationalInactivityPush = functions.pubsub
   })
 
 /** Disparo manual (admin) do push motivacional por inatividade. */
-exports.runMotivationalInactivityPushNow = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+exports.runMotivationalInactivityPushNow = functions.https.onRequest(withCors(async (req, res) => {
     try {
       if (req.method === 'OPTIONS') return res.status(204).send('')
       await verifyAdminRequest(req)
@@ -1950,12 +1775,13 @@ exports.runMotivationalInactivityPushNow = functions.https.onRequest((req, res) 
       const status = error.status || 500
       return res.status(status).json({ error: error.message || 'Erro ao enviar push' })
     }
-  })
-})
+}))
+
 
 /** Retoma jobs pausados — backup a cada 10 min (reduz QPS / Rate exceeded no projeto). */
-exports.resumeWaitingGenerationJobs = functions.pubsub
-  .schedule('every 10 minutes')
+exports.resumeWaitingGenerationJobs = functions
+  .runWith({ timeoutSeconds: 540, memory: '1GB' })
+  .pubsub.schedule('every 10 minutes')
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
     const { processStuckPendingGenerationJobs } = getKickModule()
@@ -1969,9 +1795,9 @@ exports.resumeWaitingGenerationJobs = functions.pubsub
     return null
   })
 
-/** Agenda retomada após pausa — espera curta (≤8s); o cron de 1 min cobre o restante. */
+/** Agenda retomada após pausa — espera curta (≤8s); o cron de 10 min cobre o restante. */
 exports.onGenerationResumeQueueWrite = functions
-  .runWith({ timeoutSeconds: 120, memory: '1GB' })
+  .runWith({ timeoutSeconds: 540, memory: '1GB' })
   .firestore.document('generationResumeQueue/{jobId}')
   .onWrite(async (change, context) => {
     if (!change.after.exists) return null
@@ -2013,8 +1839,7 @@ exports.onGenerationResumeQueueWrite = functions
 /** Cliente força retomada de job travado ou aguardando. */
 exports.nudgeGenerationJobResume = functions
   .runWith({ timeoutSeconds: 540, memory: '1GB' })
-  .https.onRequest((req, res) => {
-    cors(req, res, async () => {
+  .https.onRequest(withCors(async (req, res) => {
       if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Método não permitido' })
       }
@@ -2038,14 +1863,12 @@ exports.nudgeGenerationJobResume = functions
         console.error('[nudgeGenerationJobResume]', err)
         return res.status(500).json({ error: err.message || 'Erro ao retomar job' })
       }
-    })
-  })
+}))
 
 /** Dispara processamento imediato de job pendente (fallback se onCreate não disparar). */
 exports.kickGenerationJob = functions
   .runWith({ timeoutSeconds: 540, memory: '1GB' })
-  .https.onRequest((req, res) => {
-    cors(req, res, async () => {
+  .https.onRequest(withCors(async (req, res) => {
       if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Método não permitido' })
       }
@@ -2069,12 +1892,10 @@ exports.kickGenerationJob = functions
         console.error('[kickGenerationJob]', err)
         return res.status(500).json({ error: err.message || 'Erro ao iniciar job' })
       }
-    })
-  })
+}))
 
 /** Cancela job no servidor — para retomadas e libera slot. */
-exports.cancelGenerationJob = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+exports.cancelGenerationJob = functions.https.onRequest(withCors(async (req, res) => {
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' })
     }
@@ -2113,15 +1934,14 @@ exports.cancelGenerationJob = functions.https.onRequest((req, res) => {
       console.error('[cancelGenerationJob]', err)
       return res.status(500).json({ error: err.message || 'Erro ao cancelar job' })
     }
-  })
-})
+}))
+
 
 /**
  * Lista jobs de geração ativos em toda a plataforma (admin).
  * Usa collection group — complementa a regra de read admin em generationJobs.
  */
-exports.listActiveGenerationJobs = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+exports.listActiveGenerationJobs = functions.https.onRequest(withCors(async (req, res) => {
     if (req.method === 'OPTIONS') return res.status(200).end()
     if (req.method !== 'GET' && req.method !== 'POST') {
       return res.status(405).json({ error: 'Método não permitido' })
@@ -2167,12 +1987,13 @@ exports.listActiveGenerationJobs = functions.https.onRequest((req, res) => {
       const status = err?.statusCode || (String(err.message || '').includes('Admin') ? 403 : 500)
       return res.status(status).json({ error: err.message || 'Erro ao listar jobs' })
     }
-  })
-})
+}))
+
 
 /** Professor fiscalizador — 1 item por vez; backup a cada 10 min (protege cota HTTP de pagamento). */
-exports.professorSupervisorTick = functions.pubsub
-  .schedule('every 10 minutes')
+exports.professorSupervisorTick = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('every 10 minutes')
   .timeZone('America/Sao_Paulo')
   .onRun(async () => {
     try {
@@ -2188,8 +2009,9 @@ exports.professorSupervisorTick = functions.pubsub
   })
 
 /** Ao ativar, dispara fiscalização imediata. */
-exports.onProfessorFiscalizadorConfigUpdated = functions.firestore
-  .document('config/professorFiscalizador')
+exports.onProfessorFiscalizadorConfigUpdated = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .firestore.document('config/professorFiscalizador')
   .onUpdate(async (change) => {
     const before = change.before.data() || {}
     const after = change.after.data() || {}
@@ -2499,8 +2321,7 @@ exports.processCourseAutoRenewals = functions.pubsub
  * Gera notícias de concursos automaticamente usando IA
  * Busca informações sobre concursos abertos, vagas, remuneração, etc.
  */
-exports.generateConcursoNews = functions.https.onRequest((req, res) => {
-  return cors(req, res, async () => {
+exports.generateConcursoNews = functions.https.onRequest(withCors(async (req, res) => {
     // Responder a OPTIONS (preflight) imediatamente
     if (req.method === 'OPTIONS') {
       return res.status(200).end()
@@ -2740,15 +2561,16 @@ exports.generateConcursoNews = functions.https.onRequest((req, res) => {
         message: error.message 
       })
     }
-  })
-})
+}))
+
 
 /**
  * Scheduler para gerar notícias automaticamente
  * 08:15 SP — evita pico com outros crons das 8h; dedupe 24h igual ao HTTP
  */
-exports.scheduledGenerateConcursoNews = functions.pubsub
-  .schedule('15 8 * * *')
+exports.scheduledGenerateConcursoNews = functions
+  .runWith({ timeoutSeconds: 300, memory: '512MB' })
+  .pubsub.schedule('15 8 * * *')
   .timeZone('America/Sao_Paulo')
   .onRun(async (context) => {
     try {
@@ -2923,8 +2745,7 @@ exports.scheduledGenerateConcursoNews = functions.pubsub
  * Gerar notícia de concurso a partir de um link de referência
  * O admin fornece um link e a IA lê o conteúdo e gera a notícia
  */
-exports.generateNewsFromLink = functions.https.onRequest((req, res) => {
-  return cors(req, res, async () => {
+exports.generateNewsFromLink = functions.https.onRequest(withCors(async (req, res) => {
     // Responder a OPTIONS (preflight) imediatamente
     if (req.method === 'OPTIONS') {
       return res.status(200).end()
@@ -3152,5 +2973,8 @@ IMPORTANTE:
         message: error.message 
       })
     }
-  })
-})
+}))
+
+
+// ── Cloud Functions 2ª geração (Cloud Run) — migração gradual ──
+Object.assign(exports, require('./v2Exports'))

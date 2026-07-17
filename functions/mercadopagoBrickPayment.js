@@ -5,6 +5,7 @@
 
 const admin = require('firebase-admin')
 const { MercadoPagoConfig, Payment } = require('mercadopago')
+const { createMercadoPagoPayment } = require('./mercadopagoUtils')
 
 async function processBrickPaymentPayload(
   {
@@ -85,11 +86,10 @@ async function processBrickPaymentPayload(
     tokenPrefix: String(accessToken).slice(0, 8),
   })
 
-  const result = await payment.create({
+  const result = await createMercadoPagoPayment(payment, {
     body: paymentBody,
-    requestOptions: {
-      idempotencyKey: `${transactionId}-${Date.now()}`,
-    },
+    idempotencyKey: `brick-${transactionId}`,
+    maxAttempts: 3,
   })
 
   const status = result.status || 'pending'

@@ -1,4 +1,5 @@
 const cors = require('cors')
+const { wrapCorsHandler } = require('./httpUtils')
 
 const STATIC_ORIGINS = new Set([
   'https://www.flashconcards.com.br',
@@ -33,4 +34,7 @@ const corsMiddleware = cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 })
 
-module.exports = { corsMiddleware, isAllowedOrigin }
+/** Atalho: handler CORS + garantia de resposta HTTP em todos os caminhos. */
+const withCors = (handler) => wrapCorsHandler(handler, corsMiddleware)
+
+module.exports = { corsMiddleware, isAllowedOrigin, withCors }

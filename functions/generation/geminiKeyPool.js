@@ -1,7 +1,7 @@
 const functions = require('firebase-functions')
 const path = require('path')
 const fs = require('fs')
-const { geminiFetch } = require('./geminiHttp')
+const { geminiFetch, PROBE_GEMINI_TIMEOUT_MS } = require('./geminiHttp')
 
 const KEY_RATE_LIMIT_TTL_MS = 45 * 1000
 const KEY_QUOTA_TTL_MS = 15 * 60 * 1000
@@ -275,10 +275,16 @@ async function silentProbeGeminiKey(apiKey) {
   if (!apiKey) return false
   if (isKeyUnavailable(apiKey)) return false
   try {
-    const response = await geminiFetch(SILENT_PROBE_MODEL, apiKey, {
-      contents: [{ parts: [{ text: 'ok' }] }],
-      generationConfig: { maxOutputTokens: 1, temperature: 0 },
-    })
+    const response = await geminiFetch(
+      SILENT_PROBE_MODEL,
+      apiKey,
+      {
+        contents: [{ parts: [{ text: 'ok' }] }],
+        generationConfig: { maxOutputTokens: 1, temperature: 0 },
+      },
+      'generateContent',
+      { timeoutMs: PROBE_GEMINI_TIMEOUT_MS },
+    )
 
     if (response.ok) {
       markGeminiKeyOk(apiKey)
