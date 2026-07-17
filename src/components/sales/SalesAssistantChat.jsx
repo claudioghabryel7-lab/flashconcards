@@ -42,7 +42,7 @@ function buildCoursePrompt(course) {
   const price = formatCoursePrice(course?.price) || 'na página'
   const access = getCourseAccessLabel(course || {})
   const desc = String(course?.description || '').replace(/\s+/g, ' ').slice(0, 180)
-  return `Consultora de vendas Concurseiro Preditivo. PT-BR. Responda em 2–4 frases curtas e completas (sempre termine a última frase). Persuasiva, sem pressão.
+  return `Consultora Concurseiro Preditivo. PT-BR. Máximo 3 frases completas (termine sempre a última frase). Sem listas longas. Persuasiva, sem pressão.
 Curso: ${course?.name || '—'} | ${course?.competition || '—'} | Banca ${course?.banca || '—'}
 Preço: ${price} | Acesso: ${access.short}
 Incluso: edital verticalizado, flashcards IA, questões preditivas, Guia Mentorado.
@@ -51,7 +51,7 @@ Não invente edital/vagas. Sugira "Adquirir curso" quando couber.`
 }
 
 function buildHomePrompt() {
-  return `Consultora Concurseiro Preditivo. PT-BR. Responda em 2–4 frases curtas e completas (sempre termine a última frase). Persuasiva, sem pressão.
+  return `Consultora Concurseiro Preditivo. PT-BR. Máximo 3 frases completas (termine sempre a última frase). Sem listas longas. Persuasiva, sem pressão.
 Plataforma: estudo preditivo por banca, edital verticalizado, flashcards IA, questões no estilo da prova, Guia Mentorado.
 Indique /cursos para ver ofertas. Pagamento PIX ou cartão; acesso após confirmação.
 Não invente preços específicos sem dados.`
@@ -91,9 +91,29 @@ function getCannedReply(text, { course, variant }) {
   return null
 }
 
+function extractSalesChatText(response) {
+  const candidate = response?.candidates?.[0]
+  if (!candidate) return ''
+
+  const parts = candidate.content?.parts || []
+  const visible = parts
+    .filter((part) => part && typeof part.text === 'string' && !part.thought)
+    .map((part) => part.text)
+    .join('')
+    .trim()
+
+  if (visible) return visible
+
+  try {
+    return extractGeneratedText(response)?.trim() || ''
+  } catch {
+    return ''
+  }
+}
+
 async function fetchAssistantReply({ course, variant, messages }) {
   const history = trimHistory(messages)
-    .map((m) => `${m.role === 'user' ? 'U' : 'C'}: ${m.text.slice(0, 320)}`)
+    .map((m) => `${m.role === 'user' ? 'U' : 'C'}: ${m.text.slice(0, 400)}`)
     .join('\n')
 
   const system = variant === 'home' ? buildHomePrompt() : buildCoursePrompt(course)
@@ -104,8 +124,13 @@ async function fetchAssistantReply({ course, variant, messages }) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       prompt,
-      models: ['gemini-2.5-flash'],
-      generationConfig: { temperature: 0.45, maxOutputTokens: 512 },
+      // 2.0-flash: respostas curtas sem "thinking" que corta o texto visível
+      models: ['gemini-2.0-flash', 'gemini-2.5-flash'],
+      generationConfig: {
+        temperature: 0.55,
+        maxOutputTokens: 1024,
+        candidateCount: 1,
+      },
     }),
   })
 
@@ -114,7 +139,7 @@ async function fetchAssistantReply({ course, variant, messages }) {
     throw new Error(data?.error || 'Não foi possível obter resposta agora.')
   }
 
-  const text = extractGeneratedText(data)?.trim()
+  const text = extractSalesChatText(data)
   if (!text) throw new Error('Resposta vazia. Tente novamente.')
   return text
 }
@@ -259,7 +284,7 @@ export default function SalesAssistantChat({
               height: minimized ? 'auto' : 'min(520px, calc(100dvh - 6rem))',
             }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
-            className="pointer-events-auto flex w-full max-w-[400px] flex-col overflow-hidden rounded-2xl border border-cp-border/80 bg-cp-surface/95 shadow-[0_20px_60px_rgba(0,0,0,0.25)] backdrop-blur-xl"
+            className="pointer-events-auto flex w-full max-w-[400px] min-h-0 flex-col overflow-hidden rounded-2xl border border-cp-border/80 bg-cp-surface/95 shadow-[0_20px_60px_rgba(0,0,0,0.25)] backdrop-blur-xl"
           >
             <div className="flex items-center justify-between gap-2 border-b border-cp-border/60 bg-gradient-to-r from-cp-accent/15 via-cp-surface to-cp-surface px-4 py-3">
               <div className="flex min-w-0 items-center gap-2.5">
@@ -318,7 +343,7 @@ export default function SalesAssistantChat({
                       className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-[88%] break-words whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                        className={`max-w-[88%] break-words whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed [overflow-wrap:anywhere] ${
                           msg.role === 'user'
                             ? 'rounded-br-md bg-cp-accent text-white'
                             : 'rounded-bl-md border border-cp-border/60 bg-cp-bg/60 text-cp-text'
