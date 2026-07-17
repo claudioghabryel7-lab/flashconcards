@@ -114,7 +114,7 @@ export function getProfessorNextWindowInfo(cfg = {}, date = new Date()) {
   if (within && !cfg.enabled) {
     return {
       status: 'in_window_idle',
-      label: `Dentro da janela ${label} — o tick deve iniciar em até ~1 min`,
+      label: `Dentro da janela ${label} — o cron deve iniciar em até ~10 min (ou ao salvar a agenda)`,
       countdown: null,
       within: true,
       windowLabel: label,

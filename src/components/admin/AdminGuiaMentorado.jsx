@@ -323,7 +323,7 @@ export default function AdminGuiaMentorado() {
     const n = courses.length
     if (
       !window.confirm(
-        `Aplicar a configuração atual (automação ${form.enabled ? 'LIGADA' : 'DESLIGADA'}, horário ${releaseLabel}, gatilhos e planejamento) a TODOS os ${n} cursos ativos?\n\nIsso sobrescreve a config de cada curso na nuvem.`,
+        `Aplicar a configuração atual (automação ${form.enabled ? 'LIGADA' : 'DESLIGADA'}, horário ${releaseLabel}, gatilhos e planejamento) a TODOS os ${n} cursos ativos?\n\nIsso sobrescreve a config de cada curso na nuvem e define você como responsável pelos jobs (automationUserId).`,
       )
     ) {
       return
@@ -573,8 +573,8 @@ export default function AdminGuiaMentorado() {
               <p className="mt-1 max-w-2xl text-sm text-cp-muted">
                 Um painel por curso: liga/desliga a geração diária, define o horário (Brasília),
                 controla gatilhos (cronograma, cron, backfill, véspera) e dispara ações manuais.
-                O cron horário só processa o curso na hora configurada — sem religar a automação
-                sozinha.
+                O cron horário (a cada 15 min) só processa o curso na hora configurada — sem religar a
+                automação sozinha. Jobs Gemini: máx. 1 por vez (compartilhado com Professor IA).
               </p>
             </div>
           </div>

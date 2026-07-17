@@ -137,7 +137,7 @@ export default function AdminProfessorSupervisor() {
         setWindowDirty(false)
         if (result && result.within === false) {
           alert(
-            `Agenda ativada (${result.windowLabel}).\n\nAgora está fora do horário — o Professor entra sozinho quando a janela abrir (tick a cada 1 min).`,
+            `Agenda ativada (${result.windowLabel}).\n\nAgora está fora do horário — o Professor entra sozinho quando a janela abrir (cron a cada 10 min + disparo ao salvar a agenda).`,
           )
         }
       }
@@ -273,7 +273,8 @@ export default function AdminProfessorSupervisor() {
                 Agenda <strong>segunda a domingo</strong> com janela de horário. Corrige{' '}
                 <strong>somente</strong> a aba <strong>🚩 Moderação</strong> (sinalizações abertas).
                 Independente do <strong>📅 Guia Mentorado</strong> (cronograma/dia) — compartilham só
-                a fila global de jobs (máx. 3). Sem report novo, fica em espera — não gasta API à toa.
+                a fila global de jobs Gemini (máx. <strong>1</strong> por vez). Sem report novo, fica em
+                espera — não gasta API à toa.
               </p>
             </div>
           </div>
@@ -316,7 +317,7 @@ export default function AdminProfessorSupervisor() {
                   </p>
                 )}
                 <p className="mt-1 text-[11px] text-cp-muted">
-                  Tick a cada 1 min (`professorSupervisorTick`). Agora em SP:{' '}
+                  Cron a cada 10 min (`professorSupervisorTick`); ~5 min entre itens na fila. Agora em SP:{' '}
                   {formatDailyStartLabel(clock.hour, clock.minute)}.
                 </p>
               </div>

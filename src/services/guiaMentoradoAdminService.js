@@ -71,7 +71,7 @@ export async function saveGuiaMentoradoAdminConfig(courseId, form, { userId, exi
 
 /**
  * Aplica a mesma configuração (planejamento + agenda + gatilhos) a todos os cursos ativos.
- * Preserva lastDailyRun* de cada curso.
+ * Preserva lastDailyRun* de cada curso; define automationUserId do admin atual em todos.
  */
 export async function applyGuiaMentoradoConfigToAllCourses(form, { userId, onProgress } = {}) {
   if (!userId) throw new Error('Usuário não autenticado.')
@@ -90,7 +90,7 @@ export async function applyGuiaMentoradoConfigToAllCourses(form, { userId, onPro
       await saveGuiaMentoradoAdminConfig(course.id, form, {
         userId,
         existing,
-        preserveAutomationUserId: true,
+        preserveAutomationUserId: false,
       })
       ok += 1
     } catch (err) {

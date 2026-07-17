@@ -5,7 +5,7 @@ import {
   generateCourseCoverImageAi,
   formatCourseAiError,
 } from '../utils/courseCoverAi'
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -87,6 +87,38 @@ const MATERIAS = [
   'Realidade de Goiás',
   'Redação',
 ]
+
+const ADMIN_TAB_IDS = new Set([
+  'config',
+  'users',
+  'courses',
+  'moderacao',
+  'guia-mentorado',
+  'professor-fiscalizador',
+  'flashcards',
+  'edital',
+  'material-concurso',
+  'simulados',
+  'news',
+  'banners',
+  'popup',
+  'reviews',
+  'trials',
+  'shared-links',
+  'prompt-test',
+])
+
+function syncAdminTabInUrl(tabId) {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  if (!tabId || tabId === 'config') {
+    url.searchParams.delete('tab')
+  } else {
+    url.searchParams.set('tab', tabId)
+  }
+  const qs = url.searchParams.toString()
+  window.history.replaceState(null, '', qs ? `${url.pathname}?${qs}` : url.pathname)
+}
 
 
 function isUserEmailVerified(user) {
@@ -227,11 +259,16 @@ const AdminPanel = () => {
     if (typeof window === 'undefined') return 'config'
     try {
       const tab = new URLSearchParams(window.location.search).get('tab')
-      return tab || 'config'
+      return tab && ADMIN_TAB_IDS.has(tab) ? tab : 'config'
     } catch {
       return 'config'
     }
   })
+
+  const selectAdminTab = useCallback((tabId) => {
+    setActiveTab(tabId)
+    syncAdminTabInUrl(tabId)
+  }, [])
   
   // Estado para gerenciar testes gratuitos
   const [testTrials, setTestTrials] = useState([])
@@ -7065,7 +7102,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                       <button
                         key={tab.id}
                         type="button"
-                        onClick={() => setActiveTab(tab.id)}
+                        onClick={() => selectAdminTab(tab.id)}
                         title={tab.label}
                         className={`group relative flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 sm:py-2.5 sm:text-sm ${
                           activeTab === tab.id
