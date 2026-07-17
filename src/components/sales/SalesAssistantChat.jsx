@@ -42,7 +42,7 @@ function buildCoursePrompt(course) {
   const price = formatCoursePrice(course?.price) || 'na página'
   const access = getCourseAccessLabel(course || {})
   const desc = String(course?.description || '').replace(/\s+/g, ' ').slice(0, 180)
-  return `Consultora de vendas Concurseiro Preditivo. PT-BR. Máx 3 frases. Persuasiva, sem pressão.
+  return `Consultora de vendas Concurseiro Preditivo. PT-BR. Responda em 2–4 frases curtas e completas (sempre termine a última frase). Persuasiva, sem pressão.
 Curso: ${course?.name || '—'} | ${course?.competition || '—'} | Banca ${course?.banca || '—'}
 Preço: ${price} | Acesso: ${access.short}
 Incluso: edital verticalizado, flashcards IA, questões preditivas, Guia Mentorado.
@@ -51,7 +51,7 @@ Não invente edital/vagas. Sugira "Adquirir curso" quando couber.`
 }
 
 function buildHomePrompt() {
-  return `Consultora Concurseiro Preditivo. PT-BR. Máx 3 frases. Persuasiva, sem pressão.
+  return `Consultora Concurseiro Preditivo. PT-BR. Responda em 2–4 frases curtas e completas (sempre termine a última frase). Persuasiva, sem pressão.
 Plataforma: estudo preditivo por banca, edital verticalizado, flashcards IA, questões no estilo da prova, Guia Mentorado.
 Indique /cursos para ver ofertas. Pagamento PIX ou cartão; acesso após confirmação.
 Não invente preços específicos sem dados.`
@@ -93,7 +93,7 @@ function getCannedReply(text, { course, variant }) {
 
 async function fetchAssistantReply({ course, variant, messages }) {
   const history = trimHistory(messages)
-    .map((m) => `${m.role === 'user' ? 'U' : 'C'}: ${m.text.slice(0, 200)}`)
+    .map((m) => `${m.role === 'user' ? 'U' : 'C'}: ${m.text.slice(0, 320)}`)
     .join('\n')
 
   const system = variant === 'home' ? buildHomePrompt() : buildCoursePrompt(course)
@@ -105,7 +105,7 @@ async function fetchAssistantReply({ course, variant, messages }) {
     body: JSON.stringify({
       prompt,
       models: ['gemini-2.5-flash'],
-      generationConfig: { temperature: 0.45, maxOutputTokens: 180 },
+      generationConfig: { temperature: 0.45, maxOutputTokens: 512 },
     }),
   })
 
@@ -116,7 +116,7 @@ async function fetchAssistantReply({ course, variant, messages }) {
 
   const text = extractGeneratedText(data)?.trim()
   if (!text) throw new Error('Resposta vazia. Tente novamente.')
-  return text.slice(0, 600)
+  return text
 }
 
 export default function SalesAssistantChat({
@@ -304,11 +304,11 @@ export default function SalesAssistantChat({
                   style={{ minHeight: 0 }}
                 >
                   {messages.length <= 1 ? (
-                    <div className="flex items-center justify-center overflow-hidden rounded-xl border border-cp-border/50 bg-gradient-to-br from-cp-accent/10 via-cp-bg/20 to-cp-bg/40 p-2">
+                    <div className="flex justify-center py-1">
                       <img
                         src={CONSULTANT_IMAGE}
                         alt="Estude com IA — Concurseiro Preditivo"
-                        className="mx-auto h-auto max-h-36 w-full object-contain object-center"
+                        className="h-24 w-24 rounded-full object-cover object-[center_18%] sm:h-28 sm:w-28"
                       />
                     </div>
                   ) : null}
@@ -318,7 +318,7 @@ export default function SalesAssistantChat({
                       className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                        className={`max-w-[88%] break-words whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                           msg.role === 'user'
                             ? 'rounded-br-md bg-cp-accent text-white'
                             : 'rounded-bl-md border border-cp-border/60 bg-cp-bg/60 text-cp-text'
