@@ -1,4 +1,4 @@
-import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/site'
+import { SITE_DESCRIPTION, SITE_LOGO_SQUARE, SITE_NAME, SITE_OG_IMAGE, SITE_URL } from '@/lib/site'
 
 const faq = [
   {
@@ -21,7 +21,13 @@ export default function HomeJsonLd() {
     '@type': 'Organization',
     name: SITE_NAME,
     url: SITE_URL,
-    logo: `${SITE_URL}/course-icons/logo.png`,
+    logo: {
+      '@type': 'ImageObject',
+      url: SITE_LOGO_SQUARE,
+      width: 192,
+      height: 192,
+    },
+    image: SITE_OG_IMAGE,
     description: SITE_DESCRIPTION,
     sameAs: [SITE_URL],
   }
