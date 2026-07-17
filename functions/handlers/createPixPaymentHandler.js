@@ -5,6 +5,28 @@
 const functions = require('firebase-functions')
 const { MercadoPagoConfig, Payment } = require('mercadopago')
 const { createMercadoPagoPayment } = require('../mercadopagoUtils')
+const { extractPixFromMercadoPagoPayment } = require('../pixExtract')
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function resolvePixFromPayment(payment, result, { retries = 2 } = {}) {
+  let current = result
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const pix = extractPixFromMercadoPagoPayment(current)
+    if (pix.pixCopyPaste) return { result: current, ...pix }
+    if (!current?.id || attempt >= retries) break
+    await sleep(1200)
+    try {
+      current = await payment.get({ id: current.id })
+    } catch (err) {
+      console.warn('resolvePixFromPayment: falha ao reconsultar pagamento', err?.message || err)
+      break
+    }
+  }
+  return { result: current, ...extractPixFromMercadoPagoPayment(current) }
+}
 
 /**
  * @param {import('express').Request} req
@@ -84,32 +106,20 @@ async function handleCreatePixPayment(req, res, { getMercadoPagoAccessToken }) {
         'https://us-central1-plegi-d84c2.cloudfunctions.net/webhookMercadoPago',
     }
 
-    const result = await createMercadoPagoPayment(payment, {
-      body: paymentData,
-      idempotencyKey: `pix-${transactionId}`,
-      maxAttempts: 3,
-    })
+    const { result, pixCopyPaste, pixQrCode, ticketUrl } = await resolvePixFromPayment(
+      payment,
+      await createMercadoPagoPayment(payment, {
+        body: paymentData,
+        idempotencyKey: `pix-${transactionId}`,
+        maxAttempts: 3,
+      }),
+    )
 
     if (!result || !result.id) {
       return res.status(500).json({
         error: 'Erro ao gerar PIX',
         message: 'Pagamento não foi criado no Mercado Pago',
       })
-    }
-
-    const pixData = result.point_of_interaction?.transaction_data || {}
-    let pixCopyPaste = pixData.qr_code || null
-    const pixQrCodeBase64 = pixData.qr_code_base64 || null
-    const ticketUrl = pixData.ticket_url || null
-
-    if (!pixCopyPaste && result.transaction_details?.transaction_data?.qr_code) {
-      pixCopyPaste = result.transaction_details.transaction_data.qr_code
-    }
-    if (!pixCopyPaste && result.qr_code) {
-      pixCopyPaste = result.qr_code
-    }
-    if (pixCopyPaste && pixCopyPaste.startsWith('iVBORw0KGgo')) {
-      pixCopyPaste = null
     }
 
     if (!pixCopyPaste) {
@@ -129,7 +139,7 @@ async function handleCreatePixPayment(req, res, { getMercadoPagoAccessToken }) {
       success: true,
       paymentId: result.id,
       status: result.status,
-      pixQrCode: pixQrCodeBase64,
+      pixQrCode,
       pixCopyPaste,
       ticketUrl,
     })

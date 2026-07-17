@@ -6,6 +6,28 @@
 const admin = require('firebase-admin')
 const { MercadoPagoConfig, Payment } = require('mercadopago')
 const { createMercadoPagoPayment } = require('./mercadopagoUtils')
+const { extractPixFromMercadoPagoPayment } = require('./pixExtract')
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function resolvePixFromPayment(payment, result, { retries = 2 } = {}) {
+  let current = result
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const pix = extractPixFromMercadoPagoPayment(current)
+    if (pix.pixCopyPaste || pix.pixQrCode) return { result: current, ...pix }
+    if (!current?.id || attempt >= retries) break
+    await sleep(1200)
+    try {
+      current = await payment.get({ id: current.id })
+    } catch (err) {
+      console.warn('resolvePixFromPayment (brick):', err?.message || err)
+      break
+    }
+  }
+  return { result: current, ...extractPixFromMercadoPagoPayment(current) }
+}
 
 async function processBrickPaymentPayload(
   {
@@ -92,22 +114,23 @@ async function processBrickPaymentPayload(
     maxAttempts: 3,
   })
 
-  const status = result.status || 'pending'
-  const statusDetail = result.status_detail || null
-  const pointOfInteraction = result.point_of_interaction || {}
-  const txData = pointOfInteraction.transaction_data || {}
+  const {
+    result: resolvedResult,
+    pixCopyPaste,
+    pixQrCode,
+    ticketUrl,
+  } = await resolvePixFromPayment(payment, result)
 
-  const pixCopyPaste = txData.qr_code || null
-  const pixQrCode = txData.qr_code_base64 || null
-  const ticketUrl = txData.ticket_url || result.transaction_details?.external_resource_url || null
+  const status = resolvedResult.status || 'pending'
+  const statusDetail = resolvedResult.status_detail || null
 
   try {
     await admin.firestore().collection('transactions').doc(String(transactionId)).set(
       {
-        mercadopagoPaymentId: result.id != null ? String(result.id) : null,
+        mercadopagoPaymentId: resolvedResult.id != null ? String(resolvedResult.id) : null,
         mercadopagoStatus: status,
         mercadopagoStatusDetail: statusDetail,
-        paymentMethodId: result.payment_method_id || paymentBody.payment_method_id || null,
+        paymentMethodId: resolvedResult.payment_method_id || paymentBody.payment_method_id || null,
         pixCopyPaste: pixCopyPaste || null,
         pixQrCode: pixQrCode || null,
         ticketUrl: ticketUrl || null,
@@ -125,10 +148,10 @@ async function processBrickPaymentPayload(
 
   return {
     success: true,
-    paymentId: result.id,
+    paymentId: resolvedResult.id,
     status,
     statusDetail,
-    paymentMethodId: result.payment_method_id || null,
+    paymentMethodId: resolvedResult.payment_method_id || null,
     pixCopyPaste,
     pixQrCode,
     ticketUrl,

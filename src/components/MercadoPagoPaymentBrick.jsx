@@ -3,6 +3,11 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
+import {
+  isValidPixCopyPaste,
+  normalizePixPayload,
+  requestPixPayment,
+} from '@/utils/pixCheckout'
 
 function loadMercadoPagoSdk() {
   if (typeof window === 'undefined') return Promise.reject(new Error('SSR'))
@@ -54,8 +59,32 @@ function isIgnorableBrickError(err) {
     if (err.type === 'non_critical') return true
     if (err.cause === 'already_initialized') return true
     if (err.cause === 'container_not_found' && !err.message) return true
+    const msg = String(err.message || err.cause || '').toLowerCase()
+    if (msg.includes('qr') || msg.includes('qrcode') || msg.includes('bank_transfer')) {
+      return true
+    }
   }
   return false
+}
+
+async function ensurePixCheckoutData(data, ctx) {
+  const normalized = normalizePixPayload(data || {})
+  if (ctx.method !== 'pix' || isValidPixCopyPaste(normalized.pixCopyPaste)) {
+    return normalized
+  }
+
+  try {
+    return await requestPixPayment({
+      amount: ctx.amount,
+      description: ctx.description,
+      transactionId: ctx.transactionId,
+      userEmail: ctx.userEmail,
+      userName: ctx.userName,
+    })
+  } catch (err) {
+    console.warn('[Payment Brick] fallback PIX indisponível', err?.message || err)
+    return normalized
+  }
 }
 
 function formatBrickError(err) {
@@ -277,8 +306,22 @@ export default function MercadoPagoPaymentBrick({
             },
             onSubmit: ({ formData }) =>
               new Promise(async (resolve, reject) => {
+                const pixCtx = {
+                  method: safeMethod,
+                  amount: amountNumber,
+                  description,
+                  transactionId,
+                  userEmail,
+                  userName,
+                }
+
+                const finishPending = (payload) => {
+                  onPendingRef.current?.(payload)
+                  resolve()
+                }
+
                 try {
-                  const data = await processBrickViaFirestore({
+                  let data = await processBrickViaFirestore({
                     transactionId,
                     formData,
                     amount: amountNumber,
@@ -288,15 +331,40 @@ export default function MercadoPagoPaymentBrick({
                     courseId,
                   })
 
+                  data = await ensurePixCheckoutData(data, pixCtx)
+
                   if (data.status === 'approved') {
                     onSuccessRef.current?.(data)
                     resolve()
                     return
                   }
 
-                  onPendingRef.current?.(data)
-                  resolve()
+                  if (isValidPixCopyPaste(data.pixCopyPaste) || data.ticketUrl) {
+                    finishPending(data)
+                    return
+                  }
+
+                  if (safeMethod === 'pix') {
+                    const fallback = await ensurePixCheckoutData({}, pixCtx)
+                    if (isValidPixCopyPaste(fallback.pixCopyPaste)) {
+                      finishPending({ ...data, ...fallback })
+                      return
+                    }
+                  }
+
+                  throw new Error('Não foi possível gerar o PIX agora. Tente novamente em instantes.')
                 } catch (submitErr) {
+                  if (safeMethod === 'pix') {
+                    try {
+                      const fallback = await ensurePixCheckoutData({}, pixCtx)
+                      if (isValidPixCopyPaste(fallback.pixCopyPaste)) {
+                        finishPending(fallback)
+                        return
+                      }
+                    } catch (fallbackErr) {
+                      console.warn('[Payment Brick] fallback PIX falhou', fallbackErr)
+                    }
+                  }
                   onErrorRef.current?.(submitErr.message || 'Erro ao processar pagamento.')
                   reject()
                 }

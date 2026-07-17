@@ -15,6 +15,12 @@ import { db } from '../firebase/config'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { trackPurchaseConversion } from '../utils/googleAds'
 import { getCourseAccessLabel } from '../utils/courseAccess'
+import {
+  isValidPixCopyPaste,
+  isValidPixQrBase64,
+  normalizePixPayload,
+  requestPixPayment,
+} from '../utils/pixCheckout'
 import MercadoPagoPaymentBrick from '../components/MercadoPagoPaymentBrick'
 import CourseCoverMedia from '@/components/cp/CourseCoverMedia'
 
@@ -91,6 +97,7 @@ const Payment = () => {
   const [brickTxn, setBrickTxn] = useState(null) // dados da txn para o brick
   const [pixCode, setPixCode] = useState('')
   const [pixQrCodeBase64, setPixQrCodeBase64] = useState('')
+  const [pixQrVisible, setPixQrVisible] = useState(true)
   const [ticketUrl, setTicketUrl] = useState('')
   
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -503,6 +510,66 @@ const Payment = () => {
     }
   }
 
+  const applyPixCheckout = useCallback((data) => {
+    const normalized = normalizePixPayload(data || {})
+    if (normalized.pixCopyPaste) setPixCode(normalized.pixCopyPaste)
+    if (normalized.pixQrCode) {
+      setPixQrCodeBase64(normalized.pixQrCode)
+      setPixQrVisible(isValidPixQrBase64(normalized.pixQrCode))
+    } else {
+      setPixQrVisible(false)
+    }
+    if (normalized.ticketUrl) setTicketUrl(normalized.ticketUrl)
+  }, [])
+
+  useEffect(() => {
+    if (pixQrCodeBase64) {
+      setPixQrVisible(isValidPixQrBase64(pixQrCodeBase64))
+    }
+  }, [pixQrCodeBase64])
+
+  useEffect(() => {
+    if (
+      paymentStatus !== 'pending' ||
+      paymentMethod !== 'pix' ||
+      pixCode ||
+      !currentTransactionId ||
+      !product?.price
+    ) {
+      return undefined
+    }
+
+    let cancelled = false
+    requestPixPayment({
+      amount: product.price,
+      description: product.name,
+      transactionId: currentTransactionId,
+      userEmail: email || user?.email || '',
+      userName: name || user?.displayName || '',
+    })
+      .then((data) => {
+        if (cancelled || !isValidPixCopyPaste(data.pixCopyPaste)) return
+        applyPixCheckout(data)
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    applyPixCheckout,
+    currentTransactionId,
+    email,
+    name,
+    paymentMethod,
+    paymentStatus,
+    pixCode,
+    product.name,
+    product.price,
+    user?.displayName,
+    user?.email,
+  ])
+
   const handleBrickSuccess = useCallback((data) => {
     // Brick só chama onSuccess quando Mercado Pago retorna status === 'approved' (compra confirmada).
     setPaymentStatus('success')
@@ -524,16 +591,47 @@ const Payment = () => {
     setShowBrick(false)
     setLoading(false)
     setPaymentStatus('pending')
+    setErrorMessage('')
     setPaymentMethod(data?.paymentMethodId === 'pix' ? 'pix' : paymentMethod === 'card' ? 'card' : 'pix')
-    if (data?.pixCopyPaste) setPixCode(data.pixCopyPaste)
-    if (data?.pixQrCode) setPixQrCodeBase64(data.pixQrCode)
-    if (data?.ticketUrl) setTicketUrl(data.ticketUrl)
-  }, [paymentMethod])
+    applyPixCheckout(data)
+  }, [applyPixCheckout, paymentMethod])
 
-  const handleBrickError = useCallback((msg) => {
+  const handleBrickError = useCallback(async (msg) => {
+    if (paymentMethod === 'pix' && currentTransactionId && product?.price) {
+      try {
+        const data = await requestPixPayment({
+          amount: product.price,
+          description: product.name,
+          transactionId: currentTransactionId,
+          userEmail: email || user?.email || '',
+          userName: name || user?.displayName || '',
+        })
+        if (isValidPixCopyPaste(data.pixCopyPaste)) {
+          applyPixCheckout(data)
+          setShowBrick(false)
+          setPaymentStatus('pending')
+          setLoading(false)
+          setErrorMessage('')
+          return
+        }
+      } catch (err) {
+        console.warn('Fallback PIX após erro do Brick:', err)
+      }
+    }
+
     setErrorMessage(typeof msg === 'string' ? msg : 'Erro no pagamento.')
     setLoading(false)
-  }, [])
+  }, [
+    applyPixCheckout,
+    currentTransactionId,
+    email,
+    name,
+    paymentMethod,
+    product.name,
+    product.price,
+    user?.displayName,
+    user?.email,
+  ])
 
   const submitPurchaseReview = async () => {
     if (reviewSending || reviewDone) return
@@ -963,11 +1061,12 @@ const Payment = () => {
                         O acesso libera automaticamente após a confirmação.
                         {paymentMethod === 'pix' ? ' PIX costuma ser imediato.' : ''}
                       </p>
-                      {pixQrCodeBase64 ? (
+                      {pixQrVisible && isValidPixQrBase64(pixQrCodeBase64) ? (
                         <img
                           src={`data:image/png;base64,${pixQrCodeBase64}`}
                           alt="QR Code PIX"
                           className="mx-auto mt-5 h-48 w-48 rounded-xl bg-white p-2"
+                          onError={() => setPixQrVisible(false)}
                         />
                       ) : null}
                       {pixCode ? (
