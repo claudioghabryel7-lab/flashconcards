@@ -56,10 +56,10 @@ function getMercadoPagoAccessToken(options = {}) {
   )
 }
 
-/** Health check v2 — minInstances=1 elimina cold start para monitores de uptime. */
+/** Health check v2 — minInstances=0 (sem custo fixo; cold start ~2s na 1ª requisição). */
 exports.healthCheckV2 = onRequest(
   {
-    minInstances: 1,
+    minInstances: 0,
     maxInstances: 3,
     timeoutSeconds: 10,
     memory: '128MiB',
@@ -102,12 +102,12 @@ exports.healthCheckV2 = onRequest(
 )
 
 /**
- * PIX v2 — minInstances=1 para eliminar cold start no checkout.
+ * PIX v2 — minInstances=0 (sem custo fixo).
  * concurrency=40: múltiplas requisições PIX por instância (I/O bound).
  */
 exports.createPixPaymentV2 = onRequest(
   {
-    minInstances: 1,
+    minInstances: 0,
     maxInstances: 10,
     timeoutSeconds: 30,
     memory: '256MiB',
@@ -118,11 +118,11 @@ exports.createPixPaymentV2 = onRequest(
 )
 
 /**
- * Payment Brick v2 — minInstances=1, retry no SDK via mercadopagoUtils.
+ * Payment Brick v2 — minInstances=0, retry no SDK via mercadopagoUtils.
  */
 exports.processBrickPaymentV2 = onRequest(
   {
-    minInstances: 1,
+    minInstances: 0,
     maxInstances: 10,
     timeoutSeconds: 30,
     memory: '256MiB',
@@ -161,9 +161,14 @@ exports.processBrickPaymentV2 = onRequest(
 )
 
 /**
- * Job de geração v2 — 540s, 1GiB, concurrency=1 por instância (CPU bound).
- * minInstances=0 (custo) — aumente para 1 se cold start for crítico.
+ * Job de geração v2 — DESABILITADO até remover v1 (onGenerationJobCreated).
+ * Deploy simultâneo v1+v2 processa o mesmo job 2× (corrida/duplicação).
+ *
+ * Para migrar:
+ *   1. firebase functions:delete onGenerationJobCreated
+ *   2. Descomente o bloco abaixo e faça deploy
  */
+/*
 exports.onGenerationJobCreatedV2 = onDocumentCreated(
   {
     document: 'users/{userId}/generationJobs/{jobId}',
@@ -188,10 +193,17 @@ exports.onGenerationJobCreatedV2 = onDocumentCreated(
     return null
   },
 )
+*/
 
 /**
- * Cron de retomada v2 — 540s para processar jobs completos sem kill prematuro.
+ * Cron de retomada v2 — DESABILITADO até remover v1 (resumeWaitingGenerationJobs).
+ * Deploy simultâneo dispara retomada 2× a cada 10 min.
+ *
+ * Para migrar:
+ *   1. firebase functions:delete resumeWaitingGenerationJobs
+ *   2. Descomente o bloco abaixo e faça deploy
  */
+/*
 exports.resumeWaitingGenerationJobsV2 = onSchedule(
   {
     schedule: 'every 10 minutes',
@@ -216,3 +228,4 @@ exports.resumeWaitingGenerationJobsV2 = onSchedule(
     return null
   },
 )
+*/
