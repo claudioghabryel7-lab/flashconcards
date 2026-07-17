@@ -4,6 +4,7 @@
 
 const { grantCourseAccess } = require('./courseAccessExpiry')
 const { createEmailTransporter } = require('./emailUtils')
+const { readLegacyConfig } = require('./mercadopagoConfig')
 
 function generatePassword() {
   const length = 12
@@ -171,8 +172,11 @@ async function fulfillApprovedPayment(admin, functions, { transactionDoc, transa
 
     const transporter = createEmailTransporter()
     if (transporter) {
+      const legacy = readLegacyConfig()
       const fromEmail =
-        functions.config().email?.user || process.env.EMAIL_USER || 'flashconcards@gmail.com'
+        process.env.EMAIL_USER ||
+        legacy.email?.user ||
+        'flashconcards@gmail.com'
       await transporter.sendMail({
         from: `"Plegimentoria ALEGO" <${fromEmail}>`,
         to: userEmail.toLowerCase().trim(),

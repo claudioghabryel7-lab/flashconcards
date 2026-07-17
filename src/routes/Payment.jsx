@@ -102,6 +102,7 @@ const Payment = () => {
   const [pixQrCodeBase64, setPixQrCodeBase64] = useState('')
   const [pixQrVisible, setPixQrVisible] = useState(true)
   const [ticketUrl, setTicketUrl] = useState('')
+  const [pixHydrating, setPixHydrating] = useState(false)
   
   const [reviewOpen, setReviewOpen] = useState(false)
   const [reviewRating, setReviewRating] = useState(5)
@@ -511,6 +512,16 @@ const Payment = () => {
       } catch (_) {
         /* ignore */
       }
+
+      if (paymentMethod === 'pix') {
+        const pixOk = await regeneratePixPayment(transactionId, transactionData)
+        if (!pixOk) {
+          setPaymentStatus('error')
+        }
+        setLoading(false)
+        return
+      }
+
       setBrickTxn(transactionData)
       setShowBrick(true)
       setLoading(false)
@@ -534,6 +545,84 @@ const Payment = () => {
     }
     if (normalized.ticketUrl) setTicketUrl(normalized.ticketUrl)
   }, [])
+
+  const regeneratePixPayment = useCallback(
+    async (txnId, txnData = null) => {
+      if (!txnId) return false
+      setPixHydrating(true)
+      setErrorMessage('')
+      try {
+        let data = txnData
+        if (!data) {
+          const snap = await getDoc(doc(db, 'transactions', txnId))
+          if (snap.exists()) data = snap.data()
+        }
+
+        const pix = await ensurePixCopyPaste({
+          amount: data?.amount || product.price,
+          description: data?.productName || product.name,
+          transactionId: txnId,
+          userEmail: data?.userEmail || email || user?.email || '',
+          userName: data?.userName || name || user?.displayName || '',
+          courseId: data?.courseId || product.courseId || null,
+        })
+
+        if (!isValidPixCopyPaste(pix.pixCopyPaste)) {
+          throw new Error('Não foi possível gerar o código PIX. Tente novamente.')
+        }
+
+        applyPixCheckout(pix)
+        setPaymentStatus('pending')
+        setShowBrick(false)
+        setPaymentMethod('pix')
+        return true
+      } catch (err) {
+        console.error('Erro ao gerar PIX:', err)
+        setErrorMessage(err?.message || 'Erro ao gerar PIX.')
+        return false
+      } finally {
+        setPixHydrating(false)
+      }
+    },
+    [
+      applyPixCheckout,
+      email,
+      name,
+      product.courseId,
+      product.name,
+      product.price,
+      user?.displayName,
+      user?.email,
+    ],
+  )
+
+  // Recuperar QR/copia e cola após refresh ou sessão pendente sem dados locais
+  useEffect(() => {
+    if (!currentTransactionId || paymentStatus !== 'pending' || pixCode) return
+
+    let cancelled = false
+    const hydrate = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'transactions', currentTransactionId))
+        if (!snap.exists() || cancelled) return
+        const data = snap.data()
+        if (isValidPixCopyPaste(data?.pixCopyPaste)) {
+          applyPixCheckout(data)
+          return
+        }
+        await regeneratePixPayment(currentTransactionId, data)
+      } catch (err) {
+        if (!cancelled) {
+          console.warn('Falha ao recuperar PIX:', err)
+        }
+      }
+    }
+
+    hydrate()
+    return () => {
+      cancelled = true
+    }
+  }, [applyPixCheckout, currentTransactionId, paymentStatus, pixCode, regeneratePixPayment])
 
   useEffect(() => {
     if (pixQrCodeBase64) {
@@ -1092,13 +1181,49 @@ const Payment = () => {
                         Aguardando confirmação…
                       </p>
                     </>
-                  ) : (
+                  ) : pixHydrating ? (
                     <>
                       <ArrowPathIcon className="mx-auto mb-4 h-14 w-14 animate-spin text-cp-accent" />
-                      <h2 className="cp-headline text-2xl">Confirmando pagamento</h2>
+                      <h2 className="cp-headline text-2xl">Gerando código PIX…</h2>
                       <p className="mt-2 text-sm text-cp-muted">
-                        Estamos confirmando seu pagamento. Isso pode levar alguns instantes.
+                        Aguarde enquanto preparamos seu QR Code.
                       </p>
+                    </>
+                  ) : (
+                    <>
+                      <XCircleIcon className="mx-auto mb-4 h-14 w-14 text-amber-400" />
+                      <h2 className="cp-headline text-2xl">Código PIX não encontrado</h2>
+                      <p className="mt-2 text-sm text-cp-muted">
+                        {errorMessage ||
+                          'Não foi possível carregar o QR Code. Gere um novo código ou inicie uma nova compra.'}
+                      </p>
+                      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                        <button
+                          type="button"
+                          onClick={() => regeneratePixPayment(currentTransactionId)}
+                          className="cp-btn-primary justify-center"
+                        >
+                          Gerar código PIX
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            try {
+                              sessionStorage.removeItem(PENDING_TXN_STORAGE_KEY)
+                            } catch (_) {
+                              /* ignore */
+                            }
+                            setCurrentTransactionId('')
+                            setPaymentStatus(null)
+                            setPixCode('')
+                            setPixQrCodeBase64('')
+                            setErrorMessage('')
+                          }}
+                          className="inline-flex items-center justify-center rounded-xl border border-cp-border px-6 py-3 text-sm font-semibold text-cp-text transition hover:bg-cp-surface"
+                        >
+                          Nova compra
+                        </button>
+                      </div>
                     </>
                   )}
                 </motion.div>

@@ -9,44 +9,15 @@ const { withCors } = require('./corsConfig')
 const { handleCreatePixPayment } = require('./handlers/createPixPaymentHandler')
 const { handleReconcilePayment } = require('./handlers/reconcilePaymentHandler')
 const { processBrickPaymentPayload } = require('./mercadopagoBrickPayment')
+const {
+  getMercadoPagoAccessToken,
+  isMercadoPagoTestMode,
+} = require('./mercadopagoConfig')
 
 setGlobalOptions({
   region: 'us-central1',
   memory: '512MiB',
 })
-
-function getMercadoPagoAccessToken(options = {}) {
-  const functions = require('firebase-functions')
-  const { forPix = false } = options
-  const mode = String(
-    process.env.MERCADOPAGO_MODE || functions.config().mercadopago?.mode || 'test',
-  ).toLowerCase()
-  const cfgToken =
-    functions.config().mercadopago?.access_token_prod ||
-    functions.config().mercadopago?.access_token ||
-    ''
-
-  if (forPix) {
-    return (
-      process.env.MERCADOPAGO_ACCESS_TOKEN_PIX ||
-      process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
-      process.env.MERCADOPAGO_ACCESS_TOKEN ||
-      cfgToken ||
-      process.env.MERCADOPAGO_ACCESS_TOKEN_TEST ||
-      ''
-    )
-  }
-
-  if (mode === 'test' || mode === 'sandbox') {
-    return process.env.MERCADOPAGO_ACCESS_TOKEN_TEST || process.env.MERCADOPAGO_ACCESS_TOKEN || ''
-  }
-  return (
-    process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
-    process.env.MERCADOPAGO_ACCESS_TOKEN ||
-    cfgToken ||
-    ''
-  )
-}
 
 /** Health check v2 — minInstances=0 (sem custo fixo; cold start ~2s na 1ª requisição). */
 exports.healthCheckV2 = onRequest(
@@ -131,17 +102,7 @@ exports.processBrickPaymentV2 = onRequest(
     try {
       const result = await processBrickPaymentPayload(req.body || {}, {
         getMercadoPagoAccessToken,
-        isMercadoPagoTestMode: () => {
-          const mode = String(
-            process.env.MERCADOPAGO_MODE ||
-              require('firebase-functions').config().mercadopago?.mode ||
-              'test',
-          ).toLowerCase()
-          if (mode === 'prod' || mode === 'production') return false
-          if (mode === 'test' || mode === 'sandbox') return true
-          const token = getMercadoPagoAccessToken()
-          return String(token).startsWith('TEST-')
-        },
+        isMercadoPagoTestMode,
       })
       return res.status(200).json(result)
     } catch (error) {
