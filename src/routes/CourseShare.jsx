@@ -15,6 +15,7 @@ import {
 import { db } from '../firebase/config'
 import { formatCoursePrice, getCourseAccessLabel } from '../utils/courseAccess'
 import CoursePageReviews from '../components/CoursePageReviews'
+import SalesAssistantChat from '../components/sales/SalesAssistantChat'
 
 const benefits = [
   {
@@ -145,16 +146,8 @@ const CourseShare = () => {
     course.originalPrice > course.price
 
   return (
-    <div className="relative w-full overflow-hidden text-cp-text">
-      <div
-        className="pointer-events-none absolute inset-0 -z-10 opacity-40"
-        style={{
-          background:
-            'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(34,211,238,0.18), transparent), radial-gradient(ellipse 60% 40% at 100% 50%, rgba(251,146,60,0.12), transparent)',
-        }}
-      />
-
-      <div className="relative z-10 w-full py-6 sm:py-10">
+    <div className="relative w-full text-cp-text pb-24 sm:pb-28">
+      <div className="relative z-10 w-full px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -293,6 +286,12 @@ const CourseShare = () => {
           </div>
         </motion.div>
       </div>
+
+      <SalesAssistantChat
+        course={course}
+        checkoutHref={`/pagamento?course=${courseId}`}
+        defaultOpen
+      />
     </div>
   )
 }

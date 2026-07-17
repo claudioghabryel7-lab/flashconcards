@@ -2,24 +2,22 @@
 
 import Image from 'next/image'
 
-/** Fundo leve — gradientes estáticos + logo watermark opaca */
+/** Fundo full-bleed — gradientes suaves sem bordas quadradas visíveis */
 export default function TechBackground({ showLogo = true }: { showLogo?: boolean }) {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div className="absolute inset-0 bg-cp-bg" />
 
-      {/* Gradientes estáticos (sem animação/blur pesado) */}
       <div
-        className="absolute -left-[15%] -top-[25%] h-[55vh] w-[55vw] rounded-full opacity-60"
-        style={{ background: 'radial-gradient(circle, var(--cp-aurora-1) 0%, transparent 70%)' }}
-      />
-      <div
-        className="absolute -right-[10%] top-[5%] h-[45vh] w-[45vw] rounded-full opacity-50"
-        style={{ background: 'radial-gradient(circle, var(--cp-aurora-2) 0%, transparent 70%)' }}
-      />
-      <div
-        className="absolute bottom-[-15%] left-[15%] h-[40vh] w-[50vw] rounded-full opacity-40"
-        style={{ background: 'radial-gradient(circle, var(--cp-aurora-3) 0%, transparent 70%)' }}
+        className="absolute inset-0 opacity-70"
+        style={{
+          background: [
+            'radial-gradient(ellipse 120% 90% at -8% -15%, var(--cp-aurora-1), transparent 58%)',
+            'radial-gradient(ellipse 100% 80% at 108% 8%, var(--cp-aurora-2), transparent 55%)',
+            'radial-gradient(ellipse 110% 85% at 35% 108%, var(--cp-aurora-3), transparent 60%)',
+            'radial-gradient(ellipse 80% 60% at 50% 35%, rgba(34, 211, 238, 0.06), transparent 70%)',
+          ].join(', '),
+        }}
       />
 
       {showLogo && (
@@ -40,7 +38,7 @@ export default function TechBackground({ showLogo = true }: { showLogo?: boolean
       <div
         className="absolute inset-0"
         style={{
-          background: 'radial-gradient(ellipse at center, transparent 0%, var(--cp-bg) 78%)',
+          background: 'radial-gradient(ellipse at center, transparent 0%, var(--cp-bg) 82%)',
         }}
       />
     </div>

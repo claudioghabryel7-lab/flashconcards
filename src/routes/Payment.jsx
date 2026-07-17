@@ -13,7 +13,7 @@ import { useAuth } from '../hooks/useAuth'
 import { doc, setDoc, getDoc, collection, serverTimestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
-import { trackGoogleAdsConversion } from '../utils/googleAds'
+import { trackPurchaseConversion } from '../utils/googleAds'
 import { getCourseAccessLabel } from '../utils/courseAccess'
 import MercadoPagoPaymentBrick from '../components/MercadoPagoPaymentBrick'
 import CourseCoverMedia from '@/components/cp/CourseCoverMedia'
@@ -172,7 +172,7 @@ const Payment = () => {
         if (data.status === 'paid' || data.status === 'approved') {
           setPaymentStatus('success')
           setLoading(false)
-          trackGoogleAdsConversion(null, data.amount || 99.9, txn)
+          trackPurchaseConversion(null, data.amount || 99.9, txn)
           if (data.userEmail) {
             setCreatedCredentials({
               email: data.userEmail,
@@ -303,7 +303,7 @@ const Payment = () => {
           setLoading(false)
           
           // Conversão Google Ads somente com compra confirmada (+ dedupe por transaction_id)
-          trackGoogleAdsConversion(null, transactionData.amount || product.price, currentTransactionId)
+          trackPurchaseConversion(null, transactionData.amount || product.price, currentTransactionId)
           
           // Parar de monitorar
           unsubscribe()
@@ -516,7 +516,7 @@ const Payment = () => {
       ).catch(() => {})
     }
     if (currentTransactionId) {
-      trackGoogleAdsConversion(null, product.price, currentTransactionId)
+      trackPurchaseConversion(null, product.price, currentTransactionId)
     }
   }, [currentTransactionId, product.price])
 

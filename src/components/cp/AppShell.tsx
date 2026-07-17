@@ -6,6 +6,9 @@ import CPHeader from '@/components/cp/CPHeader'
 import CPFooter from '@/components/cp/CPFooter'
 import TechBackground from '@/components/cp/TechBackground'
 
+const SalesAssistantChat = dynamic(() => import('@/components/sales/SalesAssistantChat'), {
+  ssr: false,
+})
 const PopupBanner = dynamic(() => import('@/components/PopupBanner'), { ssr: false })
 const OfflineIndicator = dynamic(() => import('@/components/OfflineIndicator'), { ssr: false })
 const TrilhaTimerBanner = dynamic(() => import('@/components/TrilhaTimerBanner'), { ssr: false })
@@ -41,6 +44,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const fullBleed = FULL_BLEED_PATHS.includes(pathname) || isComunidade
   const studyLayout = isStudyRoute(pathname)
   const checkoutLayout = CHECKOUT_PATH_PREFIXES.some((p) => pathname.startsWith(p))
+  const wideContentLayout = fullBleed || checkoutLayout
+  const isHome = pathname === '/'
 
   if (minimal) {
     return <>{children}</>
@@ -48,13 +53,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="relative min-h-screen w-full text-cp-text">
-      <TechBackground showLogo={!fullBleed} />
+      <TechBackground showLogo={!wideContentLayout} />
       <CPHeader />
       <main
         className={
-          fullBleed
-            ? 'relative z-10 w-full'
-            : checkoutLayout || studyLayout
+          wideContentLayout
+            ? `relative z-10 w-full py-4 sm:py-6${isHome ? ' pb-28' : ''}`
+            : studyLayout
               ? 'cp-container-wide relative z-10 py-4 sm:py-6'
               : 'cp-container relative z-10 py-4 sm:py-6'
         }
@@ -67,6 +72,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <TrilhaTimerBanner />
       <CourseOnboarding />
       <ProfilePhotoReminder />
+      {isHome ? (
+        <SalesAssistantChat variant="home" defaultOpen checkoutHref="/cursos" />
+      ) : null}
     </div>
   )
 }

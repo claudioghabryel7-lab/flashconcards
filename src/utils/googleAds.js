@@ -98,6 +98,9 @@ export const trackGoogleAdsConversion = (conversionLabel = null, value = 99.9, t
   }, 500)
 }
 
+/** Dispara conversão de compra — usar SOMENTE após pagamento confirmado (paid/approved). */
+export const trackPurchaseConversion = trackGoogleAdsConversion
+
 /** Clique de engajamento (não é conversão de compra). */
 export const trackButtonClick = () => {
   if (typeof window !== 'undefined' && window.gtag) {

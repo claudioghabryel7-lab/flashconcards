@@ -127,14 +127,21 @@ export default function CPHeader() {
             : 'border-b border-cp-border/50 bg-cp-bg/80'
         }`}
       >
-        <div className="cp-container-wide flex h-[4.5rem] items-center justify-between gap-4">
-          <CPLogo size="lg" />
+        <div className="cp-container-wide grid h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:h-[4.5rem] sm:gap-4">
+          <div className="min-w-0 overflow-hidden">
+            <div className="sm:hidden">
+              <CPLogo size="sm" showText />
+            </div>
+            <div className="hidden sm:block">
+              <CPLogo size="lg" showText />
+            </div>
+          </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1.5">
             <button
               type="button"
               onClick={toggleDarkMode}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-cp-border text-cp-muted transition hover:border-cp-border-hover hover:bg-cp-surface hover:text-cp-text"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-cp-border text-cp-muted transition hover:border-cp-border-hover hover:bg-cp-surface hover:text-cp-text sm:h-10 sm:w-10"
               aria-label="Alternar tema"
             >
               {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -203,7 +210,7 @@ export default function CPHeader() {
             <button
               type="button"
               onClick={openDrawer}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-cp-border bg-cp-surface text-cp-text transition hover:border-cp-accent/30 hover:shadow-cp-glow"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-cp-border bg-cp-surface text-cp-text transition hover:border-cp-accent/30 hover:shadow-cp-glow sm:h-10 sm:w-10"
               aria-label="Abrir menu"
             >
               <Menu className="h-5 w-5" />
