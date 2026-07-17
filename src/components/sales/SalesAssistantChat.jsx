@@ -12,7 +12,12 @@ import {
   X,
 } from 'lucide-react'
 import { extractGeneratedText } from '@/utils/geminiApi'
-import { formatCoursePrice, getCourseAccessLabel } from '@/utils/courseAccess'
+import {
+  buildWhatsAppCourseUrl,
+  buildWhatsAppSupportUrl,
+  formatCoursePrice,
+  getCourseAccessLabel,
+} from '@/utils/courseAccess'
 
 const CONSULTANT_IMAGE = '/images/sales-consultant.png'
 const MAX_HISTORY_TURNS = 3
@@ -174,6 +179,15 @@ export default function SalesAssistantChat({
     if (variant === 'home') return 'Especialista em concursos'
     return course?.name ? `Especialista em ${course.name}` : 'Consultora de vendas'
   }, [course?.name, variant])
+
+  const whatsappUrl = useMemo(() => {
+    if (variant === 'course' && course?.name) {
+      return buildWhatsAppCourseUrl(course.name)
+    }
+    return buildWhatsAppSupportUrl(
+      'Olá! Vi o chat da consultora no site e gostaria de tirar dúvidas sobre os cursos.',
+    )
+  }, [variant, course?.name])
 
   useEffect(() => {
     if (!open || messages.length) return
@@ -374,6 +388,15 @@ export default function SalesAssistantChat({
                         {q}
                       </button>
                     ))}
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-full border border-emerald-500/45 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300"
+                    >
+                      <MessageCircle className="h-3 w-3 shrink-0" aria-hidden="true" />
+                      Falar no WhatsApp
+                    </a>
                   </div>
                   <form
                     className="flex items-end gap-2"
@@ -406,13 +429,32 @@ export default function SalesAssistantChat({
                     </button>
                   </form>
                   {checkoutHref ? (
+                    <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] font-semibold">
+                      <a href={checkoutHref} className="text-cp-accent hover:underline">
+                        {variant === 'home' ? 'Ver cursos disponíveis →' : 'Ir para pagamento →'}
+                      </a>
+                      <span className="text-cp-border" aria-hidden="true">
+                        ·
+                      </span>
+                      <a
+                        href={whatsappUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-600 hover:underline dark:text-emerald-400"
+                      >
+                        WhatsApp (62) 98184-1878 →
+                      </a>
+                    </div>
+                  ) : (
                     <a
-                      href={checkoutHref}
-                      className="mt-2 block text-center text-[11px] font-semibold text-cp-accent hover:underline"
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 block text-center text-[11px] font-semibold text-emerald-600 hover:underline dark:text-emerald-400"
                     >
-                      {variant === 'home' ? 'Ver cursos disponíveis →' : 'Ir para pagamento →'}
+                      Falar no WhatsApp →
                     </a>
-                  ) : null}
+                  )}
                 </div>
               </>
             )}
