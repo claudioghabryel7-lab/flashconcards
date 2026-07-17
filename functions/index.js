@@ -3,7 +3,6 @@ const functions = require('firebase-functions')
 const admin = require('firebase-admin')
 const nodemailer = require('nodemailer')
 const { corsMiddleware: cors, withCors } = require('./corsConfig')
-const { handleCreatePixPayment } = require('./handlers/createPixPaymentHandler')
 const {
   createEmailTransporter,
   buildBrandedEmailHtml,
@@ -130,45 +129,7 @@ try {
   /* já configurado */
 }
 
-/** Health check para Cloud Run / uptime monitors — sem CORS, resposta rápida. */
-exports.healthCheck = functions.https.onRequest(async (req, res) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    return res.status(405).json({ error: 'Método não permitido' })
-  }
-
-  const started = Date.now()
-  const checks = { firestore: 'unknown', auth: 'unknown' }
-
-  try {
-    await admin.firestore().collection('_health').doc('ping').get()
-    checks.firestore = 'ok'
-  } catch (err) {
-    checks.firestore = 'error'
-    console.error('[healthCheck] firestore:', err?.message || err)
-  }
-
-  try {
-    await admin.auth().listUsers(1)
-    checks.auth = 'ok'
-  } catch (err) {
-    checks.auth = 'error'
-    console.error('[healthCheck] auth:', err?.message || err)
-  }
-
-  const healthy = checks.firestore === 'ok' && checks.auth === 'ok'
-  const body = {
-    status: healthy ? 'ok' : 'degraded',
-    checks,
-    latencyMs: Date.now() - started,
-    timestamp: new Date().toISOString(),
-    region: process.env.FUNCTION_REGION || 'us-central1',
-  }
-
-  if (req.method === 'HEAD') {
-    return res.status(healthy ? 200 : 503).end()
-  }
-  return res.status(healthy ? 200 : 503).json(body)
-})
+/** Health check v1 — migrado para healthCheckV2 (v2Exports.js). */
 
 const {
   getResumeModule,
@@ -177,7 +138,7 @@ const {
   getKickModule,
 } = require('./generationLoader')
 
-/** Processa jobs de geração IA no servidor — continua mesmo com aba/dispositivo fechado. */
+/** Jobs de geração IA (v1) — v2 Firestore aguarda permissões Eventarc. */
 exports.onGenerationJobCreated = functions
   .runWith({ timeoutSeconds: 540, memory: '1GB' })
   .firestore.document('users/{userId}/generationJobs/{jobId}')
@@ -307,12 +268,7 @@ exports.createUserAndSendEmail = functions.https.onRequest(withCors(async (req, 
 }))
 
 
-// Função para criar pagamento PIX real no Mercado Pago
-exports.createPixPayment = functions
-  .runWith({ timeoutSeconds: 30, memory: '256MB' })
-  .https.onRequest(
-    withCors((req, res) => handleCreatePixPayment(req, res, { getMercadoPagoAccessToken })),
-  )
+// PIX migrado para createPixPaymentV2 (v2Exports.js)
 
 /** Public Key para Checkout Transparente (Payment Brick) — sem secrets. */
 exports.getMercadoPagoPublicConfig = functions.https.onRequest(
@@ -342,38 +298,7 @@ exports.getMercadoPagoPublicConfig = functions.https.onRequest(
 
 const { processBrickPaymentPayload } = require('./mercadopagoBrickPayment')
 
-/**
- * Checkout Transparente — processa formData do Payment Brick (cartão / PIX / boleto).
- * Pagamento acontece no site; sem redirecionar ao login do MP.
- */
-exports.processBrickPayment = functions
-  .runWith({ timeoutSeconds: 30, memory: '256MB' })
-  .https.onRequest(
-    withCors(async (req, res) => {
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Método não permitido' })
-    }
-
-    try {
-      const result = await processBrickPaymentPayload(req.body || {}, {
-        getMercadoPagoAccessToken,
-        isMercadoPagoTestMode,
-      })
-      return res.status(200).json(result)
-    } catch (error) {
-      console.error('Erro processBrickPayment:', error)
-      const status = error.statusCode || 500
-      return res.status(status).json({
-        error: status === 400 ? 'Dados inválidos' : 'Erro ao processar pagamento',
-        message:
-          error.message ||
-          error.cause?.[0]?.description ||
-          'Erro desconhecido',
-        details: error.cause || error.response?.data || null,
-      })
-    }
-  }),
-)
+// processBrickPayment migrado para processBrickPaymentV2 (v2Exports.js)
 
 /**
  * Bypass do Rate exceeded no HTTPS cloudfunctions.net:
@@ -1778,7 +1703,7 @@ exports.runMotivationalInactivityPushNow = functions.https.onRequest(withCors(as
 }))
 
 
-/** Retoma jobs pausados — backup a cada 10 min (reduz QPS / Rate exceeded no projeto). */
+/** Retoma jobs pausados (v1) — evita duplicata com resumeWaitingGenerationJobsV2. */
 exports.resumeWaitingGenerationJobs = functions
   .runWith({ timeoutSeconds: 540, memory: '1GB' })
   .pubsub.schedule('every 10 minutes')

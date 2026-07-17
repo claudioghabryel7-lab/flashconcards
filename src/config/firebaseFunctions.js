@@ -1,21 +1,16 @@
 /**
- * Configuração das URLs das Funções Firebase
- *
- * Endpoints v2 (Cloud Run) eliminam cold start nos fluxos críticos.
- * Após deploy, confirme as URLs no console Firebase / Cloud Run.
+ * URLs das Cloud Functions — migrado para 2ª geração (Cloud Run) nos fluxos críticos.
  */
 
 const FIREBASE_FUNCTIONS_BASE_URL = 'https://us-central1-plegi-d84c2.cloudfunctions.net'
 
 export const FIREBASE_FUNCTIONS = {
-  // Health check para monitores de uptime
   healthCheck: `${FIREBASE_FUNCTIONS_BASE_URL}/healthCheckV2`,
 
   createUserAndSendEmail: `${FIREBASE_FUNCTIONS_BASE_URL}/createUserAndSendEmail`,
 
   webhookMercadoPago: `${FIREBASE_FUNCTIONS_BASE_URL}/webhookMercadoPago`,
 
-  // v2 — minInstances=1, retry automático, sem cold start no checkout
   createPixPayment: `${FIREBASE_FUNCTIONS_BASE_URL}/createPixPaymentV2`,
   processBrickPayment: `${FIREBASE_FUNCTIONS_BASE_URL}/processBrickPaymentV2`,
 

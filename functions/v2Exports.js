@@ -1,22 +1,13 @@
 /**
- * Cloud Functions 2ª geração (Cloud Run) — funções críticas com minInstances e concorrência.
- *
- * Migração gradual: deploye estas funções v2 e atualize o frontend para as novas URLs.
- * As funções v1 permanecem ativas até a migração completa.
- *
- * Deploy seletivo:
- *   firebase deploy --only functions:createPixPaymentV2,functions:healthCheckV2,functions:onGenerationJobCreatedV2
+ * Cloud Functions 2ª geração (Cloud Run) — endpoints críticos e jobs de background.
  */
 
 const { onRequest } = require('firebase-functions/v2/https')
-const { onDocumentCreated } = require('firebase-functions/v2/firestore')
-const { onSchedule } = require('firebase-functions/v2/scheduler')
 const { setGlobalOptions } = require('firebase-functions/v2')
 const admin = require('firebase-admin')
 const { withCors } = require('./corsConfig')
 const { handleCreatePixPayment } = require('./handlers/createPixPaymentHandler')
 const { processBrickPaymentPayload } = require('./mercadopagoBrickPayment')
-const { getKickModule } = require('./generationLoader')
 
 setGlobalOptions({
   region: 'us-central1',
@@ -160,14 +151,7 @@ exports.processBrickPaymentV2 = onRequest(
   }),
 )
 
-/**
- * Job de geração v2 — DESABILITADO até remover v1 (onGenerationJobCreated).
- * Deploy simultâneo v1+v2 processa o mesmo job 2× (corrida/duplicação).
- *
- * Para migrar:
- *   1. firebase functions:delete onGenerationJobCreated
- *   2. Descomente o bloco abaixo e faça deploy
- */
+/** Job de geração v2 — aguardando permissões Eventarc (desabilitado; v1 ativo). */
 /*
 exports.onGenerationJobCreatedV2 = onDocumentCreated(
   {
@@ -195,14 +179,7 @@ exports.onGenerationJobCreatedV2 = onDocumentCreated(
 )
 */
 
-/**
- * Cron de retomada v2 — DESABILITADO até remover v1 (resumeWaitingGenerationJobs).
- * Deploy simultâneo dispara retomada 2× a cada 10 min.
- *
- * Para migrar:
- *   1. firebase functions:delete resumeWaitingGenerationJobs
- *   2. Descomente o bloco abaixo e faça deploy
- */
+/** Cron de retomada v2 — desabilitado; v1 resumeWaitingGenerationJobs ativo. */
 /*
 exports.resumeWaitingGenerationJobsV2 = onSchedule(
   {
