@@ -6,6 +6,7 @@ import {
   resolveContentFlag,
   subscribeOpenFlags,
 } from '../../services/contentFeedbackService'
+import { buildFlagCorrectionLink } from '../../utils/flagCorrectionLinks'
 
 /**
  * Painel de Moderação — foco em conteúdos sinalizados pelos alunos.
@@ -86,7 +87,8 @@ export default function AdminContentModeration() {
           <div>
             <h2 className="cp-headline text-lg text-cp-text">Moderação — Sinalizações</h2>
             <p className="text-sm text-cp-muted">
-              Conteúdos reportados pelos alunos. O Professor IA corrige somente estes itens.
+              Conteúdos reportados pelos alunos. O Professor IA tenta corrigir automaticamente a
+              cada ~10 min; use os botões abaixo só depois de revisar o conteúdo.
             </p>
           </div>
         </div>
@@ -113,6 +115,7 @@ export default function AdminContentModeration() {
             const when = flag.createdAt?.toDate?.()
               ? dayjs(flag.createdAt.toDate()).format('DD/MM/YYYY HH:mm')
               : ''
+            const openHref = buildFlagCorrectionLink(flag)
             return (
               <div key={`${flag.courseId}-${flag.id}`} className="cp-card !rounded-2xl space-y-3 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -151,16 +154,29 @@ export default function AdminContentModeration() {
                 {flag.lastProfessorSummary && (
                   <p className="text-xs text-amber-700 dark:text-amber-300">
                     Professor IA: {flag.lastProfessorSummary}
+                    {Number(flag.lastProfessorApplied) > 0
+                      ? ` (${flag.lastProfessorApplied} patch(es) aplicado(s))`
+                      : ''}
                   </p>
                 )}
 
                 <div className="flex flex-wrap gap-2">
+                  {flag.courseId && (
+                    <a
+                      href={openHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="cp-btn-ghost !text-xs"
+                    >
+                      Abrir conteúdo
+                    </a>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleResolve(flag, true)}
                     disabled={busyId === flag.id || !flag.courseId}
                     className="cp-btn-primary !text-xs"
-                    title="Use se você já corrigiu o conteúdo"
+                    title="Use só se você já alterou o conteúdo manualmente"
                   >
                     <CheckIcon className="h-4 w-4" />
                     {busyId === flag.id ? 'Salvando…' : 'Conteúdo corrigido'}

@@ -4,6 +4,7 @@ import { db } from '../firebase/config'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 import { buildTopicoPublishMapFromSnapshot } from '../services/topicoPublishService'
 import { sanitizeTopicKeyForFirestore } from '../utils/topicKeyFirestore'
+import { buildTopicContentLink, parseTopicKeyParts } from '../utils/topicContentLinks'
 
 const STORAGE_KEY = (uid, courseId) => `topicNotifs_${uid}_${courseId}`
 
@@ -103,52 +104,8 @@ function collectAvailableTopics(map, metaByKey) {
   return topics
 }
 
-function buildContentLink(contentType, courseId, topicKey, extra = {}) {
-  const course = courseId || ''
-  let materia = ''
-  let modulo = ''
-  try {
-    const decoded = decodeURIComponent(topicKey || '')
-    const parts = decoded.split(' :: ')
-    materia = parts[0] || ''
-    modulo = parts.slice(1).join(' :: ') || ''
-  } catch {
-    modulo = topicKey || ''
-  }
-
-  if (contentType === 'flashcards' || contentType === 'flashcard') {
-    if (course && topicKey) {
-      const params = new URLSearchParams()
-      params.set('topicKey', topicKey)
-      if (materia) params.set('disciplina', materia)
-      if (modulo) params.set('modulo', modulo)
-      if (extra.contentId) params.set('card', String(extra.contentId))
-      return `/flashcards/topico/${encodeURIComponent(course)}?${params.toString()}`
-    }
-    const params = new URLSearchParams()
-    if (course) params.set('course', course)
-    if (materia) params.set('materia', materia)
-    if (modulo) params.set('modulo', modulo)
-    if (extra.contentId) params.set('card', String(extra.contentId))
-    return `/flashcards/estudar?${params.toString()}`
-  }
-  if (contentType === 'material' || contentType === 'materia') {
-    if (course && topicKey) {
-      return `/conteudo-completo/topic/${course}/${encodeURIComponent(topicKey)}`
-    }
-    return '/resolver-material'
-  }
-  if (contentType === 'questoes' || contentType === 'questao') {
-    if (course && topicKey) {
-      return `/questoes-topic/${course}/${encodeURIComponent(topicKey)}`
-    }
-    return '/resolver-questoes'
-  }
-  if (contentType === 'vespera') return '/vespera-de-prova'
-  return '/edital-verticalizado'
-}
-
 function buildNotification(courseId, topicKey, meta, contentType = 'topico') {
+  const { nome: topicoNome } = parseTopicKeyParts(topicKey)
   const labels = {
     flashcards: 'Flashcards liberados',
     material: 'Material liberado',
@@ -158,12 +115,22 @@ function buildNotification(courseId, topicKey, meta, contentType = 'topico') {
   }
   const baseLabel = decodeTopicLabel(topicKey, meta.disciplinaNome)
 
+  const resolvedType = contentType === 'topico' ? 'flashcards' : contentType
+
   return {
     id: `${notificationId(courseId, topicKey)}:${contentType}`,
     courseId,
     topicKey,
     contentType,
-    linkPath: buildContentLink(contentType === 'topico' ? 'flashcards' : contentType, courseId, topicKey),
+    disciplinaNome: meta.disciplinaNome || '',
+    topicoNome: topicoNome || meta.topicoNome || '',
+    linkPath: buildTopicContentLink({
+      courseId,
+      topicKey,
+      contentType: resolvedType,
+      disciplinaNome: meta.disciplinaNome || '',
+      topicoNome: topicoNome || meta.topicoNome || '',
+    }),
     label:
       contentType === 'topico'
         ? baseLabel

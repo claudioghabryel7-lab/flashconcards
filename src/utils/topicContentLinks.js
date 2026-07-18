@@ -1,56 +1,7 @@
-/** Sanitiza topicKey para uso como ID de documento no Firestore */
-function sanitizeTopicKeyForFirestore(topicKey = '') {
-  if (!topicKey) return ''
+import { normalizeTopicKeyForStorage } from './topicKeyFirestore'
 
-  let decoded = topicKey
-  try {
-    decoded = decodeURIComponent(topicKey)
-  } catch {
-    decoded = topicKey
-  }
-
-  let sanitized = decoded
-    .replace(/::/g, '_DOUBLECOLON_')
-    .replace(/\//g, '_SLASH_')
-    .replace(/\\/g, '_BACKSLASH_')
-    .trim()
-
-  if (sanitized.length > 400) {
-    sanitized = sanitized.substring(0, 400)
-  }
-
-  if (!sanitized || sanitized.trim() === '') {
-    const hash = topicKey.split('').reduce((acc, char) => {
-      return (acc << 5) - acc + char.charCodeAt(0)
-    }, 0)
-    return `topic_${Math.abs(hash).toString(36)}`
-  }
-
-  return sanitized
-}
-
-function normalizeTopicKeyForStorage(topicKey = '') {
-  if (!topicKey) return ''
-
-  let key = String(topicKey).trim()
-  for (let i = 0; i < 2; i += 1) {
-    try {
-      const decoded = decodeURIComponent(key)
-      if (decoded === key) break
-      key = decoded
-    } catch {
-      break
-    }
-  }
-
-  return key
-}
-
-function sanitizeDisciplinaKey(nome = '') {
-  return (nome || '').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100)
-}
-
-function parseTopicKeyParts(topicKey = '') {
+/** Extrai numero/nome de uma topicKey canônica ("4 :: Nome do tópico"). */
+export function parseTopicKeyParts(topicKey = '') {
   const normalized = normalizeTopicKeyForStorage(topicKey)
   if (!normalized) return { numero: '', nome: '', normalized: '' }
 
@@ -70,16 +21,21 @@ function parseTopicKeyParts(topicKey = '') {
   return { numero, nome, normalized }
 }
 
-function formatModuloFromTopicKey(topicKey = '', moduloLabel = '') {
+/** Mesmo formato usado no edital verticalizado (modulo dos flashcards). */
+export function formatModuloFromTopicKey(topicKey = '', moduloLabel = '') {
   if (moduloLabel) return moduloLabel
   const { numero, nome } = parseTopicKeyParts(topicKey)
   if (numero && nome) return `${numero} - ${nome}`
   return nome || numero || ''
 }
 
-function encodeTopicKeyForPath(topicKey = '') {
+export function encodeTopicKeyForPath(topicKey = '') {
   const normalized = normalizeTopicKeyForStorage(topicKey)
   return normalized ? encodeURIComponent(normalized) : ''
+}
+
+export function encodeTopicKeyForQuery(topicKey = '') {
+  return encodeTopicKeyForPath(topicKey)
 }
 
 function normalizeContentType(contentType = '') {
@@ -92,7 +48,10 @@ function normalizeContentType(contentType = '') {
   return t
 }
 
-function buildTopicContentLink({
+/**
+ * Monta URL alinhada ao EditalVerticalizado para flashcard / material / questão.
+ */
+export function buildTopicContentLink({
   courseId = '',
   topicKey = '',
   contentType = '',
@@ -100,6 +59,7 @@ function buildTopicContentLink({
   disciplinaNome = '',
   topicoNome = '',
   moduloLabel = '',
+  linkPath = '',
 } = {}) {
   const course = courseId || ''
   const type = normalizeContentType(contentType)
@@ -119,7 +79,13 @@ function buildTopicContentLink({
       if (contentId) params.set('card', String(contentId))
       return `/flashcards/topico/${encodeURIComponent(course)}?${params.toString()}`
     }
-    return course ? `/flashcards?course=${course}` : '/flashcards'
+    const params = new URLSearchParams()
+    if (course) params.set('course', course)
+    if (effectiveDisciplina) params.set('materia', effectiveDisciplina)
+    if (effectiveModulo) params.set('modulo', effectiveModulo)
+    if (contentId) params.set('card', String(contentId))
+    const qs = params.toString()
+    return qs ? `/flashcards/estudar?${qs}` : course ? `/flashcards?course=${course}` : '/flashcards'
   }
 
   if (type === 'material') {
@@ -150,13 +116,8 @@ function buildTopicContentLink({
     return '/resolver-material'
   }
 
-  return '/edital-verticalizado'
-}
+  if (type === 'vespera') return '/vespera-de-prova'
 
-module.exports = {
-  sanitizeTopicKeyForFirestore,
-  normalizeTopicKeyForStorage,
-  sanitizeDisciplinaKey,
-  buildTopicContentLink,
-  parseTopicKeyParts,
+  if (linkPath) return linkPath
+  return '/edital-verticalizado'
 }

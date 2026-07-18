@@ -9,6 +9,7 @@ import { useFlagCorrectionNotifications } from '@/hooks/useFlagCorrectionNotific
 import { useMotivationalNotification } from '@/hooks/useMotivationalNotification'
 import { useCommunityFeedNotifications } from '@/hooks/useCommunityFeedNotifications'
 import { buildFlagCorrectionLink } from '@/utils/flagCorrectionLinks'
+import { buildTopicContentLink } from '@/utils/topicContentLinks'
 import {
   createUnreadSoundWatcher,
   unlockNotificationAudio,
@@ -163,6 +164,7 @@ const TopicNotificationsButton = memo(() => {
               <div className="max-h-40 overflow-y-auto">
                 {correctionNotifs.map((n) => {
                   const href = buildFlagCorrectionLink(n)
+                  const aiApplied = Number(n.appliedCorrections) > 0
                   return (
                     <Link
                       key={n.id}
@@ -179,8 +181,13 @@ const TopicNotificationsButton = memo(() => {
                         {n.title || 'Sinalização corrigida'}
                       </p>
                       <p className="mt-0.5 line-clamp-3 text-xs text-cp-muted">{n.message}</p>
+                      {aiApplied && (
+                        <p className="mt-1 text-[10px] font-medium text-emerald-700">
+                          {n.appliedCorrections} correção(ões) aplicada(s) automaticamente
+                        </p>
+                      )}
                       <p className="mt-1 text-[10px] font-medium text-emerald-600">
-                        Abrir conteúdo corrigido →
+                        Abrir conteúdo →
                       </p>
                       <p className="mt-0.5 text-[10px] text-emerald-600/80">
                         {dayjs(n.createdAt).format('DD/MM HH:mm')}
@@ -237,10 +244,20 @@ const TopicNotificationsButton = memo(() => {
                   : 'Nenhum tópico liberado recente.'}
               </p>
             ) : (
-              notifications.map((n) => (
+              notifications.map((n) => {
+                const href =
+                  buildTopicContentLink({
+                    courseId: n.courseId,
+                    topicKey: n.topicKey,
+                    contentType: n.contentType,
+                    disciplinaNome: n.disciplinaNome,
+                    topicoNome: n.topicoNome,
+                    linkPath: n.linkPath,
+                  }) || '/edital-verticalizado'
+                return (
                 <Link
                   key={n.id}
-                  href={n.linkPath || '/edital-verticalizado'}
+                  href={href}
                   onClick={() => {
                     markRead(n.id)
                     setOpen(false)
@@ -257,7 +274,8 @@ const TopicNotificationsButton = memo(() => {
                     Liberado {dayjs(n.createdAt).format('DD/MM HH:mm')}
                   </p>
                 </Link>
-              ))
+                )
+              })
             )}
           </div>
         </div>

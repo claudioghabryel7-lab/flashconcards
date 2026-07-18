@@ -19,6 +19,7 @@ import {
   MAX_TOPIC_FLASHCARDS,
 } from '../constants/topicFlashcards'
 import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
+import { formatModuloFromTopicKey } from '../utils/topicContentLinks'
 import { generateShareToken } from '../utils/shareToken'
 import ShareItemButton from '../components/share/ShareItemButton'
 import { FEED_POST_TYPES } from '../services/trilhaFeedService'
@@ -42,15 +43,8 @@ const FlashcardsTopicoView = () => {
   // Deriva disciplina/módulo do topicKey "Matéria :: Módulo" quando a URL só traz topicKey
   let disciplina = disciplinaParam
   let modulo = moduloParam
-  if ((!disciplina || !modulo) && topicKey) {
-    try {
-      const decoded = decodeURIComponent(topicKey)
-      const parts = decoded.split(' :: ')
-      if (!disciplina) disciplina = parts[0] || ''
-      if (!modulo) modulo = parts.slice(1).join(' :: ') || parts[0] || ''
-    } catch {
-      if (!modulo) modulo = topicKey
-    }
+  if (!modulo && topicKey) {
+    modulo = formatModuloFromTopicKey(topicKey)
   }
 
   const courseId = courseIdParam || profile?.selectedCourseId || 'alego-default'
