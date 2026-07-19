@@ -4,6 +4,7 @@ const {
   isResumableJob,
   isApiQuotaError,
   isTransientGenerationError,
+  isJobCancelledError,
   pauseJobForResume,
   clearActiveJob,
   clearResumeQueue,
@@ -25,9 +26,20 @@ function parseUserIdFromJobPath(path = '') {
 async function handleServerJobError(userId, jobId, data, error, updateRef) {
   console.error(`[runServerGenerationJob] job ${jobId}:`, error)
 
+  if (isJobCancelledError(error) || (await isJobCancelled(userId, jobId))) {
+    await clearResumeQueue(jobId)
+    await clearActiveJob(jobId)
+    return { ok: false, cancelled: true, reason: 'cancelled' }
+  }
+
   if (isResumableJob(data.jobType) && isTransientGenerationError(error)) {
+    if (await isJobCancelled(userId, jobId)) {
+      await clearResumeQueue(jobId)
+      await clearActiveJob(jobId)
+      return { ok: false, cancelled: true, reason: 'cancelled' }
+    }
     const pauseStatus = isApiQuotaError(error) ? 'waiting_api' : 'waiting_retry'
-    await pauseJobForResume({
+    const pauseResult = await pauseJobForResume({
       userId,
       jobId,
       courseId: data.courseId,
@@ -51,7 +63,16 @@ async function handleServerJobError(userId, jobId, data, error, updateRef) {
         ? 'API indisponível — trocando chave e retomando…'
         : `Erro temporário — tentando outra API em 15s… (${error?.message || 'erro'})`,
     })
+    if (pauseResult?.skipped && pauseResult.reason === 'cancelled') {
+      return { ok: false, cancelled: true, reason: 'cancelled' }
+    }
     return { ok: false, paused: true, error: error.message }
+  }
+
+  if (await isJobCancelled(userId, jobId)) {
+    await clearResumeQueue(jobId)
+    await clearActiveJob(jobId)
+    return { ok: false, cancelled: true, reason: 'cancelled' }
   }
 
   await updateRef

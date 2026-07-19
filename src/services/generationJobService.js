@@ -250,11 +250,29 @@ export async function reconcileStaleGenerationJobs(userId) {
   }
 }
 
+async function markJobsCancelledLocally(userId, jobIds = []) {
+  if (!userId || !jobIds.length || !db) return
+  await Promise.all(
+    jobIds.map((jobId) =>
+      updateGenerationJob(userId, jobId, {
+        status: GENERATION_JOB_STATUS.CANCELLED,
+        progress: 100,
+        message: 'Cancelado',
+        finishedAt: serverTimestamp(),
+      }).catch(() => null),
+    ),
+  )
+}
+
 export async function dismissGenerationJob(userId, jobId) {
   if (!userId || !jobId) return { ok: false }
 
   markJobCancelling(jobId)
   pauseJobNudge()
+
+  // Cancela no Firestore primeiro — some do banner na hora
+  await markJobsCancelledLocally(userId, [jobId])
+
   try {
     const user = auth?.currentUser
     if (user?.uid === userId) {
@@ -277,16 +295,11 @@ export async function dismissGenerationJob(userId, jobId) {
         return { ok: true, ...data }
       }
       if (response.status >= 400) {
-        throw new Error(data.error || 'Não foi possível cancelar no servidor.')
+        // Já marcamos cancelled localmente — servidor pode limpar fila depois
+        return { ok: true, fallback: true, warning: data.error || 'Cancelado localmente.' }
       }
     }
 
-    await updateGenerationJob(userId, jobId, {
-      status: GENERATION_JOB_STATUS.CANCELLED,
-      progress: 100,
-      message: 'Cancelado',
-      finishedAt: serverTimestamp(),
-    })
     return { ok: true, fallback: true }
   } finally {
     // Mantém flag até o job sumir do snapshot ativo (syncCancellingJobsWithActive)
@@ -309,34 +322,40 @@ export async function cancelAllGenerationJobs(userId) {
 
   if (!snap.docs.length) return { cancelled: 0 }
 
-  snap.docs.forEach((d) => markJobCancelling(d.id))
-  pauseJobNudge()
+  const jobIds = snap.docs.map((d) => d.id)
+  jobIds.forEach((id) => markJobCancelling(id))
+  pauseJobNudge(300_000)
+
+  await markJobsCancelledLocally(userId, jobIds)
 
   const user = auth?.currentUser
   if (user?.uid === userId) {
-    const token = await user.getIdToken()
-    const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ userId, all: true }),
-    })
-    let data = {}
     try {
-      data = await response.json()
-    } catch {
-      data = {}
+      const token = await user.getIdToken()
+      const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId, all: true }),
+      })
+      let data = {}
+      try {
+        data = await response.json()
+      } catch {
+        data = {}
+      }
+      if (response.ok) {
+        return { cancelled: data.cancelled ?? jobIds.length, ...data }
+      }
+      return { cancelled: jobIds.length, fallback: true, warning: data.error }
+    } catch (err) {
+      return { cancelled: jobIds.length, fallback: true, warning: err?.message }
     }
-    if (response.ok) {
-      return { cancelled: data.cancelled ?? snap.docs.length, ...data }
-    }
-    throw new Error(data.error || 'Não foi possível parar os jobs no servidor.')
   }
 
-  await Promise.all(snap.docs.map((d) => dismissGenerationJob(userId, d.id)))
-  return { cancelled: snap.docs.length }
+  return { cancelled: jobIds.length, fallback: true }
 }
 
 /** Admin: força parada de TODOS os jobs (todos os usuários). */
@@ -346,7 +365,22 @@ export async function forceStopAllGenerationJobsGlobally() {
     throw new Error('Não autenticado ou função de cancelamento indisponível.')
   }
 
-  pauseJobNudge(180_000)
+  pauseJobNudge(300_000)
+
+  // Cancela jobs do admin visíveis localmente antes da CF (melhor UX)
+  try {
+    const localSnap = await getDocs(
+      query(jobsRef(user.uid), where('status', 'in', ACTIVE_JOB_STATUSES)),
+    )
+    if (localSnap.docs.length) {
+      await markJobsCancelledLocally(
+        user.uid,
+        localSnap.docs.map((d) => d.id),
+      )
+    }
+  } catch {
+    /* ignore */
+  }
 
   const token = await user.getIdToken()
   const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {

@@ -181,6 +181,8 @@ async function isJobCancelled(userId, jobId) {
 }
 
 async function touchActiveJob(userId, jobId, patch = {}) {
+  if (await isJobCancelled(userId, jobId)) return
+
   const ts = admin.firestore.FieldValue.serverTimestamp()
   const db = getDb()
 
@@ -278,6 +280,11 @@ async function pauseJobForResume({
   waitReason = 'retry',
   retryDelayMs = RETRY_INTERVAL_MS,
 }) {
+  if (await isJobCancelled(userId, jobId)) {
+    await clearResumeQueue(jobId)
+    return { skipped: true, reason: 'cancelled' }
+  }
+
   const ts = admin.firestore.FieldValue.serverTimestamp()
   const nextRetryAt = new Date(Date.now() + Math.max(0, retryDelayMs))
 
@@ -325,6 +332,11 @@ async function pauseJobForResume({
     const extracted = m.slice(open + 1, close).trim()
     return extracted && !extracted.includes('tentativa') ? extracted : null
   })()
+
+  if (await isJobCancelled(userId, jobId)) {
+    await clearResumeQueue(jobId)
+    return { skipped: true, reason: 'cancelled' }
+  }
 
   await updateJob(userId, jobId, {
     status,
@@ -534,6 +546,9 @@ async function cancelGenerationJob(userId, jobId) {
     return { ok: true, reason: 'already_cancelled' }
   }
 
+  // Limpa fila/slot ANTES de marcar cancelado — evita corrida com pause/resume
+  await clearResumeQueue(jobId)
+
   const ts = admin.firestore.FieldValue.serverTimestamp()
   await jobRef.update({
     status: 'cancelled',
@@ -542,6 +557,7 @@ async function cancelGenerationJob(userId, jobId) {
     finishedAt: ts,
     updatedAt: ts,
     progressUpdatedAt: ts,
+    cancelRequestedAt: ts,
     resumeClaimToken: admin.firestore.FieldValue.delete(),
     resumeClaimedAt: admin.firestore.FieldValue.delete(),
   })
@@ -753,6 +769,7 @@ function mergeResumeServerPayload(jobData = {}, queueData = {}, resumeFromTopicI
 }
 
 async function ensureResumeQueueFromJob(userId, jobId, jobData) {
+  if (await isJobCancelled(userId, jobId)) return
   const resumeFromTopicIndex =
     jobData.resumeState?.resumeFromTopicIndex ??
     jobData.serverPayload?.resumeFromTopicIndex ??
@@ -1101,7 +1118,7 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
     return { resumed: true, jobId, jobType: effectiveJobType, outcome }
   } catch (err) {
     console.error(`[resumeSingleGenerationJob] job ${jobId}:`, err)
-    if (await isJobCancelled(userId, jobId)) {
+    if (await isJobCancelled(userId, jobId) || isJobCancelledError(err)) {
       await handleGenerationJobCancelled(userId, jobId, {
         ...jobData,
         courseId: courseId || jobData.courseId,
@@ -1111,7 +1128,7 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
     }
     if (isResumableJob(effectiveJobType) && isTransientGenerationError(err)) {
       const pauseStatus = isApiQuotaError(err) ? 'waiting_api' : 'waiting_retry'
-      await pauseJobForResume({
+      const pauseResult = await pauseJobForResume({
         userId,
         jobId,
         courseId: courseId || jobData.courseId,
@@ -1137,7 +1154,19 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
           ? 'API indisponível — trocando chave e retomando…'
           : `Erro temporário — retomando em ${Math.round(RETRY_INTERVAL_MS / 1000)}s… (${err.message || 'erro'})`,
       })
+      if (pauseResult?.skipped && pauseResult.reason === 'cancelled') {
+        return { resumed: false, reason: 'cancelled' }
+      }
       return { resumed: false, reason: 'error', error: err.message }
+    }
+
+    if (await isJobCancelled(userId, jobId)) {
+      await handleGenerationJobCancelled(userId, jobId, {
+        ...jobData,
+        courseId: courseId || jobData.courseId,
+        jobType: effectiveJobType,
+      })
+      return { resumed: false, reason: 'cancelled' }
     }
 
     await jobRef.update({
