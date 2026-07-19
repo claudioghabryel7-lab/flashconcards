@@ -448,15 +448,30 @@ async function verifyAdminRequest(req) {
     err.status = 401
     throw err
   }
-  const decoded = await admin.auth().verifyIdToken(idToken)
-  const userDoc = await admin.firestore().collection('users').doc(decoded.uid).get()
-  const docExists = typeof userDoc.exists === 'function' ? userDoc.exists() : userDoc.exists
-  if (!docExists || userDoc.data()?.role !== 'admin') {
-    const err = new Error('Apenas administradores podem executar esta ação.')
-    err.status = 403
-    throw err
+
+  const {
+    isCredentialError,
+    verifyAdminWithUserToken,
+  } = require('./adminAuthFallback')
+
+  try {
+    const decoded = await admin.auth().verifyIdToken(idToken)
+    const userDoc = await admin.firestore().collection('users').doc(decoded.uid).get()
+    const docExists = typeof userDoc.exists === 'function' ? userDoc.exists() : userDoc.exists
+    if (!docExists || userDoc.data()?.role !== 'admin') {
+      const err = new Error('Apenas administradores podem executar esta ação.')
+      err.status = 403
+      throw err
+    }
+    return { ...decoded, idToken }
+  } catch (err) {
+    if (err?.status === 403 || err?.status === 401) throw err
+    if (!isCredentialError(err)) throw err
+    console.warn(
+      '[emailUtils] Firebase Admin sem credenciais — usando fallback Identity Toolkit.',
+    )
+    return verifyAdminWithUserToken(idToken)
   }
-  return decoded
 }
 
 async function verifyAuthRequest(req) {
@@ -467,7 +482,15 @@ async function verifyAuthRequest(req) {
     err.status = 401
     throw err
   }
-  return admin.auth().verifyIdToken(idToken)
+
+  const { isCredentialError, lookupUserByIdToken } = require('./adminAuthFallback')
+
+  try {
+    return await admin.auth().verifyIdToken(idToken)
+  } catch (err) {
+    if (!isCredentialError(err)) throw err
+    return lookupUserByIdToken(idToken)
+  }
 }
 
 async function sendBrandedEmail({ to, subject, html, text }) {

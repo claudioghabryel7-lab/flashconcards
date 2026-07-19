@@ -76,6 +76,12 @@ function ensureInitialized() {
       'plegi-d84c2'
 
     const credential = resolveCredential()
+    if (!credential) {
+      console.warn(
+        '[firebaseAdmin] Sem FIREBASE_SERVICE_ACCOUNT_KEY / firebase-service-account.json. ' +
+          'APIs que usam Admin SDK vão falhar; há fallback para email/auth via Identity Toolkit.',
+      )
+    }
     admin.initializeApp(credential ? { credential, projectId } : { projectId })
 
     try {

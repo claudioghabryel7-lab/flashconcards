@@ -1,10 +1,23 @@
-const admin = require('firebase-admin')
+const { getAdmin } = require('../firebaseAdmin')
 const {
   verifyAdminRequest,
   buildBrandedEmailHtml,
   paragraphsToHtml,
   sendBrandedEmail,
 } = require('../emailUtils')
+const {
+  isCredentialError,
+  listStudentEmailsWithUserToken,
+} = require('../adminAuthFallback')
+
+async function listStudentEmailsAdminSdk() {
+  const admin = getAdmin()
+  const usersSnap = await admin.firestore().collection('users').get()
+  return usersSnap.docs
+    .map((docSnap) => docSnap.data())
+    .filter((user) => user?.email && !user.deleted && user.role !== 'admin')
+    .map((user) => user.email)
+}
 
 async function handleSendAdminBroadcastEmail(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).send('')
@@ -14,6 +27,9 @@ async function handleSendAdminBroadcastEmail(req, res) {
 
   try {
     const adminUser = await verifyAdminRequest(req)
+    const idToken =
+      adminUser.idToken ||
+      (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
     const {
       subject,
       title,
@@ -34,11 +50,13 @@ async function handleSendAdminBroadcastEmail(req, res) {
     let targetEmails = []
 
     if (recipientMode === 'all') {
-      const usersSnap = await admin.firestore().collection('users').get()
-      targetEmails = usersSnap.docs
-        .map((docSnap) => docSnap.data())
-        .filter((user) => user?.email && !user.deleted && user.role !== 'admin')
-        .map((user) => user.email)
+      try {
+        targetEmails = await listStudentEmailsAdminSdk()
+      } catch (listErr) {
+        if (!isCredentialError(listErr) || !idToken) throw listErr
+        console.warn('[broadcastEmail] list users via Firestore REST (sem service account)')
+        targetEmails = await listStudentEmailsWithUserToken(idToken)
+      }
     } else {
       targetEmails = Array.isArray(recipients) ? recipients : [recipients]
     }
@@ -96,6 +114,7 @@ async function handleSendAdminBroadcastEmail(req, res) {
     }
 
     try {
+      const admin = getAdmin()
       await admin.firestore().collection('broadcastEmailHistory').add({
         subject: subject.trim(),
         title: title.trim(),
@@ -109,7 +128,8 @@ async function handleSendAdminBroadcastEmail(req, res) {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       })
     } catch (historyErr) {
-      console.error('[broadcastEmail] Erro ao salvar histórico:', historyErr)
+      // Sem service account o histórico pode falhar — envio já ocorreu
+      console.warn('[broadcastEmail] Histórico não salvo:', historyErr?.message || historyErr)
     }
 
     return res.status(200).json({
