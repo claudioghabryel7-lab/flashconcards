@@ -587,10 +587,9 @@ export default function AdminGuiaMentorado() {
             <div>
               <h2 className="cp-headline text-lg text-cp-text">Guia Mentorado — automação unificada</h2>
               <p className="mt-1 max-w-2xl text-sm text-cp-muted">
-                Um painel por curso: liga/desliga a geração diária, define o horário (Brasília),
-                controla gatilhos (cronograma, cron, backfill, véspera) e dispara ações manuais.
-                O cron horário (a cada 15 min) só processa o curso na hora configurada — sem religar a
-                automação sozinha. Jobs Gemini: máx. 2 por vez (compartilhado com Professor IA).
+                Roda com o admin online. No horário (ex. 08:30) ou em catch-up se a aba abrir depois:
+                se ainda não rodou hoje → gera agora; se já rodou → só confirma. Ações manuais
+                (cronograma, conteúdos do dia, backfill) na aba aberta.
               </p>
             </div>
           </div>
@@ -872,7 +871,7 @@ export default function AdminGuiaMentorado() {
               ? 'Selecione um curso'
               : busy
                 ? 'Aguarde a ação em andamento'
-                : 'Gerar cronograma na nuvem'
+                : 'Gerar cronograma (aba aberta)'
           }
           className="inline-flex items-center gap-2 rounded-xl border border-cp-border px-4 py-2 text-sm font-semibold text-cp-text transition hover:bg-cp-surface disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -924,8 +923,8 @@ export default function AdminGuiaMentorado() {
           <div>
             <h3 className="text-sm font-semibold text-cp-text">Automação de conteúdo (global)</h3>
             <p className="mt-1 max-w-2xl text-xs text-cp-muted">
-              Independente do Professor IA. A cada 30 min libera 1 job (incidência → níveis).
-              Janela padrão 06:00–23:00 (Brasília). Não gasta API se o conteúdo já existir.
+              Automação de incidência/níveis (separada do Guia Mentorado diário). Use “Rodar 1 job
+              agora” com a aba aberta. Toggle liga/desliga a intenção de automação.
             </p>
             {contentAuto.automationUserId ? (
               <p className="mt-1 text-xs text-cp-muted">

@@ -283,11 +283,10 @@ export default function AdminProfessorSupervisor() {
             <div>
               <h2 className="cp-headline text-lg text-cp-text">Professor IA — correções automáticas</h2>
               <p className="mt-1 max-w-xl text-sm text-cp-muted">
-                Agenda <strong>segunda a domingo</strong> com janela de horário. Corrige{' '}
-                <strong>somente</strong> a aba <strong>🚩 Moderação</strong> (sinalizações abertas).
-                Independente do <strong>📅 Guia Mentorado</strong> (cronograma/dia) — compartilham só
-                a fila global de jobs Gemini (máx. <strong>2</strong> por vez). Sem report novo, fica em
-                espera — não gasta API à toa.
+                Roda com o admin online, na janela De/Até (Brasília). Corrige{' '}
+                <strong>somente</strong> a aba <strong>🚩 Moderação</strong>. Se o horário chegou e a
+                sessão ainda não iniciou hoje → inicia (catch-up). Sem sinalização aberta → espera,
+                sem gastar API.
               </p>
             </div>
           </div>
@@ -330,7 +329,7 @@ export default function AdminProfessorSupervisor() {
                   </p>
                 )}
                 <p className="mt-1 text-[11px] text-cp-muted">
-                  Cron a cada 10 min (`professorSupervisorTick`); ~5 min entre itens na fila. Agora em SP:{' '}
+                  Tick local ~90s enquanto o painel admin está aberto. Agora em SP:{' '}
                   {formatDailyStartLabel(clock.hour, clock.minute)}.
                 </p>
               </div>

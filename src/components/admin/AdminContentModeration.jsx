@@ -9,8 +9,8 @@ import {
 import { buildFlagCorrectionLink } from '../../utils/flagCorrectionLinks'
 
 /**
- * Painel de Moderação — foco em conteúdos sinalizados pelos alunos.
- * O Professor IA só corrige o que aparece aqui.
+ * Painel de Moderação — sinalizações dos alunos.
+ * Admin resolve/apaga aqui; Professor IA (online) corrige automaticamente as abertas.
  */
 export default function AdminContentModeration() {
   const [flags, setFlags] = useState([])
@@ -87,8 +87,9 @@ export default function AdminContentModeration() {
           <div>
             <h2 className="cp-headline text-lg text-cp-text">Moderação — Sinalizações</h2>
             <p className="text-sm text-cp-muted">
-              Conteúdos reportados pelos alunos. O Professor IA tenta corrigir automaticamente a
-              cada ~10 min; use os botões abaixo só depois de revisar o conteúdo.
+              Conteúdos reportados pelos alunos. Com o admin online e o Professor IA na janela de
+              horário, a correção automática roda sozinha (~90s). Use os botões abaixo para
+              resolver/apagar manualmente após revisar.
             </p>
           </div>
         </div>

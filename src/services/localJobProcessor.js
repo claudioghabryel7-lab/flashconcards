@@ -308,6 +308,30 @@ async function processGuiaMentoradoDay(courseId, serverPayload, updateProgress, 
   }
 
   await finalizeLocalDayStatus(courseId, targetDate, { errors, total: topics.length })
+
+  // Marca dia do cron diário (catch-up / programação) quando for o dia de hoje
+  try {
+    const todayKey = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+    }).format(new Date())
+    if (targetDate === todayKey) {
+      await setDoc(
+        doc(db, 'courses', courseId, 'config', 'guiaMentorado'),
+        {
+          automation: {
+            lastDailyRunDayKey: todayKey,
+            lastDailyRunAt: serverTimestamp(),
+            lastError: errors.length ? errors[0]?.error || 'partial' : null,
+          },
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
+    }
+  } catch {
+    /* ignore */
+  }
+
   await updateProgress(95, `Concluído — ${done}/${topics.length} tópico(s)`)
   return { publishedCount: done, totalTopics: topics.length, errors }
 }
@@ -566,10 +590,17 @@ export async function processLocalGenerationJob({
         serverPayload.savePlan || {},
       )
     }
-    case 'professor_supervisor':
-      throw new Error(
-        'Professor IA ainda depende da fila antiga. Use Gerar conteúdos / flashcards / questões pelo painel (modo local).',
-      )
+    case 'professor_supervisor': {
+      const { processProfessorFlagLocal } = await import('./localProfessorFlagProcessor')
+      if (serverPayload?.itemType === 'flag' || serverPayload?.payload?.flagId) {
+        return processProfessorFlagLocal({
+          courseId,
+          payload: serverPayload.payload || serverPayload,
+          updateProgress,
+        })
+      }
+      throw new Error('Professor IA local: apenas sinalizações da Moderação por enquanto.')
+    }
     default:
       throw new Error(`Tipo de job não suportado no modo local: ${jobType}`)
   }

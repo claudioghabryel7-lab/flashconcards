@@ -61,6 +61,7 @@ import { auth, db, storage } from '../firebase/config'
 import { requestPasswordResetEmail, sendRetroactiveWelcomeEmails } from '../utils/adminApi'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { useAuth } from '../hooks/useAuth'
+import { useAdminOnlineWorkers } from '../hooks/useAdminOnlineWorkers'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { createSlug } from '../utils/slug'
@@ -149,6 +150,8 @@ function formatUserLastAccess(user, userPresence) {
 
 const AdminPanel = () => {
   const { isAdmin, user: currentAdminUser, profile } = useAuth()
+  // Guia Mentorado + Professor IA + Moderação — rodam enquanto o admin está online
+  useAdminOnlineWorkers(Boolean(isAdmin))
   const [cards, setCards] = useState([])
   const [users, setUsers] = useState([])
   const [presence, setPresence] = useState({}) // { uid: { status, lastSeen } }
