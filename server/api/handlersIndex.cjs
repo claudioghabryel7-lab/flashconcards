@@ -1,7 +1,7 @@
 /**
  * Índice único de handlers HTTP — carregado via require estático nas rotas Next.js.
+ * Init do Firebase fica lazy (no primeiro request via httpAdapter/initBackend).
  */
-require('../../functions/firebaseAdmin.js').ensureInitialized()
 require('./initBackend.cjs')
 
 module.exports = {

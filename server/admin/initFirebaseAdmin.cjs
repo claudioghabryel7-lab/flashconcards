@@ -1,11 +1,13 @@
 /**
- * Firebase Admin para rotas API do Next.js (diagnóstico admin).
- * Delega para functions/firebaseAdmin.js (init único + globalThis).
+ * Firebase Admin para rotas API do Next.js.
+ * Lazy — não inicializa no import (evita quebrar `next build` / collect page data).
  */
 const { getAdmin, ensureInitialized } = require('../../functions/firebaseAdmin.js')
 
 module.exports = {
   getAdmin,
   ensureInitialized,
-  admin: getAdmin(),
+  get admin() {
+    return getAdmin()
+  },
 }

@@ -10,6 +10,8 @@ export const maxDuration = 60
 
 export const POST = backendRoute(handlers.handleReconcilePayment, {
   getMercadoPagoAccessToken,
-  admin: getAdmin(),
+  get admin() {
+    return getAdmin()
+  },
   functions: { config: () => ({}) },
 })

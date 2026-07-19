@@ -1,5 +1,6 @@
 /**
- * Inicializa env + Firebase Admin para rotas API do Next.js (substituto das Cloud Functions).
+ * Inicializa env + Firebase Admin para rotas API do Next.js.
+ * Firebase só inicia no primeiro getAdmin() (não no import — evita quebrar next build).
  */
 const path = require('path')
 
@@ -19,9 +20,10 @@ try {
   /* ignore */
 }
 
-const { ensureInitialized, getAdmin } = require('../../functions/firebaseAdmin.js')
-
-ensureInitialized()
+function getAdmin() {
+  const { getAdmin: ga } = require('../../functions/firebaseAdmin.js')
+  return ga()
+}
 
 function getSiteWebhookUrl() {
   const base = (
@@ -32,7 +34,10 @@ function getSiteWebhookUrl() {
   ).replace(/\/$/, '')
 
   if (base.includes('cloudfunctions.net')) {
-    const site = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.flashconcards.com.br').replace(/\/$/, '')
+    const site = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.flashconcards.com.br').replace(
+      /\/$/,
+      '',
+    )
     return `${site}/api/mercadopago/webhook`
   }
   return base.includes('/api/mercadopago/webhook') ? base : `${base}/api/mercadopago/webhook`

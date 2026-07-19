@@ -1,24 +1,15 @@
 /**
- * Firebase Admin — ponto único de init (Next.js API + Cloud Functions).
- * Sempre carrega firebase-admin da raiz do monorepo.
+ * Firebase Admin — init único (Next.js API + Cloud Functions).
+ * require('firebase-admin') estático — Turbopack/Vercel não aceita resolve dinâmico.
  */
 'use strict'
 
 const path = require('path')
 const fs = require('fs')
-const os = require('os')
+const admin = require('firebase-admin')
 
 const GLOBAL_KEY = '__FLASHCON_FIREBASE_ADMIN__'
 const ROOT_DIR = path.join(__dirname, '..')
-
-/** Client OAuth público do Firebase CLI (ADC local). */
-const FIREBASE_CLI_CLIENT_ID =
-  '563584335869-fgrhgmd47bqnek1034q9jv48h7qbmqlj.apps.googleusercontent.com'
-const FIREBASE_CLI_CLIENT_SECRET = 'j9iVZfS8kkCEFUPaAeJV0sAi'
-
-function resolveRootFirebaseAdmin() {
-  return require(require.resolve('firebase-admin', { paths: [ROOT_DIR] }))
-}
 
 function loadEnvFiles() {
   for (const envPath of [
@@ -34,56 +25,7 @@ function loadEnvFiles() {
   }
 }
 
-function readFirebaseCliRefreshToken() {
-  const candidates = [
-    path.join(os.homedir(), '.config', 'configstore', 'firebase-tools.json'),
-    path.join(process.env.APPDATA || '', 'configstore', 'firebase-tools.json'),
-  ]
-
-  for (const filePath of candidates) {
-    if (!filePath || !fs.existsSync(filePath)) continue
-    try {
-      const data = JSON.parse(fs.readFileSync(filePath, 'utf8'))
-      const token =
-        data?.tokens?.refresh_token ||
-        data?.refresh_token ||
-        data?.token?.refresh_token ||
-        null
-      if (token) return token
-    } catch {
-      /* ignore */
-    }
-  }
-  return null
-}
-
-/**
- * Firestore Admin exige cert ou ADC. Gera ADC authorized_user
- * a partir do `firebase login` (arquivo local, gitignored).
- */
-function ensureAdcFromFirebaseCli() {
-  const adcPath = path.join(ROOT_DIR, '.firebase-adc.json')
-  if (fs.existsSync(adcPath)) {
-    process.env.GOOGLE_APPLICATION_CREDENTIALS = adcPath
-    return adcPath
-  }
-
-  const refreshToken = readFirebaseCliRefreshToken()
-  if (!refreshToken) return null
-
-  const payload = {
-    type: 'authorized_user',
-    client_id: FIREBASE_CLI_CLIENT_ID,
-    client_secret: FIREBASE_CLI_CLIENT_SECRET,
-    refresh_token: refreshToken,
-  }
-
-  fs.writeFileSync(adcPath, JSON.stringify(payload), { encoding: 'utf8', mode: 0o600 })
-  process.env.GOOGLE_APPLICATION_CREDENTIALS = adcPath
-  return adcPath
-}
-
-function resolveCredential(admin) {
+function resolveCredential() {
   const saJson =
     process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
     process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON ||
@@ -116,29 +58,6 @@ function resolveCredential(admin) {
     }
   }
 
-  const adcFromCli = ensureAdcFromFirebaseCli()
-  if (adcFromCli) {
-    try {
-      return admin.credential.applicationDefault()
-    } catch (err) {
-      console.error('[firebaseAdmin] ADC do Firebase CLI inválido:', err?.message)
-    }
-  }
-
-  const defaultAdc = path.join(
-    process.env.APPDATA || path.join(os.homedir(), '.config'),
-    'gcloud',
-    'application_default_credentials.json',
-  )
-  if (fs.existsSync(defaultAdc)) {
-    try {
-      process.env.GOOGLE_APPLICATION_CREDENTIALS = defaultAdc
-      return admin.credential.applicationDefault()
-    } catch {
-      /* ignore */
-    }
-  }
-
   return undefined
 }
 
@@ -148,7 +67,6 @@ function ensureInitialized() {
   }
 
   loadEnvFiles()
-  const admin = resolveRootFirebaseAdmin()
 
   if (!admin.apps.length) {
     const projectId =
@@ -157,15 +75,7 @@ function ensureInitialized() {
       process.env.GCP_PROJECT ||
       'plegi-d84c2'
 
-    const credential = resolveCredential(admin)
-
-    if (!credential) {
-      console.warn(
-        '[firebaseAdmin] Sem credenciais. Rode `npx firebase login` ou coloque ' +
-          'firebase-service-account.json / FIREBASE_SERVICE_ACCOUNT_KEY.',
-      )
-    }
-
+    const credential = resolveCredential()
     admin.initializeApp(credential ? { credential, projectId } : { projectId })
 
     try {
