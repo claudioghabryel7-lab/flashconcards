@@ -15,5 +15,6 @@ module.exports = {
   ...require('../../functions/handlers/passwordResetHandlers'),
   ...require('../../functions/handlers/generationHttpHandlers'),
   ...require('../../functions/handlers/adminAutomationHandlers'),
+  ...require('../../functions/handlers/adminBroadcastEmailHandler'),
   ...require('../../functions/handlers/generateConcursoNewsHandler'),
 }
