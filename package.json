@@ -14,6 +14,7 @@
     "generate:pages": "node scripts/generate-next-pages.mjs",
     "deploy:rules": "firebase deploy --only firestore:rules --project plegi-d84c2",
     "sync:gemini-env": "node scripts/sync-gemini-env.mjs",
+    "deploy:functions": "npm run sync:gemini-env && firebase deploy --only functions --project plegi-d84c2",
     "generate:favicons": "node scripts/generate-favicons.mjs"
   },
   "dependencies": {

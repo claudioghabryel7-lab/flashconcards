@@ -21,28 +21,35 @@ function loadRootEnvLocal() {
   if (rootEnvLoaded) return
   rootEnvLoaded = true
 
-  try {
-    const envPath = path.join(__dirname, '../../.env.local')
-    if (!fs.existsSync(envPath)) return
+  const candidates = [
+    path.join(__dirname, '../../.env.local'),
+    path.join(__dirname, '../../.env'),
+  ]
 
-    const content = fs.readFileSync(envPath, 'utf8')
-    for (const line of content.split(/\r?\n/)) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith('#')) continue
-      const eq = trimmed.indexOf('=')
-      if (eq <= 0) continue
-      const key = trimmed.slice(0, eq).trim()
-      let val = trimmed.slice(eq + 1).trim()
-      if (
-        (val.startsWith('"') && val.endsWith('"')) ||
-        (val.startsWith("'") && val.endsWith("'"))
-      ) {
-        val = val.slice(1, -1)
+  for (const envPath of candidates) {
+    try {
+      if (!fs.existsSync(envPath)) continue
+
+      const content = fs.readFileSync(envPath, 'utf8')
+      for (const line of content.split(/\r?\n/)) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith('#')) continue
+        const eq = trimmed.indexOf('=')
+        if (eq <= 0) continue
+        const key = trimmed.slice(0, eq).trim()
+        let val = trimmed.slice(eq + 1).trim()
+        if (
+          (val.startsWith('"') && val.endsWith('"')) ||
+          (val.startsWith("'") && val.endsWith("'"))
+        ) {
+          val = val.slice(1, -1)
+        }
+        if (!process.env[key]) process.env[key] = val
       }
-      if (!process.env[key]) process.env[key] = val
+      return
+    } catch {
+      // tenta próximo arquivo
     }
-  } catch {
-    // ignora falha de leitura em produção
   }
 }
 

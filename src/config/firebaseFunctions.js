@@ -1,40 +1,44 @@
 /**
- * URLs das Cloud Functions — migrado para 2ª geração (Cloud Run) nos fluxos críticos.
+ * URLs do backend — migrado para rotas Next.js/Vercel (sem Cloud Functions GCP).
+ * Rotas relativas funcionam no browser e no SSR (same-origin).
  */
 
-const FIREBASE_FUNCTIONS_BASE_URL = 'https://us-central1-plegi-d84c2.cloudfunctions.net'
+export const API_ROUTES = {
+  healthCheck: '/api/health',
 
-export const FIREBASE_FUNCTIONS = {
-  healthCheck: `${FIREBASE_FUNCTIONS_BASE_URL}/healthCheckV2`,
+  createUserAndSendEmail: '/api/auth/create-user',
 
-  createUserAndSendEmail: `${FIREBASE_FUNCTIONS_BASE_URL}/createUserAndSendEmail`,
+  webhookMercadoPago: '/api/mercadopago/webhook',
 
-  webhookMercadoPago: `${FIREBASE_FUNCTIONS_BASE_URL}/webhookMercadoPago`,
+  createPixPayment: '/api/payments/create-pix',
+  processBrickPayment: '/api/mercadopago/process-brick',
+  reconcilePayment: '/api/payments/reconcile',
 
-  createPixPayment: `${FIREBASE_FUNCTIONS_BASE_URL}/createPixPaymentV2`,
-  processBrickPayment: `${FIREBASE_FUNCTIONS_BASE_URL}/processBrickPaymentV2`,
-  reconcilePayment: `${FIREBASE_FUNCTIONS_BASE_URL}/reconcilePaymentV2`,
+  createCheckoutPreference: '/api/payments/checkout-preference',
+  getMercadoPagoPublicConfig: '/api/mercadopago/public-config',
 
-  createCheckoutPreference: `${FIREBASE_FUNCTIONS_BASE_URL}/createCheckoutPreference`,
-  getMercadoPagoPublicConfig: `${FIREBASE_FUNCTIONS_BASE_URL}/getMercadoPagoPublicConfig`,
+  sendPasswordResetEmail: '/api/auth/password-reset/send',
+  updateUserPassword: '/api/auth/password-reset/update',
+  sendAdminBroadcastEmail: '/api/admin/emails/broadcast',
+  sendEmailVerificationCode: '/api/auth/email-verification/send',
+  verifyEmailCode: '/api/auth/email-verification/verify',
+  sendEmailVerificationCodeV2: '/api/auth/email-verification/send',
+  verifyEmailCodeV2: '/api/auth/email-verification/verify',
+  sendRetroactiveWelcomeEmails: '/api/admin/emails/welcome-retroactive',
 
-  sendPasswordResetEmail: `${FIREBASE_FUNCTIONS_BASE_URL}/sendPasswordResetEmail`,
-  updateUserPassword: `${FIREBASE_FUNCTIONS_BASE_URL}/updateUserPassword`,
-  sendAdminBroadcastEmail: `${FIREBASE_FUNCTIONS_BASE_URL}/sendAdminBroadcastEmail`,
-  sendEmailVerificationCode: `${FIREBASE_FUNCTIONS_BASE_URL}/sendEmailVerificationCode`,
-  verifyEmailCode: `${FIREBASE_FUNCTIONS_BASE_URL}/verifyEmailCode`,
-  sendEmailVerificationCodeV2: `${FIREBASE_FUNCTIONS_BASE_URL}/sendEmailVerificationCodeV2`,
-  verifyEmailCodeV2: `${FIREBASE_FUNCTIONS_BASE_URL}/verifyEmailCodeV2`,
-  sendRetroactiveWelcomeEmails: `${FIREBASE_FUNCTIONS_BASE_URL}/sendRetroactiveWelcomeEmails`,
+  generateConcursoNews: '/api/admin/generate-concurso-news',
+  generateNewsFromLink: '/api/admin/generate-news-from-link',
 
-  generateConcursoNews: `${FIREBASE_FUNCTIONS_BASE_URL}/generateConcursoNews`,
-  generateNewsFromLink: `${FIREBASE_FUNCTIONS_BASE_URL}/generateNewsFromLink`,
+  nudgeGenerationJobResume: '/api/generation/nudge',
+  kickGenerationJob: '/api/generation/kick',
+  cancelGenerationJob: '/api/generation/cancel',
+  listActiveGenerationJobs: '/api/generation/list-active',
+  runContentAutomationNow: '/api/admin/content-automation/run',
 
-  nudgeGenerationJobResume: `${FIREBASE_FUNCTIONS_BASE_URL}/nudgeGenerationJobResume`,
-  kickGenerationJob: `${FIREBASE_FUNCTIONS_BASE_URL}/kickGenerationJob`,
-  cancelGenerationJob: `${FIREBASE_FUNCTIONS_BASE_URL}/cancelGenerationJob`,
-  listActiveGenerationJobs: `${FIREBASE_FUNCTIONS_BASE_URL}/listActiveGenerationJobs`,
-  runContentAutomationNow: `${FIREBASE_FUNCTIONS_BASE_URL}/runContentAutomationNow`,
+  processBrickRequest: '/api/payments/process-brick-request',
 }
 
-export default FIREBASE_FUNCTIONS
+/** @deprecated Use API_ROUTES — alias mantido para compatibilidade */
+export const FIREBASE_FUNCTIONS = API_ROUTES
+
+export default API_ROUTES

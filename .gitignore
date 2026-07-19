@@ -29,6 +29,7 @@ functions/.env
 ENV_KEYS_TEMP.txt
 
 # Editor directories and files
+supabase/.temp/
 .vscode/*
 !.vscode/extensions.json
 .idea

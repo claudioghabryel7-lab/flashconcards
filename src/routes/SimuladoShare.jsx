@@ -843,7 +843,7 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
       
       if (emailToSend) {
         try {
-          const emailFunctionUrl = 'https://us-central1-plegi-d84c2.cloudfunctions.net/sendSimuladoResultEmail'
+          const emailFunctionUrl = '/api/simulado/send-result-email'
           await fetch(emailFunctionUrl, {
             method: 'POST',
             headers: {

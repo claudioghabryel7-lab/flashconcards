@@ -22,10 +22,10 @@ function sleep(ms) {
 }
 
 function getWebhookUrl() {
-  return (
-    process.env.MERCADOPAGO_WEBHOOK_URL ||
-    'https://us-central1-plegi-d84c2.cloudfunctions.net/webhookMercadoPago'
-  )
+  const env = process.env.MERCADOPAGO_WEBHOOK_URL || ''
+  if (env && !env.includes('cloudfunctions.net')) return env
+  const site = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.flashconcards.com.br').replace(/\/$/, '')
+  return `${site}/api/mercadopago/webhook`
 }
 
 function isPixMethod(paymentBody = {}) {

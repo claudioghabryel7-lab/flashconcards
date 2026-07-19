@@ -89,10 +89,10 @@ async function processCheckoutViaFirestoreFirst(ctx) {
   }
 
   try {
+    return normalizePixPayload(await processBrickPayment(payload))
+  } catch (httpErr) {
+    console.warn('[Payment Brick] HTTP falhou, tentando Firestore+API', httpErr?.message || httpErr)
     return normalizePixPayload(await processBrickViaFirestore(payload, ctx.abortSignal))
-  } catch (firestoreErr) {
-    console.warn('[Payment Brick] Firestore falhou, tentando HTTP', firestoreErr?.message || firestoreErr)
-    return processBrickPayment(payload)
   }
 }
 
@@ -211,6 +211,11 @@ function processBrickViaFirestore(
         state: 'pending',
         createdAt: serverTimestamp(),
       })
+      fetch('/api/payments/process-brick-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId }),
+      }).catch(() => {})
     } catch (err) {
       if (!settled) {
         settled = true

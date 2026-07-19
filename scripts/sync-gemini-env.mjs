@@ -1,5 +1,5 @@
 /**
- * Copia VITE_GEMINI_API_KEY* do .env.local (raiz) para functions/.env como GEMINI_API_KEY*.
+ * Copia VITE_GEMINI_API_KEY* do .env.local ou .env (raiz) para functions/.env como GEMINI_API_KEY*.
  * Inclui VITE_GEMINI_API_KEY_MAE → GEMINI_API_KEY_MAE (CHAVE MOTHER).
  * Rode antes de `firebase deploy --only functions` se as chaves só existirem no Next.
  */
@@ -9,11 +9,16 @@ import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(__dirname, '..')
-const sourcePath = path.join(root, '.env.local')
 const targetPath = path.join(root, 'functions', '.env')
 
-if (!fs.existsSync(sourcePath)) {
-  console.error('Arquivo .env.local não encontrado na raiz do projeto.')
+const sourceCandidates = [
+  path.join(root, '.env.local'),
+  path.join(root, '.env'),
+]
+const sourcePath = sourceCandidates.find((p) => fs.existsSync(p))
+
+if (!sourcePath) {
+  console.error('Nenhum .env.local ou .env encontrado na raiz do projeto.')
   process.exit(1)
 }
 
@@ -47,7 +52,7 @@ for (const line of lines) {
 }
 
 if (geminiLines.length === 0) {
-  console.error('Nenhuma VITE_GEMINI_API_KEY* encontrada em .env.local')
+  console.error(`Nenhuma VITE_GEMINI_API_KEY* encontrada em ${path.basename(sourcePath)}`)
   process.exit(1)
 }
 
@@ -74,4 +79,6 @@ const header = [
 
 const output = [preserved, header, ...geminiLines, ''].filter(Boolean).join('\n')
 fs.writeFileSync(targetPath, output, 'utf8')
-console.log(`✅ ${geminiLines.length} chave(s) Gemini copiada(s) para functions/.env (inclui CHAVE MOTHER se houver)`)
+console.log(
+  `✅ ${geminiLines.length} chave(s) Gemini copiada(s) de ${path.basename(sourcePath)} → functions/.env (inclui CHAVE MOTHER se houver)`,
+)

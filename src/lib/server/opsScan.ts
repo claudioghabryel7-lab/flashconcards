@@ -4,8 +4,75 @@ const require = createRequire(import.meta.url)
 const { collectGeminiApiKeys } = require('../../utils/geminiKeyPool.js')
 const { getAdmin } = require('../../../server/admin/initFirebaseAdmin.cjs')
 
-const GCP_HEALTH_URL =
-  'https://us-central1-plegi-d84c2.cloudfunctions.net/healthCheckV2'
+const GCP_HEALTH_URL = '/api/health'
+
+const GCP_HEALTH_RETRIES = 3
+const GCP_HEALTH_RETRY_DELAY_MS = 8000
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+type GcpHealthProbe = {
+  httpStatus: number
+  contentType: string
+  bodyText: string
+  health: Record<string, unknown>
+  checks: Record<string, string>
+  isJson: boolean
+  isHtml: boolean
+  looksLikeBillingBlock: boolean
+  looksLikeColdStart: boolean
+}
+
+async function probeBackendHealth(siteBaseUrl: string): Promise<GcpHealthProbe> {
+  const base = siteBaseUrl.replace(/\/$/, '')
+  const url = `${base}/api/health`
+  const res = await fetch(url, { signal: AbortSignal.timeout(25000) })
+  const contentType = res.headers.get('content-type') || ''
+  const bodyText = await res.text()
+  const isHtml = /text\/html/i.test(contentType) || bodyText.trimStart().startsWith('<')
+  const looksLikeBillingBlock = /billing is disabled|billing account|payment method/i.test(bodyText)
+  const looksLikeColdStart =
+    /not available yet|please try again in 30 seconds/i.test(bodyText)
+
+  let health: Record<string, unknown> = {}
+  let checks: Record<string, string> = {}
+  let isJson = false
+
+  if (!isHtml) {
+    try {
+      health = JSON.parse(bodyText) as Record<string, unknown>
+      isJson = true
+      checks = (health.checks as Record<string, string>) || {}
+    } catch {
+      // resposta não-JSON
+    }
+  }
+
+  return {
+    httpStatus: res.status,
+    contentType,
+    bodyText,
+    health,
+    checks,
+    isJson,
+    isHtml,
+    looksLikeBillingBlock,
+    looksLikeColdStart,
+  }
+}
+
+async function fetchGcpHealthWithRetry(siteBaseUrl: string): Promise<GcpHealthProbe> {
+  let last = await probeBackendHealth(siteBaseUrl)
+  for (let attempt = 1; attempt < GCP_HEALTH_RETRIES; attempt += 1) {
+    if (last.isJson) return last
+    if (!last.isHtml || (!last.looksLikeColdStart && !last.looksLikeBillingBlock)) return last
+    await sleep(GCP_HEALTH_RETRY_DELAY_MS)
+    last = await probeBackendHealth(siteBaseUrl)
+  }
+  return last
+}
 
 export type OpsIssue = {
   severity: 'critical' | 'warning' | 'info'
@@ -37,66 +104,80 @@ export async function runOpsScan(siteBaseUrl: string): Promise<OpsScanResult> {
   const issues: OpsIssue[] = []
   const stats: Record<string, unknown> = {
     stack: 'firebase',
+    backend: 'vercel',
     projectId: process.env.VITE_FIREBASE_PROJECT_ID || 'plegi-d84c2',
     siteBaseUrl,
   }
 
-  // Cloud Functions health
+  // Backend health (Next.js / Vercel)
   try {
-    const res = await fetch(GCP_HEALTH_URL, { signal: AbortSignal.timeout(25000) })
-    const health = await res.json().catch(() => ({}))
-    stats.gcpHealthStatus = health.status || (res.ok ? 'ok' : 'error')
-    stats.gcpHealthChecks = health.checks || {}
-    stats.gcpHealthHttp = res.status
+    const probe = await fetchGcpHealthWithRetry(siteBaseUrl)
+    const { health, checks, isJson, isHtml } = probe
 
-    const checks = health.checks || {}
-    if (checks.firestore === 'error') {
+    stats.gcpHealthStatus = isJson
+      ? (health.status as string) || (probe.httpStatus < 400 ? 'ok' : 'error')
+      : 'unreachable'
+    stats.gcpHealthChecks = isJson ? checks : {}
+    stats.gcpHealthHttp = probe.httpStatus
+    stats.gcpHealthContentType = probe.contentType
+    stats.backendRuntime = 'vercel'
+
+    if (!isJson) {
       pushIssue(issues, {
         severity: 'critical',
-        title: 'Firestore inacessível (GCP)',
-        detail: 'O health check das Cloud Functions não conseguiu ler o Firestore.',
-        action: 'Verifique billing Firebase, regras Firestore e credenciais do projeto plegi-d84c2.',
-        fixPrompt: 'Diagnostique por que admin.firestore() falha no healthCheckV2 do projeto plegi-d84c2.',
+        title: 'Backend API indisponível',
+        detail: `GET ${siteBaseUrl}/api/health retornou HTTP ${probe.httpStatus} sem JSON.`,
+        action: 'Verifique deploy Vercel, variáveis de ambiente e logs da função /api/health.',
       })
-    }
-    if (checks.auth === 'error') {
-      pushIssue(issues, {
-        severity: 'warning',
-        title: 'Firebase Auth Admin com erro',
-        detail: 'listUsers falhou no health check GCP.',
-        action: 'Confirme permissões IAM e service account das Cloud Functions.',
-      })
-    }
-    if (checks.email === 'missing') {
-      pushIssue(issues, {
-        severity: 'warning',
-        title: 'E-mail não configurado no servidor',
-        detail: 'SMTP ausente nas Cloud Functions.',
-        action: 'Configure EMAIL_USER e EMAIL_PASSWORD em functions/.env e redeploy.',
-      })
-    }
-    if (checks.mercadopago === 'missing') {
-      pushIssue(issues, {
-        severity: 'warning',
-        title: 'Mercado Pago não configurado',
-        detail: 'Token MP ausente no backend GCP.',
-        action: 'Configure MERCADOPAGO_ACCESS_TOKEN_PROD em functions/.env.',
-      })
-    }
-    if (checks.gemini !== 'configured') {
-      pushIssue(issues, {
-        severity: 'critical',
-        title: 'Gemini ausente no GCP',
-        detail: 'Nenhuma chave Gemini nas Cloud Functions.',
-        action: 'Rode npm run sync:gemini-env e faça deploy das functions.',
-      })
+    } else {
+      if (checks.firestore === 'error') {
+        pushIssue(issues, {
+          severity: 'critical',
+          title: 'Firestore inacessível (GCP)',
+          detail: 'O health check das Cloud Functions não conseguiu ler o Firestore.',
+          action: 'Verifique billing Firebase, regras Firestore e credenciais do projeto plegi-d84c2.',
+          fixPrompt: 'Diagnostique por que admin.firestore() falha no healthCheckV2 do projeto plegi-d84c2.',
+        })
+      }
+      if (checks.auth === 'error') {
+        pushIssue(issues, {
+          severity: 'warning',
+          title: 'Firebase Auth Admin com erro',
+          detail: 'listUsers falhou no health check GCP.',
+          action: 'Confirme permissões IAM e service account das Cloud Functions.',
+        })
+      }
+      if (checks.email === 'missing') {
+        pushIssue(issues, {
+          severity: 'warning',
+          title: 'E-mail não configurado no servidor',
+          detail: 'SMTP ausente nas Cloud Functions.',
+          action: 'Configure EMAIL_USER e EMAIL_PASSWORD em functions/.env e redeploy.',
+        })
+      }
+      if (checks.mercadopago === 'missing') {
+        pushIssue(issues, {
+          severity: 'warning',
+          title: 'Mercado Pago não configurado',
+          detail: 'Token MP ausente no backend GCP.',
+          action: 'Configure MERCADOPAGO_ACCESS_TOKEN_PROD em functions/.env.',
+        })
+      }
+      if (checks.gemini !== 'configured') {
+        pushIssue(issues, {
+          severity: 'critical',
+          title: 'Gemini ausente no backend',
+          detail: 'Nenhuma chave Gemini nas variáveis Vercel/functions/.env.',
+          action: 'Configure VITE_GEMINI_API_KEY* no Vercel e rode npm run sync:gemini-env para functions/.env local.',
+        })
+      }
     }
   } catch (err) {
     pushIssue(issues, {
       severity: 'critical',
-      title: 'Cloud Functions offline',
-      detail: err instanceof Error ? err.message : 'healthCheckV2 inacessível',
-      action: 'Verifique billing GCP e deploy: firebase deploy --only functions',
+      title: 'Backend API offline',
+      detail: err instanceof Error ? err.message : '/api/health inacessível',
+      action: 'Verifique deploy Vercel e variáveis de ambiente.',
     })
   }
 
@@ -168,7 +249,7 @@ export async function runOpsScan(siteBaseUrl: string): Promise<OpsScanResult> {
   const warning = issues.filter((i) => i.severity === 'warning').length
   const info = issues.filter((i) => i.severity === 'info').length
 
-  let summary = 'Sistema aparenta estar saudável (Firebase/GCP).'
+  let summary = 'Sistema aparenta estar saudável (Firebase + Vercel API).'
   if (critical > 0) summary = `${critical} problema(s) crítico(s) para corrigir.`
   else if (warning > 0) summary = `${warning} aviso(s) — revise configuração.`
   else if (info > 0) summary = `${info} observação(ões) informativas.`
@@ -191,7 +272,7 @@ function buildCursorFixPrompt(
   summary: string,
 ) {
   const lines = [
-    'Corrija os problemas do site Flashconcards (stack Firebase + Cloud Functions GCP, SEM Supabase).',
+    'Corrija os problemas do site Flashconcards (Firebase Auth/Firestore + backend Next.js/Vercel, SEM Cloud Functions GCP).',
     '',
     `Resumo: ${summary}`,
     '',
