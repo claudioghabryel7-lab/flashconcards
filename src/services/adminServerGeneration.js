@@ -1,6 +1,6 @@
 import { startBackgroundGeneration } from './aiGenerationRunner'
 
-/** Enfileira processamento completo do edital no servidor (Cloud Functions). */
+/** Processa edital na aba do admin (Gemini + Firestore local). */
 export async function enqueueAdminEditalProcessing({ userId, courseId, editalText }) {
   if (!userId) throw new Error('Usuário não autenticado.')
   if (!editalText?.trim()) throw new Error('Texto do edital vazio.')
@@ -19,7 +19,7 @@ export async function enqueueAdminEditalProcessing({ userId, courseId, editalTex
 }
 
 /**
- * Gera matéria revisada na nuvem (mesmo pipeline de jobs / keep-alive 15s).
+ * Gera matéria revisada na aba do admin.
  */
 export async function enqueueAdminMateriaRevisada({
   userId,

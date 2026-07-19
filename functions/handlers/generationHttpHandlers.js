@@ -1,4 +1,5 @@
-const admin = require('firebase-admin')
+const { getAdmin, getDb } = require('../firebaseAdmin')
+const admin = getAdmin()
 const { verifyAuthRequest, verifyAdminRequest } = require('../emailUtils')
 const { kickGenerationJob } = require('../generation/generationJobKick')
 const {
@@ -25,7 +26,16 @@ async function handleKickGenerationJob(req, res) {
     return res.status(200).json(result)
   } catch (err) {
     console.error('[kickGenerationJob]', err)
-    return res.status(500).json({ error: err.message || 'Erro ao iniciar job' })
+    const message = err.message || 'Erro ao iniciar job'
+    let hint = null
+    if (/does not exist/i.test(message)) {
+      hint =
+        'Firebase Admin não inicializado. Reinicie o servidor ou configure FIREBASE_SERVICE_ACCOUNT_KEY.'
+    } else if (/credentials/i.test(message)) {
+      hint =
+        'Credenciais Firebase Admin ausentes. Gere uma service account no Firebase Console e defina FIREBASE_SERVICE_ACCOUNT_KEY no .env.'
+    }
+    return res.status(500).json({ error: message, hint })
   }
 }
 
@@ -93,7 +103,7 @@ async function handleListActiveGenerationJobs(req, res) {
   try {
     await verifyAdminRequest(req)
     const limit = Math.min(Number(req.body?.limit || req.query?.limit) || 50, 100)
-    const db = admin.firestore()
+    const db = getDb()
     const ACTIVE = ['pending', 'running', 'waiting_api', 'waiting_retry', 'waiting_timeout']
 
     const snap = await db

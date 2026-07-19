@@ -9,22 +9,38 @@ export async function GET() {
   const checks: Record<string, string> = {
     firestore: 'unknown',
     auth: 'unknown',
+    firebaseAdmin: 'unknown',
   }
 
   try {
     const { getAdmin } = require('../../../../server/admin/initFirebaseAdmin.cjs')
-    await getAdmin().firestore().collection('_health').doc('ping').get()
+    const admin = getAdmin()
+    checks.firebaseAdmin = admin.apps.length ? 'ok' : 'app_not_initialized'
+    await admin.firestore().collection('_health').doc('ping').get()
     checks.firestore = 'ok'
-  } catch {
-    checks.firestore = 'error'
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    checks.firestore = message.includes('does not exist')
+      ? 'app_not_initialized'
+      : /credential/i.test(message)
+        ? 'missing_credentials'
+        : 'error'
+    if (checks.firebaseAdmin === 'unknown') {
+      checks.firebaseAdmin = checks.firestore
+    }
   }
 
   try {
     const { getAdmin } = require('../../../../server/admin/initFirebaseAdmin.cjs')
     await getAdmin().auth().listUsers(1)
     checks.auth = 'ok'
-  } catch {
-    checks.auth = 'error'
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    checks.auth = message.includes('does not exist')
+      ? 'app_not_initialized'
+      : /credential/i.test(message)
+        ? 'missing_credentials'
+        : 'error'
   }
 
   checks.email =
@@ -44,6 +60,10 @@ export async function GET() {
     {
       status: healthy ? 'ok' : 'degraded',
       checks,
+      hint:
+        checks.firestore === 'missing_credentials' || checks.auth === 'missing_credentials'
+          ? 'Rode `npx firebase login` ou configure FIREBASE_SERVICE_ACCOUNT_KEY / firebase-service-account.json.'
+          : undefined,
       latencyMs: Date.now() - started,
       version: 'vercel',
       runtime: 'nextjs',

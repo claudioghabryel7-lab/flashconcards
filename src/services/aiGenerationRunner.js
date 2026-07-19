@@ -1,13 +1,12 @@
 import {
   createGenerationJob,
   updateGenerationJob,
-  waitForGenerationJob,
-  kickGenerationJob,
   GENERATION_JOB_STATUS,
 } from './generationJobService'
 import { formatAiErrorForUser } from '../utils/geminiApi'
+import { processLocalGenerationJob } from './localJobProcessor'
 
-/** Promessas ativas — sobrevivem a desmontagem de componentes React (modo cliente). */
+/** Promessas ativas — sobrevivem a desmontagem de componentes React. */
 const activeTasks = new Map()
 
 async function executeJob(userId, jobId, task) {
@@ -48,8 +47,8 @@ async function executeJob(userId, jobId, task) {
 }
 
 /**
- * Inicia geração em segundo plano (retorna jobId imediatamente).
- * Com `serverPayload`, a Cloud Function processa mesmo com aba fechada.
+ * Gera em segundo plano na aba do admin (sem Cloud Functions).
+ * Mantém a aba aberta até concluir.
  */
 export async function startBackgroundGeneration({
   userId,
@@ -59,15 +58,15 @@ export async function startBackgroundGeneration({
   metadata = {},
   task,
   serverPayload = null,
-  runOnServer = false,
+  runOnServer: _runOnServer = false,
 }) {
   if (!userId) {
     throw new Error('Usuário não autenticado para geração em segundo plano.')
   }
 
-  const useServer = Boolean(runOnServer && serverPayload)
-
-  if (!useServer && typeof task !== 'function') {
+  const hasTask = typeof task === 'function'
+  const hasPayload = Boolean(serverPayload)
+  if (!hasTask && !hasPayload) {
     throw new Error('Task ou serverPayload é obrigatório.')
   }
 
@@ -77,38 +76,22 @@ export async function startBackgroundGeneration({
     jobType,
     topicKey,
     metadata,
-    serverPayload: useServer ? serverPayload : null,
-    runOnServer: useServer,
+    serverPayload: null,
+    runOnServer: false,
   })
 
-  if (useServer) {
-    const kick = await kickGenerationJob(userId, jobId)
-    const kickOk =
-      kick?.ok ||
-      kick?.paused ||
-      ['kick_scheduled', 'already_started', 'already_finished'].includes(kick?.reason)
-    if (!kickOk) {
-      const reason = kick?.reason || kick?.error || 'kick_failed'
-      throw new Error(
-        `Job criado (${jobId}), mas o servidor não iniciou o processamento (${reason}). Tente de novo em alguns segundos.`,
-      )
-    }
+  const localTask =
+    hasTask
+      ? task
+      : async ({ updateProgress }) =>
+          processLocalGenerationJob({
+            jobType,
+            courseId,
+            serverPayload,
+            updateProgress,
+          })
 
-    const promise = waitForGenerationJob(userId, jobId).then((job) => {
-      if (job?.cancelled || job?.status === GENERATION_JOB_STATUS.CANCELLED) {
-        return null
-      }
-      return job?.resultRef ?? job
-    })
-    promise.catch((err) => {
-      console.error('[generation] job falhou:', err?.message || err)
-    })
-    activeTasks.set(jobId, promise)
-    promise.finally(() => activeTasks.delete(jobId))
-    return { jobId, promise }
-  }
-
-  const promise = executeJob(userId, jobId, task)
+  const promise = executeJob(userId, jobId, localTask)
   promise.catch((err) => {
     console.error('[generation] task falhou:', err?.message || err)
   })

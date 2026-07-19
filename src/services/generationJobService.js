@@ -79,11 +79,12 @@ export async function createGenerationJob({
   jobType,
   topicKey = null,
   metadata = {},
-  serverPayload = null,
-  runOnServer = false,
+  serverPayload: _serverPayload = null,
+  runOnServer: _runOnServer = false,
 }) {
   if (!userId || !db) throw new Error('Usuário não autenticado.')
 
+  // Geração local na aba do admin — sem Cloud / sem payload no Firestore.
   const ref = await addDoc(
     jobsRef(userId),
     stripUndefined({
@@ -92,11 +93,11 @@ export async function createGenerationJob({
       jobType,
       topicKey,
       metadata,
-      runOnServer: Boolean(runOnServer && serverPayload),
-      serverPayload: runOnServer && serverPayload ? serverPayload : null,
+      runOnServer: false,
+      serverPayload: null,
       status: GENERATION_JOB_STATUS.PENDING,
       progress: 0,
-      message: runOnServer && serverPayload ? 'Enviado ao servidor…' : 'Aguardando início…',
+      message: 'Aguardando início…',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }),
@@ -501,7 +502,11 @@ export async function kickGenerationJob(userId, jobId) {
   }
 
   if (!response.ok) {
-    return { ok: false, reason: data.error || data.reason || 'request_failed' }
+    return {
+      ok: false,
+      reason: data.error || data.reason || 'request_failed',
+      hint: data.hint || null,
+    }
   }
 
   return data

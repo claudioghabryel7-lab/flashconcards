@@ -19,9 +19,9 @@ try {
   /* ignore */
 }
 
-const { getAdmin } = require('../admin/initFirebaseAdmin.cjs')
+const { ensureInitialized, getAdmin } = require('../../functions/firebaseAdmin.js')
 
-getAdmin()
+ensureInitialized()
 
 function getSiteWebhookUrl() {
   const base = (

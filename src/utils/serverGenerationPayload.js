@@ -1,4 +1,4 @@
-/** Monta payload serializável para geração server-side (Cloud Functions). */
+/** Monta payload para geração local na aba do admin. */
 
 export function buildAiOptions(courseId, overrides = {}) {
   return {

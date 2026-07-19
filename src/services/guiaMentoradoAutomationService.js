@@ -113,7 +113,7 @@ function buildTopicPayloads(topic, context, autoPublish) {
 }
 
 /**
- * Inicia geração do cronograma na nuvem (admin pode fechar o site).
+ * Inicia geração do cronograma na aba do admin (mantenha a aba aberta).
  */
 export async function startGuiaMentoradoCronogramaGeneration({ userId, courseId, config }) {
   if (!userId) throw new Error('Usuário não autenticado.')
@@ -198,7 +198,7 @@ export async function startMentoradoDayContentAutomation({
 }
 
 /**
- * Um único job na nuvem: gera do 1º dia do cronograma até hoje (com checkpoint).
+ * Backfill: gera conteúdos dos dias (na aba do admin — mantenha aberta).
  */
 export async function startMentoradoBackfillJob({ userId, courseId, dayKeys = null }) {
   if (!userId) throw new Error('Usuário não autenticado.')

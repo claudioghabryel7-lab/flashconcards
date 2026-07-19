@@ -1,6 +1,7 @@
 const functions = require('firebase-functions')
 const nodemailer = require('nodemailer')
-const admin = require('firebase-admin')
+const { getAdmin } = require('./firebaseAdmin')
+const admin = getAdmin()
 
 const DEFAULT_FROM_NAME = 'Concurseiro Preditivo'
 const SITE_LOGO_URL = 'https://www.flashconcards.com.br/course-icons/logo.png'

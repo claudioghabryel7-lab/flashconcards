@@ -44,3 +44,6 @@ supabase/.temp/
 .firebase/
 firebase-debug.log
 firestore-debug.log
+firebase-service-account.json
+*-firebase-adminsdk-*.json
+.firebase-adc.json

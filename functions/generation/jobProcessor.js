@@ -1,4 +1,5 @@
-const admin = require('firebase-admin')
+const { getAdmin, getDb } = require('../firebaseAdmin')
+const admin = getAdmin()
 const {
   sanitizeTopicKeyForFirestore,
   normalizeTopicKeyForStorage,
@@ -11,10 +12,6 @@ const CONTENT_STATUS = {
 }
 
 const { sanitizeQuestaoAlternativas } = require('./aiTextFormatting')
-
-function getDb() {
-  return admin.firestore()
-}
 
 /** Garante alternativas A→E em cada questão antes de gravar. */
 function normalizeParsedQuestoes(parsed) {

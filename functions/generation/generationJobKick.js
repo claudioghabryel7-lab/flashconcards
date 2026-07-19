@@ -1,4 +1,5 @@
-const admin = require('firebase-admin')
+const { getAdmin, getDb } = require('../firebaseAdmin')
+const admin = getAdmin()
 const { processGenerationJob } = require('./jobProcessor')
 const {
   isResumableJob,
@@ -12,10 +13,6 @@ const {
 } = require('./generationJobResume')
 
 const PENDING_KICK_GRACE_MS = 8 * 1000
-
-function getDb() {
-  return admin.firestore()
-}
 
 function parseUserIdFromJobPath(path = '') {
   const parts = String(path).split('/')

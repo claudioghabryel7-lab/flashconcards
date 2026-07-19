@@ -66,6 +66,7 @@ function createRes() {
 }
 
 async function runHandler(handler, request, deps) {
+  require('../../functions/firebaseAdmin.js').ensureInitialized()
   require('./initBackend.cjs')
 
   let body = {}

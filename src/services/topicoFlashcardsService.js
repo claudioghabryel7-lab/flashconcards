@@ -114,7 +114,7 @@ export async function generateAndSaveFlashcardsForTopico({
   }
 
   if (!userId) {
-    throw new Error('Faça login como admin para gerar flashcards no servidor (pipeline auditado).')
+    throw new Error('Faça login como admin para gerar flashcards.')
   }
 
   const initialStatus = await fetchTopicoPublishStatus(resolvedId, normalizedTopicKey)

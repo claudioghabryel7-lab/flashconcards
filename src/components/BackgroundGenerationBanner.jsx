@@ -62,7 +62,7 @@ function jobAgeSeconds(job, now = Date.now()) {
 
 function formatJobMessage(job) {
   if (isPendingStatus(job.status)) {
-    return job.message || 'Enviado ao servidor — aguardando início…'
+    return job.message || 'Iniciando geração…'
   }
   if (isWaitingStatus(job.status)) {
     return (
@@ -72,24 +72,21 @@ function formatJobMessage(job) {
         : 'Aguardando para retomar…')
     )
   }
-  return job.message || 'Gerando em segundo plano…'
+  return job.message || 'Gerando…'
 }
 
 function formatJobHint(job, now = Date.now()) {
   if (isPendingStatus(job.status)) {
     const age = jobAgeSeconds(job, now)
     if (age != null && age >= 90) {
-      return 'Demorando para iniciar — o cliente tenta de novo a cada 30s. Se persistir, use Parar (X) e gere outra vez.'
+      return 'Demorando — mantenha esta aba aberta. Se persistir, use Parar (X) e gere outra vez.'
     }
-    return 'Iniciando no servidor… você pode sair desta tela.'
+    return 'Mantenha esta aba aberta enquanto gera.'
   }
   if (isWaitingStatus(job.status)) {
-    return (
-      WAITING_HINTS[job.status] ||
-      'O servidor retoma sozinho — só para se você cancelar (X).'
-    )
+    return WAITING_HINTS[job.status] || 'Aguardando API — mantenha a aba aberta.'
   }
-  return 'Você pode sair desta tela — a geração continua no servidor.'
+  return 'Mantenha esta aba aberta até concluir.'
 }
 
 function loadMinimized() {

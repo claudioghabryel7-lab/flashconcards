@@ -1,6 +1,7 @@
 /**
  * Índice único de handlers HTTP — carregado via require estático nas rotas Next.js.
  */
+require('../../functions/firebaseAdmin.js').ensureInitialized()
 require('./initBackend.cjs')
 
 module.exports = {

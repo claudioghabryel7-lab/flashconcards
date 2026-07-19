@@ -1,6 +1,7 @@
 require('dotenv').config()
 const functions = require('firebase-functions')
-const admin = require('firebase-admin')
+const { getAdmin } = require('./firebaseAdmin')
+const admin = getAdmin()
 const nodemailer = require('nodemailer')
 const { corsMiddleware: cors, withCors } = require('./corsConfig')
 const {
@@ -120,13 +121,6 @@ function assertGeminiConfigured() {
     err.code = 'gemini_not_configured'
     throw err
   }
-}
-
-admin.initializeApp()
-try {
-  admin.firestore().settings({ ignoreUndefinedProperties: true })
-} catch {
-  /* já configurado */
 }
 
 /** Health check v1 — migrado para healthCheckV2 (v2Exports.js). */

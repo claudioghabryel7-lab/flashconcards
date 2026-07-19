@@ -1,4 +1,5 @@
-const admin = require('firebase-admin')
+const { getAdmin, getDb } = require('../firebaseAdmin')
+const admin = getAdmin()
 const {
   getAvailableGeminiKeysInOrder,
   silentProbeGeminiKey,
@@ -33,10 +34,6 @@ function stripUndefinedDeep(value) {
     out[k] = stripUndefinedDeep(v)
   }
   return out
-}
-
-function getDb() {
-  return admin.firestore()
 }
 
 function isApiQuotaError(error) {

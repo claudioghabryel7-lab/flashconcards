@@ -45,8 +45,8 @@ const CONTENT_STATUS = {
 }
 
 function getDb() {
-  const admin = require('firebase-admin')
-  return admin.firestore()
+  const { getDb: db } = require('../firebaseAdmin')
+  return db()
 }
 
 async function hasFlashcards(courseId, topicKey, disciplina, modulo) {
