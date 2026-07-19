@@ -30,6 +30,7 @@ import {
 } from '../../utils/mentoradoNextRun'
 import { loadEditalVerticalizado } from '../../utils/editalVerticalizadoLoader'
 import { validateGuiaMentoradoAutomation } from '../../utils/automationValidation'
+import { usePresenceRegistry } from '../../hooks/usePresenceRegistry'
 
 function padTime(h, m) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
@@ -109,6 +110,7 @@ function buildSavePayload(form, releaseTime) {
 
 export default function AdminGuiaMentorado() {
   const { user } = useAuth()
+  const { onlineCount, loading: onlineLoading } = usePresenceRegistry({ platformWide: true })
   const [courses, setCourses] = useState([])
   const [courseId, setCourseId] = useState('')
   const [config, setConfig] = useState(null)
@@ -543,7 +545,7 @@ export default function AdminGuiaMentorado() {
       }
       if (
         !window.confirm(
-          `Gerar conteúdos faltantes de “${courseName}” (1º dia do cronograma → hoje)?\n\nUm job na nuvem processa dia a dia com retomada automática.`,
+          `Gerar conteúdos faltantes de “${courseName}” (1º dia do cronograma → hoje)?\n\nRoda na aba do admin (mantenha aberta). Dias já completos são pulados; o restante usa checkpoint.`,
         )
       ) {
         return
@@ -553,25 +555,31 @@ export default function AdminGuiaMentorado() {
       if (!edital?.disciplinas?.length) {
         throw new Error('Edital verticalizado não encontrado. Gere o edital primeiro.')
       }
-      const { dayCount } = await runMentoradoBackfill({
+      const { dayCount, promise } = await runMentoradoBackfill({
         userId,
         courseId,
         courseName,
       })
-      setFeedback(`🚀 Backfill iniciado (${dayCount} dia(s)). Acompanhe no banner.`)
+      setFeedback(
+        `🚀 Backfill iniciado (${dayCount} dia(s)) na aba — mantenha aberta. Acompanhe o banner.`,
+      )
+      if (promise) await promise
+      setFeedback(`✅ Backfill concluído (${dayCount} dia(s) enfileirados/processados).`)
     })
 
   const handleBackfillAll = () =>
     withAction('backfillAll', async (userId) => {
       if (
         !window.confirm(
-          'Gerar Guia Mentorado em massa (dia 1 → hoje)?\n\nSó cursos com automação ativa. 1 curso por vez.',
+          'Gerar Guia Mentorado em massa (dia 1 → hoje)?\n\nSó cursos com automação ativa. 1 curso por vez. Mantenha a aba aberta.',
         )
       ) {
         return
       }
       const { jobs } = await runMentoradoBackfillAllCourses(userId, setProgress)
-      setFeedback(`✅ ${jobs.length} job(s) enfileirado(s). Acompanhe no banner.`)
+      setFeedback(
+        `✅ ${jobs.length} job(s) iniciado(s) na aba — mantenha aberta. Acompanhe o banner.`,
+      )
     })
 
   const busy = Boolean(busyAction) || saving
@@ -593,13 +601,30 @@ export default function AdminGuiaMentorado() {
               </p>
             </div>
           </div>
-          <a
-            href="/guia-mentorado"
-            className="inline-flex items-center gap-2 rounded-xl border border-cp-border px-3 py-2 text-sm text-cp-text transition hover:bg-cp-surface"
-          >
-            <LinkIcon className="h-4 w-4" />
-            Abrir calendário
-          </a>
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2"
+              title="Usuários reais com presença ativa (últimos 45s)"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="font-mono text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
+                {onlineLoading ? '…' : onlineCount}
+              </span>
+              <span className="text-xs font-semibold text-emerald-800/80 dark:text-emerald-200/80">
+                online agora
+              </span>
+            </div>
+            <a
+              href="/guia-mentorado"
+              className="inline-flex items-center gap-2 rounded-xl border border-cp-border px-3 py-2 text-sm text-cp-text transition hover:bg-cp-surface"
+            >
+              <LinkIcon className="h-4 w-4" />
+              Abrir calendário
+            </a>
+          </div>
         </div>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">

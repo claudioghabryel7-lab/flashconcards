@@ -212,17 +212,17 @@ export async function startMentoradoBackfillForCourse({
   }
 
   onProgress?.(
-    `🚀 ${name}: enfileirando backfill (${pendingDayKeys.length} dia(s)) na nuvem…`,
+    `🚀 ${name}: iniciando backfill (${pendingDayKeys.length} dia(s)) na aba…`,
   )
 
-  const { jobId } = await startMentoradoBackfillJob({
+  const { jobId, promise } = await startMentoradoBackfillJob({
     userId,
     courseId,
     dayKeys: pendingDayKeys,
   })
 
   onProgress?.(
-    `✅ ${name}: backfill iniciado (1 job) — acompanhe no banner.`,
+    `✅ ${name}: backfill iniciado (1 job) — mantenha a aba aberta.`,
   )
 
   return {
@@ -230,6 +230,7 @@ export async function startMentoradoBackfillForCourse({
     todayKey,
     dayCount: pendingDayKeys.length,
     jobId,
+    promise,
   }
 }
 

@@ -154,6 +154,56 @@ export async function startGuiaMentoradoCronogramaGeneration({ userId, courseId,
 }
 
 /**
+ * Monta payloads dos tópicos de um dia (sem enfileirar job).
+ * Usado por “conteúdos de hoje” e pelo backfill local.
+ */
+export async function prepareMentoradoDayAutomation({
+  courseId,
+  targetDate,
+  editalVerticalizado = null,
+  autoPublish = true,
+}) {
+  if (!courseId) return { ok: false, reason: 'missing_course' }
+  if (!targetDate) return { ok: false, reason: 'missing_date' }
+
+  const monthKey = targetDate.slice(0, 7)
+  const cronogramaSnap = await getDoc(doc(db, 'courses', courseId, 'cronograma', monthKey))
+  const dayEntry = cronogramaSnap.exists() ? cronogramaSnap.data()?.days?.[targetDate] : null
+  if (!dayEntry) {
+    return { ok: false, reason: 'day_missing', targetDate }
+  }
+
+  const tipo = dayEntry.type || dayEntry.tipo || 'estudo'
+  if (tipo === 'simulado' || tipo === 'descanso') {
+    return { ok: false, reason: 'skip_day_type', targetDate, tipo }
+  }
+
+  const edital = editalVerticalizado || (await loadEditalVerticalizado(courseId))
+  const topics = extractTopicsFromCronogramaDay(
+    { data: targetDate, tipo, materias: dayEntry.materias || [] },
+    edital,
+  )
+  if (!topics.length) {
+    return { ok: false, reason: 'no_topics', targetDate }
+  }
+
+  const baseContext = await loadMentoradoAutomationContext(courseId)
+  if (!baseContext.editalText?.trim()) {
+    return { ok: false, reason: 'missing_edital', targetDate }
+  }
+
+  const context = { ...baseContext, courseId }
+  const topicPayloads = topics.map((topic) => buildTopicPayloads(topic, context, autoPublish))
+  return {
+    ok: true,
+    targetDate,
+    autoPublish,
+    topics: topicPayloads,
+    topicCount: topicPayloads.length,
+  }
+}
+
+/**
  * Inicia geração automática apenas dos tópicos de um dia do cronograma.
  */
 export async function startMentoradoDayContentAutomation({
@@ -167,29 +217,21 @@ export async function startMentoradoDayContentAutomation({
   if (!courseId) throw new Error('Curso não selecionado.')
   if (!targetDate) throw new Error('Data do dia não informada.')
 
-  const monthKey = targetDate.slice(0, 7)
-  const cronogramaSnap = await getDoc(doc(db, 'courses', courseId, 'cronograma', monthKey))
-  const dayEntry = cronogramaSnap.exists() ? cronogramaSnap.data()?.days?.[targetDate] : null
-  if (!dayEntry) {
-    throw new Error(`Dia ${targetDate} não encontrado no cronograma.`)
+  const prepared = await prepareMentoradoDayAutomation({
+    courseId,
+    targetDate,
+    editalVerticalizado,
+    autoPublish,
+  })
+  if (!prepared.ok) {
+    const messages = {
+      day_missing: `Dia ${targetDate} não encontrado no cronograma.`,
+      no_topics: 'Nenhum tópico válido encontrado para este dia.',
+      missing_edital: 'Edital não encontrado. Gere o edital verticalizado primeiro.',
+      skip_day_type: `Dia ${targetDate} é ${prepared.tipo} — sem geração de conteúdo.`,
+    }
+    throw new Error(messages[prepared.reason] || `Não foi possível preparar o dia ${targetDate}.`)
   }
-
-  const edital = editalVerticalizado || (await loadEditalVerticalizado(courseId))
-  const topics = extractTopicsFromCronogramaDay(
-    { data: targetDate, tipo: dayEntry.type || dayEntry.tipo, materias: dayEntry.materias || [] },
-    edital,
-  )
-  if (!topics.length) {
-    throw new Error('Nenhum tópico válido encontrado para este dia.')
-  }
-
-  const baseContext = await loadMentoradoAutomationContext(courseId)
-  if (!baseContext.editalText?.trim()) {
-    throw new Error('Edital não encontrado. Gere o edital verticalizado primeiro.')
-  }
-
-  const context = { ...baseContext, courseId }
-  const topicPayloads = topics.map((topic) => buildTopicPayloads(topic, context, autoPublish))
 
   const { jobId, promise } = await startBackgroundGeneration({
     userId,
@@ -197,7 +239,7 @@ export async function startMentoradoDayContentAutomation({
     jobType: 'guia_mentorado_automation',
     topicKey: null,
     metadata: {
-      topicCount: topicPayloads.length,
+      topicCount: prepared.topicCount,
       targetDate,
       autoPublish,
     },
@@ -206,11 +248,11 @@ export async function startMentoradoDayContentAutomation({
       courseId,
       autoPublish,
       targetDate,
-      topics: topicPayloads,
+      topics: prepared.topics,
     },
   })
 
-  return { jobId, promise, topicCount: topicPayloads.length }
+  return { jobId, promise, topicCount: prepared.topicCount }
 }
 
 /**

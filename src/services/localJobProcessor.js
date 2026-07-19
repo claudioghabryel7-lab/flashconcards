@@ -3,8 +3,10 @@
  * Sem Cloud Functions / Firebase Admin.
  */
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -959,6 +961,145 @@ async function processGuiaMentoradoDay(courseId, serverPayload, updateProgress, 
   return { publishedCount: done, totalTopics: topics.length, errors }
 }
 
+async function collectCronogramaDayKeysLocal(courseId, endDate) {
+  const cronogramaSnap = await getDocs(collection(db, 'courses', courseId, 'cronograma'))
+  const dayKeys = []
+  for (const monthDoc of cronogramaSnap.docs) {
+    const days = monthDoc.data().days || {}
+    for (const [dateKey, entry] of Object.entries(days)) {
+      if (dateKey > endDate) continue
+      const tipo = entry.type || entry.tipo || 'estudo'
+      if (tipo === 'simulado' || tipo === 'descanso') continue
+      dayKeys.push(dateKey)
+    }
+  }
+  return [...new Set(dayKeys)].sort()
+}
+
+async function isMentoradoDayFullyDone(courseId, dayKey) {
+  const snap = await getDoc(doc(db, 'courses', courseId, 'mentoradoAutomation', dayKey))
+  if (!snap.exists()) return false
+  const data = snap.data()
+  if (data.status === 'done') return true
+  const total = Number(data.totalTopics) || 0
+  const published = Number(data.publishedCount) || 0
+  return total > 0 && published >= total
+}
+
+/**
+ * Backfill local: percorre dayKeys e gera cada dia (checkpoint + auto-retry).
+ * Mantém a aba do admin aberta.
+ */
+async function processGuiaMentoradoBackfill(
+  courseId,
+  serverPayload,
+  updateProgress,
+  { userId, jobId } = {},
+) {
+  const todayKey = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+  }).format(new Date())
+
+  const dayKeys = Array.isArray(serverPayload?.dayKeys) && serverPayload.dayKeys.length
+    ? [...serverPayload.dayKeys].sort()
+    : await collectCronogramaDayKeysLocal(courseId, todayKey)
+
+  if (!dayKeys.length) {
+    throw new Error('Nenhum dia de estudo encontrado no cronograma até hoje.')
+  }
+
+  const startDayIndex = Math.max(0, Number(serverPayload?.resumeFromDayIndex) || 0)
+  const autoPublish = serverPayload?.autoPublish !== false
+  const totalDays = dayKeys.length
+  let processed = 0
+  let skipped = 0
+  const dayErrors = []
+
+  await updateProgress(2, `Backfill: ${totalDays} dia(s) no cronograma (a partir do ${startDayIndex + 1})…`)
+
+  // Import dinâmico evita ciclo com aiGenerationRunner
+  const { prepareMentoradoDayAutomation } = await import('./guiaMentoradoAutomationService')
+
+  for (let i = startDayIndex; i < dayKeys.length; i += 1) {
+    const dayKey = dayKeys[i]
+    const pctBase = Math.round((i / totalDays) * 92) + 3
+
+    if (await isMentoradoDayFullyDone(courseId, dayKey)) {
+      skipped += 1
+      await updateProgress(pctBase, `${dayKey}: já completo — pulando (${i + 1}/${totalDays})`)
+      continue
+    }
+
+    await updateProgress(pctBase, `Gerando dia ${dayKey} (${i + 1}/${totalDays})…`)
+
+    const prepared = await prepareMentoradoDayAutomation({
+      courseId,
+      targetDate: dayKey,
+      autoPublish,
+    })
+
+    if (!prepared.ok) {
+      if (prepared.reason === 'skip_day_type' || prepared.reason === 'no_topics') {
+        skipped += 1
+        await updateProgress(pctBase + 1, `${dayKey}: sem conteúdo — pulando`)
+        continue
+      }
+      if (prepared.reason === 'missing_edital') {
+        throw new Error('Edital não encontrado. Gere o edital verticalizado primeiro.')
+      }
+      dayErrors.push({ dayKey, error: prepared.reason || 'prepare_failed' })
+      continue
+    }
+
+    try {
+      const dayResult = await processGuiaMentoradoDay(
+        courseId,
+        {
+          topics: prepared.topics,
+          targetDate: dayKey,
+          autoPublish,
+          forceFresh: false,
+        },
+        async (p, msg) => {
+          const mapped = pctBase + Math.round(((p || 0) / 100) * Math.max(1, Math.round(92 / totalDays) - 1))
+          await updateProgress(Math.min(mapped, 94), `[${dayKey}] ${msg || ''}`)
+        },
+        { userId, jobId },
+      )
+      processed += 1
+      if (dayResult?.errors?.length) {
+        dayErrors.push(
+          ...dayResult.errors.map((e) => ({
+            dayKey,
+            topicKey: e.topicKey,
+            error: e.error,
+          })),
+        )
+      }
+    } catch (err) {
+      const message = err?.message || String(err)
+      console.error(`[localJob] backfill dia ${dayKey}:`, message)
+      dayErrors.push({ dayKey, error: message })
+      await updateProgress(pctBase + 2, `${dayKey}: erro — ${message.slice(0, 120)}`)
+    }
+  }
+
+  await updateProgress(
+    96,
+    `Backfill concluído — ${processed} dia(s) gerado(s), ${skipped} pulado(s)${
+      dayErrors.length ? `, ${dayErrors.length} aviso(s)` : ''
+    }`,
+  )
+
+  return {
+    daysProcessed: processed,
+    daysSkipped: skipped,
+    totalDays,
+    courseId,
+    errors: dayErrors,
+  }
+}
+
 async function processGuiaMentoradoCronograma(courseId, serverPayload, updateProgress) {
   const config = serverPayload?.config || {}
   await updateProgress(10, 'Gerando cronograma…')
@@ -1198,13 +1339,13 @@ export async function processLocalGenerationJob({
     case 'guia_mentorado_cronograma':
       return processGuiaMentoradoCronograma(courseId, serverPayload, updateProgress)
     case 'guia_mentorado_backfill': {
-      // Backfill = gera conteúdos dos dias; se vier topics usa o mesmo pipeline do dia
-      if (serverPayload?.topics?.length) {
+      if (serverPayload?.topics?.length && serverPayload?.targetDate) {
         return processGuiaMentoradoDay(courseId, serverPayload, updateProgress, { userId, jobId })
       }
-      throw new Error(
-        'Backfill local: use "Gerar conteúdos do dia" por enquanto (admin online).',
-      )
+      return processGuiaMentoradoBackfill(courseId, serverPayload, updateProgress, {
+        userId,
+        jobId,
+      })
     }
     case 'admin_edital_verticalizado':
       return processAdminEdital(courseId, serverPayload, updateProgress)

@@ -990,6 +990,7 @@ const AdminPanel = () => {
               status: data.status || 'offline',
               lastSeen: data.lastSeen,
               updatedAt: data.updatedAt,
+              courseId: data.courseId ?? null,
             }
           }
         })
@@ -7010,6 +7011,25 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
         title="Painel Admin"
         subtitle="Gerencie flashcards, usuários, configurações e mais"
         backHref="/dashboard"
+        actions={
+          <div
+            className="inline-flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5"
+            title="Usuários com heartbeat de presença nos últimos 45s"
+          >
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+            </span>
+            <div className="leading-tight">
+              <p className="font-mono text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
+                {countOnlineFromEntries(presence, { now: presenceNow })}
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800/80 dark:text-emerald-200/80">
+                online agora
+              </p>
+            </div>
+          </div>
+        }
       />
 
       {/* Mensagem de feedback */}
@@ -10979,7 +10999,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                       {users.length} usuários cadastrados ·{' '}
                       {users.filter(isUserEmailVerified).length} com email verificado ·{' '}
                       {users.filter((u) => !isUserEmailVerified(u)).length} pendentes ·{' '}
-                      {countOnlineFromEntries(presence, { now: presenceNow })} online agora (tempo real)
+                      {countOnlineFromEntries(presence, { now: presenceNow })} usuários reais online agora
                     </p>
                     <div className="mt-4 divide-y divide-slate-100">
                       {users.map((user) => {

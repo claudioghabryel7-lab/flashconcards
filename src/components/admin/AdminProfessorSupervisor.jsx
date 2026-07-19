@@ -27,6 +27,7 @@ import {
   defaultWindowEndHour,
 } from '../../services/professorSupervisorService'
 import { subscribeGenerationJob } from '../../services/generationJobService'
+import { usePresenceRegistry } from '../../hooks/usePresenceRegistry'
 
 dayjs.extend(duration)
 
@@ -57,6 +58,7 @@ function formatRemaining(sessionEndsAt) {
 
 export default function AdminProfessorSupervisor() {
   const { user } = useAuth()
+  const { onlineCount, loading: onlineLoading } = usePresenceRegistry({ platformWide: true })
   const [config, setConfig] = useState({ enabled: false })
   const [configError, setConfigError] = useState(null)
   const [liveJob, setLiveJob] = useState(null)
@@ -290,18 +292,35 @@ export default function AdminProfessorSupervisor() {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleToggle}
-            disabled={toggling}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50 ${
-              isScheduleOn
-                ? 'bg-red-500/15 text-red-700 hover:bg-red-500/25 dark:text-red-300'
-                : 'cp-btn-primary'
-            }`}
-          >
-            {toggling ? 'Salvando…' : isScheduleOn ? 'Desativar agenda' : 'Ativar agenda (seg–dom)'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2"
+              title="Usuários reais com presença ativa (últimos 45s)"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="font-mono text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
+                {onlineLoading ? '…' : onlineCount}
+              </span>
+              <span className="text-xs font-semibold text-emerald-800/80 dark:text-emerald-200/80">
+                online agora
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggle}
+              disabled={toggling}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50 ${
+                isScheduleOn
+                  ? 'bg-red-500/15 text-red-700 hover:bg-red-500/25 dark:text-red-300'
+                  : 'cp-btn-primary'
+              }`}
+            >
+              {toggling ? 'Salvando…' : isScheduleOn ? 'Desativar agenda' : 'Ativar agenda (seg–dom)'}
+            </button>
+          </div>
         </div>
 
         <div
