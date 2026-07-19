@@ -58,6 +58,7 @@ function formatRemaining(sessionEndsAt) {
 export default function AdminProfessorSupervisor() {
   const { user } = useAuth()
   const [config, setConfig] = useState({ enabled: false })
+  const [configError, setConfigError] = useState(null)
   const [liveJob, setLiveJob] = useState(null)
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
@@ -78,18 +79,25 @@ export default function AdminProfessorSupervisor() {
   const [windowDirty, setWindowDirty] = useState(false)
 
   useEffect(() => {
-    const unsub = subscribeProfessorSupervisorConfig((data) => {
-      setConfig(data)
-      setLoading(false)
-      if (windowDirty) return
-      const sh = data.windowStartHour ?? data.dailyStartHour
-      const sm = data.windowStartMinute ?? data.dailyStartMinute ?? 0
-      const eh = data.windowEndHour
-      const em = data.windowEndMinute ?? 0
-      if (sh != null) setStartTime(padTime(sh, sm))
-      if (eh != null) setEndTime(padTime(eh, em))
-      else if (sh != null) setEndTime(padTime(defaultWindowEndHour(Number(sh)), 0))
-    })
+    const unsub = subscribeProfessorSupervisorConfig(
+      (data) => {
+        setConfig(data)
+        setLoading(false)
+        setConfigError(data?.loadError || null)
+        if (windowDirty) return
+        const sh = data.windowStartHour ?? data.dailyStartHour
+        const sm = data.windowStartMinute ?? data.dailyStartMinute ?? 0
+        const eh = data.windowEndHour
+        const em = data.windowEndMinute ?? 0
+        if (sh != null) setStartTime(padTime(sh, sm))
+        if (eh != null) setEndTime(padTime(eh, em))
+        else if (sh != null) setEndTime(padTime(defaultWindowEndHour(Number(sh)), 0))
+      },
+      (err) => {
+        setLoading(false)
+        setConfigError(err?.message || 'Erro ao carregar configuração do Professor IA.')
+      },
+    )
     return () => unsub?.()
   }, [windowDirty])
 
@@ -261,6 +269,11 @@ export default function AdminProfessorSupervisor() {
 
   return (
     <div className="space-y-4">
+      {configError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+          {configError}
+        </div>
+      )}
       <div className="cp-card !rounded-2xl p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -273,7 +286,7 @@ export default function AdminProfessorSupervisor() {
                 Agenda <strong>segunda a domingo</strong> com janela de horário. Corrige{' '}
                 <strong>somente</strong> a aba <strong>🚩 Moderação</strong> (sinalizações abertas).
                 Independente do <strong>📅 Guia Mentorado</strong> (cronograma/dia) — compartilham só
-                a fila global de jobs Gemini (máx. <strong>1</strong> por vez). Sem report novo, fica em
+                a fila global de jobs Gemini (máx. <strong>2</strong> por vez). Sem report novo, fica em
                 espera — não gasta API à toa.
               </p>
             </div>

@@ -482,7 +482,7 @@ export default function AdminGuiaMentorado() {
       }
 
       setProgress('Salvando configuração…')
-      await persistConfig(form)
+      await persistConfig(form, { skipValidation: true })
 
       setProgress('Enfileirando geração do cronograma na nuvem…')
       const { jobId } = await runMentoradoCronograma({
@@ -587,7 +587,7 @@ export default function AdminGuiaMentorado() {
                 Um painel por curso: liga/desliga a geração diária, define o horário (Brasília),
                 controla gatilhos (cronograma, cron, backfill, véspera) e dispara ações manuais.
                 O cron horário (a cada 15 min) só processa o curso na hora configurada — sem religar a
-                automação sozinha. Jobs Gemini: máx. 1 por vez (compartilhado com Professor IA).
+                automação sozinha. Jobs Gemini: máx. 2 por vez (compartilhado com Professor IA).
               </p>
             </div>
           </div>

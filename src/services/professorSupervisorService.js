@@ -191,12 +191,20 @@ export function computeSessionEndsAtFromWindow(cfg = {}, date = new Date()) {
   return Timestamp.fromDate(new Date(Date.now() + minutesLeft * 60 * 1000))
 }
 
-export function subscribeProfessorSupervisorConfig(onData) {
+export function subscribeProfessorSupervisorConfig(onData, onError) {
   if (!db) return () => {}
   const ref = doc(db, ...CONFIG_PATH)
-  return onSnapshot(ref, (snap) => {
-    onData(snap.exists() ? snap.data() : { enabled: false, recurringDaily: false })
-  })
+  return onSnapshot(
+    ref,
+    (snap) => {
+      onData(snap.exists() ? snap.data() : { enabled: false, recurringDaily: false })
+    },
+    (err) => {
+      console.error('[professorSupervisor] config snapshot:', err)
+      onError?.(err)
+      onData({ enabled: false, recurringDaily: false, loadError: err?.message || 'Erro ao carregar config.' })
+    },
+  )
 }
 
 /**

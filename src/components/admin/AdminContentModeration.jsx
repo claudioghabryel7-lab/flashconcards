@@ -43,7 +43,7 @@ export default function AdminContentModeration() {
       await resolveContentFlag(flag.courseId, flag.id, { contentCorrected })
     } catch (e) {
       console.error(e)
-      alert('Erro ao marcar como resolvido.')
+      alert(e?.message || 'Erro ao marcar como resolvido.')
     } finally {
       setBusyId(null)
     }
@@ -57,7 +57,7 @@ export default function AdminContentModeration() {
       await deleteContentFlag(flag.courseId, flag.id)
     } catch (e) {
       console.error(e)
-      alert('Erro ao apagar sinalização.')
+      alert(e?.message || 'Erro ao apagar sinalização.')
     } finally {
       setBusyId(null)
     }
