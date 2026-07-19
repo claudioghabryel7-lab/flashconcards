@@ -713,8 +713,10 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       console.log('🤖 [Questões Tópico] Iniciando geração com IA...')
       const parsed = await generateAiJson(prompt, {
         courseId: resolvedCourseId,
+        trustedGeneration: true,
         isLegalContent: true,
         useRAG: true,
+        useGoogleSearch: true,
       })
       console.log('✅ [Questões Tópico] JSON parseado com sucesso')
       console.log('📊 [Questões Tópico] Número de questões geradas:', parsed.questoes?.length || 0)

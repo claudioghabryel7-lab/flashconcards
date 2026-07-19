@@ -134,7 +134,11 @@ function normalizeQuestao(questao = {}, index = 0) {
   return {
     enunciado: enunciadoParagraphs.join('\n\n'),
     alternativas: sanitizeQuestaoAlternativas(normalizedAlts),
-    correta: questao.correta || questao.respostaCorreta || questao.gabarito || 'A',
+    correta: (() => {
+      const raw = questao.correta || questao.respostaCorreta || questao.gabarito || ''
+      const letter = String(raw).trim().toUpperCase().replace(/[^A-E]/g, '').slice(0, 1)
+      return letter || ''
+    })(),
     gabaritoComentado: coerceHtml(
       questao.gabaritoComentado || questao.explicacao || questao.comentario || '',
     ),

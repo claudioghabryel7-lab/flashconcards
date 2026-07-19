@@ -225,17 +225,13 @@ async function loadMentoradoAutomationContext(courseId) {
 }
 
 const { buildConteudoCompletoServerPrompt } = require('./conteudoCompletoPrompt')
+const { buildQuestoesPrompt } = require('./unifiedGenerationPrompts')
 
 function buildTopicPayloads(topic, context) {
-  const tipoProva =
-    context.banca?.toUpperCase().includes('CESPE') ||
-    context.banca?.toUpperCase().includes('CEBRASPE')
-      ? 'Certo/Errado'
-      : 'ABCD'
-
   const flashcardMeta = {
     courseId: context.courseId,
     courseName: context.courseName,
+    concursoName: context.concursoName,
     disciplina: topic.disciplina,
     topicoNome: topic.topicoNome,
     topicoNumero: topic.topicoNumero,
@@ -255,19 +251,18 @@ function buildTopicPayloads(topic, context) {
     editalText: context.editalText,
   })
 
-  const altBlock =
-    tipoProva === 'Certo/Errado'
-      ? `"respostaCorreta": "C"`
-      : `"alternativas": { "A": "", "B": "", "C": "", "D": "", "E": "" }, "respostaCorreta": "A"`
-
-  const questoesPrompt = `Gere 50 questões preditivas nível 1 para:
-DISCIPLINA: ${topic.disciplina}
-TÓPICO: ${topic.topicoNome}
-BANCA: ${context.banca || 'não definida'}
-TIPO: ${tipoProva}
-EDITAL: ${(context.editalText || '').slice(0, 10000)}
-JSON: { "topico": "${topic.topicoNome}", "nivel": 1, "questoes": [{ "numero": 1, "enunciado": "", ${altBlock}, "explicacao": "" }] }
-Retorne APENAS JSON válido.`
+  const questoesPrompt = buildQuestoesPrompt({
+    disciplina: topic.disciplina,
+    topicoNome: topic.topicoNome,
+    topicKey: topic.topicKey,
+    banca: context.banca,
+    concursoName: context.concursoName,
+    cargo: context.cargo,
+    editalText: context.editalText,
+    nivel: 1,
+    maxNivel: 10,
+    expectedCount: 50,
+  })
 
   return {
     topicKey: topic.topicKey,

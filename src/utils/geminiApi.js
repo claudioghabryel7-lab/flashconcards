@@ -451,10 +451,10 @@ export async function generateAiJson(prompt, options = {}) {
           : `${prompt}\n\nIMPORTANTE: a resposta anterior não pôde ser lida. Retorne APENAS um único JSON válido e completo, sem markdown nem texto extra.`
 
       const response = await callGeminiWithRetry(effectivePrompt, {
-        silent: true,
-        verifyContent: false,
-        useRAG: options.useRAG ?? false,
-        useGoogleSearch: options.useGoogleSearch ?? false,
+        silent: !options.trustedGeneration,
+        verifyContent: options.trustedGeneration ? true : false,
+        useRAG: options.useRAG ?? Boolean(options.trustedGeneration),
+        useGoogleSearch: options.useGoogleSearch ?? Boolean(options.trustedGeneration),
         ...options,
       })
 

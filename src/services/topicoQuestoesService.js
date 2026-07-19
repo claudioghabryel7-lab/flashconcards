@@ -136,7 +136,12 @@ REGRAS:
 - ${AI_TEXT_FORMAT_RULES}
 - Separe parágrafos no enunciado e no comentário com linha em branco`
 
-    const parsed = await generateAiJson(prompt, { courseId })
+    const parsed = await generateAiJson(prompt, {
+      courseId,
+      trustedGeneration: true,
+      useGoogleSearch: true,
+      useRAG: true,
+    })
     const items = parsed.questoes || []
     
     if (!items.length) {

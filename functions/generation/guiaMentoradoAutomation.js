@@ -1,4 +1,6 @@
-const { generateAiJson } = require('./geminiServer')
+const { generateTrustedJson } = require('./trustedGeneration')
+const { buildFlashcardPrompt } = require('./unifiedGenerationPrompts')
+const { validateFlashcardsList, MIN_FLASHCARDS, MAX_FLASHCARDS } = require('./flashcardsValidate')
 const {
   sanitizeTopicKeyForFirestore,
   normalizeTopicKeyForStorage,
@@ -30,8 +32,6 @@ const CONTENT_STATUS = {
   UNAVAILABLE: 'indisponivel',
 }
 
-const MIN_FLASHCARDS = 40
-const MAX_FLASHCARDS = 60
 const BATCH_SIZE = 30
 
 function getDb() {
@@ -54,25 +54,6 @@ function dedupeFlashcards(items = []) {
     seen.add(front)
     return true
   })
-}
-
-function buildFlashcardPrompt(meta, batchNumber, totalBatches, cardsInBatch, existingFronts = []) {
-  const existingList = existingFronts.length
-    ? `\nNÃO repita:\n${existingFronts.slice(0, 40).map((f) => `- ${f}`).join('\n')}`
-    : ''
-
-  return `Gere flashcards para o tópico:
-CURSO: ${meta.courseName || ''}
-DISCIPLINA: ${meta.disciplina}
-TÓPICO: ${meta.topicoNumero ? `${meta.topicoNumero} - ` : ''}${meta.topicoNome}
-LOTE: ${batchNumber}/${totalBatches} — ${cardsInBatch} cards
-${existingList}
-
-EDITAL:
-${(meta.editalText || '').slice(0, 12000)}
-
-JSON: { "flashcards": [{ "frente": "", "verso": "", "dificuldade": "médio" }] }
-Retorne APENAS JSON válido.`
 }
 
 async function hasFlashcards(courseId, topicKey, disciplina, modulo) {
@@ -160,9 +141,17 @@ async function generateAndSaveFlashcards(courseId, topic, onHeartbeat, shouldAbo
 
   await onHeartbeat?.('flashcards lote 1/2')
   const batch1 = await runBatch('flashcards lote 1/2', () =>
-    generateAiJson(buildFlashcardPrompt(meta, 1, 2, firstBatchCount, []), {
-      generationConfig: { maxOutputTokens: 24000, temperature: 0.35 },
-    }),
+    generateTrustedJson(
+      buildFlashcardPrompt(meta, 1, 2, firstBatchCount, []),
+      { contentType: 'flashcards', rejectTruncatedJson: false },
+      {
+        contentType: 'flashcards',
+        disciplina: meta.disciplina,
+        banca: meta.banca,
+        concursoName: meta.concursoName || meta.courseName,
+        flashcardLimits: { min: 1, max: firstBatchCount + 5 },
+      },
+    ),
   )
   allItems = dedupeFlashcards(batch1.flashcards || [])
 
@@ -170,7 +159,7 @@ async function generateAndSaveFlashcards(courseId, topic, onHeartbeat, shouldAbo
     await onHeartbeat?.('flashcards lote 2/2')
     const remaining = Math.min(MAX_FLASHCARDS - allItems.length, BATCH_SIZE)
     const batch2 = await runBatch('flashcards lote 2/2', () =>
-      generateAiJson(
+      generateTrustedJson(
         buildFlashcardPrompt(
           meta,
           2,
@@ -178,13 +167,24 @@ async function generateAndSaveFlashcards(courseId, topic, onHeartbeat, shouldAbo
           remaining,
           allItems.map((c) => c.frente || c.pergunta),
         ),
-        { generationConfig: { maxOutputTokens: 24000, temperature: 0.35 } },
+        { contentType: 'flashcards', rejectTruncatedJson: false },
+        {
+          contentType: 'flashcards',
+          disciplina: meta.disciplina,
+          banca: meta.banca,
+          concursoName: meta.concursoName || meta.courseName,
+          flashcardLimits: { min: 1, max: remaining + 5 },
+        },
       ),
     )
     allItems = dedupeFlashcards([...allItems, ...(batch2.flashcards || [])])
   }
 
   allItems = allItems.slice(0, MAX_FLASHCARDS)
+  const finalValidation = validateFlashcardsList(allItems)
+  if (!finalValidation.ok) {
+    throw new Error(`Flashcards inválidos — ${finalValidation.errors.slice(0, 6).join(' ')}`)
+  }
   if (allItems.length < MIN_FLASHCARDS) {
     throw new Error(`Flashcards insuficientes para ${topic.topicoNome} (${allItems.length})`)
   }
@@ -239,29 +239,20 @@ async function generateAndSaveConteudo(courseId, topic, onHeartbeat, shouldAbort
     return { skipped: true, type: 'conteudo' }
   }
 
-  const { validateConteudoCompletoPayload } = require('./conteudoCompletoValidate')
   const { hydrateConteudoCompletoMaterial } = require('./materialFormatting')
 
   const parsed = await runWithHeartbeat(
     () =>
-      generateAiJson(topic.conteudoPrompt, {
-        useRAG: true,
-        useGoogleSearch: true,
-        generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
-        rejectTruncatedJson: true,
-        maxParseAttempts: 4,
+      generateTrustedJson(topic.conteudoPrompt, { contentType: 'material', rejectTruncatedJson: true }, {
+        contentType: 'material',
+        disciplina: topic.disciplina,
+        banca: topic.flashcardMeta?.banca,
+        concursoName: topic.flashcardMeta?.courseName,
       }),
     () => onHeartbeat?.('material'),
     JOB_HEARTBEAT_MS,
     shouldAbort,
   )
-
-  const validation = validateConteudoCompletoPayload(parsed)
-  if (!validation.ok) {
-    const err = new Error(`Material incompleto — ${validation.errors.join(' ')}`)
-    err.code = 'material_incomplete'
-    throw err
-  }
 
   const hydrated = hydrateConteudoCompletoMaterial(parsed, topic.topicKey)
   const sanitizedKey = sanitizeTopicKeyForFirestore(topic.topicKey)
@@ -292,10 +283,12 @@ async function generateAndSaveQuestoes(courseId, topic, onHeartbeat, shouldAbort
 
   const parsed = await runWithHeartbeat(
     () =>
-      generateAiJson(topic.questoesPrompt, {
-        useRAG: true,
-        useGoogleSearch: true,
-        generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
+      generateTrustedJson(topic.questoesPrompt, { contentType: 'questoes' }, {
+        contentType: 'questoes',
+        expectedCount: 50,
+        disciplina: topic.disciplina,
+        banca: topic.flashcardMeta?.banca,
+        concursoName: topic.flashcardMeta?.courseName,
       }),
     () => onHeartbeat?.('questões'),
     JOB_HEARTBEAT_MS,

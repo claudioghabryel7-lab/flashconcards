@@ -828,8 +828,10 @@ REGRAS:
 
       const parsed = await generateAiJson(prompt, {
         courseId: resolvedCourseId,
+        trustedGeneration: true,
         isLegalContent: true,
         useRAG: true,
+        useGoogleSearch: true,
       })
       setProgress(75)
       const payload = hydrateConteudoCompletoMaterial(

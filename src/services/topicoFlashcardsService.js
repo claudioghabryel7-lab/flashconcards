@@ -170,9 +170,12 @@ async function generateFlashcardBatch(params) {
   const prompt = buildTopicoFlashcardPrompt(params)
   const parsed = await generateAiJson(prompt, {
     courseId: params.courseId,
+    trustedGeneration: true,
+    useGoogleSearch: true,
+    useRAG: true,
     generationConfig: {
       maxOutputTokens: 24000,
-      temperature: 0.35,
+      temperature: 0.25,
     },
   })
   return parsed.flashcards || []

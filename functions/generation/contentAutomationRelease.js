@@ -17,6 +17,7 @@ const {
   formatTopicoAsModulo,
 } = require('./guiaMentoradoEdital')
 const { sanitizeTopicKeyForFirestore, sanitizeDisciplinaKey } = require('./topicKeyUtils')
+const { buildQuestoesPrompt: buildUnifiedQuestoesPrompt } = require('./unifiedGenerationPrompts')
 
 const CONTENT_RELEASE_INTERVAL_MINUTES = 30
 const MAX_NIVEL = 10
@@ -255,38 +256,18 @@ async function foundationComplete(courseId, edital, topics) {
 }
 
 function buildQuestoesPrompt({ topic, context, nivel }) {
-  const tipoProva =
-    context.banca?.toUpperCase().includes('CESPE') ||
-    context.banca?.toUpperCase().includes('CEBRASPE')
-      ? 'Certo/Errado'
-      : 'ABCD'
-
-  const altBlock =
-    tipoProva === 'Certo/Errado'
-      ? `"respostaCorreta": "C"`
-      : `"alternativas": { "A": "", "B": "", "C": "", "D": "", "E": "" }, "respostaCorreta": "A"`
-
-  const dificuldade =
-    nivel === 1
-      ? 'básicas e diretas (conceitos fundamentais)'
-      : nivel <= 3
-        ? 'fáceis a médias'
-        : nivel <= 6
-          ? 'médias (análise e interpretação)'
-          : nivel <= 8
-            ? 'avançadas (casos complexos)'
-            : 'especialista (nuances e casos excepcionais)'
-
-  return `Gere 50 questões preditivas nível ${nivel} (${dificuldade}) para:
-DISCIPLINA: ${topic.disciplina}
-TÓPICO: ${topic.topicoNome}
-BANCA: ${context.banca || 'não definida'}
-CARGO: ${context.cargo || context.concursoName || ''}
-TIPO: ${tipoProva}
-NÍVEL: ${nivel} de ${MAX_NIVEL}
-EDITAL: ${(context.editalText || '').slice(0, 10000)}
-JSON: { "topico": "${topic.topicoNome}", "nivel": ${nivel}, "questoes": [{ "numero": 1, "enunciado": "", ${altBlock}, "explicacao": "" }] }
-Retorne APENAS JSON válido.`
+  return buildUnifiedQuestoesPrompt({
+    disciplina: topic.disciplina,
+    topicoNome: topic.topicoNome,
+    topicKey: topic.topicKey,
+    banca: context.banca,
+    concursoName: context.concursoName,
+    cargo: context.cargo,
+    editalText: context.editalText,
+    nivel,
+    maxNivel: MAX_NIVEL,
+    expectedCount: 50,
+  })
 }
 
 function buildIncidenciaPrompt({ disciplina, disciplinaNome, context, editalText }) {

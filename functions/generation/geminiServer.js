@@ -339,4 +339,7 @@ module.exports = {
   generateAiJson,
   parseAiJsonText,
   loadApiKeys: collectGeminiApiKeys,
+  callGemini,
+  extractGeneratedText,
+  collectTextFromGeminiResponse,
 }

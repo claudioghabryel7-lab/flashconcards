@@ -65,19 +65,28 @@ ${truncateForVerification(content)}`
 }
 
 export function parseVerificationResult(rawText = '') {
-  const defaultResult = { aprovado: true, problemas: [], texto_corrigido: null }
+  const rejected = {
+    aprovado: false,
+    problemas: [{ status: 'INCERTO', motivo: 'Auditoria não parseável' }],
+    texto_corrigido: null,
+  }
 
   try {
     const jsonMatch = rawText.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return defaultResult
+    if (!jsonMatch) return rejected
     const parsed = JSON.parse(jsonMatch[0])
+    const problemas = Array.isArray(parsed.problemas) ? parsed.problemas : []
+    const hasFalse = problemas.some((p) => String(p?.status || '').toUpperCase() === 'FALSO')
+    const graveIncerto =
+      problemas.filter((p) => String(p?.status || '').toUpperCase() === 'INCERTO').length > 1
+    const aprovado = parsed.aprovado === true && !hasFalse && !graveIncerto
     return {
-      aprovado: parsed.aprovado !== false,
-      problemas: Array.isArray(parsed.problemas) ? parsed.problemas : [],
+      aprovado,
+      problemas,
       texto_corrigido: parsed.texto_corrigido || null,
     }
   } catch {
-    return defaultResult
+    return rejected
   }
 }
 

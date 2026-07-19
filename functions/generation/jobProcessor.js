@@ -1,5 +1,7 @@
 const admin = require('firebase-admin')
-const { generateAiJsonWithJobHeartbeat } = require('./generationJobResume')
+const { generateTrustedJsonWithJobHeartbeat } = require('./trustedGeneration')
+const { buildFlashcardPrompt } = require('./unifiedGenerationPrompts')
+const { validateFlashcardsList, MIN_FLASHCARDS, MAX_FLASHCARDS } = require('./flashcardsValidate')
 const {
   sanitizeTopicKeyForFirestore,
   normalizeTopicKeyForStorage,
@@ -11,9 +13,7 @@ const CONTENT_STATUS = {
   UNAVAILABLE: 'indisponivel',
 }
 
-const { sanitizeFlashcardText, AI_TEXT_FORMAT_RULES, sanitizeQuestaoAlternativas } = require('./aiTextFormatting')
-const MIN_FLASHCARDS = 40
-const MAX_FLASHCARDS = 60
+const { sanitizeFlashcardText, sanitizeQuestaoAlternativas } = require('./aiTextFormatting')
 const BATCH_SIZE = 30
 
 function getDb() {
@@ -89,40 +89,6 @@ function dedupeFlashcards(items = []) {
   })
 }
 
-function buildFlashcardPrompt(meta, batchNumber, totalBatches, cardsInBatch, existingFronts = []) {
-  const existingList = existingFronts.length
-    ? `\nNÃO repita estas frentes já geradas:\n${existingFronts.slice(0, 40).map((f) => `- ${f}`).join('\n')}`
-    : ''
-
-  return `Gere flashcards para o tópico do edital abaixo.
-
-CURSO: ${meta.courseName || ''}
-DISCIPLINA: ${meta.disciplina}
-TÓPICO: ${meta.topicoNumero ? `${meta.topicoNumero} - ` : ''}${meta.topicoNome}
-MÓDULO: ${meta.modulo}
-BANCA: ${meta.banca || 'não informada'}
-LOTE: ${batchNumber}/${totalBatches} — gere exatamente ${cardsInBatch} cards neste lote.
-${existingList}
-
-EDITAL (trecho):
-${(meta.editalText || '').slice(0, 12000)}
-
-FORMATO JSON OBRIGATÓRIO:
-{
-  "flashcards": [
-    { "frente": "pergunta", "verso": "resposta completa", "dificuldade": "fácil|médio|difícil" }
-  ]
-}
-
-REGRAS:
-- Retorne APENAS JSON válido
-- ${AI_TEXT_FORMAT_RULES}
-- Separe ideias no verso com linha em branco entre parágrafos
-- Respostas completas e detalhadas (mínimo 2-4 frases no verso), nunca superficiais
-- Cubra TODO o tópico — são necessários ${MIN_FLASHCARDS} a ${MAX_FLASHCARDS} cards no total
-- Conteúdo fiel à legislação e ao edital`
-}
-
 async function deleteExistingFlashcards(courseId, topicKey, disciplina, modulo) {
   const db = getDb()
   const normalizedTopicKey = normalizeTopicKeyForStorage(topicKey)
@@ -165,34 +131,26 @@ async function saveMergeDoc(courseId, collectionName, docId, parsed, extraFields
 
 async function processConteudoCompleto(userId, jobId, courseId, serverPayload) {
   const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
-  const { validateConteudoCompletoPayload } = require('./conteudoCompletoValidate')
   const { hydrateConteudoCompletoMaterial } = require('./materialFormatting')
-  await updateJob(userId, jobId, { progress: 15, message: 'Gerando conteúdo com IA…' })
+  await updateJob(userId, jobId, { progress: 15, message: 'Gerando conteúdo confiável…' })
 
-  const parsed = await generateAiJsonWithJobHeartbeat(
+  const parsed = await generateTrustedJsonWithJobHeartbeat(
     userId,
     jobId,
     prompt,
     {
-      useRAG: aiOptions.useRAG ?? true,
-      useGoogleSearch: aiOptions.useGoogleSearch ?? true,
-      generationConfig: {
-        maxOutputTokens: 32000,
-        temperature: 0.35,
-        ...(aiOptions.generationConfig || {}),
-      },
+      contentType: 'material',
       rejectTruncatedJson: true,
-      maxParseAttempts: 4,
+      generationConfig: aiOptions.generationConfig,
     },
-    'Gerando conteúdo com IA…',
+    'Gerando conteúdo confiável…',
+    {
+      contentType: 'material',
+      banca: savePlan.banca,
+      concursoName: savePlan.concursoName,
+      disciplina: savePlan.disciplina,
+    },
   )
-
-  const validation = validateConteudoCompletoPayload(parsed)
-  if (!validation.ok) {
-    const err = new Error(`Material incompleto — ${validation.errors.join(' ')}`)
-    err.code = 'material_incomplete'
-    throw err
-  }
 
   const topicKey = savePlan.topicKey || ''
   const normalized = hydrateConteudoCompletoMaterial(parsed, topicKey)
@@ -216,18 +174,24 @@ async function processConteudoCompleto(userId, jobId, courseId, serverPayload) {
 
 async function processQuestoesTopico(userId, jobId, courseId, serverPayload) {
   const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
-  await updateJob(userId, jobId, { progress: 15, message: 'Gerando questões com IA…' })
+  await updateJob(userId, jobId, { progress: 15, message: 'Gerando questões confiáveis…' })
 
-  const parsed = await generateAiJsonWithJobHeartbeat(
+  const parsed = await generateTrustedJsonWithJobHeartbeat(
     userId,
     jobId,
     prompt,
     {
-      useRAG: aiOptions.useRAG ?? true,
-      useGoogleSearch: aiOptions.useGoogleSearch ?? true,
+      contentType: 'questoes',
       generationConfig: aiOptions.generationConfig,
     },
-    'Gerando questões com IA…',
+    'Gerando questões confiáveis…',
+    {
+      contentType: 'questoes',
+      expectedCount: savePlan.expectedCount ?? 50,
+      banca: savePlan.banca,
+      concursoName: savePlan.concursoName,
+      disciplina: savePlan.disciplina,
+    },
   )
 
   await updateJob(userId, jobId, { progress: 85, message: 'Salvando questões…' })
@@ -339,18 +303,19 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
   await updateJob(userId, jobId, { progress: 20, message: 'Gerando flashcards (lote 1)…' })
 
   const batch1Prompt = buildFlashcardPrompt(baseMeta, 1, 2, firstBatchCount, [])
-  const batch1 = await generateAiJsonWithJobHeartbeat(
+  const batch1 = await generateTrustedJsonWithJobHeartbeat(
     userId,
     jobId,
     batch1Prompt,
+    { contentType: 'flashcards', rejectTruncatedJson: false },
+    'Gerando flashcards confiáveis (lote 1)…',
     {
-      generationConfig: {
-        maxOutputTokens: 24000,
-        temperature: 0.35,
-        ...(aiOptions.generationConfig || {}),
-      },
+      contentType: 'flashcards',
+      disciplina: meta.disciplina,
+      banca: meta.banca,
+      concursoName: meta.concursoName || meta.courseName,
+      flashcardLimits: { min: 1, max: firstBatchCount + 5 },
     },
-    'Gerando flashcards (lote 1)…',
   )
   allItems = dedupeFlashcards(batch1.flashcards || [])
 
@@ -364,12 +329,19 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
       remaining,
       allItems.map((c) => c.frente || c.pergunta),
     )
-    const batch2 = await generateAiJsonWithJobHeartbeat(
+    const batch2 = await generateTrustedJsonWithJobHeartbeat(
       userId,
       jobId,
       batch2Prompt,
-      { generationConfig: { maxOutputTokens: 24000, temperature: 0.35 } },
-      'Gerando flashcards (lote 2)…',
+      { contentType: 'flashcards', rejectTruncatedJson: false },
+      'Gerando flashcards confiáveis (lote 2)…',
+      {
+        contentType: 'flashcards',
+        disciplina: meta.disciplina,
+        banca: meta.banca,
+        concursoName: meta.concursoName || meta.courseName,
+        flashcardLimits: { min: 1, max: remaining + 5 },
+      },
     )
     allItems = dedupeFlashcards([...allItems, ...(batch2.flashcards || [])])
   }
@@ -384,17 +356,29 @@ async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
       remaining,
       allItems.map((c) => c.frente || c.pergunta),
     )
-    const batch3 = await generateAiJsonWithJobHeartbeat(
+    const batch3 = await generateTrustedJsonWithJobHeartbeat(
       userId,
       jobId,
       batch3Prompt,
-      { generationConfig: { maxOutputTokens: 24000, temperature: 0.35 } },
-      'Gerando flashcards (lote 3)…',
+      { contentType: 'flashcards', rejectTruncatedJson: false },
+      'Gerando flashcards confiáveis (lote 3)…',
+      {
+        contentType: 'flashcards',
+        disciplina: meta.disciplina,
+        banca: meta.banca,
+        concursoName: meta.concursoName || meta.courseName,
+        flashcardLimits: { min: 1, max: remaining + 5 },
+      },
     )
     allItems = dedupeFlashcards([...allItems, ...(batch3.flashcards || [])])
   }
 
   allItems = allItems.slice(0, MAX_FLASHCARDS)
+
+  const finalValidation = validateFlashcardsList(allItems)
+  if (!finalValidation.ok) {
+    throw new Error(`Flashcards inválidos — ${finalValidation.errors.slice(0, 6).join(' ')}`)
+  }
 
   if (allItems.length < MIN_FLASHCARDS) {
     throw new Error(
