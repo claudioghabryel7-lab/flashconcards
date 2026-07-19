@@ -628,6 +628,11 @@ async function spawnSupervisorJob(userId, courseId, queueItem) {
     updatedAt: ts,
   })
 
+  const { kickServerJobAfterCreate } = require('./generationJobKick')
+  await kickServerJobAfterCreate(userId, ref.id).catch((err) => {
+    console.warn(`[spawnSupervisorJob] kick ${ref.id}:`, err?.message || err)
+  })
+
   return ref.id
 }
 

@@ -332,6 +332,12 @@ async function spawnContentJob(userId, courseId, jobType, serverPayload, metadat
     createdAt: ts,
     updatedAt: ts,
   })
+
+  const { kickServerJobAfterCreate } = require('./generationJobKick')
+  await kickServerJobAfterCreate(userId, ref.id).catch((err) => {
+    console.warn(`[spawnContentJob] kick ${ref.id}:`, err?.message || err)
+  })
+
   return ref.id
 }
 

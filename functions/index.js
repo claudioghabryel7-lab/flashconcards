@@ -149,9 +149,9 @@ exports.onGenerationJobCreated = functions
     }
 
     const { userId, jobId } = context.params
-    const { runServerGenerationJob } = getKickModule()
-    const result = await runServerGenerationJob(userId, jobId, data)
-    console.log(`[onGenerationJobCreated] ${jobId}:`, result?.ok ? 'ok' : result?.reason || result)
+    const { kickServerJobAfterCreate } = getKickModule()
+    const result = await kickServerJobAfterCreate(userId, jobId)
+    console.log(`[onGenerationJobCreated] ${jobId}:`, result?.ok ? 'kicked' : result?.reason || result)
     return null
   })
 

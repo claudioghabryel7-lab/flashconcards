@@ -212,8 +212,15 @@ async function processStuckPendingGenerationJobs() {
   return { kicked, scanned: seen.size, activeCount, slotsLeft }
 }
 
+/** Dispara processamento assíncrono — seguro chamar após criar doc ou no onCreate. */
+async function kickServerJobAfterCreate(userId, jobId) {
+  if (!userId || !jobId) return { ok: false, reason: 'missing_params' }
+  return kickGenerationJob(userId, jobId, { wait: false })
+}
+
 module.exports = {
   runServerGenerationJob,
   kickGenerationJob,
   processStuckPendingGenerationJobs,
+  kickServerJobAfterCreate,
 }

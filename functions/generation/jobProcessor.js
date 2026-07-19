@@ -385,6 +385,13 @@ async function processGenerationJob(userId, jobId, jobData) {
       await releaseServerJobSlot(jobId)
       return { skipped: true, reason: 'already_claimed' }
     }
+  } else if (jobData.status === 'running') {
+    const { hasFreshActiveHeartbeat } = require('./generationJobResume')
+    if (await hasFreshActiveHeartbeat(jobId)) {
+      const { releaseServerJobSlot } = require('./generationJobConcurrency')
+      await releaseServerJobSlot(jobId)
+      return { skipped: true, reason: 'already_running' }
+    }
   }
 
   const { courseId, jobType, serverPayload } = jobData

@@ -61,10 +61,29 @@ async function hasActiveMentoradoJobs(courseId, userId) {
     .where('status', 'in', ACTIVE_JOB_STATUSES)
     .limit(40)
     .get()
-  return jobsSnap.docs.some((d) => {
-    const type = d.data()?.jobType
-    return type === 'guia_mentorado_automation' || type === 'guia_mentorado_backfill'
-  })
+
+  const now = Date.now()
+  let hasRealActive = false
+
+  for (const d of jobsSnap.docs) {
+    const data = d.data() || {}
+    const type = data.jobType
+    if (type !== 'guia_mentorado_automation' && type !== 'guia_mentorado_backfill') continue
+
+    if (data.status === 'pending') {
+      const created = data.createdAt?.toDate?.() || data.updatedAt?.toDate?.()
+      const ageMs = created ? now - created.getTime() : 0
+      if (ageMs > 2 * 60 * 1000) {
+        const { kickServerJobAfterCreate } = require('./generationJobKick')
+        await kickServerJobAfterCreate(userId, d.id).catch(() => {})
+        continue
+      }
+    }
+
+    hasRealActive = true
+  }
+
+  return hasRealActive
 }
 
 async function prepareDayAutomation(courseId, targetDate, options = {}) {
@@ -175,6 +194,11 @@ async function spawnDayAutomationJob(userId, courseId, targetDate, topicPayloads
     message: `Preparando conteúdos do dia ${targetDate}…`,
     createdAt: ts,
     updatedAt: ts,
+  })
+
+  const { kickServerJobAfterCreate } = require('./generationJobKick')
+  await kickServerJobAfterCreate(userId, ref.id).catch((err) => {
+    console.warn(`[spawnDayAutomationJob] kick ${ref.id}:`, err?.message || err)
   })
 
   return ref.id
