@@ -406,7 +406,7 @@ export async function forceStopAllGenerationJobsGlobally() {
   return data
 }
 
-export function subscribeActiveGenerationJobs(userId, onData) {
+export function subscribeActiveGenerationJobs(userId, onData, onError) {
   if (!userId || !db) return () => {}
 
   const q = query(
@@ -424,7 +424,10 @@ export function subscribeActiveGenerationJobs(userId, onData) {
       const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
       onData(rows)
     },
-    (err) => console.error('Erro ao observar jobs de geração:', err),
+    (err) => {
+      console.error('Erro ao observar jobs de geração:', err)
+      onError?.(err)
+    },
   )
 }
 

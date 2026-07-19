@@ -50,6 +50,48 @@ function isWaitingStatus(status) {
   return GENERATION_WAITING_STATUSES.includes(status)
 }
 
+function isPendingStatus(status) {
+  return status === GENERATION_JOB_STATUS.PENDING
+}
+
+function jobAgeSeconds(job, now = Date.now()) {
+  const created = job.createdAt?.toDate?.()
+  if (!created) return null
+  return Math.max(0, Math.floor((now - created.getTime()) / 1000))
+}
+
+function formatJobMessage(job) {
+  if (isPendingStatus(job.status)) {
+    return job.message || 'Enviado ao servidor — aguardando início…'
+  }
+  if (isWaitingStatus(job.status)) {
+    return (
+      job.message ||
+      (job.status === GENERATION_JOB_STATUS.WAITING_API
+        ? 'API expirada — aguardando…'
+        : 'Aguardando para retomar…')
+    )
+  }
+  return job.message || 'Gerando em segundo plano…'
+}
+
+function formatJobHint(job, now = Date.now()) {
+  if (isPendingStatus(job.status)) {
+    const age = jobAgeSeconds(job, now)
+    if (age != null && age >= 90) {
+      return 'Demorando para iniciar — o cliente tenta de novo a cada 30s. Se persistir, use Parar (X) e gere outra vez.'
+    }
+    return 'Iniciando no servidor… você pode sair desta tela.'
+  }
+  if (isWaitingStatus(job.status)) {
+    return (
+      WAITING_HINTS[job.status] ||
+      'O servidor retoma sozinho — só para se você cancelar (X).'
+    )
+  }
+  return 'Você pode sair desta tela — a geração continua no servidor.'
+}
+
 function loadMinimized() {
   if (typeof window === 'undefined') return false
   try {
@@ -70,11 +112,19 @@ function saveMinimized(value) {
 
 export default function BackgroundGenerationBanner() {
   const { user, isAdmin } = useAuth()
-  const { jobs } = useBackgroundGeneration()
+  const { jobs, subscribeError } = useBackgroundGeneration()
   const [dismissing, setDismissing] = useState({})
+  const [dismissErrors, setDismissErrors] = useState({})
   const [stoppingAll, setStoppingAll] = useState(false)
   const [stopFeedback, setStopFeedback] = useState(null)
   const [minimized, setMinimized] = useState(loadMinimized)
+  const [nowTick, setNowTick] = useState(Date.now())
+
+  useEffect(() => {
+    if (!jobs.length) return undefined
+    const timer = setInterval(() => setNowTick(Date.now()), 15_000)
+    return () => clearInterval(timer)
+  }, [jobs.length])
 
   useEffect(() => {
     if (!jobs.length) setMinimized(false)
@@ -117,8 +167,20 @@ export default function BackgroundGenerationBanner() {
   const handleDismiss = async (jobId) => {
     if (!user?.uid || dismissing[jobId]) return
     setDismissing((prev) => ({ ...prev, [jobId]: true }))
+    setDismissErrors((prev) => ({ ...prev, [jobId]: null }))
     try {
-      await dismissGenerationJob(user.uid, jobId)
+      const result = await dismissGenerationJob(user.uid, jobId)
+      if (result?.warning) {
+        setDismissErrors((prev) => ({
+          ...prev,
+          [jobId]: result.warning,
+        }))
+      }
+    } catch (err) {
+      setDismissErrors((prev) => ({
+        ...prev,
+        [jobId]: err?.message || 'Não foi possível parar esta tarefa.',
+      }))
     } finally {
       setDismissing((prev) => ({ ...prev, [jobId]: false }))
     }
@@ -181,6 +243,11 @@ export default function BackgroundGenerationBanner() {
       role="status"
       aria-live="polite"
     >
+      {subscribeError ? (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-200">
+          {subscribeError}
+        </div>
+      ) : null}
       <div className="flex items-center justify-end gap-2">
         {stopFeedback ? (
           <p
@@ -214,16 +281,19 @@ export default function BackgroundGenerationBanner() {
       </div>
       {jobs.map((job) => {
         const waiting = isWaitingStatus(job.status)
-        const waitingApi = job.status === GENERATION_JOB_STATUS.WAITING_API
+        const pending = isPendingStatus(job.status)
         const waitingTimeout = job.status === GENERATION_JOB_STATUS.WAITING_TIMEOUT
+        const stuckPending = pending && (jobAgeSeconds(job, nowTick) ?? 0) >= 90
 
         return (
           <div
             key={job.id}
             className={`rounded-xl border px-4 py-3 shadow-lg backdrop-blur-sm ${
-              waiting
+              waiting || stuckPending
                 ? 'border-amber-500/40 bg-amber-500/10'
-                : 'border-cp-accent/30 bg-cp-surface/95'
+                : pending
+                  ? 'border-sky-500/30 bg-sky-500/5'
+                  : 'border-cp-accent/30 bg-cp-surface/95'
             }`}
           >
             <div className="flex items-start justify-between gap-2">
@@ -234,6 +304,8 @@ export default function BackgroundGenerationBanner() {
                   ) : (
                     <ClockIcon className="h-4 w-4 animate-pulse text-amber-600" />
                   )
+                ) : pending ? (
+                  <ClockIcon className="h-4 w-4 animate-pulse text-sky-600" />
                 ) : (
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
                 )}
@@ -253,24 +325,23 @@ export default function BackgroundGenerationBanner() {
               </button>
             </div>
             <p
-              className={`mt-1 text-xs ${waiting ? 'text-amber-800 dark:text-amber-200' : 'text-cp-muted'}`}
+              className={`mt-1 text-xs ${
+                waiting || stuckPending
+                  ? 'text-amber-800 dark:text-amber-200'
+                  : pending
+                    ? 'text-sky-800 dark:text-sky-200'
+                    : 'text-cp-muted'
+              }`}
             >
-              {job.message ||
-                (waitingApi
-                  ? 'API expirada — aguardando…'
-                  : waiting
-                    ? 'Aguardando para retomar…'
-                    : 'Gerando em segundo plano…')}
-              {!waiting && typeof job.progress === 'number' && job.progress > 0
+              {formatJobMessage(job)}
+              {!waiting && !pending && typeof job.progress === 'number' && job.progress > 0
                 ? ` (${job.progress}%)`
                 : ''}
             </p>
-            <p className="mt-1 text-[10px] text-cp-muted/80">
-              {waiting
-                ? WAITING_HINTS[job.status] ||
-                  'O servidor retoma sozinho — só para se você cancelar (X).'
-                : 'Você pode sair desta tela — a geração continua no servidor.'}
-            </p>
+            <p className="mt-1 text-[10px] text-cp-muted/80">{formatJobHint(job, nowTick)}</p>
+            {dismissErrors[job.id] ? (
+              <p className="mt-1 text-[10px] text-red-600 dark:text-red-300">{dismissErrors[job.id]}</p>
+            ) : null}
           </div>
         )
       })}

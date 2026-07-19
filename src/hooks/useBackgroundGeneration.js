@@ -4,22 +4,27 @@ import {
   subscribeActiveGenerationJobs,
   reconcileStaleGenerationJobs,
   nudgeGenerationJobResume,
+  kickGenerationJob,
   shouldNudgeJob,
   STALL_NUDGE_MS,
   syncCancellingJobsWithActive,
   isJobNudgePaused,
+  GENERATION_JOB_STATUS,
 } from '../services/generationJobService'
 
 /** Observa jobs de geração ativos do usuário (segundo plano). */
 export function useBackgroundGeneration() {
   const { user } = useAuth()
   const [jobs, setJobs] = useState([])
+  const [subscribeError, setSubscribeError] = useState(null)
   const lastNudgeRef = useRef({})
+  const lastKickRef = useRef({})
   const failStreakRef = useRef({})
 
   useEffect(() => {
     if (!user?.uid) {
       setJobs([])
+      setSubscribeError(null)
       return () => {}
     }
 
@@ -29,10 +34,19 @@ export function useBackgroundGeneration() {
       reconcileStaleGenerationJobs(user.uid).catch(() => {})
     }, 60 * 1000)
 
-    const unsub = subscribeActiveGenerationJobs(user.uid, (rows) => {
-      syncCancellingJobsWithActive(rows.map((job) => job.id))
-      setJobs(rows)
-    })
+    const unsub = subscribeActiveGenerationJobs(
+      user.uid,
+      (rows) => {
+        syncCancellingJobsWithActive(rows.map((job) => job.id))
+        setJobs(rows)
+        setSubscribeError(null)
+      },
+      (err) => {
+        setSubscribeError(
+          err?.message || 'Não foi possível acompanhar as tarefas de geração.',
+        )
+      },
+    )
     return () => {
       clearInterval(interval)
       unsub?.()
@@ -45,9 +59,20 @@ export function useBackgroundGeneration() {
     const nudgeEligible = (now) => {
       if (isJobNudgePaused()) return
       jobs.forEach((job) => {
+        if (job.status === GENERATION_JOB_STATUS.PENDING) {
+          const created = job.createdAt?.toDate?.()
+          const ageMs = created ? now - created.getTime() : 0
+          if (ageMs >= 8_000) {
+            const lastKick = lastKickRef.current[job.id] || 0
+            if (now - lastKick >= 20_000) {
+              lastKickRef.current[job.id] = now
+              kickGenerationJob(user.uid, job.id).catch(() => {})
+            }
+          }
+        }
+
         if (!shouldNudgeJob(job, now)) return
         const fails = failStreakRef.current[job.id] || 0
-        // Backoff: 5s, 15s, 30s, 60s após falhas (evita spam 500/CORS)
         const delay = Math.min(60_000, STALL_NUDGE_MS * Math.pow(2, Math.min(fails, 4)))
         const last = lastNudgeRef.current[job.id] || 0
         if (now - last < delay) return
@@ -73,5 +98,5 @@ export function useBackgroundGeneration() {
     return () => clearInterval(nudgeInterval)
   }, [user?.uid, jobs])
 
-  return { jobs, hasActiveJobs: jobs.length > 0 }
+  return { jobs, hasActiveJobs: jobs.length > 0, subscribeError }
 }
