@@ -35,6 +35,12 @@ map.set('NEXT_PUBLIC_SITE_URL', 'https://www.flashconcards.com.br')
 map.set('MERCADOPAGO_WEBHOOK_URL', 'https://www.flashconcards.com.br/api/mercadopago/webhook')
 map.set('MERCADOPAGO_MODE', 'prod')
 
+const geminiKeys = [
+  'VITE_GEMINI_API_KEY',
+  'GEMINI_API_KEY',
+  ...Array.from({ length: 10 }, (_, i) => `VITE_GEMINI_API_KEY_${i + 1}`),
+]
+
 const keys = [
   'VITE_FIREBASE_API_KEY',
   'VITE_FIREBASE_AUTH_DOMAIN',
@@ -44,8 +50,7 @@ const keys = [
   'VITE_FIREBASE_APP_ID',
   'VITE_FIREBASE_VAPID_KEY',
   'NEXT_PUBLIC_FIREBASE_VAPID_KEY',
-  'VITE_GEMINI_API_KEY',
-  'GEMINI_API_KEY',
+  ...geminiKeys,
   'VITE_USE_SUPABASE',
   'NEXT_PUBLIC_USE_SUPABASE',
   'NEXT_PUBLIC_SITE_URL',

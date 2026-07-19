@@ -3,18 +3,6 @@
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
-  "crons": [
-    { "path": "/api/cron/reconcile-pix", "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/resume-jobs", "schedule": "*/10 * * * *" },
-    { "path": "/api/cron/mentorado-daily", "schedule": "*/15 * * * *" },
-    { "path": "/api/cron/content-automation", "schedule": "*/30 * * * *" },
-    { "path": "/api/cron/expire-trials", "schedule": "0 3 * * *" },
-    { "path": "/api/cron/purge-unverified", "schedule": "20 * * * *" },
-    { "path": "/api/cron/expire-course-access", "schedule": "15 3 * * *" },
-    { "path": "/api/cron/auto-renewals", "schedule": "0 11 * * *" },
-    { "path": "/api/cron/motivational-push", "schedule": "0 13,21 * * *" },
-    { "path": "/api/cron/professor-supervisor", "schedule": "*/10 * * * *" }
-  ],
   "headers": [
     {
       "source": "/favicon.ico",
