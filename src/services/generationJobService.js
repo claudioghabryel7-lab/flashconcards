@@ -10,7 +10,7 @@ import {
   where,
 } from 'firebase/firestore'
 import { db, auth } from '../firebase/config'
-import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
+import { BACKEND_FUNCTIONS } from '../config/backendFunctions'
 import { stripUndefined } from '../utils/firestoreHelpers'
 
 export const GENERATION_JOB_STATUS = {
@@ -101,6 +101,11 @@ export async function createGenerationJob({
       updatedAt: serverTimestamp(),
     }),
   )
+
+  if (runOnServer && serverPayload) {
+    kickGenerationJob(userId, ref.id).catch(() => null)
+  }
+
   return ref.id
 }
 
@@ -224,12 +229,12 @@ export async function reconcileStaleGenerationJobs(userId) {
 
   if (serverCancels.length) {
     const user = auth?.currentUser
-    if (user?.uid === userId && FIREBASE_FUNCTIONS.cancelGenerationJob) {
+    if (user?.uid === userId && BACKEND_FUNCTIONS.cancelGenerationJob) {
       try {
         const token = await user.getIdToken()
         await Promise.all(
           serverCancels.map((jobId) =>
-            fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+            fetch(BACKEND_FUNCTIONS.cancelGenerationJob, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -277,7 +282,7 @@ export async function dismissGenerationJob(userId, jobId) {
     const user = auth?.currentUser
     if (user?.uid === userId) {
       const token = await user.getIdToken()
-      const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+      const response = await fetch(BACKEND_FUNCTIONS.cancelGenerationJob, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -332,7 +337,7 @@ export async function cancelAllGenerationJobs(userId) {
   if (user?.uid === userId) {
     try {
       const token = await user.getIdToken()
-      const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+      const response = await fetch(BACKEND_FUNCTIONS.cancelGenerationJob, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -361,7 +366,7 @@ export async function cancelAllGenerationJobs(userId) {
 /** Admin: força parada de TODOS os jobs (todos os usuários). */
 export async function forceStopAllGenerationJobsGlobally() {
   const user = auth?.currentUser
-  if (!user || !FIREBASE_FUNCTIONS.cancelGenerationJob) {
+  if (!user || !BACKEND_FUNCTIONS.cancelGenerationJob) {
     throw new Error('Não autenticado ou função de cancelamento indisponível.')
   }
 
@@ -383,7 +388,7 @@ export async function forceStopAllGenerationJobsGlobally() {
   }
 
   const token = await user.getIdToken()
-  const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+  const response = await fetch(BACKEND_FUNCTIONS.cancelGenerationJob, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -484,7 +489,7 @@ export async function kickGenerationJob(userId, jobId) {
   if (!user || user.uid !== userId) return { ok: false, reason: 'not_authenticated' }
 
   const token = await user.getIdToken()
-  const response = await fetch(FIREBASE_FUNCTIONS.kickGenerationJob, {
+  const response = await fetch(BACKEND_FUNCTIONS.kickGenerationJob, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -518,7 +523,7 @@ export async function nudgeGenerationJobResume(userId, jobId) {
     const token = await user.getIdToken()
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 15_000)
-    const response = await fetch(FIREBASE_FUNCTIONS.nudgeGenerationJobResume, {
+    const response = await fetch(BACKEND_FUNCTIONS.nudgeGenerationJobResume, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -1,5 +1,5 @@
 import { auth } from '../firebase/config'
-import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
+import { BACKEND_FUNCTIONS } from '../config/backendFunctions'
 
 async function parseCloudResponse(response) {
   let data = {}
@@ -40,16 +40,16 @@ export async function callAdminCloudFunction(url, body = {}) {
 }
 
 export function requestPasswordResetEmail(email) {
-  return callPublicCloudFunction(FIREBASE_FUNCTIONS.sendPasswordResetEmail, {
+  return callPublicCloudFunction(BACKEND_FUNCTIONS.sendPasswordResetEmail, {
     email: email.toLowerCase().trim(),
     baseUrl: typeof window !== 'undefined' ? window.location.origin : undefined,
   })
 }
 
 export function sendAdminBroadcastEmail(payload) {
-  return callAdminCloudFunction(FIREBASE_FUNCTIONS.sendAdminBroadcastEmail, payload)
+  return callAdminCloudFunction(BACKEND_FUNCTIONS.sendAdminBroadcastEmail, payload)
 }
 
 export function sendRetroactiveWelcomeEmails() {
-  return callAdminCloudFunction(FIREBASE_FUNCTIONS.sendRetroactiveWelcomeEmails, {})
+  return callAdminCloudFunction(BACKEND_FUNCTIONS.sendRetroactiveWelcomeEmails, {})
 }

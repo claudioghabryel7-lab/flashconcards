@@ -1,0 +1,1 @@
+-- Seed opcional — dados iniciais após migração Firestore → Supabase.

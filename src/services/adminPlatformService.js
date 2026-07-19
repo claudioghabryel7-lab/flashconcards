@@ -13,7 +13,7 @@ import {
   where,
 } from 'firebase/firestore'
 import { db, auth } from '../firebase/config'
-import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
+import { BACKEND_FUNCTIONS } from '../config/backendFunctions'
 import { loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
 import {
   startMentoradoBackfillJob,
@@ -304,11 +304,11 @@ export async function startMentoradoBackfillAllCourses(userId, onProgress) {
 export async function listActiveGenerationJobs({ limit = 50 } = {}) {
   const user = auth?.currentUser
   if (!user) throw new Error('Não autenticado')
-  if (!FIREBASE_FUNCTIONS.listActiveGenerationJobs) {
+  if (!BACKEND_FUNCTIONS.listActiveGenerationJobs) {
     throw new Error('Endpoint listActiveGenerationJobs não configurado')
   }
   const token = await user.getIdToken()
-  const response = await fetch(FIREBASE_FUNCTIONS.listActiveGenerationJobs, {
+  const response = await fetch(BACKEND_FUNCTIONS.listActiveGenerationJobs, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

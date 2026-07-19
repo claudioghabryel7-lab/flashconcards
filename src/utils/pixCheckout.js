@@ -1,4 +1,4 @@
-import { FIREBASE_FUNCTIONS } from '@/config/firebaseFunctions'
+import { BACKEND_FUNCTIONS } from '@/config/backendFunctions'
 
 /** Valida EMV PIX copia e cola (padrão BR). */
 export function isValidPixCopyPaste(code) {
@@ -97,7 +97,7 @@ export async function processBrickPayment({
   userName,
   courseId,
 }) {
-  const res = await fetchWithRetry(FIREBASE_FUNCTIONS.processBrickPayment, {
+  const res = await fetchWithRetry(BACKEND_FUNCTIONS.processBrickPayment, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -125,7 +125,7 @@ export async function requestPixPayment({
   userName,
   courseId,
 }) {
-  const res = await fetchWithRetry(FIREBASE_FUNCTIONS.createPixPayment, {
+  const res = await fetchWithRetry(BACKEND_FUNCTIONS.createPixPayment, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -157,7 +157,7 @@ export async function reconcilePaymentStatus(transactionId) {
   if (!transactionId) return null
 
   const res = await fetchWithRetry(
-    FIREBASE_FUNCTIONS.reconcilePayment,
+    BACKEND_FUNCTIONS.reconcilePayment,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

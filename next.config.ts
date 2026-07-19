@@ -12,6 +12,14 @@ const viteEnvKeys = [
   'VITE_FIREBASE_APP_ID',
   'VITE_FIREBASE_VAPID_KEY',
   'NEXT_PUBLIC_FIREBASE_VAPID_KEY',
+  'VITE_SUPABASE_URL',
+  'VITE_SUPABASE_ANON_KEY',
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  'VITE_USE_SUPABASE',
+  'NEXT_PUBLIC_USE_SUPABASE',
+  'VITE_SUPABASE_FUNCTIONS_URL',
+  'NEXT_PUBLIC_SUPABASE_FUNCTIONS_URL',
   'VITE_GEMINI_API_KEY',
   'VITE_GEMINI_API_KEY_1',
   'VITE_GEMINI_API_KEY_2',
@@ -40,6 +48,7 @@ const nextConfig: NextConfig = {
   transpilePackages: ['framer-motion'],
   env,
   productionBrowserSourceMaps: false,
+  serverExternalPackages: ['firebase-admin', 'firebase-functions', 'nodemailer', 'mercadopago'],
   compiler: {
     // Remove console.* do bundle em produção
     removeConsole: process.env.NODE_ENV === 'production',
@@ -47,7 +56,21 @@ const nextConfig: NextConfig = {
   turbopack: {
     resolveAlias: {
       'react-router-dom': './src/lib/react-router-compat.tsx',
+      'firebase/firestore': './src/lib/db/firestoreShim.js',
+      'firebase/firestore-native': './node_modules/firebase/firestore/dist/esm/index.esm.js',
     },
+  },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'react-router-dom': require('path').resolve(__dirname, 'src/lib/react-router-compat.tsx'),
+      'firebase/firestore': require('path').resolve(__dirname, 'src/lib/db/firestoreShim.js'),
+      'firebase/firestore-native': require('path').resolve(
+        __dirname,
+        'node_modules/firebase/firestore/dist/esm/index.esm.js',
+      ),
+    }
+    return config
   },
   typescript: {
     ignoreBuildErrors: true,

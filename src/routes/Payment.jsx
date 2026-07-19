@@ -12,7 +12,7 @@ import {
 import { useAuth } from '../hooks/useAuth'
 import { doc, setDoc, getDoc, collection, serverTimestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
-import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
+import { BACKEND_FUNCTIONS } from '../config/backendFunctions'
 import { trackPurchaseConversion } from '../utils/googleAds'
 import { getCourseAccessLabel } from '../utils/courseAccess'
 import {
@@ -752,7 +752,7 @@ const Payment = () => {
   const createUserAccount = async (email, name, password, transactionId) => {
     try {
       // Chamar função Firebase para criar usuário e enviar email
-      const response = await fetch(FIREBASE_FUNCTIONS.createUserAndSendEmail, {
+      const response = await fetch(BACKEND_FUNCTIONS.createUserAndSendEmail, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -814,7 +814,7 @@ const Payment = () => {
     const courseQuery = product.courseId ? `&course=${encodeURIComponent(product.courseId)}` : ''
     const txn = encodeURIComponent(transactionData.transactionId)
 
-    const preferenceResponse = await fetch(FIREBASE_FUNCTIONS.createCheckoutPreference, {
+    const preferenceResponse = await fetch(BACKEND_FUNCTIONS.createCheckoutPreference, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       },
       notification_url:
         process.env.MERCADOPAGO_WEBHOOK_URL ||
-        'https://us-central1-plegi-d84c2.cloudfunctions.net/webhookMercadoPago',
+        `${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.flashconcards.com.br'}/api/backend/webhook-mercado-pago`,
       payer: {
         ...payerFromBrick,
         email: payerFromBrick.email || userEmail || undefined,

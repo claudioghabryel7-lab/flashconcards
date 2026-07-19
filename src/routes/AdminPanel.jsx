@@ -39,12 +39,14 @@ import {
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore'
 import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager'
 import AdminContentModeration from '../components/admin/AdminContentModeration'
 import AdminProfessorSupervisor from '../components/admin/AdminProfessorSupervisor'
 import AdminGuiaMentorado from '../components/admin/AdminGuiaMentorado'
 import AdminGenerationJobs from '../components/admin/AdminGenerationJobs'
+import AdminOpsAssistant from '../components/admin/AdminOpsAssistant'
 import AdminMockReviews from '../components/admin/AdminMockReviews'
 import AdminEmailBroadcast from '../components/admin/AdminEmailBroadcast'
 import AdminCacheReset from '../components/admin/AdminCacheReset'
@@ -57,7 +59,7 @@ import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
 import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { auth, db, storage } from '../firebase/config'
 import { requestPasswordResetEmail, sendRetroactiveWelcomeEmails } from '../utils/adminApi'
-import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
+import { BACKEND_FUNCTIONS } from '../config/backendFunctions'
 import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
@@ -97,6 +99,7 @@ const ADMIN_TAB_IDS = new Set([
   'guia-mentorado',
   'professor-fiscalizador',
   'generation-jobs',
+  'ops-assistant',
   'flashcards',
   'edital',
   'material-concurso',
@@ -6940,6 +6943,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
         { id: 'guia-mentorado', label: 'Guia Mentorado', icon: '📅' },
         { id: 'professor-fiscalizador', label: 'Professor IA', icon: '🎓' },
         { id: 'generation-jobs', label: 'Jobs nuvem', icon: '⚡' },
+        { id: 'ops-assistant', label: 'Assistente Ops', icon: '🤖' },
       ],
     },
     {
@@ -12494,7 +12498,7 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
                       try {
                         const token = await auth.currentUser?.getIdToken()
                         if (!token) throw new Error('Faça login como administrador.')
-                        const response = await fetch(FIREBASE_FUNCTIONS.generateConcursoNews, {
+                        const response = await fetch(BACKEND_FUNCTIONS.generateConcursoNews, {
                           method: 'POST',
                           headers: {
                             'Content-Type': 'application/json',
@@ -13435,6 +13439,8 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
             {activeTab === 'professor-fiscalizador' && <AdminProfessorSupervisor />}
 
             {activeTab === 'generation-jobs' && <AdminGenerationJobs />}
+
+            {activeTab === 'ops-assistant' && <AdminOpsAssistant />}
           </div>
         </div>
 
