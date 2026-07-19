@@ -1,15 +1,33 @@
 /**
  * Geração unificada — flashcards (30), material e questões com o mesmo pipeline confiável.
+ * Suporta checkpoints: salva após cada lote/fase e retoma com existingItems/startBatch/startPhase.
  */
 
 const { generateTrustedJson } = require('./trustedGeneration')
-const { buildFlashcardPrompt, buildMaterialPrompt, buildQuestoesPrompt } = require('./unifiedGenerationPrompts')
+const {
+  buildFlashcardPrompt,
+  buildMaterialCorePrompt,
+  buildMaterialExtrasPrompt,
+  buildQuestoesBatchPrompt,
+} = require('./unifiedGenerationPrompts')
 const {
   validateFlashcardsList,
   MIN_FLASHCARDS,
   MAX_FLASHCARDS,
   FLASHCARD_BATCH_SIZE,
 } = require('./flashcardsValidate')
+const {
+  validateConteudoCompletoPayload,
+  validateMaterialCorePayload,
+  validateMaterialExtrasPayload,
+} = require('./conteudoCompletoValidate')
+const { validateQuestoesPayload } = require('./questoesValidate')
+const {
+  QUESTOES_BATCH_SIZE,
+  DEFAULT_QUESTOES_COUNT,
+  MATERIAL_PHASE_CORE,
+  MATERIAL_PHASE_EXTRAS,
+} = require('./generationCheckpoint')
 const { isLikelyLegalDiscipline } = require('./unifiedLegalTravas')
 const { buildConsistencyAuditPrompt, parseVerificationResult } = require('./contentVerification')
 const { callGemini, extractGeneratedText } = require('./geminiServer')
@@ -42,15 +60,48 @@ function buildGenerationContext(meta = {}, extra = {}) {
   }
 }
 
+function assertMaterialCore(parsed) {
+  const v = validateMaterialCorePayload(parsed)
+  if (!v.ok) {
+    const err = new Error(`Material (núcleo) inválido — ${v.errors.join(' ')}`)
+    err.code = 'material_incomplete'
+    throw err
+  }
+}
+
+function assertMaterialExtras(parsed) {
+  const v = validateMaterialExtrasPayload(parsed)
+  if (!v.ok) {
+    const err = new Error(`Material (complemento) inválido — ${v.errors.join(' ')}`)
+    err.code = 'material_incomplete'
+    throw err
+  }
+}
+
 /**
- * 30 flashcards em 3 lotes de 10 — cada lote passa pelo pipeline confiável completo.
+ * 30 flashcards em lotes — retoma de startBatch com existingItems.
  */
-async function generateTrustedFlashcardsSet(meta = {}, { onBatch = null } = {}) {
+async function generateTrustedFlashcardsSet(
+  meta = {},
+  {
+    onBatch = null,
+    onBatchComplete = null,
+    existingItems = [],
+    startBatch = 1,
+  } = {},
+) {
   const batchCount = Math.ceil(MAX_FLASHCARDS / FLASHCARD_BATCH_SIZE)
-  let allItems = []
+  let allItems = dedupeFlashcards(existingItems)
   const ctx = buildGenerationContext(meta, { contentType: 'flashcards' })
 
-  for (let batchNum = 1; batchNum <= batchCount; batchNum += 1) {
+  if (allItems.length >= MIN_FLASHCARDS) {
+    const early = validateFlashcardsList(allItems, { min: MIN_FLASHCARDS, max: MAX_FLASHCARDS })
+    if (early.ok) return allItems.slice(0, MAX_FLASHCARDS)
+  }
+
+  const firstBatch = Math.max(1, Math.min(startBatch, batchCount + 1))
+
+  for (let batchNum = firstBatch; batchNum <= batchCount; batchNum += 1) {
     const remaining = MAX_FLASHCARDS - allItems.length
     if (remaining <= 0) break
 
@@ -74,7 +125,12 @@ async function generateTrustedFlashcardsSet(meta = {}, { onBatch = null } = {}) 
       },
     )
 
-    allItems = dedupeFlashcards([...allItems, ...(parsed.flashcards || [])])
+    const batchItems = parsed.flashcards || []
+    allItems = dedupeFlashcards([...allItems, ...batchItems])
+
+    if (onBatchComplete) {
+      await onBatchComplete(batchNum, batchCount, allItems, batchItems)
+    }
   }
 
   allItems = allItems.slice(0, MAX_FLASHCARDS)
@@ -97,52 +153,180 @@ async function generateTrustedFlashcardsSet(meta = {}, { onBatch = null } = {}) 
   return allItems
 }
 
-async function generateTrustedMaterial(params = {}) {
-  const prompt =
-    params.prompt ||
-    buildMaterialPrompt({
-      disciplina: params.disciplina,
-      topicoNome: params.topicoNome,
-      topicKey: params.topicKey,
-      banca: params.banca,
-      concursoName: params.concursoName || params.courseName,
-      courseName: params.courseName,
-      cargo: params.cargo,
-      editalText: params.editalText,
-    })
+/**
+ * Material em 2 fases — núcleo (Raio-X + Revisão) e complemento (pegadinhas + questões embutidas).
+ */
+async function generateTrustedMaterial(
+  params = {},
+  {
+    onPhaseComplete = null,
+    startPhase = 1,
+    existingDraft = null,
+  } = {},
+) {
+  const ctx = buildGenerationContext(params, { contentType: 'material' })
+  const promptParams = {
+    disciplina: params.disciplina,
+    topicoNome: params.topicoNome,
+    topicKey: params.topicKey,
+    banca: params.banca,
+    concursoName: params.concursoName || params.courseName,
+    courseName: params.courseName,
+    cargo: params.cargo,
+    editalText: params.editalText,
+  }
 
-  return generateTrustedJson(
-    prompt,
-    { contentType: 'material', rejectTruncatedJson: true },
-    buildGenerationContext(params, { contentType: 'material' }),
-  )
+  let core = existingDraft
+
+  if (startPhase <= MATERIAL_PHASE_CORE) {
+    const corePrompt = params.prompt || buildMaterialCorePrompt(promptParams)
+    core = await generateTrustedJson(
+      corePrompt,
+      { contentType: 'material', rejectTruncatedJson: true },
+      ctx,
+    )
+    assertMaterialCore(core)
+    if (onPhaseComplete) await onPhaseComplete(MATERIAL_PHASE_CORE, core)
+  }
+
+  if (startPhase <= MATERIAL_PHASE_EXTRAS) {
+    const extrasPrompt = buildMaterialExtrasPrompt(
+      promptParams,
+      JSON.stringify({
+        titulo: core?.titulo,
+        raioXProbabilidade: core?.raioXProbabilidade,
+        revisaoTurbo: core?.revisaoTurbo,
+      }),
+    )
+    const extras = await generateTrustedJson(
+      extrasPrompt,
+      { contentType: 'material', rejectTruncatedJson: true },
+      ctx,
+    )
+    assertMaterialExtras(extras)
+
+    const merged = {
+      ...core,
+      pegadinhas: extras.pegadinhas,
+      questoesPreditivas: extras.questoesPreditivas,
+    }
+
+    const fullValidation = validateConteudoCompletoPayload(merged)
+    if (!fullValidation.ok) {
+      const err = new Error(`Material inválido — ${fullValidation.errors.slice(0, 6).join(' ')}`)
+      err.code = 'material_incomplete'
+      throw err
+    }
+
+    if (onPhaseComplete) await onPhaseComplete(MATERIAL_PHASE_EXTRAS, merged)
+    return merged
+  }
+
+  return core
 }
 
-async function generateTrustedQuestoes(params = {}, expectedCount = 50) {
-  const prompt =
-    params.prompt ||
-    buildQuestoesPrompt({
-      disciplina: params.disciplina,
-      topicoNome: params.topicoNome,
-      topicKey: params.topicKey,
-      banca: params.banca,
-      concursoName: params.concursoName,
-      cargo: params.cargo,
-      editalText: params.editalText,
-      nivel: params.nivel ?? 1,
-      maxNivel: params.maxNivel ?? 10,
-      expectedCount,
-    })
+/**
+ * Questões em lotes de 10 — retoma de startBatch com existingQuestoes.
+ */
+async function generateTrustedQuestoes(
+  params = {},
+  expectedCount = DEFAULT_QUESTOES_COUNT,
+  {
+    onBatchComplete = null,
+    existingQuestoes = [],
+    startBatch = 1,
+  } = {},
+) {
+  const ctx = buildGenerationContext(params, { contentType: 'questoes', expectedCount })
+  const batchCount = Math.ceil(expectedCount / QUESTOES_BATCH_SIZE)
+  let allQuestoes = [...existingQuestoes]
+  const firstBatch = Math.max(1, Math.min(startBatch, batchCount + 1))
 
-  return generateTrustedJson(
-    prompt,
-    { contentType: 'questoes' },
-    buildGenerationContext(params, { contentType: 'questoes', expectedCount }),
-  )
+  if (allQuestoes.length >= expectedCount) {
+    const early = validateQuestoesPayload(
+      { questoes: allQuestoes.slice(0, expectedCount) },
+      { expectedCount, banca: params.banca },
+    )
+    if (early.ok) {
+      return {
+        topico: params.topicoNome || params.topicKey || '',
+        nivel: params.nivel ?? 1,
+        questoes: allQuestoes.slice(0, expectedCount),
+      }
+    }
+  }
+
+  for (let batchNum = firstBatch; batchNum <= batchCount; batchNum += 1) {
+    const remaining = expectedCount - allQuestoes.length
+    if (remaining <= 0) break
+
+    const questionsInBatch = Math.min(QUESTOES_BATCH_SIZE, remaining)
+    const startNum = allQuestoes.length + 1
+
+    const prompt =
+      params.prompt && batchNum === firstBatch && firstBatch === 1 && !existingQuestoes.length
+        ? params.prompt
+        : buildQuestoesBatchPrompt({
+            disciplina: params.disciplina,
+            topicoNome: params.topicoNome,
+            topicKey: params.topicKey,
+            banca: params.banca,
+            concursoName: params.concursoName,
+            cargo: params.cargo,
+            editalText: params.editalText,
+            nivel: params.nivel ?? 1,
+            maxNivel: params.maxNivel ?? 10,
+            batchNumber: batchNum,
+            totalBatches: batchCount,
+            questionsInBatch,
+            startNum,
+            expectedCount,
+            existingEnunciados: allQuestoes.map((q) => q.enunciado || q.pergunta),
+          })
+
+    const parsed = await generateTrustedJson(prompt, { contentType: 'questoes' }, ctx)
+
+    const batchItems = parsed.questoes || parsed.questions || []
+    const batchValidation = validateQuestoesPayload(
+      { questoes: batchItems },
+      { expectedCount: questionsInBatch, banca: params.banca },
+    )
+    if (!batchValidation.ok) {
+      const err = new Error(`Questões (lote) inválidas — ${batchValidation.errors.slice(0, 6).join(' ')}`)
+      err.code = 'questoes_invalid'
+      throw err
+    }
+
+    allQuestoes = [...allQuestoes, ...batchItems]
+
+    if (onBatchComplete) {
+      await onBatchComplete(batchNum, batchCount, allQuestoes, batchItems, parsed)
+    }
+  }
+
+  const result = {
+    topico: params.topicoNome || params.topicKey || '',
+    nivel: params.nivel ?? 1,
+    questoes: allQuestoes.slice(0, expectedCount),
+  }
+
+  const validation = validateQuestoesPayload(result, { expectedCount, banca: params.banca })
+  if (!validation.ok) {
+    const err = new Error(`Questões inválidas — ${validation.errors.slice(0, 8).join(' ')}`)
+    err.code = 'questoes_invalid'
+    throw err
+  }
+
+  return result
 }
 
 /** Auditoria cruzada automática antes de publicar tópico. */
-async function auditTopicBundleConsistency({ flashcards = [], materialSample = '', questoesSample = '', courseContext = {} }) {
+async function auditTopicBundleConsistency({
+  flashcards = [],
+  materialSample = '',
+  questoesSample = '',
+  courseContext = {},
+}) {
   const fcSample = flashcards
     .slice(0, 12)
     .map((c, i) => `${i + 1}. F: ${c.frente || c.pergunta}\n   V: ${c.verso || c.resposta}`)

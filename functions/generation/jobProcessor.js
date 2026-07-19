@@ -1,10 +1,5 @@
 const admin = require('firebase-admin')
 const {
-  generateTrustedFlashcardsSet,
-  generateTrustedMaterial,
-  generateTrustedQuestoes,
-} = require('./unifiedContentGeneration')
-const {
   sanitizeTopicKeyForFirestore,
   normalizeTopicKeyForStorage,
   sanitizeDisciplinaKey,
@@ -15,7 +10,7 @@ const CONTENT_STATUS = {
   UNAVAILABLE: 'indisponivel',
 }
 
-const { sanitizeFlashcardText, sanitizeQuestaoAlternativas } = require('./aiTextFormatting')
+const { sanitizeQuestaoAlternativas } = require('./aiTextFormatting')
 
 function getDb() {
   return admin.firestore()
@@ -73,49 +68,6 @@ async function resolveIncidenciaContentStatus(courseId, disciplinaNome) {
   return CONTENT_STATUS.UNAVAILABLE
 }
 
-function normalizeCardText(value = '') {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function dedupeFlashcards(items = []) {
-  const seen = new Set()
-  return items.filter((item) => {
-    const front = normalizeCardText(item.frente || item.pergunta)
-    if (!front || seen.has(front)) return false
-    seen.add(front)
-    return true
-  })
-}
-
-async function deleteExistingFlashcards(courseId, topicKey, disciplina, modulo) {
-  const db = getDb()
-  const normalizedTopicKey = normalizeTopicKeyForStorage(topicKey)
-  const flashcardsRef = db.collection(`courses/${courseId}/flashcards`)
-
-  let docs = []
-  if (normalizedTopicKey) {
-    const byTopic = await flashcardsRef.where('topicKey', '==', normalizedTopicKey).get()
-    docs = byTopic.docs
-  }
-
-  if (!docs.length && disciplina && modulo) {
-    const byModule = await flashcardsRef
-      .where('materia', '==', disciplina)
-      .where('modulo', '==', modulo)
-      .get()
-    docs = byModule.docs
-  }
-
-  if (!docs.length) return
-
-  const batch = db.batch()
-  docs.forEach((d) => batch.delete(d.ref))
-  await batch.commit()
-}
-
 async function saveMergeDoc(courseId, collectionName, docId, parsed, extraFields = {}) {
   const ref = getDb().doc(`courses/${courseId}/${collectionName}/${docId}`)
   await ref.set(
@@ -131,23 +83,38 @@ async function saveMergeDoc(courseId, collectionName, docId, parsed, extraFields
 }
 
 async function processConteudoCompleto(userId, jobId, courseId, serverPayload) {
-  const { prompt, savePlan = {} } = serverPayload
-  const { hydrateConteudoCompletoMaterial } = require('./materialFormatting')
+  const { savePlan = {} } = serverPayload
   const { runWithHeartbeat, isJobCancelled } = require('./generationJobResume')
+  const { runMaterialWithCheckpoint } = require('./topicGenerationRunner')
   await updateJob(userId, jobId, { progress: 15, message: 'Gerando conteúdo confiável…' })
 
-  const parsed = await runWithHeartbeat(
+  const topicKey = savePlan.topicKey || ''
+  const status =
+    savePlan.status ||
+    (await resolveTopicoPublishStatus(courseId, topicKey))
+
+  const { parsed: normalized } = await runWithHeartbeat(
     () =>
-      generateTrustedMaterial({
-        prompt,
-        topicKey: savePlan.topicKey,
-        disciplina: savePlan.disciplina,
-        topicoNome: savePlan.topicoNome,
-        banca: savePlan.banca,
-        concursoName: savePlan.concursoName,
-        courseName: savePlan.courseName,
-        cargo: savePlan.cargo,
-        editalText: savePlan.editalText,
+      runMaterialWithCheckpoint({
+        courseId,
+        jobId,
+        forceFresh: Boolean(savePlan.forceRegenerate),
+        finalStatus: status,
+        params: {
+          prompt: serverPayload.prompt,
+          topicKey,
+          disciplina: savePlan.disciplina,
+          topicoNome: savePlan.topicoNome,
+          banca: savePlan.banca,
+          concursoName: savePlan.concursoName,
+          courseName: savePlan.courseName,
+          cargo: savePlan.cargo,
+          editalText: savePlan.editalText,
+        },
+        onProgress: async (msg) => {
+          await updateJob(userId, jobId, { message: msg })
+          await touchActiveJob(userId, jobId, { step: 'material' })
+        },
       }),
     async () => {
       await touchActiveJob(userId, jobId, { step: 'material' })
@@ -156,48 +123,52 @@ async function processConteudoCompleto(userId, jobId, courseId, serverPayload) {
     async () => isJobCancelled(userId, jobId),
   )
 
-  const topicKey = savePlan.topicKey || ''
-  const normalized = hydrateConteudoCompletoMaterial(parsed, topicKey)
-
-  await updateJob(userId, jobId, { progress: 85, message: 'Salvando conteúdo…' })
+  await updateJob(userId, jobId, { progress: 95, message: 'Conteúdo salvo (checkpoint concluído).' })
 
   const sanitizedKey = savePlan.docId || sanitizeTopicKeyForFirestore(topicKey)
+  return {
+    resultRef: { collection: 'conteudosCompletos', docId: sanitizedKey },
+    parsed: normalized,
+  }
+}
+
+async function processQuestoesTopico(userId, jobId, courseId, serverPayload) {
+  const { savePlan = {} } = serverPayload
+  const { runWithHeartbeat, isJobCancelled } = require('./generationJobResume')
+  const { runQuestoesWithCheckpoint } = require('./topicGenerationRunner')
+  await updateJob(userId, jobId, { progress: 15, message: 'Gerando questões confiáveis…' })
+
+  const expectedCount = savePlan.expectedCount ?? 50
+  const topicKey = savePlan.topicKey || ''
+  const nivel = savePlan.nivel ?? 1
   const status =
     savePlan.status ||
     (await resolveTopicoPublishStatus(courseId, topicKey))
 
-  const resultRef = await saveMergeDoc(courseId, 'conteudosCompletos', sanitizedKey, normalized, {
-    materia: normalized.materia,
-    numero: normalized.numero || topicKey,
-    topicKey,
-    status,
-  })
-
-  return { resultRef, parsed: normalized }
-}
-
-async function processQuestoesTopico(userId, jobId, courseId, serverPayload) {
-  const { prompt, savePlan = {} } = serverPayload
-  const { runWithHeartbeat, isJobCancelled } = require('./generationJobResume')
-  await updateJob(userId, jobId, { progress: 15, message: 'Gerando questões confiáveis…' })
-
-  const expectedCount = savePlan.expectedCount ?? 50
-  const parsed = await runWithHeartbeat(
+  const { parsed } = await runWithHeartbeat(
     () =>
-      generateTrustedQuestoes(
-        {
-          prompt,
-          topicKey: savePlan.topicKey,
+      runQuestoesWithCheckpoint({
+        courseId,
+        jobId,
+        expectedCount,
+        forceFresh: Boolean(savePlan.forceRegenerate),
+        finalStatus: status,
+        params: {
+          prompt: serverPayload.prompt,
+          topicKey,
           topicoNome: savePlan.topicoNome,
-          nivel: savePlan.nivel,
+          nivel,
           banca: savePlan.banca,
           concursoName: savePlan.concursoName,
           cargo: savePlan.cargo,
           disciplina: savePlan.disciplina,
           editalText: savePlan.editalText,
         },
-        expectedCount,
-      ),
+        onProgress: async (msg) => {
+          await updateJob(userId, jobId, { message: msg })
+          await touchActiveJob(userId, jobId, { step: 'questoes' })
+        },
+      }),
     async () => {
       await touchActiveJob(userId, jobId, { step: 'questoes' })
     },
@@ -205,22 +176,13 @@ async function processQuestoesTopico(userId, jobId, courseId, serverPayload) {
     async () => isJobCancelled(userId, jobId),
   )
 
-  await updateJob(userId, jobId, { progress: 85, message: 'Salvando questões…' })
+  await updateJob(userId, jobId, { progress: 95, message: 'Questões salvas (checkpoint concluído).' })
 
-  const topicKey = savePlan.topicKey || ''
-  const nivel = savePlan.nivel ?? 1
   const sanitizedKey = savePlan.docId || `${sanitizeTopicKeyForFirestore(topicKey)}_nivel_${nivel}`
-  const status =
-    savePlan.status ||
-    (await resolveTopicoPublishStatus(courseId, topicKey))
-
-  const resultRef = await saveMergeDoc(courseId, 'questoesTopico', sanitizedKey, normalizeParsedQuestoes(parsed), {
-    topico: parsed.topico || savePlan.topicoNome || topicKey,
-    nivel,
-    status,
-  })
-
-  return { resultRef, parsed }
+  return {
+    resultRef: { collection: 'questoesTopico', docId: sanitizedKey },
+    parsed,
+  }
 }
 
 async function processConteudoIncidencia(userId, jobId, courseId, serverPayload) {
@@ -300,74 +262,44 @@ async function processQuestoesIncidencia(userId, jobId, courseId, serverPayload)
 
 async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
   const { savePlan = {} } = serverPayload
+  const { runWithHeartbeat, isJobCancelled } = require('./generationJobResume')
+  const { runFlashcardsWithCheckpoint } = require('./topicGenerationRunner')
   const meta = savePlan.flashcardMeta || {}
-
-  await updateJob(userId, jobId, { progress: 10, message: 'Preparando 30 flashcards estratégicos…' })
-
   const normalizedTopicKey = normalizeTopicKeyForStorage(meta.topicKey)
-  await deleteExistingFlashcards(courseId, normalizedTopicKey, meta.disciplina, meta.modulo)
-
-  const baseMeta = { ...meta, editalText: meta.editalText || '' }
-
-  const allItems = await generateTrustedFlashcardsSet(baseMeta, {
-    onBatch: async (n, total) => {
-      await updateJob(userId, jobId, {
-        progress: Math.min(10 + n * 25, 80),
-        message: `Flashcards auditados — lote ${n}/${total}…`,
-      })
-      await touchActiveJob(userId, jobId, { step: `flashcards_${n}` })
-    },
-  })
-
-  await updateJob(userId, jobId, { progress: 85, message: 'Salvando flashcards…' })
 
   const initialStatus =
     savePlan.status || (await resolveTopicoPublishStatus(courseId, normalizedTopicKey))
 
-  const db = getDb()
-  const flashcardsRef = db.collection(`courses/${courseId}/flashcards`)
-  let batch = db.batch()
-  let opCount = 0
+  let savedCount = 0
+  const { count } = await runWithHeartbeat(
+    () =>
+      runFlashcardsWithCheckpoint({
+        courseId,
+        jobId,
+        meta: { ...meta, topicKey: normalizedTopicKey, editalText: meta.editalText || '' },
+        forceFresh: Boolean(savePlan.forceRegenerate),
+        draftStatus: initialStatus,
+        onProgress: async (msg, partialCount) => {
+          if (typeof partialCount === 'number') savedCount = partialCount
+          await updateJob(userId, jobId, {
+            progress: Math.min(85, 10 + Math.round((savedCount / 30) * 70)),
+            message: msg,
+          })
+          await touchActiveJob(userId, jobId, { step: 'flashcards' })
+        },
+      }),
+    async () => {
+      await touchActiveJob(userId, jobId, { step: 'flashcards' })
+    },
+    15000,
+    async () => isJobCancelled(userId, jobId),
+  )
 
-  for (let index = 0; index < allItems.length; index += 1) {
-    const item = allItems[index]
-    const docRef = flashcardsRef.doc()
-    const frente = sanitizeFlashcardText(item.frente || item.pergunta || '')
-    const verso = sanitizeFlashcardText(item.verso || item.resposta || '')
-
-    batch.set(docRef, {
-      disciplina: meta.disciplina,
-      materia: meta.disciplina,
-      topico: meta.topicoNome,
-      topicoNumero: meta.topicoNumero || '',
-      modulo: meta.modulo,
-      topicKey: normalizedTopicKey,
-      frente,
-      verso,
-      pergunta: frente,
-      resposta: verso,
-      dificuldade: item.dificuldade || 'médio',
-      courseId,
-      shared: true,
-      status: initialStatus,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      order: index,
-    })
-
-    opCount += 1
-    if (opCount >= 400) {
-      await batch.commit()
-      batch = db.batch()
-      opCount = 0
-    }
-  }
-
-  if (opCount > 0) await batch.commit()
+  await updateJob(userId, jobId, { progress: 95, message: 'Flashcards salvos (checkpoint concluído).' })
 
   return {
-    resultRef: { collection: 'flashcards', count: allItems.length },
-    parsed: { count: allItems.length },
+    resultRef: { collection: 'flashcards', count },
+    parsed: { count },
   }
 }
 

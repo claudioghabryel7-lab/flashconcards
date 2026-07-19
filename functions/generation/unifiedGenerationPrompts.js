@@ -121,6 +121,146 @@ REGRAS:
 8. JSON completo — não truncar.`
 }
 
+function buildMaterialCorePrompt(params = {}) {
+  const {
+    disciplina = '',
+    topicoNome = '',
+    topicKey = '',
+    banca = '',
+    concursoName = '',
+    courseName = '',
+    cargo = '',
+    editalText = '',
+  } = params
+  const nome = topicoNome || topicKey || 'Tópico'
+  const editalSlice = String(editalText || '').slice(0, 10000)
+  const legalTravas = buildUnifiedLegalTravas({ banca, concursoName: concursoName || courseName })
+
+  return `Gere a PARTE 1 (núcleo) do material de concurso — Raio-X + Revisão Turbo.
+
+${legalTravas}
+
+DISCIPLINA: ${disciplina || 'não informada'}
+TÓPICO: ${nome}
+CHAVE: ${topicKey}
+BANCA: ${banca || 'não definida'}
+CARGO: ${cargo || concursoName || courseName || 'não informado'}
+
+PRIORIDADE: alta incidência na banca ${banca || ''} para o cargo acima.
+
+EDITAL (trecho):
+${editalSlice}
+
+OBRIGATÓRIO: use Google Search para confirmar leis/artigos citados.
+
+Retorne APENAS JSON válido:
+{
+  "titulo": "Material de Apoio Completo: ${nome}",
+  "materia": "${nome}",
+  "subtitulo": "Revisão estratégica para ${concursoName || courseName || 'o concurso'}",
+  "numero": "${topicKey}",
+  "raioXProbabilidade": {
+    "topicosQuentes": ["assunto 1", "..."],
+    "padraoBanca": "<p>Como a banca cobra este tópico</p>"
+  },
+  "revisaoTurbo": [{ "titulo": "Assunto", "conteudo": "<p>Resumo ~${MIN_PALAVRAS_POR_RESUMO}-${MAX_PALAVRAS_POR_RESUMO} palavras</p>" }]
+}
+
+REGRAS:
+- topicosQuentes: ${MIN_TOPICOS_QUENTES} a ${MAX_TOPICOS_QUENTES} itens.
+- revisaoTurbo: um resumo por assunto quente.
+- Resumos: ${MIN_PALAVRAS_POR_RESUMO}-${MAX_PALAVRAS_POR_RESUMO} palavras cada.
+- ${AI_MATERIAL_FORMAT_RULES}
+- ${AI_TEXT_FORMAT_RULES}
+- NÃO inclua pegadinhas nem questoesPreditivas nesta fase.`
+}
+
+function buildMaterialExtrasPrompt(params = {}, coreSummary = '') {
+  const {
+    disciplina = '',
+    topicoNome = '',
+    topicKey = '',
+    banca = '',
+    concursoName = '',
+    courseName = '',
+    cargo = '',
+  } = params
+  const nome = topicoNome || topicKey || 'Tópico'
+  const legalTravas = buildUnifiedLegalTravas({ banca, concursoName: concursoName || courseName })
+
+  return `Gere a PARTE 2 (complemento) do material — pegadinhas + questões preditivas embutidas.
+
+${legalTravas}
+
+DISCIPLINA: ${disciplina || ''}
+TÓPICO: ${nome}
+BANCA: ${banca || 'não definida'}
+CARGO: ${cargo || concursoName || courseName || ''}
+
+MATERIAL JÁ GERADO (parte 1 — use como base, não contradiga):
+${String(coreSummary || '').slice(0, 12000)}
+
+OBRIGATÓRIO: use Google Search. Gabarito e explicação alinhados.
+
+Retorne APENAS JSON válido:
+{
+  "pegadinhas": [{ "titulo": "Cuidado, Caçapa!", "conteudo": "<p>Pegadinha objetiva</p>" }],
+  "questoesPreditivas": [{
+    "enunciado": "...",
+    "alternativas": { "A": "", "B": "", "C": "", "D": "", "E": "" },
+    "correta": "A",
+    "gabaritoComentado": "<p>Explicação alinhada ao gabarito</p>"
+  }]
+}
+
+REGRAS:
+- pegadinhas: 3 a 5 itens.
+- questoesPreditivas: EXATAMENTE ${MIN_QUESTOES} questões.
+- ${AI_MATERIAL_FORMAT_RULES}
+- ${AI_TEXT_FORMAT_RULES}`
+}
+
+function buildQuestoesBatchPrompt({
+  disciplina = '',
+  topicoNome = '',
+  topicKey = '',
+  banca = '',
+  concursoName = '',
+  cargo = '',
+  editalText = '',
+  nivel = 1,
+  maxNivel = 10,
+  batchNumber = 1,
+  totalBatches = 5,
+  questionsInBatch = 10,
+  startNum = 1,
+  expectedCount = 50,
+  existingEnunciados = [],
+} = {}) {
+  const base = buildQuestoesPrompt({
+    disciplina,
+    topicoNome,
+    topicKey,
+    banca,
+    concursoName,
+    cargo,
+    editalText,
+    nivel,
+    maxNivel,
+    expectedCount: questionsInBatch,
+  })
+
+  const existingList = existingEnunciados.length
+    ? `\nNÃO repita estes enunciados:\n${existingEnunciados.slice(-20).map((e) => `- ${String(e).slice(0, 120)}`).join('\n')}`
+    : ''
+
+  return `${base}
+
+LOTE ${batchNumber}/${totalBatches} — exatamente ${questionsInBatch} questões.
+Numere de ${startNum} a ${startNum + questionsInBatch - 1}.
+Total do tópico ao final: ${expectedCount} questões.${existingList}`
+}
+
 function buildQuestoesPrompt({
   disciplina = '',
   topicoNome = '',
@@ -193,5 +333,8 @@ REGRAS:
 module.exports = {
   buildFlashcardPrompt,
   buildMaterialPrompt,
+  buildMaterialCorePrompt,
+  buildMaterialExtrasPrompt,
   buildQuestoesPrompt,
+  buildQuestoesBatchPrompt,
 }

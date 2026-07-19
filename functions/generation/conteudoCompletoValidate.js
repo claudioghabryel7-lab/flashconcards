@@ -58,7 +58,35 @@ function validateConteudoCompletoPayload(parsed = {}) {
   }
 }
 
+function validateMaterialCorePayload(parsed = {}) {
+  const errors = []
+  const topicosQuentes = parsed?.raioXProbabilidade?.topicosQuentes
+  if (!Array.isArray(topicosQuentes) || topicosQuentes.length < MIN_TOPICOS_QUENTES) {
+    errors.push(`Raio-X incompleto: esperado pelo menos ${MIN_TOPICOS_QUENTES} assuntos quentes.`)
+  }
+  const revisaoTurbo = parsed?.revisaoTurbo
+  if (!Array.isArray(revisaoTurbo) || !revisaoTurbo.length) {
+    errors.push('Revisão Turbo ausente ou vazia.')
+  }
+  return { ok: errors.length === 0, errors }
+}
+
+function validateMaterialExtrasPayload(parsed = {}) {
+  const errors = []
+  const pegadinhas = parsed?.pegadinhas
+  if (!Array.isArray(pegadinhas) || pegadinhas.length < 3) {
+    errors.push('Seção pegadinhas ausente ou incompleta.')
+  }
+  const questoes = parsed?.questoesPreditivas
+  if (!Array.isArray(questoes) || questoes.length < MIN_QUESTOES) {
+    errors.push(`Questões preditivas embutidas insuficientes (mín. ${MIN_QUESTOES}).`)
+  }
+  return { ok: errors.length === 0, errors }
+}
+
 module.exports = {
   validateConteudoCompletoPayload,
+  validateMaterialCorePayload,
+  validateMaterialExtrasPayload,
   wordCount,
 }

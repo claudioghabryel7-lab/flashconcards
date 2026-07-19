@@ -10,7 +10,7 @@ export function buildAiOptions(courseId, overrides = {}) {
   }
 }
 
-export function buildConteudoCompletoPayload({ prompt, courseId, topicKey, status }) {
+export function buildConteudoCompletoPayload({ prompt, courseId, topicKey, status, forceRegenerate = false }) {
   return {
     prompt,
     aiOptions: buildAiOptions(courseId, {
@@ -19,11 +19,12 @@ export function buildConteudoCompletoPayload({ prompt, courseId, topicKey, statu
     savePlan: {
       topicKey,
       status: status || null,
+      forceRegenerate: Boolean(forceRegenerate),
     },
   }
 }
 
-export function buildQuestoesTopicoPayload({ prompt, courseId, topicKey, topicoNome, nivel, status }) {
+export function buildQuestoesTopicoPayload({ prompt, courseId, topicKey, topicoNome, nivel, status, forceRegenerate = false }) {
   return {
     prompt,
     aiOptions: buildAiOptions(courseId),
@@ -32,6 +33,7 @@ export function buildQuestoesTopicoPayload({ prompt, courseId, topicKey, topicoN
       topicoNome,
       nivel,
       status: status || null,
+      forceRegenerate: Boolean(forceRegenerate),
     },
   }
 }
@@ -68,12 +70,13 @@ export function buildQuestoesIncidenciaPayload({
   }
 }
 
-export function buildFlashcardsTopicoPayload({ courseId, flashcardMeta, status }) {
+export function buildFlashcardsTopicoPayload({ courseId, flashcardMeta, status, forceRegenerate = false }) {
   return {
     aiOptions: buildAiOptions(courseId, { generationConfig: { maxOutputTokens: 24000, temperature: 0.35 } }),
     savePlan: {
       flashcardMeta,
       status: status || null,
+      forceRegenerate: Boolean(forceRegenerate),
     },
   }
 }

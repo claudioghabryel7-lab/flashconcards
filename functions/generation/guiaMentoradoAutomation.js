@@ -1,9 +1,16 @@
 const {
-  generateTrustedFlashcardsSet,
-  generateTrustedMaterial,
-  generateTrustedQuestoes,
   auditTopicBundleConsistency,
 } = require('./unifiedContentGeneration')
+const {
+  isFlashcardsComplete,
+  isMaterialComplete,
+  isQuestoesComplete,
+} = require('./generationCheckpoint')
+const {
+  runFlashcardsWithCheckpoint,
+  runMaterialWithCheckpoint,
+  runQuestoesWithCheckpoint,
+} = require('./topicGenerationRunner')
 const {
   sanitizeTopicKeyForFirestore,
   normalizeTopicKeyForStorage,
@@ -43,39 +50,15 @@ function getDb() {
 }
 
 async function hasFlashcards(courseId, topicKey, disciplina, modulo) {
-  const db = getDb()
-  const flashcardsRef = db.collection(`courses/${courseId}/flashcards`)
-  const normalized = normalizeTopicKeyForStorage(topicKey)
-
-  if (normalized) {
-    const byTopic = await flashcardsRef.where('topicKey', '==', normalized).limit(1).get()
-    if (!byTopic.empty) return true
-  }
-
-  if (disciplina && modulo) {
-    const byModule = await flashcardsRef
-      .where('materia', '==', disciplina)
-      .where('modulo', '==', modulo)
-      .limit(1)
-      .get()
-    if (!byModule.empty) return true
-  }
-
-  return false
+  return isFlashcardsComplete(courseId, topicKey, disciplina, modulo)
 }
 
 async function hasConteudo(courseId, topicKey) {
-  const key = sanitizeTopicKeyForFirestore(topicKey)
-  const snap = await getDb().doc(`courses/${courseId}/conteudosCompletos/${key}`).get()
-  if (!snap.exists) return false
-  const data = snap.data()
-  return Boolean(data.content || (data.secoes && data.secoes.length) || data.revisaoTurbo?.length)
+  return isMaterialComplete(courseId, topicKey)
 }
 
 async function hasQuestoes(courseId, topicKey) {
-  const key = `${sanitizeTopicKeyForFirestore(topicKey)}_nivel_1`
-  const snap = await getDb().doc(`courses/${courseId}/questoesTopico/${key}`).get()
-  return snap.exists
+  return isQuestoesComplete(courseId, topicKey)
 }
 
 async function isTopicContentComplete(courseId, topic) {
@@ -87,102 +70,46 @@ async function isTopicContentComplete(courseId, topic) {
   return { complete: fc && mat && q, flashcards: fc, material: mat, questoes: q }
 }
 
-async function deleteExistingFlashcards(courseId, topicKey, disciplina, modulo) {
-  const db = getDb()
-  const flashcardsRef = db.collection(`courses/${courseId}/flashcards`)
-  const normalized = normalizeTopicKeyForStorage(topicKey)
-
-  let docs = []
-  if (normalized) {
-    const byTopic = await flashcardsRef.where('topicKey', '==', normalized).get()
-    docs = byTopic.docs
-  }
-  if (!docs.length && disciplina && modulo) {
-    const byModule = await flashcardsRef
-      .where('materia', '==', disciplina)
-      .where('modulo', '==', modulo)
-      .get()
-    docs = byModule.docs
-  }
-  if (!docs.length) return
-
-  const batch = db.batch()
-  docs.forEach((d) => batch.delete(d.ref))
-  await batch.commit()
-}
-
-async function generateAndSaveFlashcards(courseId, topic, onHeartbeat, shouldAbort) {
+async function generateAndSaveFlashcards(courseId, topic, jobId, onHeartbeat, shouldAbort) {
   const meta = topic.flashcardMeta
   if (await hasFlashcards(courseId, topic.topicKey, topic.disciplina, topic.modulo)) {
     return { skipped: true, type: 'flashcards' }
   }
 
-  await deleteExistingFlashcards(courseId, topic.topicKey, topic.disciplina, topic.modulo)
-
   const runBatch = async (label, fn) =>
     runWithHeartbeat(fn, () => onHeartbeat?.(label), JOB_HEARTBEAT_MS, shouldAbort)
 
-  const allItems = await runBatch('flashcards auditados', () =>
-    generateTrustedFlashcardsSet(meta, {
-      onBatch: async (n, total) => onHeartbeat?.(`flashcards lote ${n}/${total}`),
+  const result = await runBatch('flashcards auditados', () =>
+    runFlashcardsWithCheckpoint({
+      courseId,
+      jobId,
+      meta,
+      draftStatus: CONTENT_STATUS.UNAVAILABLE,
+      onProgress: async (msg, partialCount) => {
+        await onHeartbeat?.(
+          partialCount ? `flashcards ${partialCount}/30 — ${msg}` : msg,
+        )
+      },
     }),
   )
 
-  const db = getDb()
-  const flashcardsRef = db.collection(`courses/${courseId}/flashcards`)
-  let batch = db.batch()
-  let opCount = 0
-  const ts = require('firebase-admin').firestore.FieldValue.serverTimestamp()
-  const draftStatus = CONTENT_STATUS.UNAVAILABLE
-
-  for (let index = 0; index < allItems.length; index += 1) {
-    const item = allItems[index]
-    const docRef = flashcardsRef.doc()
-    const frente = item.frente || item.pergunta || ''
-    const verso = item.verso || item.resposta || ''
-
-    batch.set(docRef, {
-      disciplina: meta.disciplina,
-      materia: meta.disciplina,
-      topico: meta.topicoNome,
-      topicoNumero: meta.topicoNumero || '',
-      modulo: meta.modulo,
-      topicKey: normalizeTopicKeyForStorage(meta.topicKey),
-      frente,
-      verso,
-      pergunta: frente,
-      resposta: verso,
-      dificuldade: item.dificuldade || 'médio',
-      courseId,
-      shared: true,
-      status: draftStatus,
-      createdAt: ts,
-      updatedAt: ts,
-      order: index,
-    })
-
-    opCount += 1
-    if (opCount >= 400) {
-      await batch.commit()
-      batch = db.batch()
-      opCount = 0
-    }
-  }
-
-  if (opCount) await batch.commit()
-  return { skipped: false, type: 'flashcards', count: allItems.length }
+  return { skipped: false, type: 'flashcards', count: result.count, resumed: result.resumed }
 }
 
-async function generateAndSaveConteudo(courseId, topic, onHeartbeat, shouldAbort) {
+async function generateAndSaveConteudo(courseId, topic, jobId, onHeartbeat, shouldAbort) {
   if (await hasConteudo(courseId, topic.topicKey)) {
     return { skipped: true, type: 'conteudo' }
   }
 
-  const { hydrateConteudoCompletoMaterial } = require('./materialFormatting')
+  const runBatch = async (label, fn) =>
+    runWithHeartbeat(fn, () => onHeartbeat?.(label), JOB_HEARTBEAT_MS, shouldAbort)
 
-  const parsed = await runWithHeartbeat(
-    () =>
-      generateTrustedMaterial({
+  await runBatch('material', () =>
+    runMaterialWithCheckpoint({
+      courseId,
+      jobId,
+      finalStatus: CONTENT_STATUS.UNAVAILABLE,
+      params: {
         prompt: topic.conteudoPrompt,
         disciplina: topic.disciplina,
         topicoNome: topic.topicoNome,
@@ -192,76 +119,40 @@ async function generateAndSaveConteudo(courseId, topic, onHeartbeat, shouldAbort
         courseName: topic.flashcardMeta?.courseName,
         cargo: topic.flashcardMeta?.cargo,
         editalText: topic.flashcardMeta?.editalText,
-      }),
-    () => onHeartbeat?.('material'),
-    JOB_HEARTBEAT_MS,
-    shouldAbort,
-  )
-
-  const hydrated = hydrateConteudoCompletoMaterial(parsed, topic.topicKey)
-  const sanitizedKey = sanitizeTopicKeyForFirestore(topic.topicKey)
-  const ts = require('firebase-admin').firestore.FieldValue.serverTimestamp()
-
-  await getDb()
-    .doc(`courses/${courseId}/conteudosCompletos/${sanitizedKey}`)
-    .set(
-      {
-        ...hydrated,
-        materia: hydrated.materia,
-        numero: hydrated.numero || topic.topicKey,
-        topicKey: topic.topicKey,
-        status: CONTENT_STATUS.UNAVAILABLE,
-        updatedAt: ts,
-        generatedAt: ts,
       },
-      { merge: true },
-    )
+      onProgress: (msg) => onHeartbeat?.(msg),
+    }),
+  )
 
   return { skipped: false, type: 'conteudo' }
 }
 
-async function generateAndSaveQuestoes(courseId, topic, onHeartbeat, shouldAbort) {
+async function generateAndSaveQuestoes(courseId, topic, jobId, onHeartbeat, shouldAbort) {
   if (await hasQuestoes(courseId, topic.topicKey)) {
     return { skipped: true, type: 'questoes' }
   }
 
-  const parsed = await runWithHeartbeat(
-    () =>
-      generateTrustedQuestoes(
-        {
-          prompt: topic.questoesPrompt,
-          disciplina: topic.disciplina,
-          topicoNome: topic.topicoNome,
-          topicKey: topic.topicKey,
-          banca: topic.flashcardMeta?.banca,
-          concursoName: topic.flashcardMeta?.courseName,
-          cargo: topic.flashcardMeta?.cargo,
-          editalText: topic.flashcardMeta?.editalText,
-        },
-        50,
-      ),
-    () => onHeartbeat?.('questões'),
-    JOB_HEARTBEAT_MS,
-    shouldAbort,
-  )
+  const runBatch = async (label, fn) =>
+    runWithHeartbeat(fn, () => onHeartbeat?.(label), JOB_HEARTBEAT_MS, shouldAbort)
 
-  const sanitizedKey = `${sanitizeTopicKeyForFirestore(topic.topicKey)}_nivel_1`
-  const ts = require('firebase-admin').firestore.FieldValue.serverTimestamp()
-
-  await getDb()
-    .doc(`courses/${courseId}/questoesTopico/${sanitizedKey}`)
-    .set(
-      {
-        ...parsed,
-        topico: parsed.topico || topic.topicoNome,
-        nivel: 1,
+  await runBatch('questões', () =>
+    runQuestoesWithCheckpoint({
+      courseId,
+      jobId,
+      finalStatus: CONTENT_STATUS.UNAVAILABLE,
+      params: {
+        prompt: topic.questoesPrompt,
+        disciplina: topic.disciplina,
+        topicoNome: topic.topicoNome,
         topicKey: topic.topicKey,
-        status: CONTENT_STATUS.UNAVAILABLE,
-        updatedAt: ts,
-        generatedAt: ts,
+        banca: topic.flashcardMeta?.banca,
+        concursoName: topic.flashcardMeta?.courseName,
+        cargo: topic.flashcardMeta?.cargo,
+        editalText: topic.flashcardMeta?.editalText,
       },
-      { merge: true },
-    )
+      onProgress: (msg) => onHeartbeat?.(msg),
+    }),
+  )
 
   return { skipped: false, type: 'questoes' }
 }
@@ -368,7 +259,7 @@ async function processSingleTopic(
     message: `[${index + 1}/${total}] ${label} — gerando flashcards…`,
   })
 
-  await generateAndSaveFlashcards(courseId, topic, heartbeat, shouldAbort)
+  await generateAndSaveFlashcards(courseId, topic, jobId, heartbeat, shouldAbort)
   await throwIfCancelled(userId, jobId)
   await updateTopicStep(courseId, targetDate, topic.topicKey, { flashcards: 'done', step: 'material' })
 
@@ -377,7 +268,7 @@ async function processSingleTopic(
     message: `[${index + 1}/${total}] ${label} — gerando material…`,
   })
 
-  await generateAndSaveConteudo(courseId, topic, heartbeat, shouldAbort)
+  await generateAndSaveConteudo(courseId, topic, jobId, heartbeat, shouldAbort)
   await throwIfCancelled(userId, jobId)
   await updateTopicStep(courseId, targetDate, topic.topicKey, { material: 'done', step: 'questoes' })
 
@@ -386,7 +277,7 @@ async function processSingleTopic(
     message: `[${index + 1}/${total}] ${label} — gerando questões…`,
   })
 
-  await generateAndSaveQuestoes(courseId, topic, heartbeat, shouldAbort)
+  await generateAndSaveQuestoes(courseId, topic, jobId, heartbeat, shouldAbort)
   await updateTopicStep(courseId, targetDate, topic.topicKey, { questoes: 'done', step: 'publicando' })
 
   const readiness = await isTopicContentComplete(courseId, topic)

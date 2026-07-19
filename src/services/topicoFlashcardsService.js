@@ -127,6 +127,7 @@ export async function generateAndSaveFlashcardsForTopico({
     serverPayload: buildFlashcardsTopicoPayload({
       courseId: resolvedId,
       status: initialStatus,
+      forceRegenerate: true,
       flashcardMeta: {
         ...baseParams,
         topicKey: normalizedTopicKey,
