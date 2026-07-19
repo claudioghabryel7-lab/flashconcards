@@ -43,6 +43,7 @@ function buildFlashcardPrompt(meta = {}, batchNumber, totalBatches, cardsInBatch
   const legalTravas = buildUnifiedLegalTravas({
     banca: meta.banca,
     concursoName: meta.concursoName || meta.courseName,
+    cargo: meta.cargo || meta.concursoName || meta.courseName,
   })
 
   const searchRule = isLikelyLegalDiscipline(meta.disciplina)
@@ -51,19 +52,23 @@ function buildFlashcardPrompt(meta = {}, batchNumber, totalBatches, cardsInBatch
 
   const totalCards = 30
 
-  return `Gere flashcards ESTRATÉGICOS para concurso — apenas o essencial (alta incidência na banca).
+  const cargo = meta.cargo || meta.concursoName || meta.courseName || ''
+  const concurso = meta.concursoName || meta.courseName || ''
+
+  return `Gere flashcards ESTRATÉGICOS — 100% fiéis à banca, cargo e concurso.
 
 ${legalTravas}
 
+CONCURSO: ${concurso}
+CARGO: ${cargo}
 CURSO: ${meta.courseName || ''}
-CARGO: ${meta.cargo || meta.concursoName || meta.courseName || ''}
 DISCIPLINA: ${meta.disciplina || ''}
 TÓPICO: ${meta.topicoNumero ? `${meta.topicoNumero} - ` : ''}${meta.topicoNome || ''}
 MÓDULO: ${meta.modulo || ''}
 BANCA: ${meta.banca || 'não informada'}
 
-PRIORIDADE: escolha os ${totalCards} pontos MAIS COBRADOS pela banca ${meta.banca || ''} neste tópico/cargo.
-Estilo das perguntas deve refletir como a ${meta.banca || 'banca'} costuma cobrar (objetiva, pegadinhas típicas, jurisprudência quando couber).
+PRIORIDADE: escolha os ${totalCards} pontos MAIS COBRADOS pela banca ${meta.banca || ''} PARA O CARGO ${cargo} neste tópico (concurso ${concurso}).
+Estilo das perguntas = estilo da ${meta.banca || 'banca'}. Nada genérico de outros cargos.
 
 TOTAL DO TÓPICO: exatamente ${totalCards} cards (este lote: ${batchNumber}/${totalBatches} — ${cardsInBatch} cards).
 ${existingList}
@@ -95,11 +100,17 @@ function buildMaterialPrompt({
   banca = '',
   concursoName = '',
   courseName = '',
+  cargo = '',
   editalText = '',
 } = {}) {
   const nome = topicoNome || topicKey || 'Tópico'
   const editalSlice = String(editalText || '').slice(0, 10000)
-  const legalTravas = buildUnifiedLegalTravas({ banca, concursoName: concursoName || courseName })
+  const cargoLabel = cargo || concursoName || courseName || ''
+  const legalTravas = buildUnifiedLegalTravas({
+    banca,
+    concursoName: concursoName || courseName,
+    cargo: cargoLabel,
+  })
   const questoesBlock = buildMaterialQuestoesBlock(banca)
 
   return `Você é especialista em materiais de concursos. Gere material COMPLETO, objetivo e equilibrado.
@@ -110,7 +121,8 @@ DISCIPLINA: ${disciplina || 'não informada'}
 TÓPICO: ${nome}
 CHAVE: ${topicKey}
 BANCA: ${banca || 'não definida'}
-CONCURSO/CARGO: ${concursoName || courseName || 'não informado'}
+CONCURSO: ${concursoName || courseName || 'não informado'}
+CARGO: ${cargoLabel || 'não informado'}
 
 PRIORIDADE: conteúdo alinhado ao estilo e incidência da banca ${banca || ''} para o cargo acima.
 
@@ -159,7 +171,11 @@ function buildMaterialCorePrompt(params = {}) {
   } = params
   const nome = topicoNome || topicKey || 'Tópico'
   const editalSlice = String(editalText || '').slice(0, 10000)
-  const legalTravas = buildUnifiedLegalTravas({ banca, concursoName: concursoName || courseName })
+  const legalTravas = buildUnifiedLegalTravas({
+    banca,
+    concursoName: concursoName || courseName,
+    cargo: cargo || concursoName || courseName,
+  })
 
   return `Gere a PARTE 1 (núcleo) do material de concurso — Raio-X + Revisão Turbo.
 
@@ -211,7 +227,11 @@ function buildMaterialExtrasPrompt(params = {}, coreSummary = '') {
     cargo = '',
   } = params
   const nome = topicoNome || topicKey || 'Tópico'
-  const legalTravas = buildUnifiedLegalTravas({ banca, concursoName: concursoName || courseName })
+  const legalTravas = buildUnifiedLegalTravas({
+    banca,
+    concursoName: concursoName || courseName,
+    cargo: cargo || concursoName || courseName,
+  })
   const questoesBlock = buildMaterialQuestoesBlock(banca)
 
   return `Gere a PARTE 2 (complemento) do material — pegadinhas + questões preditivas embutidas.
@@ -313,7 +333,11 @@ function buildQuestoesPrompt({
             ? 'avançadas'
             : 'especialista'
 
-  const legalTravas = buildUnifiedLegalTravas({ banca, concursoName: concursoName || cargo })
+  const legalTravas = buildUnifiedLegalTravas({
+    banca,
+    concursoName: concursoName || cargo,
+    cargo: cargo || concursoName,
+  })
 
   return `Gere ${expectedCount} questões preditivas nível ${nivel} (${dificuldade}) para concurso.
 

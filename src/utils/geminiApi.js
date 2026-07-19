@@ -9,11 +9,20 @@ import { performRAG, googleSearch } from './googleSearch.js'
 import { fetchCourseAiContext, buildPromptWithCourseContext } from './courseAiContext.js'
 import {
   buildVerificationPrompt,
+  buildFactualAuditPrompt,
+  buildLegalConfirmPrompt,
+  buildFlashcardAuditPrompt,
+  buildConsistencyAuditPrompt,
   parseVerificationResult,
   shouldRunVerification,
   applyVerificationToResponse,
+  summarizeAuditProblems,
+  isLikelyLegalDiscipline,
 } from './contentVerification.js'
 import { appendSilentJsonRules } from './aiPromptUtils.js'
+
+const MAX_AUDIT_ROUNDS_LEGAL = 4
+const MAX_AUDIT_ROUNDS_FACTUAL = 3
 import { geminiFetch } from './geminiHttp.js'
 import {
   collectGeminiApiKeys,
@@ -63,6 +72,13 @@ export function formatAiErrorForUser(error) {
   if (isGeminiQuotaError(error)) {
     return 'Cota da API Gemini esgotada ou limite gratuito atingido. Tente novamente mais tarde ou configure outra chave.'
   }
+  const code = String(error?.code || '')
+  if (code === 'legal_audit_failed' || code === 'bundle_consistency_failed') {
+    return (
+      error?.message ||
+      'Conteúdo reprovado na auditoria — não foi publicado. Gere novamente.'
+    )
+  }
   const msg = String(error?.message || error || '')
   if (msg.includes('Nenhum JSON') || msg.includes('reparar o JSON') || msg.includes('formato inválido')) {
     return 'A IA respondeu em formato inválido ou incompleto. Tente gerar novamente.'
@@ -89,8 +105,162 @@ function isRetryableAiError(error) {
   return (
     code === 'ai_empty_response' ||
     code === 'ai_json_parse_error' ||
+    code === 'legal_audit_failed' ||
+    code === 'bundle_consistency_failed' ||
     msg.includes('json') ||
-    msg.includes('reparar')
+    msg.includes('reparar') ||
+    msg.includes('auditoria')
+  )
+}
+
+function buildAuditFailError(verification, prefix = 'Conteúdo reprovado na auditoria') {
+  const detail = summarizeAuditProblems(verification?.problemas)
+  const err = new Error(detail ? `${prefix}: ${detail}` : prefix)
+  err.code = 'legal_audit_failed'
+  err.problemas = verification?.problemas || []
+  return err
+}
+
+async function runSingleAudit(auditPrompt, silent = false) {
+  const verifyResponse = await executeGeminiRequest(auditPrompt, {
+    models: VERIFY_MODELS,
+    generationConfig: VERIFY_GENERATION_CONFIG,
+    useGoogleSearch: true,
+    silent,
+  })
+  return parseVerificationResult(extractGeneratedText(verifyResponse))
+}
+
+function pickAuditPrompt(currentText, auditContext, contentType, auditMode) {
+  const legal = auditMode === 'legal'
+  if (contentType === 'flashcards') {
+    return buildFlashcardAuditPrompt(currentText, auditContext, { legal })
+  }
+  if (legal) return buildVerificationPrompt(currentText, auditContext)
+  return buildFactualAuditPrompt(currentText, auditContext)
+}
+
+/**
+ * Máxima confiabilidade:
+ * - Nunca publica com FALSO residual (regenera / bloqueia).
+ * - Jurídico: até 4 correções + 2ª auditoria de confirmação.
+ * - Não jurídico: auditoria factual leve (datas/conceitos).
+ */
+async function runFailClosedAuditLoop(response, generatedText, options = {}) {
+  const {
+    courseData = {},
+    contentType = '',
+    disciplina = '',
+    silent = false,
+    auditMode = 'factual',
+  } = options
+
+  const legal = auditMode === 'legal'
+  const maxRounds = legal ? MAX_AUDIT_ROUNDS_LEGAL : MAX_AUDIT_ROUNDS_FACTUAL
+  const auditContext = {
+    ...courseData,
+    disciplina: disciplina || courseData.disciplina || '',
+  }
+
+  let currentResponse = response
+  let currentText = generatedText
+  let lastVerification = null
+
+  for (let round = 1; round <= maxRounds; round += 1) {
+    if (!silent) {
+      console.log(
+        `🔎 Auditoria ${legal ? 'jurídica' : 'factual'} ${round}/${maxRounds} (Google Search)…`,
+      )
+    }
+
+    let verification
+    try {
+      verification = await runSingleAudit(
+        pickAuditPrompt(currentText, auditContext, contentType, auditMode),
+        silent,
+      )
+    } catch (auditErr) {
+      if (legal) {
+        // Jurídico: falha técnica → regenera (não publica às cegas)
+        throw buildAuditFailError(
+          { problemas: [{ motivo: auditErr?.message || 'auditoria indisponível' }] },
+          'Auditoria jurídica indisponível',
+        )
+      }
+      if (!silent) {
+        console.warn('⚠️ Auditoria factual indisponível — publicando:', auditErr?.message)
+      }
+      return currentResponse
+    }
+
+    lastVerification = verification
+
+    if (verification.aprovado) {
+      // Jurídico: 2ª passagem de confirmação (reduz falso negativo/positivo)
+      if (legal && contentType !== 'flashcards') {
+        try {
+          const confirm = await runSingleAudit(
+            buildLegalConfirmPrompt(currentText, auditContext),
+            silent,
+          )
+          if (!confirm.aprovado) {
+            lastVerification = confirm
+            if (confirm.texto_corrigido) {
+              currentResponse = applyVerificationToResponse(
+                currentResponse,
+                confirm,
+                currentText,
+              )
+              currentText = confirm.texto_corrigido
+              if (round < maxRounds) continue
+              throw buildAuditFailError(confirm, 'Confirmação jurídica ainda com FALSO')
+            }
+            throw buildAuditFailError(confirm, 'Confirmação jurídica apontou FALSO')
+          }
+        } catch (confirmErr) {
+          if (confirmErr?.code === 'legal_audit_failed') throw confirmErr
+          // confirmação técnica falhou após 1ª aprovação → aceita 1ª (já sem FALSO)
+          if (!silent) {
+            console.warn('⚠️ Confirmação jurídica indisponível — mantendo 1ª aprovação')
+          }
+        }
+      }
+
+      if (!silent) console.log('✅ Auditoria limpa (zero FALSO) — aprovado')
+      return {
+        ...currentResponse,
+        _verification: {
+          ...(currentResponse._verification || {}),
+          aprovado: true,
+          auditMode,
+          dualConfirmed: legal,
+        },
+      }
+    }
+
+    // FALSO residual → corrigir
+    if (verification.texto_corrigido) {
+      if (!silent) {
+        console.warn(
+          `⚠️ ${verification.falsosCount || 0} FALSO(s) na rodada ${round} — corrigindo…`,
+        )
+      }
+      currentResponse = applyVerificationToResponse(currentResponse, verification, currentText)
+      currentText = verification.texto_corrigido
+      continue
+    }
+
+    // FALSO sem correção → regenerar lote/geração (NÃO publicar)
+    throw buildAuditFailError(
+      verification,
+      'FALSO sem correção automática — regenerando (não publicado)',
+    )
+  }
+
+  // Ainda há FALSO após todas as correções → NÃO publicar
+  throw buildAuditFailError(
+    lastVerification,
+    'Ainda há FALSO após correções — conteúdo NÃO publicado',
   )
 }
 
@@ -228,18 +398,30 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     courseContext = null,
     verifyContent = true,
     silent = false,
+    forceAudit = false,
+    contentType = '',
+    disciplina = '',
+    auditMode: auditModeOption = null,
   } = options
 
-  const effectiveVerify = silent ? false : verifyContent
-  const effectiveRAG = silent ? Boolean(options.useRAG) : useRAG
-  const effectiveGoogleSearch = silent ? Boolean(options.useGoogleSearch) : useGoogleSearch
+  const trusted = Boolean(options.trustedGeneration)
+  const effectiveVerify = silent && !trusted ? false : Boolean(verifyContent || trusted)
+  const effectiveRAG = silent && !trusted ? Boolean(options.useRAG) : useRAG
+  const effectiveGoogleSearch =
+    silent && !trusted ? Boolean(options.useGoogleSearch) : useGoogleSearch || trusted
 
   let courseData = courseContext
   if (!courseData && courseId) {
     courseData = await fetchCourseAiContext(courseId)
   }
 
-  const promptBase = silent ? appendSilentJsonRules(prompt) : prompt
+  const resolvedDisciplina = disciplina || courseData?.disciplina || options.disciplina || ''
+  const legalByDiscipline = isLikelyLegalDiscipline(resolvedDisciplina)
+  const effectiveIsLegal = isLegalContent === true || legalByDiscipline
+  const auditMode =
+    auditModeOption || (effectiveIsLegal ? 'legal' : trusted || forceAudit ? 'factual' : null)
+
+  const promptBase = silent && !trusted ? appendSilentJsonRules(prompt) : prompt
   let enhancedPrompt = buildPromptWithCourseContext(promptBase, courseData)
 
   if (effectiveRAG) {
@@ -248,7 +430,7 @@ export async function callGeminiWithRetry(prompt, options = {}) {
       if (!silent) {
         console.log(`🔍 RAG: Buscando contexto em fontes oficiais: "${searchTopic.substring(0, 80)}..."`)
       }
-      const ragContext = await performRAG(searchTopic, isLegalContent)
+      const ragContext = await performRAG(searchTopic, effectiveIsLegal)
       if (ragContext) {
         enhancedPrompt = ragContext + '\n\n' + enhancedPrompt
         if (!silent) console.log('✅ RAG: contexto oficial adicionado ao prompt')
@@ -278,49 +460,39 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     return response
   }
 
-  if (!shouldRunVerification(generatedText, { verifyContent, isLegalContent })) {
-    return response
-  }
+  const mustAudit = shouldRunVerification(generatedText, {
+    verifyContent: true,
+    isLegalContent: effectiveIsLegal,
+    forceAudit: forceAudit || Boolean(auditMode),
+    auditMode,
+    disciplina: resolvedDisciplina,
+  })
 
-  console.log('🔎 Verificação jurídica pós-geração (1 chamada Flash)...')
+  if (!mustAudit) return response
+
   try {
-    const verifyPrompt = buildVerificationPrompt(generatedText, courseData || {})
-    const verifyResponse = await executeGeminiRequest(verifyPrompt, {
-      models: VERIFY_MODELS,
-      generationConfig: VERIFY_GENERATION_CONFIG,
-      useGoogleSearch: false,
+    return await runFailClosedAuditLoop(response, generatedText, {
+      courseData: courseData || {},
+      contentType,
+      disciplina: resolvedDisciplina,
+      silent,
+      auditMode: auditMode || (effectiveIsLegal ? 'legal' : 'factual'),
     })
-    const verifyText = extractGeneratedText(verifyResponse)
-    const verification = parseVerificationResult(verifyText)
-
-    if (!verification.aprovado && !verification.texto_corrigido) {
-      const err = new Error(
-        `Conteúdo reprovado na auditoria: ${(verification.problemas || [])
-          .slice(0, 3)
-          .map((p) => p.motivo || p.status)
-          .join('; ')}`,
-      )
-      err.code = 'legal_audit_failed'
-      throw err
-    }
-
-    if (!verification.aprovado) {
-      console.warn(
-        `⚠️ Verificação encontrou ${verification.problemas?.length || 0} problema(s); aplicando correções.`,
-      )
-    } else {
-      console.log('✅ Conteúdo aprovado na verificação')
-    }
-
-    return applyVerificationToResponse(response, verification, generatedText)
   } catch (verifyErr) {
-    if (options.trustedGeneration) {
-      const err = new Error(verifyErr.message || 'Auditoria falhou')
-      err.code = verifyErr.code || 'legal_audit_failed'
-      throw err
+    // Nunca soft-pass com FALSO residual. Soft-pass só em falha técnica na última tentativa factual.
+    const isTechnical =
+      String(verifyErr?.message || '').includes('indisponível') &&
+      !(verifyErr?.problemas || []).some(
+        (p) => String(p?.status || '').toUpperCase() === 'FALSO',
+      )
+    if (options.auditSoftPassOnFail && !effectiveIsLegal && isTechnical) {
+      console.warn('⚠️ Auditoria factual técnica falhou — publicando:', verifyErr.message)
+      return response
     }
-    console.warn('⚠️ Verificação falhou, mantendo texto original:', verifyErr.message)
-    return response
+    const err = new Error(verifyErr.message || 'Auditoria apontou FALSO — não publicado')
+    err.code = verifyErr.code || 'legal_audit_failed'
+    err.problemas = verifyErr.problemas
+    throw err
   }
 }
 
@@ -455,23 +627,85 @@ export function extractGeneratedText(response) {
 /**
  * Chamada silenciosa + parse JSON robusto (uso padrão em todas as gerações).
  */
+/**
+ * Auditoria cruzada FC + material + questões (com Google Search).
+ * Fail-closed: lança se houver contradição.
+ */
+export async function auditTopicBundleConsistency({
+  flashcards = [],
+  materialSample = '',
+  questoesSample = '',
+  courseContext = {},
+} = {}) {
+  const fcSample = (flashcards || [])
+    .slice(0, 12)
+    .map((c, i) => `${i + 1}. F: ${c.frente || c.pergunta}\n   V: ${c.verso || c.resposta}`)
+    .join('\n')
+
+  const prompt = buildConsistencyAuditPrompt({
+    flashcardsSample: fcSample,
+    materialSample: String(materialSample || '').slice(0, 6000),
+    questoesSample: String(questoesSample || '').slice(0, 6000),
+    courseContext,
+  })
+
+  const response = await executeGeminiRequest(prompt, {
+    models: VERIFY_MODELS,
+    generationConfig: VERIFY_GENERATION_CONFIG,
+    useGoogleSearch: true,
+  })
+  const text = extractGeneratedText(response)
+  const result = parseVerificationResult(text)
+  if (!result.aprovado) {
+    if (isLikelyLegalDiscipline(courseContext.disciplina || '')) {
+      const err = new Error(
+        `Inconsistência FALSA no pacote jurídico: ${summarizeAuditProblems(result.problemas)}`,
+      )
+      err.code = 'bundle_consistency_failed'
+      err.problemas = result.problemas
+      throw err
+    }
+    console.warn(
+      '[bundle] inconsistência factual (seguindo):',
+      summarizeAuditProblems(result.problemas),
+    )
+    return { ...result, softApproved: true, blocked: false }
+  }
+  return result
+}
+
 export async function generateAiJson(prompt, options = {}) {
-  const maxAttempts = options.maxParseAttempts ?? 2
+  const trusted = Boolean(options.trustedGeneration)
+  const legal =
+    options.auditMode === 'legal' ||
+    options.isLegalContent === true ||
+    isLikelyLegalDiscipline(options.disciplina || '')
+  // Jurídico: mais regenerações até sair limpo. Factual: 3 tentativas.
+  const maxAttempts = options.maxParseAttempts ?? (trusted ? (legal ? 5 : 3) : 2)
   let lastError
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      const effectivePrompt =
-        attempt === 1
-          ? prompt
-          : `${prompt}\n\nIMPORTANTE: a resposta anterior não pôde ser lida. Retorne APENAS um único JSON válido e completo, sem markdown nem texto extra.`
+      let effectivePrompt = prompt
+      if (attempt > 1) {
+        const hint =
+          lastError?.code === 'legal_audit_failed'
+            ? `A auditoria encontrou FALSO (${lastError.message}). Regenere JSON 100% correto com Google Search. Não repita o erro.`
+            : 'a resposta anterior não pôde ser lida. Retorne APENAS um único JSON válido e completo, sem markdown nem texto extra.'
+        effectivePrompt = `${prompt}\n\nIMPORTANTE: ${hint}`
+      }
 
       const response = await callGeminiWithRetry(effectivePrompt, {
-        silent: !options.trustedGeneration,
-        verifyContent: options.trustedGeneration ? true : false,
-        useRAG: options.useRAG ?? Boolean(options.trustedGeneration),
-        useGoogleSearch: options.useGoogleSearch ?? Boolean(options.trustedGeneration),
         ...options,
+        silent: !trusted,
+        verifyContent: trusted ? true : Boolean(options.verifyContent),
+        forceAudit: trusted ? true : Boolean(options.forceAudit),
+        auditMode: options.auditMode || (legal ? 'legal' : trusted ? 'factual' : null),
+        // Soft-pass técnico só na última tentativa factual — nunca com FALSO
+        auditSoftPassOnFail: !legal && attempt >= maxAttempts,
+        useRAG: options.useRAG ?? trusted,
+        useGoogleSearch: options.useGoogleSearch ?? trusted,
+        trustedGeneration: trusted,
       })
 
       const text = extractGeneratedText(response)
@@ -490,7 +724,11 @@ export async function generateAiJson(prompt, options = {}) {
     }
   }
 
-  const err = new Error(resolveAiErrorMessage(lastError))
+  const err = new Error(
+    lastError?.code === 'legal_audit_failed'
+      ? lastError.message
+      : resolveAiErrorMessage(lastError),
+  )
   err.code = lastError?.code || 'ai_json_parse_error'
   err.cause = lastError
   throw err

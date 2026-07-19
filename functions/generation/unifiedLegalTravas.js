@@ -8,11 +8,12 @@ function todayPtBr() {
   })
 }
 
-function buildUnifiedLegalTravas({ banca = '', concursoName = '' } = {}) {
+function buildUnifiedLegalTravas({ banca = '', concursoName = '', cargo = '' } = {}) {
   const hoje = todayPtBr()
+  const cargoLabel = cargo || concursoName || 'não informado'
   return `
-🚨 FIDELIDADE JURÍDICA (OBRIGATÓRIO — data de referência: ${hoje})
-BANCA: ${banca || 'não definida'} | CONCURSO/CARGO: ${concursoName || 'não informado'}
+🚨 FIDELIDADE JURÍDICA + CONCURSO (OBRIGATÓRIO — data de referência: ${hoje})
+BANCA: ${banca || 'não definida'} | CONCURSO: ${concursoName || 'não informado'} | CARGO: ${cargoLabel}
 
 1. PROIBIDO inventar números de leis, decretos, artigos, súmulas ou datas.
 2. Se não tiver certeza absoluta após consultar fontes: cite o conceito SEM número inventado OU omita a citação numérica.
@@ -20,6 +21,7 @@ BANCA: ${banca || 'não definida'} | CONCURSO/CARGO: ${concursoName || 'não inf
 4. Confronte jurisprudência pacífica (STF/STJ) quando a eficácia do dispositivo foi alterada por decisão definitiva.
 5. USE Google Search / contexto de busca para confirmar vigência ANTES de citar lei ou artigo.
 6. Gabarito e explicação devem estar SEMPRE alinhados.
+7. Conteúdo 100% alinhado à banca ${banca || ''} e ao cargo ${cargoLabel} — nada genérico de outros cargos.
 
 PROCESSO INTERNO (não exibir): confira cada citação legal; se não confirmar, remova ou generalize — nunca invente.`
 }

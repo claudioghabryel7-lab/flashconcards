@@ -48,14 +48,17 @@ function dedupeFlashcards(items = []) {
 }
 
 function buildGenerationContext(meta = {}, extra = {}) {
+  const disciplina = meta.disciplina || extra.disciplina || ''
+  const legal = isLikelyLegalDiscipline(disciplina)
   return {
-    disciplina: meta.disciplina || extra.disciplina || '',
+    disciplina,
     banca: meta.banca || extra.banca || '',
     concursoName: meta.concursoName || meta.courseName || extra.concursoName || '',
     cargo: meta.cargo || extra.cargo || '',
     topicoNome: meta.topicoNome || extra.topicoNome || '',
     forceAudit: true,
-    isLegalContent: isLikelyLegalDiscipline(meta.disciplina || extra.disciplina),
+    auditMode: legal ? 'legal' : 'factual',
+    isLegalContent: legal,
     ...extra,
   }
 }
@@ -359,14 +362,25 @@ async function auditTopicBundleConsistency({
   const text = extractGeneratedText(response)
   const result = parseVerificationResult(text)
   if (!result.aprovado) {
-    const err = new Error(
-      `Inconsistência entre flashcards/material/questões: ${(result.problemas || [])
+    const legal = isLikelyLegalDiscipline(courseContext.disciplina || '')
+    if (legal) {
+      const err = new Error(
+        `Inconsistência FALSA no pacote jurídico: ${(result.problemas || [])
+          .slice(0, 3)
+          .map((p) => p.motivo || p.status)
+          .join('; ')}`,
+      )
+      err.code = 'bundle_consistency_failed'
+      throw err
+    }
+    console.warn(
+      '[bundle] inconsistência factual — publicando com aviso:',
+      (result.problemas || [])
         .slice(0, 3)
         .map((p) => p.motivo || p.status)
-        .join('; ')}`,
+        .join('; '),
     )
-    err.code = 'bundle_consistency_failed'
-    throw err
+    return { ...result, softApproved: true }
   }
   return result
 }

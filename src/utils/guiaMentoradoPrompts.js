@@ -3,8 +3,14 @@ import {
   getConteudoCompletoDepthInstructions,
 } from './contentDepthRules'
 import { AI_TEXT_FORMAT_RULES, AI_MATERIAL_FORMAT_RULES } from './aiTextFormatting'
-
 import { DEFAULT_PLANNING_DAYS } from '../constants/guiaMentorado'
+import {
+  buildExamAwareFlashcardMeta,
+  buildExamFidelityBlock,
+  buildExamFidelityInline,
+  normalizeExamContext,
+  resolveTipoProvaFromBanca,
+} from './examFidelityContext'
 
 export function buildMentoradoCronogramaPrompt({
   today,
@@ -84,15 +90,34 @@ export function buildMentoradoConteudoPrompt({
   banca = '',
   concursoName = '',
   courseName = '',
+  cargo = '',
+  nivelCurso = '',
   editalText = '',
+  ...rest
 }) {
-  const depth = getConteudoCompletoDepthInstructions({ banca, concursoName, courseName })
+  const exam = normalizeExamContext({
+    banca,
+    concursoName,
+    courseName,
+    cargo,
+    nivel: nivelCurso,
+    ...rest,
+  })
+  const depth = getConteudoCompletoDepthInstructions({
+    banca: exam.banca,
+    concursoName: exam.concursoName,
+    courseName: exam.courseName,
+  })
+  const altBlock =
+    exam.tipoProva === 'Certo/Errado'
+      ? `"correta": "C"`
+      : `"alternativas": { "A": "", "B": "", "C": "", "D": "", "E": "" },
+    "correta": "A"`
 
-  return `Gere material de apoio completo (Estudar) para o tópico do edital abaixo.
+  return `${buildExamFidelityBlock(exam)}
+Gere material de apoio completo (Estudar) para o tópico do edital abaixo.
 
-BANCA: ${banca || 'não definida'}
-CONCURSO: ${concursoName || courseName || 'Concurso público'}
-CURSO/CARGO: ${courseName || 'Curso preparatório'}
+${buildExamFidelityInline(exam)}
 DISCIPLINA: ${disciplina}
 TÓPICO: ${topicoNome}
 CHAVE DO TÓPICO: ${topicKey}
@@ -102,31 +127,36 @@ ${(editalText || '').slice(0, 10000)}
 
 ${depth}
 
+PRIORIDADE ABSOLUTA: conteúdo cobrado pela banca ${exam.banca} para o cargo ${exam.cargo} neste concurso (${exam.concursoName}).
+Nada genérico de outros cargos. Questões embutidas no formato ${exam.tipoProva}.
+
 Retorne APENAS JSON válido:
 {
   "validacaoArtigo": "artigo/lei/jurisprudência base",
   "titulo": "título do material",
   "materia": "${topicoNome}",
-  "subtitulo": "subtítulo opcional",
+  "subtitulo": "Revisão estratégica — ${exam.cargo || exam.concursoName}",
   "numero": "${topicKey}",
+  "banca": "${exam.banca}",
+  "cargo": "${exam.cargo}",
+  "concurso": "${exam.concursoName}",
   "raioXProbabilidade": {
     "topicosQuentes": ["assunto 1"],
-    "padraoBanca": "padrão da banca"
+    "padraoBanca": "como a ${exam.banca} cobra este tópico para ${exam.cargo}"
   },
   "revisaoTurbo": [{ "titulo": "título", "conteudo": "HTML simples longo" }],
-  "pegadinhas": [{ "titulo": "título", "conteudo": "pegadinha detalhada" }],
+  "pegadinhas": [{ "titulo": "título", "conteudo": "pegadinha típica da ${exam.banca}" }],
   "questoesPreditivas": [{
-    "enunciado": "texto",
-    "alternativas": { "A": "", "B": "", "C": "", "D": "", "E": "" },
-    "correta": "A",
+    "enunciado": "texto no estilo ${exam.banca}",
+    ${altBlock},
     "gabaritoComentado": "explicação"
   }],
   "content": "conteúdo HTML opcional"
 }
 
 REGRAS:
-- Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} questões preditivas
-- Foco 100% neste tópico — nada genérico
+- Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} questões preditivas no formato ${exam.tipoProva}
+- Foco 100% neste tópico + cargo ${exam.cargo} + banca ${exam.banca}
 - Sem markdown — apenas HTML (<b>, <i>, <p>, <h4>, <mark>, <ul>, <li>)
 - ${AI_MATERIAL_FORMAT_RULES}
 - ${AI_TEXT_FORMAT_RULES}
@@ -140,25 +170,46 @@ export function buildMentoradoQuestoesPrompt({
   banca = '',
   courseName = '',
   cargo = '',
+  concursoName = '',
+  nivelCurso = '',
   editalText = '',
   nivel = 1,
-  tipoProva = 'ABCD',
+  tipoProva = '',
+  ...rest
 }) {
+  const exam = normalizeExamContext({
+    banca,
+    courseName,
+    cargo,
+    concursoName: concursoName || courseName,
+    nivel: nivelCurso,
+    tipoProva,
+    ...rest,
+  })
+  const resolvedTipo = tipoProva || exam.tipoProva || resolveTipoProvaFromBanca(exam.banca)
   const altBlock =
-    tipoProva === 'Certo/Errado'
+    resolvedTipo === 'Certo/Errado'
       ? `"respostaCorreta": "C"`
       : `"alternativas": { "A": "", "B": "", "C": "", "D": "", "E": "" },
       "respostaCorreta": "A"`
 
-  return `Gere questões preditivas para o tópico do edital.
+  const dificuldadeNivel =
+    nivel === 1
+      ? 'fundamentos cobrados pela banca para este cargo'
+      : nivel <= 3
+        ? 'média — padrão da prova'
+        : nivel <= 6
+          ? 'avançada — pegadinhas da banca'
+          : 'elite — cobrança máxima da banca neste cargo'
 
-BANCA: ${banca || 'não definida'}
-CURSO: ${courseName || 'Curso preparatório'}
-CARGO: ${cargo || 'não definido'}
+  return `${buildExamFidelityBlock({ ...exam, tipoProva: resolvedTipo })}
+Gere questões preditivas para o tópico do edital.
+
+${buildExamFidelityInline({ ...exam, tipoProva: resolvedTipo })}
 DISCIPLINA: ${disciplina}
 TÓPICO: ${topicoNome}
-NÍVEL: ${nivel}
-TIPO: ${tipoProva}
+NÍVEL DE QUESTÃO: ${nivel} (${dificuldadeNivel})
+TIPO: ${resolvedTipo}
 
 EDITAL (trecho):
 ${(editalText || '').slice(0, 10000)}
@@ -166,18 +217,19 @@ ${(editalText || '').slice(0, 10000)}
 Retorne APENAS JSON válido:
 {
   "disciplina": "${disciplina}",
-  "banca": "${banca || ''}",
-  "cargo": "${cargo || ''}",
-  "curso": "${courseName || ''}",
+  "banca": "${exam.banca}",
+  "cargo": "${exam.cargo}",
+  "concurso": "${exam.concursoName}",
+  "curso": "${exam.courseName}",
   "topico": "${topicoNome}",
-  "tipoProva": "${tipoProva}",
+  "tipoProva": "${resolvedTipo}",
   "nivel": ${nivel},
   "questoes": [
     {
       "numero": 1,
       "assunto": "assunto",
       "probabilidade": 90,
-      "enunciado": "enunciado",
+      "enunciado": "enunciado no estilo ${exam.banca} para ${exam.cargo}",
       ${altBlock},
       "explicacao": "gabarito comentado"
     }
@@ -186,7 +238,9 @@ Retorne APENAS JSON válido:
 
 REGRAS:
 - Gere EXATAMENTE 50 questões
-- Estilo da banca ${banca || 'definida'}
+- Estilo 100% da banca ${exam.banca} (${resolvedTipo})
+- Conteúdo 100% alinhado ao cargo ${exam.cargo} no concurso ${exam.concursoName}
+- Nível de exigência: ${exam.dificuldade} / nível ${nivel}
 - Não use aspas duplas dentro de strings — use aspas simples
 - JSON válido e completo`
 }
@@ -200,17 +254,30 @@ export function buildMentoradoFlashcardMeta({
   topicKey,
   modulo,
   banca,
+  cargo = '',
+  concursoName = '',
+  nivelCurso = '',
   editalText,
+  ...rest
 }) {
-  return {
-    courseId,
-    courseName,
-    disciplina,
-    topicoNome,
-    topicoNumero,
-    topicKey,
-    modulo,
-    banca,
-    editalText: (editalText || '').slice(0, 12000),
-  }
+  return buildExamAwareFlashcardMeta(
+    {
+      courseId,
+      courseName,
+      disciplina,
+      topicoNome,
+      topicoNumero,
+      topicKey,
+      modulo,
+      editalText: (editalText || '').slice(0, 12000),
+    },
+    {
+      banca,
+      cargo,
+      concursoName: concursoName || courseName,
+      courseName,
+      nivel: nivelCurso,
+      ...rest,
+    },
+  )
 }

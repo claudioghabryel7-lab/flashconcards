@@ -16,6 +16,8 @@ const STEP_LABELS = {
   flashcards: 'Flashcards',
   material: 'Material',
   questoes: 'Questões',
+  auditoria: 'Auditoria',
+  retentando: 'Retentando automaticamente',
   publicando: 'Liberando',
   concluído: 'Concluído',
 }

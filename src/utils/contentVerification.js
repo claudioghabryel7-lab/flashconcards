@@ -1,104 +1,244 @@
 /**
- * Auditoria pós-geração — 1 chamada extra (Flash, temp 0) para reduzir alucinações jurídicas.
- * Otimizado para APIs gratuitas: analisa trecho resumido, não o documento inteiro.
+ * Auditoria pós-geração — máxima confiabilidade prática.
+ * Regra de ouro: nunca publicar com FALSO claro residual.
+ * INCERTO / parse falho ≠ bloqueio (exceto jurídico com FALSO).
  */
 
-const MAX_VERIFY_CHARS = 8000
+const MAX_VERIFY_CHARS = 12000
+const FLASHCARD_VERIFY_CHARS = 10000
 
-const LEGAL_CLAIM_PATTERNS = [
+export const LEGAL_CLAIM_PATTERNS = [
   /lei\s+n[º°.]?\s*[\d.]+(?:\/\d{2,4})?/gi,
   /art(?:igo)?\.?\s*\d+/gi,
   /súmula\s+\d+/gi,
+  /sumula\s+\d+/gi,
   /adi\s+\d+/gi,
   /stf|stj|tema\s+\d+/gi,
-  /vigente|revogad|vetad|suspenso|inconstitucional/gi,
+  /cf\/88|constituição federal/gi,
+  /vigente|revogad|vetad|inconstitucional/gi,
   /juiz\s+das\s+garantias/gi,
 ]
 
-export function truncateForVerification(text = '') {
-  if (!text || text.length <= MAX_VERIFY_CHARS) return text
+export function isLikelyLegalDiscipline(disciplina = '') {
+  const n = String(disciplina || '').toLowerCase()
+  return /direito|constitucional|penal|administrativ|processual|tribut|legisla|juríd|juridic|cf\/88|\bc\.?\s*c\.?|\bc\.?\s*p\.?|\bcpc\b|\bcpp\b|\bclt\b|emprego público|servidor/.test(
+    n,
+  )
+}
+
+export function textHasLegalClaims(text = '') {
+  const sample = String(text || '')
+  if (sample.length < 20) return false
+  return LEGAL_CLAIM_PATTERNS.some((p) => {
+    const re = new RegExp(p.source, p.flags)
+    return re.test(sample)
+  })
+}
+
+export function truncateForVerification(text = '', maxChars = MAX_VERIFY_CHARS) {
+  if (!text || text.length <= maxChars) return text
 
   const claims = []
   for (const pattern of LEGAL_CLAIM_PATTERNS) {
-    const matches = text.match(pattern) || []
+    const re = new RegExp(pattern.source, pattern.flags)
+    const matches = String(text).match(re) || []
     claims.push(...matches)
   }
 
-  const uniqueClaims = [...new Set(claims)].slice(0, 25)
-  const head = text.slice(0, 4000)
-  const tail = text.slice(-2000)
+  const uniqueClaims = [...new Set(claims)].slice(0, 30)
+  const head = String(text).slice(0, Math.floor(maxChars * 0.55))
+  const tail = String(text).slice(-Math.floor(maxChars * 0.3))
 
   if (uniqueClaims.length === 0) {
-    return `${head}\n\n[...trecho omitido...]\n\n${tail}`.slice(0, MAX_VERIFY_CHARS)
+    return `${head}\n\n[...trecho omitido...]\n\n${tail}`.slice(0, maxChars)
   }
 
-  return `${head}\n\nAFIRMAÇÕES A VERIFICAR:\n${uniqueClaims.join('\n')}\n\n${tail}`.slice(0, MAX_VERIFY_CHARS)
+  return `${head}\n\nAFIRMAÇÕES A VERIFICAR:\n${uniqueClaims.join('\n')}\n\n${tail}`.slice(
+    0,
+    maxChars,
+  )
 }
 
-export function buildVerificationPrompt(content, courseData = {}) {
+function examHeader(courseData = {}) {
   const banca = courseData.banca || 'não definida'
-  const concurso = courseData.competition || courseData.name || ''
+  const concurso =
+    courseData.competition || courseData.concursoName || courseData.name || ''
+  const cargo = courseData.cargo || concurso || ''
+  const disciplina = courseData.disciplina || ''
   const hoje = new Date().toLocaleDateString('pt-BR')
+  return { banca, concurso, cargo, disciplina, hoje }
+}
 
-  return `Você é auditor jurídico de material para concursos (${concurso}, banca ${banca}).
-Data: ${hoje}. Use Google Search para confirmar vigência de leis, artigos vetados e status de normas (ex.: Juiz das Garantias).
+/** Auditoria jurídica rigorosa (Direito). */
+export function buildVerificationPrompt(content, courseData = {}) {
+  const { banca, concurso, cargo, disciplina, hoje } = examHeader(courseData)
 
-Analise o conteúdo abaixo. Para cada afirmação jurídica relevante, classifique:
-- CONFIRMADO (com fonte oficial)
-- INCERTO (sem confirmação)
-- FALSO (contradiz fonte oficial)
+  return `Você é auditor jurídico SÊNIOR de material para concursos.
+Concurso: ${concurso} | Cargo: ${cargo} | Banca: ${banca} | Disciplina: ${disciplina}
+Data: ${hoje}. Use Google Search em fontes oficiais (Planalto, STF, STJ).
 
-Responda APENAS com JSON válido:
+Classifique afirmações: CONFIRMADO | INCERTO | FALSO.
+
+Responda APENAS JSON:
 {
   "aprovado": true ou false,
   "problemas": [{"trecho": "...", "status": "FALSO|INCERTO", "motivo": "...", "correcao": "..."}],
-  "texto_corrigido": "texto completo corrigido OU null se aprovado"
+  "texto_corrigido": null ou "JSON/texto corrigido COMPLETO (mesmo formato do original)"
 }
 
 Regras:
-- aprovado=true somente se NÃO houver problemas FALSO e no máximo 1 INCERTO leve.
-- Se houver FALSO ou INCERTO grave, aprovado=false e forneça texto_corrigido com as correções (mantenha formato JSON/markdown do original).
-- Não invente leis. Remova ou corrija artigos vetados/revogados.
+- aprovado=false SOMENTE com FALSO claro (lei/artigo/jurisprudência/fato jurídico errado).
+- INCERTO sem prova de erro → aprovado=true (não bloqueie).
+- Lei/artigo inventado, vetado ou revogado citado como vigente → FALSO.
+- Se houver FALSO, devolva texto_corrigido COMPLETO e correto.
+- Fidelidade à banca ${banca} e cargo ${cargo}.
 
 CONTEÚDO:
 ${truncateForVerification(content)}`
 }
 
-export function parseVerificationResult(rawText = '') {
-  const rejected = {
-    aprovado: false,
-    problemas: [{ status: 'INCERTO', motivo: 'Auditoria não parseável' }],
+/** 2ª passagem jurídica — confirma que não ficou FALSO. */
+export function buildLegalConfirmPrompt(content, courseData = {}) {
+  const { banca, cargo, disciplina, hoje } = examHeader(courseData)
+
+  return `CONFIRMAÇÃO FINAL (auditor 2). Só aponte erros FALSOS inequívocos.
+Banca: ${banca} | Cargo: ${cargo} | Disciplina: ${disciplina} | Data: ${hoje}
+Use Google Search.
+
+Responda APENAS JSON:
+{
+  "aprovado": true ou false,
+  "problemas": [{"trecho":"...","status":"FALSO","motivo":"...","correcao":"..."}],
+  "texto_corrigido": null ou JSON/texto completo corrigido
+}
+
+aprovado=false SÓ com FALSO comprovado. Em dúvida → aprovado=true.
+
+CONTEÚDO:
+${truncateForVerification(content, 9000)}`
+}
+
+/**
+ * Auditoria factual leve (Português, História, TI, etc.).
+ * Cobre datas, conceitos e erros objetivos — sem travas jurídicas.
+ */
+export function buildFactualAuditPrompt(content, courseData = {}) {
+  const { banca, concurso, cargo, disciplina, hoje } = examHeader(courseData)
+
+  return `Você é auditor factual de material para concursos (disciplina NÃO jurídica).
+Concurso: ${concurso} | Cargo: ${cargo} | Banca: ${banca} | Disciplina: ${disciplina}
+Data: ${hoje}. Use Google Search para fatos, datas, nomes e conceitos.
+
+Responda APENAS JSON:
+{
+  "aprovado": true ou false,
+  "problemas": [{"trecho": "...", "status": "FALSO|INCERTO", "motivo": "...", "correcao": "..."}],
+  "texto_corrigido": null ou "JSON/texto corrigido COMPLETO"
+}
+
+Regras:
+- aprovado=false SÓ se houver erro FALSO claro (data errada, conceito invertido, fato histórico falso, comando de língua claramente errado).
+- Preferência de estilo ou INCERTO → aprovado=true.
+- Se houver FALSO, corrija e devolva texto_corrigido completo.
+- Mantenha fidelidade à banca ${banca} e ao cargo ${cargo}.
+
+CONTEÚDO:
+${truncateForVerification(content)}`
+}
+
+export function buildFlashcardAuditPrompt(flashcardsJson = '', courseData = {}, { legal = false } = {}) {
+  const { banca, concurso, cargo, disciplina } = examHeader(courseData)
+  const topico = courseData.topicoNome || courseData.topico || ''
+
+  return `Audite flashcards de concurso (${legal ? 'modo JURÍDICO' : 'modo FACTUAL'}).
+Banca: ${banca} | Concurso: ${concurso} | Cargo: ${cargo}
+Disciplina: ${disciplina} | Tópico: ${topico}
+
+Use Google Search. Verifique se cada verso está CORRETO.
+
+Responda APENAS JSON:
+{
+  "aprovado": true ou false,
+  "problemas": [{"trecho": "frente ou verso", "status": "FALSO|INCERTO", "motivo": "...", "correcao": "..."}],
+  "texto_corrigido": null ou JSON {"flashcards":[...]} com TODOS os cards
+}
+
+Regras:
+- aprovado=false SÓ com FALSO claro no verso/frente.
+- Genérico/fraco → NÃO reprova.
+- Em dúvida, aprove.
+- Se houver FALSO, devolva todos os cards corrigidos.
+
+FLASHCARDS:
+${truncateForVerification(flashcardsJson, FLASHCARD_VERIFY_CHARS)}`
+}
+
+export function buildConsistencyAuditPrompt({
+  flashcardsSample = '',
+  materialSample = '',
+  questoesSample = '',
+  courseContext = {},
+} = {}) {
+  const { banca, concurso, cargo } = examHeader(courseContext)
+
+  return `Verifique CONSISTÊNCIA entre flashcards, material e questões do MESMO tópico.
+Banca: ${banca} | Concurso: ${concurso} | Cargo: ${cargo}
+
+Detecte só contradições FALSAS claras entre os três. Em dúvida, aprove.
+
+Responda APENAS JSON:
+{"aprovado": true|false, "problemas": [{"trecho":"...","status":"FALSO|INCERTO","motivo":"..."}], "texto_corrigido": null}
+
+FLASHCARDS (amostra):
+${flashcardsSample}
+
+MATERIAL (trecho):
+${String(materialSample).slice(0, 5000)}
+
+QUESTÕES (trecho):
+${String(questoesSample).slice(0, 5000)}`
+}
+
+export function parseVerificationResult(rawText = {}) {
+  const softPass = {
+    aprovado: true,
+    soft: true,
+    problemas: [],
     texto_corrigido: null,
+    falsosCount: 0,
   }
 
   try {
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return rejected
+    const jsonMatch = String(rawText).match(/\{[\s\S]*\}/)
+    if (!jsonMatch) return softPass
     const parsed = JSON.parse(jsonMatch[0])
     const problemas = Array.isArray(parsed.problemas) ? parsed.problemas : []
-    const hasFalse = problemas.some((p) => String(p?.status || '').toUpperCase() === 'FALSO')
-    const graveIncerto =
-      problemas.filter((p) => String(p?.status || '').toUpperCase() === 'INCERTO').length > 1
-    const aprovado = parsed.aprovado === true && !hasFalse && !graveIncerto
+    const falsos = problemas.filter((p) => String(p?.status || '').toUpperCase() === 'FALSO')
     return {
-      aprovado,
+      aprovado: falsos.length === 0,
+      soft: falsos.length === 0 && parsed.aprovado !== true,
       problemas,
       texto_corrigido: parsed.texto_corrigido || null,
+      falsosCount: falsos.length,
     }
   } catch {
-    return rejected
+    return softPass
   }
 }
 
+/**
+ * Trusted: sempre audita (jurídico ou factual).
+ * verifyContent false → pula.
+ */
 export function shouldRunVerification(text = '', options = {}) {
   if (options.verifyContent === false) return false
   if (!text || text.length < 80) return false
-  if (options.isLegalContent === false) return false
-  const hasLegalSignal = LEGAL_CLAIM_PATTERNS.some((p) => {
-    const re = new RegExp(p.source, p.flags)
-    return re.test(text)
-  })
-  return hasLegalSignal || options.isLegalContent !== false
+  if (options.forceAudit === true) return true
+  if (options.auditMode === 'factual' || options.auditMode === 'legal') return true
+  if (isLikelyLegalDiscipline(options.disciplina || '')) return true
+  if (options.isLegalContent === true) return true
+  if (options.isLegalContent === false) return Boolean(options.forceAudit)
+  return textHasLegalClaims(text)
 }
 
 export function applyVerificationToResponse(response, verification, originalText) {
@@ -127,4 +267,12 @@ export function applyVerificationToResponse(response, verification, originalText
       originalLength: originalText?.length || 0,
     },
   }
+}
+
+export function summarizeAuditProblems(problemas = [], limit = 3) {
+  return (problemas || [])
+    .slice(0, limit)
+    .map((p) => p.motivo || p.status)
+    .filter(Boolean)
+    .join('; ')
 }

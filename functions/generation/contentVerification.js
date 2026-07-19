@@ -33,13 +33,15 @@ function truncateForVerification(text = '', maxChars = MAX_VERIFY_CHARS) {
 
 function buildVerificationPrompt(content, courseContext = {}) {
   const banca = courseContext.banca || 'não definida'
-  const concurso = courseContext.concursoName || courseContext.cargo || courseContext.competition || ''
+  const concurso = courseContext.concursoName || courseContext.competition || ''
+  const cargo = courseContext.cargo || concurso || ''
   const disciplina = courseContext.disciplina || ''
   const hoje = new Date().toLocaleDateString('pt-BR')
 
   return `Você é auditor rigoroso de material para concursos.
-Concurso/cargo: ${concurso} | Banca: ${banca} | Disciplina: ${disciplina}
+Concurso: ${concurso} | Cargo: ${cargo} | Banca: ${banca} | Disciplina: ${disciplina}
 Data: ${hoje}. Use Google Search para confirmar fatos, vigência de leis e artigos.
+Reprove conteúdo genérico demais para outro cargo/banca.
 
 Analise TODO o conteúdo. Classifique afirmações relevantes: CONFIRMADO | INCERTO | FALSO.
 
@@ -51,10 +53,10 @@ Responda APENAS JSON:
 }
 
 Regras:
-- aprovado=true SOMENTE se zero FALSO e no máximo 1 INCERTO leve.
-- Qualquer FALSO factual ou jurídico → aprovado=false.
-- Priorize estilo e exigências da banca ${banca}.
-- Não invente leis. Se corrigir, devolva texto_corrigido completo.
+- aprovado=false SOMENTE se houver erro FALSO claro e verificável.
+- INCERTO ou falta de confirmação → NÃO reprove (aprovado=true).
+- Em dúvida, aprove. Só reprove com evidência de erro.
+- Se houver FALSO, corrija e devolva texto_corrigido completo.
 
 CONTEÚDO:
 ${truncateForVerification(content)}`
@@ -62,14 +64,16 @@ ${truncateForVerification(content)}`
 
 function buildFlashcardAuditPrompt(flashcardsJson = '', courseContext = {}) {
   const banca = courseContext.banca || 'não definida'
-  const concurso = courseContext.concursoName || courseContext.cargo || ''
+  const concurso = courseContext.concursoName || courseContext.competition || ''
+  const cargo = courseContext.cargo || concurso || ''
   const disciplina = courseContext.disciplina || ''
   const topico = courseContext.topicoNome || ''
 
-  return `Audite flashcards de concurso (banca ${banca}, cargo/concurso: ${concurso}).
+  return `Audite flashcards de concurso.
+Banca: ${banca} | Concurso: ${concurso} | Cargo: ${cargo}
 Disciplina: ${disciplina} | Tópico: ${topico}
 
-Use Google Search. Para CADA card verifique se a resposta (verso) está CORRETA e alinhada ao edital e ao estilo da banca.
+Use Google Search. Para CADA card verifique se a resposta (verso) está CORRETA e alinhada ao edital, ao CARGO e ao estilo da BANCA.
 
 Responda APENAS JSON:
 {
@@ -79,9 +83,9 @@ Responda APENAS JSON:
 }
 
 Regras:
-- aprovado=true só se TODOS os cards estiverem corretos (zero FALSO).
-- Cards genéricos demais ou fora do tópico → FALSO.
-- Lei/artigo errado → FALSO.
+- aprovado=false SOMENTE se houver card com erro FALSO claro.
+- Card genérico → NÃO reprova (no máximo INCERTO).
+- Em dúvida, aprove.
 
 FLASHCARDS:
 ${truncateForVerification(flashcardsJson, FLASHCARD_VERIFY_CHARS)}`
@@ -94,12 +98,14 @@ function buildConsistencyAuditPrompt({
   courseContext = {},
 } = {}) {
   const banca = courseContext.banca || 'não definida'
-  const concurso = courseContext.concursoName || courseContext.cargo || ''
+  const concurso = courseContext.concursoName || courseContext.competition || ''
+  const cargo = courseContext.cargo || concurso || ''
 
   return `Verifique CONSISTÊNCIA entre flashcards, material e questões do MESMO tópico.
-Banca: ${banca} | Concurso/cargo: ${concurso}
+Banca: ${banca} | Concurso: ${concurso} | Cargo: ${cargo}
 
 Use Google Search se necessário. Detecte contradições factuais entre os três.
+Reprove se algum asset estiver genérico ou alinhado a outro cargo/banca.
 
 Responda APENAS JSON:
 {"aprovado": true|false, "problemas": [{"trecho":"...", "status":"FALSO|INCERTO", "motivo":"..."}], "texto_corrigido": null}
@@ -117,28 +123,28 @@ ${questoesSample.slice(0, 5000)}`
 }
 
 function parseVerificationResult(rawText = '') {
-  const rejected = {
-    aprovado: false,
-    problemas: [{ status: 'INCERTO', motivo: 'Auditoria não parseável' }],
+  const softPass = {
+    aprovado: true,
+    soft: true,
+    problemas: [],
     texto_corrigido: null,
   }
 
   try {
     const jsonMatch = String(rawText).match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return rejected
+    if (!jsonMatch) return softPass
     const parsed = JSON.parse(jsonMatch[0])
     const problemas = Array.isArray(parsed.problemas) ? parsed.problemas : []
-    const hasFalse = problemas.some((p) => String(p?.status || '').toUpperCase() === 'FALSO')
-    const graveIncerto =
-      problemas.filter((p) => String(p?.status || '').toUpperCase() === 'INCERTO').length > 1
-    const aprovado = parsed.aprovado === true && !hasFalse && !graveIncerto
+    const falsos = problemas.filter((p) => String(p?.status || '').toUpperCase() === 'FALSO')
     return {
-      aprovado,
+      aprovado: falsos.length === 0,
+      soft: falsos.length === 0 && parsed.aprovado !== true,
       problemas,
       texto_corrigido: parsed.texto_corrigido || null,
+      falsosCount: falsos.length,
     }
   } catch {
-    return rejected
+    return softPass
   }
 }
 

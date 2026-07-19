@@ -9,6 +9,10 @@ import {
   buildMentoradoFlashcardMeta,
   buildMentoradoQuestoesPrompt,
 } from '../utils/guiaMentoradoPrompts'
+import {
+  normalizeExamContext,
+  resolveTipoProvaFromBanca,
+} from '../utils/examFidelityContext'
 import { startBackgroundGeneration } from './aiGenerationRunner'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 
@@ -47,55 +51,66 @@ export async function loadMentoradoAutomationContext(courseId) {
   const unifiedSnap = await getDoc(doc(db, 'courses', resolvedId, 'prompts', 'unified'))
   const unifiedData = unifiedSnap.exists() ? unifiedSnap.data() : {}
 
-  return {
-    courseName: courseData.name || courseData.competition || 'Curso preparatório',
+  const exam = normalizeExamContext({
+    courseId: resolvedId,
+    banca: courseData.banca || unifiedData.banca || '',
     cargo: courseData.cargo || courseData.competition || '',
-    banca: courseData.banca || '',
-    concursoName: unifiedData.concursoName || courseData.competition || '',
+    concursoName: unifiedData.concursoName || courseData.competition || courseData.name || '',
+    courseName: courseData.name || courseData.competition || 'Curso preparatório',
+    name: courseData.name || '',
+    competition: courseData.competition || '',
+    nivel: courseData.nivel || courseData.escolaridade || courseData.nivelCargo || '',
+    area: courseData.area || '',
+    editalText,
+  })
+
+  return {
+    ...exam,
+    courseId: resolvedId,
     editalText,
   }
 }
 
 function buildTopicPayloads(topic, context, autoPublish) {
   const status = autoPublish ? CONTENT_STATUS.AVAILABLE : CONTENT_STATUS.UNAVAILABLE
-  const tipoProva =
-    context.banca?.toUpperCase().includes('CESPE') ||
-    context.banca?.toUpperCase().includes('CEBRASPE')
-      ? 'Certo/Errado'
-      : 'ABCD'
+  const exam = normalizeExamContext(context)
+  const tipoProva = resolveTipoProvaFromBanca(exam.banca, exam.tipoProva)
+
+  const shared = {
+    banca: exam.banca,
+    cargo: exam.cargo,
+    concursoName: exam.concursoName,
+    courseName: exam.courseName,
+    nivelCurso: exam.nivelCurso,
+    area: exam.area,
+    tipoProva,
+    dificuldade: exam.dificuldade,
+    editalText: context.editalText,
+  }
 
   const flashcardMeta = buildMentoradoFlashcardMeta({
     courseId: context.courseId,
-    courseName: context.courseName,
     disciplina: topic.disciplina,
     topicoNome: topic.topicoNome,
     topicoNumero: topic.topicoNumero,
     topicKey: topic.topicKey,
     modulo: topic.modulo,
-    banca: context.banca,
-    editalText: context.editalText,
+    ...shared,
   })
 
   const conteudoPrompt = buildMentoradoConteudoPrompt({
     topicKey: topic.topicKey,
     topicoNome: topic.topicoNome,
     disciplina: topic.disciplina,
-    banca: context.banca,
-    concursoName: context.concursoName,
-    courseName: context.courseName,
-    editalText: context.editalText,
+    ...shared,
   })
 
   const questoesPrompt = buildMentoradoQuestoesPrompt({
     topicKey: topic.topicKey,
     topicoNome: topic.topicoNome,
     disciplina: topic.disciplina,
-    banca: context.banca,
-    courseName: context.courseName,
-    cargo: context.cargo,
-    editalText: context.editalText,
     nivel: 1,
-    tipoProva,
+    ...shared,
   })
 
   return {
@@ -105,6 +120,7 @@ function buildTopicPayloads(topic, context, autoPublish) {
     topicoNumero: topic.topicoNumero,
     modulo: topic.modulo,
     firstStudyDate: topic.firstStudyDate || null,
+    examContext: exam,
     flashcardMeta,
     conteudoPrompt,
     questoesPrompt,

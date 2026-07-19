@@ -514,9 +514,13 @@ const Payment = () => {
       }
 
       if (paymentMethod === 'pix') {
+        // Entra na tela de PIX imediatamente (evita ficar preso em "Dados da conta")
+        setPaymentStatus('pending')
+        setPixHydrating(true)
         const pixOk = await regeneratePixPayment(transactionId, transactionData)
         if (!pixOk) {
-          setPaymentStatus('error')
+          // Mantém pending para o usuário ver o erro e poder "Gerar código PIX" de novo
+          setPaymentStatus('pending')
         }
         setLoading(false)
         return
@@ -549,8 +553,11 @@ const Payment = () => {
   const regeneratePixPayment = useCallback(
     async (txnId, txnData = null) => {
       if (!txnId) return false
+      setPaymentStatus('pending')
       setPixHydrating(true)
       setErrorMessage('')
+      setShowBrick(false)
+      setPaymentMethod('pix')
       try {
         let data = txnData
         if (!data) {
@@ -568,17 +575,33 @@ const Payment = () => {
         })
 
         if (!isValidPixCopyPaste(pix.pixCopyPaste)) {
-          throw new Error('Não foi possível gerar o código PIX. Tente novamente.')
+          throw new Error(
+            pix?.message ||
+              'Não foi possível gerar o código PIX. Verifique a chave PIX no Mercado Pago e tente novamente.',
+          )
         }
 
         applyPixCheckout(pix)
+        if (txnId) {
+          setDoc(
+            doc(db, 'transactions', txnId),
+            {
+              mercadopagoPaymentId: pix.paymentId ? String(pix.paymentId) : null,
+              mercadopagoStatus: pix.status || 'pending',
+              pixCopyPaste: pix.pixCopyPaste || null,
+              pixQrCode: pix.pixQrCode || null,
+              ticketUrl: pix.ticketUrl || null,
+              paymentMethodId: 'pix',
+            },
+            { merge: true },
+          ).catch(() => {})
+        }
         setPaymentStatus('pending')
-        setShowBrick(false)
-        setPaymentMethod('pix')
         return true
       } catch (err) {
         console.error('Erro ao gerar PIX:', err)
         setErrorMessage(err?.message || 'Erro ao gerar PIX.')
+        setPaymentStatus('pending')
         return false
       } finally {
         setPixHydrating(false)

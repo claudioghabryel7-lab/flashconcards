@@ -3,19 +3,89 @@
  * Sem Cloud Functions / Firebase Admin.
  */
 import {
-  addDoc,
-  collection,
   doc,
   getDoc,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
-import { generateAiJson } from '../utils/geminiApi'
+import { auditTopicBundleConsistency, generateAiJson } from '../utils/geminiApi'
+import { isLikelyLegalDiscipline } from '../utils/contentVerification'
 import { buildFlashcardPrompt } from '../utils/unifiedPrompt'
 import { buildMentoradoCronogramaPrompt } from '../utils/guiaMentoradoPrompts'
 import { DEFAULT_PLANNING_DAYS } from '../constants/guiaMentorado'
 import dayjs from 'dayjs'
+import {
+  FLASHCARD_TARGET,
+  FLASHCARD_BATCH_SIZE,
+  appendFlashcardBatch,
+  finalizeFlashcardsCheckpoint,
+  loadFlashcardsByTopicKey,
+  loadMaterialDraft,
+  loadQuestoesDraft,
+  markBundleAuditPassed,
+  prepareBundleAudit,
+  prepareFlashcardsRun,
+  prepareMaterialRun,
+  prepareQuestoesRun,
+  saveMaterialCheckpoint,
+  saveQuestoesCheckpoint,
+  setFlashcardsStatus,
+} from './localGenerationCheckpoint'
+import {
+  buildExamFidelityBlock,
+  buildExamFidelityInline,
+  normalizeExamContext,
+  toCourseAiContextShape,
+} from '../utils/examFidelityContext'
+
+const TRUSTED_AI = {
+  trustedGeneration: true,
+  useRAG: true,
+  useGoogleSearch: true,
+}
+
+/** Tentativas automáticas por tópico (erros temporários da IA) — sem clicar de novo. */
+const TOPIC_AUTO_RETRIES = 4
+const TOPIC_RETRY_DELAY_MS = 4000
+/** Varredura final nos que falharam com erro temporário. */
+const DAY_SWEEP_RETRIES = 2
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Erros em que vale retentar do checkpoint (não precisa clicar "Gerar" de novo). */
+function isTransientGenerationError(err) {
+  const code = String(err?.code || '')
+  const msg = String(err?.message || err || '').toLowerCase()
+  return (
+    code === 'ai_empty_response' ||
+    code === 'ai_json_parse_error' ||
+    code === 'ai_blocked' ||
+    code === 'ai_generation_error' ||
+    code === 'legal_audit_failed' ||
+    code === 'bundle_consistency_failed' ||
+    code === 'flashcards_invalid' ||
+    code === 'questoes_invalid' ||
+    code === 'material_incomplete' ||
+    msg.includes('não retornou texto') ||
+    msg.includes('nao retornou texto') ||
+    msg.includes('não retornou resposta') ||
+    msg.includes('json') ||
+    msg.includes('timeout') ||
+    msg.includes('timed out') ||
+    msg.includes('network') ||
+    msg.includes('fetch') ||
+    msg.includes('429') ||
+    msg.includes('quota') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('overloaded') ||
+    msg.includes('unavailable') ||
+    msg.includes('auditoria')
+  )
+}
 
 function resolvePlanningEndDate(config = {}) {
   const today = dayjs().startOf('day')
@@ -55,85 +125,327 @@ async function saveMerge(courseId, collectionName, docId, parsed, extra = {}) {
   return { collection: collectionName, docId }
 }
 
-async function processPromptSave(courseId, serverPayload, updateProgress, label, collectionName, docId, extra = {}) {
+/** Só marca como jurídico quando a disciplina realmente é de Direito. */
+function resolveLegalFlag(disciplina = '', explicit) {
+  if (explicit === true) return true
+  if (explicit === false) return false
+  return isLikelyLegalDiscipline(disciplina)
+}
+
+function buildTrustedOptions(disciplina = '', extra = {}) {
+  const isLegal = resolveLegalFlag(disciplina, extra.isLegalContent)
+  return {
+    ...TRUSTED_AI,
+    isLegalContent: isLegal,
+    // Todos auditados: jurídico (dual+Search) ou factual leve (Português/História/TI)
+    forceAudit: true,
+    auditMode: isLegal ? 'legal' : 'factual',
+    disciplina,
+    ...extra,
+  }
+}
+
+async function processPromptSave(
+  courseId,
+  serverPayload,
+  updateProgress,
+  label,
+  collectionName,
+  docId,
+  extra = {},
+  { jobId = null } = {},
+) {
   const { prompt, aiOptions = {} } = serverPayload
   if (!prompt?.trim()) throw new Error(`Prompt ausente para ${label}.`)
+  const disciplina = extra.disciplina || serverPayload?.savePlan?.disciplina || ''
+  const topicKey = extra.topicKey || serverPayload?.savePlan?.topicKey || null
+  const forceFresh = Boolean(serverPayload?.forceFresh)
+  const status = extra.status || 'indisponivel'
+
+  // Checkpoint: material / questões por tópico — não regenera se já existe
+  if (topicKey && extra.contentType === 'material') {
+    const prep = await prepareMaterialRun({ courseId, topicKey, jobId, forceFresh })
+    if (prep.alreadyComplete && prep.existingDraft) {
+      await updateProgress(90, `${label} já no checkpoint — pulando API`)
+      return {
+        resultRef: { collection: collectionName, docId, resumed: true },
+        parsed: prep.existingDraft,
+        resumed: true,
+      }
+    }
+  }
+  if (topicKey && extra.contentType === 'questoes') {
+    const nivel = extra.nivel ?? 1
+    const prep = await prepareQuestoesRun({
+      courseId,
+      topicKey,
+      jobId,
+      nivel,
+      forceFresh,
+      minCount: 1,
+    })
+    if (prep.alreadyComplete && prep.existingDraft) {
+      await updateProgress(90, `${label} já no checkpoint — pulando API`)
+      return {
+        resultRef: { collection: collectionName, docId, resumed: true },
+        parsed: prep.existingDraft,
+        resumed: true,
+      }
+    }
+  }
+
+  const examCtx = normalizeExamContext({
+    banca: extra.banca || serverPayload?.savePlan?.banca,
+    cargo: extra.cargo || serverPayload?.savePlan?.cargo,
+    concursoName: extra.concursoName || serverPayload?.savePlan?.concursoName,
+    courseName: extra.courseName || serverPayload?.savePlan?.courseName,
+    nivel: extra.nivelCurso || serverPayload?.savePlan?.nivelCurso,
+    disciplina,
+  })
+
   await updateProgress(20, `Gerando ${label}…`)
   const parsed = await generateAiJson(prompt, {
     courseId,
-    trustedGeneration: true,
-    isLegalContent: true,
-    useRAG: aiOptions.useRAG ?? true,
-    useGoogleSearch: aiOptions.useGoogleSearch ?? true,
-    generationConfig: aiOptions.generationConfig,
+    ...buildTrustedOptions(disciplina, {
+      isLegalContent: aiOptions.isLegalContent,
+      contentType: extra.contentType || aiOptions.contentType || '',
+      useRAG: aiOptions.useRAG ?? true,
+      useGoogleSearch: aiOptions.useGoogleSearch ?? true,
+      generationConfig: aiOptions.generationConfig,
+      courseContext: toCourseAiContextShape({ ...examCtx, disciplina }),
+    }),
   })
-  await updateProgress(85, `Salvando ${label}…`)
-  const resultRef = await saveMerge(courseId, collectionName, docId, parsed, extra)
-  return { resultRef, parsed }
-}
+  await updateProgress(85, `Salvando ${label} (checkpoint)…`)
 
-async function saveFlashcards(courseId, meta, cards, status = 'indisponivel') {
-  const flashcardsRef = collection(db, 'courses', courseId, 'flashcards')
-  let count = 0
-  for (const card of cards) {
-    const pergunta = card.pergunta || card.front || card.question
-    const resposta = card.resposta || card.back || card.answer
-    if (!pergunta || !resposta) continue
-    await addDoc(flashcardsRef, {
-      pergunta,
-      resposta,
-      materia: meta.disciplina || meta.materia || '',
-      modulo: meta.modulo || '',
-      topico: meta.topicoNome || meta.topico || '',
-      topicKey: meta.topicKey || null,
-      topicoNumero: meta.topicoNumero || null,
-      banca: meta.banca || '',
+  if (topicKey && extra.contentType === 'material') {
+    await saveMaterialCheckpoint({
       courseId,
+      topicKey,
+      jobId,
+      parsed,
+      extra: { disciplina, topico: extra.topico, ...extra },
       status,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      source: 'local_admin_generation',
     })
-    count += 1
+    return { resultRef: { collection: collectionName, docId }, parsed, resumed: false }
   }
-  return count
+  if (topicKey && extra.contentType === 'questoes') {
+    await saveQuestoesCheckpoint({
+      courseId,
+      topicKey,
+      jobId,
+      nivel: extra.nivel ?? 1,
+      parsed,
+      extra: { topico: extra.topico, disciplina, ...extra },
+      status,
+    })
+    return { resultRef: { collection: collectionName, docId }, parsed, resumed: false }
+  }
+
+  const resultRef = await saveMerge(courseId, collectionName, docId, parsed, extra)
+  return { resultRef, parsed, resumed: false }
 }
 
-async function processFlashcardsTopico(courseId, serverPayload, updateProgress) {
+function normalizeCard(card = {}) {
+  const pergunta = String(card.pergunta || card.frente || card.front || card.question || '').trim()
+  const resposta = String(card.resposta || card.verso || card.back || card.answer || '').trim()
+  return {
+    pergunta,
+    resposta,
+    frente: pergunta,
+    verso: resposta,
+    dificuldade: card.dificuldade || 'médio',
+    prioridade: card.prioridade || 'alta',
+  }
+}
+
+function dedupeCards(cards = []) {
+  const seen = new Set()
+  return cards.filter((c) => {
+    const key = String(c.pergunta || c.frente || '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/**
+ * 30 flashcards em lotes de 10 — checkpoint após CADA lote auditado.
+ * Retry retoma do próximo lote sem regastar API nos já salvos.
+ */
+async function processFlashcardsTopico(
+  courseId,
+  serverPayload,
+  updateProgress,
+  { jobId = null } = {},
+) {
   const meta = serverPayload?.savePlan?.flashcardMeta || {}
   const status = serverPayload?.savePlan?.status || 'indisponivel'
-  await updateProgress(15, 'Gerando flashcards…')
+  const forceFresh = Boolean(serverPayload?.forceFresh)
+  const disciplina = meta.disciplina || ''
+  const topicKey = meta.topicKey || serverPayload?.savePlan?.topicKey
+  const batchCount = Math.ceil(FLASHCARD_TARGET / FLASHCARD_BATCH_SIZE)
+  const examCtx = normalizeExamContext(meta)
+
+  if (!topicKey) {
+    throw new Error('topicKey ausente — checkpoint de flashcards exige topicKey.')
+  }
+
+  const prep = await prepareFlashcardsRun({
+    courseId,
+    topicKey,
+    jobId,
+    forceFresh,
+  })
+
+  let allCards = dedupeCards((prep.existingItems || []).map(normalizeCard))
+  let allIds = [...(prep.existingIds || [])]
+
+  if (prep.alreadyComplete && allCards.length >= FLASHCARD_TARGET - 2) {
+    await updateProgress(90, `Flashcards já no checkpoint (${allCards.length}) — pulando API`)
+    await finalizeFlashcardsCheckpoint({
+      courseId,
+      topicKey,
+      jobId,
+      cardIds: allIds,
+      finalStatus: status,
+    })
+    return {
+      resultRef: { collection: 'flashcards', count: allCards.length, ids: allIds, resumed: true },
+      parsed: { count: allCards.length, cards: allCards },
+      cardIds: allIds,
+      cards: allCards,
+      resumed: true,
+    }
+  }
+
+  const startBatch = prep.startBatch || 1
+  if (prep.resume && allCards.length > 0) {
+    await updateProgress(
+      12,
+      `Retomando flashcards — lote ${startBatch}/${batchCount} (${allCards.length} já salvos, sem re-gerar)…`,
+    )
+  } else {
+    await updateProgress(10, 'Gerando flashcards em lotes auditados…')
+  }
 
   const basePrompt = await buildFlashcardPrompt(
     courseId,
-    meta.disciplina || '',
+    disciplina,
     meta.editalText || '',
   )
-  const prompt = `${basePrompt}
 
-TAREFA: Criar exatamente 30 flashcards para o tópico "${meta.topicoNome || meta.topicKey}" da disciplina "${meta.disciplina}".
+  for (let batchNum = startBatch; batchNum <= batchCount; batchNum += 1) {
+    const remaining = FLASHCARD_TARGET - allCards.length
+    if (remaining <= 0) break
+    const cardsInBatch = Math.min(FLASHCARD_BATCH_SIZE, remaining)
+    const pct = 10 + Math.round((batchNum / batchCount) * 65)
+    await updateProgress(
+      pct,
+      `Flashcards lote ${batchNum}/${batchCount} (${cardsInBatch} cards, auditoria)…`,
+    )
+
+    const existingFronts = allCards.map((c) => c.pergunta || c.frente).filter(Boolean)
+    const existingList = existingFronts.length
+      ? `\nNÃO repita estas frentes:\n${existingFronts
+          .slice(0, 40)
+          .map((f) => `- ${f}`)
+          .join('\n')}`
+      : ''
+
+    const prompt = `${buildExamFidelityBlock(examCtx)}
+${basePrompt}
+
+${buildExamFidelityInline(examCtx)}
+DISCIPLINA: ${disciplina}
+TÓPICO: ${meta.topicoNome || meta.topicKey || ''}
 MÓDULO: ${meta.modulo || ''}
-BANCA: ${meta.banca || ''}
+
+TAREFA: Criar exatamente ${cardsInBatch} flashcards (lote ${batchNum}/${batchCount} de ${FLASHCARD_TARGET} total)
+100% fiéis à banca ${examCtx.banca}, ao cargo ${examCtx.cargo} e ao concurso ${examCtx.concursoName}.
+Priorize o que essa banca mais cobra PARA ESSE CARGO neste tópico.
+${existingList}
+
+Use Google Search. Não invente lei/artigo. Versos factualmente corretos (2–4 frases).
+Estilo das perguntas = estilo da ${examCtx.banca}.
 
 Retorne APENAS JSON:
 { "flashcards": [ { "pergunta": "...", "resposta": "..." } ] }`
 
-  const parsed = await generateAiJson(prompt, {
+    const parsed = await generateAiJson(prompt, {
+      courseId,
+      ...buildTrustedOptions(disciplina, {
+        contentType: 'flashcards',
+        courseContext: toCourseAiContextShape({
+          ...examCtx,
+          disciplina,
+          topicoNome: meta.topicoNome,
+        }),
+        generationConfig: serverPayload?.aiOptions?.generationConfig || {
+          maxOutputTokens: 16000,
+          temperature: 0.2,
+        },
+      }),
+    })
+
+    const batchCards = dedupeCards(
+      (parsed?.flashcards || parsed?.cards || []).map(normalizeCard),
+    ).filter((c) => c.pergunta && c.resposta)
+
+    if (batchCards.length < Math.max(1, cardsInBatch - 2)) {
+      const err = new Error(
+        `Lote ${batchNum} de flashcards insuficiente após auditoria (${batchCards.length}/${cardsInBatch}).`,
+      )
+      err.code = 'flashcards_invalid'
+      throw err
+    }
+
+    // Checkpoint imediato — se cair aqui, o próximo run não re-gera este lote
+    const saved = await appendFlashcardBatch({
+      courseId,
+      jobId,
+      meta: { ...meta, topicKey, disciplina },
+      batchItems: batchCards,
+      batchNum,
+      draftStatus: status,
+      startOrder: allCards.length,
+    })
+
+    allCards = dedupeCards([...allCards, ...batchCards])
+    allIds = [...allIds, ...saved.ids]
+    await updateProgress(
+      pct + 2,
+      `Checkpoint: lote ${batchNum} salvo (${allCards.length}/${FLASHCARD_TARGET})`,
+    )
+  }
+
+  allCards = allCards.slice(0, FLASHCARD_TARGET)
+  if (allCards.length < FLASHCARD_TARGET - 2) {
+    const err = new Error(
+      `Flashcards insuficientes após auditoria: ${allCards.length} (exigido ~${FLASHCARD_TARGET}). Checkpoint mantido — retome o job.`,
+    )
+    err.code = 'flashcards_invalid'
+    throw err
+  }
+
+  await updateProgress(85, `Finalizando checkpoint de ${allCards.length} flashcards…`)
+  await finalizeFlashcardsCheckpoint({
     courseId,
-    trustedGeneration: true,
-    isLegalContent: true,
-    useRAG: true,
-    useGoogleSearch: true,
-    generationConfig: serverPayload?.aiOptions?.generationConfig || {
-      maxOutputTokens: 24000,
-      temperature: 0.35,
-    },
+    topicKey,
+    jobId,
+    cardIds: allIds,
+    finalStatus: status,
   })
 
-  const cards = parsed?.flashcards || parsed?.cards || []
-  await updateProgress(80, `Salvando ${cards.length} flashcards…`)
-  const count = await saveFlashcards(courseId, meta, cards, status)
-  return { resultRef: { collection: 'flashcards', count }, parsed: { count } }
+  return {
+    resultRef: { collection: 'flashcards', count: allCards.length, ids: allIds },
+    parsed: { count: allCards.length, cards: allCards },
+    cardIds: allIds,
+    cards: allCards,
+    resumed: Boolean(prep.resume),
+  }
 }
 
 function dayStatusRef(courseId, targetDate) {
@@ -141,30 +453,44 @@ function dayStatusRef(courseId, targetDate) {
 }
 
 async function initLocalDayStatus(courseId, targetDate, topics, jobId, userId) {
+  const ref = dayStatusRef(courseId, targetDate)
+  const snap = await getDoc(ref)
+  const prevTopics = snap.exists() ? snap.data()?.topics || [] : []
+  const prevByKey = new Map(prevTopics.map((t) => [t.topicKey, t]))
+
+  // Preserva progresso de tópicos já feitos — retry não zera o dia
+  const mergedTopics = topics.map((t) => {
+    const prev = prevByKey.get(t.topicKey)
+    if (prev?.status === 'published') {
+      return { ...prev, error: null }
+    }
+    return {
+      topicKey: t.topicKey,
+      topicoNome: t.topicoNome || t.topicKey,
+      disciplina: t.disciplina || '',
+      status: prev?.status === 'error' ? 'pending' : prev?.status || 'pending',
+      step: prev?.step || 'aguardando',
+      flashcards: prev?.flashcards || 'pending',
+      material: prev?.material || 'pending',
+      questoes: prev?.questoes || 'pending',
+      error: prev?.status === 'published' ? null : prev?.error || null,
+    }
+  })
+
   await setDoc(
-    dayStatusRef(courseId, targetDate),
+    ref,
     {
       date: targetDate,
       courseId,
       status: 'running',
       totalTopics: topics.length,
-      publishedCount: 0,
+      publishedCount: mergedTopics.filter((t) => t.status === 'published').length,
       jobId: jobId || null,
       automationUserId: userId || null,
-      topics: topics.map((t) => ({
-        topicKey: t.topicKey,
-        topicoNome: t.topicoNome || t.topicKey,
-        disciplina: t.disciplina || '',
-        status: 'pending',
-        step: 'aguardando',
-        flashcards: 'pending',
-        material: 'pending',
-        questoes: 'pending',
-        error: null,
-      })),
+      topics: mergedTopics,
       reason: null,
       updatedAt: serverTimestamp(),
-      startedAt: serverTimestamp(),
+      ...(snap.exists() ? {} : { startedAt: serverTimestamp() }),
     },
     { merge: true },
   )
@@ -207,6 +533,296 @@ async function finalizeLocalDayStatus(courseId, targetDate, { errors = [], total
   )
 }
 
+async function publishTopicAssets(courseId, { sanitized, topicKey, cardIds = [] }) {
+  await updateDoc(doc(db, 'courses', courseId, 'conteudosCompletos', sanitized), {
+    status: 'disponivel',
+    updatedAt: serverTimestamp(),
+  }).catch(() => {})
+  await updateDoc(doc(db, 'courses', courseId, 'questoesTopico', `${sanitized}_nivel_1`), {
+    status: 'disponivel',
+    updatedAt: serverTimestamp(),
+  }).catch(() => {})
+  if (cardIds.length) {
+    await setFlashcardsStatus(courseId, cardIds, 'disponivel')
+  } else if (topicKey) {
+    const existing = await loadFlashcardsByTopicKey(courseId, topicKey)
+    await setFlashcardsStatus(
+      courseId,
+      existing.map((c) => c.id),
+      'disponivel',
+    )
+  }
+}
+
+/**
+ * Processa 1 tópico (material → questões → FC → publish).
+ * Usa checkpoint: etapas já ok não regeram.
+ */
+async function processSingleMentoradoTopic({
+  courseId,
+  topic,
+  jobId,
+  forceFresh,
+  autoPublish,
+  draftStatus,
+  updateProgress,
+  pctBase,
+  index,
+  total,
+}) {
+  const topicKey = topic.topicKey || topic.topicoNome
+  const sanitized = sanitizeTopicKey(topicKey)
+  const label = topic.topicoNome || topicKey
+  const disciplina = topic.disciplina || topic.flashcardMeta?.disciplina || ''
+  const examCtx = normalizeExamContext(topic.examContext || topic.flashcardMeta || {})
+  const courseContext = toCourseAiContextShape({
+    ...examCtx,
+    disciplina,
+    topicoNome: topic.topicoNome,
+  })
+
+  let materialParsed = null
+  let questoesParsed = null
+  let fcResult = null
+
+  await patchLocalTopicStatus(courseId, topic._targetDate, topicKey, {
+    status: 'generating',
+    step: 'material',
+    error: null,
+  })
+  await updateProgress(pctBase, `Tópico ${index + 1}/${total}: ${label} — material`)
+
+  const matPrep = await prepareMaterialRun({ courseId, topicKey, jobId, forceFresh })
+  if (matPrep.alreadyComplete && matPrep.existingDraft) {
+    materialParsed = matPrep.existingDraft
+    await updateProgress(pctBase + 1, `${label}: material do checkpoint — sem API`)
+  } else if (topic.conteudoPrompt) {
+    materialParsed = await generateAiJson(topic.conteudoPrompt, {
+      courseId,
+      ...buildTrustedOptions(disciplina, {
+        contentType: 'material',
+        courseContext,
+        generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
+      }),
+    })
+    await saveMaterialCheckpoint({
+      courseId,
+      topicKey,
+      jobId,
+      parsed: materialParsed,
+      extra: {
+        disciplina: topic.disciplina,
+        topico: topic.topicoNome,
+        banca: examCtx.banca,
+        cargo: examCtx.cargo,
+        concurso: examCtx.concursoName,
+      },
+      status: draftStatus,
+    })
+  } else {
+    throw new Error('Prompt de material ausente — tópico não publicado.')
+  }
+  await patchLocalTopicStatus(courseId, topic._targetDate, topicKey, {
+    material: 'done',
+    step: 'questoes',
+  })
+
+  await updateProgress(pctBase + 3, `Tópico ${index + 1}/${total}: ${label} — questões`)
+  const qPrep = await prepareQuestoesRun({
+    courseId,
+    topicKey,
+    jobId,
+    nivel: 1,
+    forceFresh,
+    minCount: 1,
+  })
+  if (qPrep.alreadyComplete && qPrep.existingDraft) {
+    questoesParsed = qPrep.existingDraft
+    await updateProgress(pctBase + 4, `${label}: questões do checkpoint — sem API`)
+  } else if (topic.questoesPrompt) {
+    questoesParsed = await generateAiJson(topic.questoesPrompt, {
+      courseId,
+      ...buildTrustedOptions(disciplina, {
+        contentType: 'questoes',
+        courseContext,
+        generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
+      }),
+    })
+    await saveQuestoesCheckpoint({
+      courseId,
+      topicKey,
+      jobId,
+      nivel: 1,
+      parsed: questoesParsed,
+      extra: {
+        topico: topic.topicoNome,
+        disciplina,
+        banca: examCtx.banca,
+        cargo: examCtx.cargo,
+        concurso: examCtx.concursoName,
+      },
+      status: draftStatus,
+    })
+  } else {
+    throw new Error('Prompt de questões ausente — tópico não publicado.')
+  }
+  await patchLocalTopicStatus(courseId, topic._targetDate, topicKey, {
+    questoes: 'done',
+    step: 'flashcards',
+  })
+
+  await updateProgress(pctBase + 6, `Tópico ${index + 1}/${total}: ${label} — flashcards`)
+  if (topic.flashcardMeta) {
+    fcResult = await processFlashcardsTopico(
+      courseId,
+      {
+        forceFresh,
+        savePlan: {
+          flashcardMeta: {
+            ...topic.flashcardMeta,
+            ...examCtx,
+            topicKey,
+            disciplina,
+          },
+          status: draftStatus,
+          topicKey,
+        },
+      },
+      async (p, msg) =>
+        updateProgress(Math.min(pctBase + 6 + Math.round((p || 0) / 20), pctBase + 12), msg),
+      { jobId },
+    )
+  } else {
+    throw new Error('Meta de flashcards ausente — tópico não publicado.')
+  }
+
+  await patchLocalTopicStatus(courseId, topic._targetDate, topicKey, {
+    flashcards: 'done',
+    step: 'auditoria',
+  })
+
+  const bundlePrep = await prepareBundleAudit({ courseId, topicKey, forceFresh })
+  if (bundlePrep.alreadyPassed) {
+    await updateProgress(pctBase + 12, `${label}: auditoria cruzada já ok — sem API`)
+  } else {
+    await updateProgress(pctBase + 12, `Tópico ${index + 1}/${total}: ${label} — auditoria cruzada`)
+    if (!materialParsed) materialParsed = await loadMaterialDraft(courseId, topicKey)
+    if (!questoesParsed) questoesParsed = await loadQuestoesDraft(courseId, topicKey, 1)
+    const cards =
+      fcResult?.cards ||
+      (await loadFlashcardsByTopicKey(courseId, topicKey)).map((c) => ({
+        pergunta: c.pergunta || c.frente,
+        resposta: c.resposta || c.verso,
+        frente: c.frente || c.pergunta,
+        verso: c.verso || c.resposta,
+      }))
+
+    try {
+      await auditTopicBundleConsistency({
+        flashcards: cards,
+        materialSample: JSON.stringify(materialParsed || {}).slice(0, 8000),
+        questoesSample: JSON.stringify(questoesParsed || {}).slice(0, 8000),
+        courseContext: {
+          banca: examCtx.banca,
+          concursoName: examCtx.concursoName,
+          cargo: examCtx.cargo,
+          disciplina,
+          topicoNome: topic.topicoNome,
+        },
+      })
+    } catch (bundleErr) {
+      if (resolveLegalFlag(disciplina)) throw bundleErr
+      console.warn('[localJob] bundle factual avisou — publicando:', bundleErr?.message)
+    }
+    await markBundleAuditPassed(courseId, topicKey, jobId)
+  }
+
+  if (autoPublish) {
+    await publishTopicAssets(courseId, {
+      sanitized,
+      topicKey,
+      cardIds: fcResult?.cardIds || [],
+    })
+  }
+
+  await patchLocalTopicStatus(courseId, topic._targetDate, topicKey, {
+    status: 'published',
+    step: 'concluído',
+    flashcards: 'done',
+    material: 'done',
+    questoes: 'done',
+    error: null,
+  })
+
+  return { topicKey, published: true }
+}
+
+/**
+ * Tenta um tópico com retentativas automáticas (checkpoint).
+ * Ex.: "A IA não retornou texto" → espera → continua do que já salvou.
+ */
+async function runTopicWithAutoRetry(ctx) {
+  const { courseId, topic, updateProgress, pctBase, label } = ctx
+  const topicKey = topic.topicKey || topic.topicoNome
+  let lastErr = null
+
+  for (let attempt = 1; attempt <= TOPIC_AUTO_RETRIES; attempt += 1) {
+    try {
+      if (attempt > 1) {
+        await patchLocalTopicStatus(courseId, topic._targetDate, topicKey, {
+          status: 'generating',
+          step: 'retentando',
+          error: `Retentativa automática ${attempt}/${TOPIC_AUTO_RETRIES}: ${lastErr?.message || ''}`,
+        })
+        await updateProgress(
+          pctBase + 12,
+          `${label}: IA falhou (“${lastErr?.message || 'erro'}”) — retentando ${attempt}/${TOPIC_AUTO_RETRIES} do checkpoint…`,
+        )
+        await sleep(TOPIC_RETRY_DELAY_MS * Math.min(attempt, 3))
+      }
+      // Retentativa NUNCA usa forceFresh — sempre retoma checkpoint
+      await processSingleMentoradoTopic({
+        ...ctx,
+        forceFresh: attempt === 1 ? ctx.forceFresh : false,
+      })
+      return { ok: true, topicKey }
+    } catch (err) {
+      lastErr = err
+      const transient = isTransientGenerationError(err)
+      console.warn(
+        `[localJob] ${topicKey} tentativa ${attempt}/${TOPIC_AUTO_RETRIES}:`,
+        err?.message || err,
+        transient ? '(retentará)' : '(definitivo)',
+      )
+      if (!transient || attempt >= TOPIC_AUTO_RETRIES) {
+        break
+      }
+    }
+  }
+
+  const message = lastErr?.message || String(lastErr)
+  await patchLocalTopicStatus(courseId, topic._targetDate, topicKey, {
+    status: 'error',
+    step: 'aguardando',
+    error: message,
+  }).catch(() => {})
+  await updateProgress(
+    pctBase + 12,
+    `${label}: ainda com erro após ${TOPIC_AUTO_RETRIES} tentativas — checkpoint salvo`,
+  )
+  return {
+    ok: false,
+    topicKey,
+    error: message,
+    code: lastErr?.code || null,
+    transient: isTransientGenerationError(lastErr),
+  }
+}
+
+/**
+ * Gera material + questões + FC como rascunho (indisponível).
+ * Checkpoint + retentativa automática em erros temporários da IA (sem clicar de novo).
+ */
 async function processGuiaMentoradoDay(courseId, serverPayload, updateProgress, { userId, jobId } = {}) {
   const topics = serverPayload?.topics || []
   if (!topics.length) throw new Error('Lista de tópicos ausente.')
@@ -214,102 +830,106 @@ async function processGuiaMentoradoDay(courseId, serverPayload, updateProgress, 
   if (!targetDate) throw new Error('Data do dia ausente.')
 
   const autoPublish = Boolean(serverPayload?.autoPublish)
-  const publishStatus = autoPublish ? 'disponivel' : 'indisponivel'
+  const forceFresh = Boolean(serverPayload?.forceFresh)
+  const draftStatus = 'indisponivel'
   const errors = []
   let done = 0
 
   await initLocalDayStatus(courseId, targetDate, topics, jobId, userId)
-  await updateProgress(8, `Gerando ${topics.length} tópico(s) do dia ${targetDate}…`)
+  await updateProgress(
+    8,
+    `Gerando ${topics.length} tópico(s) do dia ${targetDate} (checkpoint + auto-retry)…`,
+  )
 
-  for (let i = 0; i < topics.length; i += 1) {
-    const topic = topics[i]
-    const topicKey = topic.topicKey || topic.topicoNome
-    const sanitized = sanitizeTopicKey(topicKey)
-    const label = topic.topicoNome || topicKey
-    const pctBase = Math.round((i / topics.length) * 90) + 8
+  const daySnap = await getDoc(dayStatusRef(courseId, targetDate))
+  const dayTopics = daySnap.exists() ? daySnap.data()?.topics || [] : []
+  const dayByKey = new Map(dayTopics.map((t) => [t.topicKey, t]))
 
-    try {
-      await patchLocalTopicStatus(courseId, targetDate, topicKey, {
-        status: 'generating',
-        step: 'material',
-        error: null,
-      })
-      await updateProgress(pctBase, `Tópico ${i + 1}/${topics.length}: ${label} — material`)
+  const topicStates = topics.map((t, i) => ({
+    topic: { ...t, _targetDate: targetDate },
+    index: i,
+    topicKey: t.topicKey || t.topicoNome,
+  }))
 
-      if (topic.conteudoPrompt) {
-        const parsed = await generateAiJson(topic.conteudoPrompt, {
-          courseId,
-          trustedGeneration: true,
-          isLegalContent: true,
-          useRAG: true,
-          useGoogleSearch: true,
-          generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
-        })
-        await saveMerge(courseId, 'conteudosCompletos', sanitized, parsed, {
-          topicKey,
-          disciplina: topic.disciplina,
-          topico: topic.topicoNome,
-          status: topic.publishStatus || publishStatus,
-        })
-      }
-      await patchLocalTopicStatus(courseId, targetDate, topicKey, { material: 'done', step: 'questoes' })
-
-      await updateProgress(pctBase + 3, `Tópico ${i + 1}/${topics.length}: ${label} — questões`)
-      if (topic.questoesPrompt) {
-        const parsed = await generateAiJson(topic.questoesPrompt, {
-          courseId,
-          trustedGeneration: true,
-          isLegalContent: true,
-          useRAG: true,
-          useGoogleSearch: true,
-        })
-        await saveMerge(courseId, 'questoesTopico', `${sanitized}_nivel_1`, parsed, {
-          topico: topic.topicoNome,
-          nivel: 1,
-          status: topic.publishStatus || publishStatus,
-        })
-      }
-      await patchLocalTopicStatus(courseId, targetDate, topicKey, { questoes: 'done', step: 'flashcards' })
-
-      await updateProgress(pctBase + 6, `Tópico ${i + 1}/${topics.length}: ${label} — flashcards`)
-      if (topic.flashcardMeta) {
-        await processFlashcardsTopico(
-          courseId,
-          {
-            savePlan: {
-              flashcardMeta: topic.flashcardMeta,
-              status: topic.publishStatus || publishStatus,
-            },
-          },
-          async () => {},
-        )
-      }
-
-      await patchLocalTopicStatus(courseId, targetDate, topicKey, {
-        status: 'published',
-        step: 'concluído',
-        flashcards: 'done',
-        material: 'done',
-        questoes: 'done',
-        error: null,
-      })
-      done += 1
-    } catch (err) {
-      const message = err?.message || String(err)
-      console.error(`[localJob] tópico ${topicKey}:`, message)
-      errors.push({ topicKey, error: message })
-      await patchLocalTopicStatus(courseId, targetDate, topicKey, {
-        status: 'error',
-        step: 'aguardando',
-        error: message,
-      }).catch(() => {})
-      await updateProgress(pctBase + 6, `Erro em ${label} — seguindo…`)
+  async function runTopicEntry(entry, useForceFresh) {
+    const label = entry.topic.topicoNome || entry.topicKey
+    const pctBase = Math.round((entry.index / topics.length) * 90) + 8
+    const prev = dayByKey.get(entry.topicKey)
+    if (prev?.status === 'published' && !useForceFresh) {
+      await updateProgress(pctBase + 12, `${label} já publicado — pulando`)
+      return { ok: true, topicKey: entry.topicKey, skipped: true }
     }
+    return runTopicWithAutoRetry({
+      courseId,
+      topic: entry.topic,
+      jobId,
+      forceFresh: useForceFresh,
+      autoPublish,
+      draftStatus,
+      updateProgress,
+      pctBase,
+      label,
+      index: entry.index,
+      total: topics.length,
+    })
+  }
+
+  for (const entry of topicStates) {
+    const result = await runTopicEntry(entry, forceFresh)
+    if (result.ok) {
+      done += 1
+      dayByKey.set(entry.topicKey, { status: 'published' })
+    } else {
+      errors.push({
+        topicKey: result.topicKey,
+        error: result.error,
+        code: result.code || null,
+        transient: Boolean(result.transient),
+      })
+    }
+  }
+
+  // Varredura automática: tópicos com erro temporário sem clicar de novo
+  for (let sweep = 1; sweep <= DAY_SWEEP_RETRIES; sweep += 1) {
+    const pending = errors.filter((e) => e.transient)
+    if (!pending.length) break
+
+    await updateProgress(
+      92,
+      `Retentativa automática do dia (${sweep}/${DAY_SWEEP_RETRIES}): ${pending.length} tópico(s) do checkpoint…`,
+    )
+    await sleep(TOPIC_RETRY_DELAY_MS * 2)
+
+    const stillErrors = []
+    for (const errItem of errors) {
+      if (!errItem.transient) {
+        stillErrors.push(errItem)
+        continue
+      }
+      const entry = topicStates.find((t) => t.topicKey === errItem.topicKey)
+      if (!entry) {
+        stillErrors.push(errItem)
+        continue
+      }
+      const result = await runTopicEntry(entry, false)
+      if (result.ok) {
+        done += 1
+        dayByKey.set(entry.topicKey, { status: 'published' })
+      } else {
+        stillErrors.push({
+          topicKey: result.topicKey,
+          error: result.error,
+          code: result.code || null,
+          transient: Boolean(result.transient),
+        })
+      }
+    }
+    errors.length = 0
+    errors.push(...stillErrors)
   }
 
   await finalizeLocalDayStatus(courseId, targetDate, { errors, total: topics.length })
 
-  // Marca dia do cron diário (catch-up / programação) quando for o dia de hoje
   try {
     const todayKey = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'America/Sao_Paulo',
@@ -332,7 +952,10 @@ async function processGuiaMentoradoDay(courseId, serverPayload, updateProgress, 
     /* ignore */
   }
 
-  await updateProgress(95, `Concluído — ${done}/${topics.length} tópico(s)`)
+  await updateProgress(
+    95,
+    `Concluído — ${done}/${topics.length} tópico(s) (auto-retry + checkpoint)`,
+  )
   return { publishedCount: done, totalTopics: topics.length, errors }
 }
 
@@ -483,8 +1106,11 @@ export async function processLocalGenerationJob({
         docId,
         {
           topicKey,
+          disciplina: serverPayload.savePlan?.disciplina || '',
+          contentType: 'material',
           status: serverPayload.savePlan?.status || 'indisponivel',
         },
+        { jobId },
       )
     }
     case 'questoes_topico': {
@@ -499,10 +1125,14 @@ export async function processLocalGenerationJob({
         'questoesTopico',
         docId,
         {
+          topicKey,
           topico: serverPayload.savePlan?.topicoNome || topicKey,
           nivel,
+          disciplina: serverPayload.savePlan?.disciplina || '',
+          contentType: 'questoes',
           status: serverPayload.savePlan?.status || 'indisponivel',
         },
+        { jobId },
       )
     }
     case 'conteudo_incidencia': {
@@ -562,7 +1192,7 @@ export async function processLocalGenerationJob({
       )
     }
     case 'flashcards_topico':
-      return processFlashcardsTopico(courseId, serverPayload, updateProgress)
+      return processFlashcardsTopico(courseId, serverPayload, updateProgress, { jobId })
     case 'guia_mentorado_automation':
       return processGuiaMentoradoDay(courseId, serverPayload, updateProgress, { userId, jobId })
     case 'guia_mentorado_cronograma':

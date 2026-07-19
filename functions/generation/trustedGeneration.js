@@ -41,14 +41,16 @@ function buildTrustedOptions(options = {}) {
 }
 
 function buildCourseContext(context = {}) {
+  const legal = context.isLegalContent ?? isLikelyLegalDiscipline(context.disciplina)
   return {
     banca: context.banca,
     concursoName: context.concursoName || context.courseName,
     cargo: context.cargo,
     disciplina: context.disciplina,
     topicoNome: context.topicoNome,
-    forceAudit: context.forceAudit !== false,
-    isLegalContent: context.isLegalContent ?? isLikelyLegalDiscipline(context.disciplina),
+    forceAudit: true,
+    auditMode: legal ? 'legal' : 'factual',
+    isLegalContent: legal,
   }
 }
 
@@ -180,9 +182,10 @@ async function runContentAudit(textSample, courseContext = {}, contentType = '')
 async function tryApplyCorrection(originalParsed, verification, contentType) {
   if (verification.aprovado) return originalParsed
 
+  // Fail-closed: sem correção válida → NÃO devolve o original
   if (!verification.texto_corrigido) {
     const err = new Error(
-      `Auditoria reprovou: ${(verification.problemas || [])
+      `Auditoria reprovou (conteúdo NÃO publicado): ${(verification.problemas || [])
         .slice(0, 4)
         .map((p) => p.motivo || p.status)
         .join('; ')}`,
@@ -198,11 +201,50 @@ async function tryApplyCorrection(originalParsed, verification, contentType) {
     return corrected
   } catch (parseErr) {
     const err = new Error(
-      `Correção da auditoria inválida: ${parseErr.message || 'JSON ilegível'}`,
+      `Correção da auditoria inválida — NÃO publicado: ${parseErr.message || 'JSON ilegível'}`,
     )
     err.code = 'legal_audit_failed'
     throw err
   }
+}
+
+/** Corrige FALSOs; nunca devolve conteúdo com FALSO residual. */
+async function auditUntilApproved(parsed, courseContext, contentType, validationContext = {}, maxRounds = 4) {
+  const legal = Boolean(courseContext.isLegalContent || courseContext.auditMode === 'legal')
+  let current = parsed
+  let lastAudit = null
+
+  for (let round = 1; round <= maxRounds; round += 1) {
+    try {
+      lastAudit = await runContentAudit(JSON.stringify(current), courseContext, contentType)
+    } catch (auditErr) {
+      if (legal) {
+        const err = new Error(`Auditoria jurídica indisponível: ${auditErr?.message || auditErr}`)
+        err.code = 'legal_audit_failed'
+        throw err
+      }
+      console.warn('[audit] factual indisponível — seguindo:', auditErr?.message || auditErr)
+      return current
+    }
+    if (lastAudit.aprovado) return current
+    if (round >= maxRounds) break
+    try {
+      current = await tryApplyCorrection(current, lastAudit, contentType)
+      assertValidation(contentType, current, validationContext)
+    } catch (corrErr) {
+      if (corrErr.code === 'legal_audit_failed') throw corrErr
+      break
+    }
+  }
+
+  const err = new Error(
+    `Ainda há FALSO após correções — NÃO publicado: ${(lastAudit?.problemas || [])
+      .slice(0, 3)
+      .map((p) => p.motivo || p.status)
+      .join('; ')}`,
+  )
+  err.code = 'legal_audit_failed'
+  throw err
 }
 
 async function generateTrustedJson(prompt, options = {}, context = {}) {
@@ -236,27 +278,7 @@ async function generateTrustedJson(prompt, options = {}, context = {}) {
       requireGroundingIfNeeded(response, JSON.stringify(parsed), courseContext)
       assertValidation(contentType, parsed, context)
 
-      const audit = await runContentAudit(JSON.stringify(parsed), courseContext, contentType)
-      if (!audit.aprovado) {
-        parsed = await tryApplyCorrection(parsed, audit, contentType)
-        assertValidation(contentType, parsed, context)
-        const audit2 = await runContentAudit(JSON.stringify(parsed), courseContext, contentType)
-        if (!audit2.aprovado) {
-          parsed = await tryApplyCorrection(parsed, audit2, contentType)
-          assertValidation(contentType, parsed, context)
-          const audit3 = await runContentAudit(JSON.stringify(parsed), courseContext, contentType)
-          if (!audit3.aprovado) {
-            const err = new Error(
-              `Auditoria reprovou após correções: ${(audit3.problemas || audit2.problemas || [])
-                .slice(0, 3)
-                .map((p) => p.motivo || p.status)
-                .join('; ')}`,
-            )
-            err.code = 'legal_audit_failed'
-            throw err
-          }
-        }
-      }
+      parsed = await auditUntilApproved(parsed, courseContext, contentType, context, 3)
 
       return parsed
     } catch (error) {

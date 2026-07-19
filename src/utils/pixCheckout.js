@@ -80,7 +80,16 @@ async function fetchWithRetry(url, options = {}, { maxAttempts = 4, timeoutMs = 
 async function parseJsonResponse(res) {
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    throw new Error(data.message || data.error || 'Falha ao processar pagamento.')
+    const detail =
+      data.message ||
+      data.error ||
+      (typeof data.details === 'string' ? data.details : null) ||
+      `Falha ao processar pagamento (HTTP ${res.status}).`
+    const err = new Error(detail)
+    err.code = data.code || null
+    err.status = res.status
+    err.payload = data
+    throw err
   }
   return data
 }
