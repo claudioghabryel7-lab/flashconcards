@@ -44,10 +44,11 @@ const nextConfig: NextConfig = {
     // Remove console.* do bundle em produção
     removeConsole: process.env.NODE_ENV === 'production',
   },
-  serverExternalPackages: ['firebase-admin', 'mercadopago', '@google/generative-ai', 'nodemailer'],
+  serverExternalPackages: ['firebase-admin', 'mercadopago', '@google/generative-ai', 'nodemailer', 'dotenv'],
   turbopack: {
     resolveAlias: {
       'react-router-dom': './src/lib/react-router-compat.tsx',
+      'firebase-functions': './server/stubs/firebase-functions.cjs',
     },
   },
   typescript: {
