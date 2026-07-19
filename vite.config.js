@@ -8,8 +8,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
-      'firebase/firestore': resolve(__dirname, 'src/lib/db/firestoreShim.js'),
-      'firebase/firestore-native': resolve(__dirname, 'node_modules/firebase/firestore/dist/esm/index.esm.js'),
     },
     dedupe: ['react', 'react-dom'],
   },

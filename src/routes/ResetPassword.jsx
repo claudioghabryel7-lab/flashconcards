@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { doc, getDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { LockClosedIcon } from '@heroicons/react/24/solid'
-import { BACKEND_FUNCTIONS } from '../config/backendFunctions'
+import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 
 const ResetPassword = () => {
   const { token } = useParams()
@@ -83,14 +83,18 @@ const ResetPassword = () => {
     setSubmitting(true)
 
     try {
-      const response = await fetch(BACKEND_FUNCTIONS.updateUserPassword, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          newPassword: formData.newPassword,
-        }),
-      })
+      const response = await fetch(
+        FIREBASE_FUNCTIONS.updateUserPassword ||
+          'https://us-central1-plegi-d84c2.cloudfunctions.net/updateUserPassword',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token,
+            newPassword: formData.newPassword,
+          }),
+        },
+      )
 
       const data = await response.json()
 

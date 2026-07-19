@@ -1,10 +1,8 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore } from '../lib/db/firestoreShim.js'
+import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { ENV } from '../lib/env.js'
-import { isSupabaseConfigured, useSupabaseBackend } from '../lib/supabase/config.js'
-import { setFirebaseTokenGetter } from '../lib/supabase/client.js'
 
 const firebaseConfig = {
   apiKey: ENV.VITE_FIREBASE_API_KEY,
@@ -16,12 +14,10 @@ const firebaseConfig = {
 }
 
 const hasValidConfig =
-  useSupabaseBackend()
-    ? isSupabaseConfigured()
-    : Boolean(firebaseConfig.apiKey) &&
-      firebaseConfig.apiKey !== 'undefined' &&
-      Boolean(firebaseConfig.projectId) &&
-      firebaseConfig.projectId !== 'undefined'
+  Boolean(firebaseConfig.apiKey) &&
+  firebaseConfig.apiKey !== 'undefined' &&
+  Boolean(firebaseConfig.projectId) &&
+  firebaseConfig.projectId !== 'undefined'
 
 export let firebaseInitialized = false
 export let firebaseError = null
@@ -36,23 +32,10 @@ function initFirebase() {
   if (app || !hasValidConfig) return
 
   try {
-    if (!useSupabaseBackend()) {
-      app = initializeApp(firebaseConfig)
-      auth = getAuth(app)
-    } else {
-      app = initializeApp(firebaseConfig)
-      auth = getAuth(app)
-      setFirebaseTokenGetter(async () => {
-        const user = auth?.currentUser
-        return user ? user.getIdToken() : null
-      })
-    }
+    app = initializeApp(firebaseConfig)
+    auth = getAuth(app)
     db = getFirestore(app)
-    if (!useSupabaseBackend()) {
-      storage = getStorage(app)
-    } else {
-      storage = getStorage(app)
-    }
+    storage = getStorage(app)
     firebaseInitialized = true
   } catch (error) {
     firebaseError = error

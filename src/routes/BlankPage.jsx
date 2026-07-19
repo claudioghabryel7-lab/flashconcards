@@ -4,7 +4,7 @@ import { collection, onSnapshot, query, where, orderBy, doc, getDoc, addDoc, upd
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { callGeminiWithRetry, extractGeneratedText, extractJsonFromResponse, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
-import { BACKEND_FUNCTIONS } from '../config/backendFunctions'
+import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 
 const BlankPage = () => {
   const navigate = useNavigate()

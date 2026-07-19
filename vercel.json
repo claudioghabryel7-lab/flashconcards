@@ -3,20 +3,6 @@
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
-  "crons": [
-    { "path": "/api/cron/reconcile-pending-pix-payments", "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/mentorado-daily-content-release", "schedule": "*/15 * * * *" },
-    { "path": "/api/cron/content-automation-tick", "schedule": "*/30 * * * *" },
-    { "path": "/api/cron/resume-waiting-generation-jobs", "schedule": "*/10 * * * *" },
-    { "path": "/api/cron/professor-supervisor-tick", "schedule": "*/10 * * * *" },
-    { "path": "/api/cron/weekly-redacao-theme-rotation", "schedule": "0 3 * * 1" },
-    { "path": "/api/cron/motivational-inactivity-push", "schedule": "0 10,18 * * *" },
-    { "path": "/api/cron/expire-trial-users", "schedule": "0 0 * * *" },
-    { "path": "/api/cron/purge-unverified-emails", "schedule": "20 * * * *" },
-    { "path": "/api/cron/expire-course-accesses", "schedule": "15 0 * * *" },
-    { "path": "/api/cron/process-course-auto-renewals", "schedule": "0 8 * * *" },
-    { "path": "/api/cron/scheduled-generate-concurso-news", "schedule": "15 8 * * *" }
-  ],
   "headers": [
     {
       "source": "/favicon.ico",

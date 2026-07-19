@@ -1,5 +1,5 @@
 import { auth } from '../firebase/config'
-import { BACKEND_FUNCTIONS } from '../config/backendFunctions'
+import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 
 async function parseCloudResponse(response) {
   let data = {}
@@ -73,16 +73,16 @@ async function callWithV2Fallback(v2Url, v1Url, body) {
 
 export function requestEmailVerificationCode() {
   return callWithV2Fallback(
-    BACKEND_FUNCTIONS.sendEmailVerificationCodeV2,
-    BACKEND_FUNCTIONS.sendEmailVerificationCode,
+    FIREBASE_FUNCTIONS.sendEmailVerificationCodeV2,
+    FIREBASE_FUNCTIONS.sendEmailVerificationCode,
     {},
   )
 }
 
 export function submitEmailVerificationCode(code) {
   return callWithV2Fallback(
-    BACKEND_FUNCTIONS.verifyEmailCodeV2,
-    BACKEND_FUNCTIONS.verifyEmailCode,
+    FIREBASE_FUNCTIONS.verifyEmailCodeV2,
+    FIREBASE_FUNCTIONS.verifyEmailCode,
     { code },
   )
 }

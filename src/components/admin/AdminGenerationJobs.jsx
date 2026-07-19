@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowPathIcon, StopIcon } from '@heroicons/react/24/outline'
 import { auth } from '../../firebase/config'
-import { BACKEND_FUNCTIONS } from '../../config/backendFunctions'
+import { FIREBASE_FUNCTIONS } from '../../config/firebaseFunctions'
 
 function formatTs(ms) {
   if (!ms) return '—'
@@ -28,7 +28,7 @@ export default function AdminGenerationJobs() {
       const token = await auth.currentUser?.getIdToken()
       if (!token) throw new Error('Faça login como admin.')
 
-      const res = await fetch(BACKEND_FUNCTIONS.listActiveGenerationJobs, {
+      const res = await fetch(FIREBASE_FUNCTIONS.listActiveGenerationJobs, {
         method: 'GET',
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -57,7 +57,7 @@ export default function AdminGenerationJobs() {
     setBusyId(job.id)
     try {
       const token = await auth.currentUser?.getIdToken()
-      const res = await fetch(BACKEND_FUNCTIONS.cancelGenerationJob, {
+      const res = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

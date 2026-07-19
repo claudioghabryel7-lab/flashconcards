@@ -22,7 +22,7 @@ import {
   subscribeGuiaMentoradoConfig,
 } from '../../services/guiaMentoradoAdminService'
 import { DEFAULT_PLANNING_DAYS } from '../../constants/guiaMentorado'
-import { BACKEND_FUNCTIONS } from '../../config/backendFunctions'
+import { FIREBASE_FUNCTIONS } from '../../config/firebaseFunctions'
 import { auth, db } from '../../firebase/config'
 import {
   CRON_STEP_MINUTES,
@@ -420,7 +420,7 @@ export default function AdminGuiaMentorado() {
     setFeedback('')
     try {
       const token = await userAuth.getIdToken()
-      const response = await fetch(BACKEND_FUNCTIONS.runContentAutomationNow, {
+      const response = await fetch(FIREBASE_FUNCTIONS.runContentAutomationNow, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

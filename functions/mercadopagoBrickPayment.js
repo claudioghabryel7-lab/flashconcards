@@ -59,12 +59,9 @@ async function processBrickPaymentPayload(
       transaction_id: String(transactionId),
       course_id: courseId || null,
     },
-    notification_url: (() => {
-      if (process.env.MERCADOPAGO_WEBHOOK_URL) return process.env.MERCADOPAGO_WEBHOOK_URL
-      const base =
-        process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://www.flashconcards.com.br'
-      return `${String(base).replace(/\/$/, '')}/api/backend/webhook-mercado-pago`
-    })(),
+    notification_url:
+      process.env.MERCADOPAGO_WEBHOOK_URL ||
+      'https://us-central1-plegi-d84c2.cloudfunctions.net/webhookMercadoPago',
     payer: {
       ...payerFromBrick,
       email: payerFromBrick.email || userEmail || undefined,

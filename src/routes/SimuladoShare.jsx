@@ -4,7 +4,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp, arrayUnion, collection, onSnapshot, query, where, getDocs } from 'firebase/firestore'
 import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser, hasGeminiApiKeys } from '../utils/geminiApi'
 import { db } from '../firebase/config'
-import { BACKEND_FUNCTIONS } from '../config/backendFunctions'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { sortAlternativasEntries } from '../utils/questaoAlternativas'
 import ResultExport from '../components/ResultExport'
@@ -844,7 +843,8 @@ CRÍTICO: A nota total deve ser de 0 a 10 (não 0 a 1000). Cada critério de 0 a
       
       if (emailToSend) {
         try {
-          await fetch(BACKEND_FUNCTIONS.sendSimuladoResultEmail, {
+          const emailFunctionUrl = 'https://us-central1-plegi-d84c2.cloudfunctions.net/sendSimuladoResultEmail'
+          await fetch(emailFunctionUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

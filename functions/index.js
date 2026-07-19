@@ -122,17 +122,11 @@ function assertGeminiConfigured() {
   }
 }
 
-if (!admin.apps.length) {
-  admin.initializeApp()
-}
-const { patchAdminFirestore } = require('./lib/database')
-const usingSupabaseDb = patchAdminFirestore(admin)
-if (!usingSupabaseDb) {
-  try {
-    admin.firestore().settings({ ignoreUndefinedProperties: true })
-  } catch {
-    /* já configurado */
-  }
+admin.initializeApp()
+try {
+  admin.firestore().settings({ ignoreUndefinedProperties: true })
+} catch {
+  /* já configurado */
 }
 
 /** Health check v1 — migrado para healthCheckV2 (v2Exports.js). */
@@ -586,12 +580,9 @@ exports.createCheckoutPreference = functions
           failure,
           pending,
         },
-        notification_url: (() => {
-          if (process.env.MERCADOPAGO_WEBHOOK_URL) return process.env.MERCADOPAGO_WEBHOOK_URL
-          const base =
-            process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://www.flashconcards.com.br'
-          return `${String(base).replace(/\/$/, '')}/api/backend/webhook-mercado-pago`
-        })(),
+        notification_url:
+          process.env.MERCADOPAGO_WEBHOOK_URL ||
+          'https://us-central1-plegi-d84c2.cloudfunctions.net/webhookMercadoPago',
         statement_descriptor: 'CONCURSEIRO PRED',
       }
 
