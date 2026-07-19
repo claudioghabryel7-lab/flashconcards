@@ -326,17 +326,21 @@ const GuiaMentorado = () => {
 
     setGeneratingDay(true)
     try {
-      const { topicCount } = await startMentoradoDayContentAutomation({
+      const { topicCount, promise } = await startMentoradoDayContentAutomation({
         userId: uid,
         courseId: selectedCourseId,
         targetDate: todayKey,
         editalVerticalizado,
       })
-      setMessage(`🚀 Gerando ${topicCount} tópico(s) de hoje, um por vez. Acompanhe abaixo e no banner.`)
-      setTimeout(() => setMessage(''), 10000)
+      setMessage(
+        `🚀 Gerando ${topicCount} tópico(s) de hoje. Mantenha esta aba aberta e acompanhe o progresso abaixo.`,
+      )
+      await promise
+      setMessage('✅ Conteúdos de hoje concluídos.')
+      setTimeout(() => setMessage(''), 12000)
     } catch (error) {
       console.error('Erro ao gerar conteúdos do dia:', error)
-      alert(error.message || 'Erro ao iniciar geração do dia.')
+      alert(error.message || 'Erro ao gerar conteúdos do dia.')
     } finally {
       setGeneratingDay(false)
     }

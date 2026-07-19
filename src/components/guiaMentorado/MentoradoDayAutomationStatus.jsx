@@ -67,6 +67,8 @@ export default function MentoradoDayAutomationStatus({
     return subscribeGenerationJob(jobUserId, jobId, setLinkedJob)
   }, [jobUserId, jobId])
 
+  // Só trata como cancelado se o admin cancelou de verdade — NÃO quando o job
+  // local termina/erra (antes isso “fechava” a geração sozinho).
   const jobCancelled = linkedJob?.status === GENERATION_JOB_STATUS.CANCELLED
   const jobStillActive =
     linkedJob &&
@@ -78,33 +80,28 @@ export default function MentoradoDayAutomationStatus({
       GENERATION_JOB_STATUS.WAITING_TIMEOUT,
     ].includes(linkedJob.status)
 
-  const dayInactive =
-    status?.status === 'cancelled' ||
-    jobCancelled ||
-    (jobId && linkedJob && !jobStillActive && status?.status !== 'done' && status?.status !== 'partial')
+  const dayInactive = status?.status === 'cancelled' || jobCancelled
 
   useEffect(() => {
-    if (!courseId || !targetDate || !dayInactive) return undefined
+    if (!courseId || !targetDate || !jobCancelled) return undefined
+    if (status?.status === 'cancelled') return undefined
 
-    const hasStuck =
-      status?.status !== 'cancelled' ||
-      (status?.topics || []).some((t) => t.status === 'generating')
-    if (!hasStuck) return undefined
-
-    const key = `${courseId}:${targetDate}:${linkedJob?.status || status?.status}`
+    const key = `${courseId}:${targetDate}:cancelled`
     if (reconciledKeyRef.current === key) return undefined
     reconciledKeyRef.current = key
 
     reconcileCancelledMentoradoDay(courseId, targetDate).catch((err) =>
       console.error('Erro ao reconciliar painel mentorado:', err),
     )
-  }, [courseId, targetDate, dayInactive, status?.status, status?.topics, linkedJob?.status])
+  }, [courseId, targetDate, jobCancelled, status?.status])
 
   if (!courseId || !targetDate) return null
 
   const dayLabel = dayjs(targetDate).format('DD/MM/YYYY')
   const topics = status?.topics || []
-  const isRunning = ACTIVE_DAY_STATUSES.has(status?.status) && !dayInactive
+  const isRunning =
+    !dayInactive &&
+    (ACTIVE_DAY_STATUSES.has(status?.status) || Boolean(jobStillActive) || Boolean(generating))
 
   const DAY_STATUS_HINTS = {
     running: ' — em andamento…',

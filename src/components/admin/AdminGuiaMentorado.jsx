@@ -525,12 +525,15 @@ export default function AdminGuiaMentorado() {
       if (!edital?.disciplinas?.length) {
         throw new Error('Edital verticalizado não encontrado. Gere o edital primeiro.')
       }
-      const { topicCount } = await runMentoradoToday({
+      setProgress('Gerando conteúdos na aba (mantenha aberta)…')
+      const { topicCount, promise } = await runMentoradoToday({
         userId,
         courseId,
         targetDate: todayKey,
       })
-      setFeedback(`🚀 Gerando ${topicCount} tópico(s) de hoje. Acompanhe abaixo e no banner.`)
+      setFeedback(`🚀 Gerando ${topicCount} tópico(s) de hoje. Acompanhe o progresso abaixo.`)
+      await promise
+      setFeedback(`✅ Conteúdos de hoje concluídos (${topicCount} tópico(s)).`)
     })
 
   const handleBackfill = () =>

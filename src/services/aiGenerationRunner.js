@@ -83,12 +83,14 @@ export async function startBackgroundGeneration({
   const localTask =
     hasTask
       ? task
-      : async ({ updateProgress }) =>
+      : async ({ updateProgress, jobId: activeJobId }) =>
           processLocalGenerationJob({
             jobType,
             courseId,
             serverPayload,
             updateProgress,
+            userId,
+            jobId: activeJobId || jobId,
           })
 
   const promise = executeJob(userId, jobId, localTask)

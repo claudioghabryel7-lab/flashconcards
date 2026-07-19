@@ -136,70 +136,180 @@ Retorne APENAS JSON:
   return { resultRef: { collection: 'flashcards', count }, parsed: { count } }
 }
 
-async function processGuiaMentoradoDay(courseId, serverPayload, updateProgress) {
+function dayStatusRef(courseId, targetDate) {
+  return doc(db, 'courses', courseId, 'mentoradoAutomation', targetDate)
+}
+
+async function initLocalDayStatus(courseId, targetDate, topics, jobId, userId) {
+  await setDoc(
+    dayStatusRef(courseId, targetDate),
+    {
+      date: targetDate,
+      courseId,
+      status: 'running',
+      totalTopics: topics.length,
+      publishedCount: 0,
+      jobId: jobId || null,
+      automationUserId: userId || null,
+      topics: topics.map((t) => ({
+        topicKey: t.topicKey,
+        topicoNome: t.topicoNome || t.topicKey,
+        disciplina: t.disciplina || '',
+        status: 'pending',
+        step: 'aguardando',
+        flashcards: 'pending',
+        material: 'pending',
+        questoes: 'pending',
+        error: null,
+      })),
+      reason: null,
+      updatedAt: serverTimestamp(),
+      startedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+async function patchLocalTopicStatus(courseId, targetDate, topicKey, patch) {
+  const ref = dayStatusRef(courseId, targetDate)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return
+  const data = snap.data()
+  const topics = (data.topics || []).map((t) =>
+    t.topicKey === topicKey ? { ...t, ...patch } : t,
+  )
+  const publishedCount = topics.filter((t) => t.status === 'published').length
+  await setDoc(
+    ref,
+    { topics, publishedCount, updatedAt: serverTimestamp() },
+    { merge: true },
+  )
+}
+
+async function finalizeLocalDayStatus(courseId, targetDate, { errors = [], total = 0 } = {}) {
+  const ref = dayStatusRef(courseId, targetDate)
+  const snap = await getDoc(ref)
+  const topics = snap.exists() ? snap.data().topics || [] : []
+  const publishedCount = topics.filter((t) => t.status === 'published').length
+  let status = 'done'
+  if (publishedCount === 0 && errors.length) status = 'error'
+  else if (publishedCount < total) status = 'partial'
+  await setDoc(
+    ref,
+    {
+      status,
+      publishedCount,
+      errors: errors.slice(0, 20),
+      finishedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+async function processGuiaMentoradoDay(courseId, serverPayload, updateProgress, { userId, jobId } = {}) {
   const topics = serverPayload?.topics || []
   if (!topics.length) throw new Error('Lista de tópicos ausente.')
+  const targetDate = serverPayload?.targetDate
+  if (!targetDate) throw new Error('Data do dia ausente.')
+
   const autoPublish = Boolean(serverPayload?.autoPublish)
-  const status = autoPublish ? 'disponivel' : 'indisponivel'
+  const publishStatus = autoPublish ? 'disponivel' : 'indisponivel'
+  const errors = []
   let done = 0
+
+  await initLocalDayStatus(courseId, targetDate, topics, jobId, userId)
+  await updateProgress(8, `Gerando ${topics.length} tópico(s) do dia ${targetDate}…`)
 
   for (let i = 0; i < topics.length; i += 1) {
     const topic = topics[i]
     const topicKey = topic.topicKey || topic.topicoNome
     const sanitized = sanitizeTopicKey(topicKey)
-    const pct = Math.round(((i + 0.2) / topics.length) * 90)
-    await updateProgress(pct, `Tópico ${i + 1}/${topics.length}: ${topic.topicoNome || topicKey}`)
+    const label = topic.topicoNome || topicKey
+    const pctBase = Math.round((i / topics.length) * 90) + 8
 
-    if (topic.conteudoPrompt) {
-      const parsed = await generateAiJson(topic.conteudoPrompt, {
-        courseId,
-        trustedGeneration: true,
-        isLegalContent: true,
-        useRAG: true,
-        useGoogleSearch: true,
-        generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
+    try {
+      await patchLocalTopicStatus(courseId, targetDate, topicKey, {
+        status: 'generating',
+        step: 'material',
+        error: null,
       })
-      await saveMerge(courseId, 'conteudosCompletos', sanitized, parsed, {
-        topicKey,
-        disciplina: topic.disciplina,
-        topico: topic.topicoNome,
-        status: topic.publishStatus || status,
-      })
-    }
+      await updateProgress(pctBase, `Tópico ${i + 1}/${topics.length}: ${label} — material`)
 
-    if (topic.questoesPrompt) {
-      const parsed = await generateAiJson(topic.questoesPrompt, {
-        courseId,
-        trustedGeneration: true,
-        isLegalContent: true,
-        useRAG: true,
-        useGoogleSearch: true,
-      })
-      await saveMerge(courseId, 'questoesTopico', `${sanitized}_nivel_1`, parsed, {
-        topico: topic.topicoNome,
-        nivel: 1,
-        status: topic.publishStatus || status,
-      })
-    }
+      if (topic.conteudoPrompt) {
+        const parsed = await generateAiJson(topic.conteudoPrompt, {
+          courseId,
+          trustedGeneration: true,
+          isLegalContent: true,
+          useRAG: true,
+          useGoogleSearch: true,
+          generationConfig: { maxOutputTokens: 32000, temperature: 0.35 },
+        })
+        await saveMerge(courseId, 'conteudosCompletos', sanitized, parsed, {
+          topicKey,
+          disciplina: topic.disciplina,
+          topico: topic.topicoNome,
+          status: topic.publishStatus || publishStatus,
+        })
+      }
+      await patchLocalTopicStatus(courseId, targetDate, topicKey, { material: 'done', step: 'questoes' })
 
-    if (topic.flashcardMeta) {
-      await processFlashcardsTopico(
-        courseId,
-        {
-          savePlan: {
-            flashcardMeta: topic.flashcardMeta,
-            status: topic.publishStatus || status,
+      await updateProgress(pctBase + 3, `Tópico ${i + 1}/${topics.length}: ${label} — questões`)
+      if (topic.questoesPrompt) {
+        const parsed = await generateAiJson(topic.questoesPrompt, {
+          courseId,
+          trustedGeneration: true,
+          isLegalContent: true,
+          useRAG: true,
+          useGoogleSearch: true,
+        })
+        await saveMerge(courseId, 'questoesTopico', `${sanitized}_nivel_1`, parsed, {
+          topico: topic.topicoNome,
+          nivel: 1,
+          status: topic.publishStatus || publishStatus,
+        })
+      }
+      await patchLocalTopicStatus(courseId, targetDate, topicKey, { questoes: 'done', step: 'flashcards' })
+
+      await updateProgress(pctBase + 6, `Tópico ${i + 1}/${topics.length}: ${label} — flashcards`)
+      if (topic.flashcardMeta) {
+        await processFlashcardsTopico(
+          courseId,
+          {
+            savePlan: {
+              flashcardMeta: topic.flashcardMeta,
+              status: topic.publishStatus || publishStatus,
+            },
           },
-        },
-        async () => {},
-      )
-    }
+          async () => {},
+        )
+      }
 
-    done += 1
+      await patchLocalTopicStatus(courseId, targetDate, topicKey, {
+        status: 'published',
+        step: 'concluído',
+        flashcards: 'done',
+        material: 'done',
+        questoes: 'done',
+        error: null,
+      })
+      done += 1
+    } catch (err) {
+      const message = err?.message || String(err)
+      console.error(`[localJob] tópico ${topicKey}:`, message)
+      errors.push({ topicKey, error: message })
+      await patchLocalTopicStatus(courseId, targetDate, topicKey, {
+        status: 'error',
+        step: 'aguardando',
+        error: message,
+      }).catch(() => {})
+      await updateProgress(pctBase + 6, `Erro em ${label} — seguindo…`)
+    }
   }
 
+  await finalizeLocalDayStatus(courseId, targetDate, { errors, total: topics.length })
   await updateProgress(95, `Concluído — ${done}/${topics.length} tópico(s)`)
-  return { publishedCount: done, totalTopics: topics.length }
+  return { publishedCount: done, totalTopics: topics.length, errors }
 }
 
 async function processGuiaMentoradoCronograma(courseId, serverPayload, updateProgress) {
@@ -330,6 +440,8 @@ export async function processLocalGenerationJob({
   courseId,
   serverPayload = {},
   updateProgress = async () => {},
+  userId = null,
+  jobId = null,
 }) {
   if (!courseId) throw new Error('courseId ausente.')
   if (!jobType) throw new Error('jobType ausente.')
@@ -428,13 +540,13 @@ export async function processLocalGenerationJob({
     case 'flashcards_topico':
       return processFlashcardsTopico(courseId, serverPayload, updateProgress)
     case 'guia_mentorado_automation':
-      return processGuiaMentoradoDay(courseId, serverPayload, updateProgress)
+      return processGuiaMentoradoDay(courseId, serverPayload, updateProgress, { userId, jobId })
     case 'guia_mentorado_cronograma':
       return processGuiaMentoradoCronograma(courseId, serverPayload, updateProgress)
     case 'guia_mentorado_backfill': {
       // Backfill = gera conteúdos dos dias; se vier topics usa o mesmo pipeline do dia
       if (serverPayload?.topics?.length) {
-        return processGuiaMentoradoDay(courseId, serverPayload, updateProgress)
+        return processGuiaMentoradoDay(courseId, serverPayload, updateProgress, { userId, jobId })
       }
       throw new Error(
         'Backfill local: use "Gerar conteúdos do dia" por enquanto (admin online).',
