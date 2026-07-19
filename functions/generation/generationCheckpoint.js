@@ -14,9 +14,45 @@ const ASSET = {
 }
 
 const QUESTOES_BATCH_SIZE = 10
+const FLASHCARD_BATCH_SIZE = 10
 const DEFAULT_QUESTOES_COUNT = 50
 const MATERIAL_PHASE_CORE = 1
 const MATERIAL_PHASE_EXTRAS = 2
+
+function inferFlashcardStartBatch(existingCount, batchesCompleted = 0) {
+  const batchCount = Math.ceil(MAX_FLASHCARDS / FLASHCARD_BATCH_SIZE)
+  const completed = Math.max(Number(batchesCompleted) || 0, Math.ceil(existingCount / FLASHCARD_BATCH_SIZE))
+  if (existingCount >= MAX_FLASHCARDS) return batchCount + 1
+  return Math.min(completed + 1, batchCount + 1)
+}
+
+function inferQuestoesStartBatch(existingCount, expectedCount, batchesCompleted = 0) {
+  const batchCount = Math.ceil(expectedCount / QUESTOES_BATCH_SIZE)
+  const completed = Math.max(Number(batchesCompleted) || 0, Math.ceil(existingCount / QUESTOES_BATCH_SIZE))
+  if (existingCount >= expectedCount) return batchCount + 1
+  return Math.min(completed + 1, batchCount + 1)
+}
+
+function inferMaterialStartPhase(draft, cp) {
+  const phase = Number(cp?.materialPhase ?? draft?.materialPhase ?? 0)
+  const hasCore = Boolean(draft?.revisaoTurbo?.length && draft?.raioXProbabilidade)
+  const hasExtras = Boolean(draft?.pegadinhas?.length && draft?.questoesPreditivas?.length)
+
+  if (phase >= MATERIAL_PHASE_EXTRAS || hasExtras) {
+    return MATERIAL_PHASE_EXTRAS + 1
+  }
+  if (phase >= MATERIAL_PHASE_CORE || hasCore) {
+    return MATERIAL_PHASE_EXTRAS
+  }
+  return MATERIAL_PHASE_CORE
+}
+
+function isSameJobDraft(draft, jobId) {
+  if (!draft || !jobId) return false
+  if (draft.generationComplete === true) return false
+  if (draft.generationDraft === false) return false
+  return !draft.generationJobId || draft.generationJobId === jobId
+}
 
 function getDb() {
   return admin.firestore()
@@ -130,20 +166,38 @@ function flashcardDocToItem(doc) {
 
 async function prepareFlashcardsRun({ courseId, topicKey, jobId, meta, forceFresh = false }) {
   const cp = await loadCheckpoint(courseId, topicKey, ASSET.FLASHCARDS, jobId)
-  const resume = !forceFresh && cp?.canResume && cp?.jobId === jobId
 
-  if (forceFresh || cp?.stale) {
+  if (forceFresh) {
     await deleteTopicFlashcards(courseId, topicKey, meta?.disciplina, meta?.modulo)
     await clearCheckpoint(courseId, topicKey, ASSET.FLASHCARDS)
     return { resume: false, existingItems: [], startBatch: 1 }
   }
 
-  if (resume) {
-    const saved = await loadFlashcardsForJob(courseId, topicKey, jobId)
-    const existingItems = saved.map(flashcardDocToItem)
-    const batchesCompleted = cp?.batchesCompleted || Math.ceil(existingItems.length / 10)
-    const startBatch = Math.min(batchesCompleted + 1, Math.ceil(MAX_FLASHCARDS / 10) + 1)
+  if (cp?.stale && cp?.jobId && cp.jobId !== jobId) {
+    await deleteTopicFlashcards(courseId, topicKey, meta?.disciplina, meta?.modulo)
+    await clearCheckpoint(courseId, topicKey, ASSET.FLASHCARDS)
+    return { resume: false, existingItems: [], startBatch: 1 }
+  }
+
+  const saved = jobId ? await loadFlashcardsForJob(courseId, topicKey, jobId) : []
+  const existingItems = saved.map(flashcardDocToItem)
+
+  if (existingItems.length > 0 && jobId) {
+    const startBatch = inferFlashcardStartBatch(existingItems.length, cp?.batchesCompleted)
+    if (!cp?.jobId || cp.jobId !== jobId) {
+      await upsertCheckpoint(courseId, topicKey, ASSET.FLASHCARDS, {
+        jobId,
+        batchesCompleted: Math.max(0, startBatch - 1),
+        itemCount: existingItems.length,
+        complete: false,
+        generationDraft: true,
+      })
+    }
     return { resume: true, existingItems, startBatch, checkpoint: cp }
+  }
+
+  if (!forceFresh && cp?.canResume && cp?.jobId === jobId) {
+    return { resume: true, existingItems: [], startBatch: 1, checkpoint: cp }
   }
 
   return { resume: false, existingItems: [], startBatch: 1 }
@@ -281,25 +335,42 @@ async function loadMaterialDraft(courseId, topicKey) {
 
 async function prepareMaterialRun({ courseId, topicKey, jobId, forceFresh = false }) {
   const cp = await loadCheckpoint(courseId, topicKey, ASSET.MATERIAL, jobId)
-  const resume = !forceFresh && cp?.canResume && cp?.jobId === jobId
+  const draft = await loadMaterialDraft(courseId, topicKey)
 
-  if (forceFresh || cp?.stale) {
+  if (forceFresh) {
     const key = sanitizeTopicKeyForFirestore(topicKey)
     await getDb().doc(`courses/${courseId}/conteudosCompletos/${key}`).delete().catch(() => {})
     await clearCheckpoint(courseId, topicKey, ASSET.MATERIAL)
     return { resume: false, startPhase: 1, existingDraft: null }
   }
 
-  if (resume) {
-    const draft = await loadMaterialDraft(courseId, topicKey)
-    const phase = cp?.materialPhase || 0
-    if (phase >= MATERIAL_PHASE_CORE && draft) {
-      return {
-        resume: true,
-        startPhase: phase >= MATERIAL_PHASE_EXTRAS ? MATERIAL_PHASE_EXTRAS + 1 : MATERIAL_PHASE_EXTRAS,
-        existingDraft: draft,
-        checkpoint: cp,
-      }
+  if (cp?.stale && cp?.jobId && cp.jobId !== jobId) {
+    const key = sanitizeTopicKeyForFirestore(topicKey)
+    await getDb().doc(`courses/${courseId}/conteudosCompletos/${key}`).delete().catch(() => {})
+    await clearCheckpoint(courseId, topicKey, ASSET.MATERIAL)
+    return { resume: false, startPhase: 1, existingDraft: null }
+  }
+
+  const sameJobDraft = isSameJobDraft(draft, jobId)
+  const canResumeCheckpoint = !forceFresh && cp?.canResume && cp?.jobId === jobId
+  const canResumeDraft = !forceFresh && sameJobDraft && draft?.revisaoTurbo?.length
+
+  if (canResumeCheckpoint || canResumeDraft) {
+    const startPhase = inferMaterialStartPhase(draft, cp)
+    if (!cp?.jobId || cp.jobId !== jobId) {
+      await upsertCheckpoint(courseId, topicKey, ASSET.MATERIAL, {
+        jobId,
+        materialPhase:
+          startPhase > MATERIAL_PHASE_EXTRAS ? MATERIAL_PHASE_EXTRAS : MATERIAL_PHASE_CORE,
+        complete: false,
+        generationDraft: true,
+      })
+    }
+    return {
+      resume: true,
+      startPhase,
+      existingDraft: draft,
+      checkpoint: cp,
     }
   }
 
@@ -376,27 +447,70 @@ async function loadQuestoesDraft(courseId, topicKey, nivel = 1) {
   return snap.data()
 }
 
-async function prepareQuestoesRun({ courseId, topicKey, jobId, nivel = 1, forceFresh = false }) {
+async function prepareQuestoesRun({
+  courseId,
+  topicKey,
+  jobId,
+  nivel = 1,
+  expectedCount = DEFAULT_QUESTOES_COUNT,
+  forceFresh = false,
+}) {
   const cp = await loadCheckpoint(courseId, topicKey, ASSET.QUESTOES, jobId, { nivel })
-  const resume = !forceFresh && cp?.canResume && cp?.jobId === jobId
 
-  if (forceFresh || cp?.stale) {
+  if (forceFresh) {
     const key = `${sanitizeTopicKeyForFirestore(topicKey)}_nivel_${nivel}`
     await getDb().doc(`courses/${courseId}/questoesTopico/${key}`).delete().catch(() => {})
     await clearCheckpoint(courseId, topicKey, ASSET.QUESTOES, { nivel })
     return { resume: false, existingQuestoes: [], startBatch: 1, existingParsed: null }
   }
 
-  if (resume) {
-    const draft = await loadQuestoesDraft(courseId, topicKey, nivel)
-    const existingQuestoes = draft?.questoes || draft?.questions || []
-    const batchesCompleted = cp?.batchesCompleted || Math.ceil(existingQuestoes.length / QUESTOES_BATCH_SIZE)
-    const batchCount = Math.ceil(DEFAULT_QUESTOES_COUNT / QUESTOES_BATCH_SIZE)
+  if (cp?.stale && cp?.jobId && cp.jobId !== jobId) {
+    const key = `${sanitizeTopicKeyForFirestore(topicKey)}_nivel_${nivel}`
+    await getDb().doc(`courses/${courseId}/questoesTopico/${key}`).delete().catch(() => {})
+    await clearCheckpoint(courseId, topicKey, ASSET.QUESTOES, { nivel })
+    return { resume: false, existingQuestoes: [], startBatch: 1, existingParsed: null }
+  }
+
+  const draft = await loadQuestoesDraft(courseId, topicKey, nivel)
+  const existingQuestoes = draft?.questoes || draft?.questions || []
+  const sameJobDraft = isSameJobDraft(draft, jobId)
+
+  if (existingQuestoes.length > 0 && jobId && (sameJobDraft || cp?.jobId === jobId)) {
+    const startBatch = inferQuestoesStartBatch(
+      existingQuestoes.length,
+      expectedCount,
+      cp?.batchesCompleted,
+    )
+    if (!cp?.jobId || cp.jobId !== jobId) {
+      await upsertCheckpoint(
+        courseId,
+        topicKey,
+        ASSET.QUESTOES,
+        {
+          jobId,
+          batchesCompleted: Math.max(0, startBatch - 1),
+          itemCount: existingQuestoes.length,
+          complete: false,
+          generationDraft: true,
+        },
+        { nivel },
+      )
+    }
     return {
       resume: true,
       existingQuestoes,
       existingParsed: draft,
-      startBatch: Math.min(batchesCompleted + 1, batchCount + 1),
+      startBatch,
+      checkpoint: cp,
+    }
+  }
+
+  if (!forceFresh && cp?.canResume && cp?.jobId === jobId) {
+    return {
+      resume: true,
+      existingQuestoes: [],
+      existingParsed: draft,
+      startBatch: 1,
       checkpoint: cp,
     }
   }

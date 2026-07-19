@@ -178,6 +178,7 @@ async function runQuestoesWithCheckpoint({
     topicKey: params.topicKey,
     jobId,
     nivel,
+    expectedCount,
     forceFresh,
   })
 

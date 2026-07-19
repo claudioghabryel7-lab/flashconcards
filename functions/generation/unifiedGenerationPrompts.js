@@ -1,11 +1,39 @@
 const { buildUnifiedLegalTravas, isLikelyLegalDiscipline } = require('./unifiedLegalTravas')
 const { AI_TEXT_FORMAT_RULES, AI_MATERIAL_FORMAT_RULES } = require('./aiTextFormatting')
+const { resolveTipoProva } = require('./questoesValidate')
 
 const MIN_TOPICOS_QUENTES = 6
 const MAX_TOPICOS_QUENTES = 10
 const MIN_QUESTOES = 8
 const MIN_PALAVRAS_POR_RESUMO = 220
 const MAX_PALAVRAS_POR_RESUMO = 320
+
+function buildMaterialQuestoesBlock(banca = '') {
+  const tipoProva = resolveTipoProva(banca)
+  if (tipoProva === 'Certo/Errado') {
+    return {
+      tipoProva,
+      example: `{
+    "enunciado": "...",
+    "correta": "C",
+    "gabaritoComentado": "<p>Explicação alinhada ao gabarito</p>"
+  }`,
+      rules: `- TIPO DE PROVA: Certo/Errado (${banca || 'CESPE/Cebraspe'})
+- Gabarito OBRIGATORIAMENTE "C" (certo) ou "E" (errado) no campo "correta" ou "respostaCorreta". Proibido A/B/D.
+- Sem alternativas A-E.`,
+    }
+  }
+  return {
+    tipoProva: 'ABCD',
+    example: `{
+    "enunciado": "...",
+    "alternativas": { "A": "", "B": "", "C": "", "D": "", "E": "" },
+    "correta": "A",
+    "gabaritoComentado": "<p>Explicação alinhada ao gabarito</p>"
+  }`,
+    rules: `- TIPO DE PROVA: Múltipla escolha (A-E). Gabarito em "correta" ou "respostaCorreta".`,
+  }
+}
 
 function buildFlashcardPrompt(meta = {}, batchNumber, totalBatches, cardsInBatch, existingFronts = []) {
   const existingList = existingFronts.length
@@ -72,6 +100,7 @@ function buildMaterialPrompt({
   const nome = topicoNome || topicKey || 'Tópico'
   const editalSlice = String(editalText || '').slice(0, 10000)
   const legalTravas = buildUnifiedLegalTravas({ banca, concursoName: concursoName || courseName })
+  const questoesBlock = buildMaterialQuestoesBlock(banca)
 
   return `Você é especialista em materiais de concursos. Gere material COMPLETO, objetivo e equilibrado.
 
@@ -102,12 +131,7 @@ Retorne APENAS JSON válido:
   },
   "revisaoTurbo": [{ "titulo": "Assunto", "conteudo": "<p>Resumo ~${MIN_PALAVRAS_POR_RESUMO}-${MAX_PALAVRAS_POR_RESUMO} palavras</p>" }],
   "pegadinhas": [{ "titulo": "Cuidado, Caçapa!", "conteudo": "<p>Pegadinha objetiva</p>" }],
-  "questoesPreditivas": [{
-    "enunciado": "...",
-    "alternativas": { "A": "", "B": "", "C": "", "D": "", "E": "" },
-    "correta": "A",
-    "gabaritoComentado": "<p>Explicação alinhada ao gabarito</p>"
-  }]
+  "questoesPreditivas": [${questoesBlock.example}]
 }
 
 REGRAS:
@@ -116,9 +140,10 @@ REGRAS:
 3. Resumos: ${MIN_PALAVRAS_POR_RESUMO}-${MAX_PALAVRAS_POR_RESUMO} palavras cada.
 4. pegadinhas: 3 a 5 itens.
 5. questoesPreditivas: EXATAMENTE ${MIN_QUESTOES} questões; gabarito coerente com explicação.
-6. ${AI_MATERIAL_FORMAT_RULES}
-7. ${AI_TEXT_FORMAT_RULES}
-8. JSON completo — não truncar.`
+6. ${questoesBlock.rules}
+7. ${AI_MATERIAL_FORMAT_RULES}
+8. ${AI_TEXT_FORMAT_RULES}
+9. JSON completo — não truncar.`
 }
 
 function buildMaterialCorePrompt(params = {}) {
@@ -187,6 +212,7 @@ function buildMaterialExtrasPrompt(params = {}, coreSummary = '') {
   } = params
   const nome = topicoNome || topicKey || 'Tópico'
   const legalTravas = buildUnifiedLegalTravas({ banca, concursoName: concursoName || courseName })
+  const questoesBlock = buildMaterialQuestoesBlock(banca)
 
   return `Gere a PARTE 2 (complemento) do material — pegadinhas + questões preditivas embutidas.
 
@@ -205,17 +231,13 @@ OBRIGATÓRIO: use Google Search. Gabarito e explicação alinhados.
 Retorne APENAS JSON válido:
 {
   "pegadinhas": [{ "titulo": "Cuidado, Caçapa!", "conteudo": "<p>Pegadinha objetiva</p>" }],
-  "questoesPreditivas": [{
-    "enunciado": "...",
-    "alternativas": { "A": "", "B": "", "C": "", "D": "", "E": "" },
-    "correta": "A",
-    "gabaritoComentado": "<p>Explicação alinhada ao gabarito</p>"
-  }]
+  "questoesPreditivas": [${questoesBlock.example}]
 }
 
 REGRAS:
 - pegadinhas: 3 a 5 itens.
 - questoesPreditivas: EXATAMENTE ${MIN_QUESTOES} questões.
+- ${questoesBlock.rules}
 - ${AI_MATERIAL_FORMAT_RULES}
 - ${AI_TEXT_FORMAT_RULES}`
 }
@@ -273,12 +295,7 @@ function buildQuestoesPrompt({
   maxNivel = 10,
   expectedCount = 50,
 } = {}) {
-  const tipoProva =
-    String(banca || '')
-      .toUpperCase()
-      .includes('CESPE') || String(banca || '').toUpperCase().includes('CEBRASPE')
-      ? 'Certo/Errado'
-      : 'ABCD'
+  const tipoProva = resolveTipoProva(banca)
 
   const altBlock =
     tipoProva === 'Certo/Errado'

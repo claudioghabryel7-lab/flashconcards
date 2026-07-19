@@ -182,7 +182,7 @@ async function generateTrustedMaterial(
     const corePrompt = params.prompt || buildMaterialCorePrompt(promptParams)
     core = await generateTrustedJson(
       corePrompt,
-      { contentType: 'material', rejectTruncatedJson: true },
+      { contentType: 'material_core', rejectTruncatedJson: true },
       ctx,
     )
     assertMaterialCore(core)
@@ -200,7 +200,7 @@ async function generateTrustedMaterial(
     )
     const extras = await generateTrustedJson(
       extrasPrompt,
-      { contentType: 'material', rejectTruncatedJson: true },
+      { contentType: 'material_extras', rejectTruncatedJson: true },
       ctx,
     )
     assertMaterialExtras(extras)
@@ -216,6 +216,19 @@ async function generateTrustedMaterial(
       const err = new Error(`Material inválido — ${fullValidation.errors.slice(0, 6).join(' ')}`)
       err.code = 'material_incomplete'
       throw err
+    }
+
+    const embedded = merged.questoesPreditivas || []
+    if (embedded.length > 0) {
+      const qv = validateQuestoesPayload(
+        { questoes: embedded },
+        { expectedCount: embedded.length, banca: params.banca },
+      )
+      if (!qv.ok) {
+        const err = new Error(`Questões embutidas inválidas — ${qv.errors.slice(0, 6).join(' ')}`)
+        err.code = 'questoes_invalid'
+        throw err
+      }
     }
 
     if (onPhaseComplete) await onPhaseComplete(MATERIAL_PHASE_EXTRAS, merged)

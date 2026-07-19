@@ -11,7 +11,7 @@ const {
   parseVerificationResult,
   shouldRunVerification,
 } = require('./contentVerification')
-const { validateConteudoCompletoPayload } = require('./conteudoCompletoValidate')
+const { validateConteudoCompletoPayload, validateMaterialCorePayload, validateMaterialExtrasPayload } = require('./conteudoCompletoValidate')
 const { validateQuestoesPayload } = require('./questoesValidate')
 const { validateFlashcardsList } = require('./flashcardsValidate')
 const { runWithHeartbeat } = require('./generationJobResume')
@@ -52,7 +52,59 @@ function buildCourseContext(context = {}) {
   }
 }
 
+function validateEmbeddedMaterialQuestoes(parsed, context = {}) {
+  const embedded = parsed?.questoesPreditivas || []
+  if (!embedded.length) return
+  const qv = validateQuestoesPayload(
+    { questoes: embedded },
+    { expectedCount: embedded.length, banca: context.banca },
+  )
+  if (!qv.ok) {
+    const err = new Error(`Questões embutidas inválidas — ${qv.errors.slice(0, 5).join(' ')}`)
+    err.code = 'questoes_invalid'
+    throw err
+  }
+}
+
+function buildValidationRetryHint(lastError, courseContext = {}) {
+  const msg = String(lastError?.message || '')
+  const banca = courseContext.banca || ''
+  let hint = `Resposta anterior inválida (${msg}). Retorne APENAS JSON válido e completo. Use Google Search. Priorize acertos para a banca ${banca}.`
+
+  if (msg.includes('Certo/Errado') || msg.includes('deve ser C ou E')) {
+    hint += ` BANCA CERTO/ERRADO (${banca}): gabarito APENAS "C" (certo) ou "E" (errado) — use campo "correta" ou "respostaCorreta". Proibido A/B/D.`
+  }
+  if (lastError?.code === 'questoes_invalid') {
+    hint += ' Corrija gabarito, alternativas e gabaritoComentado coerente com o gabarito.'
+  }
+  if (lastError?.code === 'material_incomplete') {
+    hint += ' Complete todas as seções exigidas sem truncar o JSON.'
+  }
+  return hint
+}
+
 function assertValidation(contentType, parsed, context = {}) {
+  if (contentType === 'material_core') {
+    const v = validateMaterialCorePayload(parsed)
+    if (!v.ok) {
+      const err = new Error(`Material (núcleo) inválido — ${v.errors.join(' ')}`)
+      err.code = 'material_incomplete'
+      throw err
+    }
+    return
+  }
+
+  if (contentType === 'material_extras') {
+    const v = validateMaterialExtrasPayload(parsed)
+    if (!v.ok) {
+      const err = new Error(`Material (complemento) inválido — ${v.errors.join(' ')}`)
+      err.code = 'material_incomplete'
+      throw err
+    }
+    validateEmbeddedMaterialQuestoes(parsed, context)
+    return
+  }
+
   if (contentType === 'material') {
     const v = validateConteudoCompletoPayload(parsed)
     if (!v.ok) {
@@ -62,15 +114,7 @@ function assertValidation(contentType, parsed, context = {}) {
     }
     const embedded = parsed?.questoesPreditivas || []
     if (embedded.length > 0) {
-      const qv = validateQuestoesPayload(
-        { questoes: embedded },
-        { expectedCount: embedded.length, banca: context.banca },
-      )
-      if (!qv.ok) {
-        const err = new Error(`Questões embutidas inválidas — ${qv.errors.slice(0, 5).join(' ')}`)
-        err.code = 'questoes_invalid'
-        throw err
-      }
+      validateEmbeddedMaterialQuestoes(parsed, context)
     }
     return
   }
@@ -167,14 +211,14 @@ async function generateTrustedJson(prompt, options = {}, context = {}) {
   const courseContext = buildCourseContext(context)
 
   let lastError
-  const maxAttempts = opts.maxParseAttempts ?? 5
+  const maxAttempts = opts.maxParseAttempts ?? 8
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       const effectivePrompt =
         attempt === 1
           ? prompt
-          : `${prompt}\n\nIMPORTANTE: resposta anterior inválida (${lastError?.message || 'erro'}). Retorne APENAS JSON válido e completo. Use Google Search. Priorize acertos para a banca ${courseContext.banca || ''}.`
+          : `${prompt}\n\nIMPORTANTE: ${buildValidationRetryHint(lastError, courseContext)}`
 
       const response = await callGemini(effectivePrompt, opts)
       let { text, finishReason } = collectTextFromGeminiResponse(response)

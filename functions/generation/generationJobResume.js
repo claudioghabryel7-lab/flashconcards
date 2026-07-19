@@ -62,24 +62,17 @@ function isPermanentGenerationError(error) {
   const code = error?.code
   const msg = String(error?.message || '').toLowerCase()
   if (
+    // Erros de configuração/admin — não melhoram com retry
     code === 'invalid_payload' ||
     code === 'unsupported_job_type' ||
     code === 'not_authenticated' ||
     code === 'permission_denied' ||
-    // Validação de conteúdo incompleto não melhora com retry — falha permanente
-    code === 'material_incomplete' ||
-    code === 'topic_incomplete' ||
-    code === 'questoes_invalid' ||
-    code === 'flashcards_invalid' ||
-    code === 'legal_audit_failed' ||
-    code === 'bundle_consistency_failed' ||
-    code === 'grounding_required'
+    code === 'topic_incomplete'
   ) {
     return true
   }
   return (
     msg.includes('payload') ||
-    msg.includes('ausente') ||
     msg.includes('não suportado') ||
     msg.includes('nao suportado') ||
     msg.includes('não autenticado') ||
@@ -88,9 +81,7 @@ function isPermanentGenerationError(error) {
     msg.includes('tipo de job não suportado') ||
     msg.includes('edital verticalizado não encontrado') ||
     msg.includes('curso não selecionado') ||
-    msg.includes('usuário admin não identificado') ||
-    msg.includes('material incompleto') ||
-    msg.includes('conteúdo incompleto')
+    msg.includes('usuário admin não identificado')
   )
 }
 
@@ -107,7 +98,13 @@ function isTransientGenerationError(error) {
     code === 'ai_json_truncated' ||
     code === 'cf_timeout' ||
     code === 'concurrency_limit' ||
-    code === 'api_not_ready'
+    code === 'api_not_ready' ||
+    code === 'material_incomplete' ||
+    code === 'questoes_invalid' ||
+    code === 'flashcards_invalid' ||
+    code === 'legal_audit_failed' ||
+    code === 'bundle_consistency_failed' ||
+    code === 'grounding_required'
   ) {
     return true
   }
@@ -133,7 +130,16 @@ function isTransientGenerationError(error) {
     msg.includes('json') ||
     msg.includes('resource has been exhausted') ||
     msg.includes('deadline') ||
-    msg.includes('aborted')
+    msg.includes('aborted') ||
+    msg.includes('questões embutidas inválidas') ||
+    msg.includes('questoes embutidas invalidas') ||
+    msg.includes('questões inválidas') ||
+    msg.includes('questoes invalidas') ||
+    msg.includes('material incompleto') ||
+    msg.includes('material inválido') ||
+    msg.includes('material invalido') ||
+    msg.includes('flashcards inválidos') ||
+    msg.includes('flashcards invalidos')
   )
 }
 
