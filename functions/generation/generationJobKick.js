@@ -7,6 +7,7 @@ const {
   pauseJobForResume,
   clearActiveJob,
   clearResumeQueue,
+  isJobCancelled,
 } = require('./generationJobResume')
 
 const PENDING_KICK_GRACE_MS = 8 * 1000
@@ -78,6 +79,9 @@ async function runServerGenerationJob(userId, jobId, initialData = null) {
 
   if (!data) return { ok: false, reason: 'not_found' }
   if (!data.runOnServer) return { ok: false, reason: 'not_server' }
+  if (data.status === 'cancelled' || (await isJobCancelled(userId, jobId))) {
+    return { ok: false, reason: 'cancelled' }
+  }
 
   try {
     const outcome = await processGenerationJob(userId, jobId, data)
@@ -95,6 +99,10 @@ async function kickGenerationJob(userId, jobId, { wait = true } = {}) {
 
   const data = snap.data()
   if (!data.runOnServer) return { ok: false, reason: 'not_server' }
+
+  if (data.status === 'cancelled' || (await isJobCancelled(userId, jobId))) {
+    return { ok: true, reason: 'cancelled', status: 'cancelled' }
+  }
 
   if (['done', 'error', 'cancelled'].includes(data.status)) {
     return { ok: true, reason: 'already_finished', status: data.status }

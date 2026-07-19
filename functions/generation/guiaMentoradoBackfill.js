@@ -8,6 +8,7 @@ const {
   clearActiveJob,
   pauseJobForResume,
   isJobCancelled,
+  handleGenerationJobCancelled,
   JOB_HEARTBEAT_MS,
 } = require('./generationJobResume')
 
@@ -41,6 +42,15 @@ async function processGuiaMentoradoBackfill(userId, jobId, courseId, serverPaylo
   try {
   for (let i = startDayIndex; i < dayKeys.length; i += 1) {
     if (await isJobCancelled(userId, jobId)) {
+      await handleGenerationJobCancelled(userId, jobId, {
+        courseId,
+        jobType: 'guia_mentorado_backfill',
+        serverPayload: {
+          ...serverPayload,
+          targetDate: dayKeys[i],
+          dayKeys,
+        },
+      })
       await clearActiveJob(jobId)
       return { cancelled: true }
     }
@@ -118,6 +128,15 @@ async function processGuiaMentoradoBackfill(userId, jobId, courseId, serverPaylo
     )
 
     if (outcome.cancelled) {
+      await handleGenerationJobCancelled(userId, jobId, {
+        courseId,
+        jobType: 'guia_mentorado_backfill',
+        serverPayload: {
+          ...serverPayload,
+          targetDate: dayKey,
+          dayKeys,
+        },
+      })
       await clearActiveJob(jobId)
       return outcome
     }

@@ -67,7 +67,13 @@ function isPermanentGenerationError(error) {
     code === 'not_authenticated' ||
     code === 'permission_denied' ||
     // Validação de conteúdo incompleto não melhora com retry — falha permanente
-    code === 'material_incomplete'
+    code === 'material_incomplete' ||
+    code === 'topic_incomplete' ||
+    code === 'questoes_invalid' ||
+    code === 'flashcards_invalid' ||
+    code === 'legal_audit_failed' ||
+    code === 'bundle_consistency_failed' ||
+    code === 'grounding_required'
   ) {
     return true
   }
@@ -503,16 +509,28 @@ async function handleGenerationJobCancelled(userId, jobId, jobData = {}) {
   }
 }
 
+const ACTIVE_JOB_STATUSES = ['pending', 'running', ...WAITING_STATUSES]
+
+function parseUserIdFromGenerationJobPath(path = '') {
+  const parts = String(path).split('/')
+  if (parts[0] === 'users' && parts[2] === 'generationJobs') return parts[1]
+  return null
+}
+
 /** Cancela job no servidor — limpa fila de retomada e libera slot ativo. */
 async function cancelGenerationJob(userId, jobId) {
   const db = getDb()
   const jobRef = db.doc(`users/${userId}/generationJobs/${jobId}`)
   const snap = await jobRef.get()
-  if (!snap.exists) return { ok: false, reason: 'not_found' }
+  if (!snap.exists) {
+    await clearResumeQueue(jobId)
+    await clearActiveJob(jobId)
+    return { ok: false, reason: 'not_found' }
+  }
 
   const jobData = snap.data()
   if (jobData.status === 'cancelled') {
-    await clearResumeQueue(jobId)
+    await handleGenerationJobCancelled(userId, jobId, jobData)
     return { ok: true, reason: 'already_cancelled' }
   }
 
@@ -520,10 +538,12 @@ async function cancelGenerationJob(userId, jobId) {
   await jobRef.update({
     status: 'cancelled',
     progress: 100,
-    message: 'Cancelado pelo admin',
+    message: 'Cancelado pelo usuário',
     finishedAt: ts,
     updatedAt: ts,
     progressUpdatedAt: ts,
+    resumeClaimToken: admin.firestore.FieldValue.delete(),
+    resumeClaimedAt: admin.firestore.FieldValue.delete(),
   })
 
   await handleGenerationJobCancelled(userId, jobId, jobData)
@@ -534,7 +554,7 @@ async function cancelAllGenerationJobs(userId) {
   const db = getDb()
   const snap = await db
     .collection(`users/${userId}/generationJobs`)
-    .where('status', 'in', ['pending', 'running', ...WAITING_STATUSES])
+    .where('status', 'in', ACTIVE_JOB_STATUSES)
     .get()
 
   if (snap.empty) return { ok: true, cancelled: 0 }
@@ -556,17 +576,12 @@ async function cancelAllGenerationJobs(userId) {
  */
 async function cancelAllActiveJobsGlobally() {
   const db = getDb()
+  const seen = new Set()
   let cancelled = 0
 
-  const activeSnap = await db.collection('generationActiveJobs').get()
-  for (const doc of activeSnap.docs) {
-    const data = doc.data() || {}
-    const userId = data.userId
-    const jobId = data.jobId || doc.id
-    if (!userId || !jobId) {
-      await doc.ref.delete().catch(() => {})
-      continue
-    }
+  const cancelIfActive = async (userId, jobId) => {
+    if (!userId || !jobId || seen.has(jobId)) return
+    seen.add(jobId)
     try {
       const result = await cancelGenerationJob(userId, jobId)
       if (result?.ok) cancelled += 1
@@ -576,18 +591,49 @@ async function cancelAllActiveJobsGlobally() {
     }
   }
 
+  // 1) Todos os jobs ativos no Firestore (inclui waiting sem slot/fila)
+  try {
+    let lastDoc = null
+    for (;;) {
+      let q = db
+        .collectionGroup('generationJobs')
+        .where('runOnServer', '==', true)
+        .where('status', 'in', ACTIVE_JOB_STATUSES)
+        .limit(200)
+      if (lastDoc) q = q.startAfter(lastDoc)
+      const jobsSnap = await q.get()
+      if (jobsSnap.empty) break
+      for (const doc of jobsSnap.docs) {
+        const userId = parseUserIdFromGenerationJobPath(doc.ref.path) || doc.data()?.userId
+        await cancelIfActive(userId, doc.id)
+      }
+      lastDoc = jobsSnap.docs[jobsSnap.docs.length - 1]
+      if (jobsSnap.size < 200) break
+    }
+  } catch (err) {
+    console.warn('[cancelAllActiveJobsGlobally] collectionGroup:', err.message)
+  }
+
+  // 2) Slots ativos e fila de retomada (órfãos)
+  const activeSnap = await db.collection('generationActiveJobs').get()
+  for (const doc of activeSnap.docs) {
+    const data = doc.data() || {}
+    const userId = data.userId
+    const jobId = data.jobId || doc.id
+    if (!userId || !jobId) {
+      await doc.ref.delete().catch(() => {})
+      continue
+    }
+    await cancelIfActive(userId, jobId)
+  }
+
   const queueSnap = await db.collection('generationResumeQueue').get()
   for (const doc of queueSnap.docs) {
     const data = doc.data() || {}
     const userId = data.userId
     const jobId = data.jobId || doc.id
     if (userId && jobId) {
-      try {
-        const result = await cancelGenerationJob(userId, jobId)
-        if (result?.ok) cancelled += 1
-      } catch {
-        await clearResumeQueue(jobId)
-      }
+      await cancelIfActive(userId, jobId)
     } else {
       await doc.ref.delete().catch(() => {})
     }
@@ -1010,6 +1056,7 @@ async function resumeSingleGenerationJob(jobId, queueData = null, hintUserId = n
     const snap = await tx.get(jobRef)
     if (!snap.exists) return false
     const current = snap.data() || {}
+    if (current.status === 'cancelled') return false
     if (!WAITING_STATUSES.includes(current.status)) return false
     // Já claimado por outro worker nesta janela
     if (current.status === 'running' && current.resumeClaimToken) return false

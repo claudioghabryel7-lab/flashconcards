@@ -33,6 +33,7 @@ const MENTORADO_JOB_TYPES = [
 
 /** Jobs em processo de cancelamento — evita nudge retomar enquanto para. */
 const cancellingJobIds = new Set()
+let nudgePausedUntil = 0
 
 export function markJobCancelling(jobId) {
   if (jobId) cancellingJobIds.add(jobId)
@@ -44,6 +45,22 @@ export function unmarkJobCancelling(jobId) {
 
 export function isJobCancelling(jobId) {
   return cancellingJobIds.has(jobId)
+}
+
+/** Pausa retomadas automáticas após cancelamento em massa. */
+export function pauseJobNudge(ms = 120_000) {
+  nudgePausedUntil = Date.now() + ms
+}
+
+export function isJobNudgePaused() {
+  return Date.now() < nudgePausedUntil
+}
+
+export function syncCancellingJobsWithActive(activeJobIds = []) {
+  const active = new Set(activeJobIds)
+  for (const jobId of [...cancellingJobIds]) {
+    if (!active.has(jobId)) unmarkJobCancelling(jobId)
+  }
 }
 
 export const GENERATION_WAITING_STATUSES = [
@@ -126,6 +143,7 @@ export function isJobProgressStalled(job, now = Date.now(), stallMs = STALL_PROG
 
 export function shouldNudgeJob(job, now = Date.now()) {
   if (!job?.runOnServer) return false
+  if (isJobNudgePaused()) return false
   if (isJobCancelling(job.id)) return false
   if (job.status === GENERATION_JOB_STATUS.PENDING) return true
   if (GENERATION_WAITING_STATUSES.includes(job.status)) {
@@ -236,6 +254,7 @@ export async function dismissGenerationJob(userId, jobId) {
   if (!userId || !jobId) return { ok: false }
 
   markJobCancelling(jobId)
+  pauseJobNudge()
   try {
     const user = auth?.currentUser
     if (user?.uid === userId) {
@@ -257,17 +276,20 @@ export async function dismissGenerationJob(userId, jobId) {
       if (response.ok && data.ok !== false) {
         return { ok: true, ...data }
       }
+      if (response.status >= 400) {
+        throw new Error(data.error || 'Não foi possível cancelar no servidor.')
+      }
     }
 
     await updateGenerationJob(userId, jobId, {
       status: GENERATION_JOB_STATUS.CANCELLED,
       progress: 100,
-      message: 'Cancelado pelo admin',
+      message: 'Cancelado',
       finishedAt: serverTimestamp(),
     })
     return { ok: true, fallback: true }
   } finally {
-    unmarkJobCancelling(jobId)
+    // Mantém flag até o job sumir do snapshot ativo (syncCancellingJobsWithActive)
   }
 }
 
@@ -288,35 +310,33 @@ export async function cancelAllGenerationJobs(userId) {
   if (!snap.docs.length) return { cancelled: 0 }
 
   snap.docs.forEach((d) => markJobCancelling(d.id))
+  pauseJobNudge()
 
-  try {
-    const user = auth?.currentUser
-    if (user?.uid === userId) {
-      const token = await user.getIdToken()
-      const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ userId, all: true }),
-      })
-      let data = {}
-      try {
-        data = await response.json()
-      } catch {
-        data = {}
-      }
-      if (response.ok) {
-        return { cancelled: data.cancelled ?? snap.docs.length, ...data }
-      }
+  const user = auth?.currentUser
+  if (user?.uid === userId) {
+    const token = await user.getIdToken()
+    const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ userId, all: true }),
+    })
+    let data = {}
+    try {
+      data = await response.json()
+    } catch {
+      data = {}
     }
-
-    await Promise.all(snap.docs.map((d) => dismissGenerationJob(userId, d.id)))
-    return { cancelled: snap.docs.length }
-  } finally {
-    snap.docs.forEach((d) => unmarkJobCancelling(d.id))
+    if (response.ok) {
+      return { cancelled: data.cancelled ?? snap.docs.length, ...data }
+    }
+    throw new Error(data.error || 'Não foi possível parar os jobs no servidor.')
   }
+
+  await Promise.all(snap.docs.map((d) => dismissGenerationJob(userId, d.id)))
+  return { cancelled: snap.docs.length }
 }
 
 /** Admin: força parada de TODOS os jobs (todos os usuários). */
@@ -325,6 +345,8 @@ export async function forceStopAllGenerationJobsGlobally() {
   if (!user || !FIREBASE_FUNCTIONS.cancelGenerationJob) {
     throw new Error('Não autenticado ou função de cancelamento indisponível.')
   }
+
+  pauseJobNudge(180_000)
 
   const token = await user.getIdToken()
   const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {

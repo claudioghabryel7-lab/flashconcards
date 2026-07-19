@@ -1,6 +1,5 @@
 /**
- * Pipeline confiável de geração — Google Search + validação + auditoria seletiva (fail-closed).
- * Custo baixo: auditoria só quando há citações legais; Pro não usado aqui.
+ * Pipeline confiável unificado — Google Search + validação + auditoria fail-closed.
  */
 
 const { callGemini, parseAiJsonText, extractGeneratedText, collectTextFromGeminiResponse } = require('./geminiServer')
@@ -8,6 +7,7 @@ const { hasGroundingSupport } = require('./groundingUtils')
 const { isLikelyLegalDiscipline, textHasLegalClaims } = require('./unifiedLegalTravas')
 const {
   buildVerificationPrompt,
+  buildFlashcardAuditPrompt,
   parseVerificationResult,
   shouldRunVerification,
 } = require('./contentVerification')
@@ -17,7 +17,7 @@ const { validateFlashcardsList } = require('./flashcardsValidate')
 const { runWithHeartbeat } = require('./generationJobResume')
 
 const TRUSTED_GENERATION_CONFIG = {
-  temperature: 0.25,
+  temperature: 0.2,
   maxOutputTokens: 32000,
 }
 
@@ -35,8 +35,20 @@ function buildTrustedOptions(options = {}) {
       ...(options.generationConfig || {}),
     },
     rejectTruncatedJson: options.rejectTruncatedJson ?? options.contentType === 'material',
-    maxParseAttempts: options.maxParseAttempts ?? 4,
+    maxParseAttempts: options.maxParseAttempts ?? 5,
     ...options,
+  }
+}
+
+function buildCourseContext(context = {}) {
+  return {
+    banca: context.banca,
+    concursoName: context.concursoName || context.courseName,
+    cargo: context.cargo,
+    disciplina: context.disciplina,
+    topicoNome: context.topicoNome,
+    forceAudit: context.forceAudit !== false,
+    isLegalContent: context.isLegalContent ?? isLikelyLegalDiscipline(context.disciplina),
   }
 }
 
@@ -90,62 +102,79 @@ function assertValidation(contentType, parsed, context = {}) {
 
 function requireGroundingIfNeeded(response, textSample, context = {}) {
   const disciplina = context.disciplina || ''
-  if (!isLikelyLegalDiscipline(disciplina)) return
-  if (!textHasLegalClaims(textSample)) return
+  const legal = isLikelyLegalDiscipline(disciplina)
+  const hasClaims = textHasLegalClaims(textSample)
+
+  if (!legal && !hasClaims) return
   if (hasGroundingSupport(response)) return
 
   const err = new Error(
-    'Conteúdo jurídico gerado sem consulta Google Search (grounding). Regeneração necessária.',
+    'Conteúdo exige Google Search (grounding) — regeneração necessária.',
   )
   err.code = 'grounding_required'
   throw err
 }
 
-async function runLegalAudit(textSample, courseContext = {}) {
-  if (!shouldRunVerification(textSample, { isLegalContent: true })) {
+async function runContentAudit(textSample, courseContext = {}, contentType = '') {
+  if (!shouldRunVerification(textSample, courseContext)) {
     return { aprovado: true, parsed: null }
   }
 
-  const verifyPrompt = buildVerificationPrompt(textSample, courseContext)
-  const verifyResponse = await callGemini(verifyPrompt, {
+  const auditPrompt =
+    contentType === 'flashcards'
+      ? buildFlashcardAuditPrompt(textSample, courseContext)
+      : buildVerificationPrompt(textSample, courseContext)
+
+  const verifyResponse = await callGemini(auditPrompt, {
     useGoogleSearch: true,
     generationConfig: VERIFY_GENERATION_CONFIG,
   })
   const verifyText = extractGeneratedText(verifyResponse)
-  const verification = parseVerificationResult(verifyText)
-  return { ...verification, verifyResponse }
+  return { ...parseVerificationResult(verifyText), verifyResponse }
 }
 
 async function tryApplyCorrection(originalParsed, verification, contentType) {
-  if (verification.aprovado || !verification.texto_corrigido) return originalParsed
+  if (verification.aprovado) return originalParsed
+
+  if (!verification.texto_corrigido) {
+    const err = new Error(
+      `Auditoria reprovou: ${(verification.problemas || [])
+        .slice(0, 4)
+        .map((p) => p.motivo || p.status)
+        .join('; ')}`,
+    )
+    err.code = 'legal_audit_failed'
+    throw err
+  }
+
   try {
     const corrected = await parseAiJsonText(verification.texto_corrigido, {
       rejectTruncated: contentType === 'material',
     })
     return corrected
-  } catch {
-    return originalParsed
+  } catch (parseErr) {
+    const err = new Error(
+      `Correção da auditoria inválida: ${parseErr.message || 'JSON ilegível'}`,
+    )
+    err.code = 'legal_audit_failed'
+    throw err
   }
 }
 
 async function generateTrustedJson(prompt, options = {}, context = {}) {
   const opts = buildTrustedOptions(options)
   const contentType = opts.contentType || context.contentType || ''
-  const courseContext = context.courseContext || {
-    banca: context.banca,
-    concursoName: context.concursoName || context.courseName,
-    disciplina: context.disciplina,
-  }
+  const courseContext = buildCourseContext(context)
 
   let lastError
-  const maxAttempts = opts.maxParseAttempts ?? 4
+  const maxAttempts = opts.maxParseAttempts ?? 5
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       const effectivePrompt =
         attempt === 1
           ? prompt
-          : `${prompt}\n\nIMPORTANTE: resposta anterior inválida (${lastError?.message || 'erro'}). Retorne APENAS JSON válido e completo. Use Google Search para leis/artigos.`
+          : `${prompt}\n\nIMPORTANTE: resposta anterior inválida (${lastError?.message || 'erro'}). Retorne APENAS JSON válido e completo. Use Google Search. Priorize acertos para a banca ${courseContext.banca || ''}.`
 
       const response = await callGemini(effectivePrompt, opts)
       let { text, finishReason } = collectTextFromGeminiResponse(response)
@@ -160,21 +189,28 @@ async function generateTrustedJson(prompt, options = {}, context = {}) {
       let parsed = await parseAiJsonText(text, { rejectTruncated: Boolean(opts.rejectTruncatedJson) })
       if (parsed?.erro) throw new Error(String(parsed.erro))
 
-      requireGroundingIfNeeded(response, JSON.stringify(parsed), context)
-
+      requireGroundingIfNeeded(response, JSON.stringify(parsed), courseContext)
       assertValidation(contentType, parsed, context)
 
-      const audit = await runLegalAudit(JSON.stringify(parsed), courseContext)
+      const audit = await runContentAudit(JSON.stringify(parsed), courseContext, contentType)
       if (!audit.aprovado) {
         parsed = await tryApplyCorrection(parsed, audit, contentType)
         assertValidation(contentType, parsed, context)
-        const audit2 = await runLegalAudit(JSON.stringify(parsed), courseContext)
+        const audit2 = await runContentAudit(JSON.stringify(parsed), courseContext, contentType)
         if (!audit2.aprovado) {
-          const err = new Error(
-            `Auditoria jurídica reprovou: ${(audit2.problemas || audit.problemas || []).slice(0, 3).map((p) => p.motivo || p.status).join('; ')}`,
-          )
-          err.code = 'legal_audit_failed'
-          throw err
+          parsed = await tryApplyCorrection(parsed, audit2, contentType)
+          assertValidation(contentType, parsed, context)
+          const audit3 = await runContentAudit(JSON.stringify(parsed), courseContext, contentType)
+          if (!audit3.aprovado) {
+            const err = new Error(
+              `Auditoria reprovou após correções: ${(audit3.problemas || audit2.problemas || [])
+                .slice(0, 3)
+                .map((p) => p.motivo || p.status)
+                .join('; ')}`,
+            )
+            err.code = 'legal_audit_failed'
+            throw err
+          }
         }
       }
 
@@ -189,7 +225,8 @@ async function generateTrustedJson(prompt, options = {}, context = {}) {
         error.code === 'questoes_invalid' ||
         error.code === 'flashcards_invalid' ||
         error.code === 'grounding_required' ||
-        error.code === 'legal_audit_failed'
+        error.code === 'legal_audit_failed' ||
+        error.code === 'bundle_consistency_failed'
       if (attempt < maxAttempts && retryable) continue
       throw error
     }

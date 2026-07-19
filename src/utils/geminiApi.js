@@ -293,17 +293,33 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     const verifyText = extractGeneratedText(verifyResponse)
     const verification = parseVerificationResult(verifyText)
 
+    if (!verification.aprovado && !verification.texto_corrigido) {
+      const err = new Error(
+        `Conteúdo reprovado na auditoria: ${(verification.problemas || [])
+          .slice(0, 3)
+          .map((p) => p.motivo || p.status)
+          .join('; ')}`,
+      )
+      err.code = 'legal_audit_failed'
+      throw err
+    }
+
     if (!verification.aprovado) {
       console.warn(
-        `⚠️ Verificação encontrou ${verification.problemas?.length || 0} problema(s); aplicando correções.`
+        `⚠️ Verificação encontrou ${verification.problemas?.length || 0} problema(s); aplicando correções.`,
       )
     } else {
-      console.log('✅ Conteúdo aprovado na verificação jurídica')
+      console.log('✅ Conteúdo aprovado na verificação')
     }
 
     return applyVerificationToResponse(response, verification, generatedText)
   } catch (verifyErr) {
-    console.warn('⚠️ Verificação jurídica falhou, mantendo texto original:', verifyErr.message)
+    if (options.trustedGeneration) {
+      const err = new Error(verifyErr.message || 'Auditoria falhou')
+      err.code = verifyErr.code || 'legal_audit_failed'
+      throw err
+    }
+    console.warn('⚠️ Verificação falhou, mantendo texto original:', verifyErr.message)
     return response
   }
 }

@@ -73,11 +73,18 @@ export default function BackgroundGenerationBanner() {
   const { jobs } = useBackgroundGeneration()
   const [dismissing, setDismissing] = useState({})
   const [stoppingAll, setStoppingAll] = useState(false)
+  const [stopFeedback, setStopFeedback] = useState(null)
   const [minimized, setMinimized] = useState(loadMinimized)
 
   useEffect(() => {
     if (!jobs.length) setMinimized(false)
   }, [jobs.length])
+
+  useEffect(() => {
+    if (!stopFeedback) return undefined
+    const timer = setTimeout(() => setStopFeedback(null), 5000)
+    return () => clearTimeout(timer)
+  }, [stopFeedback])
 
   if (!jobs.length) return null
 
@@ -88,12 +95,20 @@ export default function BackgroundGenerationBanner() {
       : 'Parar TODOS os seus jobs em andamento? A geração será cancelada.'
     if (!window.confirm(msg)) return
     setStoppingAll(true)
+    setStopFeedback(null)
     try {
-      if (isAdmin) {
-        await forceStopAllGenerationJobsGlobally()
-      } else {
-        await cancelAllGenerationJobs(user.uid)
-      }
+      const result = isAdmin
+        ? await forceStopAllGenerationJobsGlobally()
+        : await cancelAllGenerationJobs(user.uid)
+      setStopFeedback({
+        type: 'success',
+        text: `Parados ${result.cancelled ?? jobs.length} job(s).`,
+      })
+    } catch (err) {
+      setStopFeedback({
+        type: 'error',
+        text: err?.message || 'Não foi possível parar os jobs. Tente de novo.',
+      })
     } finally {
       setStoppingAll(false)
     }
@@ -119,21 +134,43 @@ export default function BackgroundGenerationBanner() {
     const waiting = jobs.length - running
 
     return (
-      <div className="fixed bottom-4 right-4 z-[90]">
-        <button
-          type="button"
-          onClick={() => toggleMinimized(false)}
-          className="inline-flex items-center gap-2 rounded-full border border-cp-accent/30 bg-cp-surface/95 px-4 py-2 text-xs font-semibold text-cp-text shadow-lg backdrop-blur-sm transition hover:border-cp-accent/50"
-          title="Expandir tarefas em andamento"
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cp-accent opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-cp-accent" />
-          </span>
-          {jobs.length} tarefa{jobs.length !== 1 ? 's' : ''} IA
-          {waiting > 0 ? ` · ${waiting} aguardando` : ''}
-          <ChevronUpIcon className="h-4 w-4 text-cp-muted" />
-        </button>
+      <div className="fixed bottom-4 right-4 z-[90] flex flex-col items-end gap-2">
+        {stopFeedback ? (
+          <p
+            className={`max-w-xs rounded-lg px-3 py-2 text-xs shadow-lg ${
+              stopFeedback.type === 'error'
+                ? 'bg-red-500/15 text-red-700 dark:text-red-200'
+                : 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-200'
+            }`}
+          >
+            {stopFeedback.text}
+          </p>
+        ) : null}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleStopAll}
+            disabled={stoppingAll}
+            className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/10 px-3 py-2 text-[11px] font-semibold text-red-600 shadow-lg backdrop-blur-sm transition hover:bg-red-500/20 disabled:opacity-50 dark:text-red-300"
+            title={isAdmin ? 'Parar todos os jobs do sistema' : 'Parar todos os seus jobs'}
+          >
+            {stoppingAll ? 'Parando…' : isAdmin ? 'Parar tudo' : 'Parar todas'}
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleMinimized(false)}
+            className="inline-flex items-center gap-2 rounded-full border border-cp-accent/30 bg-cp-surface/95 px-4 py-2 text-xs font-semibold text-cp-text shadow-lg backdrop-blur-sm transition hover:border-cp-accent/50"
+            title="Expandir tarefas em andamento"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cp-accent opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-cp-accent" />
+            </span>
+            {jobs.length} tarefa{jobs.length !== 1 ? 's' : ''} IA
+            {waiting > 0 ? ` · ${waiting} aguardando` : ''}
+            <ChevronUpIcon className="h-4 w-4 text-cp-muted" />
+          </button>
+        </div>
       </div>
     )
   }
@@ -145,6 +182,17 @@ export default function BackgroundGenerationBanner() {
       aria-live="polite"
     >
       <div className="flex items-center justify-end gap-2">
+        {stopFeedback ? (
+          <p
+            className={`mr-auto max-w-[14rem] rounded-lg px-2 py-1 text-[11px] ${
+              stopFeedback.type === 'error'
+                ? 'bg-red-500/10 text-red-600 dark:text-red-300'
+                : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+            }`}
+          >
+            {stopFeedback.text}
+          </p>
+        ) : null}
         <button
           type="button"
           onClick={() => toggleMinimized(true)}

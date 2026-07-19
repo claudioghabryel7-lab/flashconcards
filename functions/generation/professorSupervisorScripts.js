@@ -1,7 +1,7 @@
 const admin = require('firebase-admin')
 const { sanitizeTopicKeyForFirestore, normalizeTopicKeyForStorage } = require('./topicKeyUtils')
 
-const MIN_FLASHCARDS = 40
+const MIN_FLASHCARDS = 30
 
 function getDb() {
   return admin.firestore()

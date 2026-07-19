@@ -1,6 +1,9 @@
-const { generateTrustedJson } = require('./trustedGeneration')
-const { buildFlashcardPrompt } = require('./unifiedGenerationPrompts')
-const { validateFlashcardsList, MIN_FLASHCARDS, MAX_FLASHCARDS } = require('./flashcardsValidate')
+const {
+  generateTrustedFlashcardsSet,
+  generateTrustedMaterial,
+  generateTrustedQuestoes,
+  auditTopicBundleConsistency,
+} = require('./unifiedContentGeneration')
 const {
   sanitizeTopicKeyForFirestore,
   normalizeTopicKeyForStorage,
@@ -16,10 +19,12 @@ const {
   isApiQuotaError,
   isJobCancelled,
   isJobCancelledError,
+  isPermanentGenerationError,
   pauseJobForApi,
   pauseJobForResume,
   touchActiveJob,
   clearActiveJob,
+  clearResumeQueue,
   shouldCheckpointTimeout,
   runWithHeartbeat,
   throwIfCancelled,
@@ -32,28 +37,9 @@ const CONTENT_STATUS = {
   UNAVAILABLE: 'indisponivel',
 }
 
-const BATCH_SIZE = 30
-
 function getDb() {
   const admin = require('firebase-admin')
   return admin.firestore()
-}
-
-function normalizeCardText(value = '') {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function dedupeFlashcards(items = []) {
-  const seen = new Set()
-  return items.filter((item) => {
-    const front = normalizeCardText(item.frente || item.pergunta)
-    if (!front || seen.has(front)) return false
-    seen.add(front)
-    return true
-  })
 }
 
 async function hasFlashcards(courseId, topicKey, disciplina, modulo) {
@@ -133,61 +119,14 @@ async function generateAndSaveFlashcards(courseId, topic, onHeartbeat, shouldAbo
 
   await deleteExistingFlashcards(courseId, topic.topicKey, topic.disciplina, topic.modulo)
 
-  let allItems = []
-  const firstBatchCount = Math.min(BATCH_SIZE, MAX_FLASHCARDS)
-
   const runBatch = async (label, fn) =>
     runWithHeartbeat(fn, () => onHeartbeat?.(label), JOB_HEARTBEAT_MS, shouldAbort)
 
-  await onHeartbeat?.('flashcards lote 1/2')
-  const batch1 = await runBatch('flashcards lote 1/2', () =>
-    generateTrustedJson(
-      buildFlashcardPrompt(meta, 1, 2, firstBatchCount, []),
-      { contentType: 'flashcards', rejectTruncatedJson: false },
-      {
-        contentType: 'flashcards',
-        disciplina: meta.disciplina,
-        banca: meta.banca,
-        concursoName: meta.concursoName || meta.courseName,
-        flashcardLimits: { min: 1, max: firstBatchCount + 5 },
-      },
-    ),
+  const allItems = await runBatch('flashcards auditados', () =>
+    generateTrustedFlashcardsSet(meta, {
+      onBatch: async (n, total) => onHeartbeat?.(`flashcards lote ${n}/${total}`),
+    }),
   )
-  allItems = dedupeFlashcards(batch1.flashcards || [])
-
-  if (allItems.length < MIN_FLASHCARDS) {
-    await onHeartbeat?.('flashcards lote 2/2')
-    const remaining = Math.min(MAX_FLASHCARDS - allItems.length, BATCH_SIZE)
-    const batch2 = await runBatch('flashcards lote 2/2', () =>
-      generateTrustedJson(
-        buildFlashcardPrompt(
-          meta,
-          2,
-          2,
-          remaining,
-          allItems.map((c) => c.frente || c.pergunta),
-        ),
-        { contentType: 'flashcards', rejectTruncatedJson: false },
-        {
-          contentType: 'flashcards',
-          disciplina: meta.disciplina,
-          banca: meta.banca,
-          concursoName: meta.concursoName || meta.courseName,
-          flashcardLimits: { min: 1, max: remaining + 5 },
-        },
-      ),
-    )
-    allItems = dedupeFlashcards([...allItems, ...(batch2.flashcards || [])])
-  }
-
-  allItems = allItems.slice(0, MAX_FLASHCARDS)
-  const finalValidation = validateFlashcardsList(allItems)
-  if (!finalValidation.ok) {
-    throw new Error(`Flashcards inválidos — ${finalValidation.errors.slice(0, 6).join(' ')}`)
-  }
-  if (allItems.length < MIN_FLASHCARDS) {
-    throw new Error(`Flashcards insuficientes para ${topic.topicoNome} (${allItems.length})`)
-  }
 
   const db = getDb()
   const flashcardsRef = db.collection(`courses/${courseId}/flashcards`)
@@ -243,11 +182,16 @@ async function generateAndSaveConteudo(courseId, topic, onHeartbeat, shouldAbort
 
   const parsed = await runWithHeartbeat(
     () =>
-      generateTrustedJson(topic.conteudoPrompt, { contentType: 'material', rejectTruncatedJson: true }, {
-        contentType: 'material',
+      generateTrustedMaterial({
+        prompt: topic.conteudoPrompt,
         disciplina: topic.disciplina,
+        topicoNome: topic.topicoNome,
+        topicKey: topic.topicKey,
         banca: topic.flashcardMeta?.banca,
         concursoName: topic.flashcardMeta?.courseName,
+        courseName: topic.flashcardMeta?.courseName,
+        cargo: topic.flashcardMeta?.cargo,
+        editalText: topic.flashcardMeta?.editalText,
       }),
     () => onHeartbeat?.('material'),
     JOB_HEARTBEAT_MS,
@@ -283,13 +227,19 @@ async function generateAndSaveQuestoes(courseId, topic, onHeartbeat, shouldAbort
 
   const parsed = await runWithHeartbeat(
     () =>
-      generateTrustedJson(topic.questoesPrompt, { contentType: 'questoes' }, {
-        contentType: 'questoes',
-        expectedCount: 50,
-        disciplina: topic.disciplina,
-        banca: topic.flashcardMeta?.banca,
-        concursoName: topic.flashcardMeta?.courseName,
-      }),
+      generateTrustedQuestoes(
+        {
+          prompt: topic.questoesPrompt,
+          disciplina: topic.disciplina,
+          topicoNome: topic.topicoNome,
+          topicKey: topic.topicKey,
+          banca: topic.flashcardMeta?.banca,
+          concursoName: topic.flashcardMeta?.courseName,
+          cargo: topic.flashcardMeta?.cargo,
+          editalText: topic.flashcardMeta?.editalText,
+        },
+        50,
+      ),
     () => onHeartbeat?.('questões'),
     JOB_HEARTBEAT_MS,
     shouldAbort,
@@ -339,7 +289,20 @@ async function publishTopicoStatus(courseId, topic) {
     { merge: true },
   )
 
-  const flashcardsSnap = await db.collection(`courses/${courseId}/flashcards`).get()
+  const flashcardsRef = db.collection(`courses/${courseId}/flashcards`)
+  let flashcardDocs = []
+  if (normalized) {
+    const byTopic = await flashcardsRef.where('topicKey', '==', normalized).get()
+    flashcardDocs = byTopic.docs
+  }
+  if (!flashcardDocs.length && topic.disciplina && topic.modulo) {
+    const byModulo = await flashcardsRef
+      .where('materia', '==', topic.disciplina)
+      .where('modulo', '==', topic.modulo)
+      .get()
+    flashcardDocs = byModulo.docs
+  }
+
   let batch = db.batch()
   let ops = 0
 
@@ -353,14 +316,8 @@ async function publishTopicoStatus(courseId, topic) {
     }
   }
 
-  for (const d of flashcardsSnap.docs) {
-    const data = d.data()
-    if (
-      normalizeTopicKeyForStorage(data.topicKey) === normalized ||
-      (data.materia === topic.disciplina && data.modulo === topic.modulo)
-    ) {
-      await queue(d.ref, { status, topicKey: normalized, updatedAt: ts })
-    }
+  for (const d of flashcardDocs) {
+    await queue(d.ref, { status, topicKey: normalized, updatedAt: ts })
   }
 
   const conteudoRef = db.doc(`courses/${courseId}/conteudosCompletos/${sanitized}`)
@@ -442,6 +399,30 @@ async function processSingleTopic(
     err.code = 'topic_incomplete'
     throw err
   }
+
+  await heartbeat('auditoria cruzada')
+  const db = getDb()
+  const normalized = normalizeTopicKeyForStorage(topic.topicKey)
+  const sanitized = sanitizeTopicKeyForFirestore(topic.topicKey)
+  let fcDocs = []
+  if (normalized) {
+    fcDocs = (await db.collection(`courses/${courseId}/flashcards`).where('topicKey', '==', normalized).get()).docs
+  }
+  const fcItems = fcDocs.map((d) => d.data())
+  const matSnap = await db.doc(`courses/${courseId}/conteudosCompletos/${sanitized}`).get()
+  const qSnap = await db.doc(`courses/${courseId}/questoesTopico/${sanitized}_nivel_1`).get()
+  await auditTopicBundleConsistency({
+    flashcards: fcItems,
+    materialSample: matSnap.exists ? JSON.stringify(matSnap.data()).slice(0, 8000) : '',
+    questoesSample: qSnap.exists ? JSON.stringify(qSnap.data()).slice(0, 8000) : '',
+    courseContext: {
+      banca: topic.flashcardMeta?.banca,
+      concursoName: topic.flashcardMeta?.courseName,
+      cargo: topic.flashcardMeta?.cargo,
+      disciplina: topic.disciplina,
+      topicoNome: topic.topicoNome,
+    },
+  })
 
   await publishTopicoStatus(courseId, topic)
   await updateTopicStep(courseId, targetDate, topic.topicKey, {
@@ -691,6 +672,28 @@ async function processGuiaMentoradoAutomation(
         })
         return { cancelled: true, publishedCount }
       }
+      if (isPermanentGenerationError(err)) {
+        const topicKey = topics[i]?.topicKey
+        if (targetDate && topicKey) {
+          await updateTopicStep(courseId, targetDate, topicKey, {
+            status: 'error',
+            error: err.message,
+          })
+          await updateDayStatus(courseId, targetDate, {
+            status: 'error',
+            reason: err.message,
+          })
+        }
+        await updateJob(userId, jobId, {
+          status: 'error',
+          progress: 100,
+          message: err.message || 'Erro permanente na automação.',
+          finishedAt: require('firebase-admin').firestore.FieldValue.serverTimestamp(),
+        })
+        await clearActiveJob(jobId)
+        await clearResumeQueue(jobId)
+        return { error: err.message, publishedCount }
+      }
       return pauseAutomationJob({
         err,
         userId,
@@ -709,15 +712,13 @@ async function processGuiaMentoradoAutomation(
   await clearActiveJob(jobId)
 
   if (targetDate) {
-    const statusSnap = await getDb().doc(`courses/${courseId}/mentoradoAutomation/${targetDate}`).get()
-    const totalPublished = statusSnap.exists ? statusSnap.data().publishedCount || 0 : publishedCount
     await finalizeDayStatus(courseId, targetDate, { errors: [], total })
     await updateDayStatus(courseId, targetDate, {
-      publishedCount: totalPublished,
-      status: totalPublished >= total ? 'done' : 'partial',
+      publishedCount,
+      status: publishedCount >= total ? 'done' : 'partial',
     })
-    if (totalPublished >= total) {
-      await markDayContentGenerated(courseId, targetDate, totalPublished, total)
+    if (publishedCount >= total) {
+      await markDayContentGenerated(courseId, targetDate, publishedCount, total)
       try {
         const { normalizeMentoradoAutomationConfig } = require('./guiaMentoradoConfig')
         const cfgSnap = await getDb().doc(`courses/${courseId}/config/guiaMentorado`).get()

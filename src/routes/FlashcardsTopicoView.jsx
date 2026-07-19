@@ -16,7 +16,6 @@ import {
 } from '../services/topicoFlashcardsService'
 import {
   MIN_TOPIC_FLASHCARDS,
-  MAX_TOPIC_FLASHCARDS,
 } from '../constants/topicFlashcards'
 import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
 import { formatModuloFromTopicKey } from '../utils/topicContentLinks'
@@ -225,7 +224,7 @@ const FlashcardsTopicoView = () => {
 
   const handleRegenerate = async () => {
     if (!isAdmin || regenerating || generating) return
-    if (!window.confirm(`Regenerar flashcards deste tópico? Serão criados de ${MIN_TOPIC_FLASHCARDS} a ${MAX_TOPIC_FLASHCARDS} cards focados apenas neste tópico.`)) {
+    if (!window.confirm(`Regenerar flashcards deste tópico? Serão criados exatamente ${MIN_TOPIC_FLASHCARDS} cards estratégicos (alta incidência na banca).`)) {
       return
     }
 
@@ -435,7 +434,7 @@ const FlashcardsTopicoView = () => {
         <div className="cp-card flex flex-col items-center py-16">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
           <p className="mt-4 text-sm font-medium text-cp-text">
-            {generating || regenerating ? `Gerando flashcards com IA (${MIN_TOPIC_FLASHCARDS}–${MAX_TOPIC_FLASHCARDS} por tópico)...` : 'Carregando...'}
+            {generating || regenerating ? `Gerando ${MIN_TOPIC_FLASHCARDS} flashcards estratégicos com IA...` : 'Carregando...'}
           </p>
           {generating && isAdmin && (
             <p className="mt-2 text-xs text-cp-muted">Após gerar, clique em Disponibilizar para liberar aos alunos.</p>

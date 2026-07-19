@@ -221,20 +221,10 @@ async function startDayAutomation(courseId, targetDate, userId, options = {}) {
   }
 
   if (await hasActiveMentoradoJobs(courseId, effectiveUserId)) {
-    const stillDay = await hasActiveAutomationJob(courseId, targetDate)
-    if (!stillDay) {
-      const backfillBusy = await getDb()
-        .collection(`users/${effectiveUserId}/generationJobs`)
-        .where('courseId', '==', courseId)
-        .where('status', 'in', ACTIVE_JOB_STATUSES)
-        .limit(40)
-        .get()
-      const hasBackfill = backfillBusy.docs.some(
-        (d) => d.data()?.jobType === 'guia_mentorado_backfill',
-      )
-      if (hasBackfill) {
-        return { started: false, reason: 'Backfill em andamento neste curso.', skipped: true }
-      }
+    return {
+      started: false,
+      reason: 'Automação mentorado em andamento neste curso.',
+      skipped: true,
     }
   }
 

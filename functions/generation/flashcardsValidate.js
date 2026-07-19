@@ -1,6 +1,7 @@
-const MIN_FLASHCARDS = 40
-const MAX_FLASHCARDS = 60
-const MIN_VERSO_CHARS = 40
+const MIN_FLASHCARDS = 30
+const MAX_FLASHCARDS = 30
+const FLASHCARD_BATCH_SIZE = 10
+const MIN_VERSO_CHARS = 35
 
 function validateFlashcardsList(flashcards = [], options = {}) {
   const errors = []
@@ -23,7 +24,7 @@ function validateFlashcardsList(flashcards = [], options = {}) {
 
     if (!frente) errors.push(`Card ${idx + 1}: frente vazia.`)
     if (!verso) errors.push(`Card ${idx + 1}: verso vazio.`)
-    if (idx < 15 && verso.length < MIN_VERSO_CHARS) {
+    if (idx < list.length && verso.length < MIN_VERSO_CHARS) {
       errors.push(`Card ${idx + 1}: verso muito curto (${verso.length} chars).`)
     }
     if (key && seen.has(key)) errors.push(`Card ${idx + 1}: frente duplicada.`)
@@ -37,4 +38,5 @@ module.exports = {
   validateFlashcardsList,
   MIN_FLASHCARDS,
   MAX_FLASHCARDS,
+  FLASHCARD_BATCH_SIZE,
 }

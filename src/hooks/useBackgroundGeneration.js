@@ -6,6 +6,8 @@ import {
   nudgeGenerationJobResume,
   shouldNudgeJob,
   STALL_NUDGE_MS,
+  syncCancellingJobsWithActive,
+  isJobNudgePaused,
 } from '../services/generationJobService'
 
 /** Observa jobs de geração ativos do usuário (segundo plano). */
@@ -27,7 +29,10 @@ export function useBackgroundGeneration() {
       reconcileStaleGenerationJobs(user.uid).catch(() => {})
     }, 60 * 1000)
 
-    const unsub = subscribeActiveGenerationJobs(user.uid, setJobs)
+    const unsub = subscribeActiveGenerationJobs(user.uid, (rows) => {
+      syncCancellingJobsWithActive(rows.map((job) => job.id))
+      setJobs(rows)
+    })
     return () => {
       clearInterval(interval)
       unsub?.()
@@ -38,6 +43,7 @@ export function useBackgroundGeneration() {
     if (!user?.uid || !jobs.length) return () => {}
 
     const nudgeEligible = (now) => {
+      if (isJobNudgePaused()) return
       jobs.forEach((job) => {
         if (!shouldNudgeJob(job, now)) return
         const fails = failStreakRef.current[job.id] || 0

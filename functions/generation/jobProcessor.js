@@ -1,7 +1,9 @@
 const admin = require('firebase-admin')
-const { generateTrustedJsonWithJobHeartbeat } = require('./trustedGeneration')
-const { buildFlashcardPrompt } = require('./unifiedGenerationPrompts')
-const { validateFlashcardsList, MIN_FLASHCARDS, MAX_FLASHCARDS } = require('./flashcardsValidate')
+const {
+  generateTrustedFlashcardsSet,
+  generateTrustedMaterial,
+  generateTrustedQuestoes,
+} = require('./unifiedContentGeneration')
 const {
   sanitizeTopicKeyForFirestore,
   normalizeTopicKeyForStorage,
@@ -14,7 +16,6 @@ const CONTENT_STATUS = {
 }
 
 const { sanitizeFlashcardText, sanitizeQuestaoAlternativas } = require('./aiTextFormatting')
-const BATCH_SIZE = 30
 
 function getDb() {
   return admin.firestore()
@@ -130,26 +131,29 @@ async function saveMergeDoc(courseId, collectionName, docId, parsed, extraFields
 }
 
 async function processConteudoCompleto(userId, jobId, courseId, serverPayload) {
-  const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
+  const { prompt, savePlan = {} } = serverPayload
   const { hydrateConteudoCompletoMaterial } = require('./materialFormatting')
+  const { runWithHeartbeat, isJobCancelled } = require('./generationJobResume')
   await updateJob(userId, jobId, { progress: 15, message: 'Gerando conteúdo confiável…' })
 
-  const parsed = await generateTrustedJsonWithJobHeartbeat(
-    userId,
-    jobId,
-    prompt,
-    {
-      contentType: 'material',
-      rejectTruncatedJson: true,
-      generationConfig: aiOptions.generationConfig,
+  const parsed = await runWithHeartbeat(
+    () =>
+      generateTrustedMaterial({
+        prompt,
+        topicKey: savePlan.topicKey,
+        disciplina: savePlan.disciplina,
+        topicoNome: savePlan.topicoNome,
+        banca: savePlan.banca,
+        concursoName: savePlan.concursoName,
+        courseName: savePlan.courseName,
+        cargo: savePlan.cargo,
+        editalText: savePlan.editalText,
+      }),
+    async () => {
+      await touchActiveJob(userId, jobId, { step: 'material' })
     },
-    'Gerando conteúdo confiável…',
-    {
-      contentType: 'material',
-      banca: savePlan.banca,
-      concursoName: savePlan.concursoName,
-      disciplina: savePlan.disciplina,
-    },
+    15000,
+    async () => isJobCancelled(userId, jobId),
   )
 
   const topicKey = savePlan.topicKey || ''
@@ -173,25 +177,32 @@ async function processConteudoCompleto(userId, jobId, courseId, serverPayload) {
 }
 
 async function processQuestoesTopico(userId, jobId, courseId, serverPayload) {
-  const { prompt, aiOptions = {}, savePlan = {} } = serverPayload
+  const { prompt, savePlan = {} } = serverPayload
+  const { runWithHeartbeat, isJobCancelled } = require('./generationJobResume')
   await updateJob(userId, jobId, { progress: 15, message: 'Gerando questões confiáveis…' })
 
-  const parsed = await generateTrustedJsonWithJobHeartbeat(
-    userId,
-    jobId,
-    prompt,
-    {
-      contentType: 'questoes',
-      generationConfig: aiOptions.generationConfig,
+  const expectedCount = savePlan.expectedCount ?? 50
+  const parsed = await runWithHeartbeat(
+    () =>
+      generateTrustedQuestoes(
+        {
+          prompt,
+          topicKey: savePlan.topicKey,
+          topicoNome: savePlan.topicoNome,
+          nivel: savePlan.nivel,
+          banca: savePlan.banca,
+          concursoName: savePlan.concursoName,
+          cargo: savePlan.cargo,
+          disciplina: savePlan.disciplina,
+          editalText: savePlan.editalText,
+        },
+        expectedCount,
+      ),
+    async () => {
+      await touchActiveJob(userId, jobId, { step: 'questoes' })
     },
-    'Gerando questões confiáveis…',
-    {
-      contentType: 'questoes',
-      expectedCount: savePlan.expectedCount ?? 50,
-      banca: savePlan.banca,
-      concursoName: savePlan.concursoName,
-      disciplina: savePlan.disciplina,
-    },
+    15000,
+    async () => isJobCancelled(userId, jobId),
   )
 
   await updateJob(userId, jobId, { progress: 85, message: 'Salvando questões…' })
@@ -288,103 +299,25 @@ async function processQuestoesIncidencia(userId, jobId, courseId, serverPayload)
 }
 
 async function processFlashcardsTopico(userId, jobId, courseId, serverPayload) {
-  const { aiOptions = {}, savePlan = {} } = serverPayload
+  const { savePlan = {} } = serverPayload
   const meta = savePlan.flashcardMeta || {}
 
-  await updateJob(userId, jobId, { progress: 10, message: 'Preparando flashcards…' })
+  await updateJob(userId, jobId, { progress: 10, message: 'Preparando 30 flashcards estratégicos…' })
 
   const normalizedTopicKey = normalizeTopicKeyForStorage(meta.topicKey)
   await deleteExistingFlashcards(courseId, normalizedTopicKey, meta.disciplina, meta.modulo)
 
   const baseMeta = { ...meta, editalText: meta.editalText || '' }
-  let allItems = []
 
-  const firstBatchCount = Math.min(BATCH_SIZE, MAX_FLASHCARDS)
-  await updateJob(userId, jobId, { progress: 20, message: 'Gerando flashcards (lote 1)…' })
-
-  const batch1Prompt = buildFlashcardPrompt(baseMeta, 1, 2, firstBatchCount, [])
-  const batch1 = await generateTrustedJsonWithJobHeartbeat(
-    userId,
-    jobId,
-    batch1Prompt,
-    { contentType: 'flashcards', rejectTruncatedJson: false },
-    'Gerando flashcards confiáveis (lote 1)…',
-    {
-      contentType: 'flashcards',
-      disciplina: meta.disciplina,
-      banca: meta.banca,
-      concursoName: meta.concursoName || meta.courseName,
-      flashcardLimits: { min: 1, max: firstBatchCount + 5 },
+  const allItems = await generateTrustedFlashcardsSet(baseMeta, {
+    onBatch: async (n, total) => {
+      await updateJob(userId, jobId, {
+        progress: Math.min(10 + n * 25, 80),
+        message: `Flashcards auditados — lote ${n}/${total}…`,
+      })
+      await touchActiveJob(userId, jobId, { step: `flashcards_${n}` })
     },
-  )
-  allItems = dedupeFlashcards(batch1.flashcards || [])
-
-  if (allItems.length < MIN_FLASHCARDS) {
-    await updateJob(userId, jobId, { progress: 45, message: 'Gerando flashcards (lote 2)…' })
-    const remaining = Math.min(MAX_FLASHCARDS - allItems.length, BATCH_SIZE)
-    const batch2Prompt = buildFlashcardPrompt(
-      baseMeta,
-      2,
-      2,
-      remaining,
-      allItems.map((c) => c.frente || c.pergunta),
-    )
-    const batch2 = await generateTrustedJsonWithJobHeartbeat(
-      userId,
-      jobId,
-      batch2Prompt,
-      { contentType: 'flashcards', rejectTruncatedJson: false },
-      'Gerando flashcards confiáveis (lote 2)…',
-      {
-        contentType: 'flashcards',
-        disciplina: meta.disciplina,
-        banca: meta.banca,
-        concursoName: meta.concursoName || meta.courseName,
-        flashcardLimits: { min: 1, max: remaining + 5 },
-      },
-    )
-    allItems = dedupeFlashcards([...allItems, ...(batch2.flashcards || [])])
-  }
-
-  if (allItems.length < MIN_FLASHCARDS) {
-    await updateJob(userId, jobId, { progress: 65, message: 'Gerando flashcards (lote 3)…' })
-    const remaining = Math.min(MAX_FLASHCARDS - allItems.length, BATCH_SIZE)
-    const batch3Prompt = buildFlashcardPrompt(
-      baseMeta,
-      3,
-      3,
-      remaining,
-      allItems.map((c) => c.frente || c.pergunta),
-    )
-    const batch3 = await generateTrustedJsonWithJobHeartbeat(
-      userId,
-      jobId,
-      batch3Prompt,
-      { contentType: 'flashcards', rejectTruncatedJson: false },
-      'Gerando flashcards confiáveis (lote 3)…',
-      {
-        contentType: 'flashcards',
-        disciplina: meta.disciplina,
-        banca: meta.banca,
-        concursoName: meta.concursoName || meta.courseName,
-        flashcardLimits: { min: 1, max: remaining + 5 },
-      },
-    )
-    allItems = dedupeFlashcards([...allItems, ...(batch3.flashcards || [])])
-  }
-
-  allItems = allItems.slice(0, MAX_FLASHCARDS)
-
-  const finalValidation = validateFlashcardsList(allItems)
-  if (!finalValidation.ok) {
-    throw new Error(`Flashcards inválidos — ${finalValidation.errors.slice(0, 6).join(' ')}`)
-  }
-
-  if (allItems.length < MIN_FLASHCARDS) {
-    throw new Error(
-      `A IA gerou apenas ${allItems.length} flashcards. São necessários no mínimo ${MIN_FLASHCARDS}.`,
-    )
-  }
+  })
 
   await updateJob(userId, jobId, { progress: 85, message: 'Salvando flashcards…' })
 
@@ -448,6 +381,8 @@ const {
   clearActiveJob,
   pauseJobForResume,
   startJobSelfKeepAlive,
+  isJobCancelled,
+  generateAiJsonWithJobHeartbeat,
 } = require('./generationJobResume')
 const { tryAcquireServerJobSlot, MAX_CONCURRENT_SERVER_JOBS } = require('./generationJobConcurrency')
 
@@ -456,6 +391,12 @@ const CONCURRENCY_RETRY_MS = 15 * 1000
 async function processGenerationJob(userId, jobId, jobData) {
   const db = admin.firestore()
   const jobRef = db.doc(`users/${userId}/generationJobs/${jobId}`)
+
+  if (await isJobCancelled(userId, jobId)) {
+    await clearActiveJob(jobId)
+    await clearResumeQueue(jobId)
+    return { cancelled: true, reason: 'cancelled' }
+  }
 
   // Slot ANTES de marcar running — evita N "running" sem vaga e bypass no resume
   const slot = await tryAcquireServerJobSlot(userId, jobId, jobData.jobType)
@@ -494,7 +435,10 @@ async function processGenerationJob(userId, jobId, jobData) {
   if (jobData.status === 'pending') {
     const claimed = await db.runTransaction(async (tx) => {
       const snap = await tx.get(jobRef)
-      if (!snap.exists || snap.data().status !== 'pending') return false
+      if (!snap.exists) return false
+      const current = snap.data() || {}
+      if (current.status === 'cancelled') return false
+      if (current.status !== 'pending') return false
       tx.update(jobRef, {
         status: 'running',
         message: 'Processando no servidor…',
@@ -593,6 +537,11 @@ async function processGenerationJob(userId, jobId, jobData) {
   let stopKeepAlive = () => {}
   try {
     if (jobData.status !== 'pending') {
+      if (await isJobCancelled(userId, jobId)) {
+        await clearActiveJob(jobId)
+        await clearResumeQueue(jobId)
+        return { cancelled: true, reason: 'cancelled' }
+      }
       await updateJob(userId, jobId, {
         status: 'running',
         progress: 5,
@@ -650,13 +599,25 @@ async function processGenerationJob(userId, jobId, jobData) {
         if (outcome.paused) {
           return outcome
         }
+        if (outcome.error) {
+          await clearResumeQueue(jobId)
+          return outcome
+        }
         await clearResumeQueue(jobId)
-        // Marca o dia só após sucesso — permite retry no cron se o job falhar antes
+        // Marca cron diário só quando conclui o dia de HOJE — catch-up/backfill não alteram lastDailyRunDayKey
         try {
           const targetDate = serverPayload?.targetDate
-          if (targetDate) {
+          const triggeredBy =
+            jobData.metadata?.triggeredBy ||
+            serverPayload?.triggeredBy ||
+            serverPayload?.metadata?.triggeredBy
+          if (targetDate && triggeredBy === 'daily_cron') {
             const { markDailyRun } = require('./guiaMentoradoDaily')
-            await markDailyRun(courseId, targetDate, { lastError: null })
+            const { getTodayKeyInSaoPaulo } = require('./guiaMentoradoShared')
+            const todayKey = getTodayKeyInSaoPaulo()
+            if (targetDate === todayKey) {
+              await markDailyRun(courseId, todayKey, { lastError: null })
+            }
           }
         } catch (markErr) {
           console.warn('[jobProcessor] markDailyRun:', markErr?.message || markErr)
