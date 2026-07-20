@@ -762,9 +762,45 @@ async function processSingleMentoradoTopic({
     )
     try {
       const { filterValidQuestoes } = await import('../utils/questoesQuality')
-      const { ok, dropped } = filterValidQuestoes(questoesParsed?.questoes || [], { minKeep: 1 })
+      const tipoProva = examCtx.tipoProva || courseContext?.tipoProva || 'ABCD'
+      let { ok, dropped } = filterValidQuestoes(questoesParsed?.questoes || questoesParsed, {
+        tipoProva,
+        minKeep: 1,
+      })
       if (dropped) {
         console.warn(`[mentorado] ${dropped} questão(ões) inválida(s) descartada(s) em ${topicKey}`)
+      }
+      // Reparo automático se veio vazio/inválido
+      if (!ok.length) {
+        await updateProgress(pctBase + 4, `${label}: reparando questões (formato)…`)
+        const repair = await generateAiJson(
+          `Reescreva as questões abaixo em JSON VÁLIDO para concurso.
+
+TIPO DE PROVA: ${tipoProva}
+DISCIPLINA: ${disciplina}
+TÓPICO: ${topic.topicoNome || topicKey}
+
+ENTRADA (pode estar mal formatada):
+${JSON.stringify(questoesParsed).slice(0, 12000)}
+
+RETORNE APENAS:
+{ "questoes": [ { "enunciado": "...", "alternativas": {"A":"...","B":"...","C":"...","D":"...","E":"..."}, "correta": "A", "gabaritoComentado": "..." } ] }
+
+REGRAS:
+- correta DEVE ser uma letra A-E (ou C/E se Certo/Errado)
+- alternativas com texto não vazio
+- pelo menos 3 questões`,
+          {
+            courseId,
+            trustedGeneration: true,
+            useGoogleSearch: false,
+            generationConfig: { maxOutputTokens: 16000, temperature: 0.1 },
+          },
+        )
+        ;({ ok, dropped } = filterValidQuestoes(repair?.questoes || repair, {
+          tipoProva,
+          minKeep: 1,
+        }))
       }
       questoesParsed = { ...questoesParsed, questoes: ok }
     } catch (filterErr) {
@@ -1222,18 +1258,28 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
   await updateProgress(25, 'Montando guia (bot: tópicos + 5 dias de incidência)…')
 
   if (!config.dataProva) {
-    throw new Error(
-      'Informe a data da prova no Guia Mentorado. O bot precisa dela para calcular até o dia da prova.',
-    )
+    // Sem data: usa janela padrão (não bloqueia o bot)
+    console.warn('[mentorado] cronograma sem dataProva — usando janela padrão')
   }
 
   const { buildDeterministicMentoradoCronograma } = await import('../utils/buildMentoradoCronograma')
-  const { cronograma: days, meta } = buildDeterministicMentoradoCronograma({
-    edital,
-    today,
-    planningEnd,
-    config,
-  })
+  let built
+  try {
+    built = buildDeterministicMentoradoCronograma({
+      edital,
+      today,
+      planningEnd,
+      config: {
+        ...config,
+        // Se não tiver data, o builder usa planningEnd (90 dias) sem exigir dataProva
+        dataProva: config.dataProva || planningEnd.format('YYYY-MM-DD'),
+      },
+    })
+  } catch (buildErr) {
+    buildErr.message = buildErr.message || 'Falha ao montar o guia mentorado.'
+    throw buildErr
+  }
+  const { cronograma: days, meta } = built
 
   if (!Array.isArray(days) || days.length < 1) {
     const err = new Error('Não foi possível montar dias de cronograma a partir do edital.')

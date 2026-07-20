@@ -459,9 +459,8 @@ export default function AdminGuiaMentorado() {
   const handleCronograma = () =>
     withAction('cronograma', async (userId) => {
       if (!form.dataProva) {
-        throw new Error(
-          'Informe a data da prova antes de gerar. O bot monta o guia até 5 dias antes da prova; os últimos 5 dias são incidência.',
-        )
+        // aviso, mas não bloqueia — usa janela padrão no bot
+        console.warn('[AdminGuiaMentorado] gerando sem dataProva — janela padrão')
       }
       setProgress('Verificando edital verticalizado…')
       const edital = await loadEditalVerticalizado(courseId)

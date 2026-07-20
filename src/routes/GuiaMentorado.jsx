@@ -277,8 +277,8 @@ const GuiaMentorado = () => {
 
       setMessage(
         usingDefaultWindow
-          ? `🤖 Gerando cronograma (${DEFAULT_PLANNING_DAYS} dias)… Mantenha esta aba aberta.`
-          : '🤖 Gerando cronograma… Mantenha esta aba aberta.',
+          ? `📅 Montando guia (${DEFAULT_PLANNING_DAYS} dias, bot sem IA)… Mantenha esta aba aberta.`
+          : '📅 Montando guia até a prova (bot sem IA)… Mantenha esta aba aberta.',
       )
 
       const { jobId, promise } = await startGuiaMentoradoCronogramaGeneration({
@@ -286,6 +286,7 @@ const GuiaMentorado = () => {
         courseId: selectedCourseId,
         config: {
           ...config,
+          dataProva: config.dataProva || null,
           autoGerarConteudo: automation.enabled,
           automation: {
             enabled: automation.enabled,
@@ -298,16 +299,20 @@ const GuiaMentorado = () => {
         },
       })
 
-      setMessage(`⏳ Cronograma em andamento (job ${String(jobId).slice(0, 8)}…)…`)
+      setMessage(`⏳ Guia em andamento (job ${String(jobId).slice(0, 8)}…)…`)
       const result = await promise
       setMessage(
-        `✅ Cronograma gerado: ${result?.totalDays || 0} dia(s) salvos.`,
+        `✅ Guia gerado a partir de hoje: ${result?.totalDays || 0} dia(s).`,
       )
 
       setTimeout(() => setMessage(''), 12000)
     } catch (error) {
       console.error('Erro ao gerar cronograma:', error)
-      alert('Erro ao gerar cronograma: ' + (error.message || String(error)))
+      const real =
+        error?.cause?.message ||
+        error?.message ||
+        String(error)
+      alert('Erro ao gerar o Guia Mentorado: ' + real)
       setMessage('')
     } finally {
       setGenerating(false)

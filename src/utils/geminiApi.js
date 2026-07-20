@@ -59,7 +59,31 @@ export function formatAiErrorForUser(error) {
   if (isGeminiQuotaError(error)) {
     return 'Cota da API Gemini esgotada ou limite gratuito atingido. Tente novamente mais tarde ou configure outra chave.'
   }
-  return 'Falha na geração com IA. Tente novamente.'
+
+  const code = String(error?.code || '')
+  const msg = String(error?.message || '').trim()
+
+  // Erros de negócio / bot (já em português) — não mascarar
+  if (
+    code === 'missing_data_prova' ||
+    code === 'prova_passada' ||
+    code === 'cronograma_empty' ||
+    code === 'cronograma_invalid' ||
+    code === 'questoes_invalid' ||
+    code === 'flashcards_invalid' ||
+    /data da prova|edital|cronograma|tópico|questão|questao|firestore|permiss/i.test(msg)
+  ) {
+    return msg || 'Falha na operação. Tente novamente.'
+  }
+
+  if (msg && msg.length >= 12 && msg.length <= 280 && !/^error:/i.test(msg)) {
+    // Mensagem útil do processador (PT) — preservar
+    if (/[áàâãéêíóôõúç]/i.test(msg) || /\b(gere|informe|ajuste|salve|tente|falha|erro)\b/i.test(msg)) {
+      return msg
+    }
+  }
+
+  return msg && msg.length < 200 ? msg : 'Falha na geração com IA. Tente novamente.'
 }
 
 function stripConversationalWrapper(text = '') {

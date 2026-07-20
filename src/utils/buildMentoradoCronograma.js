@@ -170,14 +170,6 @@ export function buildDeterministicMentoradoCronograma({
   const start = dayjs(today).startOf('day')
   const end = dayjs(planningEnd).startOf('day')
 
-  if (!config.dataProva) {
-    const err = new Error(
-      'Informe a data da prova no Guia Mentorado. O bot calcula o cronograma até o dia da prova.',
-    )
-    err.code = 'missing_data_prova'
-    throw err
-  }
-
   if (end.isBefore(start)) {
     const err = new Error('A data da prova já passou. Atualize a data da prova para gerar o guia.')
     err.code = 'prova_passada'

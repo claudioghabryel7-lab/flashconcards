@@ -45,6 +45,7 @@ async function executeJob(userId, jobId, task, fingerprint = null) {
     }).catch(() => {})
     const wrapped = new Error(userMessage)
     wrapped.cause = error
+    wrapped.code = error?.code || null
     wrapped.isAiGenerationError = true
     throw wrapped
   } finally {
