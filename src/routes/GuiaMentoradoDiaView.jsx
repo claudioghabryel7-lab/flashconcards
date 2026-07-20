@@ -137,7 +137,33 @@ const GuiaMentoradoDiaView = () => {
         completed: false,
       })
     }
-    
+
+    if (dayType === 'incidencia' || dayType === 'reta_final') {
+      const materiasInc = dayInfo.materias || []
+      let t = 8
+      if (!materiasInc.length) {
+        autoSchedule.push({
+          startTime: '08:00',
+          endTime: '12:00',
+          activity: 'Revisão por incidência (todas as matérias)',
+          type: 'incidencia',
+          completed: false,
+        })
+      } else {
+        materiasInc.forEach((materia) => {
+          const nome = materia?.disciplina || materia?.materia || 'Matéria'
+          autoSchedule.push({
+            startTime: `${String(t).padStart(2, '0')}:00`,
+            endTime: `${String(Math.min(t + 2, 20)).padStart(2, '0')}:00`,
+            activity: `Incidência: ${nome}`,
+            type: 'incidencia',
+            completed: false,
+          })
+          t = Math.min(t + 2, 18)
+        })
+      }
+    }
+
     if (dayType === 'simulado') {
       autoSchedule.push({
         startTime: '08:00',

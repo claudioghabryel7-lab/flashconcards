@@ -1,12 +1,14 @@
 /**
- * Cronograma determinístico do Guia Mentorado — sem IA / sem Google Search.
- * Cobre todos os tópicos do edital até a data da prova (+ redação, TAF, reta final).
+ * Bot do Guia Mentorado — sem IA / sem Google Search.
+ * Distribui TODOS os tópicos do edital até 5 dias antes da prova;
+ * nos últimos 5 dias agenda revisão por incidência (todas as matérias).
  */
 import dayjs from 'dayjs'
 import { formatTopicoAsModulo } from './editalVerticalizadoLoader'
 
 const MAX_TOPICS_PER_DAY = 4
-const RETA_FINAL_DAYS = 7
+/** Últimos N dias = revisão de incidência (não estudo de tópico novo). */
+export const INCIDENCIA_FINAL_DAYS = 5
 
 /** Agrupa disciplinas “afins” pelo prefixo (ex.: Direito*). */
 function affinityKey(disciplinaNome = '') {
@@ -26,7 +28,6 @@ function affinityKey(disciplinaNome = '') {
 
 /**
  * Lista plana de todos os tópicos do edital verticalizado.
- * @returns {{ disciplina: string, topico: string, numero: string }[]}
  */
 export function flattenEditalTopics(edital) {
   const out = []
@@ -51,11 +52,26 @@ export function flattenEditalTopics(edital) {
   return out
 }
 
+/** Nomes únicos das disciplinas do edital (ordem do edital). */
+export function listEditalDisciplinas(edital) {
+  const names = []
+  const seen = new Set()
+  for (const disc of edital?.disciplinas || []) {
+    const nome = String(disc?.nome || '').trim()
+    if (!nome) continue
+    const key = nome.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    names.push(nome)
+  }
+  return names
+}
+
 function buildDateKeys(today, planningEnd) {
   const keys = []
-  let cursor = today.startOf('day')
-  const end = planningEnd.startOf('day')
-  if (!end.isAfter(cursor) && !end.isSame(cursor)) {
+  let cursor = dayjs(today).startOf('day')
+  const end = dayjs(planningEnd).startOf('day')
+  if (end.isBefore(cursor)) {
     return [cursor.format('YYYY-MM-DD')]
   }
   while (cursor.isBefore(end) || cursor.isSame(end)) {
@@ -114,7 +130,6 @@ function distributeTopics(topics, bucketCount) {
     }
   }
 
-  // Sobra (se algum dia ficou vazio no meio): empurra para o próximo com espaço
   const leftover = queues.flat()
   for (const topic of leftover) {
     let placed = false
@@ -125,16 +140,26 @@ function distributeTopics(topics, bucketCount) {
         break
       }
     }
-    if (!placed) {
-      buckets[buckets.length - 1].push(topic)
-    }
+    if (!placed) buckets[buckets.length - 1].push(topic)
   }
 
   return buckets
 }
 
+/** Distribui todas as disciplinas nos N dias de incidência. */
+function distributeDisciplinas(disciplinas, dayCount) {
+  const buckets = Array.from({ length: Math.max(1, dayCount) }, () => [])
+  if (!disciplinas.length) return buckets
+  disciplinas.forEach((nome, idx) => {
+    buckets[idx % buckets.length].push(nome)
+  })
+  return buckets
+}
+
 /**
- * Monta o array no formato esperado pelo processador (sem IA).
+ * Monta o cronograma (bot determinístico).
+ * - Estudo de tópicos: hoje → (prova − 5 dias)
+ * - Últimos 5 dias: incidência de TODAS as matérias
  */
 export function buildDeterministicMentoradoCronograma({
   edital,
@@ -144,6 +169,21 @@ export function buildDeterministicMentoradoCronograma({
 }) {
   const start = dayjs(today).startOf('day')
   const end = dayjs(planningEnd).startOf('day')
+
+  if (!config.dataProva) {
+    const err = new Error(
+      'Informe a data da prova no Guia Mentorado. O bot calcula o cronograma até o dia da prova.',
+    )
+    err.code = 'missing_data_prova'
+    throw err
+  }
+
+  if (end.isBefore(start)) {
+    const err = new Error('A data da prova já passou. Atualize a data da prova para gerar o guia.')
+    err.code = 'prova_passada'
+    throw err
+  }
+
   const dateKeys = buildDateKeys(start, end)
   if (!dateKeys.length) {
     throw new Error('Janela de planejamento inválida para o cronograma.')
@@ -151,22 +191,25 @@ export function buildDeterministicMentoradoCronograma({
 
   const topics = flattenEditalTopics(edital)
   if (!topics.length) {
-    throw new Error('Edital sem tópicos para montar o cronograma.')
+    throw new Error('Edital sem tópicos para montar o cronograma. Gere o edital verticalizado primeiro.')
   }
 
+  const disciplinas = listEditalDisciplinas(edital)
   const hasRedacao = Boolean(config.hasRedacao)
   const hasTAF = Boolean(config.hasTAF)
   const tafExercicios = Array.isArray(config.tafExercicios) ? config.tafExercicios.filter(Boolean) : []
 
-  const retaCount = Math.min(RETA_FINAL_DAYS, Math.max(0, dateKeys.length - 1))
-  const studyDateKeys = dateKeys.slice(0, Math.max(1, dateKeys.length - retaCount))
-  const retaDateKeys = dateKeys.slice(studyDateKeys.length)
+  // Últimos 5 dias = incidência; o restante = estudo de tópicos (até 5 dias antes da prova)
+  const incidenciaCount = Math.min(INCIDENCIA_FINAL_DAYS, Math.max(0, dateKeys.length - 1))
+  const studyDateKeys = dateKeys.slice(0, Math.max(1, dateKeys.length - incidenciaCount))
+  const incidenciaDateKeys = dateKeys.slice(studyDateKeys.length)
 
-  const buckets = distributeTopics(topics, studyDateKeys.length)
+  const topicBuckets = distributeTopics(topics, studyDateKeys.length)
+  const disciplinaBuckets = distributeDisciplinas(disciplinas, incidenciaDateKeys.length || 1)
   const cronograma = []
 
   studyDateKeys.forEach((data, idx) => {
-    const materias = (buckets[idx] || []).map((t) => ({
+    const materias = (topicBuckets[idx] || []).map((t) => ({
       disciplina: t.disciplina,
       topico: t.topico,
     }))
@@ -186,11 +229,10 @@ export function buildDeterministicMentoradoCronograma({
     if (tipo === 'redacao') descParts.push('Treino de redação da semana')
     if (tipo === 'taf') descParts.push(tafExercicio ? `TAF: ${tafExercicio}` : 'Dia de TAF + estudo')
     if (!descParts.length) {
-      descParts.push(
-        materias.length
-          ? `Estudo: ${materias.map((m) => m.disciplina).filter((v, i, a) => a.indexOf(v) === i).join(', ')}`
-          : 'Dia de estudo',
-      )
+      const discs = materias
+        .map((m) => m.disciplina)
+        .filter((v, i, a) => a.indexOf(v) === i)
+      descParts.push(discs.length ? `Estudo: ${discs.join(', ')}` : 'Dia de estudo')
     }
 
     cronograma.push({
@@ -203,17 +245,24 @@ export function buildDeterministicMentoradoCronograma({
     })
   })
 
-  retaDateKeys.forEach((data, idx) => {
-    const isSimulado = idx % 2 === 1
+  incidenciaDateKeys.forEach((data, idx) => {
+    const discs = disciplinaBuckets[idx] || []
+    const materias = discs.map((disciplina) => ({
+      disciplina,
+      topico: 'Incidência / revisão da matéria',
+      incidencia: true,
+    }))
+
     cronograma.push({
       data,
-      tipo: isSimulado ? 'simulado' : 'reta_final',
+      tipo: 'incidencia',
       fase: 'reta_final',
-      materias: [],
+      materias,
       taf_exercicio: '',
-      descricao: isSimulado
-        ? 'Simulado geral — revisão estratégica'
-        : 'Reta final — revisão dos pontos críticos',
+      descricao: discs.length
+        ? `Revisão por incidência: ${discs.join(', ')}`
+        : 'Revisão por incidência',
+      incidencia: true,
     })
   })
 
@@ -222,11 +271,13 @@ export function buildDeterministicMentoradoCronograma({
     meta: {
       totalDays: cronograma.length,
       totalTopics: topics.length,
+      totalDisciplinas: disciplinas.length,
       studyDays: studyDateKeys.length,
-      retaFinalDays: retaDateKeys.length,
+      incidenciaDays: incidenciaDateKeys.length,
       hasRedacao,
       hasTAF,
-      source: 'deterministic',
+      dataProva: config.dataProva,
+      source: 'bot_deterministic',
     },
   }
 }

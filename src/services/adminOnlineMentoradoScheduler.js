@@ -128,10 +128,18 @@ export async function tickMentoradoDailyOnline(adminUserId) {
 
         const userId = automation.automationUserId || adminUserId
 
-        // 1) Sem dia no cronograma → gera cronograma determinístico (1 curso/tick)
+        // 1) Sem dia no cronograma → gera bot (precisa data da prova)
         const hasDay = await courseHasCronogramaDay(courseId, todayKey)
         if (!hasDay) {
           const config = await loadMentoradoConfigForCronograma(courseId)
+          if (!config.dataProva && !automation.dataProva) {
+            results.push({
+              courseId,
+              skipped: true,
+              reason: 'sem_data_prova',
+            })
+            continue
+          }
           const { jobId, promise, duplicate } = await startGuiaMentoradoCronogramaGeneration({
             userId,
             courseId,

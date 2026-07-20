@@ -1219,7 +1219,13 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
     )
   }
 
-  await updateProgress(25, 'Montando cronograma (edital completo, sem IA)…')
+  await updateProgress(25, 'Montando guia (bot: tópicos + 5 dias de incidência)…')
+
+  if (!config.dataProva) {
+    throw new Error(
+      'Informe a data da prova no Guia Mentorado. O bot precisa dela para calcular até o dia da prova.',
+    )
+  }
 
   const { buildDeterministicMentoradoCronograma } = await import('../utils/buildMentoradoCronograma')
   const { cronograma: days, meta } = buildDeterministicMentoradoCronograma({
@@ -1253,6 +1259,7 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
       materias: day.materias || [],
       taf_exercicio: day.taf_exercicio || '',
       descricao: day.descricao || '',
+      ...(day.incidencia ? { incidencia: true } : {}),
     }
   }
 

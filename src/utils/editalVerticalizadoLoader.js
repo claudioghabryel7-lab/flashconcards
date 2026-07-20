@@ -72,39 +72,51 @@ export function normalizeFlashcard(card) {
 
 /**
  * Carrega edital verticalizado completo (com partes, se houver).
+ * Tenta `principal` e, se vazio, fallback `atual` (pipeline legado do admin).
  */
 export async function loadEditalVerticalizado(courseId) {
   const resolvedId = courseId || 'alego-default'
-  const editalRef = doc(db, 'courses', resolvedId, 'editalVerticalizado', 'principal')
-  const snapshot = await getDoc(editalRef)
 
-  if (!snapshot.exists()) return null
+  async function readDoc(docId) {
+    const snapshot = await getDoc(doc(db, 'courses', resolvedId, 'editalVerticalizado', docId))
+    if (!snapshot.exists()) return null
+    const data = snapshot.data() || {}
 
-  const data = snapshot.data()
+    // Legado: alguns docs usam "materias" em vez de "disciplinas"
+    if (!data.disciplinas?.length && Array.isArray(data.materias) && data.materias.length) {
+      data.disciplinas = data.materias.map((m) => ({
+        nome: m.nome || m.disciplina || '',
+        topicos: m.topicos || [],
+      }))
+    }
 
-  if (data.temPartes && data.totalPartes > 1) {
-    const partesRef = collection(
-      db,
-      'courses',
-      resolvedId,
-      'editalVerticalizado',
-      'principal',
-      'partes'
-    )
-    const partesSnapshot = await getDocs(query(partesRef, orderBy('parte')))
-    const todasDisciplinas = [...(data.disciplinas || [])]
+    if (data.temPartes && data.totalPartes > 1) {
+      const partesRef = collection(
+        db,
+        'courses',
+        resolvedId,
+        'editalVerticalizado',
+        docId,
+        'partes',
+      )
+      const partesSnapshot = await getDocs(query(partesRef, orderBy('parte')))
+      const todasDisciplinas = [...(data.disciplinas || [])]
 
-    partesSnapshot.forEach((parteDoc) => {
-      const parteData = parteDoc.data()
-      if (parteData.disciplinas && Array.isArray(parteData.disciplinas)) {
-        todasDisciplinas.push(...parteData.disciplinas)
-      }
-    })
+      partesSnapshot.forEach((parteDoc) => {
+        const parteData = parteDoc.data()
+        if (parteData.disciplinas && Array.isArray(parteData.disciplinas)) {
+          todasDisciplinas.push(...parteData.disciplinas)
+        }
+      })
 
-    return { ...data, disciplinas: todasDisciplinas }
+      return { ...data, disciplinas: todasDisciplinas, _sourceDoc: docId }
+    }
+
+    if (!data.disciplinas?.length) return null
+    return { ...data, _sourceDoc: docId }
   }
 
-  return data
+  return (await readDoc('principal')) || (await readDoc('atual'))
 }
 
 /**

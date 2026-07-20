@@ -174,7 +174,8 @@ export async function prepareMentoradoDayAutomation({
   }
 
   const tipo = dayEntry.type || dayEntry.tipo || 'estudo'
-  if (tipo === 'simulado' || tipo === 'descanso') {
+  // Simulado / descanso / incidência: sem geração de material de tópico
+  if (tipo === 'simulado' || tipo === 'descanso' || tipo === 'incidencia' || tipo === 'reta_final') {
     return { ok: false, reason: 'skip_day_type', targetDate, tipo }
   }
 

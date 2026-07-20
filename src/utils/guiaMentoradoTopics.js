@@ -112,12 +112,19 @@ export function extractTopicsFromCronogramaDay(dayEntry = {}, editalVerticalizad
   const tipo = dayEntry.tipo || dayEntry.type || 'estudo'
   const dayKey = dayEntry.data || dayEntry.dayKey || null
 
-  if (tipo === 'simulado' || tipo === 'descanso') return []
+  if (
+    tipo === 'simulado' ||
+    tipo === 'descanso' ||
+    tipo === 'incidencia' ||
+    tipo === 'reta_final'
+  ) {
+    return []
+  }
 
   const map = new Map()
   materias.forEach((rawItem) => {
     const materiaItem = normalizeMateriaItem(rawItem)
-    if (!materiaItem) return
+    if (!materiaItem || materiaItem.incidencia) return
     const resolved = resolveCronogramaMateria(editalVerticalizado, materiaItem)
     if (!resolved?.topicKey || map.has(resolved.topicKey)) return
     map.set(resolved.topicKey, {

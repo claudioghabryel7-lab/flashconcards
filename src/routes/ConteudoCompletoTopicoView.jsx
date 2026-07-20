@@ -1013,10 +1013,10 @@ REGRAS:
       })
       setProgress(75)
       const payload = {
-        ...parsed,
+          ...parsed,
         materia: parsed.materia || parsed.titulo || resolvedTopicKey,
         numero: parsed.numero || resolvedTopicKey,
-        topicKey: resolvedTopicKey,
+          topicKey: resolvedTopicKey,
         status: CONTENT_STATUS.UNAVAILABLE,
         updatedAt: serverTimestamp(),
         generatedAt: serverTimestamp(),
@@ -1024,7 +1024,7 @@ REGRAS:
 
       // Sanitizar o topicKey para usar como ID de documento no Firestore
       const sanitizedKey = sanitizeTopicKeyForFirestore(resolvedTopicKey)
-      
+
       await setDoc(doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', sanitizedKey), payload, {
         merge: true,
       })
@@ -1145,24 +1145,24 @@ REGRAS:
             </div>
           )}
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button
-              type="button"
-              onClick={handleGenerateContent}
-              disabled={generating}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-alego-600 text-white rounded-lg hover:bg-alego-700 transition disabled:opacity-60"
-            >
-              {generating ? (
-                <>
-                  <span className="inline-block h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Gerando conteúdo...
-                </>
-              ) : (
-                <>
-                  <span role="img" aria-label="raio">⚡</span>
-                  Chamar o professor!
-                </>
-              )}
-            </button>
+              <button
+                type="button"
+                onClick={handleGenerateContent}
+                disabled={generating}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-alego-600 text-white rounded-lg hover:bg-alego-700 transition disabled:opacity-60"
+              >
+                {generating ? (
+                  <>
+                    <span className="inline-block h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Gerando conteúdo...
+                  </>
+                ) : (
+                  <>
+                    <span role="img" aria-label="raio">⚡</span>
+                    Chamar o professor!
+                  </>
+                )}
+              </button>
             <Link
               to="/conteudo-completo"
               className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition"
@@ -1288,12 +1288,12 @@ REGRAS:
         </div>
 
         <div className="max-w-none">
-          {courseName && (
+            {courseName && (
             <div className="mb-6 cp-card !border-cp-accent/30 p-4">
               <p className="text-sm text-cp-text">
                 Material elaborado para <span className="text-cp-accent font-medium">{courseName}</span>.
               </p>
-            </div>
+          </div>
           )}
 
           {editingContent && isAdmin && editDraft ? (

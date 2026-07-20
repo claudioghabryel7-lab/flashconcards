@@ -458,6 +458,11 @@ export default function AdminGuiaMentorado() {
 
   const handleCronograma = () =>
     withAction('cronograma', async (userId) => {
+      if (!form.dataProva) {
+        throw new Error(
+          'Informe a data da prova antes de gerar. O bot monta o guia até 5 dias antes da prova; os últimos 5 dias são incidência.',
+        )
+      }
       setProgress('Verificando edital verticalizado…')
       const edital = await loadEditalVerticalizado(courseId)
       if (!edital?.disciplinas?.length) {
@@ -469,7 +474,7 @@ export default function AdminGuiaMentorado() {
       setProgress('Salvando configuração…')
       await persistConfig(form, { skipValidation: true })
 
-      setProgress('Enfileirando geração do cronograma (aba admin — mantenha aberta)…')
+      setProgress('Montando cronograma (bot — sem IA, aba aberta)…')
       const { jobId } = await runMentoradoCronograma({
         userId,
         courseId,
@@ -891,7 +896,7 @@ export default function AdminGuiaMentorado() {
           className="inline-flex items-center gap-2 rounded-xl border border-cp-border px-4 py-2 text-sm font-semibold text-cp-text transition hover:bg-cp-surface disabled:cursor-not-allowed disabled:opacity-50"
         >
           <SparklesIcon className={`h-4 w-4 ${busyAction === 'cronograma' ? 'animate-pulse' : ''}`} />
-          {busyAction === 'cronograma' ? 'Gerando…' : 'Gerar cronograma (edital completo)'}
+          {busyAction === 'cronograma' ? 'Gerando…' : 'Gerar guia (bot até a prova)'}
         </button>
         <button
           type="button"

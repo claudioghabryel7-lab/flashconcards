@@ -39,6 +39,12 @@ export const DAY_TYPE_CONFIG = {
     className: 'bg-red-500/12 text-red-500 border-red-500/25',
     dot: 'bg-red-500',
   },
+  incidencia: {
+    label: 'Incidência',
+    short: 'Inc.',
+    className: 'bg-amber-500/12 text-amber-600 border-amber-500/25',
+    dot: 'bg-amber-500',
+  },
 }
 
 export function buildMonthDays(currentMonth, cronograma, examDate) {
