@@ -19,6 +19,7 @@ import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import ShareToFeedButton from '../components/feed/ShareToFeedButton'
 import { FEED_POST_TYPES } from '../services/trilhaFeedService'
 import ContentFeedbackActions from '../components/content/ContentFeedbackActions'
+import ProfessorFlagNoteBanner from '../components/content/ProfessorFlagNoteBanner'
 import { buildMaterialContentId } from '../utils/contentCommentIds'
 import { stripHtml } from '../utils/htmlTextHelpers'
 import ReactMarkdown from 'react-markdown'
@@ -1212,12 +1213,19 @@ REGRAS:
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto p-4 sm:p-6">
+      <ProfessorFlagNoteBanner />
       <Link to="/edital-verticalizado" className="inline-flex items-center gap-2 text-sm text-cp-muted hover:text-cp-accent transition">
         <ArrowLeftIcon className="w-5 h-5" />
         Voltar ao edital
       </Link>
 
-      <div className="cp-card p-6 sm:p-8">
+      <div
+        className="cp-card p-6 sm:p-8"
+        data-content-id={buildMaterialContentId({
+          courseId: resolvedCourseId,
+          topicKey: resolvedTopicKey,
+        })}
+      >
         <div className="mb-8 pb-6 border-b border-cp-border">
           <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted mb-1">Material de apoio</p>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">

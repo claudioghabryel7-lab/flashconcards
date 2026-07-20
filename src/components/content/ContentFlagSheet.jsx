@@ -13,6 +13,9 @@ export default function ContentFlagSheet({
   topicKey,
   preview,
   contextLabel = 'este conteúdo',
+  disciplinaNome = '',
+  topicoNome = '',
+  moduloLabel = '',
 }) {
   const { user, profile } = useAuth()
   const [text, setText] = useState('')
@@ -36,8 +39,11 @@ export default function ContentFlagSheet({
         user,
         profile,
         preview,
+        disciplinaNome,
+        topicoNome,
+        moduloLabel: moduloLabel || topicoNome,
       })
-      setMessage('Sinalização enviada. A equipe irá revisar.')
+      setMessage('Sinalização enviada. O Professor IA irá revisar.')
       setTimeout(() => {
         onClose()
         setText('')

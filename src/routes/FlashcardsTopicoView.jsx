@@ -20,6 +20,11 @@ import { CONTENT_STATUS, isContentAvailable, toggleContentStatus } from '../util
 import { persistCardReview } from '../utils/spacedRepetition'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import toast from 'react-hot-toast'
+import ProfessorFlagNoteBanner, {
+  scrollToFocusedContent,
+} from '../components/content/ProfessorFlagNoteBanner'
+import { findCardIndex } from '../utils/flagCorrectionLinks'
+import { buildFlashcardContentId } from '../utils/contentCommentIds'
 
 const FlashcardsTopicoView = () => {
   const { courseId: courseIdParam } = useParams()
@@ -321,8 +326,28 @@ const FlashcardsTopicoView = () => {
 
   const canStudy = isAdmin || (hasTopicAccess && cards.length > 0 && isContentAvailable(publishStatus, false))
 
+  useEffect(() => {
+    const focusId = searchParams.get('focusContentId')
+    if (!focusId || !cards.length) return
+    const idx = findCardIndex(cards, focusId)
+    if (idx >= 0) setCurrentIndex(idx)
+    const t = setTimeout(() => {
+      const contentId =
+        buildFlashcardContentId({
+          courseId,
+          topicKey,
+          card: cards[idx >= 0 ? idx : 0],
+          cardIndex: idx >= 0 ? idx : 0,
+        }) || focusId
+      scrollToFocusedContent(contentId)
+      scrollToFocusedContent(focusId)
+    }, 400)
+    return () => clearTimeout(t)
+  }, [cards, searchParams, courseId, topicKey])
+
   return (
     <div className="space-y-6 pb-10">
+      <ProfessorFlagNoteBanner />
       <div className="cp-card p-4 sm:p-5">
         <Link
           to="/edital-verticalizado"

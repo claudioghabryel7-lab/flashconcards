@@ -97,6 +97,9 @@ export default function ContentFeedbackActions({
             topicKey={topicKey}
             preview={preview}
             contextLabel={contextLabel}
+            disciplinaNome={materia}
+            topicoNome={assunto}
+            moduloLabel={assunto}
           />
         </Suspense>
       )}

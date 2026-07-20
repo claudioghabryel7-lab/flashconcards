@@ -254,23 +254,25 @@ REGRAS:
   }
 
   if (verdict?.reportValid === false || (applied === 0 && !(verdict?.corrections || []).length)) {
-    await resolveContentFlag(courseId, flagId, { contentCorrected: false })
-    await updateDoc(flagRef, {
-      lastProfessorSummary: verdict?.summary || 'Sem erro a corrigir.',
-      lastProfessorApplied: 0,
+    const summary = verdict?.summary || 'Sem erro a corrigir — conteúdo mantido.'
+    await resolveContentFlag(courseId, flagId, {
+      contentCorrected: false,
+      lastProfessorSummary: summary,
       resolvedBy: 'professor_local',
-    }).catch(() => {})
-    return { applied: 0, flagResolved: true, summary: verdict?.summary }
+      flagSnapshot: flag,
+    })
+    return { applied: 0, flagResolved: true, summary }
   }
 
   if (applied > 0) {
-    await resolveContentFlag(courseId, flagId, { contentCorrected: true })
-    await updateDoc(flagRef, {
-      lastProfessorSummary: verdict?.summary || 'Conteúdo corrigido.',
-      lastProfessorApplied: applied,
+    const summary = verdict?.summary || 'Conteúdo corrigido pelo Professor IA.'
+    await resolveContentFlag(courseId, flagId, {
+      contentCorrected: true,
+      lastProfessorSummary: summary,
       resolvedBy: 'professor_local',
-    }).catch(() => {})
-    return { applied, flagResolved: true, summary: verdict?.summary }
+      flagSnapshot: { ...flag, lastProfessorSummary: summary, contentCorrected: true },
+    })
+    return { applied, flagResolved: true, summary }
   }
 
   // Material / patch incompleto: manda para admin
@@ -336,10 +338,13 @@ export async function fetchNextOpenFlag() {
       const snap = await getDocs(q)
       for (const d of snap.docs) {
         const data = d.data() || {}
-        // Evita loop infinito em needs_admin sem chance de auto-correção
+        // needs_admin: só pula se o Professor pediu revisão humana explícita
         if (
           status === 'needs_admin' &&
           data.lastProfessorSummary &&
+          /revisão admin|needsAdminReview|aguardando revisão do admin|dúvida|duvida grave/i.test(
+            String(data.lastProfessorSummary),
+          ) &&
           !/não encontrado|nao encontrado|não carregado|travada|Reaberto/i.test(
             String(data.lastProfessorSummary),
           )

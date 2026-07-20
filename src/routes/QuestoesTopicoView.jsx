@@ -20,6 +20,7 @@ import {
 import { incrementQuestoesStats } from '../utils/questoesStats'
 import { isContentAvailable, toggleContentStatus, CONTENT_STATUS } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
+import ProfessorFlagNoteBanner from '../components/content/ProfessorFlagNoteBanner'
 import {
   QuestoesLoading,
   QuestoesHeader,
@@ -1134,6 +1135,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
   return (
     <div className="space-y-6">
+      <ProfessorFlagNoteBanner />
       {courseName && (
         <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cp-muted">{courseName}</p>
       )}

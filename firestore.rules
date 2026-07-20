@@ -83,6 +83,13 @@ service cloud.firestore {
         allow update, delete: if isOwner(userId) || isAdmin();
       }
 
+      /** Inbox do aluno (ex.: resposta do Professor IA a sinalização) */
+      match /notifications/{notifId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) || isAdmin();
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
       match /generationJobs/{jobId} {
         allow read, create, update: if isOwner(userId);
         allow delete: if isOwner(userId) || isAdmin();

@@ -2,7 +2,6 @@ import { buildTopicContentLink } from './topicContentLinks'
 
 /**
  * Monta URL para abrir o conteúdo corrigido a partir de uma notificação de flag.
- * Preferência: rota por tópico (Guia Mentorado) + foco no card.
  */
 export function buildFlagCorrectionLink(n = {}) {
   return buildTopicContentLink({
@@ -14,6 +13,8 @@ export function buildFlagCorrectionLink(n = {}) {
     topicoNome: n.topicoNome || n.topico || '',
     moduloLabel: n.moduloLabel || n.modulo || '',
     linkPath: n.linkPath,
+    professorNote: n.professorNote || n.explanation || n.message || '',
+    flagId: n.flagId || n.id || '',
   })
 }
 

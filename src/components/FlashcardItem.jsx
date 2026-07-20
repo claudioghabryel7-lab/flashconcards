@@ -148,7 +148,11 @@ const FlashcardItem = ({
   const cardHeight = 'min-h-[min(340px,52dvh)] h-[min(340px,52dvh)] sm:min-h-[360px] sm:h-[360px]'
 
   return (
-    <div className="relative mx-auto w-full max-w-xl px-0 sm:px-0">
+    <div
+      className="relative mx-auto w-full max-w-xl px-0 sm:px-0"
+      data-content-id={buildFlashcardContentId({ courseId, topicKey, card, cardIndex })}
+      id={card?.id ? String(card.id) : undefined}
+    >
       <div
         className={`relative mx-auto w-full cursor-pointer select-none ${cardHeight}`}
         style={{ perspective: '1200px', WebkitPerspective: '1200px', touchAction: 'manipulation' }}
