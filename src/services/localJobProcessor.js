@@ -1195,21 +1195,40 @@ async function processGuiaMentoradoBackfill(
 
 async function processGuiaMentoradoCronograma(courseId, serverPayload, updateProgress) {
   const config = serverPayload?.config || {}
-  await updateProgress(10, 'Gerando cronograma…')
+  await updateProgress(10, 'Carregando edital verticalizado…')
 
   const today = dayjs().startOf('day')
   const planningEnd = resolvePlanningEndDate(config)
-  const editalSnap = await getDoc(doc(db, 'courses', courseId, 'editalVerticalizado', 'atual')).catch(() => null)
-  let editalSummary = []
-  if (editalSnap?.exists()) {
-    editalSummary = editalSnap.data()?.materias || editalSnap.data()?.edital || []
+
+  // Documento real: editalVerticalizado/principal (disciplinas) — NÃO "atual"
+  const { loadEditalVerticalizado, buildEditalStructurePrompt } = await import(
+    '../utils/editalVerticalizadoLoader'
+  )
+  const edital = await loadEditalVerticalizado(courseId)
+  if (!edital?.disciplinas?.length) {
+    throw new Error(
+      'Edital verticalizado não encontrado neste curso. Gere o edital no Admin antes do cronograma.',
+    )
   }
+
+  // Resumo compacto + lista estruturada (evita prompt gigante e edital vazio)
+  const editalSummary = edital.disciplinas.map((d) => ({
+    disciplina: d.nome || '',
+    topicos: (d.topicos || []).map((t) => ({
+      numero: t.numero || '',
+      nome: t.nome || '',
+    })),
+  }))
+  const editalText = buildEditalStructurePrompt(edital, 80)
+
+  await updateProgress(20, 'Gerando cronograma (sem Google Search)…')
 
   const prompt = buildMentoradoCronogramaPrompt({
     today,
     planningEnd,
     config,
     editalSummary,
+    editalText,
     usingDefaultWindow: !config.dataProva,
   })
 
@@ -1222,6 +1241,12 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
   })
 
   const days = parsed?.cronograma || []
+  if (!Array.isArray(days) || days.length < 1) {
+    const err = new Error('A IA não retornou dias de cronograma. Tente gerar de novo.')
+    err.code = 'cronograma_empty'
+    throw err
+  }
+
   await updateProgress(70, `Salvando ${days.length} dias…`)
 
   const byMonth = {}
@@ -1238,6 +1263,12 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
       taf_exercicio: day.taf_exercicio || '',
       descricao: day.descricao || '',
     }
+  }
+
+  if (!Object.keys(byMonth).length) {
+    const err = new Error('Cronograma sem datas válidas (YYYY-MM-DD). Tente gerar de novo.')
+    err.code = 'cronograma_invalid'
+    throw err
   }
 
   for (const [monthKey, data] of Object.entries(byMonth)) {
@@ -1260,6 +1291,8 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
     { ...(config || {}), updatedAt: serverTimestamp() },
     { merge: true },
   )
+
+  await updateProgress(95, `Cronograma salvo (${days.length} dias)`)
 
   return {
     totalDays: days.length,

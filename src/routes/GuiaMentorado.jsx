@@ -277,11 +277,11 @@ const GuiaMentorado = () => {
 
       setMessage(
         usingDefaultWindow
-          ? `🤖 Gerando cronograma na nuvem (${DEFAULT_PLANNING_DAYS} dias)… Pode fechar o site.`
-          : '🤖 Gerando cronograma na nuvem… Pode fechar o site.',
+          ? `🤖 Gerando cronograma (${DEFAULT_PLANNING_DAYS} dias)… Mantenha esta aba aberta.`
+          : '🤖 Gerando cronograma… Mantenha esta aba aberta.',
       )
 
-      const { jobId } = await startGuiaMentoradoCronogramaGeneration({
+      const { jobId, promise } = await startGuiaMentoradoCronogramaGeneration({
         userId: uid,
         courseId: selectedCourseId,
         config: {
@@ -298,10 +298,10 @@ const GuiaMentorado = () => {
         },
       })
 
+      setMessage(`⏳ Cronograma em andamento (job ${String(jobId).slice(0, 8)}…)…`)
+      const result = await promise
       setMessage(
-        automation.enabled
-          ? `✅ Cronograma enfileirado (job ${String(jobId).slice(0, 8)}…). Hoje libera os tópicos do dia; demais dias às ${dailyReleaseLabel}. Acompanhe o banner.`
-          : `✅ Cronograma enfileirado (job ${String(jobId).slice(0, 8)}…). Acompanhe o banner no canto inferior direito.`,
+        `✅ Cronograma gerado: ${result?.totalDays || 0} dia(s) salvos.`,
       )
 
       setTimeout(() => setMessage(''), 12000)
@@ -392,7 +392,7 @@ const GuiaMentorado = () => {
   const cronogramaBtnTitle = editalLoading
     ? 'Carregando edital…'
     : editalReady
-      ? 'Gerar cronograma na nuvem'
+      ? 'Gerar cronograma (mantenha a aba aberta)'
       : editalError || 'Sem edital verticalizado — o clique verifica de novo e avisa'
 
   return (

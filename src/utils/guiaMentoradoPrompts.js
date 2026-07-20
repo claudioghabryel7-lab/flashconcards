@@ -17,6 +17,7 @@ export function buildMentoradoCronogramaPrompt({
   planningEnd,
   config = {},
   editalSummary = [],
+  editalText = '',
   usingDefaultWindow = false,
 }) {
   const daysUntilProva = planningEnd.diff(today, 'day')
@@ -29,7 +30,7 @@ TEM TAF: ${config.hasTAF ? 'Sim' : 'Não'}
 TEM REDAÇÃO: ${config.hasRedacao ? 'Sim' : 'Não'}
 EXERCÍCIOS TAF: ${config.tafExercicios?.join(', ') || 'Nenhum'}
 
-EDITAL VERTICALIZADO COMPLETO:
+${editalText ? `${editalText}\n\n` : ''}EDITAL VERTICALIZADO (JSON):
 ${JSON.stringify(editalSummary, null, 2)}
 
 ANÁLISE OBRIGATÓRIA DO EDITAL:
@@ -55,6 +56,7 @@ REGRAS OBRIGATÓRIAS DO MENTOR:
 9. Distribua as matérias de forma ESTRATÉGICA e equilibrada (não sequencial)
 10. Priorize matérias mais importantes com mais tempo de estudo
 11. OBJETIVO: Fechar TODO o edital 7 dias antes da prova
+12. NÃO use Google Search — trabalhe só com o edital acima
 
 RETORNE APENAS ESTE JSON (sem texto adicional):
 {
@@ -78,6 +80,7 @@ CRÍTICO - NÃO CORTAR O JSON:
 IMPORTANTE:
 - Comece em ${today.format('DD/MM/YYYY')}
 - Termine em ${planningEnd.format('DD/MM/YYYY')}
+- Cada item de materias.disciplina e materias.topico deve bater com nomes do edital
 - JSON deve ser válido e completo
 - Use aspas duplas
 - Não adicione comentários no JSON`
