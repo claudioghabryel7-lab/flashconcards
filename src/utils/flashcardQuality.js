@@ -1,13 +1,14 @@
 /**
  * Filtros de qualidade para flashcards gerados no cliente (antes do checkpoint).
+ * Leves o bastante para não forçar regeneração cara; o grosso fica na auditoria.
  */
 
-const MIN_VERSO = 40
-const MIN_FRENTE = 12
+const MIN_VERSO = 28
+const MIN_FRENTE = 10
 const GENERIC_FRONT =
-  /^(o que [ée]\b|defina\b|conceito de\b|explique o que\b|qual (a|o) (definição|conceito))/i
+  /^(o que [ée]\b|defina\b|conceito de\b|explique o que\b|qual (a|o) (definição|conceito))\b.{0,40}$/i
 const GENERIC_BACK =
-  /^(é um|é uma|trata-se de um|trata-se de uma|consiste em)\b.{0,40}$/i
+  /^(é um|é uma|trata-se de um|trata-se de uma|consiste em)\b.{0,30}$/i
 
 function norm(s = '') {
   return String(s)
@@ -18,19 +19,11 @@ function norm(s = '') {
     .trim()
 }
 
-function tokenizeTopic(topic = '') {
-  return norm(topic)
-    .split(/[^a-z0-9]+/)
-    .filter((t) => t.length >= 4)
-    .slice(0, 12)
-}
-
 /**
- * Descarta cards vazios, genéricos, curtos ou claramente fora do tópico.
+ * Descarta só cards claramente inválidos (vazio, curto demais, duplicado, genérico extremo).
+ * Não rejeita por "fora do tópico" — isso queimava cota em regenerações falsas.
  */
-export function filterFlashcardBatch(cards = [], { topicoNome = '', disciplina = '' } = {}) {
-  const topicTokens = tokenizeTopic(topicoNome)
-  const discTokens = tokenizeTopic(disciplina)
+export function filterFlashcardBatch(cards = [], { topicoNome: _topicoNome = '', disciplina: _disciplina = '' } = {}) {
   const kept = []
   const rejected = []
   const seen = new Set()
@@ -56,25 +49,13 @@ export function filterFlashcardBatch(cards = [], { topicoNome = '', disciplina =
       rejected.push({ pergunta, reason: 'duplicado' })
       continue
     }
-    if (GENERIC_FRONT.test(pergunta) && resposta.length < 80) {
+    if (GENERIC_FRONT.test(pergunta) && resposta.length < 60) {
       rejected.push({ pergunta, reason: 'generico' })
       continue
     }
     if (GENERIC_BACK.test(resposta)) {
       rejected.push({ pergunta, reason: 'verso_generico' })
       continue
-    }
-
-    // Relevância: se temos tokens do tópico, pelo menos 1 deve aparecer em frente OU verso
-    // (exceto tópicos muito curtos / genéricos)
-    if (topicTokens.length >= 2) {
-      const blob = `${norm(pergunta)} ${norm(resposta)}`
-      const hitTopic = topicTokens.some((t) => blob.includes(t))
-      const hitDisc = discTokens.some((t) => blob.includes(t))
-      if (!hitTopic && !hitDisc) {
-        rejected.push({ pergunta, reason: 'fora_do_topico' })
-        continue
-      }
     }
 
     seen.add(key)

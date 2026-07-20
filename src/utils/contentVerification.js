@@ -153,25 +153,23 @@ export function buildFlashcardAuditPrompt(flashcardsJson = '', courseData = {}, 
   return `Audite flashcards de concurso (${legal ? 'modo JURÍDICO' : 'modo FACTUAL'}).
 Banca: ${banca} | Concurso: ${concurso} | Cargo: ${cargo}
 Disciplina: ${disciplina}
-TÓPICO OBRIGATÓRIO: ${topico || '(não informado)'}
+TÓPICO: ${topico || '(não informado)'}
 
-Use Google Search. Seja RIGOROSO — conteúdo ruim NÃO pode passar.
+Use Google Search só se necessário. Em dúvida, APROVE.
 
 Responda APENAS JSON:
 {
   "aprovado": true ou false,
   "problemas": [{"trecho": "frente ou verso", "status": "FALSO|FORA_DO_TOPICO|GENERICO|INCERTO", "motivo": "...", "correcao": "..."}],
-  "texto_corrigido": null ou JSON {"flashcards":[...]} com TODOS os cards
+  "texto_corrigido": null ou string JSON {"flashcards":[...]} com TODOS os cards
 }
 
-Regras (obrigatórias):
-- aprovado=false se QUALQUER card tiver: fato FALSO, lei/artigo inventado, fora do TÓPICO, genérico demais, ou sem nexo com a disciplina.
-- FORA_DO_TOPICO e GENERICO contam como FALSO para fins de aprovação (aprovado=false).
-- Card genérico ("O que é X?" com definição vaga) → reprova e corrija para pergunta técnica de prova.
-- Card de outro assunto (ex.: fala de direito civil em tópico de processo) → reprova.
-- Em dúvida factual ou de pertinência ao tópico → reprova (aprovado=false) e corrija ou remova o card.
-- Se houver qualquer problema, devolva texto_corrigido com TODOS os cards (só os bons + corrigidos).
-- Só aprove se TODOS os cards forem corretos, específicos do tópico e úteis para a banca ${banca}.
+Regras:
+- aprovado=false SOMENTE com erro FALSO claro (lei/artigo inventado, fato invertido) OU card claramente de outro tópico.
+- GENERICO / INCERTO / estilo ruim → aprovado=true (não bloqueie o lote).
+- FORA_DO_TOPICO só se o card for obviamente de outra matéria (não por ausência de keywords).
+- Em dúvida → aprovado=true.
+- Se reprovar, texto_corrigido deve ser STRING JSON válida com os cards.
 
 FLASHCARDS:
 ${truncateForVerification(flashcardsJson, FLASHCARD_VERIFY_CHARS)}`
@@ -204,40 +202,45 @@ ${String(questoesSample).slice(0, 5000)}`
 }
 
 export function parseVerificationResult(rawText = {}) {
-  // Fail-closed: JSON ilegível = NÃO aprova (antes soft-pass deixava lixo passar)
-  const hardFail = {
-    aprovado: false,
-    soft: false,
-    problemas: [{ status: 'FALSO', motivo: 'Auditoria retornou JSON inválido/ilegível' }],
+  // Parse falho = falha TÉCNICA (não FALSO). Tratar como FALSO regenerava conteúdo sem necessidade.
+  const technicalFail = {
+    aprovado: null,
+    soft: true,
+    parseError: true,
+    problemas: [{ status: 'INCERTO', motivo: 'Auditoria retornou JSON inválido/ilegível' }],
     texto_corrigido: null,
-    falsosCount: 1,
+    falsosCount: 0,
   }
 
   try {
     const jsonMatch = String(rawText).match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return hardFail
+    if (!jsonMatch) return technicalFail
     const parsed = JSON.parse(jsonMatch[0])
     const problemas = Array.isArray(parsed.problemas) ? parsed.problemas : []
+    // Só FALSO / fora de tópico claro bloqueiam — GENERICO não queima quota em regeneração
     const blocking = problemas.filter((p) => {
       const s = String(p?.status || '').toUpperCase()
-      return (
-        s === 'FALSO' ||
-        s === 'FORA_DO_TOPICO' ||
-        s === 'GENERICO' ||
-        s === 'GENÉRICO' ||
-        s === 'OFF_TOPIC'
-      )
+      return s === 'FALSO' || s === 'FORA_DO_TOPICO' || s === 'OFF_TOPIC'
     })
+    let textoCorrigido = parsed.texto_corrigido || null
+    if (textoCorrigido && typeof textoCorrigido !== 'string') {
+      try {
+        textoCorrigido = JSON.stringify(textoCorrigido)
+      } catch {
+        textoCorrigido = null
+      }
+    }
     const aprovadoExplicit = parsed.aprovado === true && blocking.length === 0
     return {
       aprovado: aprovadoExplicit || (blocking.length === 0 && parsed.aprovado !== false),
       soft: false,
+      parseError: false,
       problemas,
-      texto_corrigido: parsed.texto_corrigido || null,
+      texto_corrigido: textoCorrigido,
       falsosCount: blocking.length,
     }
   } catch {
-    return hardFail
+    return technicalFail
   }
 }
 
@@ -261,7 +264,9 @@ export function applyVerificationToResponse(response, verification, originalText
     return response
   }
 
-  const corrected = verification.texto_corrigido
+  const correctedRaw = verification.texto_corrigido
+  const corrected =
+    typeof correctedRaw === 'string' ? correctedRaw : JSON.stringify(correctedRaw)
   const candidate = response?.candidates?.[0]
   if (!candidate?.content?.parts?.[0]) return response
 

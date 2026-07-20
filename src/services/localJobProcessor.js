@@ -44,15 +44,16 @@ import {
 
 const TRUSTED_AI = {
   trustedGeneration: true,
-  useRAG: true,
-  useGoogleSearch: true,
+  // Search/RAG decididos em generateAiJson (só jurídico usa grounding)
+  useRAG: false,
+  useGoogleSearch: false,
 }
 
 /** Tentativas automáticas por tópico (erros temporários da IA) — sem clicar de novo. */
-const TOPIC_AUTO_RETRIES = 4
-const TOPIC_RETRY_DELAY_MS = 4000
+const TOPIC_AUTO_RETRIES = 2
+const TOPIC_RETRY_DELAY_MS = 2500
 /** Varredura final nos que falharam com erro temporário. */
-const DAY_SWEEP_RETRIES = 2
+const DAY_SWEEP_RETRIES = 1
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -139,9 +140,11 @@ function buildTrustedOptions(disciplina = '', extra = {}) {
   return {
     ...TRUSTED_AI,
     isLegalContent: isLegal,
-    // Todos auditados: jurídico (dual+Search) ou factual leve (Português/História/TI)
     forceAudit: true,
     auditMode: isLegal ? 'legal' : 'factual',
+    // Geração em JSON mode; grounding fica só na auditoria jurídica
+    useGoogleSearch: false,
+    useRAG: false,
     disciplina,
     ...extra,
   }
@@ -211,8 +214,6 @@ async function processPromptSave(
     ...buildTrustedOptions(disciplina, {
       isLegalContent: aiOptions.isLegalContent,
       contentType: extra.contentType || aiOptions.contentType || '',
-      useRAG: aiOptions.useRAG ?? true,
-      useGoogleSearch: aiOptions.useGoogleSearch ?? true,
       generationConfig: aiOptions.generationConfig,
       courseContext: toCourseAiContextShape({ ...examCtx, disciplina }),
     }),
@@ -372,7 +373,7 @@ TAREFA: Criar exatamente ${cardsInBatch} flashcards (lote ${batchNum}/${batchCou
 REGRAS DE OURO (violação = card inválido):
 1. CADA card DEVE ser 100% sobre o TÓPICO EXATO acima — nada de assuntos vizinhos ou genéricos da disciplina.
 2. Perguntas no estilo da banca ${examCtx.banca} para o cargo ${examCtx.cargo} (${examCtx.concursoName}).
-3. NÃO invente lei, artigo, súmula, data ou jurisprudência. Use Google Search.
+3. NÃO invente lei, artigo, súmula, data ou jurisprudência.
 4. PROIBIDO: "O que é X?" com definição vaga; curiosidades; conteúdo óbvio; misturar outro tópico.
 5. Verso: 2–5 frases técnicas, corretas e cobráveis em prova.
 ${existingList}
@@ -381,14 +382,14 @@ Retorne APENAS JSON:
 { "flashcards": [ { "pergunta": "...", "resposta": "..." } ] }`
 
     const { validateFlashcardBatchOrThrow } = await import('../utils/flashcardQuality')
-    const minKeep = Math.max(1, cardsInBatch - 2)
+    const minKeep = Math.max(1, Math.ceil(cardsInBatch * 0.6))
     let batchCards = []
 
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       const parsed = await generateAiJson(
         attempt === 1
           ? prompt
-          : `${prompt}\n\nREGENERAÇÃO: o lote anterior foi REJEITADO (fora do tópico/genérico/curto). Gere de novo, 100% no TÓPICO EXATO.`,
+          : `${prompt}\n\nREGENERAÇÃO: o lote anterior foi REJEITADO (vazio/genérico/curto). Gere de novo, 100% no TÓPICO EXATO.`,
         {
           courseId,
           ...buildTrustedOptions(disciplina, {
@@ -399,10 +400,10 @@ Retorne APENAS JSON:
               topicoNome,
             }),
             generationConfig: serverPayload?.aiOptions?.generationConfig || {
-              maxOutputTokens: 16000,
-              temperature: attempt === 1 ? 0.1 : 0.15,
+              maxOutputTokens: 8192,
+              temperature: attempt === 1 ? 0.2 : 0.25,
             },
-            auditSoftPassOnFail: false,
+            auditSoftPassOnFail: true,
           }),
         },
       )
