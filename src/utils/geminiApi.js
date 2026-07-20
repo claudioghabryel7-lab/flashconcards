@@ -54,23 +54,40 @@ const VERIFY_GENERATION_CONFIG = {
 const MAX_RETRIES = 1 // Apenas 1 tentativa para economizar quota
 const BASE_DELAY = 2000 // 2 segundos
 
-/** Erros aceitáveis para exibir ao usuário (cota / limite gratuito). */
+/** Rate limit / quota Gemini (para retry e UI). */
 export function isGeminiQuotaError(error) {
   const msg = String(error?.message || error || '').toLowerCase()
   const code = String(error?.code || '').toLowerCase()
   return (
     code.includes('429') ||
     code.includes('quota') ||
+    code.includes('rate_limited') ||
     code.includes('resource_exhausted') ||
     isGeminiQuotaOrUnavailable(429, msg) ||
     msg.includes('esgotad') ||
-    msg.includes('limite')
+    msg.includes('resource_exhausted') ||
+    msg.includes('resource has been exhausted')
+  )
+}
+
+function isHardFreeTierMessage(message = '') {
+  const msg = String(message).toLowerCase()
+  return (
+    msg.includes('free_tier') ||
+    msg.includes('free tier') ||
+    msg.includes('generate_content_free_tier') ||
+    (msg.includes('billing') && (msg.includes('disabled') || msg.includes('not enabled')))
   )
 }
 
 export function formatAiErrorForUser(error) {
   if (isGeminiQuotaError(error)) {
-    return 'Cota da API Gemini esgotada ou limite gratuito atingido. Tente novamente mais tarde ou configure outra chave.'
+    const raw = String(error?.message || '')
+    if (isHardFreeTierMessage(raw)) {
+      return 'A chave Gemini ainda está no plano gratuito ou sem billing ativo. Ative o faturamento no Google AI Studio / Cloud e use a chave do projeto pago.'
+    }
+    // 429 / RPM — comum com crédito (auditoria dual + Search). Não é “sem crédito”.
+    return 'A API Gemini atingiu o limite temporário de requisições (rate limit). Aguarde alguns segundos e tente de novo — isso pode acontecer mesmo com crédito na conta.'
   }
   const code = String(error?.code || '')
   if (code === 'legal_audit_failed' || code === 'bundle_consistency_failed') {
