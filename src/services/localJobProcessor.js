@@ -1216,6 +1216,8 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
   const parsed = await generateAiJson(prompt, {
     courseId,
     trustedGeneration: true,
+    useGoogleSearch: false,
+    searchGrounded: false,
     generationConfig: { maxOutputTokens: 32000, temperature: 0.3 },
   })
 
