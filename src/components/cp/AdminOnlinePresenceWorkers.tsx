@@ -13,6 +13,7 @@ export default function AdminOnlinePresenceWorkers() {
     enabled: Boolean(isAdmin),
     professor: true,
     mentorado: true,
+    content: true,
   })
   return null
 }

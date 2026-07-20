@@ -31,6 +31,7 @@ import {
 import { loadEditalVerticalizado } from '../../utils/editalVerticalizadoLoader'
 import { validateGuiaMentoradoAutomation } from '../../utils/automationValidation'
 import { usePresenceRegistry } from '../../hooks/usePresenceRegistry'
+import { forceContentAutomationNow } from '../../services/contentAutomationScheduler'
 
 function padTime(h, m) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
@@ -183,6 +184,10 @@ export default function AdminGuiaMentorado() {
         lastCourseId: data.lastCourseId || '',
         useProfessorWindow: data.useProfessorWindow === true,
         automationUserId: data.automationUserId || null,
+        lastReviewDayKey: data.lastReviewDayKey || '',
+        lastIncidenciaDayKey: data.lastIncidenciaDayKey || '',
+        lastNivelRunAtMs: data.lastNivelRunAtMs || data.lastNivelRunAt?.toMillis?.() || 0,
+        stats: data.stats || {},
       })
     })
   }, [])
@@ -420,10 +425,24 @@ export default function AdminGuiaMentorado() {
     setContentBusy(true)
     setFeedback('')
     try {
-      // Sem Cloud Functions: use “Conteúdos de hoje” / backfill com a aba admin aberta.
-      setFeedback(
-        'ℹ️ Automação de conteúdo roda na aba do admin (online). Use “Conteúdos de hoje” ou backfill no curso selecionado — mantenha o /admin aberto.',
-      )
+      const result = await forceContentAutomationNow(uid)
+      if (result?.started) {
+        const label =
+          result.kind === 'review'
+            ? `Matéria revisada: ${result.materia}`
+            : result.kind === 'incidencia'
+              ? `Incidência: ${result.disciplina}`
+              : result.kind === 'nivel'
+                ? `Questões nv.${result.nivel}`
+                : result.kind
+        setFeedback(`✅ Job iniciado (${label}). Acompanhe no banner de tarefas IA.`)
+      } else {
+        setFeedback(
+          `ℹ️ Nada iniciado agora (${result?.reason || 'idle'}). Filas podem estar em dia ou aguardando 6h / outro job ativo.`,
+        )
+      }
+    } catch (err) {
+      setFeedback(`❌ ${err.message || 'Erro ao rodar automação de conteúdo.'}`)
     } finally {
       setContentBusy(false)
     }
@@ -964,8 +983,11 @@ export default function AdminGuiaMentorado() {
           <div>
             <h3 className="text-sm font-semibold text-cp-text">Automação de conteúdo (global)</h3>
             <p className="mt-1 max-w-2xl text-xs text-cp-muted">
-              Automação de incidência/níveis (separada do Guia Mentorado diário). Use “Rodar 1 job
-              agora” com a aba aberta. Toggle liga/desliga a intenção de automação.
+              Com admin online (qualquer página, aba visível):{' '}
+              <strong>1 matéria revisada/dia</strong> até cobrir o edital;{' '}
+              <strong>1 incidência/dia</strong> por disciplina; e{' '}
+              <strong>1 nível de questões (1–10) a cada 6h</strong> nos tópicos já liberados, com
+              rotação (níveis baixos primeiro).
             </p>
             {contentAuto.automationUserId ? (
               <p className="mt-1 text-xs text-cp-muted">
@@ -976,6 +998,31 @@ export default function AdminGuiaMentorado() {
                 ⚠️ Sem automationUserId — ligue o toggle estando logado como admin.
               </p>
             )}
+            <ul className="mt-2 space-y-0.5 text-[11px] text-cp-muted">
+              <li>
+                Revisão hoje:{' '}
+                {contentAuto.lastReviewDayKey === todayKey ? 'já rodou' : 'pendente'}
+                {contentAuto.stats?.reviewRemaining != null
+                  ? ` · ${contentAuto.stats.reviewRemaining} na fila`
+                  : ''}
+              </li>
+              <li>
+                Incidência hoje:{' '}
+                {contentAuto.lastIncidenciaDayKey === todayKey ? 'já rodou' : 'pendente'}
+                {contentAuto.stats?.incidenciaRemaining != null
+                  ? ` · ${contentAuto.stats.incidenciaRemaining} na fila`
+                  : ''}
+              </li>
+              <li>
+                Níveis:{' '}
+                {contentAuto.stats?.nivelGapsRemaining != null
+                  ? `${contentAuto.stats.nivelGapsRemaining} gaps`
+                  : '—'}
+                {contentAuto.lastNivelRunAtMs
+                  ? ` · último ${new Date(contentAuto.lastNivelRunAtMs).toLocaleString('pt-BR')}`
+                  : ''}
+              </li>
+            </ul>
             {contentAuto.lastMessage && (
               <p className="mt-2 text-xs text-cp-muted">
                 Último: {contentAuto.lastMessage}

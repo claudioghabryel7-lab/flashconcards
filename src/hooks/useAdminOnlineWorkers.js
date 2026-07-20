@@ -2,23 +2,27 @@ import { useEffect, useRef } from 'react'
 import { useAuth } from './useAuth'
 import { tickMentoradoDailyOnline } from '../services/adminOnlineMentoradoScheduler'
 import { tickProfessorOnline } from '../services/adminOnlineProfessorScheduler'
+import { tickContentAutomationOnline } from '../services/contentAutomationScheduler'
 
 const MENTORADO_MS = 60 * 1000
 const PROFESSOR_MS = 45 * 1000
+const CONTENT_MS = 60 * 1000
 
 /**
  * Enquanto QUALQUER aba do admin estiver aberta e visível no site,
- * o Professor IA fiscaliza a Moderação e (opcional) o Mentorado faz catch-up.
- * Não exige abrir o painel Admin / configurações.
+ * o Professor IA fiscaliza a Moderação, o Mentorado faz catch-up
+ * e a automação de conteúdo (revisão / incidência / níveis) avança.
  */
 export function useAdminOnlineWorkers({
   enabled = true,
   professor = true,
   mentorado = true,
+  content = true,
 } = {}) {
   const { user, isAdmin } = useAuth()
   const mentoradoBusy = useRef(false)
   const professorBusy = useRef(false)
+  const contentBusy = useRef(false)
 
   useEffect(() => {
     if (!enabled || !isAdmin || !user?.uid) return undefined
@@ -53,18 +57,35 @@ export function useAdminOnlineWorkers({
       }
     }
 
-    // Imediato ao ficar online em qualquer página
+    const runContent = async () => {
+      if (!content || contentBusy.current || document.hidden) return
+      contentBusy.current = true
+      try {
+        const result = await tickContentAutomationOnline(user.uid)
+        if (result?.started) {
+          console.info('[adminOnline] Content automation:', result)
+        }
+      } catch (err) {
+        console.warn('[adminOnline] Content automation:', err?.message || err)
+      } finally {
+        contentBusy.current = false
+      }
+    }
+
     if (professor) runProfessor()
     if (mentorado) runMentorado()
+    if (content) runContent()
 
     const timers = []
     if (mentorado) timers.push(window.setInterval(runMentorado, MENTORADO_MS))
     if (professor) timers.push(window.setInterval(runProfessor, PROFESSOR_MS))
+    if (content) timers.push(window.setInterval(runContent, CONTENT_MS))
 
     const onVisible = () => {
       if (document.hidden) return
       if (professor) runProfessor()
       if (mentorado) runMentorado()
+      if (content) runContent()
     }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
@@ -74,5 +95,5 @@ export function useAdminOnlineWorkers({
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
     }
-  }, [enabled, isAdmin, user?.uid, professor, mentorado])
+  }, [enabled, isAdmin, user?.uid, professor, mentorado, content])
 }
