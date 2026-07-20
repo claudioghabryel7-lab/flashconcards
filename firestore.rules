@@ -197,31 +197,20 @@ service cloud.firestore {
       }
       
       match /config/{configId} {
-        allow read: if isAuthenticated() && (
+        // get de doc inexistente (antes da 1ª config) e leitura autenticada
+        allow get: if isAuthenticated() && (
+          resource == null ||
           configId != 'redacao' ||
           resource.data.status == 'disponivel' ||
           isAdmin()
         );
-        allow create: if isAuthenticated() && 
-                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-        allow update: if isAuthenticated() && 
-                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-        allow delete: if isAuthenticated() && 
-                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow list: if isAuthenticated() && (isAdmin() || configId != 'redacao');
+        allow create, update, delete: if isAdmin();
       }
       
       match /cronograma/{monthKey} {
         allow read: if isAuthenticated();
-        allow create: if isAuthenticated() && 
-                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-        allow update: if isAuthenticated();
-        allow delete: if isAuthenticated() && 
-                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow create, update, delete: if isAdmin();
         
         // Subcoleção userSchedules para schedules personalizados de cada usuário
         match /userSchedules/{userId} {
@@ -230,6 +219,24 @@ service cloud.firestore {
           allow update: if isAuthenticated() && request.auth.uid == userId;
           allow delete: if isAuthenticated() && request.auth.uid == userId;
         }
+      }
+
+      /** Config legado do Guia Mentorado (bot do cronograma grava aqui) */
+      match /guiaMentorado/{docId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isAdmin();
+      }
+
+      /** Status diário da automação do Guia Mentorado */
+      match /mentoradoAutomation/{dayKey} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isAdmin();
+      }
+
+      /** Checkpoints de geração local (admin online) */
+      match /generationCheckpoints/{docId} {
+        allow read: if isAdmin();
+        allow create, update, delete: if isAdmin();
       }
       
       match /materialApoio/{docId} {

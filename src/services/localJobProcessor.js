@@ -1373,17 +1373,22 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
     )
   }
 
-  await setDoc(
-    doc(db, 'courses', courseId, 'guiaMentorado', 'config'),
-    {
-      dataProva: config.dataProva || null,
-      hasTAF: Boolean(config.hasTAF),
-      hasRedacao: Boolean(config.hasRedacao),
-      tafExercicios: config.tafExercicios || [],
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  )
+  // Config legado — se falhar por rules, não derruba o guia (cronograma já salvo)
+  try {
+    await setDoc(
+      doc(db, 'courses', courseId, 'guiaMentorado', 'config'),
+      {
+        dataProva: config.dataProva || null,
+        hasTAF: Boolean(config.hasTAF),
+        hasRedacao: Boolean(config.hasRedacao),
+        tafExercicios: config.tafExercicios || [],
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    )
+  } catch (legacyErr) {
+    console.warn('[mentorado] guiaMentorado/config:', legacyErr?.message || legacyErr)
+  }
 
   await updateProgress(
     95,
