@@ -1269,16 +1269,59 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
     throw err
   }
 
-  for (const [monthKey, data] of Object.entries(byMonth)) {
+  // Regenerar = a partir de HOJE. Dias passados ficam; futuro antigo é apagado e reescrito.
+  const todayKey = today.format('YYYY-MM-DD')
+  const monthsSnap = await getDocs(collection(db, 'courses', courseId, 'cronograma'))
+  const monthKeys = new Set([
+    ...Object.keys(byMonth),
+    ...monthsSnap.docs.map((d) => d.id),
+  ])
+
+  for (const monthKey of monthKeys) {
     const ref = doc(db, 'courses', courseId, 'cronograma', monthKey)
-    const existing = await getDoc(ref)
-    const prevDays = existing.exists() ? existing.data()?.days || {} : {}
+    const existing = monthsSnap.docs.find((d) => d.id === monthKey)
+    const prevDays = existing?.data()?.days || {}
+    const keptPast = {}
+    for (const [dayKey, dayVal] of Object.entries(prevDays)) {
+      if (dayKey < todayKey) keptPast[dayKey] = dayVal
+    }
+    const nextDays = {
+      ...keptPast,
+      ...(byMonth[monthKey]?.days || {}),
+    }
     await setDoc(
       ref,
       {
-        days: { ...prevDays, ...data.days },
+        days: nextDays,
         updatedAt: serverTimestamp(),
         generatedAt: serverTimestamp(),
+        generatedFrom: todayKey,
+        source: 'bot_deterministic',
+      },
+      { merge: true },
+    )
+  }
+
+  // Permite o tick diário gerar conteúdos de hoje de novo após regenerar o guia
+  // (updateDoc com paths aninhados — não apaga schedule/triggers)
+  const cfgRef = doc(db, 'courses', courseId, 'config', 'guiaMentorado')
+  try {
+    await updateDoc(cfgRef, {
+      cronogramaGeradoEm: serverTimestamp(),
+      'automation.lastDailyRunDayKey': null,
+      'automation.lastError': null,
+      updatedAt: serverTimestamp(),
+    })
+  } catch {
+    await setDoc(
+      cfgRef,
+      {
+        cronogramaGeradoEm: serverTimestamp(),
+        automation: {
+          lastDailyRunDayKey: null,
+          lastError: null,
+        },
+        updatedAt: serverTimestamp(),
       },
       { merge: true },
     )
@@ -1286,17 +1329,27 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
 
   await setDoc(
     doc(db, 'courses', courseId, 'guiaMentorado', 'config'),
-    { ...(config || {}), updatedAt: serverTimestamp() },
+    {
+      dataProva: config.dataProva || null,
+      hasTAF: Boolean(config.hasTAF),
+      hasRedacao: Boolean(config.hasRedacao),
+      tafExercicios: config.tafExercicios || [],
+      updatedAt: serverTimestamp(),
+    },
     { merge: true },
   )
 
-  await updateProgress(95, `Cronograma salvo (${days.length} dias, sem IA)`)
+  await updateProgress(
+    95,
+    `Guia salvo a partir de ${todayKey} (${days.length} dias novos, passado preservado)`,
+  )
 
   return {
     totalDays: days.length,
-    monthsCount: Object.keys(byMonth).length,
+    monthsCount: monthKeys.size,
     totalTopics: meta?.totalTopics || 0,
-    source: 'deterministic',
+    fromDay: todayKey,
+    source: 'bot_deterministic',
     autoGerarConteudo: Boolean(config?.autoGerarConteudo),
   }
 }

@@ -474,8 +474,8 @@ export default function AdminGuiaMentorado() {
       setProgress('Salvando configuração…')
       await persistConfig(form, { skipValidation: true })
 
-      setProgress('Montando cronograma (bot — sem IA, aba aberta)…')
-      const { jobId } = await runMentoradoCronograma({
+      setProgress('Montando guia a partir de hoje (bot — sem IA)…')
+      const { jobId, promise } = await runMentoradoCronograma({
         userId,
         courseId,
         config: {
@@ -496,11 +496,33 @@ export default function AdminGuiaMentorado() {
         },
       })
 
+      setFeedback(`⏳ Montando guia a partir de hoje (job ${String(jobId).slice(0, 8)}…)…`)
+      const cronResult = await promise
       setFeedback(
-        form.enabled && form.onCronogramaGenerated
-          ? `🚀 Cronograma enfileirado (job ${String(jobId).slice(0, 8)}…). Ao concluir, inicia o dia de hoje. Acompanhe o banner.`
-          : `🚀 Cronograma enfileirado (job ${String(jobId).slice(0, 8)}…). Acompanhe o banner no canto.`,
+        `✅ Guia salvo a partir de hoje (${cronResult?.totalDays || '?'} dias). Dias antigos preservados; futuro reescrito.`,
       )
+
+      if (form.enabled && form.onCronogramaGenerated) {
+        setProgress('Gerando conteúdos de hoje…')
+        try {
+          const { topicCount, promise: dayPromise } = await runMentoradoToday({
+            userId,
+            courseId,
+            targetDate: todayKey,
+          })
+          setFeedback(`🚀 Gerando ${topicCount} tópico(s) de hoje. Acompanhe o banner.`)
+          await dayPromise
+          setFeedback(`✅ Guia + conteúdos de hoje concluídos (${topicCount} tópico(s)).`)
+        } catch (dayErr) {
+          if (/incidência|incidencia|simulado|sem geração|skip/i.test(String(dayErr?.message || ''))) {
+            setFeedback(
+              `✅ Guia salvo. Hoje é dia de ${dayErr.message || 'revisão'} — sem geração de tópico.`,
+            )
+          } else {
+            throw dayErr
+          }
+        }
+      }
     })
 
   const handleToday = () =>
