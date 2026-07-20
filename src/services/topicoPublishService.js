@@ -255,6 +255,14 @@ export async function setTopicoPublishStatus(
       topicKeyEncoded: editalEncodedKey,
       status,
       disciplinaNome,
+      // Nome legível para notificações (evita mostrar %20%3A%3A no sino)
+      moduloLabel: moduloLabel || '',
+      topicoNome: (() => {
+        const m = String(moduloLabel || '').trim()
+        if (!m) return ''
+        const parts = m.split(/\s*[-–—]\s*/)
+        return parts.length > 1 ? parts.slice(1).join(' - ').trim() : m
+      })(),
       releasedAssets: { flashcards: true, material: true, questoes: true },
       releasedAt: now,
       updatedAt: now,

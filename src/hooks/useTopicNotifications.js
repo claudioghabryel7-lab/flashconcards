@@ -3,7 +3,10 @@ import { collection, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 import { buildTopicoPublishMapFromSnapshot } from '../services/topicoPublishService'
-import { sanitizeTopicKeyForFirestore } from '../utils/topicKeyFirestore'
+import {
+  normalizeTopicKeyForStorage,
+  sanitizeTopicKeyForFirestore,
+} from '../utils/topicKeyFirestore'
 
 const STORAGE_KEY = (uid, courseId) => `topicNotifs_${uid}_${courseId}`
 
@@ -40,17 +43,74 @@ function saveStored(uid, courseId, data) {
   }
 }
 
-function decodeTopicLabel(topicKey, disciplinaNome) {
-  let nome = ''
-  try {
-    const decoded = decodeURIComponent(topicKey || '')
-    const parts = decoded.split(' :: ')
-    nome = parts.length > 1 ? parts.slice(1).join(' :: ') : decoded
-  } catch {
-    nome = topicKey || 'Novo tópico'
+/** Detecta label ainda com %20 / %3A (topicKey URI-encoded). */
+function looksEncoded(value = '') {
+  return /%[0-9A-Fa-f]{2}/.test(String(value))
+}
+
+/**
+ * Converte topicKey (encoded, double-encoded ou ID sanitizado) em nome legível.
+ */
+export function decodeTopicLabel(topicKey, disciplinaNome, meta = {}) {
+  const fromMeta =
+    meta.topicoNome ||
+    meta.nome ||
+    meta.moduloLabel ||
+    meta.modulo ||
+    ''
+
+  let raw = String(fromMeta || topicKey || '').trim()
+
+  // ID Firestore: "4_DOUBLECOLON_Nome..."
+  if (raw.includes('_DOUBLECOLON_')) {
+    raw = raw
+      .replace(/_DOUBLECOLON_/g, ' :: ')
+      .replace(/_SLASH_/g, '/')
+      .replace(/_BACKSLASH_/g, '\\')
   }
-  if (disciplinaNome) return `${disciplinaNome} — ${nome}`
-  return nome || 'Novo tópico liberado'
+
+  // Decodifica até 2x (mesmo padrão de normalizeTopicKeyForStorage)
+  const decoded = normalizeTopicKeyForStorage(raw) || raw
+
+  let nome = decoded
+  const parts = decoded.split(/\s*::\s*/)
+  if (parts.length > 1) {
+    // "4 :: Lei nº ..." → só o nome (sem número)
+    nome = parts.slice(1).join(' :: ').trim() || decoded
+  }
+
+  // Se ainda parecer encoded, tenta mais uma passagem
+  if (looksEncoded(nome)) {
+    try {
+      nome = decodeURIComponent(nome)
+      const again = nome.split(/\s*::\s*/)
+      if (again.length > 1) nome = again.slice(1).join(' :: ').trim() || nome
+    } catch {
+      /* keep */
+    }
+  }
+
+  const disc = disciplinaNome || meta.disciplinaNome || meta.disciplina || ''
+  if (disc && nome && !nome.toLowerCase().startsWith(String(disc).toLowerCase())) {
+    return `${disc} — ${nome}`
+  }
+  return nome || disc || 'Novo tópico liberado'
+}
+
+function refreshNotificationLabels(items = []) {
+  return items.map((n) => {
+    if (!n?.topicKey && !n?.label) return n
+    const nextLabel = decodeTopicLabel(n.topicKey, n.disciplinaNome, {
+      topicoNome: n.topicoNome,
+      moduloLabel: n.moduloLabel,
+      disciplinaNome: n.disciplinaNome,
+    })
+    // Só reescreve se o label antigo estiver quebrado (encoded) ou vazio
+    if (!n.label || looksEncoded(n.label) || n.label === n.topicKey) {
+      return { ...n, label: nextLabel }
+    }
+    return n
+  })
 }
 
 function notificationId(courseId, topicKey) {
@@ -70,7 +130,14 @@ function buildMetaIndex(snapshot) {
   const metaByKey = {}
   snapshot.docs.forEach((d) => {
     const data = d.data()
-    if (data.topicKey) metaByKey[data.topicKey] = data
+    if (data.topicKey) {
+      metaByKey[data.topicKey] = data
+      metaByKey[normalizeTopicKeyForStorage(data.topicKey)] = data
+      metaByKey[sanitizeTopicKeyForFirestore(data.topicKey)] = data
+    }
+    if (data.topicKeyNormalized) {
+      metaByKey[data.topicKeyNormalized] = data
+    }
     metaByKey[d.id] = data
   })
   return metaByKey
@@ -82,22 +149,30 @@ function collectAvailableTopics(map, metaByKey) {
 
   Object.entries(map).forEach(([key, status]) => {
     if (status !== CONTENT_STATUS.AVAILABLE) return
-    const meta = metaByKey[key] || {}
-    const topicKey = meta.topicKey || key
-    if (seen.has(topicKey)) return
-    seen.add(topicKey)
+    const meta =
+      metaByKey[key] ||
+      metaByKey[normalizeTopicKeyForStorage(key)] ||
+      metaByKey[sanitizeTopicKeyForFirestore(key)] ||
+      {}
+    const topicKey = meta.topicKeyNormalized || meta.topicKey || key
+    const seenKey = normalizeTopicKeyForStorage(topicKey) || topicKey
+    if (seen.has(seenKey)) return
+    seen.add(seenKey)
     topics.push({ topicKey, meta })
   })
 
   return topics
 }
 
-function buildNotification(courseId, topicKey, meta) {
+function buildNotification(courseId, topicKey, meta = {}) {
   return {
     id: notificationId(courseId, topicKey),
     courseId,
     topicKey,
-    label: decodeTopicLabel(topicKey, meta.disciplinaNome),
+    disciplinaNome: meta.disciplinaNome || meta.disciplina || '',
+    topicoNome: meta.topicoNome || meta.nome || '',
+    moduloLabel: meta.moduloLabel || meta.modulo || '',
+    label: decodeTopicLabel(topicKey, meta.disciplinaNome || meta.disciplina, meta),
     createdAt: toMillis(meta.updatedAt),
     read: false,
   }
@@ -119,9 +194,11 @@ export function useTopicNotifications(userId, courseId) {
   const persist = useCallback(
     (data) => {
       if (!userId || !courseId) return
-      saveStored(userId, courseId, data)
-      setNotifications(data.items)
-      setUnreadCount(data.items.filter((n) => !n.read).length)
+      const items = refreshNotificationLabels(data.items || [])
+      const next = { ...data, items }
+      saveStored(userId, courseId, next)
+      setNotifications(items)
+      setUnreadCount(items.filter((n) => !n.read).length)
     },
     [userId, courseId],
   )
@@ -137,8 +214,13 @@ export function useTopicNotifications(userId, courseId) {
 
     const resolvedId = courseId || 'alego-default'
     const stored = loadStored(userId, resolvedId)
-    setNotifications(stored.items)
-    setUnreadCount(stored.items.filter((n) => !n.read).length)
+    const fixedItems = refreshNotificationLabels(stored.items || [])
+    setNotifications(fixedItems)
+    setUnreadCount(fixedItems.filter((n) => !n.read).length)
+    // Persiste labels corrigidos (migração one-shot do localStorage)
+    if (JSON.stringify(fixedItems) !== JSON.stringify(stored.items || [])) {
+      saveStored(userId, resolvedId, { ...stored, items: fixedItems })
+    }
 
     const unsub = onSnapshot(
       collection(db, 'courses', resolvedId, 'topicoStatus'),
@@ -147,6 +229,7 @@ export function useTopicNotifications(userId, courseId) {
         const metaByKey = buildMetaIndex(snapshot)
         const storedNow = loadStored(userId, resolvedId)
         let { acknowledgedKeys, items } = storedNow
+        items = refreshNotificationLabels(items)
         const existingIds = new Set(items.map((n) => n.id))
         const newItems = []
 
@@ -163,31 +246,34 @@ export function useTopicNotifications(userId, courseId) {
         }
 
         if (!initializedRef.current) {
-          // Retroativo: todos os tópicos já liberados neste curso
           collectAvailableTopics(map, metaByKey).forEach(({ topicKey, meta }) => {
             addTopic(topicKey, meta)
           })
           initializedRef.current = true
           prevMapRef.current = { ...map }
         } else {
-          // Tempo real: só liberações novas desde a última snapshot
           const prev = prevMapRef.current
           collectAvailableTopics(map, metaByKey).forEach(({ topicKey, meta }) => {
             const wasAvailable =
               prev[topicKey] === CONTENT_STATUS.AVAILABLE ||
-              prev[sanitizeTopicKeyForFirestore(topicKey)] === CONTENT_STATUS.AVAILABLE
+              prev[sanitizeTopicKeyForFirestore(topicKey)] === CONTENT_STATUS.AVAILABLE ||
+              prev[normalizeTopicKeyForStorage(topicKey)] === CONTENT_STATUS.AVAILABLE
             if (wasAvailable) return
             addTopic(topicKey, meta)
           })
           prevMapRef.current = { ...map }
         }
 
+        const labelsChanged = items.some((n, i) => n.label !== storedNow.items?.[i]?.label)
         if (newItems.length > 0) {
           const merged = [...newItems, ...items]
             .sort((a, b) => b.createdAt - a.createdAt)
             .slice(0, MAX_ITEMS)
           persist({ acknowledgedKeys, items: merged })
-        } else if (Object.keys(acknowledgedKeys).length !== Object.keys(storedNow.acknowledgedKeys).length) {
+        } else if (
+          Object.keys(acknowledgedKeys).length !== Object.keys(storedNow.acknowledgedKeys || {}).length ||
+          labelsChanged
+        ) {
           persist({ acknowledgedKeys, items })
         }
       },
