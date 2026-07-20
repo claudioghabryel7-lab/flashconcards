@@ -5,6 +5,7 @@
 import {
   collection,
   doc,
+  deleteDoc,
   getDoc,
   getDocs,
   serverTimestamp,
@@ -1315,41 +1316,48 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
     throw err
   }
 
-  // Regenerar = a partir de HOJE. Dias passados ficam; futuro antigo é apagado e reescrito.
+  // Regenerar = APAGA cronograma + automação do dia e grava só o novo plano
   const todayKey = today.format('YYYY-MM-DD')
-  const monthsSnap = await getDocs(collection(db, 'courses', courseId, 'cronograma'))
-  const monthKeys = new Set([
-    ...Object.keys(byMonth),
-    ...monthsSnap.docs.map((d) => d.id),
-  ])
+  await updateProgress(72, 'Apagando cronograma e automação antigos…')
 
-  for (const monthKey of monthKeys) {
-    const ref = doc(db, 'courses', courseId, 'cronograma', monthKey)
-    const existing = monthsSnap.docs.find((d) => d.id === monthKey)
-    const prevDays = existing?.data()?.days || {}
-    const keptPast = {}
-    for (const [dayKey, dayVal] of Object.entries(prevDays)) {
-      if (dayKey < todayKey) keptPast[dayKey] = dayVal
+  const monthsSnap = await getDocs(collection(db, 'courses', courseId, 'cronograma'))
+  for (const monthDoc of monthsSnap.docs) {
+    // Remove mês inteiro (inclui dias anteriores). Depois regrava só o novo.
+    try {
+      await deleteDoc(monthDoc.ref)
+    } catch (delErr) {
+      // fallback: zera days se delete falhar
+      await setDoc(monthDoc.ref, { days: {}, updatedAt: serverTimestamp() }, { merge: true }).catch(
+        () => {},
+      )
+      console.warn('[mentorado] delete cronograma mês:', monthDoc.id, delErr?.message || delErr)
     }
-    const nextDays = {
-      ...keptPast,
-      ...(byMonth[monthKey]?.days || {}),
+  }
+
+  // Limpa status da automação diária (PENDENTE/ERRO/LIBERADO do dia)
+  try {
+    const autoSnap = await getDocs(collection(db, 'courses', courseId, 'mentoradoAutomation'))
+    for (const autoDoc of autoSnap.docs) {
+      await deleteDoc(autoDoc.ref).catch(() => {})
     }
-    await setDoc(
-      ref,
-      {
-        days: nextDays,
-        updatedAt: serverTimestamp(),
-        generatedAt: serverTimestamp(),
-        generatedFrom: todayKey,
-        source: 'bot_deterministic',
-      },
-      { merge: true },
-    )
+  } catch (autoErr) {
+    console.warn('[mentorado] limpar mentoradoAutomation:', autoErr?.message || autoErr)
+  }
+
+  await updateProgress(80, `Gravando ${days.length} dias novos do guia…`)
+
+  for (const [monthKey, data] of Object.entries(byMonth)) {
+    await setDoc(doc(db, 'courses', courseId, 'cronograma', monthKey), {
+      days: data.days,
+      updatedAt: serverTimestamp(),
+      generatedAt: serverTimestamp(),
+      generatedFrom: todayKey,
+      source: 'bot_deterministic',
+      replacedAt: serverTimestamp(),
+    })
   }
 
   // Permite o tick diário gerar conteúdos de hoje de novo após regenerar o guia
-  // (updateDoc com paths aninhados — não apaga schedule/triggers)
   const cfgRef = doc(db, 'courses', courseId, 'config', 'guiaMentorado')
   try {
     await updateDoc(cfgRef, {
@@ -1392,14 +1400,15 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
 
   await updateProgress(
     95,
-    `Guia salvo a partir de ${todayKey} (${days.length} dias novos, passado preservado)`,
+    `Guia regenerado do zero: ${days.length} dias (cronograma + automação limpos)`,
   )
 
   return {
     totalDays: days.length,
-    monthsCount: monthKeys.size,
+    monthsCount: Object.keys(byMonth).length,
     totalTopics: meta?.totalTopics || 0,
     fromDay: todayKey,
+    wiped: true,
     source: 'bot_deterministic',
     autoGerarConteudo: Boolean(config?.autoGerarConteudo),
   }
