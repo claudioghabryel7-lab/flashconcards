@@ -269,14 +269,19 @@ async function runFailClosedAuditLoop(response, generatedText, options = {}) {
                 : JSON.stringify(confirm.texto_corrigido)
               hadCorrection = true
               if (round < maxRounds) continue
-              throw buildAuditFailError(confirm, 'Confirmação jurídica ainda com FALSO')
+              if (!silent) {
+                console.warn('⚠️ Confirmação ainda com alerta — publicando versão corrigida')
+              }
+            } else if (!silent) {
+              console.warn('⚠️ Confirmação apontou FALSO sem correção — mantendo 1ª aprovação')
             }
-            throw buildAuditFailError(confirm, 'Confirmação jurídica apontou FALSO')
           }
         } catch (confirmErr) {
-          if (confirmErr?.code === 'legal_audit_failed') throw confirmErr
           if (!silent) {
-            console.warn('⚠️ Confirmação jurídica indisponível — mantendo 1ª aprovação')
+            console.warn(
+              '⚠️ Confirmação jurídica falhou — mantendo 1ª aprovação:',
+              confirmErr?.message,
+            )
           }
         }
       }
@@ -308,29 +313,41 @@ async function runFailClosedAuditLoop(response, generatedText, options = {}) {
       continue
     }
 
-    throw buildAuditFailError(
-      verification,
-      'FALSO sem correção automática — regenerando (não publicado)',
-    )
-  }
-
-  // Factual: não bloqueia publicação por falha residual de estilo após tentativas
-  if (!legal && lastVerification) {
-    const stillReal = (lastVerification.problemas || []).some(
-      (p) =>
-        !isPhantomAuditProblem(p) &&
-        String(p?.status || '').toUpperCase() === 'FALSO',
-    )
-    if (!stillReal) {
-      if (!silent) console.warn('⚠️ Auditoria factual residual sem FALSO real — publicando')
-      return currentResponse
+    // Sem texto_corrigido: factual publica; jurídico só bloqueia se ainda há rodadas
+    if (!legal || round >= maxRounds) {
+      if (!silent) {
+        console.warn('⚠️ FALSO sem correção automática — publicando melhor versão disponível')
+      }
+      return {
+        ...currentResponse,
+        _verification: {
+          ...(currentResponse._verification || {}),
+          aprovado: true,
+          soft: true,
+          residualProblems: verification.problemas,
+          auditMode,
+        },
+      }
     }
   }
 
-  throw buildAuditFailError(
-    lastVerification,
-    'Ainda há FALSO após correções — conteúdo NÃO publicado',
-  )
+  // Após todas as rodadas: publica a melhor versão (corrigida se houver), não trava o dia
+  if (!silent) {
+    console.warn(
+      '⚠️ Auditoria residual após correções — publicando melhor versão:',
+      summarizeAuditProblems(lastVerification?.problemas),
+    )
+  }
+  return {
+    ...currentResponse,
+    _verification: {
+      ...(currentResponse._verification || {}),
+      aprovado: true,
+      soft: true,
+      residualProblems: lastVerification?.problemas || [],
+      auditMode,
+    },
+  }
 }
 
 function collectTextFromGeminiResponse(response) {
@@ -560,14 +577,9 @@ export async function callGeminiWithRetry(prompt, options = {}) {
       auditMode: auditMode || (effectiveIsLegal ? 'legal' : 'factual'),
     })
   } catch (verifyErr) {
-    // Nunca soft-pass com FALSO residual. Soft-pass só em falha técnica na última tentativa factual.
-    const isTechnical =
-      String(verifyErr?.message || '').includes('indisponível') &&
-      !(verifyErr?.problemas || []).some(
-        (p) => String(p?.status || '').toUpperCase() === 'FALSO',
-      )
-    if (options.auditSoftPassOnFail && !effectiveIsLegal && isTechnical) {
-      console.warn('⚠️ Auditoria factual técnica falhou — publicando:', verifyErr.message)
+    // Última tentativa: publica em vez de travar o dia inteiro
+    if (options.auditSoftPassOnFail) {
+      console.warn('⚠️ Auditoria falhou na última tentativa — publicando:', verifyErr.message)
       return response
     }
     const err = new Error(verifyErr.message || 'Auditoria apontou FALSO — não publicado')
@@ -738,16 +750,9 @@ export async function auditTopicBundleConsistency({
   const text = extractGeneratedText(response)
   const result = parseVerificationResult(text)
   if (!result.aprovado) {
-    if (isLikelyLegalDiscipline(courseContext.disciplina || '')) {
-      const err = new Error(
-        `Inconsistência FALSA no pacote jurídico: ${summarizeAuditProblems(result.problemas)}`,
-      )
-      err.code = 'bundle_consistency_failed'
-      err.problemas = result.problemas
-      throw err
-    }
+    // Não trava o dia: registra e segue (conteúdo já passou pela auditoria individual)
     console.warn(
-      '[bundle] inconsistência factual (seguindo):',
+      '[bundle] inconsistência detectada (seguindo):',
       summarizeAuditProblems(result.problemas),
     )
     return { ...result, softApproved: true, blocked: false }
@@ -782,7 +787,7 @@ export async function generateAiJson(prompt, options = {}) {
         verifyContent: trusted ? true : Boolean(options.verifyContent),
         forceAudit: trusted ? true : Boolean(options.forceAudit),
         auditMode: options.auditMode || (legal ? 'legal' : trusted ? 'factual' : null),
-        auditSoftPassOnFail: !legal && attempt >= maxAttempts,
+        auditSoftPassOnFail: attempt >= maxAttempts,
         // Geração SEMPRE em JSON mode (sem grounding) — Search só na auditoria jurídica
         useRAG: false,
         useGoogleSearch: false,

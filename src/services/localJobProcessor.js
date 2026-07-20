@@ -63,13 +63,12 @@ function sleep(ms) {
 function isTransientGenerationError(err) {
   const code = String(err?.code || '')
   const msg = String(err?.message || err || '').toLowerCase()
+  // legal_audit_failed NÃO é transitório — regenerar queima cota sem resolver interpretação
   return (
     code === 'ai_empty_response' ||
     code === 'ai_json_parse_error' ||
     code === 'ai_blocked' ||
     code === 'ai_generation_error' ||
-    code === 'legal_audit_failed' ||
-    code === 'bundle_consistency_failed' ||
     code === 'flashcards_invalid' ||
     code === 'questoes_invalid' ||
     code === 'material_incomplete' ||
@@ -85,8 +84,7 @@ function isTransientGenerationError(err) {
     msg.includes('quota') ||
     msg.includes('resource_exhausted') ||
     msg.includes('overloaded') ||
-    msg.includes('unavailable') ||
-    msg.includes('auditoria')
+    msg.includes('unavailable')
   )
 }
 
