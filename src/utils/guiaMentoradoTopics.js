@@ -138,6 +138,43 @@ export function extractTopicsFromCronogramaDay(dayEntry = {}, editalVerticalizad
 }
 
 /**
+ * Matéria do dia no Dashboard — inclui estudo e dias de incidência.
+ */
+export function extractTopicsForMateriaDoDia(dayEntry = {}, editalVerticalizado) {
+  if (!dayEntry || typeof dayEntry !== 'object') return []
+  const tipo = dayEntry.tipo || dayEntry.type || 'estudo'
+  const dayKey = dayEntry.data || dayEntry.dayKey || null
+  const materias = dayEntry.materias || []
+
+  if (tipo === 'simulado' || tipo === 'descanso') return []
+
+  if (tipo === 'incidencia' || tipo === 'reta_final' || dayEntry.incidencia) {
+    const seen = new Set()
+    return materias
+      .map((raw) => normalizeMateriaItem(raw))
+      .filter(Boolean)
+      .map((item) => {
+        const disciplina = item.disciplina || item.materia || 'Matéria'
+        const key = normalizeLabel(disciplina)
+        if (!key || seen.has(key)) return null
+        seen.add(key)
+        return {
+          disciplina,
+          topicoNome: item.topico || 'Incidência / revisão',
+          topicoNumero: '',
+          topicKey: '',
+          modulo: disciplina,
+          incidencia: true,
+          firstStudyDate: dayKey,
+        }
+      })
+      .filter(Boolean)
+  }
+
+  return extractTopicsFromCronogramaDay(dayEntry, editalVerticalizado)
+}
+
+/**
  * Extrai tópicos únicos de todos os dias do cronograma.
  */
 export function extractUniqueTopicsFromCronograma(cronogramaEntries = [], editalVerticalizado) {
