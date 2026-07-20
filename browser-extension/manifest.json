@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "FlashConCards Google AI Bridge",
+  "version": "0.1.0",
+  "description": "Ponte local entre o painel admin e o Modo IA do Google.",
+  "permissions": ["tabs"],
+  "host_permissions": [
+    "https://www.google.com/*",
+    "https://www.flashconcards.com.br/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.flashconcards.com.br/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": ["site-bridge.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.google.com/*"],
+      "js": ["google-agent.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "FlashConCards Google AI Bridge"
+  }
+}

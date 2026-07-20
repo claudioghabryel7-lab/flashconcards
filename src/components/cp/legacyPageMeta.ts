@@ -7,6 +7,13 @@ export type LegacyPageMeta = Omit<CPPageHeaderProps, 'actions'> & {
 }
 
 export const LEGACY_PAGE_META: Record<string, LegacyPageMeta> = {
+  '/materias-de-hoje': {
+    badge: 'Hoje',
+    title: 'Matérias de hoje',
+    subtitle: 'Estude e marque check-in de material, questões e flashcards do dia',
+    backHref: '/dashboard',
+    backLabel: 'Voltar ao Dashboard',
+  },
   '/guia-mentorado': {
     badge: 'Cronograma',
     title: 'Guia Mentorado',

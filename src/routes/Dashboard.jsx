@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import {
+  AcademicCapIcon,
   ArrowRightIcon,
   BoltIcon,
   ChartBarSquareIcon,
@@ -20,6 +21,14 @@ import { useTopicNotifications } from '../hooks/useTopicNotifications'
 import RedacoesDashboardCard from '../components/RedacoesDashboardCard'
 
 const quickLinks = [
+  {
+    to: '/materias-de-hoje',
+    code: '00',
+    title: 'Matérias de hoje',
+    desc: 'Material, questões e flashcards do dia + check-in no edital',
+    icon: AcademicCapIcon,
+    tone: 'amber',
+  },
   {
     to: '/flashcards',
     code: '01',

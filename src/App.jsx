@@ -38,6 +38,7 @@ const VesperaDeProvaConfig = lazy(() => import('./routes/VesperaDeProvaConfig'))
 const GuiaEstudos = lazy(() => import('./routes/GuiaEstudos'))
 const GuiaMentorado = lazy(() => import('./routes/GuiaMentorado'))
 const GuiaMentoradoDiaView = lazy(() => import('./routes/GuiaMentoradoDiaView'))
+const MateriasDeHoje = lazy(() => import('./routes/MateriasDeHoje'))
 const TestTrial = lazy(() => import('./routes/TestTrial'))
 const Mentoria = lazy(() => import('./routes/Mentoria'))
 const MateriaRevisada = lazy(() => import('./routes/MateriaRevisada'))
@@ -229,6 +230,14 @@ function App() {
             element={
               <ProtectedRoute requireCourseSelection>
                 <GuiaMentoradoDiaView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/materias-de-hoje"
+            element={
+              <ProtectedRoute requireCourseSelection>
+                <MateriasDeHoje />
               </ProtectedRoute>
             }
           />
