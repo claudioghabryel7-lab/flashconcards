@@ -54,18 +54,17 @@ import {
 const TRUSTED_AI = {
   trustedGeneration: true,
   useRAG: false,
-  // Automático no navegador (PC/Android): Gemini + Google Search na API.
-  // Extensão/app Android são opcionais; se existirem, o dossiê é usado como bônus.
+  // Automático no navegador: Gemini + Google Search + verificação pós-geração.
   useGoogleSearch: true,
-  verifyContent: false,
+  verifyContent: true,
   forceAudit: false,
 }
 
 /** Tentativas automáticas por tópico (erros temporários da IA) — sem clicar de novo. */
-const TOPIC_AUTO_RETRIES = 2
+const TOPIC_AUTO_RETRIES = 3
 const TOPIC_RETRY_DELAY_MS = 2500
 /** Varredura final nos que falharam com erro temporário. */
-const DAY_SWEEP_RETRIES = 1
+const DAY_SWEEP_RETRIES = 2
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -82,6 +81,7 @@ function isTransientGenerationError(err) {
     code === 'ai_blocked' ||
     code === 'ai_generation_error' ||
     code === 'flashcards_invalid' ||
+    code === 'flashcards_quality' ||
     code === 'questoes_invalid' ||
     code === 'material_incomplete' ||
     msg.includes('não retornou texto') ||
@@ -146,15 +146,19 @@ function resolveLegalFlag(disciplina = '', explicit) {
 
 function buildTrustedOptions(disciplina = '', extra = {}) {
   const isLegal = resolveLegalFlag(disciplina, extra.isLegalContent)
+  const { verifyContent: verifyOverride, ...rest } = extra
+  const defaultVerify =
+    rest.contentType === 'material' || (rest.contentType === 'flashcards' && isLegal)
   return {
     ...TRUSTED_AI,
-    isLegalContent: isLegal,
-    verifyContent: false,
     forceAudit: false,
     useGoogleSearch: true,
     useRAG: false,
     disciplina,
-    ...extra,
+    ...rest,
+    isLegalContent: isLegal,
+    // Material (e flashcards jurídicos): auditoria pós-geração. Questões: off (JSON + filtro).
+    verifyContent: verifyOverride !== undefined ? verifyOverride : defaultVerify,
   }
 }
 
@@ -423,11 +427,16 @@ Retorne APENAS JSON:
     const minKeep = Math.max(1, Math.ceil(cardsInBatch * 0.4))
     let batchCards = []
 
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
       const parsed = await generateAiJson(
         attempt === 1
           ? prompt
-          : `${prompt}\n\nREGENERAÇÃO: o lote anterior foi REJEITADO (vazio/genérico/curto). Gere de novo, 100% no TÓPICO EXATO.`,
+          : `${prompt}
+
+═══ REGENERAÇÃO ${attempt}/3 ═══
+O lote anterior foi REJEITADO (vazio/genérico/curto/dúvida factual).
+Gere de novo: 100% no TÓPICO EXATO, verso técnico, confirme com Google Search.
+Prefira menos cards corretos a cards duvidosos.`,
         {
           courseId,
           ...buildTrustedOptions(disciplina, {
@@ -439,7 +448,7 @@ Retorne APENAS JSON:
             }),
             generationConfig: serverPayload?.aiOptions?.generationConfig || {
               maxOutputTokens: 8192,
-              temperature: attempt === 1 ? 0.2 : 0.25,
+              temperature: attempt === 1 ? 0.2 : 0.12,
             },
             auditSoftPassOnFail: true,
           }),
@@ -454,10 +463,10 @@ Retorne APENAS JSON:
         batchCards = validateFlashcardBatchOrThrow(rawBatch, { topicoNome, disciplina }, { minKeep })
         break
       } catch (qualityErr) {
-        if (attempt >= 2) throw qualityErr
+        if (attempt >= 3) throw qualityErr
         await updateProgress(
           pct,
-          `Lote ${batchNum}: qualidade baixa — regenerando (tentativa ${attempt + 1})…`,
+          `Lote ${batchNum}: qualidade baixa — regenerando (tentativa ${attempt + 1}/3)…`,
         )
       }
     }
@@ -710,11 +719,41 @@ async function processSingleMentoradoTopic({
         courseId,
         ...buildTrustedOptions(disciplina, {
           contentType: 'material',
+          verifyContent: true,
           courseContext,
-          generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
+          generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
         }),
       },
     )
+
+    // Sanitiza questões embutidas no material (mesmo filtro das questões do tópico)
+    try {
+      const { filterValidQuestoes } = await import('../utils/questoesQuality')
+      const tipoProva = examCtx.tipoProva || courseContext?.tipoProva || 'ABCD'
+      const pred = materialParsed?.questoesPreditivas
+      if (Array.isArray(pred) && pred.length) {
+        const { ok, dropped } = filterValidQuestoes(pred, { tipoProva, minKeep: 0 })
+        if (dropped) {
+          console.warn(
+            `[mentorado] material ${topicKey}: ${dropped} questão(ões) preditiva(s) inválida(s) removida(s)`,
+          )
+        }
+        materialParsed = { ...materialParsed, questoesPreditivas: ok }
+      }
+    } catch (sanitizeErr) {
+      console.warn('[mentorado] sanitizar questões do material:', sanitizeErr?.message || sanitizeErr)
+    }
+
+    const hasBody =
+      (Array.isArray(materialParsed?.revisaoTurbo) && materialParsed.revisaoTurbo.length > 0) ||
+      String(materialParsed?.content || '').trim().length > 80 ||
+      String(materialParsed?.titulo || '').trim().length > 3
+    if (!hasBody) {
+      const err = new Error('Material incompleto (sem revisão/conteúdo utilizável).')
+      err.code = 'material_incomplete'
+      throw err
+    }
+
     await saveMaterialCheckpoint({
       courseId,
       topicKey,
@@ -750,64 +789,118 @@ async function processSingleMentoradoTopic({
     questoesParsed = qPrep.existingDraft
     await updateProgress(pctBase + 4, `${label}: questões do checkpoint — sem API`)
   } else if (topic.questoesPrompt) {
-    questoesParsed = await generateAiJson(
-      appendGoogleAiDossier(topic.questoesPrompt, googleAiDossier),
-      {
-        courseId,
-        ...buildTrustedOptions(disciplina, {
-          contentType: 'questoes',
-          courseContext,
-          generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
-        }),
-      },
-    )
+    const { filterValidQuestoes } = await import('../utils/questoesQuality')
+    const tipoProva = examCtx.tipoProva || courseContext?.tipoProva || 'ABCD'
+    let ok = []
+    let dropped = 0
+    let lastRaw = null
+
+    const tryFilter = (raw) => {
+      lastRaw = raw
+      return filterValidQuestoes(raw?.questoes || raw, { tipoProva, minKeep: 1 })
+    }
+
+    // Tentativa 1: geração com Search
     try {
-      const { filterValidQuestoes } = await import('../utils/questoesQuality')
-      const tipoProva = examCtx.tipoProva || courseContext?.tipoProva || 'ABCD'
-      let { ok, dropped } = filterValidQuestoes(questoesParsed?.questoes || questoesParsed, {
-        tipoProva,
-        minKeep: 1,
-      })
-      if (dropped) {
-        console.warn(`[mentorado] ${dropped} questão(ões) inválida(s) descartada(s) em ${topicKey}`)
+      questoesParsed = await generateAiJson(
+        appendGoogleAiDossier(topic.questoesPrompt, googleAiDossier),
+        {
+          courseId,
+          ...buildTrustedOptions(disciplina, {
+            contentType: 'questoes',
+            verifyContent: false,
+            courseContext,
+            generationConfig: { maxOutputTokens: 24000, temperature: 0.15 },
+          }),
+        },
+      )
+      ;({ ok, dropped } = tryFilter(questoesParsed))
+    } catch (firstErr) {
+      console.warn('[mentorado] questões tentativa 1:', firstErr?.message || firstErr)
+    }
+
+    // Tentativa 2: regenerar com prompt mais rígido + Search
+    if (!ok.length) {
+      await updateProgress(pctBase + 4, `${label}: regenerando questões (formato + veracidade)…`)
+      try {
+        questoesParsed = await generateAiJson(
+          appendGoogleAiDossier(
+            `${topic.questoesPrompt}
+
+═══ REGENERAÇÃO OBRIGATÓRIA ═══
+A resposta anterior FOI REJEITADA (gabarito/alternativas inválidos ou JSON cortado).
+Gere de novo com EXATAMENTE 10 questões.
+TODA questão DEVE ter "correta": "A"|"B"|"C"|"D"|"E" (ou "C"|"E" se Certo/Errado).
+alternativas A-E com texto real (não vazio).
+Confirme cada gabarito com Google Search.`,
+            googleAiDossier,
+          ),
+          {
+            courseId,
+            ...buildTrustedOptions(disciplina, {
+              contentType: 'questoes',
+              verifyContent: false,
+              courseContext,
+              generationConfig: { maxOutputTokens: 20000, temperature: 0.1 },
+            }),
+          },
+        )
+        ;({ ok, dropped } = tryFilter(questoesParsed))
+      } catch (secondErr) {
+        console.warn('[mentorado] questões tentativa 2:', secondErr?.message || secondErr)
       }
-      // Reparo automático se veio vazio/inválido
-      if (!ok.length) {
-        await updateProgress(pctBase + 4, `${label}: reparando questões (formato)…`)
+    }
+
+    // Tentativa 3: reparo estrutural sem Search (só formatação)
+    if (!ok.length && lastRaw) {
+      await updateProgress(pctBase + 4, `${label}: reparando formato das questões…`)
+      try {
         const repair = await generateAiJson(
-          `Reescreva as questões abaixo em JSON VÁLIDO para concurso.
+          `Reescreva as questões abaixo em JSON VÁLIDO e COMPLETO.
 
 TIPO DE PROVA: ${tipoProva}
 DISCIPLINA: ${disciplina}
 TÓPICO: ${topic.topicoNome || topicKey}
 
-ENTRADA (pode estar mal formatada):
-${JSON.stringify(questoesParsed).slice(0, 12000)}
+ENTRADA:
+${JSON.stringify(lastRaw).slice(0, 14000)}
 
 RETORNE APENAS:
-{ "questoes": [ { "enunciado": "...", "alternativas": {"A":"...","B":"...","C":"...","D":"...","E":"..."}, "correta": "A", "gabaritoComentado": "..." } ] }
+{ "questoes": [ { "numero": 1, "enunciado": "...", "alternativas": {"A":"...","B":"...","C":"...","D":"...","E":"..."}, "correta": "A", "gabaritoComentado": "..." } ] }
 
 REGRAS:
-- correta DEVE ser uma letra A-E (ou C/E se Certo/Errado)
+- Pelo menos 8 questões
+- "correta" obrigatório (A-E ou C/E)
 - alternativas com texto não vazio
-- pelo menos 3 questões`,
+- não invente lei nova: preserve fatos da entrada`,
           {
             courseId,
             trustedGeneration: true,
             useGoogleSearch: false,
-            generationConfig: { maxOutputTokens: 16000, temperature: 0.1 },
+            verifyContent: false,
+            generationConfig: { maxOutputTokens: 16000, temperature: 0 },
           },
         )
-        ;({ ok, dropped } = filterValidQuestoes(repair?.questoes || repair, {
-          tipoProva,
-          minKeep: 1,
-        }))
+        ;({ ok, dropped } = tryFilter(repair))
+        if (ok.length) questoesParsed = { ...(questoesParsed || {}), questoes: ok }
+      } catch (repairErr) {
+        console.warn('[mentorado] reparo questões:', repairErr?.message || repairErr)
       }
-      questoesParsed = { ...questoesParsed, questoes: ok }
-    } catch (filterErr) {
-      if (filterErr?.code === 'questoes_invalid') throw filterErr
-      console.warn('[mentorado] filtro questões:', filterErr?.message || filterErr)
     }
+
+    if (dropped) {
+      console.warn(`[mentorado] ${dropped} questão(ões) inválida(s) descartada(s) em ${topicKey}`)
+    }
+
+    if (!ok.length) {
+      const err = new Error(
+        'Não foi possível gerar questões válidas após 3 tentativas (gabarito/alternativas).',
+      )
+      err.code = 'questoes_invalid'
+      throw err
+    }
+
+    questoesParsed = { ...(questoesParsed || {}), questoes: ok }
     await saveQuestoesCheckpoint({
       courseId,
       topicKey,

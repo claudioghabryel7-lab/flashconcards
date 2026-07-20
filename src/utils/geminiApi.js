@@ -273,9 +273,9 @@ export async function callGeminiWithRetry(prompt, options = {}) {
     silent = false,
   } = options
 
-  const effectiveVerify = silent ? false : verifyContent
+  const effectiveVerify = Boolean(verifyContent)
   const effectiveRAG = silent ? Boolean(options.useRAG) : useRAG
-  const effectiveGoogleSearch = silent ? Boolean(options.useGoogleSearch) : useGoogleSearch
+  const effectiveGoogleSearch = silent ? Boolean(options.useGoogleSearch ?? useGoogleSearch) : useGoogleSearch
 
   let courseData = courseContext
   if (!courseData && courseId) {
@@ -508,11 +508,12 @@ export function extractGeneratedText(response) {
  */
 export async function generateAiJson(prompt, options = {}) {
   const response = await callGeminiWithRetry(prompt, {
-    silent: true,
+    useRAG: false,
+    useGoogleSearch: true,
     verifyContent: false,
-    useRAG: options.useRAG ?? false,
-    useGoogleSearch: options.useGoogleSearch ?? false,
     ...options,
+    // Sempre silencioso no parse JSON; Search/verify vêm de options (material = verify on)
+    silent: true,
   })
 
   try {

@@ -110,6 +110,7 @@ function buildTopicPayloads(topic, context, autoPublish) {
     topicoNome: topic.topicoNome,
     disciplina: topic.disciplina,
     nivel: 1,
+    quantidadeQuestoes: 12,
     ...shared,
   })
 

@@ -133,6 +133,11 @@ ${depth}
 PRIORIDADE ABSOLUTA: conteúdo cobrado pela banca ${exam.banca} para o cargo ${exam.cargo} neste concurso (${exam.concursoName}).
 Nada genérico de outros cargos. Questões embutidas no formato ${exam.tipoProva}.
 
+VERACIDADE (obrigatório):
+- Use Google Search e confirme leis/artigos/decretos em fontes oficiais.
+- Não invente dispositivo legal. Fato não confirmado → omita.
+- Cite a base normativa no validacaoArtigo e no gabarito comentado.
+
 Retorne APENAS JSON válido:
 {
   "validacaoArtigo": "artigo/lei/jurisprudência base",
@@ -159,6 +164,7 @@ Retorne APENAS JSON válido:
 
 REGRAS:
 - Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} questões preditivas no formato ${exam.tipoProva}
+- Campo "correta" obrigatório em cada questão preditiva
 - Foco 100% neste tópico + cargo ${exam.cargo} + banca ${exam.banca}
 - Sem markdown — apenas HTML (<b>, <i>, <p>, <h4>, <mark>, <ul>, <li>)
 - ${AI_MATERIAL_FORMAT_RULES}
@@ -192,9 +198,9 @@ export function buildMentoradoQuestoesPrompt({
   const resolvedTipo = tipoProva || exam.tipoProva || resolveTipoProvaFromBanca(exam.banca)
   const altBlock =
     resolvedTipo === 'Certo/Errado'
-      ? `"respostaCorreta": "C"`
-      : `"alternativas": { "A": "", "B": "", "C": "", "D": "", "E": "" },
-      "respostaCorreta": "A"`
+      ? `"correta": "C"`
+      : `"alternativas": { "A": "texto", "B": "texto", "C": "texto", "D": "texto", "E": "texto" },
+      "correta": "A"`
 
   const dificuldadeNivel =
     nivel === 1
@@ -205,8 +211,10 @@ export function buildMentoradoQuestoesPrompt({
           ? 'avançada — pegadinhas da banca'
           : 'elite — cobrança máxima da banca neste cargo'
 
+  const qtd = Number(rest.quantidadeQuestoes) > 0 ? Number(rest.quantidadeQuestoes) : 12
+
   return `${buildExamFidelityBlock({ ...exam, tipoProva: resolvedTipo })}
-Gere questões preditivas para o tópico do edital.
+Gere questões preditivas CONFIÁVEIS para o tópico do edital.
 
 ${buildExamFidelityInline({ ...exam, tipoProva: resolvedTipo })}
 DISCIPLINA: ${disciplina}
@@ -216,6 +224,12 @@ TIPO: ${resolvedTipo}
 
 EDITAL (trecho):
 ${(editalText || '').slice(0, 10000)}
+
+OBRIGATÓRIO — VERACIDADE:
+1. Use Google Search. Confirme leis, artigos, decretos e jurisprudência em fontes oficiais.
+2. NÃO invente número de lei, artigo ou Súmula. Se não confirmar → não use.
+3. Cada questão deve ter gabarito objetivamente correto e comentário citando a base legal.
+4. Prefira ${qtd} questões 100% corretas a muitas duvidosas.
 
 Retorne APENAS JSON válido:
 {
@@ -234,18 +248,19 @@ Retorne APENAS JSON válido:
       "probabilidade": 90,
       "enunciado": "enunciado no estilo ${exam.banca} para ${exam.cargo}",
       ${altBlock},
-      "explicacao": "gabarito comentado"
+      "gabaritoComentado": "explique por que a correta está certa e cite a base legal"
     }
   ]
 }
 
-REGRAS:
-- Gere EXATAMENTE 50 questões
+REGRAS DE FORMATO (CRÍTICO — sem isso a geração FALHA):
+- Gere EXATAMENTE ${qtd} questões
+- Campo "correta" OBRIGATÓRIO em TODA questão (letra A-E ou C/E)
+- alternativas A-E com texto NÃO vazio (se múltipla escolha)
+- enunciado com no mínimo 40 caracteres
 - Estilo 100% da banca ${exam.banca} (${resolvedTipo})
 - Conteúdo 100% alinhado ao cargo ${exam.cargo} no concurso ${exam.concursoName}
-- Nível de exigência: ${exam.dificuldade} / nível ${nivel}
-- Não use aspas duplas dentro de strings — use aspas simples
-- JSON válido e completo`
+- JSON válido e COMPLETO (não corte no meio)`
 }
 
 export function buildMentoradoFlashcardMeta({
