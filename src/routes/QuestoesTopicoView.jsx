@@ -1302,7 +1302,14 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
                       {questoesParaExibir[currentQuestionIndex] && (() => {
                         const questaoAtual = questoesParaExibir[currentQuestionIndex]
-                        const questaoIndexNoDeck = questoesArray.indexOf(questaoAtual)
+                        const enunciadoAtual = String(questaoAtual?.enunciado || '').trim()
+                        const questaoIndexNoDeck = questoesArray.findIndex((q) => {
+                          if (!q) return false
+                          if (q === questaoAtual) return true
+                          if (q.id && questaoAtual?.id && q.id === questaoAtual.id) return true
+                          const en = String(q.enunciado || '').trim()
+                          return en && enunciadoAtual && en === enunciadoAtual
+                        })
                         const questionIndex =
                           questaoIndexNoDeck >= 0 ? questaoIndexNoDeck : currentQuestionIndex
                         const questaoContentId = buildQuestaoContentId({
@@ -1315,7 +1322,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
                         const legacyQuestaoContentId = buildLegacyQuestaoContentId({
                           topicKey: resolvedTopicKey,
                           nivel: nivelAtual,
-                          questionIndex: currentQuestionIndex,
+                          questionIndex,
                           sanitizeTopicKey: sanitizeTopicKeyForFirestore,
                         })
 

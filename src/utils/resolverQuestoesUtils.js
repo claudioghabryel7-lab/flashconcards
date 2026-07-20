@@ -40,6 +40,7 @@ export function flattenQuestoesFromPack(pack, meta) {
     source: meta.source,
     packId: meta.packId,
     nivel: meta.nivel,
+    questionIndex: index,
   }))
 }
 

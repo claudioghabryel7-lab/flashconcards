@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import PortalOverlay from './PortalOverlay'
 import { useAuth } from '../../hooks/useAuth'
@@ -22,6 +22,21 @@ export default function ContentFlagSheet({
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState('')
 
+  // Congela identidade no mount (key remonta o sheet a cada sinalização)
+  const frozenRef = useRef({
+    courseId,
+    contentType,
+    contentId,
+    topicKey,
+    preview,
+    contextLabel,
+    disciplinaNome,
+    topicoNome,
+    moduloLabel: moduloLabel || topicoNome,
+  })
+
+  const frozen = frozenRef.current
+
   const handleSubmit = async () => {
     if (!user) {
       setMessage('Faça login para sinalizar.')
@@ -31,17 +46,17 @@ export default function ContentFlagSheet({
       setSending(true)
       setMessage('')
       await submitContentFlag({
-        courseId,
-        contentType,
-        contentId,
-        topicKey,
+        courseId: frozen.courseId,
+        contentType: frozen.contentType,
+        contentId: frozen.contentId,
+        topicKey: frozen.topicKey,
         text,
         user,
         profile,
-        preview,
-        disciplinaNome,
-        topicoNome,
-        moduloLabel: moduloLabel || topicoNome,
+        preview: frozen.preview,
+        disciplinaNome: frozen.disciplinaNome,
+        topicoNome: frozen.topicoNome,
+        moduloLabel: frozen.moduloLabel,
       })
       setMessage('Sinalização enviada. O Professor IA irá revisar.')
       setTimeout(() => {
@@ -64,7 +79,7 @@ export default function ContentFlagSheet({
             Sinalizar atenção
           </p>
           <h3 className="cp-headline text-base text-cp-text">Reportar problema</h3>
-          <p className="mt-0.5 text-xs text-cp-muted">Sobre {contextLabel}</p>
+          <p className="mt-0.5 text-xs text-cp-muted">Sobre {frozen.contextLabel}</p>
         </div>
         <button
           type="button"
@@ -76,9 +91,9 @@ export default function ContentFlagSheet({
         </button>
       </div>
 
-      {preview && (
+      {frozen.preview && (
         <div className="border-b border-cp-border bg-cp-surface/50 px-4 py-3">
-          <p className="line-clamp-4 text-sm text-cp-muted">{preview}</p>
+          <p className="line-clamp-4 text-sm text-cp-muted">{frozen.preview}</p>
         </div>
       )}
 

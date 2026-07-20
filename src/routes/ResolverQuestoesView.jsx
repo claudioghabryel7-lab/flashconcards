@@ -23,6 +23,7 @@ import {
   resolveQuestaoExplicacao,
   resolveQuestaoGabarito,
 } from '../components/QuestoesPraticaCP'
+import { buildQuestaoContentId } from '../utils/contentCommentIds'
 
 const CHART_TYPES = [
   { id: 'pie', label: 'Pizza', icon: ChartPieIcon },
@@ -429,8 +430,14 @@ const ResolverQuestoesView = () => {
                   enunciado={currentQuestao.enunciado}
                   questionNumber={currentIndex + 1}
                   courseId={courseId}
-                  contentId={currentItem.id}
-                  alternateContentIds={[currentItem.packId].filter(Boolean)}
+                  contentId={buildQuestaoContentId({
+                    topicKey: currentItem.topicKey || currentItem.materia || 'resolver',
+                    nivel: currentItem.nivel || 1,
+                    questao: currentQuestao,
+                    questionIndex: currentItem.questionIndex ?? currentIndex,
+                    packId: currentItem.packId,
+                  })}
+                  alternateContentIds={[currentItem.id, currentItem.packId].filter(Boolean)}
                   topicKey={currentItem.topicKey || null}
                 />
 

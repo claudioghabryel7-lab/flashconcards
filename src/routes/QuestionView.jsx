@@ -21,6 +21,7 @@ import {
 } from '../utils/cache'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import ContentFeedbackActions from '../components/content/ContentFeedbackActions'
+import { buildQuestaoContentId } from '../utils/contentCommentIds'
 
 const QuestionView = () => {
   const navigate = useNavigate()
@@ -509,7 +510,12 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.
               <ContentFeedbackActions
                 courseId={courseId}
                 contentType="questao"
-                contentId={currentQuestion.id || `flashquestao_${currentQuestionIndex}`}
+                contentId={buildQuestaoContentId({
+                  topicKey: selectedModulo || selectedMateria || 'flashquestao',
+                  nivel: 1,
+                  questao: currentQuestion,
+                  questionIndex: currentQuestionIndex,
+                })}
                 topicKey={selectedModulo || selectedMateria || null}
                 preview={currentQuestion.enunciado}
                 materia={selectedMateria}

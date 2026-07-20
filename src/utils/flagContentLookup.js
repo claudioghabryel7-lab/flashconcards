@@ -49,7 +49,12 @@ export function normalizeFlashcardDocId(refId) {
   const raw = String(refId || '').trim()
   if (!raw) return ''
   const fcMatch = raw.match(/_fc_(.+)$/)
-  if (fcMatch) return fcMatch[1]
+  if (fcMatch) {
+    const rest = fcMatch[1]
+    // Formato sem doc id: ..._i0_h{hash} — não é ID do Firestore
+    if (/_i\d+_h[a-z0-9]+$/i.test(rest)) return ''
+    return rest
+  }
   return raw
 }
 
@@ -94,29 +99,7 @@ function resolveQuestaoIndex(questoes, contentId, preview = '') {
   const parsed = parseQuestaoContentId(contentId)
   const id = String(contentId || '')
 
-  // Formato ResolverQuestoes: `${packId}_${index}` (ex.: topico_nivel_1_0)
-  const trailingIdx = id.match(/_(\d+)$/)
-  if (trailingIdx) {
-    const idx = Number(trailingIdx[1])
-    if (Number.isFinite(idx) && questoes[idx]) return idx
-  }
-
-  if (parsed.qIndexLegacy != null && questoes[parsed.qIndexLegacy]) {
-    return parsed.qIndexLegacy
-  }
-
-  if (parsed.qNumero != null) {
-    const asOneBased = parsed.qNumero - 1
-    if (asOneBased >= 0 && questoes[asOneBased]) return asOneBased
-    if (questoes[parsed.qNumero]) return parsed.qNumero
-    const byNumero = questoes.findIndex(
-      (q) => Number(q?.numero) === parsed.qNumero || Number(q?.number) === parsed.qNumero,
-    )
-    if (byNumero >= 0) return byNumero
-  }
-
-  if (parsed.iIndex != null && questoes[parsed.iIndex]) return parsed.iIndex
-
+  // 1) Hash do enunciado — identidade estável (não depende da ordem do array)
   if (parsed.eHash) {
     const byHash = questoes.findIndex((q) => {
       const enunciado = String(q?.enunciado || '').slice(0, 240)
@@ -125,19 +108,47 @@ function resolveQuestaoIndex(questoes, contentId, preview = '') {
     if (byHash >= 0) return byHash
   }
 
-  const previewNorm = stripHtmlLite(preview).slice(0, 100).toLowerCase()
-  if (previewNorm.length >= 20) {
+  // 2) Preview do texto sinalizado
+  const previewNorm = stripHtmlLite(preview).slice(0, 120).toLowerCase()
+  if (previewNorm.length >= 16) {
     const byPreview = questoes.findIndex((q) => {
       const hay = stripHtmlLite(q?.enunciado || '').toLowerCase()
+      if (!hay) return false
       return hay.includes(previewNorm) || previewNorm.includes(hay.slice(0, 100))
     })
     if (byPreview >= 0) return byPreview
   }
 
+  // 3) Campo "numero" da questão (NÃO usar como índice do array)
+  if (parsed.qNumero != null) {
+    const byNumero = questoes.findIndex(
+      (q) => Number(q?.numero) === parsed.qNumero || Number(q?.number) === parsed.qNumero,
+    )
+    if (byNumero >= 0) return byNumero
+  }
+
+  // 4) Índice explícito do builder: _i0, _i12
+  if (parsed.iIndex != null && questoes[parsed.iIndex]) return parsed.iIndex
+
+  // 5) Formato ResolverQuestoes `${packId}_${index}` — só se NÃO for ID canônico _nX_qY_
+  const isCanonical = /_n\d+_q\d+_/.test(id)
+  if (!isCanonical) {
+    const trailingIdx = id.match(/_(\d+)$/)
+    if (trailingIdx) {
+      const idx = Number(trailingIdx[1])
+      if (Number.isFinite(idx) && questoes[idx]) return idx
+    }
+  }
+
+  // 6) Legacy index
+  if (parsed.qIndexLegacy != null && questoes[parsed.qIndexLegacy]) {
+    return parsed.qIndexLegacy
+  }
+
   return -1
 }
 
-async function loadFlashcardDoc(courseId, contentId) {
+async function loadFlashcardDoc(courseId, contentId, preview = '') {
   const cardId = normalizeFlashcardDocId(contentId)
   const candidates = [...new Set([cardId, String(contentId || '').trim()].filter(Boolean))]
 
@@ -163,6 +174,30 @@ async function loadFlashcardDoc(courseId, contentId) {
       }
     } catch {
       /* índice/permission — ignora */
+    }
+  }
+
+  // Fallback: hash da pergunta no contentId (_h{hash}) ou preview
+  const hashFromId = String(contentId || '').match(/_h([a-z0-9]+)$/i)?.[1] || ''
+  const previewNorm = stripHtmlLite(preview).slice(0, 120).toLowerCase()
+  if (hashFromId || previewNorm.length >= 12) {
+    try {
+      const snap = await getDocs(query(collection(db, 'courses', courseId, 'flashcards'), limit(200)))
+      for (const d of snap.docs) {
+        const data = d.data() || {}
+        const pergunta = String(data.pergunta || data.frente || '')
+        if (hashFromId && pergunta && simpleHash(pergunta.slice(0, 240)) === hashFromId) {
+          return { ref: d.ref, id: d.id, data }
+        }
+        if (previewNorm.length >= 12) {
+          const hay = stripHtmlLite(pergunta).toLowerCase()
+          if (hay.includes(previewNorm) || previewNorm.includes(hay.slice(0, 100))) {
+            return { ref: d.ref, id: d.id, data }
+          }
+        }
+      }
+    } catch {
+      /* ignore */
     }
   }
 
@@ -237,14 +272,25 @@ async function loadQuestaoDoc(courseId, flag) {
   const topicKey = flag.topicKey
   const preview = flag.preview || ''
   const parsed = parseQuestaoContentId(contentId)
+  const isCanonical = /_n\d+_q\d+_/.test(contentId)
 
-  // ResolverQuestoes: contentId = `${packId}_${index}`
-  const packIdxMatch = contentId.match(/^(.+)_(\d+)$/)
-  if (packIdxMatch) {
-    const packId = packIdxMatch[1]
+  // Pack explícito no ID canônico (_p...)
+  if (parsed.packFromId) {
     for (const col of ['questoesTopico', 'questoesIncidencia']) {
-      const hit = await tryQuestaoPack(courseId, col, packId, contentId, preview)
+      const hit = await tryQuestaoPack(courseId, col, parsed.packFromId, contentId, preview)
       if (hit) return hit
+    }
+  }
+
+  // Formato legado ResolverQuestoes: `${packId}_${index}` — só se NÃO for ID canônico
+  if (!isCanonical) {
+    const packIdxMatch = contentId.match(/^(.+)_(\d+)$/)
+    if (packIdxMatch) {
+      const packId = packIdxMatch[1]
+      for (const col of ['questoesTopico', 'questoesIncidencia']) {
+        const hit = await tryQuestaoPack(courseId, col, packId, contentId, preview)
+        if (hit) return hit
+      }
     }
   }
 
@@ -263,17 +309,6 @@ async function loadQuestaoDoc(courseId, flag) {
     }
     const plain = await tryQuestaoPack(courseId, 'questoesTopico', sanitized, contentId, preview)
     if (plain) return plain
-  }
-
-  if (parsed.packFromId) {
-    const exact = await tryQuestaoPack(
-      courseId,
-      'questoesTopico',
-      parsed.packFromId,
-      contentId,
-      preview,
-    )
-    if (exact) return exact
   }
 
   // Varredura limitada por preview/enunciado
@@ -348,7 +383,7 @@ export async function loadFlaggedContentForLocal(courseId, flag) {
   const type = String(flag.contentType || '').toLowerCase()
 
   if (type === 'flashcard' || type === 'flashcards' || type === 'topico') {
-    const found = await loadFlashcardDoc(courseId, flag.contentId)
+    const found = await loadFlashcardDoc(courseId, flag.contentId, flag.preview || '')
     if (!found) return null
     const d = found.data || {}
     return {

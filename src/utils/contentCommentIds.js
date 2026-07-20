@@ -42,13 +42,16 @@ export function buildQuestaoContentId({
   packId = '',
 }) {
   const topic = sanitizeTopicKeyForContentId(topicKey)
-  const numero = questao?.numero ?? questionIndex + 1
-  const enunciadoKey = questao?.enunciado ? simpleHash(String(questao.enunciado).slice(0, 240)) : ''
+  const enunciado = String(questao?.enunciado || '').trim()
+  const enunciadoKey = enunciado ? simpleHash(enunciado.slice(0, 240)) : ''
+  // Hash do enunciado primeiro — evita trocar de questão quando numero/índice mudam
   const stable =
+    (enunciadoKey ? `e${enunciadoKey}` : '') ||
     questao?.id ||
     questao?.uid ||
-    (enunciadoKey ? `e${enunciadoKey}` : `i${questionIndex}`)
-  const pack = packId ? `_p${String(packId).slice(0, 40)}` : ''
+    `i${questionIndex}`
+  const numero = questao?.numero ?? questionIndex + 1
+  const pack = packId ? `_p${String(packId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40)}` : ''
 
   return `${topic}_n${nivel}_q${numero}_${stable}${pack}`.slice(0, 500)
 }
@@ -97,14 +100,17 @@ export function buildLegacyQuestaoContentId({ topicKey, nivel = 1, questionIndex
 }
 
 export function buildFlashcardContentId({ courseId, topicKey, card, cardIndex = 0 }) {
+  const course = String(courseId || 'course').slice(0, 60)
+  // Preferir sempre o ID do documento Firestore (único)
   if (card?.id) {
-    return `${courseId || 'course'}_fc_${card.id}`
+    return `${course}_fc_${card.id}`
   }
 
   const topic = sanitizeTopicKeyForContentId(topicKey)
-  const pergunta = card?.pergunta || card?.frente || ''
+  const pergunta = String(card?.pergunta || card?.frente || '').trim()
   const hash = pergunta ? simpleHash(pergunta.slice(0, 240)) : `idx${cardIndex}`
-  return `${courseId || 'course'}_fc_${topic}_${hash}`.slice(0, 500)
+  // Inclui índice + hash para evitar colisão entre cards sem id
+  return `${course}_fc_${topic}_i${cardIndex}_h${hash}`.slice(0, 500)
 }
 
 /** ID estável para material completo (conteudosCompletos). */

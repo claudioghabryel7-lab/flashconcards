@@ -19,10 +19,13 @@ export default function ContentFeedbackActions({
 }) {
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [flagOpen, setFlagOpen] = useState(false)
+  /** Congela o alvo no momento do clique — evita sinalizar outro card/questão se o deck avançar. */
+  const [flagTarget, setFlagTarget] = useState(null)
 
   useEffect(() => {
     setCommentsOpen(false)
     setFlagOpen(false)
+    setFlagTarget(null)
   }, [contentId, contentType, courseId])
 
   if (!courseId || !contentId) return null
@@ -31,6 +34,23 @@ export default function ContentFeedbackActions({
     variant === 'compact'
       ? 'flex h-9 w-9 items-center justify-center rounded-full transition'
       : 'inline-flex items-center gap-1.5 rounded-full border border-cp-border px-3 py-1.5 text-xs font-medium transition'
+
+  const openFlag = (e) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setFlagTarget({
+      courseId,
+      contentType,
+      contentId,
+      topicKey,
+      preview,
+      contextLabel,
+      disciplinaNome: materia,
+      topicoNome: assunto,
+      moduloLabel: assunto,
+    })
+    setFlagOpen(true)
+  }
 
   return (
     <>
@@ -53,11 +73,7 @@ export default function ContentFeedbackActions({
         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            e.preventDefault()
-            setFlagOpen(true)
-          }}
+          onClick={openFlag}
           className={`${btnBase} text-cp-muted hover:bg-[var(--cp-accent-4)]/10 hover:text-[var(--cp-accent-4)]`}
           aria-label="Sinalizar atenção"
           title="Sinalizar atenção"
@@ -86,20 +102,24 @@ export default function ContentFeedbackActions({
         </Suspense>
       )}
 
-      {flagOpen && (
+      {flagOpen && flagTarget && (
         <Suspense fallback={null}>
           <ContentFlagSheet
+            key={`flag:${flagTarget.courseId}:${flagTarget.contentType}:${flagTarget.contentId}`}
             open={flagOpen}
-            onClose={() => setFlagOpen(false)}
-            courseId={courseId}
-            contentType={contentType}
-            contentId={contentId}
-            topicKey={topicKey}
-            preview={preview}
-            contextLabel={contextLabel}
-            disciplinaNome={materia}
-            topicoNome={assunto}
-            moduloLabel={assunto}
+            onClose={() => {
+              setFlagOpen(false)
+              setFlagTarget(null)
+            }}
+            courseId={flagTarget.courseId}
+            contentType={flagTarget.contentType}
+            contentId={flagTarget.contentId}
+            topicKey={flagTarget.topicKey}
+            preview={flagTarget.preview}
+            contextLabel={flagTarget.contextLabel}
+            disciplinaNome={flagTarget.disciplinaNome}
+            topicoNome={flagTarget.topicoNome}
+            moduloLabel={flagTarget.moduloLabel}
           />
         </Suspense>
       )}
