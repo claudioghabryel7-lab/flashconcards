@@ -1,7 +1,7 @@
 /**
  * Professor IA — tick local enquanto o admin está online.
- * Respeita janela De/Até; se o horário chegou e a sessão não iniciou, inicia (catch-up).
- * Processa sinalizações da Moderação uma a uma.
+ * Moderação: corrige sinalizações sempre que o painel admin está aberto (não depende da agenda).
+ * Agenda De/Até: controla sessão/UI e rotação semanal de redação.
  */
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
@@ -16,6 +16,7 @@ import { startBackgroundGeneration, getActiveGenerationCount } from './aiGenerat
 import {
   fetchNextOpenFlag,
   patchProfessorActivity,
+  reclaimStaleInReviewFlags,
 } from './localProfessorFlagProcessor'
 
 let busy = false
@@ -41,6 +42,109 @@ async function endSessionOutsideWindow(data) {
   )
 }
 
+async function startFlagCorrection(adminUserId, flag, data = {}) {
+  const label = `Sinalização (${flag.contentType || 'conteúdo'})`
+  await patchProfessorActivity({
+    phase: 'running',
+    lastMessage: `Corrigindo: ${label}`,
+    currentActivity: {
+      phase: 'running',
+      message: `Fiscalizando: ${label}`,
+      itemType: 'flag',
+      courseId: flag.courseId,
+      label,
+      professorStep: 'iniciando',
+      progress: 5,
+      updatedAt: serverTimestamp(),
+    },
+  })
+
+  const { promise } = await startBackgroundGeneration({
+    userId: adminUserId,
+    courseId: flag.courseId,
+    jobType: 'professor_supervisor',
+    metadata: { flagId: flag.id, source: 'admin_online' },
+    serverPayload: {
+      itemType: 'flag',
+      payload: {
+        flagId: flag.id,
+        contentType: flag.contentType,
+        contentId: flag.contentId,
+        topicKey: flag.topicKey,
+        preview: flag.preview,
+        reportText: flag.text,
+        topicoNome: flag.topicoNome,
+        disciplinaNome: flag.disciplinaNome,
+      },
+    },
+  })
+
+  promise
+    .then(async (result) => {
+      await patchProfessorActivity({
+        phase: 'idle_queue',
+        lastMessage: result?.summary || 'Correção concluída.',
+        itemsProcessedSession: Number(data.itemsProcessedSession || 0) + 1,
+        currentActivity: {
+          phase: 'done_item',
+          message: result?.summary || 'Correção aplicada',
+          progress: 100,
+          updatedAt: serverTimestamp(),
+        },
+      })
+    })
+    .catch(async (err) => {
+      await patchProfessorActivity({
+        phase: 'error',
+        lastMessage: err?.message || 'Erro na correção',
+        currentActivity: {
+          phase: 'error',
+          message: err?.message || 'Erro',
+          progress: 100,
+          updatedAt: serverTimestamp(),
+        },
+      })
+    })
+
+  return { started: true, flagId: flag.id, courseId: flag.courseId }
+}
+
+/**
+ * Força 1 correção da Moderação agora (ignora agenda/janela).
+ */
+export async function forceProcessModerationNow(adminUserId) {
+  if (!db || !adminUserId) throw new Error('Admin não autenticado.')
+  if (busy) throw new Error('Professor já está processando. Aguarde alguns segundos.')
+  if (getActiveGenerationCount() > 0) {
+    throw new Error('Há outra geração em andamento. Aguarde terminar.')
+  }
+
+  busy = true
+  try {
+    await reclaimStaleInReviewFlags()
+    const flag = await fetchNextOpenFlag()
+    if (!flag) {
+      await patchProfessorActivity({
+        phase: 'idle_queue',
+        lastMessage: 'Nenhuma sinalização aberta na Moderação.',
+        currentActivity: {
+          phase: 'idle_queue',
+          message: 'Moderação vazia',
+          progress: 100,
+          updatedAt: serverTimestamp(),
+        },
+      })
+      return { skipped: true, reason: 'empty' }
+    }
+
+    const snap = await getDoc(doc(db, 'config', 'professorFiscalizador'))
+    const data = snap.exists() ? snap.data() : {}
+    return await startFlagCorrection(adminUserId, flag, data)
+  } finally {
+    busy = false
+  }
+}
+
 export async function tickProfessorOnline(adminUserId) {
   if (!db || !adminUserId || busy) return { skipped: true, reason: 'busy' }
   if (typeof document !== 'undefined' && document.hidden) {
@@ -55,80 +159,72 @@ export async function tickProfessorOnline(adminUserId) {
     const snap = await getDoc(doc(db, 'config', 'professorFiscalizador'))
     let data = snap.exists() ? snap.data() : {}
 
-    if (!data.recurringDaily && !data.enabled) {
-      return { skipped: true, reason: 'off' }
-    }
-
     const todayKey = getTodayKeyInSaoPaulo()
     const within = isWithinProfessorWindow(data)
 
-    // Catch-up: agenda ligada, horário ok, sessão ainda não ativa hoje
+    // Catch-up de sessão (agenda) — opcional
     if (data.recurringDaily && !data.enabled && within) {
-      if (data.lastAutoStartDate === todayKey && data.phase === 'session_expired') {
-        return { skipped: true, reason: 'session_done_today', checked: true }
-      }
-      await setProfessorSupervisorEnabled(adminUserId, true, {
-        startHour: data.windowStartHour ?? data.dailyStartHour,
-        startMinute: data.windowStartMinute ?? data.dailyStartMinute,
-        endHour: data.windowEndHour,
-        endMinute: data.windowEndMinute,
-      })
-      const refreshed = await getDoc(doc(db, 'config', 'professorFiscalizador'))
-      data = refreshed.exists() ? refreshed.data() : data
-    }
-
-    if (data.recurringDaily && !within) {
-      if (data.enabled) await endSessionOutsideWindow(data)
-      return {
-        skipped: true,
-        reason: 'fora_janela',
-        next: formatDailyStartLabel(
-          data.windowStartHour ?? data.dailyStartHour ?? 0,
-          data.windowStartMinute ?? data.dailyStartMinute ?? 0,
-        ),
-      }
-    }
-
-    if (!data.enabled) {
-      return { skipped: true, reason: 'waiting_window' }
-    }
-
-    // Além da Moderação: gira tema de redação a cada 7 dias (cursos com hasRedacao)
-    try {
-      const { tickProfessorRedacaoWeekly } = await import('./localProfessorRedacao')
-      const redacaoTick = await tickProfessorRedacaoWeekly()
-      if (redacaoTick?.didRotate) {
-        const first = redacaoTick.rotated?.[0]
-        await patchProfessorActivity({
-          phase: 'idle_queue',
-          lastMessage: `Tema de redação da semana publicado${
-            first?.tema ? `: ${String(first.tema).slice(0, 80)}…` : '.'
-          } (${first?.notified || 0} aluno(s) avisados).`,
-          itemsProcessedSession: Number(data.itemsProcessedSession || 0) + 1,
-          currentActivity: {
-            phase: 'done_item',
-            message: 'Redação semanal — novo tema',
-            itemType: 'redacao',
-            courseId: first?.courseId || null,
-            progress: 100,
-            updatedAt: serverTimestamp(),
-          },
+      if (!(data.lastAutoStartDate === todayKey && data.phase === 'session_expired')) {
+        await setProfessorSupervisorEnabled(adminUserId, true, {
+          startHour: data.windowStartHour ?? data.dailyStartHour,
+          startMinute: data.windowStartMinute ?? data.dailyStartMinute,
+          endHour: data.windowEndHour,
+          endMinute: data.windowEndMinute,
         })
-        return { started: true, kind: 'redacao_theme', courseId: first?.courseId }
+        const refreshed = await getDoc(doc(db, 'config', 'professorFiscalizador'))
+        data = refreshed.exists() ? refreshed.data() : data
       }
-    } catch (redacaoErr) {
-      console.warn('[professorOnline] redação semanal:', redacaoErr?.message || redacaoErr)
     }
 
+    if (data.recurringDaily && !within && data.enabled) {
+      await endSessionOutsideWindow(data)
+    }
+
+    // Redação semanal só na janela/agenda
+    if (data.recurringDaily ? within : data.enabled) {
+      try {
+        const { tickProfessorRedacaoWeekly } = await import('./localProfessorRedacao')
+        const redacaoTick = await tickProfessorRedacaoWeekly()
+        if (redacaoTick?.didRotate) {
+          const first = redacaoTick.rotated?.[0]
+          await patchProfessorActivity({
+            phase: 'idle_queue',
+            lastMessage: `Tema de redação da semana publicado${
+              first?.tema ? `: ${String(first.tema).slice(0, 80)}…` : '.'
+            } (${first?.notified || 0} aluno(s) avisados).`,
+            itemsProcessedSession: Number(data.itemsProcessedSession || 0) + 1,
+            currentActivity: {
+              phase: 'done_item',
+              message: 'Redação semanal — novo tema',
+              itemType: 'redacao',
+              courseId: first?.courseId || null,
+              progress: 100,
+              updatedAt: serverTimestamp(),
+            },
+          })
+          return { started: true, kind: 'redacao_theme', courseId: first?.courseId }
+        }
+      } catch (redacaoErr) {
+        console.warn('[professorOnline] redação semanal:', redacaoErr?.message || redacaoErr)
+      }
+    }
+
+    // Moderação: SEMPRE com admin online (painel aberto), independente da agenda
+    await reclaimStaleInReviewFlags()
     const flag = await fetchNextOpenFlag()
     if (!flag) {
       await patchProfessorActivity({
         phase: 'idle_queue',
         lastMessage:
-          'Fila vazia — Moderação ok. Redação semanal em dia. Aguardando novas sinalizações.',
+          'Fila vazia — Moderação ok. Aguardando novas sinalizações (admin online).',
         currentActivity: {
           phase: 'idle_queue',
-          message: 'Online — Moderação + Redação em dia.',
+          message: data.recurringDaily && !within
+            ? `Fora da janela (${formatDailyStartLabel(
+                data.windowStartHour ?? data.dailyStartHour ?? 0,
+                data.windowStartMinute ?? data.dailyStartMinute ?? 0,
+              )}) — Moderação ainda é corrigida com o painel aberto.`
+            : 'Online — Moderação em dia.',
           progress: 100,
           updatedAt: serverTimestamp(),
         },
@@ -136,69 +232,7 @@ export async function tickProfessorOnline(adminUserId) {
       return { skipped: true, reason: 'empty', checked: true }
     }
 
-    const label = `Sinalização (${flag.contentType || 'conteúdo'})`
-    await patchProfessorActivity({
-      phase: 'running',
-      lastMessage: `Corrigindo: ${label}`,
-      currentActivity: {
-        phase: 'running',
-        message: `Fiscalizando: ${label}`,
-        itemType: 'flag',
-        courseId: flag.courseId,
-        label,
-        professorStep: 'iniciando',
-        progress: 5,
-        updatedAt: serverTimestamp(),
-      },
-    })
-
-    const { promise } = await startBackgroundGeneration({
-      userId: adminUserId,
-      courseId: flag.courseId,
-      jobType: 'professor_supervisor',
-      metadata: { flagId: flag.id, source: 'admin_online' },
-      serverPayload: {
-        itemType: 'flag',
-        payload: {
-          flagId: flag.id,
-          contentType: flag.contentType,
-          contentId: flag.contentId,
-          topicKey: flag.topicKey,
-          preview: flag.preview,
-          reportText: flag.text,
-          topicoNome: flag.topicoNome,
-        },
-      },
-    })
-
-    promise
-      .then(async (result) => {
-        await patchProfessorActivity({
-          phase: 'idle_queue',
-          lastMessage: result?.summary || 'Correção concluída.',
-          itemsProcessedSession: Number(data.itemsProcessedSession || 0) + 1,
-          currentActivity: {
-            phase: 'done_item',
-            message: result?.summary || 'Correção aplicada',
-            progress: 100,
-            updatedAt: serverTimestamp(),
-          },
-        })
-      })
-      .catch(async (err) => {
-        await patchProfessorActivity({
-          phase: 'error',
-          lastMessage: err?.message || 'Erro na correção',
-          currentActivity: {
-            phase: 'error',
-            message: err?.message || 'Erro',
-            progress: 100,
-            updatedAt: serverTimestamp(),
-          },
-        })
-      })
-
-    return { started: true, flagId: flag.id, courseId: flag.courseId }
+    return await startFlagCorrection(adminUserId, flag, data)
   } finally {
     busy = false
   }

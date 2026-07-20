@@ -232,6 +232,40 @@ REGRAS:
   return { needsAdmin: true, applied: 0, summary: verdict?.summary }
 }
 
+const STALE_IN_REVIEW_MS = 12 * 60 * 1000
+
+/** Reabre flags travadas em in_review (job morto / aba fechada). */
+export async function reclaimStaleInReviewFlags() {
+  const coursesSnap = await getDocs(collection(db, 'courses'))
+  const now = Date.now()
+  let reclaimed = 0
+
+  for (const courseDoc of coursesSnap.docs) {
+    if (courseDoc.data()?.active === false) continue
+    const q = query(
+      collection(db, 'courses', courseDoc.id, 'contentFeedback'),
+      where('kind', '==', 'flag'),
+      where('status', '==', 'in_review'),
+      limit(10),
+    )
+    const snap = await getDocs(q)
+    for (const d of snap.docs) {
+      const data = d.data() || {}
+      const at = data.inReviewAt?.toMillis?.() || data.inReviewAt?.seconds * 1000 || 0
+      if (at && now - at < STALE_IN_REVIEW_MS) continue
+      await updateDoc(d.ref, {
+        status: 'open',
+        inReviewBy: null,
+        inReviewJobId: null,
+        lastProfessorSummary: 'Reaberto automaticamente (revisão travada).',
+        updatedAt: serverTimestamp(),
+      }).catch(() => {})
+      reclaimed += 1
+    }
+  }
+  return reclaimed
+}
+
 /** Busca a próxima flag aberta ou que precisa de retry (qualquer curso). */
 export async function fetchNextOpenFlag() {
   const coursesSnap = await getDocs(collection(db, 'courses'))
@@ -245,7 +279,7 @@ export async function fetchNextOpenFlag() {
         collection(db, 'courses', courseDoc.id, 'contentFeedback'),
         where('kind', '==', 'flag'),
         where('status', '==', status),
-        limit(3),
+        limit(5),
       )
       const snap = await getDocs(q)
       for (const d of snap.docs) {
@@ -254,7 +288,7 @@ export async function fetchNextOpenFlag() {
         if (
           status === 'needs_admin' &&
           data.lastProfessorSummary &&
-          !/não encontrado|nao encontrado|não carregado/i.test(
+          !/não encontrado|nao encontrado|não carregado|travada|Reaberto/i.test(
             String(data.lastProfessorSummary),
           )
         ) {

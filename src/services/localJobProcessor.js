@@ -357,46 +357,73 @@ async function processFlashcardsTopico(
           .join('\n')}`
       : ''
 
+    const topicoNome = meta.topicoNome || meta.topicKey || ''
     const prompt = `${buildExamFidelityBlock(examCtx)}
 ${basePrompt}
 
-${buildExamFidelityInline(examCtx)}
+═══ TRAVA DE TÓPICO (OBRIGATÓRIA) ═══
 DISCIPLINA: ${disciplina}
-TÓPICO: ${meta.topicoNome || meta.topicKey || ''}
+TÓPICO EXATO: ${topicoNome}
 MÓDULO: ${meta.modulo || ''}
+${buildExamFidelityInline(examCtx)}
 
-TAREFA: Criar exatamente ${cardsInBatch} flashcards (lote ${batchNum}/${batchCount} de ${FLASHCARD_TARGET} total)
-100% fiéis à banca ${examCtx.banca}, ao cargo ${examCtx.cargo} e ao concurso ${examCtx.concursoName}.
-Priorize o que essa banca mais cobra PARA ESSE CARGO neste tópico.
+TAREFA: Criar exatamente ${cardsInBatch} flashcards (lote ${batchNum}/${batchCount} de ${FLASHCARD_TARGET} total).
+
+REGRAS DE OURO (violação = card inválido):
+1. CADA card DEVE ser 100% sobre o TÓPICO EXATO acima — nada de assuntos vizinhos ou genéricos da disciplina.
+2. Perguntas no estilo da banca ${examCtx.banca} para o cargo ${examCtx.cargo} (${examCtx.concursoName}).
+3. NÃO invente lei, artigo, súmula, data ou jurisprudência. Use Google Search.
+4. PROIBIDO: "O que é X?" com definição vaga; curiosidades; conteúdo óbvio; misturar outro tópico.
+5. Verso: 2–5 frases técnicas, corretas e cobráveis em prova.
 ${existingList}
-
-Use Google Search. Não invente lei/artigo. Versos factualmente corretos (2–4 frases).
-Estilo das perguntas = estilo da ${examCtx.banca}.
 
 Retorne APENAS JSON:
 { "flashcards": [ { "pergunta": "...", "resposta": "..." } ] }`
 
-    const parsed = await generateAiJson(prompt, {
-      courseId,
-      ...buildTrustedOptions(disciplina, {
-        contentType: 'flashcards',
-        courseContext: toCourseAiContextShape({
-          ...examCtx,
-          disciplina,
-          topicoNome: meta.topicoNome,
-        }),
-        generationConfig: serverPayload?.aiOptions?.generationConfig || {
-          maxOutputTokens: 16000,
-          temperature: 0.2,
+    const { validateFlashcardBatchOrThrow } = await import('../utils/flashcardQuality')
+    const minKeep = Math.max(1, cardsInBatch - 2)
+    let batchCards = []
+
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const parsed = await generateAiJson(
+        attempt === 1
+          ? prompt
+          : `${prompt}\n\nREGENERAÇÃO: o lote anterior foi REJEITADO (fora do tópico/genérico/curto). Gere de novo, 100% no TÓPICO EXATO.`,
+        {
+          courseId,
+          ...buildTrustedOptions(disciplina, {
+            contentType: 'flashcards',
+            courseContext: toCourseAiContextShape({
+              ...examCtx,
+              disciplina,
+              topicoNome,
+            }),
+            generationConfig: serverPayload?.aiOptions?.generationConfig || {
+              maxOutputTokens: 16000,
+              temperature: attempt === 1 ? 0.1 : 0.15,
+            },
+            auditSoftPassOnFail: false,
+          }),
         },
-      }),
-    })
+      )
 
-    const batchCards = dedupeCards(
-      (parsed?.flashcards || parsed?.cards || []).map(normalizeCard),
-    ).filter((c) => c.pergunta && c.resposta)
+      const rawBatch = dedupeCards(
+        (parsed?.flashcards || parsed?.cards || []).map(normalizeCard),
+      ).filter((c) => c.pergunta && c.resposta)
 
-    if (batchCards.length < Math.max(1, cardsInBatch - 2)) {
+      try {
+        batchCards = validateFlashcardBatchOrThrow(rawBatch, { topicoNome, disciplina }, { minKeep })
+        break
+      } catch (qualityErr) {
+        if (attempt >= 2) throw qualityErr
+        await updateProgress(
+          pct,
+          `Lote ${batchNum}: qualidade baixa — regenerando (tentativa ${attempt + 1})…`,
+        )
+      }
+    }
+
+    if (batchCards.length < minKeep) {
       const err = new Error(
         `Lote ${batchNum} de flashcards insuficiente após auditoria (${batchCards.length}/${cardsInBatch}).`,
       )

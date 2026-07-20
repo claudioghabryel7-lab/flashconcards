@@ -152,22 +152,26 @@ export function buildFlashcardAuditPrompt(flashcardsJson = '', courseData = {}, 
 
   return `Audite flashcards de concurso (${legal ? 'modo JURÍDICO' : 'modo FACTUAL'}).
 Banca: ${banca} | Concurso: ${concurso} | Cargo: ${cargo}
-Disciplina: ${disciplina} | Tópico: ${topico}
+Disciplina: ${disciplina}
+TÓPICO OBRIGATÓRIO: ${topico || '(não informado)'}
 
-Use Google Search. Verifique se cada verso está CORRETO.
+Use Google Search. Seja RIGOROSO — conteúdo ruim NÃO pode passar.
 
 Responda APENAS JSON:
 {
   "aprovado": true ou false,
-  "problemas": [{"trecho": "frente ou verso", "status": "FALSO|INCERTO", "motivo": "...", "correcao": "..."}],
+  "problemas": [{"trecho": "frente ou verso", "status": "FALSO|FORA_DO_TOPICO|GENERICO|INCERTO", "motivo": "...", "correcao": "..."}],
   "texto_corrigido": null ou JSON {"flashcards":[...]} com TODOS os cards
 }
 
-Regras:
-- aprovado=false SÓ com FALSO claro no verso/frente.
-- Genérico/fraco → NÃO reprova.
-- Em dúvida, aprove.
-- Se houver FALSO, devolva todos os cards corrigidos.
+Regras (obrigatórias):
+- aprovado=false se QUALQUER card tiver: fato FALSO, lei/artigo inventado, fora do TÓPICO, genérico demais, ou sem nexo com a disciplina.
+- FORA_DO_TOPICO e GENERICO contam como FALSO para fins de aprovação (aprovado=false).
+- Card genérico ("O que é X?" com definição vaga) → reprova e corrija para pergunta técnica de prova.
+- Card de outro assunto (ex.: fala de direito civil em tópico de processo) → reprova.
+- Em dúvida factual ou de pertinência ao tópico → reprova (aprovado=false) e corrija ou remova o card.
+- Se houver qualquer problema, devolva texto_corrigido com TODOS os cards (só os bons + corrigidos).
+- Só aprove se TODOS os cards forem corretos, específicos do tópico e úteis para a banca ${banca}.
 
 FLASHCARDS:
 ${truncateForVerification(flashcardsJson, FLASHCARD_VERIFY_CHARS)}`
@@ -200,29 +204,40 @@ ${String(questoesSample).slice(0, 5000)}`
 }
 
 export function parseVerificationResult(rawText = {}) {
-  const softPass = {
-    aprovado: true,
-    soft: true,
-    problemas: [],
+  // Fail-closed: JSON ilegível = NÃO aprova (antes soft-pass deixava lixo passar)
+  const hardFail = {
+    aprovado: false,
+    soft: false,
+    problemas: [{ status: 'FALSO', motivo: 'Auditoria retornou JSON inválido/ilegível' }],
     texto_corrigido: null,
-    falsosCount: 0,
+    falsosCount: 1,
   }
 
   try {
     const jsonMatch = String(rawText).match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return softPass
+    if (!jsonMatch) return hardFail
     const parsed = JSON.parse(jsonMatch[0])
     const problemas = Array.isArray(parsed.problemas) ? parsed.problemas : []
-    const falsos = problemas.filter((p) => String(p?.status || '').toUpperCase() === 'FALSO')
+    const blocking = problemas.filter((p) => {
+      const s = String(p?.status || '').toUpperCase()
+      return (
+        s === 'FALSO' ||
+        s === 'FORA_DO_TOPICO' ||
+        s === 'GENERICO' ||
+        s === 'GENÉRICO' ||
+        s === 'OFF_TOPIC'
+      )
+    })
+    const aprovadoExplicit = parsed.aprovado === true && blocking.length === 0
     return {
-      aprovado: falsos.length === 0,
-      soft: falsos.length === 0 && parsed.aprovado !== true,
+      aprovado: aprovadoExplicit || (blocking.length === 0 && parsed.aprovado !== false),
+      soft: false,
       problemas,
       texto_corrigido: parsed.texto_corrigido || null,
-      falsosCount: falsos.length,
+      falsosCount: blocking.length,
     }
   } catch {
-    return softPass
+    return hardFail
   }
 }
 

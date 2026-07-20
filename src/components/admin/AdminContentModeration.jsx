@@ -7,16 +7,20 @@ import {
   subscribeOpenFlags,
 } from '../../services/contentFeedbackService'
 import { buildFlagCorrectionLink } from '../../utils/flagCorrectionLinks'
+import { useAuth } from '../../hooks/useAuth'
+import { forceProcessModerationNow } from '../../services/adminOnlineProfessorScheduler'
 
 /**
  * Painel de Moderação — sinalizações dos alunos.
  * Admin resolve/apaga aqui; Professor IA (online) corrige automaticamente as abertas.
  */
 export default function AdminContentModeration() {
+  const { user } = useAuth()
   const [flags, setFlags] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [busyId, setBusyId] = useState(null)
+  const [forcing, setForcing] = useState(false)
 
   useEffect(() => {
     const unsub = subscribeOpenFlags(
@@ -63,6 +67,24 @@ export default function AdminContentModeration() {
     }
   }
 
+  const handleForceProfessor = async () => {
+    if (!user?.uid || forcing) return
+    setForcing(true)
+    try {
+      const result = await forceProcessModerationNow(user.uid)
+      if (result?.skipped && result.reason === 'empty') {
+        alert('Nenhuma sinalização aberta para corrigir.')
+      } else if (result?.started) {
+        alert('Professor IA iniciou a correção. Acompanhe em 🎓 Professor IA.')
+      }
+    } catch (e) {
+      console.error(e)
+      alert(e?.message || 'Erro ao iniciar Professor IA.')
+    } finally {
+      setForcing(false)
+    }
+  }
+
   const typeLabel = (t) => {
     if (t === 'questao') return 'Questão'
     if (t === 'flashcard') return 'Flashcard'
@@ -80,18 +102,27 @@ export default function AdminContentModeration() {
   return (
     <div className="space-y-6">
       <div className="cp-card !rounded-2xl p-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--cp-accent-4)]/30 bg-[var(--cp-accent-4)]/10">
-            <FlagIcon className="h-5 w-5 text-[var(--cp-accent-4)]" />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--cp-accent-4)]/30 bg-[var(--cp-accent-4)]/10">
+              <FlagIcon className="h-5 w-5 text-[var(--cp-accent-4)]" />
+            </div>
+            <div>
+              <h2 className="cp-headline text-lg text-cp-text">Moderação — Sinalizações</h2>
+              <p className="text-sm text-cp-muted">
+                Conteúdos reportados pelos alunos. Com o painel admin aberto, o Professor IA corrige
+                sozinho (~90s). Você também pode forçar 1 correção agora.
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="cp-headline text-lg text-cp-text">Moderação — Sinalizações</h2>
-            <p className="text-sm text-cp-muted">
-              Conteúdos reportados pelos alunos. Com o admin online e o Professor IA na janela de
-              horário, a correção automática roda sozinha (~90s). Use os botões abaixo para
-              resolver/apagar manualmente após revisar.
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={handleForceProfessor}
+            disabled={forcing || !user?.uid || flags.length === 0}
+            className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+          >
+            {forcing ? 'Iniciando…' : 'Corrigir com Professor IA'}
+          </button>
         </div>
         <p className="mt-3 text-xs text-cp-muted">
           {loading ? 'Carregando…' : `${flags.length} sinalização(ões) pendente(s)`}

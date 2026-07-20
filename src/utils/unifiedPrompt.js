@@ -811,29 +811,29 @@ export async function buildFlashcardPrompt(courseId, materia, editalText = '') {
   const globalPrompt = await getGlobalPrompt()
   
   if (globalPrompt) {
-    // Usar prompt global se existir
+    // Prompt global + trava: o lote em localJobProcessor injeta o TÓPICO EXATO
     return `${globalPrompt}
 
-MATÉRIA: ${materia}
+DISCIPLINA/MATÉRIA: ${materia}
 
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText}\n\n` : ''}
 
-TAREFA: Criar flashcards educacionais para a matéria "${materia}".
+TAREFA: Criar flashcards educacionais.
+OBRIGATÓRIO: cada card deve ser específico do TÓPICO informado no bloco TRAVA DE TÓPICO (não genérico da disciplina).
+PROIBIDO: inventar lei/artigo; perguntas vagas ("O que é…?"); misturar outros tópicos.
 
 FORMATO OBRIGATÓRIO:
-Retorne APENAS JSON válido com esta estrutura:
+Retorne APENAS JSON válido:
 {
   "flashcards": [
     {
-      "pergunta": "Pergunta específica e técnica",
-      "resposta": "Resposta detalhada e precisa",
+      "pergunta": "Pergunta específica e técnica do tópico",
+      "resposta": "Resposta detalhada, correta e cobrável em prova",
       "materia": "${materia}",
       "modulo": "Nome do módulo específico"
     }
   ]
-}
-
-QUANTIDADE: Mínimo 15 flashcards de alta qualidade.`
+}`
   }
   
   // Fallback para o sistema atual

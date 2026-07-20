@@ -197,7 +197,8 @@ async function runFailClosedAuditLoop(response, generatedText, options = {}) {
 
     if (verification.aprovado) {
       // Jurídico: 2ª passagem de confirmação (reduz falso negativo/positivo)
-      if (legal && contentType !== 'flashcards') {
+      // Flashcards também passam por 2ª confirmação jurídica (evita lixo factual)
+      if (legal) {
         try {
           const confirm = await runSingleAudit(
             buildLegalConfirmPrompt(currentText, auditContext),

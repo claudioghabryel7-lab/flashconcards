@@ -28,6 +28,7 @@ import {
 } from '../../services/professorSupervisorService'
 import { subscribeGenerationJob } from '../../services/generationJobService'
 import { usePresenceRegistry } from '../../hooks/usePresenceRegistry'
+import { forceProcessModerationNow } from '../../services/adminOnlineProfessorScheduler'
 
 dayjs.extend(duration)
 
@@ -67,6 +68,7 @@ export default function AdminProfessorSupervisor() {
   const [toggling, setToggling] = useState(false)
   const [clearingHistory, setClearingHistory] = useState(false)
   const [clearingQueue, setClearingQueue] = useState(false)
+  const [forcingModeration, setForcingModeration] = useState(false)
   const [startTime, setStartTime] = useState('09:00')
   const [endTime, setEndTime] = useState('17:00')
   const [historyMinimized, setHistoryMinimized] = useState(() => {
@@ -213,6 +215,24 @@ export default function AdminProfessorSupervisor() {
     }
   }
 
+  const handleForceModeration = async () => {
+    if (!user?.uid || forcingModeration) return
+    setForcingModeration(true)
+    try {
+      const result = await forceProcessModerationNow(user.uid)
+      if (result?.skipped && result.reason === 'empty') {
+        alert('Nenhuma sinalização aberta na Moderação.')
+      } else if (result?.started) {
+        alert('Correção da Moderação iniciada. Acompanhe o status abaixo.')
+      }
+    } catch (err) {
+      console.error(err)
+      alert(err?.message || 'Erro ao iniciar correção.')
+    } finally {
+      setForcingModeration(false)
+    }
+  }
+
   const handleClearQueue = async () => {
     if (clearingQueue) return
     if (
@@ -285,14 +305,21 @@ export default function AdminProfessorSupervisor() {
             <div>
               <h2 className="cp-headline text-lg text-cp-text">Professor IA — correções automáticas</h2>
               <p className="mt-1 max-w-xl text-sm text-cp-muted">
-                Roda com o admin online, na janela De/Até (Brasília). Corrige a aba{' '}
-                <strong>🚩 Moderação</strong> e também gira o <strong>tema de redação</strong> a cada
-                7 dias (cursos com Redação no Guia Mentorado), avisando os alunos. Se o horário chegou
-                e a sessão ainda não iniciou hoje → inicia (catch-up).
+                Com o painel admin aberto, corrige a aba <strong>🚩 Moderação</strong>{' '}
+                automaticamente (~90s). A agenda De/Até controla a sessão e a rotação semanal do{' '}
+                <strong>tema de redação</strong>. Use o botão abaixo para forçar 1 correção agora.
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleForceModeration}
+              disabled={forcingModeration || !user?.uid}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+            >
+              {forcingModeration ? 'Iniciando…' : 'Corrigir Moderação agora'}
+            </button>
             <div
               className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2"
               title="Usuários reais com presença ativa (últimos 45s)"
