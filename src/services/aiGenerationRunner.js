@@ -1,14 +1,21 @@
 import {
   createGenerationJob,
   updateGenerationJob,
+  findActiveDuplicateGenerationJob,
+  buildGenerationJobFingerprint,
   GENERATION_JOB_STATUS,
 } from './generationJobService'
 import { formatAiErrorForUser } from '../utils/geminiApi'
+import { processLocalGenerationJob } from './localJobProcessor'
 
 /** Promessas ativas — sobrevivem a desmontagem de componentes React. */
 const activeTasks = new Map()
+/** fingerprint → { jobId, promise } */
+const activeByFingerprint = new Map()
+/** fingerprint → Promise do start em andamento (claim síncrono). */
+const startingByFingerprint = new Map()
 
-async function executeJob(userId, jobId, task) {
+async function executeJob(userId, jobId, task, fingerprint = null) {
   try {
     const updateProgress = async (progress, message) => {
       await updateGenerationJob(userId, jobId, {
@@ -42,12 +49,28 @@ async function executeJob(userId, jobId, task) {
     throw wrapped
   } finally {
     activeTasks.delete(jobId)
+    if (fingerprint && activeByFingerprint.get(fingerprint)?.jobId === jobId) {
+      activeByFingerprint.delete(fingerprint)
+    }
   }
 }
 
+function claimFingerprintStart(fingerprint) {
+  const existing = startingByFingerprint.get(fingerprint)
+  if (existing) return { owner: false, gate: existing }
+
+  let resolveGate = () => {}
+  const gate = new Promise((resolve) => {
+    resolveGate = resolve
+  })
+  gate._resolve = resolveGate
+  startingByFingerprint.set(fingerprint, gate)
+  return { owner: true, gate }
+}
+
 /**
- * Inicia geração em segundo plano (retorna jobId imediatamente).
- * A promise continua mesmo se o componente desmontar.
+ * Gera em segundo plano na aba do admin.
+ * Deduplica: mesma assinatura (curso + tipo + tópico + data) → reusa ou bloqueia.
  */
 export async function startBackgroundGeneration({
   userId,
@@ -56,22 +79,111 @@ export async function startBackgroundGeneration({
   topicKey = null,
   metadata = {},
   task,
+  serverPayload = null,
+  runOnServer: _runOnServer = false,
 }) {
-  if (!userId || typeof task !== 'function') {
+  if (!userId) {
     throw new Error('Usuário não autenticado para geração em segundo plano.')
   }
 
-  const jobId = await createGenerationJob({
-    userId,
+  const hasTask = typeof task === 'function'
+  const hasPayload = Boolean(serverPayload)
+  if (!hasTask && !hasPayload) {
+    throw new Error('Task ou serverPayload é obrigatório.')
+  }
+
+  const fingerprint = buildGenerationJobFingerprint({
     courseId,
     jobType,
     topicKey,
     metadata,
   })
 
-  const promise = executeJob(userId, jobId, task)
-  activeTasks.set(jobId, promise)
-  return { jobId, promise }
+  const local = activeByFingerprint.get(fingerprint)
+  if (local?.promise) {
+    console.info('[generation] reusando job local duplicado:', local.jobId)
+    return { jobId: local.jobId, promise: local.promise, duplicate: true }
+  }
+
+  const claim = claimFingerprintStart(fingerprint)
+  if (!claim.owner) {
+    const started = await claim.gate
+    if (started?.promise) {
+      return { ...started, duplicate: true }
+    }
+    const again = activeByFingerprint.get(fingerprint)
+    if (again?.promise) {
+      return { jobId: again.jobId, promise: again.promise, duplicate: true }
+    }
+    const err = new Error(
+      'Já existe um job ativo gerando o mesmo conteúdo. Aguarde terminar.',
+    )
+    err.code = 'duplicate_generation_job'
+    throw err
+  }
+
+  try {
+    const remote = await findActiveDuplicateGenerationJob({
+      userId,
+      courseId,
+      jobType,
+      topicKey,
+      metadata,
+    })
+    if (remote?.id) {
+      const err = new Error(
+        `Já existe um job ativo gerando o mesmo conteúdo (${String(remote.id).slice(0, 8)}…). Aguarde terminar.`,
+      )
+      err.code = 'duplicate_generation_job'
+      err.existingJobId = remote.id
+      throw err
+    }
+
+    const jobId = await createGenerationJob({
+      userId,
+      courseId,
+      jobType,
+      topicKey,
+      metadata,
+      serverPayload: null,
+      runOnServer: false,
+    })
+
+    const localTask =
+      hasTask
+        ? task
+        : async ({ updateProgress, jobId: activeJobId }) =>
+            processLocalGenerationJob({
+              jobType,
+              courseId,
+              serverPayload,
+              updateProgress,
+              userId,
+              jobId: activeJobId || jobId,
+            })
+
+    const promise = executeJob(userId, jobId, localTask, fingerprint)
+    promise.catch((err) => {
+      console.error('[generation] task falhou:', err?.message || err)
+    })
+    activeTasks.set(jobId, promise)
+    activeByFingerprint.set(fingerprint, { jobId, promise })
+
+    const result = { jobId, promise, duplicate: false }
+    claim.gate._resolve(result)
+    return result
+  } catch (error) {
+    claim.gate._resolve(null)
+    if (error?.code === 'duplicate_generation_job') {
+      const existing = activeByFingerprint.get(fingerprint)
+      if (existing?.promise) {
+        return { jobId: existing.jobId, promise: existing.promise, duplicate: true }
+      }
+    }
+    throw error
+  } finally {
+    startingByFingerprint.delete(fingerprint)
+  }
 }
 
 /** Compat: executa sem job se não houver usuário. */
@@ -91,4 +203,8 @@ export function getActiveGenerationCount() {
 
 export function isGenerationRunning(jobId) {
   return activeTasks.has(jobId)
+}
+
+export function getActiveJobByFingerprint(fingerprint) {
+  return activeByFingerprint.get(fingerprint) || null
 }

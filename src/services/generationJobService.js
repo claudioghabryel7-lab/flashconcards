@@ -2,25 +2,148 @@ import {
   addDoc,
   collection,
   doc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
   updateDoc,
   where,
 } from 'firebase/firestore'
-import { db } from '../firebase/config'
+import { db, auth } from '../firebase/config'
+import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { stripUndefined } from '../utils/firestoreHelpers'
 
 export const GENERATION_JOB_STATUS = {
   PENDING: 'pending',
   RUNNING: 'running',
+  WAITING_API: 'waiting_api',
+  WAITING_RETRY: 'waiting_retry',
+  WAITING_TIMEOUT: 'waiting_timeout',
   DONE: 'done',
   ERROR: 'error',
   CANCELLED: 'cancelled',
 }
 
+const MENTORADO_JOB_TYPES = [
+  'guia_mentorado_automation',
+  'guia_mentorado_cronograma',
+  'guia_mentorado_backfill',
+  'professor_supervisor',
+]
+
+/** Jobs em processo de cancelamento — evita nudge retomar enquanto para. */
+const cancellingJobIds = new Set()
+let nudgePausedUntil = 0
+
+export function markJobCancelling(jobId) {
+  if (jobId) cancellingJobIds.add(jobId)
+}
+
+export function unmarkJobCancelling(jobId) {
+  if (jobId) cancellingJobIds.delete(jobId)
+}
+
+export function isJobCancelling(jobId) {
+  return cancellingJobIds.has(jobId)
+}
+
+/** Pausa retomadas automáticas após cancelamento em massa. */
+export function pauseJobNudge(ms = 120_000) {
+  nudgePausedUntil = Date.now() + ms
+}
+
+export function isJobNudgePaused() {
+  return Date.now() < nudgePausedUntil
+}
+
+export function syncCancellingJobsWithActive(activeJobIds = []) {
+  const active = new Set(activeJobIds)
+  for (const jobId of [...cancellingJobIds]) {
+    if (!active.has(jobId)) unmarkJobCancelling(jobId)
+  }
+}
+
+export const GENERATION_WAITING_STATUSES = [
+  GENERATION_JOB_STATUS.WAITING_API,
+  GENERATION_JOB_STATUS.WAITING_RETRY,
+  GENERATION_JOB_STATUS.WAITING_TIMEOUT,
+]
+
 function jobsRef(userId) {
   return collection(db, 'users', userId, 'generationJobs')
+}
+
+export const GENERATION_ACTIVE_STATUSES = [
+  GENERATION_JOB_STATUS.PENDING,
+  GENERATION_JOB_STATUS.RUNNING,
+  ...GENERATION_WAITING_STATUSES,
+]
+
+/** Chave estável para detectar 2 jobs gerando a mesma coisa. */
+export function buildGenerationJobFingerprint({
+  courseId = null,
+  jobType,
+  topicKey = null,
+  metadata = {},
+} = {}) {
+  const targetDate = metadata?.targetDate || metadata?.dayKey || ''
+  const flagId = metadata?.flagId || ''
+  return [
+    String(jobType || ''),
+    String(courseId || ''),
+    String(topicKey || ''),
+    String(targetDate || ''),
+    String(flagId || ''),
+  ].join('::')
+}
+
+function jobMatchesFingerprint(data = {}, fingerprintParts = {}) {
+  if (String(data.jobType || '') !== String(fingerprintParts.jobType || '')) return false
+  if (String(data.courseId || '') !== String(fingerprintParts.courseId || '')) return false
+  if (String(data.topicKey || '') !== String(fingerprintParts.topicKey || '')) return false
+  const wantDate = fingerprintParts.metadata?.targetDate || fingerprintParts.metadata?.dayKey || ''
+  const gotDate = data.metadata?.targetDate || data.metadata?.dayKey || ''
+  if (String(wantDate || '') !== String(gotDate || '')) return false
+  const wantFlag = fingerprintParts.metadata?.flagId || ''
+  const gotFlag = data.metadata?.flagId || ''
+  if (String(wantFlag || '') !== String(gotFlag || '')) return false
+  return true
+}
+
+/**
+ * Retorna job ativo (pending/running/waiting) com a mesma assinatura, se houver.
+ */
+export async function findActiveDuplicateGenerationJob({
+  userId,
+  courseId = null,
+  jobType,
+  topicKey = null,
+  metadata = {},
+}) {
+  if (!userId || !db || !jobType) return null
+
+  // Só status (evita índice composto novo); filtra jobType/curso no cliente.
+  const snap = await getDocs(
+    query(
+      jobsRef(userId),
+      where('status', 'in', [
+        GENERATION_JOB_STATUS.PENDING,
+        GENERATION_JOB_STATUS.RUNNING,
+        GENERATION_JOB_STATUS.WAITING_API,
+        GENERATION_JOB_STATUS.WAITING_RETRY,
+        GENERATION_JOB_STATUS.WAITING_TIMEOUT,
+      ]),
+    ),
+  )
+
+  const parts = { courseId, jobType, topicKey, metadata }
+  for (const d of snap.docs) {
+    const data = d.data() || {}
+    if (jobMatchesFingerprint(data, parts)) {
+      return { id: d.id, ...data }
+    }
+  }
+  return null
 }
 
 export async function createGenerationJob({
@@ -29,9 +152,28 @@ export async function createGenerationJob({
   jobType,
   topicKey = null,
   metadata = {},
+  serverPayload: _serverPayload = null,
+  runOnServer: _runOnServer = false,
 }) {
   if (!userId || !db) throw new Error('Usuário não autenticado.')
 
+  const duplicate = await findActiveDuplicateGenerationJob({
+    userId,
+    courseId,
+    jobType,
+    topicKey,
+    metadata,
+  })
+  if (duplicate) {
+    const err = new Error(
+      `Já existe um job ativo gerando o mesmo conteúdo (${String(duplicate.id).slice(0, 8)}…). Aguarde terminar.`,
+    )
+    err.code = 'duplicate_generation_job'
+    err.existingJobId = duplicate.id
+    throw err
+  }
+
+  // Geração local na aba do admin — sem Cloud / sem payload no Firestore.
   const ref = await addDoc(
     jobsRef(userId),
     stripUndefined({
@@ -40,6 +182,9 @@ export async function createGenerationJob({
       jobType,
       topicKey,
       metadata,
+      fingerprint: buildGenerationJobFingerprint({ courseId, jobType, topicKey, metadata }),
+      runOnServer: false,
+      serverPayload: null,
       status: GENERATION_JOB_STATUS.PENDING,
       progress: 0,
       message: 'Aguardando início…',
@@ -58,12 +203,315 @@ export async function updateGenerationJob(userId, jobId, patch) {
   })
 }
 
-export function subscribeActiveGenerationJobs(userId, onData) {
+const STALE_JOB_MS = 45 * 60 * 1000
+const STALE_SERVER_JOB_MS = 90 * 60 * 1000
+/** Jobs longos (mentorado/professor) — só expira no cliente após 6h sem update. */
+const STALE_LONG_SERVER_JOB_MS = 6 * 60 * 60 * 1000
+const STALE_WAITING_API_MS = 24 * 60 * 60 * 1000
+/** Jobs waiting/pending: nudge a cada 30s (cron servidor retoma a cada 10 min). */
+export const STALL_NUDGE_MS = 30 * 1000
+/** Jobs running só são nudgeados após 90s sem progresso — keep-alive do servidor é 15s. */
+export const STALL_PROGRESS_NUDGE_MS = 90 * 1000
+
+function jobProgressTimestamp(job = {}) {
+  return job.progressUpdatedAt || job.updatedAt || job.lastHeartbeat
+}
+
+export function secondsSinceJobProgress(job, now = Date.now()) {
+  const date =
+    jobProgressTimestamp(job)?.toDate?.() ||
+    (jobProgressTimestamp(job) instanceof Date ? jobProgressTimestamp(job) : null)
+  if (!date) return null
+  return Math.max(0, Math.floor((now - date.getTime()) / 1000))
+}
+
+export function isJobProgressStalled(job, now = Date.now(), stallMs = STALL_PROGRESS_NUDGE_MS) {
+  if (!job || job.status !== GENERATION_JOB_STATUS.RUNNING) return false
+  const secs = secondsSinceJobProgress(job, now)
+  if (secs == null) return true
+  return secs * 1000 >= stallMs
+}
+
+export function shouldNudgeJob(job, now = Date.now()) {
+  if (!job?.runOnServer) return false
+  if (isJobNudgePaused()) return false
+  if (isJobCancelling(job.id)) return false
+  if (job.status === GENERATION_JOB_STATUS.PENDING) return true
+  if (GENERATION_WAITING_STATUSES.includes(job.status)) {
+    // Evita spam: só nudge waiting se ficou ≥30s sem progresso
+    const secs = secondsSinceJobProgress(job, now)
+    if (secs != null && secs * 1000 < STALL_NUDGE_MS) return false
+    return true
+  }
+  if (job.status === GENERATION_JOB_STATUS.RUNNING) {
+    return isJobProgressStalled(job, now)
+  }
+  return false
+}
+
+/**
+ * Jobs travados: locais → marca error; nuvem → cancela via CF (libera slot/fila).
+ * Nunca marca error no cliente enquanto o servidor ainda pode estar processando.
+ */
+export async function reconcileStaleGenerationJobs(userId) {
+  if (!userId || !db) return
+
+  const snap = await getDocs(
+    query(
+      jobsRef(userId),
+      where('status', 'in', [
+        GENERATION_JOB_STATUS.PENDING,
+        GENERATION_JOB_STATUS.RUNNING,
+        ...GENERATION_WAITING_STATUSES,
+      ]),
+    ),
+  )
+
+  const now = Date.now()
+  const localUpdates = []
+  const serverCancels = []
+
+  snap.docs.forEach((d) => {
+    const data = d.data()
+    // waiting_* no servidor: resume cron gerencia — não matar no cliente
+    if (data.runOnServer && GENERATION_WAITING_STATUSES.includes(data.status)) {
+      return
+    }
+
+    const updatedAt =
+      data.progressUpdatedAt?.toDate?.() ||
+      data.lastHeartbeat?.toDate?.() ||
+      data.updatedAt?.toDate?.() ||
+      data.createdAt?.toDate?.()
+    if (!updatedAt) return
+
+    const isLongJob = MENTORADO_JOB_TYPES.includes(data.jobType)
+    const staleMs = data.runOnServer
+      ? isLongJob
+        ? STALE_LONG_SERVER_JOB_MS
+        : STALE_SERVER_JOB_MS
+      : STALE_JOB_MS
+    if (now - updatedAt.getTime() < staleMs) return
+
+    const hb = data.lastHeartbeat?.toDate?.() || data.progressUpdatedAt?.toDate?.()
+    if (hb && now - hb.getTime() < STALE_PROGRESS_NUDGE_MS) return
+
+    if (data.runOnServer) {
+      serverCancels.push(d.id)
+      return
+    }
+
+    localUpdates.push(
+      updateDoc(d.ref, {
+        status: GENERATION_JOB_STATUS.ERROR,
+        progress: 100,
+        message: 'Geração interrompida. Tente novamente.',
+        updatedAt: serverTimestamp(),
+      }),
+    )
+  })
+
+  if (localUpdates.length) await Promise.all(localUpdates)
+
+  if (serverCancels.length) {
+    const user = auth?.currentUser
+    if (user?.uid === userId && FIREBASE_FUNCTIONS.cancelGenerationJob) {
+      try {
+        const token = await user.getIdToken()
+        await Promise.all(
+          serverCancels.map((jobId) =>
+            fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                userId,
+                jobId,
+                reason: 'client_stale_reconcile',
+              }),
+            }).catch(() => null),
+          ),
+        )
+      } catch {
+        // Sem token / rede — deixa o stall recovery do servidor cuidar
+      }
+    }
+  }
+}
+
+async function markJobsCancelledLocally(userId, jobIds = []) {
+  if (!userId || !jobIds.length || !db) return
+  await Promise.all(
+    jobIds.map((jobId) =>
+      updateGenerationJob(userId, jobId, {
+        status: GENERATION_JOB_STATUS.CANCELLED,
+        progress: 100,
+        message: 'Cancelado',
+        finishedAt: serverTimestamp(),
+      }).catch(() => null),
+    ),
+  )
+}
+
+export async function dismissGenerationJob(userId, jobId) {
+  if (!userId || !jobId) return { ok: false }
+
+  markJobCancelling(jobId)
+  pauseJobNudge()
+
+  // Cancela no Firestore primeiro — some do banner na hora
+  await markJobsCancelledLocally(userId, [jobId])
+
+  try {
+    const user = auth?.currentUser
+    if (user?.uid === userId && FIREBASE_FUNCTIONS.cancelGenerationJob) {
+      const token = await user.getIdToken()
+      const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId, jobId }),
+      })
+      let data = {}
+      try {
+        data = await response.json()
+      } catch {
+        data = {}
+      }
+      if (response.ok && data.ok !== false) {
+        return { ok: true, ...data }
+      }
+      if (response.status >= 400) {
+        // Já marcamos cancelled localmente — servidor pode limpar fila depois
+        return { ok: true, localOnly: true }
+      }
+    }
+  } catch {
+    /* rede / CF indisponível — cancelamento local basta */
+  }
+
+  return { ok: true, localOnly: true }
+}
+
+/** Alias local — sem Cloud Functions. */
+export async function cancelGenerationJob(userId, jobId) {
+  return dismissGenerationJob(userId, jobId)
+}
+
+const ACTIVE_JOB_STATUSES = [
+  GENERATION_JOB_STATUS.PENDING,
+  GENERATION_JOB_STATUS.RUNNING,
+  ...GENERATION_WAITING_STATUSES,
+]
+
+/** Cancela todos os jobs ativos do usuário (força parada no servidor). */
+export async function cancelAllGenerationJobs(userId) {
+  if (!userId || !db) return { cancelled: 0 }
+
+  const snap = await getDocs(
+    query(jobsRef(userId), where('status', 'in', ACTIVE_JOB_STATUSES)),
+  )
+
+  if (!snap.docs.length) return { cancelled: 0 }
+
+  const jobIds = snap.docs.map((d) => d.id)
+  jobIds.forEach((id) => markJobCancelling(id))
+  pauseJobNudge(300_000)
+
+  await markJobsCancelledLocally(userId, jobIds)
+
+  const user = auth?.currentUser
+  if (user?.uid === userId) {
+    try {
+      const token = await user.getIdToken()
+      const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId, all: true }),
+      })
+      let data = {}
+      try {
+        data = await response.json()
+      } catch {
+        data = {}
+      }
+      if (response.ok) {
+        return { cancelled: data.cancelled ?? jobIds.length, ...data }
+      }
+      return { cancelled: jobIds.length, fallback: true, warning: data.error }
+    } catch (err) {
+      return { cancelled: jobIds.length, fallback: true, warning: err?.message }
+    }
+  }
+
+  return { cancelled: jobIds.length, fallback: true }
+}
+
+/** Admin: força parada de TODOS os jobs (todos os usuários). */
+export async function forceStopAllGenerationJobsGlobally() {
+  const user = auth?.currentUser
+  if (!user || !FIREBASE_FUNCTIONS.cancelGenerationJob) {
+    throw new Error('Não autenticado ou função de cancelamento indisponível.')
+  }
+
+  pauseJobNudge(300_000)
+
+  // Cancela jobs do admin visíveis localmente antes da CF (melhor UX)
+  try {
+    const localSnap = await getDocs(
+      query(jobsRef(user.uid), where('status', 'in', ACTIVE_JOB_STATUSES)),
+    )
+    if (localSnap.docs.length) {
+      await markJobsCancelledLocally(
+        user.uid,
+        localSnap.docs.map((d) => d.id),
+      )
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const token = await user.getIdToken()
+  const response = await fetch(FIREBASE_FUNCTIONS.cancelGenerationJob, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ global: true }),
+  })
+
+  let data = {}
+  try {
+    data = await response.json()
+  } catch {
+    data = {}
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Falha ao forçar parada de todos os jobs.')
+  }
+
+  return data
+}
+
+export function subscribeActiveGenerationJobs(userId, onData, onError) {
   if (!userId || !db) return () => {}
 
   const q = query(
     jobsRef(userId),
-    where('status', 'in', [GENERATION_JOB_STATUS.PENDING, GENERATION_JOB_STATUS.RUNNING]),
+    where('status', 'in', [
+      GENERATION_JOB_STATUS.PENDING,
+      GENERATION_JOB_STATUS.RUNNING,
+      ...GENERATION_WAITING_STATUSES,
+    ]),
   )
 
   return onSnapshot(
@@ -72,7 +520,10 @@ export function subscribeActiveGenerationJobs(userId, onData) {
       const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
       onData(rows)
     },
-    (err) => console.error('Erro ao observar jobs de geração:', err),
+    (err) => {
+      console.error('Erro ao observar jobs de geração:', err)
+      onError?.(err)
+    },
   )
 }
 
@@ -81,4 +532,52 @@ export function subscribeGenerationJob(userId, jobId, onData) {
   return onSnapshot(doc(db, 'users', userId, 'generationJobs', jobId), (snap) => {
     onData(snap.exists() ? { id: snap.id, ...snap.data() } : null)
   })
+}
+
+export function waitForGenerationJob(userId, jobId, { timeoutMs = 90 * 60 * 1000 } = {}) {
+  return new Promise((resolve, reject) => {
+    if (!userId || !jobId) {
+      reject(new Error('Job de geração inválido.'))
+      return
+    }
+
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      unsub()
+      reject(new Error('Tempo esgotado aguardando geração.'))
+    }, timeoutMs)
+
+    const unsub = subscribeGenerationJob(userId, jobId, (job) => {
+      if (!job || settled) return
+
+      if (job.status === GENERATION_JOB_STATUS.DONE) {
+        settled = true
+        clearTimeout(timer)
+        unsub()
+        resolve(job)
+      } else if (job.status === GENERATION_JOB_STATUS.CANCELLED) {
+        settled = true
+        clearTimeout(timer)
+        unsub()
+        resolve({ ...job, cancelled: true })
+      } else if (job.status === GENERATION_JOB_STATUS.ERROR) {
+        settled = true
+        clearTimeout(timer)
+        unsub()
+        reject(new Error(job.message || 'Erro na geração.'))
+      }
+    })
+  })
+}
+
+/** Geração é local (admin online) — Cloud Functions de kick desligadas. */
+export async function kickGenerationJob(_userId, _jobId) {
+  return { ok: false, reason: 'admin_online_only', hint: 'Jobs rodam na aba /admin com o processador local.' }
+}
+
+/** Retomada via Cloud Functions desligada — jobs locais não precisam de nudge HTTP. */
+export async function nudgeGenerationJobResume(_userId, _jobId) {
+  return { ok: false, reason: 'admin_online_only' }
 }

@@ -428,6 +428,10 @@ const ResolverQuestoesView = () => {
                   probabilidade={currentQuestao.probabilidade}
                   enunciado={currentQuestao.enunciado}
                   questionNumber={currentIndex + 1}
+                  courseId={courseId}
+                  contentId={currentItem.id}
+                  alternateContentIds={[currentItem.packId].filter(Boolean)}
+                  topicKey={currentItem.topicKey || null}
                 />
 
                 {!showResult ? (

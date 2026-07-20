@@ -9,7 +9,12 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { formatTopicoAsModulo } from '../utils/editalVerticalizadoLoader'
-import { generateAiJson } from '../utils/geminiApi'
+import { generateAiJson, hasGeminiApiKeys } from '../utils/geminiApi'
+import {
+  AI_TEXT_FORMAT_RULES,
+  sanitizeQuestaoAlternativas,
+  sanitizeQuestaoText,
+} from '../utils/aiTextFormatting'
 
 /**
  * Busca questões já salvas para um tópico (compartilhadas entre usuários do curso).
@@ -44,9 +49,8 @@ export async function generateAndSaveQuestoesForTopico({
   courseName,
   editalText = '',
 }) {
-  const apiKey = readEnv('VITE_GEMINI_API_KEY')
-  if (!apiKey) {
-    throw new Error('VITE_GEMINI_API_KEY não configurada')
+  if (!hasGeminiApiKeys()) {
+    throw new Error('Nenhuma API key Gemini configurada (VITE_GEMINI_API_KEY ou backups)')
   }
 
   // Carregar dados do curso para obter a banca examinadora
@@ -129,9 +133,15 @@ REGRAS:
 - Cite o nome do concurso nas questões
 - Preencha "analiseJuridicaPrevia" PRIMEIRO com o artigo/lei/jurisprudência literal antes de escrever o enunciado
 - Retorne APENAS o JSON válido, sem texto adicional
-- Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
+- ${AI_TEXT_FORMAT_RULES}
+- Separe parágrafos no enunciado e no comentário com linha em branco`
 
-    const parsed = await generateAiJson(prompt, { courseId })
+    const parsed = await generateAiJson(prompt, {
+      courseId,
+      trustedGeneration: true,
+      useGoogleSearch: true,
+      useRAG: true,
+    })
     const items = parsed.questoes || []
     
     if (!items.length) {
@@ -169,11 +179,11 @@ REGRAS:
       topicoNumero: topicoNumero || '',
       modulo: modulo || '',
       topicKey: topicKey || '',
-      enunciado: item.enunciado || '',
-      alternativas: item.alternativas || [],
+      enunciado: sanitizeQuestaoText(item.enunciado || ''),
+      alternativas: sanitizeQuestaoAlternativas(item.alternativas || []),
       gabarito: item.gabarito || '',
-      comentario: item.comentario || '',
-      analiseJuridicaPrevia: item.analiseJuridicaPrevia || '',
+      comentario: sanitizeQuestaoText(item.comentario || ''),
+      analiseJuridicaPrevia: sanitizeQuestaoText(item.analiseJuridicaPrevia || ''),
       courseId: resolvedId,
       shared: true,
       createdAt: serverTimestamp(),

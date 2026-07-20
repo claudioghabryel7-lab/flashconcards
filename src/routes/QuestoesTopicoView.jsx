@@ -11,6 +11,7 @@ import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { filterValidQuestoes } from '../utils/questoesQuality'
 import {
   createGenerationJob,
   updateGenerationJob,
@@ -686,13 +687,25 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       const parsed = await generateAiJson(prompt, {
         courseId: resolvedCourseId,
         isLegalContent: true,
-        useRAG: true,
+        useRAG: false,
+        trustedGeneration: true,
+        useGoogleSearch: true,
+        verifyContent: true,
       })
       console.log('✅ [Questões Tópico] JSON parseado com sucesso')
-      console.log('📊 [Questões Tópico] Número de questões geradas:', parsed.questoes?.length || 0)
+      const { ok: questoesValidas, dropped } = filterValidQuestoes(parsed.questoes || [], {
+        tipoProva: parsed.tipoProva || 'ABCD',
+        minKeep: 1,
+      })
+      console.log(
+        '📊 [Questões Tópico] Válidas:',
+        questoesValidas.length,
+        dropped ? `(descartadas ${dropped})` : '',
+      )
 
       const payload = {
         ...parsed,
+        questoes: questoesValidas,
         topico: parsed.topico || effectiveTopicNome || resolvedTopicKey,
         nivel: nivelAtual,
         status: topicoPublishStatus === CONTENT_STATUS.AVAILABLE ? CONTENT_STATUS.AVAILABLE : CONTENT_STATUS.UNAVAILABLE,

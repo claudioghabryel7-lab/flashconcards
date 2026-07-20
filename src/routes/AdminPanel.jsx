@@ -37,7 +37,11 @@ import {
 } from 'firebase/firestore'
 import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager'
 import AdminContentModeration from '../components/admin/AdminContentModeration'
+import AdminGuiaMentorado from '../components/admin/AdminGuiaMentorado'
+import AdminProfessorSupervisor from '../components/admin/AdminProfessorSupervisor'
+import AdminGenerationJobs from '../components/admin/AdminGenerationJobs'
 import ContentPublishButton from '../components/ContentPublishButton'
+import { useAdminOnlineWorkers } from '../hooks/useAdminOnlineWorkers'
 import { defaultContentStatus, toggleContentStatus } from '../utils/contentStatus'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
@@ -70,6 +74,8 @@ const MATERIAS = [
 
 const AdminPanel = () => {
   const { isAdmin, user: currentAdminUser, profile } = useAuth()
+  // Guia Mentorado + Professor IA — rodam enquanto o admin está online
+  useAdminOnlineWorkers(Boolean(isAdmin))
   const [cards, setCards] = useState([])
   const [users, setUsers] = useState([])
   const [presence, setPresence] = useState({}) // { uid: { status, lastSeen } }
@@ -6931,6 +6937,9 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     { id: 'shared-links', label: '🔗 Links Compartilhados', icon: '🔗' },
     { id: 'trials', label: '🎁 Testes Gratuitos', icon: '🎁' },
     { id: 'moderacao', label: '🚩 Moderação', icon: '🚩' },
+    { id: 'guia-mentorado', label: '📅 Guia Mentorado', icon: '📅' },
+    { id: 'professor-fiscalizador', label: '🎓 Professor IA', icon: '🎓' },
+    { id: 'generation-jobs', label: '⚡ Jobs locais', icon: '⚡' },
     { id: 'prompt-test', label: '🧪 Teste de Prompts', icon: '🧪' },
   ]
   
@@ -13233,6 +13242,12 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
             )}
 
             {activeTab === 'moderacao' && <AdminContentModeration />}
+
+            {activeTab === 'guia-mentorado' && <AdminGuiaMentorado />}
+
+            {activeTab === 'professor-fiscalizador' && <AdminProfessorSupervisor />}
+
+            {activeTab === 'generation-jobs' && <AdminGenerationJobs />}
           </div>
         </div>
 

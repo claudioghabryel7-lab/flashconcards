@@ -39,6 +39,8 @@ export function normalizeModuloKey(str) {
     .replace(/\s+/g, ' ')
 }
 
+import { sanitizeFlashcardText } from './aiTextFormatting'
+
 /**
  * Normaliza flashcard do edital (disciplina/topico/frente/verso) para formato interno.
  */
@@ -52,14 +54,19 @@ export function normalizeFlashcard(card) {
     modulo = nomeOnly ? `${topicoNumero} - ${nomeOnly}` : `${topicoNumero} - ${modulo}`
   }
 
+  const pergunta = sanitizeFlashcardText(card.frente || card.pergunta || '')
+  const resposta = sanitizeFlashcardText(card.verso || card.resposta || '')
+
   return {
     ...card,
     materia,
     modulo,
     disciplina: materia,
     topico: card.topico || card.modulo,
-    pergunta: card.frente || card.pergunta || '',
-    resposta: card.verso || card.resposta || '',
+    pergunta,
+    resposta,
+    frente: pergunta,
+    verso: resposta,
   }
 }
 

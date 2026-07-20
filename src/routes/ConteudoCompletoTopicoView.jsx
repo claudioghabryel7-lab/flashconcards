@@ -1004,7 +1004,10 @@ REGRAS:
       const parsed = await generateAiJson(prompt, {
         courseId: resolvedCourseId,
         isLegalContent: true,
-        useRAG: true,
+        useRAG: false,
+        trustedGeneration: true,
+        useGoogleSearch: true,
+        verifyContent: true,
       })
       setProgress(75)
       const payload = {

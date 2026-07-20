@@ -20,12 +20,13 @@ import {
   rateExplanationCache
 } from '../utils/cache'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
+import ContentFeedbackActions from '../components/content/ContentFeedbackActions'
 
 const QuestionView = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, profile } = useAuth()
-  
+  const courseId = profile?.selectedCourseId || 'alego-default'  
   // Receber dados via location state
   const { 
     questions = [], 
@@ -501,8 +502,21 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.
         {currentQuestion && (
           <div className="space-y-6">
             {/* Badge fictícia */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-700 dark:text-yellow-400 text-sm font-bold">
-              ⚠️ Questão FICTÍCIA gerada por IA
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-700 dark:text-yellow-400 text-sm font-bold">
+                ⚠️ Questão FICTÍCIA gerada por IA
+              </div>
+              <ContentFeedbackActions
+                courseId={courseId}
+                contentType="questao"
+                contentId={currentQuestion.id || `flashquestao_${currentQuestionIndex}`}
+                topicKey={selectedModulo || selectedMateria || null}
+                preview={currentQuestion.enunciado}
+                materia={selectedMateria}
+                assunto={selectedModulo || selectedMateria}
+                contextLabel="esta questão"
+                variant="inline"
+              />
             </div>
             
             {/* Enunciado */}

@@ -8,7 +8,11 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { CONTENT_STATUS } from '../utils/contentStatus'
-import { sanitizeTopicKeyForFirestore, normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
+import {
+  sanitizeTopicKeyForFirestore,
+  normalizeTopicKeyForStorage,
+  toSafeFirestoreDocId,
+} from '../utils/topicKeyFirestore'
 import { cardMatchesModule } from '../utils/editalVerticalizadoLoader'
 
 const MAX_BATCH = 450
@@ -60,10 +64,29 @@ export function buildTopicoPublishMapFromSnapshot(snapshot) {
   snapshot.docs.forEach((d) => {
     const data = d.data()
     const status = data.status || CONTENT_STATUS.UNAVAILABLE
-    if (data.topicKey) {
-      map[data.topicKey] = status
+    const register = (key) => {
+      if (!key) return
+      map[key] = status
+      try {
+        const decoded = decodeURIComponent(key)
+        if (decoded && decoded !== key) map[decoded] = status
+      } catch {
+        /* ignore */
+      }
+      try {
+        const encoded = encodeURIComponent(key)
+        if (encoded && encoded !== key) map[encoded] = status
+      } catch {
+        /* ignore */
+      }
+      const soft = sanitizeTopicKeyForFirestore(key)
+      if (soft) map[soft] = status
     }
-    map[d.id] = status
+
+    register(data.topicKey)
+    register(data.topicKeyNormalized)
+    register(data.topicKeyEncoded)
+    register(d.id)
   })
   return map
 }
@@ -138,8 +161,13 @@ export async function setTopicoPublishStatus(
     }
   }
 
-  for (const legacyId of [sanitizedKey, normalizedTopicKey, topicKey, decodeURIComponentSafe(topicKey)]) {
-    if (!legacyId) continue
+  const legacyIds = new Set()
+  for (const raw of [sanitizedKey, normalizedTopicKey, topicKey, decodeURIComponentSafe(topicKey)]) {
+    const safe = toSafeFirestoreDocId(raw)
+    if (safe) legacyIds.add(safe)
+  }
+
+  for (const legacyId of legacyIds) {
     const legacyRef = doc(db, 'courses', resolvedId, 'questoesTopico', legacyId)
     const legacyDoc = await getDoc(legacyRef)
     if (legacyDoc.exists()) {
@@ -149,6 +177,19 @@ export async function setTopicoPublishStatus(
       })
     }
   }
+
+  // Documentos legados cujo ID não é seguro (ex.: contém "/") — busca por topicKey no campo
+  const questoesSnap = await getDocs(collection(db, 'courses', resolvedId, 'questoesTopico'))
+  questoesSnap.docs.forEach((d) => {
+    if (legacyIds.has(d.id)) return
+    const data = d.data()
+    const packTopic = data.topicKey || data.topico || ''
+    if (!topicKeysMatch(packTopic, normalizedTopicKey)) return
+    operations.push({
+      ref: doc(db, 'courses', resolvedId, 'questoesTopico', d.id),
+      data: { status, topicKey: normalizedTopicKey, updatedAt: now },
+    })
+  })
 
   // Material de apoio (Estudar)
   const conteudoRef = doc(db, 'courses', resolvedId, 'conteudosCompletos', sanitizedKey)
@@ -197,10 +238,27 @@ export async function setTopicoPublishStatus(
     })
   }
 
-  // Registro central (UI do edital)
+  // Registro central (UI do edital + aluno)
+  const editalEncodedKey = (() => {
+    try {
+      return encodeURIComponent(normalizedTopicKey)
+    } catch {
+      return normalizedTopicKey
+    }
+  })()
+
   operations.push({
     ref: doc(db, 'courses', resolvedId, 'topicoStatus', sanitizedKey),
-    data: { topicKey: normalizedTopicKey, status, disciplinaNome, updatedAt: now },
+    data: {
+      topicKey: editalEncodedKey,
+      topicKeyNormalized: normalizedTopicKey,
+      topicKeyEncoded: editalEncodedKey,
+      status,
+      disciplinaNome,
+      releasedAssets: { flashcards: true, material: true, questoes: true },
+      releasedAt: now,
+      updatedAt: now,
+    },
   })
 
   await commitBatches(operations)
