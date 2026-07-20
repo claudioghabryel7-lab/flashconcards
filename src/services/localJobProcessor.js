@@ -135,15 +135,15 @@ function resolveLegalFlag(disciplina = '', explicit) {
 }
 
 function buildTrustedOptions(disciplina = '', extra = {}) {
-  const isLegal = resolveLegalFlag(disciplina, extra.isLegalContent)
+  // Confirmação jurídica dual obrigatória em TUDO (flashcards, material, questões)
+  const { isLegalContent: _ignoreLegal, auditMode: _ignoreMode, ...rest } = extra || {}
   return {
     ...TRUSTED_AI,
-    isLegalContent: isLegal,
-    // Todos auditados: jurídico (dual+Search) ou factual leve (Português/História/TI)
     forceAudit: true,
-    auditMode: isLegal ? 'legal' : 'factual',
     disciplina,
-    ...extra,
+    ...rest,
+    isLegalContent: true,
+    auditMode: 'legal',
   }
 }
 

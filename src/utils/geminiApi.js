@@ -196,45 +196,44 @@ async function runFailClosedAuditLoop(response, generatedText, options = {}) {
     lastVerification = verification
 
     if (verification.aprovado) {
-      // Jurídico: 2ª passagem de confirmação (reduz falso negativo/positivo)
-      // Flashcards também passam por 2ª confirmação jurídica (evita lixo factual)
-      if (legal) {
-        try {
-          const confirm = await runSingleAudit(
-            buildLegalConfirmPrompt(currentText, auditContext),
-            silent,
-          )
-          if (!confirm.aprovado) {
-            lastVerification = confirm
-            if (confirm.texto_corrigido) {
-              currentResponse = applyVerificationToResponse(
-                currentResponse,
-                confirm,
-                currentText,
-              )
-              currentText = confirm.texto_corrigido
-              if (round < maxRounds) continue
-              throw buildAuditFailError(confirm, 'Confirmação jurídica ainda com FALSO')
-            }
-            throw buildAuditFailError(confirm, 'Confirmação jurídica apontou FALSO')
+      // 2ª passagem obrigatória em todo conteúdo auditado (fail-closed)
+      try {
+        if (!silent) console.log('🔎 Confirmação jurídica (2ª passagem)…')
+        const confirm = await runSingleAudit(
+          buildLegalConfirmPrompt(currentText, auditContext),
+          silent,
+        )
+        if (!confirm.aprovado) {
+          lastVerification = confirm
+          if (confirm.texto_corrigido) {
+            currentResponse = applyVerificationToResponse(
+              currentResponse,
+              confirm,
+              currentText,
+            )
+            currentText = confirm.texto_corrigido
+            if (round < maxRounds) continue
+            throw buildAuditFailError(confirm, 'Confirmação jurídica ainda com FALSO')
           }
-        } catch (confirmErr) {
-          if (confirmErr?.code === 'legal_audit_failed') throw confirmErr
-          // confirmação técnica falhou após 1ª aprovação → aceita 1ª (já sem FALSO)
-          if (!silent) {
-            console.warn('⚠️ Confirmação jurídica indisponível — mantendo 1ª aprovação')
-          }
+          throw buildAuditFailError(confirm, 'Confirmação jurídica apontou FALSO')
         }
+      } catch (confirmErr) {
+        if (confirmErr?.code === 'legal_audit_failed') throw confirmErr
+        // Falha técnica na 2ª passagem → NÃO publica
+        throw buildAuditFailError(
+          { problemas: [{ motivo: confirmErr?.message || 'confirmação indisponível' }] },
+          'Confirmação jurídica indisponível — conteúdo NÃO publicado',
+        )
       }
 
-      if (!silent) console.log('✅ Auditoria limpa (zero FALSO) — aprovado')
+      if (!silent) console.log('✅ Auditoria + confirmação jurídica OK — aprovado')
       return {
         ...currentResponse,
         _verification: {
           ...(currentResponse._verification || {}),
           aprovado: true,
           auditMode,
-          dualConfirmed: legal,
+          dualConfirmed: true,
         },
       }
     }
@@ -418,9 +417,13 @@ export async function callGeminiWithRetry(prompt, options = {}) {
 
   const resolvedDisciplina = disciplina || courseData?.disciplina || options.disciplina || ''
   const legalByDiscipline = isLikelyLegalDiscipline(resolvedDisciplina)
-  const effectiveIsLegal = isLegalContent === true || legalByDiscipline
+  // Trusted / forceAudit: sempre modo jurídico dual (flashcards, material, questões)
+  const forceLegalDual = Boolean(trusted || forceAudit || auditModeOption === 'legal')
+  const effectiveIsLegal = forceLegalDual || isLegalContent === true || legalByDiscipline
   const auditMode =
-    auditModeOption || (effectiveIsLegal ? 'legal' : trusted || forceAudit ? 'factual' : null)
+    forceLegalDual || auditModeOption === 'legal'
+      ? 'legal'
+      : auditModeOption || (effectiveIsLegal ? 'legal' : trusted || forceAudit ? 'factual' : null)
 
   const promptBase = silent && !trusted ? appendSilentJsonRules(prompt) : prompt
   let enhancedPrompt = buildPromptWithCourseContext(promptBase, courseData)

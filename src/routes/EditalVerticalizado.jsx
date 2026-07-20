@@ -36,7 +36,10 @@ import {
   buildTopicoPublishMapFromSnapshot,
   resolveTopicPublishStatus,
 } from '../services/topicoPublishService'
-import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
+import {
+  normalizeTopicKeyForStorage,
+  sanitizeTopicKeyForFirestore,
+} from '../utils/topicKeyFirestore'
 import {
   canAccessTopicoContent,
   getFreeTopicKeys,
@@ -802,68 +805,110 @@ const EditalVerticalizado = () => {
     }
   }
 
-  // Função para apagar conteúdo específico de um tópico
+  // Apaga TODO o conteúdo IA do tópico: material + questões (níveis) + flashcards + checkpoints
   const handleDeleteTopicContent = async (topicKey) => {
     if (!courseId || !topicKey) return
-    if (!window.confirm(`⚠️ ATENÇÃO: Isso vai apagar o CONTEÚDO e as QUESTÕES gerados para este tópico.\n\nEsta ação não pode ser desfeita. Deseja continuar?`)) {
+    if (
+      !window.confirm(
+        '⚠️ ATENÇÃO: Isso apaga MATERIAL, QUESTÕES e FLASHCARDS gerados por IA neste tópico.\n\nEsta ação não pode ser desfeita. Deseja continuar?',
+      )
+    ) {
+      return
+    }
+
+    const normalized = normalizeTopicKeyForStorage(topicKey)
+    const sanitizedKey = sanitizeTopicKeyForFirestore(topicKey)
+    if (!sanitizedKey) {
+      alert('Não foi possível identificar o tópico para apagar.')
       return
     }
 
     try {
-      // Sanitizar o topicKey para usar como ID de documento no Firestore (mesma lógica do ConteudoCompletoTopicoView)
-      let decoded = topicKey
-      try {
-        decoded = decodeURIComponent(topicKey)
-      } catch (e) {
-        decoded = topicKey
-      }
-      
-      let sanitizedKey = decoded
-        .replace(/::/g, '_DOUBLECOLON_')
-        .replace(/\//g, '_SLASH_')
-        .replace(/\\/g, '_BACKSLASH_')
-        .trim()
-      
-      // Limitar tamanho
-      if (sanitizedKey.length > 400) {
-        sanitizedKey = sanitizedKey.substring(0, 400)
-      }
+      let deletedFlashcards = 0
+      let deletedQuestoesPacks = 0
 
-      console.log('🗑️ Tentando apagar conteúdo e questões:', {
-        courseId,
-        topicKey,
-        decoded,
+      // 1) Material
+      await deleteDoc(doc(db, 'courses', courseId, 'conteudosCompletos', sanitizedKey)).catch(() => {})
+
+      // 2) Packs de questões (nivel_1…5 + id plano)
+      const packIds = [
         sanitizedKey,
-        path: `courses/${courseId}/conteudosCompletos/${sanitizedKey}`
-      })
-
-      // Apagar conteúdo completo
-      const contentRef = doc(db, 'courses', courseId, 'conteudosCompletos', sanitizedKey)
-      await deleteDoc(contentRef)
-      console.log('✅ Conteúdo apagado com sucesso!')
-
-      // Apagar questões do tópico (questoesTopico)
-      const questoesTopicoRef = doc(db, 'courses', courseId, 'questoesTopico', sanitizedKey)
-      await deleteDoc(questoesTopicoRef)
-      console.log('✅ Questões do tópico apagadas com sucesso!')
-
-      // Apagar questões na coleção questoes que correspondem ao topicKey
-      const questoesRef = collection(db, 'courses', courseId, 'questoes')
-      const questoesQuery = query(questoesRef, where('topicKey', '==', topicKey))
-      const questoesSnapshot = await getDocs(questoesQuery)
-      
-      if (!questoesSnapshot.empty) {
-        const batch = writeBatch(db)
-        questoesSnapshot.forEach((doc) => {
-          batch.delete(doc.ref)
-        })
-        await batch.commit()
-        console.log(`✅ ${questoesSnapshot.size} questões apagadas da coleção questoes`)
+        ...[1, 2, 3, 4, 5].map((n) => `${sanitizedKey}_nivel_${n}`),
+      ]
+      for (const packId of packIds) {
+        const ref = doc(db, 'courses', courseId, 'questoesTopico', packId)
+        const snap = await getDoc(ref)
+        if (snap.exists()) {
+          await deleteDoc(ref)
+          deletedQuestoesPacks += 1
+        }
       }
-      
-      alert('✅ Conteúdo e questões apagados com sucesso!')
+
+      // 3) Flashcards (topicKey pode estar normalizado ou encoded)
+      const topicKeysToMatch = [...new Set([normalized, topicKey, sanitizedKey].filter(Boolean))]
+      const flashIds = new Set()
+      for (const key of topicKeysToMatch) {
+        const snap = await getDocs(
+          query(collection(db, 'courses', courseId, 'flashcards'), where('topicKey', '==', key)),
+        )
+        snap.docs.forEach((d) => flashIds.add(d.id))
+      }
+      if (flashIds.size) {
+        let batch = writeBatch(db)
+        let n = 0
+        for (const id of flashIds) {
+          batch.delete(doc(db, 'courses', courseId, 'flashcards', id))
+          n += 1
+          deletedFlashcards += 1
+          if (n >= 400) {
+            await batch.commit()
+            batch = writeBatch(db)
+            n = 0
+          }
+        }
+        if (n > 0) await batch.commit()
+      }
+
+      // 4) Coleção legada questoes
+      for (const key of topicKeysToMatch) {
+        const snap = await getDocs(
+          query(collection(db, 'courses', courseId, 'questoes'), where('topicKey', '==', key)),
+        )
+        if (!snap.empty) {
+          let batch = writeBatch(db)
+          let n = 0
+          snap.docs.forEach((d) => {
+            batch.delete(d.ref)
+            n += 1
+          })
+          if (n > 0) await batch.commit()
+        }
+      }
+
+      // 5) Checkpoints de geração
+      await deleteDoc(
+        doc(db, 'courses', courseId, 'generationCheckpoints', `${sanitizedKey}__flashcards`),
+      ).catch(() => {})
+      await deleteDoc(
+        doc(db, 'courses', courseId, 'generationCheckpoints', `${sanitizedKey}__material`),
+      ).catch(() => {})
+      for (let nivel = 1; nivel <= 5; nivel += 1) {
+        await deleteDoc(
+          doc(
+            db,
+            'courses',
+            courseId,
+            'generationCheckpoints',
+            `${sanitizedKey}__questoes_n${nivel}`,
+          ),
+        ).catch(() => {})
+      }
+
+      alert(
+        `✅ Conteúdo IA apagado.\nMaterial: ok\nPacks de questões: ${deletedQuestoesPacks}\nFlashcards: ${deletedFlashcards}`,
+      )
     } catch (error) {
-      console.error('❌ Erro ao apagar conteúdo/questões:', error)
+      console.error('❌ Erro ao apagar conteúdo IA:', error)
       alert('❌ Erro ao apagar: ' + (error.message || 'Erro desconhecido'))
     }
   }
@@ -1442,7 +1487,12 @@ REGRAS IMPORTANTES:
                     <TrashIcon className="h-3.5 w-3.5" />
                   </button>
                   <button
-                    onClick={() => handleDeleteTopicContent(topicKey)}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleDeleteTopicContent(topicKey)
+                    }}
                     className="rounded-lg border border-red-500/20 p-1.5 text-red-400/60 transition hover:bg-red-500/10"
                     title="Apagar conteúdo IA"
                   >
