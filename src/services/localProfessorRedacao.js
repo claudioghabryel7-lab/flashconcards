@@ -73,7 +73,7 @@ Retorne APENAS JSON:
     courseId,
     trustedGeneration: false,
     useGoogleSearch: true,
-    generationConfig: { maxOutputTokens: 4096, temperature: 0.55 },
+    generationConfig: { maxOutputTokens: 16384, temperature: 0.55 },
   })
 
   const tema = String(parsed?.tema || '').trim()
