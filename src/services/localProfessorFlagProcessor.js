@@ -15,73 +15,86 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { generateAiJson } from '../utils/geminiApi'
+import { loadFlaggedContentForLocal } from '../utils/flagContentLookup'
 import { resolveContentFlag } from './contentFeedbackService'
 
 async function loadContentBlock(courseId, flag) {
-  const type = flag.contentType
-  const contentId = String(flag.contentId || '')
-
-  if (type === 'flashcard') {
-    const ref = doc(db, 'courses', courseId, 'flashcards', contentId)
-    const snap = await getDoc(ref)
-    if (!snap.exists()) return null
-    const d = snap.data()
-    return {
-      kind: 'flashcard',
-      ref,
-      text: `FRENTE:\n${d.pergunta || d.front || ''}\n\nVERSO:\n${d.resposta || d.back || ''}`,
-      data: d,
-    }
-  }
-
-  if (type === 'questao' || type === 'questoes') {
-    const packId = contentId.includes('_nivel_')
-      ? contentId
-      : flag.topicKey
-        ? `${String(flag.topicKey).replace(/[^a-zA-Z0-9_-]+/g, '_')}_nivel_1`
-        : contentId
-    const ref = doc(db, 'courses', courseId, 'questoesTopico', packId)
-    const snap = await getDoc(ref)
-    if (!snap.exists()) return null
-    return {
-      kind: 'questao',
-      ref,
-      text: JSON.stringify(snap.data()?.questoes || snap.data(), null, 2).slice(0, 20000),
-      data: snap.data(),
-    }
-  }
-
-  // material / conteudo
-  const topicKey = flag.topicKey || contentId
-  const sanitized = String(topicKey)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9_-]+/g, '_')
-    .slice(0, 120)
-  const ref = doc(db, 'courses', courseId, 'conteudosCompletos', sanitized)
-  const snap = await getDoc(ref)
-  if (!snap.exists()) return null
-  const d = snap.data()
-  const blob = JSON.stringify(d).slice(0, 20000)
-  return { kind: 'material', ref, text: blob, data: d }
+  return loadFlaggedContentForLocal(courseId, flag)
 }
 
 async function applyFlashcardPatch(content, verdict) {
-  const corr = (verdict.corrections || []).find((c) => c.target === 'flashcard' || c.field)
+  const corr = (verdict.corrections || []).find(
+    (c) =>
+      !c.target ||
+      c.target === 'flashcard' ||
+      c.field === 'frente' ||
+      c.field === 'verso' ||
+      c.field === 'ambos',
+  )
   if (!corr?.newText) return 0
-  const field = corr.field || 'ambos'
+  const field = String(corr.field || 'ambos').toLowerCase()
   const patch = {}
   if (field === 'frente' || field === 'ambos') {
     const parts = String(corr.newText).split(/\n+VERSO:\n+/i)
-    if (field === 'frente') patch.pergunta = corr.newText
-    else if (parts.length >= 2) {
+    if (field === 'frente') {
+      patch.pergunta = corr.newText.replace(/^FRENTE:\n?/i, '').trim()
+      patch.frente = patch.pergunta
+    } else if (parts.length >= 2) {
       patch.pergunta = parts[0].replace(/^FRENTE:\n?/i, '').trim()
       patch.resposta = parts[1].trim()
-    } else patch.pergunta = corr.newText
+      patch.frente = patch.pergunta
+      patch.verso = patch.resposta
+    } else {
+      patch.pergunta = corr.newText
+      patch.frente = patch.pergunta
+    }
   }
-  if (field === 'verso') patch.resposta = corr.newText
+  if (field === 'verso') {
+    patch.resposta = corr.newText.replace(/^VERSO:\n?/i, '').trim()
+    patch.verso = patch.resposta
+  }
   if (!Object.keys(patch).length) return 0
   await updateDoc(content.ref, { ...patch, updatedAt: serverTimestamp() })
+  return 1
+}
+
+async function applyQuestaoPatch(content, verdict) {
+  const corr = (verdict.corrections || []).find(
+    (c) => !c.target || c.target === 'questao' || c.field === 'aligned',
+  )
+  if (!corr?.newText || content.meta?.idx == null) return 0
+
+  let pack = {}
+  try {
+    pack = JSON.parse(corr.newText)
+  } catch {
+    return 0
+  }
+  if (!pack || typeof pack !== 'object') return 0
+
+  const questoes = Array.isArray(content.meta.questoes) ? [...content.meta.questoes] : []
+  const idx = content.meta.idx
+  if (!questoes[idx]) return 0
+
+  const next = { ...questoes[idx] }
+  if (pack.enunciado != null) next.enunciado = pack.enunciado
+  if (pack.alternativas && typeof pack.alternativas === 'object') {
+    next.alternativas = { ...(next.alternativas || {}), ...pack.alternativas }
+  }
+  const correta = pack.correta ?? pack.respostaCorreta ?? pack.gabarito
+  if (correta != null) {
+    next.correta = correta
+    next.respostaCorreta = correta
+    next.gabarito = correta
+  }
+  const expl = pack.gabaritoComentado ?? pack.explicacao ?? pack.comentario
+  if (expl != null) {
+    next.gabaritoComentado = expl
+    next.explicacao = expl
+  }
+
+  questoes[idx] = next
+  await updateDoc(content.ref, { questoes, updatedAt: serverTimestamp() })
   return 1
 }
 
@@ -125,6 +138,17 @@ export async function processProfessorFlagLocal({
   }
 
   await updateProgress(35, 'Professor IA analisando…')
+  const questaoHint =
+    content.kind === 'questao'
+      ? `
+Para questão use:
+{ "target": "questao", "field": "aligned", "newText": "{\\"correta\\":\\"A\\",\\"gabaritoComentado\\":\\"...\\",\\"enunciado\\":\\"...\\",\\"alternativas\\":{}}" }
+`
+      : `
+Para flashcard use:
+{ "target": "flashcard", "field": "ambos", "newText": "FRENTE:\\n...\\n\\nVERSO:\\n..." }
+`
+
   const verdict = await generateAiJson(
     `Você é o Professor IA. Analise a sinalização do aluno.
 
@@ -140,10 +164,9 @@ Retorne APENAS JSON:
   "reportValid": true,
   "summary": "resumo curto",
   "needsAdminReview": false,
-  "corrections": [
-    { "target": "flashcard", "field": "ambos", "newText": "FRENTE:\\n...\\n\\nVERSO:\\n..." }
-  ]
+  "corrections": []
 }
+${questaoHint}
 
 REGRAS:
 - Se o conteúdo estiver CORRETO: reportValid=false, corrections=[]
@@ -170,8 +193,12 @@ REGRAS:
   }
 
   let applied = 0
-  if (content.kind === 'flashcard' && verdict?.reportValid !== false) {
-    applied = await applyFlashcardPatch(content, verdict)
+  if (verdict?.reportValid !== false) {
+    if (content.kind === 'flashcard') {
+      applied = await applyFlashcardPatch(content, verdict)
+    } else if (content.kind === 'questao') {
+      applied = await applyQuestaoPatch(content, verdict)
+    }
   }
 
   if (verdict?.reportValid === false || (applied === 0 && !(verdict?.corrections || []).length)) {
@@ -194,7 +221,7 @@ REGRAS:
     return { applied, flagResolved: true, summary: verdict?.summary }
   }
 
-  // Questão/material: manda para admin se não aplicou automático simples
+  // Material / patch incompleto: manda para admin
   await updateDoc(flagRef, {
     status: 'needs_admin',
     lastProfessorSummary:
@@ -205,21 +232,36 @@ REGRAS:
   return { needsAdmin: true, applied: 0, summary: verdict?.summary }
 }
 
-/** Busca a próxima flag aberta (qualquer curso). */
+/** Busca a próxima flag aberta ou que precisa de retry (qualquer curso). */
 export async function fetchNextOpenFlag() {
   const coursesSnap = await getDocs(collection(db, 'courses'))
-  for (const courseDoc of coursesSnap.docs) {
-    if (courseDoc.data()?.active === false) continue
-    const q = query(
-      collection(db, 'courses', courseDoc.id, 'contentFeedback'),
-      where('kind', '==', 'flag'),
-      where('status', '==', 'open'),
-      limit(1),
-    )
-    const snap = await getDocs(q)
-    if (!snap.empty) {
-      const d = snap.docs[0]
-      return { id: d.id, courseId: courseDoc.id, ...d.data() }
+  // open primeiro; depois needs_admin (ex.: falhou "conteúdo não encontrado" com loader antigo)
+  const statusOrder = ['open', 'needs_admin']
+
+  for (const status of statusOrder) {
+    for (const courseDoc of coursesSnap.docs) {
+      if (courseDoc.data()?.active === false) continue
+      const q = query(
+        collection(db, 'courses', courseDoc.id, 'contentFeedback'),
+        where('kind', '==', 'flag'),
+        where('status', '==', status),
+        limit(3),
+      )
+      const snap = await getDocs(q)
+      for (const d of snap.docs) {
+        const data = d.data() || {}
+        // Evita loop infinito em needs_admin sem chance de auto-correção
+        if (
+          status === 'needs_admin' &&
+          data.lastProfessorSummary &&
+          !/não encontrado|nao encontrado|não carregado/i.test(
+            String(data.lastProfessorSummary),
+          )
+        ) {
+          continue
+        }
+        return { id: d.id, courseId: courseDoc.id, ...data }
+      }
     }
   }
   return null
