@@ -13,6 +13,7 @@ import { initFirebase } from '@/firebase/config'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { cleanupConsole } from '@/lib/consoleCleanup'
 import BackgroundGenerationBanner from '@/components/BackgroundGenerationBanner'
+import AdminProfessorDock from '@/components/AdminProfessorDock'
 
 function ClientBootstrap() {
   useEffect(() => {
@@ -34,6 +35,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                 <ClientBootstrap />
                 {children}
                 <BackgroundGenerationBanner />
+                <AdminProfessorDock />
                 <Toaster position="top-right" />
               </SystemProvider>
             </AuthProvider>

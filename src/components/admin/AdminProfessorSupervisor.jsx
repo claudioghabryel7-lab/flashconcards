@@ -149,7 +149,7 @@ export default function AdminProfessorSupervisor() {
         setWindowDirty(false)
         if (result && result.within === false) {
           alert(
-            `Agenda ativada (${result.windowLabel}).\n\nAgora está fora do horário — o Professor entra sozinho quando a janela abrir (tick na aba /admin a cada ~90s enquanto você estiver online).`,
+            `Agenda ativada (${result.windowLabel}).\n\nAgora está fora do horário — o Professor entra sozinho quando a janela abrir (qualquer página do site, ~45s, aba visível). Use o painel flutuante Professor IA para acompanhar.`,
           )
         }
       }
@@ -305,9 +305,10 @@ export default function AdminProfessorSupervisor() {
             <div>
               <h2 className="cp-headline text-lg text-cp-text">Professor IA — correções automáticas</h2>
               <p className="mt-1 max-w-xl text-sm text-cp-muted">
-                Com o painel admin aberto, corrige a aba <strong>🚩 Moderação</strong>{' '}
-                automaticamente (~90s). A agenda De/Até controla a sessão e a rotação semanal do{' '}
-                <strong>tema de redação</strong>. Use o botão abaixo para forçar 1 correção agora.
+                Com você online em <strong>qualquer página</strong> do site (aba visível), corrige a{' '}
+                <strong>🚩 Moderação</strong> automaticamente (~45s). Use o painel flutuante
+                &quot;Professor IA&quot; (canto inferior esquerdo) para acompanhar sem abrir o /admin.
+                A agenda De/Até controla a sessão e a rotação semanal do <strong>tema de redação</strong>.
               </p>
             </div>
           </div>
@@ -375,7 +376,7 @@ export default function AdminProfessorSupervisor() {
                   </p>
                 )}
                 <p className="mt-1 text-[11px] text-cp-muted">
-                  Tick local ~90s enquanto o painel admin está aberto. Agora em SP:{' '}
+                  Tick local ~45s em qualquer página com aba visível. Agora em SP:{' '}
                   {formatDailyStartLabel(clock.hour, clock.minute)}.
                 </p>
               </div>
