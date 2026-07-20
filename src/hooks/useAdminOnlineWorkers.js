@@ -4,13 +4,18 @@ import { tickMentoradoDailyOnline } from '../services/adminOnlineMentoradoSchedu
 import { tickProfessorOnline } from '../services/adminOnlineProfessorScheduler'
 
 const MENTORADO_MS = 60 * 1000
-const PROFESSOR_MS = 90 * 1000
+const PROFESSOR_MS = 45 * 1000
 
 /**
- * Enquanto o admin está com o painel aberto (aba visível),
- * roda os ticks locais do Guia Mentorado e do Professor IA.
+ * Enquanto QUALQUER aba do admin estiver aberta e visível no site,
+ * o Professor IA fiscaliza a Moderação e (opcional) o Mentorado faz catch-up.
+ * Não exige abrir o painel Admin / configurações.
  */
-export function useAdminOnlineWorkers(enabled = true) {
+export function useAdminOnlineWorkers({
+  enabled = true,
+  professor = true,
+  mentorado = true,
+} = {}) {
   const { user, isAdmin } = useAuth()
   const mentoradoBusy = useRef(false)
   const professorBusy = useRef(false)
@@ -19,7 +24,7 @@ export function useAdminOnlineWorkers(enabled = true) {
     if (!enabled || !isAdmin || !user?.uid) return undefined
 
     const runMentorado = async () => {
-      if (mentoradoBusy.current || document.hidden) return
+      if (!mentorado || mentoradoBusy.current || document.hidden) return
       mentoradoBusy.current = true
       try {
         const result = await tickMentoradoDailyOnline(user.uid)
@@ -34,7 +39,7 @@ export function useAdminOnlineWorkers(enabled = true) {
     }
 
     const runProfessor = async () => {
-      if (professorBusy.current || document.hidden) return
+      if (!professor || professorBusy.current || document.hidden) return
       professorBusy.current = true
       try {
         const result = await tickProfessorOnline(user.uid)
@@ -48,25 +53,26 @@ export function useAdminOnlineWorkers(enabled = true) {
       }
     }
 
-    // Catch-up imediato ao abrir o admin
-    runMentorado()
-    runProfessor()
+    // Imediato ao ficar online em qualquer página
+    if (professor) runProfessor()
+    if (mentorado) runMentorado()
 
-    const t1 = window.setInterval(runMentorado, MENTORADO_MS)
-    const t2 = window.setInterval(runProfessor, PROFESSOR_MS)
+    const timers = []
+    if (mentorado) timers.push(window.setInterval(runMentorado, MENTORADO_MS))
+    if (professor) timers.push(window.setInterval(runProfessor, PROFESSOR_MS))
 
     const onVisible = () => {
-      if (!document.hidden) {
-        runMentorado()
-        runProfessor()
-      }
+      if (document.hidden) return
+      if (professor) runProfessor()
+      if (mentorado) runMentorado()
     }
     document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
 
     return () => {
-      window.clearInterval(t1)
-      window.clearInterval(t2)
+      timers.forEach((t) => window.clearInterval(t))
       document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
     }
-  }, [enabled, isAdmin, user?.uid])
+  }, [enabled, isAdmin, user?.uid, professor, mentorado])
 }

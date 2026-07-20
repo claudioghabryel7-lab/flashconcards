@@ -1,6 +1,6 @@
 /**
- * Professor IA — tick local enquanto o admin está online.
- * Moderação: corrige sinalizações sempre que o painel admin está aberto (não depende da agenda).
+ * Professor IA — tick local enquanto o admin está online em QUALQUER página.
+ * Moderação: corrige sinalizações automaticamente (não precisa abrir o painel Admin).
  * Agenda De/Até: controla sessão/UI e rotação semanal de redação.
  */
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
@@ -10,7 +10,6 @@ import {
   isWithinProfessorWindow,
   setProfessorSupervisorEnabled,
   formatScheduleWindowLabel,
-  formatDailyStartLabel,
 } from './professorSupervisorService'
 import { startBackgroundGeneration, getActiveGenerationCount } from './aiGenerationRunner'
 import {
@@ -207,22 +206,19 @@ export async function tickProfessorOnline(adminUserId) {
       console.warn('[professorOnline] redação semanal:', redacaoErr?.message || redacaoErr)
     }
 
-    // Moderação: SEMPRE com admin online (painel aberto), independente da agenda
+    // Moderação: SEMPRE com admin online (qualquer página), independente da agenda
     await reclaimStaleInReviewFlags()
     const flag = await fetchNextOpenFlag()
     if (!flag) {
       await patchProfessorActivity({
         phase: 'idle_queue',
         lastMessage:
-          'Fila vazia — Moderação ok. Aguardando novas sinalizações (admin online).',
+          'Fila vazia — Moderação ok. Aguardando novas sinalizações (admin online no site).',
         currentActivity: {
           phase: 'idle_queue',
           message: data.recurringDaily && !within
-            ? `Fora da janela (${formatDailyStartLabel(
-                data.windowStartHour ?? data.dailyStartHour ?? 0,
-                data.windowStartMinute ?? data.dailyStartMinute ?? 0,
-              )}) — Moderação ainda é corrigida com o painel aberto.`
-            : 'Online — Moderação em dia.',
+            ? `Fora da janela de agenda — Moderação continua sendo corrigida com admin online.`
+            : 'Admin online — Moderação em dia.',
           progress: 100,
           updatedAt: serverTimestamp(),
         },

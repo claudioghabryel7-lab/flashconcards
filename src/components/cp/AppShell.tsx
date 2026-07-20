@@ -10,6 +10,10 @@ const SupportButton = dynamic(() => import('@/components/SupportButton'), { ssr:
 const PopupBanner = dynamic(() => import('@/components/PopupBanner'), { ssr: false })
 const OfflineIndicator = dynamic(() => import('@/components/OfflineIndicator'), { ssr: false })
 const TrilhaTimerBanner = dynamic(() => import('@/components/TrilhaTimerBanner'), { ssr: false })
+const AdminOnlinePresenceWorkers = dynamic(
+  () => import('@/components/cp/AdminOnlinePresenceWorkers'),
+  { ssr: false },
+)
 
 const MINIMAL_PATHS = ['/flashcards/pip', '/share-flashcards']
 const FULL_BLEED_PATHS = ['/', '/cursos', '/comunidade']
@@ -25,7 +29,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const fullBleed = FULL_BLEED_PATHS.includes(pathname) || isComunidade
 
   if (minimal) {
-    return <>{children}</>
+    return (
+      <>
+        {children}
+        <AdminOnlinePresenceWorkers />
+      </>
+    )
   }
 
   return (
@@ -46,6 +55,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <PopupBanner />
       <OfflineIndicator />
       <TrilhaTimerBanner />
+      <AdminOnlinePresenceWorkers />
     </div>
   )
 }

@@ -41,7 +41,6 @@ import AdminGuiaMentorado from '../components/admin/AdminGuiaMentorado'
 import AdminProfessorSupervisor from '../components/admin/AdminProfessorSupervisor'
 import AdminGenerationJobs from '../components/admin/AdminGenerationJobs'
 import ContentPublishButton from '../components/ContentPublishButton'
-import { useAdminOnlineWorkers } from '../hooks/useAdminOnlineWorkers'
 import { defaultContentStatus, toggleContentStatus } from '../utils/contentStatus'
 import { DocumentTextIcon, TrashIcon, UserPlusIcon, PlusIcon, DocumentArrowUpIcon, AcademicCapIcon, SparklesIcon, ShareIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { StarIcon, LockClosedIcon } from '@heroicons/react/24/solid'
@@ -74,8 +73,6 @@ const MATERIAS = [
 
 const AdminPanel = () => {
   const { isAdmin, user: currentAdminUser, profile } = useAuth()
-  // Guia Mentorado + Professor IA — rodam enquanto o admin está online
-  useAdminOnlineWorkers(Boolean(isAdmin))
   const [cards, setCards] = useState([])
   const [users, setUsers] = useState([])
   const [presence, setPresence] = useState({}) // { uid: { status, lastSeen } }
