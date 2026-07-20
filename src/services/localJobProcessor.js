@@ -23,6 +23,7 @@ import {
   sanitizeTopicKeyForFirestore,
   toSafeFirestoreDocId,
 } from '../utils/topicKeyFirestore'
+import { setTopicoPublishStatus } from './topicoPublishService'
 import dayjs from 'dayjs'
 import {
   FLASHCARD_TARGET,
@@ -565,73 +566,50 @@ async function finalizeLocalDayStatus(courseId, targetDate, { errors = [], total
 }
 
 /**
- * Libera assets do tópico + registra em topicoStatus (dispara notificação nos alunos).
- * Atualiza ID canônico e ID legado agressivo (conteúdo gerado antes da unificação).
+ * Libera no Edital Verticalizado + assets (mesma lógica do botão Liberar do admin).
  */
 async function publishTopicAssets(
   courseId,
   {
-    sanitized,
     topicKey,
     cardIds = [],
     disciplinaNome = '',
     topicoNome = '',
+    moduloLabel = '',
   } = {},
 ) {
   const available = CONTENT_STATUS.AVAILABLE
-  const normalizedTopicKey = normalizeTopicKeyForStorage(topicKey || sanitized)
-  const statusDocId =
-    sanitizeTopicKeyForFirestore(normalizedTopicKey) || sanitized
-  const canonical = statusDocId
-  const legacy = legacyAggressiveTopicKey(topicKey || sanitized)
-  const contentIds = [...new Set([canonical, sanitized, legacy].filter(Boolean))]
+  const normalizedTopicKey = normalizeTopicKeyForStorage(topicKey)
+  if (!normalizedTopicKey) {
+    throw new Error('topicKey ausente na liberação do tópico.')
+  }
 
-  for (const id of contentIds) {
+  // Mesma função do botão "Liberar" no Edital — garante topicoStatus + conteúdo alinhados
+  await setTopicoPublishStatus(courseId, normalizedTopicKey, available, {
+    disciplinaNome: disciplinaNome || '',
+    moduloLabel: moduloLabel || topicoNome || '',
+  })
+
+  // Docs gerados com ID legado agressivo (antes da unificação)
+  const softId = sanitizeTopicKeyForFirestore(normalizedTopicKey)
+  const legacyId = legacyAggressiveTopicKey(normalizedTopicKey)
+  if (legacyId && legacyId !== softId) {
     await setDoc(
-      doc(db, 'courses', courseId, 'conteudosCompletos', id),
-      {
-        status: available,
-        topicKey: normalizedTopicKey,
-        updatedAt: serverTimestamp(),
-      },
+      doc(db, 'courses', courseId, 'conteudosCompletos', legacyId),
+      { status: available, topicKey: normalizedTopicKey, updatedAt: serverTimestamp() },
       { merge: true },
     ).catch(() => {})
     await setDoc(
-      doc(db, 'courses', courseId, 'questoesTopico', `${id}_nivel_1`),
-      {
-        status: available,
-        topicKey: normalizedTopicKey,
-        updatedAt: serverTimestamp(),
-      },
+      doc(db, 'courses', courseId, 'questoesTopico', `${legacyId}_nivel_1`),
+      { status: available, topicKey: normalizedTopicKey, updatedAt: serverTimestamp() },
       { merge: true },
     ).catch(() => {})
   }
 
+  // Garante flashcards do job atual (IDs frescos) mesmo se o scan geral falhar
   if (cardIds.length) {
     await setFlashcardsStatus(courseId, cardIds, available)
-  } else if (topicKey) {
-    const existing = await loadFlashcardsByTopicKey(courseId, topicKey)
-    await setFlashcardsStatus(
-      courseId,
-      existing.map((c) => c.id),
-      available,
-    )
   }
-
-  // Fonte das notificações + gate de acesso do aluno
-  await setDoc(
-    doc(db, 'courses', courseId, 'topicoStatus', statusDocId),
-    {
-      topicKey: normalizedTopicKey,
-      status: available,
-      disciplinaNome: disciplinaNome || '',
-      topicoNome: topicoNome || '',
-      releasedAssets: { flashcards: true, material: true, questoes: true },
-      releasedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  )
 }
 
 /**
@@ -781,16 +759,17 @@ async function processSingleMentoradoTopic({
     step: 'publicando',
   })
 
-  // Search na geração já validou — marca bundle e publica
   await markBundleAuditPassed(courseId, topicKey, jobId)
 
-  if (autoPublish) {
+  // Sempre libera no Edital ao concluir (LIBERADO no mentorado = Liberar no edital)
+  if (autoPublish !== false) {
+    await updateProgress(pctBase + 11, `${label}: liberando no Edital…`)
     await publishTopicAssets(courseId, {
-      sanitized,
       topicKey,
       cardIds: fcResult?.cardIds || [],
       disciplinaNome: disciplina,
       topicoNome: topic.topicoNome || label,
+      moduloLabel: topic.modulo || topic.flashcardMeta?.modulo || topic.topicoNome || label,
     })
   }
 
@@ -905,18 +884,18 @@ async function processGuiaMentoradoDay(courseId, serverPayload, updateProgress, 
     const pctBase = Math.round((entry.index / topics.length) * 90) + 8
     const prev = dayByKey.get(entry.topicKey)
     if (prev?.status === 'published' && !useForceFresh) {
-      // Repara liberação: painel diz Liberado mas aluno viaja sem topicoStatus/conteúdo disponivel
+      // Repara: LIBERADO no mentorado sem botão Bloquear no Edital
       try {
         await publishTopicAssets(courseId, {
-          sanitized: sanitizeTopicKey(entry.topicKey),
           topicKey: entry.topicKey,
           disciplinaNome: entry.topic.disciplina || '',
           topicoNome: entry.topic.topicoNome || label,
+          moduloLabel: entry.topic.modulo || entry.topic.topicoNome || label,
         })
       } catch (repairErr) {
-        console.warn('[localJob] reparo de liberação:', repairErr?.message)
+        console.warn('[localJob] reparo de liberação no Edital:', repairErr?.message)
       }
-      await updateProgress(pctBase + 12, `${label} já publicado — liberação sincronizada`)
+      await updateProgress(pctBase + 12, `${label} já publicado — liberação sincronizada no Edital`)
       return { ok: true, topicKey: entry.topicKey, skipped: true }
     }
     return runTopicWithAutoRetry({

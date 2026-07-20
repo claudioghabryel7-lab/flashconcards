@@ -64,10 +64,29 @@ export function buildTopicoPublishMapFromSnapshot(snapshot) {
   snapshot.docs.forEach((d) => {
     const data = d.data()
     const status = data.status || CONTENT_STATUS.UNAVAILABLE
-    if (data.topicKey) {
-      map[data.topicKey] = status
+    const register = (key) => {
+      if (!key) return
+      map[key] = status
+      try {
+        const decoded = decodeURIComponent(key)
+        if (decoded && decoded !== key) map[decoded] = status
+      } catch {
+        /* ignore */
+      }
+      try {
+        const encoded = encodeURIComponent(key)
+        if (encoded && encoded !== key) map[encoded] = status
+      } catch {
+        /* ignore */
+      }
+      const soft = sanitizeTopicKeyForFirestore(key)
+      if (soft) map[soft] = status
     }
-    map[d.id] = status
+
+    register(data.topicKey)
+    register(data.topicKeyNormalized)
+    register(data.topicKeyEncoded)
+    register(d.id)
   })
   return map
 }
@@ -219,14 +238,25 @@ export async function setTopicoPublishStatus(
     })
   }
 
-  // Registro central (UI do edital)
+  // Registro central (UI do edital + aluno)
+  const editalEncodedKey = (() => {
+    try {
+      return encodeURIComponent(normalizedTopicKey)
+    } catch {
+      return normalizedTopicKey
+    }
+  })()
+
   operations.push({
     ref: doc(db, 'courses', resolvedId, 'topicoStatus', sanitizedKey),
     data: {
-      topicKey: normalizedTopicKey,
+      topicKey: editalEncodedKey,
+      topicKeyNormalized: normalizedTopicKey,
+      topicKeyEncoded: editalEncodedKey,
       status,
       disciplinaNome,
       releasedAssets: { flashcards: true, material: true, questoes: true },
+      releasedAt: now,
       updatedAt: now,
     },
   })
