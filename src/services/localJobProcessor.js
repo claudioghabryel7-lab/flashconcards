@@ -12,7 +12,7 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
-import { filterGeneratedContentWithGoogleSearch, generateAiJson } from '../utils/geminiApi'
+import { generateAiJson } from '../utils/geminiApi'
 import { isLikelyLegalDiscipline } from '../utils/contentVerification'
 import { buildFlashcardPrompt } from '../utils/unifiedPrompt'
 import { buildMentoradoCronogramaPrompt } from '../utils/guiaMentoradoPrompts'
@@ -42,7 +42,8 @@ import {
 const TRUSTED_AI = {
   trustedGeneration: true,
   useRAG: false,
-  useGoogleSearch: false,
+  // 1 passagem: gera + Google Search + auto-checagem (máxima economia)
+  useGoogleSearch: true,
   verifyContent: false,
   forceAudit: false,
 }
@@ -138,7 +139,7 @@ function buildTrustedOptions(disciplina = '', extra = {}) {
     isLegalContent: isLegal,
     verifyContent: false,
     forceAudit: false,
-    useGoogleSearch: false,
+    useGoogleSearch: true,
     useRAG: false,
     disciplina,
     ...extra,
@@ -203,8 +204,8 @@ async function processPromptSave(
     disciplina,
   })
 
-  await updateProgress(20, `Gerando ${label}…`)
-  let parsed = await generateAiJson(prompt, {
+  await updateProgress(20, `Gerando ${label} (Google Search)…`)
+  const parsed = await generateAiJson(prompt, {
     courseId,
     ...buildTrustedOptions(disciplina, {
       isLegalContent: aiOptions.isLegalContent,
@@ -213,46 +214,6 @@ async function processPromptSave(
       courseContext: toCourseAiContextShape({ ...examCtx, disciplina }),
     }),
   })
-
-  const contentType = extra.contentType || aiOptions.contentType || ''
-  if (contentType === 'material' || contentType === 'questoes' || contentType === 'flashcards') {
-    await updateProgress(70, `Verificando ${label} com Google Search…`)
-    const items =
-      contentType === 'flashcards'
-        ? parsed?.flashcards || parsed?.cards
-        : contentType === 'questoes'
-          ? parsed?.questoes || parsed?.questions || parsed?.itens
-          : null
-    const checked = await filterGeneratedContentWithGoogleSearch({
-      content: parsed,
-      contentType,
-      items: Array.isArray(items) ? items : null,
-      courseContext: toCourseAiContextShape({ ...examCtx, disciplina }),
-    })
-    if (contentType === 'material') {
-      if (!checked.aprovado || !checked.kept) {
-        const err = new Error(
-          `Material reprovado no Google Search: ${checked.rejected?.[0]?.motivo || 'FALSO'}`,
-        )
-        err.code = 'material_incomplete'
-        throw err
-      }
-      parsed = checked.kept
-    } else if (Array.isArray(checked.kept)) {
-      if (!checked.kept.length) {
-        const err = new Error(`Nenhum item ok após Google Search (${label}).`)
-        err.code = contentType === 'flashcards' ? 'flashcards_invalid' : 'questoes_invalid'
-        throw err
-      }
-      if (parsed?.flashcards) parsed = { ...parsed, flashcards: checked.kept }
-      else if (parsed?.cards) parsed = { ...parsed, cards: checked.kept }
-      else if (parsed?.questoes) parsed = { ...parsed, questoes: checked.kept }
-      else if (parsed?.questions) parsed = { ...parsed, questions: checked.kept }
-      else if (parsed?.itens) parsed = { ...parsed, itens: checked.kept }
-      else parsed = { ...parsed, items: checked.kept }
-    }
-  }
-
   await updateProgress(85, `Salvando ${label} (checkpoint)…`)
 
   if (topicKey && extra.contentType === 'material') {
@@ -382,7 +343,7 @@ async function processFlashcardsTopico(
     const pct = 10 + Math.round((batchNum / batchCount) * 65)
     await updateProgress(
       pct,
-      `Flashcards lote ${batchNum}/${batchCount} (${cardsInBatch} cards, auditoria)…`,
+      `Flashcards lote ${batchNum}/${batchCount} (${cardsInBatch} cards + Google Search)…`,
     )
 
     const existingFronts = allCards.map((c) => c.pergunta || c.frente).filter(Boolean)
@@ -408,16 +369,17 @@ TAREFA: Criar exatamente ${cardsInBatch} flashcards (lote ${batchNum}/${batchCou
 REGRAS DE OURO (violação = card inválido):
 1. CADA card DEVE ser 100% sobre o TÓPICO EXATO acima — nada de assuntos vizinhos ou genéricos da disciplina.
 2. Perguntas no estilo da banca ${examCtx.banca} para o cargo ${examCtx.cargo} (${examCtx.concursoName}).
-3. NÃO invente lei, artigo, súmula, data ou jurisprudência.
+3. Use Google Search. Para cada card pergunte: "isso está certo mesmo?". FALSO → corrija ou omita. Dúvida factual → NÃO inclua.
 4. PROIBIDO: "O que é X?" com definição vaga; curiosidades; conteúdo óbvio; misturar outro tópico.
 5. Verso: 2–5 frases técnicas, corretas e cobráveis em prova.
+6. Prefira menos cards corretos a muitos duvidosos.
 ${existingList}
 
 Retorne APENAS JSON:
 { "flashcards": [ { "pergunta": "...", "resposta": "..." } ] }`
 
     const { validateFlashcardBatchOrThrow } = await import('../utils/flashcardQuality')
-    const minKeep = Math.max(1, Math.ceil(cardsInBatch * 0.6))
+    const minKeep = Math.max(1, Math.ceil(cardsInBatch * 0.4))
     let batchCards = []
 
     for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -459,30 +421,8 @@ Retorne APENAS JSON:
       }
     }
 
-    // Google Search: publica só o que estiver ok
-    await updateProgress(pct, `Flashcards lote ${batchNum}: verificando com Google Search…`)
-    const verified = await filterGeneratedContentWithGoogleSearch({
-      contentType: 'flashcards',
-      items: batchCards,
-      courseContext: toCourseAiContextShape({
-        ...examCtx,
-        disciplina,
-        topicoNome,
-      }),
-    })
-    if (Array.isArray(verified.kept) && verified.kept.length) {
-      if (verified.rejected?.length) {
-        console.warn(
-          `[flashcards] lote ${batchNum}: ${verified.rejected.length} card(s) rejeitado(s) pelo Search`,
-        )
-      }
-      batchCards = verified.kept
-    }
-
     if (batchCards.length < 1) {
-      const err = new Error(
-        `Lote ${batchNum} de flashcards: nenhum card ok após Google Search.`,
-      )
+      const err = new Error(`Lote ${batchNum} de flashcards vazio após geração.`)
       err.code = 'flashcards_invalid'
       throw err
     }
@@ -509,7 +449,7 @@ Retorne APENAS JSON:
   allCards = allCards.slice(0, FLASHCARD_TARGET)
   if (allCards.length < Math.max(5, FLASHCARD_TARGET - 10)) {
     const err = new Error(
-      `Flashcards insuficientes após verificação: ${allCards.length} (alvo ~${FLASHCARD_TARGET}). Checkpoint mantido — retome o job.`,
+      `Flashcards insuficientes: ${allCards.length} (alvo ~${FLASHCARD_TARGET}). Checkpoint mantido — retome o job.`,
     )
     err.code = 'flashcards_invalid'
     throw err
@@ -675,7 +615,7 @@ async function processSingleMentoradoTopic({
     step: 'material',
     error: null,
   })
-  await updateProgress(pctBase, `Tópico ${index + 1}/${total}: ${label} — material`)
+  await updateProgress(pctBase, `Tópico ${index + 1}/${total}: ${label} — material (Search)`)
 
   const matPrep = await prepareMaterialRun({ courseId, topicKey, jobId, forceFresh })
   if (matPrep.alreadyComplete && matPrep.existingDraft) {
@@ -690,20 +630,6 @@ async function processSingleMentoradoTopic({
         generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
       }),
     })
-    await updateProgress(pctBase + 1, `${label}: material — Google Search…`)
-    const matCheck = await filterGeneratedContentWithGoogleSearch({
-      content: materialParsed,
-      contentType: 'material',
-      courseContext,
-    })
-    if (!matCheck.aprovado || !matCheck.kept) {
-      const err = new Error(
-        `Material reprovado no Google Search: ${matCheck.rejected?.[0]?.motivo || 'conteúdo FALSO'}`,
-      )
-      err.code = 'material_incomplete'
-      throw err
-    }
-    materialParsed = matCheck.kept
     await saveMaterialCheckpoint({
       courseId,
       topicKey,
@@ -726,7 +652,7 @@ async function processSingleMentoradoTopic({
     step: 'questoes',
   })
 
-  await updateProgress(pctBase + 3, `Tópico ${index + 1}/${total}: ${label} — questões`)
+  await updateProgress(pctBase + 3, `Tópico ${index + 1}/${total}: ${label} — questões (Search)`)
   const qPrep = await prepareQuestoesRun({
     courseId,
     topicKey,
@@ -747,31 +673,6 @@ async function processSingleMentoradoTopic({
         generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
       }),
     })
-    const qList =
-      questoesParsed?.questoes ||
-      questoesParsed?.questions ||
-      questoesParsed?.itens ||
-      (Array.isArray(questoesParsed) ? questoesParsed : null)
-    if (qList?.length) {
-      await updateProgress(pctBase + 4, `${label}: questões — Google Search…`)
-      const qCheck = await filterGeneratedContentWithGoogleSearch({
-        contentType: 'questoes',
-        items: qList,
-        courseContext,
-      })
-      if (!qCheck.aprovado || !qCheck.kept?.length) {
-        const err = new Error('Nenhuma questão ok após Google Search.')
-        err.code = 'questoes_invalid'
-        throw err
-      }
-      if (qCheck.rejected?.length) {
-        console.warn(`[questoes] ${qCheck.rejected.length} questão(ões) rejeitada(s)`)
-      }
-      if (questoesParsed?.questoes) questoesParsed = { ...questoesParsed, questoes: qCheck.kept }
-      else if (questoesParsed?.questions) questoesParsed = { ...questoesParsed, questions: qCheck.kept }
-      else if (questoesParsed?.itens) questoesParsed = { ...questoesParsed, itens: qCheck.kept }
-      else questoesParsed = qCheck.kept
-    }
     await saveQuestoesCheckpoint({
       courseId,
       topicKey,
@@ -795,7 +696,7 @@ async function processSingleMentoradoTopic({
     step: 'flashcards',
   })
 
-  await updateProgress(pctBase + 6, `Tópico ${index + 1}/${total}: ${label} — flashcards`)
+  await updateProgress(pctBase + 6, `Tópico ${index + 1}/${total}: ${label} — flashcards (Search)`)
   if (topic.flashcardMeta) {
     fcResult = await processFlashcardsTopico(
       courseId,
@@ -825,7 +726,7 @@ async function processSingleMentoradoTopic({
     step: 'publicando',
   })
 
-  // Sem auditoria cruzada — cada asset já passou no Google Search (ok publica / não-ok descarta)
+  // Search na geração já validou — marca bundle e publica
   await markBundleAuditPassed(courseId, topicKey, jobId)
 
   if (autoPublish) {

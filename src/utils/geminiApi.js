@@ -20,7 +20,7 @@ import {
   isLikelyLegalDiscipline,
   isPhantomAuditProblem,
 } from './contentVerification.js'
-import { appendSilentJsonRules } from './aiPromptUtils.js'
+import { appendSilentJsonRules, appendSearchGroundedRules } from './aiPromptUtils.js'
 
 const MAX_AUDIT_ROUNDS_LEGAL = 2
 const MAX_AUDIT_ROUNDS_FACTUAL = 1
@@ -516,7 +516,7 @@ export async function callGeminiWithRetry(prompt, options = {}) {
   } = options
 
   const trusted = Boolean(options.trustedGeneration)
-  // Geração NÃO roda auditoria em loop — verificação é Google Search à parte
+  // Geração com Search embutido — sem auditoria em loop depois
   const effectiveVerify = Boolean(verifyContent && (forceAudit || options.runLegacyAudit))
   const effectiveGoogleSearch = Boolean(useGoogleSearch)
   const effectiveRAG = Boolean(useRAG) && !effectiveGoogleSearch
@@ -532,7 +532,11 @@ export async function callGeminiWithRetry(prompt, options = {}) {
   const auditMode =
     auditModeOption || (effectiveIsLegal ? 'legal' : trusted || forceAudit ? 'factual' : null)
 
-  const promptBase = appendSilentJsonRules(prompt)
+  const promptBase = appendSilentJsonRules(
+    options.useGoogleSearch || options.searchGrounded
+      ? appendSearchGroundedRules(prompt)
+      : prompt,
+  )
   let enhancedPrompt = buildPromptWithCourseContext(promptBase, courseData)
 
   if (effectiveRAG) {
@@ -867,23 +871,25 @@ export async function auditTopicBundleConsistency(args = {}) {
 
 export async function generateAiJson(prompt, options = {}) {
   const maxAttempts = options.maxParseAttempts ?? 2
+  // Search na geração = 1 passagem fidedigna (sem 2ª chamada de auditoria)
+  const withSearch = options.useGoogleSearch !== false
   let lastError
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       let effectivePrompt = prompt
       if (attempt > 1) {
-        effectivePrompt = `${prompt}\n\nIMPORTANTE: a resposta anterior não pôde ser lida. Retorne APENAS um único JSON válido e completo, sem markdown nem texto extra.`
+        effectivePrompt = `${prompt}\n\nIMPORTANTE: a resposta anterior não pôde ser lida. Retorne APENAS um único JSON válido e completo, sem markdown nem texto extra. Use Google Search e inclua só o que estiver certo.`
       }
 
-      // Só gera — sem auditoria em loop. Verificação = Google Search depois.
       const response = await callGeminiWithRetry(effectivePrompt, {
         ...options,
         silent: !options.trustedGeneration,
         verifyContent: false,
         forceAudit: false,
         useRAG: false,
-        useGoogleSearch: false,
+        useGoogleSearch: withSearch,
+        searchGrounded: withSearch,
         trustedGeneration: Boolean(options.trustedGeneration),
       })
 
