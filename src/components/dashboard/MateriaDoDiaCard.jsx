@@ -10,16 +10,16 @@ import {
   CalendarDaysIcon,
 } from '@heroicons/react/24/outline'
 import { CheckIcon } from '@heroicons/react/24/solid'
-import { db } from '../firebase/config'
-import { loadEditalVerticalizado } from '../utils/editalVerticalizadoLoader'
-import { extractTopicsForMateriaDoDia } from '../utils/guiaMentoradoTopics'
-import { normalizeTopicKeyForStorage } from '../utils/topicKeyFirestore'
+import { db } from '../../firebase/config'
+import { loadEditalVerticalizado } from '../../utils/editalVerticalizadoLoader'
+import { extractTopicsForMateriaDoDia } from '../../utils/guiaMentoradoTopics'
+import { normalizeTopicKeyForStorage } from '../../utils/topicKeyFirestore'
 import {
   getTopicCheckin,
   loadUserEditalProgress,
   toggleTopicCheckin,
   topicProgressKey,
-} from '../services/userEditalProgressService'
+} from '../../services/userEditalProgressService'
 
 function todaySaoPaulo() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
