@@ -42,3 +42,8 @@ ENV_KEYS_TEMP.txt
 .firebase/
 firebase-debug.log
 firestore-debug.log
+firebase-service-account.json
+*-service-account.json
+
+# Vercel local link (não versionar)
+.vercel/
