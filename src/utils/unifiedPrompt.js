@@ -697,13 +697,9 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 - NÃO USE INFORMAÇÕES DESATUALIZADAS OU REVOGADAS
 - CITE SEMPRE A DATA DE ATUALIZAÇÃO QUANDO NECESSÁRIO
 
-📅 CRONOLOGIA TEMPORAL OBRIGATÓRIA:
-- Para CADA lei, decreto ou norma mencionada na redação, você DEVE traçar uma cronologia desde sua criação até a data atual
-- Exemplo: "Lei X, criada em 01/01/2000, alterada em 15/03/2010 pela Lei Y, modificada em 20/06/2015 pelo Decreto Z, atualizada em 10/02/2020 pela Medida Provisória W, vigente até ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}"
-- Liste TODAS as alterações relevantes: leis, decretos, medidas provisórias, emendas constitucionais, súmulas, jurisprudências
-- Sempre indique a data de cada alteração e o instrumento que a causou
-- Se a lei foi revogada, indique a data de revogação e o instrumento que a revogou
-- Mantenha a redação atualizada considerando TODAS as alterações até a data atual
+📅 CRONOLOGIA (use COM MODERAÇÃO na redação):
+- Cite vigência e alterações só quando forem ESSENCIAIS ao argumento (1–2 menções bem fundamentadas).
+- NÃO transforme a redação em linha do tempo de leis — priorize tese, argumentação e proposta.
 
 🚨 TRAVAS DE SEGURANÇA E FIDELIDADE JURÍDICA ABSOLUTA:
 
@@ -712,44 +708,25 @@ VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateStr
 - Nenhuma alteração futura hipotética deve ser criada. Toda e qualquer norma citada deve ter como lastro o portal do Planalto (Legislação Federal) ou os repositórios oficiais do STF/STJ.
 
 2. FILTRO DE CONSTITUCIONALIDADE E RECEPÇÃO (CF/88):
-- Para cada artigo ou código anterior a 1988 (como o CPP de 1941 ou o CP de 1940), você DEVE verificar se o dispositivo foi RECECIONADO ou NÃO pela Constituição Federal de 1988.
-- É terminantemente proibido indicar como aplicável ou vigente um dispositivo legal que os Tribunais Superiores (STF/STJ) já declararam como não-recepcionado ou inconstitucional (Ex: Incomunicabilidade do preso do Art. 21 do CPP, prisão por dívida de depositário infiel, etc.). Você deve apontar o dispositivo e declarar imediatamente a sua ineficácia jurídica atual por incompatibilidade constitucional.
+- Para cada artigo ou código anterior a 1988, verifique se foi RECECIONADO pela CF/88.
+- Não indique como vigente o que STF/STJ declarou inconstitucional ou não-recepcionado.
 
-3. ALINHAMENTO OBRIGATÓRIO DE JURISPRUDÊNCIA PACIFICADA (STF/STJ):
-- Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
-- Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
+3. JURISPRUDÊNCIA:
+- Preferir súmulas e entendimentos consolidados; não invente julgados.
 
-[TRAVA JURÍDICA CRÍTICA]: O modelo deve validar obrigatoriamente as inovações legislativas mais recentes (incluindo leis de 2025 e 2026), aplicando seus reflexos automáticos nos códigos e legislações pertinentes.
-
-🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
-
-[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
-Para cada conteúdo que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
-
-1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
-2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
-3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
-4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
-5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
-6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
-7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
-
-SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO.
-
-[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
-Gere conteúdo com:
+[DIRETRIZES DE SAÍDA]
 - Informações específicas e técnicas
-- Conteúdo detalhado e preciso
-- Fundamentação estritamente na lei real vigente
-- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
+- Fundamentação na lei real vigente
+- Se não tiver certeza absoluta de um número de lei recente, cite o conceito sem inventar o número
 
 ⚠️ REGRAS CRÍTICAS:
-- Escreva uma redação NOVA e ORIGINAL — não reutilize textos de outros concursos ou cargos
-- O conteúdo deve ser específico para ${concurso} e o cargo do concurso
-- Siga o estilo e critérios da banca ${banca}
+- Escreva uma redação NOVA e ORIGINAL — não reutilize textos de outros concursos
+- Específica para ${concurso} e o cargo do concurso
+- Estilo e critérios da banca ${banca}
 - Linguagem formal, dissertação argumentativa
-- Introdução com tese clara; 2-3 parágrafos de desenvolvimento; conclusão com propostas
-- 20-30 linhas; parágrafos com 4 espaços no início da linha
+- Introdução com tese; 2–3 parágrafos de desenvolvimento; conclusão com propostas
+- Entre 25 e 35 linhas; parágrafos iniciando com 4 espaços
+- TEXTO COMPLETO — não corte no meio da frase ou do parágrafo
 - Retorne APENAS o texto da redação, sem título, sem markdown, sem explicações`
 
   if (!unified?.prompt) {

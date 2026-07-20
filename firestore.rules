@@ -90,6 +90,22 @@ service cloud.firestore {
         allow delete: if isOwner(userId) || isAdmin();
       }
 
+      /** Histórico de redações do aluno */
+      match /redacoes/{redacaoId} {
+        allow read, create, update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /redacaoWeekly/{weekId} {
+        allow read, create, update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /redacaoSummary/{summaryId} {
+        allow read, create, update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
       match /generationJobs/{jobId} {
         allow read, create, update: if isOwner(userId);
         allow delete: if isOwner(userId) || isAdmin();

@@ -503,6 +503,16 @@ export function extractGeneratedText(response) {
   return generatedText.trim()
 }
 
+/** Motivo de parada do Gemini (ex.: MAX_TOKENS = texto cortado). */
+export function getGeminiFinishReason(response) {
+  return String(response?.candidates?.[0]?.finishReason || response?.candidates?.[0]?.finish_reason || '')
+}
+
+export function wasGeminiTruncated(response) {
+  const reason = getGeminiFinishReason(response).toUpperCase()
+  return reason === 'MAX_TOKENS' || reason === 'LENGTH'
+}
+
 /**
  * Chamada silenciosa + parse JSON robusto (uso padrão em todas as gerações).
  */

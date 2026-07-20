@@ -125,6 +125,26 @@ async function refreshRedacaoSummary(userId, courseId) {
   const avg = notas.length ? Math.round(notas.reduce((a, b) => a + b, 0) / notas.length) : 0
   const best = notas.length ? Math.max(...notas) : 0
 
+  const critKeys = ['dominio', 'compreensao', 'argumentacao', 'estrutura', 'conhecimento']
+  const criteriosAvg = {}
+  critKeys.forEach((key) => {
+    const vals = rows
+      .map((r) => Number(r.criterios?.[key]))
+      .filter((n) => Number.isFinite(n))
+    criteriosAvg[key] = vals.length
+      ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)
+      : 0
+  })
+
+  // Evolução: primeira → última (por data)
+  const chronological = [...rows].sort(
+    (a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0),
+  )
+  const firstNota = chronological.length ? Number(chronological[0].nota) || 0 : null
+  const lastNota = chronological.length
+    ? Number(chronological[chronological.length - 1].nota) || 0
+    : null
+
   await setDoc(
     doc(db, 'users', userId, 'redacaoSummary', courseId),
     {
@@ -134,6 +154,9 @@ async function refreshRedacaoSummary(userId, courseId) {
       bestNota: best,
       nota1000Count: perfect.length,
       lastNota: notas[0] ?? null,
+      firstNota,
+      improvement: firstNota != null && lastNota != null ? lastNota - firstNota : null,
+      criteriosAvg,
       lastTema: rows[0]?.tema || '',
       lastAt: rows[0]?.createdAt || serverTimestamp(),
       updatedAt: serverTimestamp(),

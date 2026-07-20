@@ -5,9 +5,13 @@ import { canAccessRedacao, isTrialMode } from '../utils/trialLimits'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
-import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { callGeminiWithRetry, extractGeneratedText, wasGeminiTruncated, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import ContentPublishButton from '../components/ContentPublishButton'
 import { isContentAvailable, toggleContentStatus, defaultContentStatus, CONTENT_STATUS } from '../utils/contentStatus'
+import {
+  saveStudentRedacao,
+} from '../services/redacaoStudentService'
+import RedacaoHistoricoPanel from '../components/redacao/RedacaoHistoricoPanel'
 import {
   ClockIcon,
   PlayIcon,
@@ -16,6 +20,7 @@ import {
   DocumentTextIcon,
   ArrowPathIcon,
   PencilSquareIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline'
 
 const TreinoRedacao = () => {
@@ -36,6 +41,9 @@ const TreinoRedacao = () => {
   const [courseName, setCourseName] = useState('')
   const [courseCompetition, setCourseCompetition] = useState('')
   const [courseBanca, setCourseBanca] = useState('CESPE')
+  const [viewMode, setViewMode] = useState('treino') // treino | historico
+  const [savingHistory, setSavingHistory] = useState(false)
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0)
   const textareaRef = useRef(null)
 
   const getCourseId = () => selectedCourseId || 'alego-default'
@@ -46,6 +54,37 @@ const TreinoRedacao = () => {
     if (!editalDoc.exists()) return ''
     const data = editalDoc.data()
     return (data.prompt || '') + '\n\n' + (data.pdfText || '')
+  }
+
+  const persistRedacaoResult = async (resultPayload) => {
+    if (!user?.uid || !resultPayload) return null
+    setSavingHistory(true)
+    try {
+      const saved = await saveStudentRedacao(user.uid, {
+        courseId: resultPayload.courseId || getCourseId(),
+        tema: resultPayload.tema || redacaoTema,
+        texto: redacaoTexto,
+        nota: resultPayload.nota,
+        criterios: resultPayload.criterios,
+        feedback: resultPayload.feedback,
+        dicas: resultPayload.dicas,
+        redacaoModelo: resultPayload.redacaoModelo || '',
+        wordCount: resultPayload.wordCount,
+        analyzedAt: resultPayload.analyzedAt || new Date().toISOString(),
+      })
+      setHistoryRefreshKey((k) => k + 1)
+      return saved
+    } catch (err) {
+      if (err?.code === 'redacao_weekly_limit') {
+        alert(err.message)
+      } else {
+        console.error('[redacao] salvar histórico:', err)
+        alert('Correção pronta, mas não foi possível salvar no histórico. Tente novamente mais tarde.')
+      }
+      return null
+    } finally {
+      setSavingHistory(false)
+    }
   }
 
   const generateRedacaoModelo = async (tema) => {
@@ -61,17 +100,44 @@ const TreinoRedacao = () => {
     const prompt = await buildRedacaoModeloPrompt(
       courseId,
       tema,
-      editalText ? editalText.substring(0, 30000) : ''
+      editalText ? editalText.substring(0, 12000) : '',
     )
 
-    const response = await callGeminiWithRetry(prompt, {
-      courseId: getCourseId(),
-      generationConfig: {
-        maxOutputTokens: 4096,
-        temperature: 0.5,
-      },
+    const genConfig = {
+      maxOutputTokens: 16384,
+      temperature: 0.45,
+    }
+
+    let response = await callGeminiWithRetry(prompt, {
+      courseId,
+      useGoogleSearch: true,
+      verifyContent: false,
+      generationConfig: genConfig,
     })
-    return extractGeneratedText(response).trim()
+    let text = extractGeneratedText(response)
+
+    // Se cortou por limite de tokens, continua a partir do final
+    let continues = 0
+    while (wasGeminiTruncated(response) && continues < 2) {
+      continues += 1
+      const continuePrompt = `Continue a redação nota 1000 abaixo EXATAMENTE de onde parou.
+Não repita o que já foi escrito. Não adicione título, markdown ou comentários.
+Finalize a conclusão se ainda não terminou.
+
+TEXTO JÁ ESCRITO (continue a partir daqui):
+${text.slice(-3500)}`
+
+      response = await callGeminiWithRetry(continuePrompt, {
+        courseId,
+        useGoogleSearch: false,
+        verifyContent: false,
+        generationConfig: { maxOutputTokens: 8192, temperature: 0.35 },
+      })
+      const chunk = extractGeneratedText(response)
+      text = `${text.trimEnd()}\n${chunk}`.trim()
+    }
+
+    return text.trim()
   }
 
   // Carregar curso do perfil
@@ -329,6 +395,7 @@ CRÍTICO: Retorne APENAS o tema, nada mais.`
       setResultado(resultadoComModelo)
       setIsRunning(false)
       setAnalizing(false)
+      await persistRedacaoResult(resultadoComModelo)
       return
     }
 
@@ -560,6 +627,16 @@ CRÍTICO:
         tema: redacaoTema,
         courseId: getCourseId(),
       })
+      await persistRedacaoResult({
+        ...parsed,
+        redacaoModelo,
+        paragraphCount,
+        lines,
+        wordCount,
+        analyzedAt: new Date().toISOString(),
+        tema: redacaoTema,
+        courseId: getCourseId(),
+      })
     } catch (err) {
       console.error('Erro ao analisar redação:', err)
       alert('Erro ao analisar redação. Tente novamente.')
@@ -590,9 +667,29 @@ CRÍTICO:
     return (
       <div className="space-y-6 pb-10">
         <div className="max-w-4xl mx-auto space-y-4">
-          <div>
-            <span className="cp-badge cp-badge-accent">Resultado</span>
-            <h1 className="cp-headline mt-3 text-2xl">Treino de Redação</h1>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <span className="cp-badge cp-badge-accent">Resultado</span>
+              <h1 className="cp-headline mt-3 text-2xl">Treino de Redação</h1>
+              {savingHistory ? (
+                <p className="mt-1 text-xs text-cp-muted">Salvando no histórico…</p>
+              ) : (
+                <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+                  Salvo no histórico para consulta depois
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setResultado(null)
+                setViewMode('historico')
+              }}
+              className="cp-btn-ghost !text-xs"
+            >
+              <ChartBarIcon className="h-4 w-4" />
+              Ver histórico
+            </button>
           </div>
 
           <div className="cp-card overflow-hidden p-0">
@@ -604,15 +701,15 @@ CRÍTICO:
 
             <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-5">
               {[
-                { label: 'Domínio', value: resultado.criterios.dominio },
-                { label: 'Compreensão', value: resultado.criterios.compreensao },
-                { label: 'Argumentação', value: resultado.criterios.argumentacao },
-                { label: 'Estrutura', value: resultado.criterios.estrutura },
-                { label: 'Conhecimento', value: resultado.criterios.conhecimento },
+                { label: 'Domínio', value: resultado.criterios?.dominio },
+                { label: 'Compreensão', value: resultado.criterios?.compreensao },
+                { label: 'Argumentação', value: resultado.criterios?.argumentacao },
+                { label: 'Estrutura', value: resultado.criterios?.estrutura },
+                { label: 'Conhecimento', value: resultado.criterios?.conhecimento },
               ].map((c) => (
                 <div key={c.label} className="cp-card !p-3 text-center">
                   <p className="font-mono text-[10px] uppercase text-cp-muted">{c.label}</p>
-                  <p className="mt-1 text-xl font-semibold text-cp-accent">{c.value}</p>
+                  <p className="mt-1 text-xl font-semibold text-cp-accent">{c.value ?? '—'}</p>
                 </div>
               ))}
             </div>
@@ -663,16 +760,26 @@ CRÍTICO:
             {resultado.tema && (
               <p className="mb-3 text-xs font-medium text-cp-muted">Tema: {resultado.tema}</p>
             )}
-            <div className="rounded-xl border border-cp-border bg-cp-bg/40 p-4">
-              <p className="font-serif text-sm leading-relaxed text-cp-text whitespace-pre-wrap">
+            <div className="max-h-[70vh] overflow-y-auto rounded-xl border border-cp-border bg-cp-bg/40 p-4">
+              <p className="font-serif text-sm leading-relaxed text-cp-text whitespace-pre-wrap break-words">
                 {resultado?.redacaoModelo || 'Redação modelo não disponível. Tente analisar novamente.'}
               </p>
             </div>
           </div>
 
-          <div className="flex gap-3">
-            <button type="button" onClick={handleNewTheme} className="cp-btn-primary flex-1 !py-3">
+          <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={handleNewTheme} className="cp-btn-primary flex-1 !py-3 min-w-[140px]">
               Novo tema
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setResultado(null)
+                setViewMode('historico')
+              }}
+              className="cp-btn-ghost flex-1 !py-3 min-w-[140px]"
+            >
+              Histórico e evolução
             </button>
             <button
               type="button"
@@ -682,15 +789,27 @@ CRÍTICO:
                 setTimeLeft(3600)
                 setIsRunning(false)
                 setAnalizing(false)
+                setViewMode('treino')
                 generateTheme()
               }}
-              className="cp-btn-ghost flex-1 !py-3"
+              className="cp-btn-ghost flex-1 !py-3 min-w-[140px]"
             >
               Treinar novamente
             </button>
           </div>
         </div>
       </div>
+    )
+  }
+
+  if (viewMode === 'historico' && !resultado) {
+    return (
+      <RedacaoHistoricoPanel
+        userId={user?.uid}
+        courseId={getCourseId()}
+        refreshKey={historyRefreshKey}
+        onBack={() => setViewMode('treino')}
+      />
     )
   }
 
@@ -708,10 +827,20 @@ CRÍTICO:
         </div>
       ) : (
       <div className="max-w-4xl mx-auto space-y-4">
-        <div>
-          <span className="cp-badge cp-badge-accent">Redação</span>
-          <h1 className="cp-headline mt-3 text-2xl">Treino de Redação</h1>
-          {courseName && <p className="mt-1 text-sm text-cp-muted">{courseName} · Banca {courseBanca}</p>}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <span className="cp-badge cp-badge-accent">Redação</span>
+            <h1 className="cp-headline mt-3 text-2xl">Treino de Redação</h1>
+            {courseName && <p className="mt-1 text-sm text-cp-muted">{courseName} · Banca {courseBanca}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={() => setViewMode('historico')}
+            className="cp-btn-ghost !text-xs"
+          >
+            <ChartBarIcon className="h-4 w-4" />
+            Histórico e evolução
+          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
