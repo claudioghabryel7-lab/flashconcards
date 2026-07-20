@@ -1,7 +1,11 @@
+import path from 'path'
 import { loadEnvConfig } from '@next/env'
 import type { NextConfig } from 'next'
 
 loadEnvConfig(process.cwd())
+
+const reactRouterCompat = path.join(__dirname, 'src/lib/react-router-compat.tsx')
+const firebaseFunctionsStub = path.join(__dirname, 'server/stubs/firebase-functions.cjs')
 
 const viteEnvKeys = [
   'VITE_FIREBASE_API_KEY',
@@ -50,6 +54,16 @@ const nextConfig: NextConfig = {
       'react-router-dom': './src/lib/react-router-compat.tsx',
       'firebase-functions': './server/stubs/firebase-functions.cjs',
     },
+  },
+  // Produção (webpack) também precisa do alias — sem isso /curso/:id quebra
+  webpack: (config) => {
+    config.resolve = config.resolve || {}
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      'react-router-dom': reactRouterCompat,
+      'firebase-functions': firebaseFunctionsStub,
+    }
+    return config
   },
   typescript: {
     ignoreBuildErrors: true,

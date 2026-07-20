@@ -198,7 +198,8 @@ export function FeaturedCourses() {
           limit(6),
         )
         const snap = await getDocs(q)
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Course[]
+        // id do documento por último — evita sobrescrita se o payload tiver campo `id`
+        const list = snap.docs.map((d) => ({ ...d.data(), id: d.id })) as Course[]
         list.sort((a, b) => {
           if (a.featured && !b.featured) return -1
           if (!a.featured && b.featured) return 1

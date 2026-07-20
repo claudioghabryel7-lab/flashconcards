@@ -62,8 +62,8 @@ export default function CursosPage() {
         const snapshot = await getDocs(q)
 
         const data = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
           ...(docSnap.data() as Omit<Course, 'id'>),
+          id: docSnap.id,
         }))
 
         const sorted = data.sort((a, b) => {
@@ -110,7 +110,12 @@ export default function CursosPage() {
   }, [courses, searchTerm])
 
   const openCourse = (courseId: string) => {
-    router.push(`/curso/${courseId}`)
+    const id = String(courseId || '').trim()
+    if (!id) {
+      router.push('/cursos')
+      return
+    }
+    router.push(`/curso/${id}`)
   }
 
   return (

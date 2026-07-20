@@ -93,14 +93,42 @@ export async function tickProfessorOnline(adminUserId) {
       return { skipped: true, reason: 'waiting_window' }
     }
 
+    // Além da Moderação: gira tema de redação a cada 7 dias (cursos com hasRedacao)
+    try {
+      const { tickProfessorRedacaoWeekly } = await import('./localProfessorRedacao')
+      const redacaoTick = await tickProfessorRedacaoWeekly()
+      if (redacaoTick?.didRotate) {
+        const first = redacaoTick.rotated?.[0]
+        await patchProfessorActivity({
+          phase: 'idle_queue',
+          lastMessage: `Tema de redação da semana publicado${
+            first?.tema ? `: ${String(first.tema).slice(0, 80)}…` : '.'
+          } (${first?.notified || 0} aluno(s) avisados).`,
+          itemsProcessedSession: Number(data.itemsProcessedSession || 0) + 1,
+          currentActivity: {
+            phase: 'done_item',
+            message: 'Redação semanal — novo tema',
+            itemType: 'redacao',
+            courseId: first?.courseId || null,
+            progress: 100,
+            updatedAt: serverTimestamp(),
+          },
+        })
+        return { started: true, kind: 'redacao_theme', courseId: first?.courseId }
+      }
+    } catch (redacaoErr) {
+      console.warn('[professorOnline] redação semanal:', redacaoErr?.message || redacaoErr)
+    }
+
     const flag = await fetchNextOpenFlag()
     if (!flag) {
       await patchProfessorActivity({
         phase: 'idle_queue',
-        lastMessage: 'Fila vazia — aguardando novas sinalizações da Moderação.',
+        lastMessage:
+          'Fila vazia — Moderação ok. Redação semanal em dia. Aguardando novas sinalizações.',
         currentActivity: {
           phase: 'idle_queue',
-          message: 'Online — sem sinalizações abertas.',
+          message: 'Online — Moderação + Redação em dia.',
           progress: 100,
           updatedAt: serverTimestamp(),
         },

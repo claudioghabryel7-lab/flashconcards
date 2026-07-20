@@ -45,7 +45,8 @@ export function useFlagCorrectionNotifications(userId) {
                 !t ||
                 t === 'flag_corrected' ||
                 t === 'motivation' ||
-                t === 'motivation_push'
+                t === 'motivation_push' ||
+                t === 'redacao_weekly_pending'
               )
             }),
         )

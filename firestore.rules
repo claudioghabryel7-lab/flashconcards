@@ -100,7 +100,27 @@ service cloud.firestore {
       /** Notificações do aluno (ex.: sinalização corrigida) */
       match /notifications/{notifId} {
         allow read, update, delete: if isOwner(userId);
-        allow create: if isAdmin();
+        allow create: if isAdmin() || (
+          isOwner(userId)
+          && request.resource.data.type == 'redacao_weekly_pending'
+        );
+      }
+
+      /** Histórico de treinos de redação do aluno */
+      match /redacoes/{redacaoId} {
+        allow read, create, update, delete: if isOwner(userId);
+      }
+
+      /** Resumo por curso (médias / notas 1000) */
+      match /redacaoSummary/{courseId} {
+        allow read, create, update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      /** Contador semanal (limite de envios) */
+      match /redacaoWeekly/{weekDocId} {
+        allow read, create, update: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
       }
 
       match /studySessions/{sessionId} {

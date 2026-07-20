@@ -163,8 +163,12 @@ const TopicNotificationsButton = memo(() => {
               </div>
               <div className="max-h-40 overflow-y-auto">
                 {correctionNotifs.map((n) => {
-                  const href = buildFlagCorrectionLink(n)
+                  const href =
+                    n.type === 'redacao_weekly_pending'
+                      ? n.linkPath || n.href || '/treino-redacao'
+                      : buildFlagCorrectionLink(n)
                   const aiApplied = Number(n.appliedCorrections) > 0
+                  const pendingRedacao = n.type === 'redacao_weekly_pending'
                   return (
                     <Link
                       key={n.id}
@@ -173,12 +177,27 @@ const TopicNotificationsButton = memo(() => {
                         markFlagRead(n.id)
                         setOpen(false)
                       }}
-                      className={`block w-full border-b border-cp-border/50 px-4 py-3 text-left transition-colors hover:bg-emerald-500/5 ${
-                        !n.read ? 'bg-emerald-500/10' : ''
+                      className={`block w-full border-b border-cp-border/50 px-4 py-3 text-left transition-colors ${
+                        pendingRedacao
+                          ? !n.read
+                            ? 'bg-amber-500/10 hover:bg-amber-500/5'
+                            : 'hover:bg-amber-500/5'
+                          : !n.read
+                            ? 'bg-emerald-500/10 hover:bg-emerald-500/5'
+                            : 'hover:bg-emerald-500/5'
                       }`}
                     >
-                      <p className="text-sm font-medium leading-snug text-emerald-800 dark:text-emerald-200">
-                        {n.title || 'Sinalização corrigida'}
+                      <p
+                        className={`text-sm font-medium leading-snug ${
+                          n.type === 'redacao_weekly_pending'
+                            ? 'text-amber-800 dark:text-amber-200'
+                            : 'text-emerald-800 dark:text-emerald-200'
+                        }`}
+                      >
+                        {n.title ||
+                          (n.type === 'redacao_weekly_pending'
+                            ? 'Redação da semana pendente'
+                            : 'Sinalização corrigida')}
                       </p>
                       <p className="mt-0.5 line-clamp-3 text-xs text-cp-muted">{n.message}</p>
                       {aiApplied && (
@@ -186,8 +205,16 @@ const TopicNotificationsButton = memo(() => {
                           {n.appliedCorrections} correção(ões) aplicada(s) automaticamente
                         </p>
                       )}
-                      <p className="mt-1 text-[10px] font-medium text-emerald-600">
-                        Abrir conteúdo →
+                      <p
+                        className={`mt-1 text-[10px] font-medium ${
+                          n.type === 'redacao_weekly_pending'
+                            ? 'text-amber-600'
+                            : 'text-emerald-600'
+                        }`}
+                      >
+                        {n.type === 'redacao_weekly_pending'
+                          ? 'Abrir Treino de Redação →'
+                          : 'Abrir conteúdo →'}
                       </p>
                       <p className="mt-0.5 text-[10px] text-emerald-600/80">
                         {dayjs(n.createdAt).format('DD/MM HH:mm')}

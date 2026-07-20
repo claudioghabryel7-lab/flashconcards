@@ -285,10 +285,10 @@ export default function AdminProfessorSupervisor() {
             <div>
               <h2 className="cp-headline text-lg text-cp-text">Professor IA — correções automáticas</h2>
               <p className="mt-1 max-w-xl text-sm text-cp-muted">
-                Roda com o admin online, na janela De/Até (Brasília). Corrige{' '}
-                <strong>somente</strong> a aba <strong>🚩 Moderação</strong>. Se o horário chegou e a
-                sessão ainda não iniciou hoje → inicia (catch-up). Sem sinalização aberta → espera,
-                sem gastar API.
+                Roda com o admin online, na janela De/Até (Brasília). Corrige a aba{' '}
+                <strong>🚩 Moderação</strong> e também gira o <strong>tema de redação</strong> a cada
+                7 dias (cursos com Redação no Guia Mentorado), avisando os alunos. Se o horário chegou
+                e a sessão ainda não iniciou hoje → inicia (catch-up).
               </p>
             </div>
           </div>

@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { doc, getDoc } from 'firebase/firestore'
+import { usePathname } from 'next/navigation'
+import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore'
 import { motion } from 'framer-motion'
 import {
   ArrowRight,
@@ -16,6 +19,16 @@ import { db } from '../firebase/config'
 import { formatCoursePrice, getCourseAccessLabel } from '../utils/courseAccess'
 import CoursePageReviews from '../components/CoursePageReviews'
 import SalesAssistantChat from '../components/sales/SalesAssistantChat'
+
+/** Extrai o id do curso da URL (/curso/:id, /adquirir/:id, /curso-share/:id). */
+function courseIdFromPathname(pathname = '') {
+  const parts = String(pathname).split('/').filter(Boolean)
+  if (!parts.length) return ''
+  if (parts[0] === 'curso' || parts[0] === 'adquirir' || parts[0] === 'curso-share') {
+    return decodeURIComponent(parts[1] || '')
+  }
+  return ''
+}
 
 const benefits = [
   {
@@ -40,9 +53,15 @@ const benefits = [
   },
 ]
 
-const CourseShare = () => {
-  const params = useParams()
-  const courseId = params.courseId || params.id
+const CourseShare = ({ courseId: courseIdProp } = {}) => {
+  const params = useParams() || {}
+  const pathname = usePathname() || ''
+  const courseId = useMemo(() => {
+    const fromProp = courseIdProp != null ? String(courseIdProp) : ''
+    const fromParams = String(params.courseId || params.id || '')
+    const fromPath = courseIdFromPathname(pathname)
+    return (fromProp || fromParams || fromPath || '').trim()
+  }, [courseIdProp, params.courseId, params.id, pathname])
   const [course, setCourse] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -60,10 +79,19 @@ const CourseShare = () => {
         setError(null)
         const courseDoc = await getDoc(doc(db, 'courses', courseId))
         if (courseDoc.exists()) {
-          setCourse({ id: courseDoc.id, ...courseDoc.data() })
-        } else {
-          setError('Curso não encontrado')
+          setCourse({ ...courseDoc.data(), id: courseDoc.id })
+          return
         }
+        // Fallback: URL com slug (ex.: /curso/pm-go) em vez do id do Firestore
+        const bySlug = await getDocs(
+          query(collection(db, 'courses'), where('slug', '==', courseId), limit(1)),
+        )
+        if (!bySlug.empty) {
+          const slugDoc = bySlug.docs[0]
+          setCourse({ ...slugDoc.data(), id: slugDoc.id })
+          return
+        }
+        setError('Curso não encontrado')
       } catch (err) {
         console.error('Erro ao carregar curso:', err)
         setError(`Erro ao carregar curso: ${err.message || 'Erro desconhecido'}`)

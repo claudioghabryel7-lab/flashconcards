@@ -17,6 +17,7 @@ import { useAuth } from '../hooks/useAuth'
 import OnlineNowBadge from '@/components/cp/OnlineNowBadge'
 import FloatingWhatsAppButton from '@/components/FloatingWhatsAppButton'
 import { useTopicNotifications } from '../hooks/useTopicNotifications'
+import RedacoesDashboardCard from '../components/RedacoesDashboardCard'
 
 const quickLinks = [
   {
@@ -79,7 +80,7 @@ const quickLinks = [
     to: '/treino-redacao',
     code: '08',
     title: 'Treino de Redação',
-    desc: 'Pratique redações com IA',
+    desc: 'Tema semanal · limite 2/semana · notas e evolução',
     icon: PencilSquareIcon,
     tone: 'violet',
   },
@@ -225,6 +226,10 @@ const Dashboard = () => {
           <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-cp-muted">
             {quickLinks.length} módulos
           </span>
+        </div>
+
+        <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <RedacoesDashboardCard />
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
