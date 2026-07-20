@@ -48,15 +48,15 @@ import {
 } from '../utils/examFidelityContext'
 import {
   appendGoogleAiDossier,
-  getGoogleAiTopicDossier,
+  getGoogleAiTopicDossierOptional,
 } from './googleAiBrowserVerifier'
 
 const TRUSTED_AI = {
   trustedGeneration: true,
   useRAG: false,
-  // O grounding vem do dossiê gratuito capturado pela extensão local.
-  // Gemini apenas transforma os fatos em JSON, reduzindo custo e truncamento.
-  useGoogleSearch: false,
+  // Automático no navegador (PC/Android): Gemini + Google Search na API.
+  // Extensão/app Android são opcionais; se existirem, o dossiê é usado como bônus.
+  useGoogleSearch: true,
   verifyContent: false,
   forceAudit: false,
 }
@@ -151,7 +151,7 @@ function buildTrustedOptions(disciplina = '', extra = {}) {
     isLegalContent: isLegal,
     verifyContent: false,
     forceAudit: false,
-    useGoogleSearch: false,
+    useGoogleSearch: true,
     useRAG: false,
     disciplina,
     ...extra,
@@ -216,9 +216,9 @@ async function processPromptSave(
     disciplina,
   })
 
-  await updateProgress(10, `Consultando Modo IA do Google para ${label}…`)
+  await updateProgress(10, `Gerando ${label} (Google Search automático)…`)
   const dossier = topicKey
-    ? await getGoogleAiTopicDossier(
+    ? await getGoogleAiTopicDossierOptional(
         {
           courseId,
           topicKey,
@@ -229,7 +229,7 @@ async function processPromptSave(
         { forceFresh },
       )
     : null
-  await updateProgress(20, `Gerando ${label} com dossiê factual…`)
+  await updateProgress(20, dossier?.text ? `Gerando ${label} com dossiê + Search…` : `Gerando ${label}…`)
   const parsed = await generateAiJson(appendGoogleAiDossier(prompt, dossier?.text), {
     courseId,
     ...buildTrustedOptions(disciplina, {
@@ -320,7 +320,7 @@ async function processFlashcardsTopico(
   const dossier =
     serverPayload?.savePlan?.googleAiDossier ||
     (
-      await getGoogleAiTopicDossier(
+      await getGoogleAiTopicDossierOptional(
         {
           courseId,
           topicKey,
@@ -330,7 +330,8 @@ async function processFlashcardsTopico(
         },
         { forceFresh },
       )
-    ).text
+    ).text ||
+    ''
 
   const prep = await prepareFlashcardsRun({
     courseId,
@@ -409,7 +410,7 @@ TAREFA: Criar exatamente ${cardsInBatch} flashcards (lote ${batchNum}/${batchCou
 REGRAS DE OURO (violação = card inválido):
 1. CADA card DEVE ser 100% sobre o TÓPICO EXATO acima — nada de assuntos vizinhos ou genéricos da disciplina.
 2. Perguntas no estilo da banca ${examCtx.banca} para o cargo ${examCtx.cargo} (${examCtx.concursoName}).
-3. Use apenas o DOSSIÊ FACTUAL anexado. Fato não confirmado → omita. Dúvida factual → NÃO inclua.
+3. Use Google Search. Confirme leis/artigos. Fato não confirmado → omita. Dúvida factual → NÃO inclua.
 4. PROIBIDO: "O que é X?" com definição vaga; curiosidades; conteúdo óbvio; misturar outro tópico.
 5. Verso: 2–5 frases técnicas, corretas e cobráveis em prova.
 6. Prefira menos cards corretos a muitos duvidosos.
@@ -671,8 +672,8 @@ async function processSingleMentoradoTopic({
     disciplina,
     topicoNome: topic.topicoNome,
   })
-  await updateProgress(pctBase, `${label}: consultando Modo IA do Google…`)
-  const dossierResult = await getGoogleAiTopicDossier(
+  await updateProgress(pctBase, `${label}: preparando geração automática…`)
+  const dossierResult = await getGoogleAiTopicDossierOptional(
     {
       courseId,
       topicKey,
@@ -682,7 +683,7 @@ async function processSingleMentoradoTopic({
     },
     { forceFresh },
   )
-  const googleAiDossier = dossierResult.text
+  const googleAiDossier = dossierResult.text || ''
 
   let materialParsed = null
   let questoesParsed = null
@@ -693,7 +694,10 @@ async function processSingleMentoradoTopic({
     step: 'material',
     error: null,
   })
-  await updateProgress(pctBase, `Tópico ${index + 1}/${total}: ${label} — material (dossiê)`)
+  await updateProgress(
+    pctBase,
+    `Tópico ${index + 1}/${total}: ${label} — material (Search automático)`,
+  )
 
   const matPrep = await prepareMaterialRun({ courseId, topicKey, jobId, forceFresh })
   if (matPrep.alreadyComplete && matPrep.existingDraft) {
@@ -733,7 +737,7 @@ async function processSingleMentoradoTopic({
     step: 'questoes',
   })
 
-  await updateProgress(pctBase + 3, `Tópico ${index + 1}/${total}: ${label} — questões (dossiê)`)
+  await updateProgress(pctBase + 3, `Tópico ${index + 1}/${total}: ${label} — questões (Search)`)
   const qPrep = await prepareQuestoesRun({
     courseId,
     topicKey,
@@ -780,7 +784,7 @@ async function processSingleMentoradoTopic({
     step: 'flashcards',
   })
 
-  await updateProgress(pctBase + 6, `Tópico ${index + 1}/${total}: ${label} — flashcards (dossiê)`)
+  await updateProgress(pctBase + 6, `Tópico ${index + 1}/${total}: ${label} — flashcards (Search)`)
   if (topic.flashcardMeta) {
     fcResult = await processFlashcardsTopico(
       courseId,

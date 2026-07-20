@@ -189,8 +189,6 @@ export async function getGoogleAiTopicDossier(meta = {}, { forceFresh = false } 
     if (cached) return { text: cached, cached: true }
   }
 
-  // O evento READY pode ter ocorrido antes do bundle React carregar. Uma
-  // requisição real ainda é o teste definitivo; esta flag melhora a mensagem.
   const prompt = buildDossierPrompt(meta)
   let text
   try {
@@ -215,6 +213,17 @@ export async function getGoogleAiTopicDossier(meta = {}, { forceFresh = false } 
 
   writeCache(meta, text)
   return { text, cached: false }
+}
+
+/** Nunca bloqueia a geração: usa ponte se existir; senão segue sem dossiê. */
+export async function getGoogleAiTopicDossierOptional(meta = {}, options = {}) {
+  try {
+    const bridge = await detectGoogleAiBridge()
+    if (!bridge.available) return { text: '', cached: false, skipped: true }
+    return await getGoogleAiTopicDossier(meta, options)
+  } catch {
+    return { text: '', cached: false, skipped: true }
+  }
 }
 
 export function appendGoogleAiDossier(prompt = '', dossier = '') {
