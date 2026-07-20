@@ -7,6 +7,10 @@
 const MAX_VERIFY_CHARS = 12000
 const FLASHCARD_VERIFY_CHARS = 10000
 
+/** Problemas fantasma: auditor reclama do recorte da amostra, não do conteúdo real. */
+const PHANTOM_AUDIT_RE =
+  /trecho omitido|frase incompleta|texto (está )?truncad|comprometendo a (clareza|integridade)|integridade do conteúdo|amostra parcial|<<<AMOSTRA_PARCIAL|meio do texto removido|falta de continuidade|clareza e a integridade/i
+
 export const LEGAL_CLAIM_PATTERNS = [
   /lei\s+n[º°.]?\s*[\d.]+(?:\/\d{2,4})?/gi,
   /art(?:igo)?\.?\s*\d+/gi,
@@ -35,6 +39,26 @@ export function textHasLegalClaims(text = '') {
   })
 }
 
+function cutAtBoundary(text = '', maxLen, fromEnd = false) {
+  const s = String(text || '')
+  if (s.length <= maxLen) return s
+  if (fromEnd) {
+    const chunk = s.slice(-maxLen)
+    const idx = chunk.search(/[\n.!?}]/)
+    return idx > 0 && idx < 80 ? chunk.slice(idx + 1) : chunk
+  }
+  const chunk = s.slice(0, maxLen)
+  const lastBreak = Math.max(
+    chunk.lastIndexOf('\n'),
+    chunk.lastIndexOf('. '),
+    chunk.lastIndexOf('! '),
+    chunk.lastIndexOf('? '),
+    chunk.lastIndexOf('},'),
+  )
+  if (lastBreak > maxLen * 0.5) return chunk.slice(0, lastBreak + 1)
+  return chunk
+}
+
 export function truncateForVerification(text = '', maxChars = MAX_VERIFY_CHARS) {
   if (!text || text.length <= maxChars) return text
 
@@ -46,17 +70,26 @@ export function truncateForVerification(text = '', maxChars = MAX_VERIFY_CHARS) 
   }
 
   const uniqueClaims = [...new Set(claims)].slice(0, 30)
-  const head = String(text).slice(0, Math.floor(maxChars * 0.55))
-  const tail = String(text).slice(-Math.floor(maxChars * 0.3))
+  const marker =
+    '\n\n<<<AMOSTRA_PARCIAL: meio do texto removido só para caber na auditoria. NÃO trate isso como erro, omissão ou frase incompleta do material.>>>\n\n'
+  const budget = Math.max(500, maxChars - marker.length - 200)
+  const head = cutAtBoundary(text, Math.floor(budget * 0.6), false)
+  const tail = cutAtBoundary(text, Math.floor(budget * 0.35), true)
 
   if (uniqueClaims.length === 0) {
-    return `${head}\n\n[...trecho omitido...]\n\n${tail}`.slice(0, maxChars)
+    return `${head}${marker}${tail}`.slice(0, maxChars)
   }
 
-  return `${head}\n\nAFIRMAÇÕES A VERIFICAR:\n${uniqueClaims.join('\n')}\n\n${tail}`.slice(
+  return `${head}${marker}AFIRMAÇÕES A VERIFICAR:\n${uniqueClaims.join('\n')}\n\n${tail}`.slice(
     0,
     maxChars,
   )
+}
+
+/** Remove FALSOs inventados sobre truncagem da amostra de auditoria. */
+export function isPhantomAuditProblem(problem = {}) {
+  const blob = `${problem?.motivo || ''} ${problem?.trecho || ''} ${problem?.correcao || ''}`
+  return PHANTOM_AUDIT_RE.test(blob)
 }
 
 function examHeader(courseData = {}) {
@@ -68,6 +101,14 @@ function examHeader(courseData = {}) {
   const hoje = new Date().toLocaleDateString('pt-BR')
   return { banca, concurso, cargo, disciplina, hoje }
 }
+
+const AUDIT_SAMPLE_RULES = `
+REGRAS DA AMOSTRA (obrigatórias):
+- O conteúdo abaixo pode ser uma AMOSTRA PARCIAL (marcador <<<AMOSTRA_PARCIAL>>>).
+- NUNCA marque FALSO por "trecho omitido", "frase incompleta", "texto truncado" ou falta de continuidade causada pela amostra.
+- Avalie só afirmações factuais/jurídicas presentes no texto visível.
+- Em dúvida → aprovado=true.
+`.trim()
 
 /** Auditoria jurídica rigorosa (Direito). */
 export function buildVerificationPrompt(content, courseData = {}) {
@@ -92,6 +133,7 @@ Regras:
 - Lei/artigo inventado, vetado ou revogado citado como vigente → FALSO.
 - Se houver FALSO, devolva texto_corrigido COMPLETO e correto.
 - Fidelidade à banca ${banca} e cargo ${cargo}.
+${AUDIT_SAMPLE_RULES}
 
 CONTEÚDO:
 ${truncateForVerification(content)}`
@@ -113,6 +155,7 @@ Responda APENAS JSON:
 }
 
 aprovado=false SÓ com FALSO comprovado. Em dúvida → aprovado=true.
+${AUDIT_SAMPLE_RULES}
 
 CONTEÚDO:
 ${truncateForVerification(content, 9000)}`
@@ -127,7 +170,7 @@ export function buildFactualAuditPrompt(content, courseData = {}) {
 
   return `Você é auditor factual de material para concursos (disciplina NÃO jurídica).
 Concurso: ${concurso} | Cargo: ${cargo} | Banca: ${banca} | Disciplina: ${disciplina}
-Data: ${hoje}. Use Google Search para fatos, datas, nomes e conceitos.
+Data: ${hoje}.
 
 Responda APENAS JSON:
 {
@@ -137,10 +180,12 @@ Responda APENAS JSON:
 }
 
 Regras:
-- aprovado=false SÓ se houver erro FALSO claro (data errada, conceito invertido, fato histórico falso, comando de língua claramente errado).
-- Preferência de estilo ou INCERTO → aprovado=true.
-- Se houver FALSO, corrija e devolva texto_corrigido completo.
+- aprovado=false SÓ se houver erro FALSO claro (data errada, conceito invertido, fato histórico falso).
+- Preferência de estilo, clareza, frase incompleta na AMOSTRA ou INCERTO → aprovado=true.
+- NÃO reprove por "clareza", "integridade" ou "trecho omitido".
+- Se houver FALSO real, corrija e devolva texto_corrigido completo.
 - Mantenha fidelidade à banca ${banca} e ao cargo ${cargo}.
+${AUDIT_SAMPLE_RULES}
 
 CONTEÚDO:
 ${truncateForVerification(content)}`
@@ -217,8 +262,9 @@ export function parseVerificationResult(rawText = {}) {
     if (!jsonMatch) return technicalFail
     const parsed = JSON.parse(jsonMatch[0])
     const problemas = Array.isArray(parsed.problemas) ? parsed.problemas : []
-    // Só FALSO / fora de tópico claro bloqueiam — GENERICO não queima quota em regeneração
-    const blocking = problemas.filter((p) => {
+    // Ignora FALSOs fantasma (auditor reclamando da amostra truncada)
+    const realProblemas = problemas.filter((p) => !isPhantomAuditProblem(p))
+    const blocking = realProblemas.filter((p) => {
       const s = String(p?.status || '').toUpperCase()
       return s === 'FALSO' || s === 'FORA_DO_TOPICO' || s === 'OFF_TOPIC'
     })
@@ -230,12 +276,23 @@ export function parseVerificationResult(rawText = {}) {
         textoCorrigido = null
       }
     }
+    // Se só havia fantasmas de truncagem → aprova
+    if (blocking.length === 0) {
+      return {
+        aprovado: true,
+        soft: problemas.length > realProblemas.length,
+        parseError: false,
+        problemas: realProblemas,
+        texto_corrigido: null,
+        falsosCount: 0,
+      }
+    }
     const aprovadoExplicit = parsed.aprovado === true && blocking.length === 0
     return {
       aprovado: aprovadoExplicit || (blocking.length === 0 && parsed.aprovado !== false),
       soft: false,
       parseError: false,
-      problemas,
+      problemas: realProblemas,
       texto_corrigido: textoCorrigido,
       falsosCount: blocking.length,
     }

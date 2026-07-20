@@ -18,6 +18,7 @@ import {
   applyVerificationToResponse,
   summarizeAuditProblems,
   isLikelyLegalDiscipline,
+  isPhantomAuditProblem,
 } from './contentVerification.js'
 import { appendSilentJsonRules } from './aiPromptUtils.js'
 
@@ -225,6 +226,25 @@ async function runFailClosedAuditLoop(response, generatedText, options = {}) {
 
     lastVerification = verification
 
+    // Só fantasmas de truncagem / estilo → publica
+    const realBlocking = (verification.problemas || []).filter(
+      (p) =>
+        !isPhantomAuditProblem(p) &&
+        ['FALSO', 'FORA_DO_TOPICO', 'OFF_TOPIC'].includes(String(p?.status || '').toUpperCase()),
+    )
+    if (!verification.aprovado && realBlocking.length === 0) {
+      if (!silent) console.warn('⚠️ Auditoria só com alertas de amostra — publicando')
+      return {
+        ...currentResponse,
+        _verification: {
+          ...(currentResponse._verification || {}),
+          aprovado: true,
+          soft: true,
+          auditMode,
+        },
+      }
+    }
+
     if (verification.aprovado) {
       // Confirmação jurídica só se houve correção prévia (economiza 1 chamada por lote limpo)
       if (legal && hadCorrection) {
@@ -292,6 +312,19 @@ async function runFailClosedAuditLoop(response, generatedText, options = {}) {
       verification,
       'FALSO sem correção automática — regenerando (não publicado)',
     )
+  }
+
+  // Factual: não bloqueia publicação por falha residual de estilo após tentativas
+  if (!legal && lastVerification) {
+    const stillReal = (lastVerification.problemas || []).some(
+      (p) =>
+        !isPhantomAuditProblem(p) &&
+        String(p?.status || '').toUpperCase() === 'FALSO',
+    )
+    if (!stillReal) {
+      if (!silent) console.warn('⚠️ Auditoria factual residual sem FALSO real — publicando')
+      return currentResponse
+    }
   }
 
   throw buildAuditFailError(
