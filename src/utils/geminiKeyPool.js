@@ -1,15 +1,13 @@
 import { readEnv } from '../lib/env.js'
 import { geminiFetch } from './geminiHttp.js'
 
-export const KEY_RATE_LIMIT_TTL_MS = 20 * 1000
-/** Quota dura (free_tier / billing) — bloqueio curto o bastante para retomar quando o crédito existe */
-export const KEY_QUOTA_TTL_MS = 90 * 1000
+export const KEY_RATE_LIMIT_TTL_MS = 45 * 1000
+export const KEY_QUOTA_TTL_MS = 15 * 60 * 1000
 export const KEY_INVALID_TTL_MS = 24 * 60 * 60 * 1000
 export const KEY_BAD_TTL_MS = KEY_QUOTA_TTL_MS
 export const KEY_OK_TTL_MS = 5 * 60 * 1000
 export const SILENT_PROBE_MODEL = 'gemini-2.5-flash'
 export const GEMINI_MOTHER_KEY_LABEL = 'CHAVE MOTHER'
-const RATE_LIMIT_RETRIES = 3
 
 const MOTHER_ENV_NAMES = ['VITE_GEMINI_API_KEY_MAE', 'GEMINI_API_KEY_MAE']
 
@@ -209,49 +207,32 @@ export function isInvalidGeminiKeyError(status, message = '') {
 export function classifyGeminiKeyFailure(status, message = '') {
   const msg = String(message).toLowerCase()
   if (isInvalidGeminiKeyError(status, message)) return 'invalid'
-
-  // Free tier explícito / billing desligado → quota dura
-  const hardQuota =
-    msg.includes('free_tier') ||
-    msg.includes('free tier') ||
-    msg.includes('generate_content_free_tier') ||
-    (msg.includes('billing') && (msg.includes('disabled') || msg.includes('not enabled'))) ||
-    msg.includes('require billing') ||
-    msg.includes('billing account')
-
-  if (hardQuota) return 'quota'
-
-  // 429 / RESOURCE_EXHAUSTED na prática costuma ser RPM/TPM (mesmo com crédito).
-  // Tratar como rate_limit com retry curto — NÃO como "limite gratuito".
   if (
     status === 429 ||
-    status === 503 ||
     msg.includes('rate limit') ||
     msg.includes('rate_limit') ||
-    msg.includes('too many requests') ||
-    msg.includes('resource has been exhausted') ||
-    msg.includes('resource_exhausted') ||
-    msg.includes('exceeded your current quota') ||
-    msg.includes('quota exceeded') ||
-    (msg.includes('quota') && (status === 429 || status === 503 || !status))
+    msg.includes('too many requests')
   ) {
+    if (
+      msg.includes('quota') ||
+      msg.includes('billing') ||
+      msg.includes('exceeded your current quota') ||
+      msg.includes('free_tier')
+    ) {
+      return 'quota'
+    }
     return 'rate_limit'
   }
-
-  return null
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function backoffMs(attempt, retryAfterHeader) {
-  const fromHeader = Number(retryAfterHeader)
-  if (Number.isFinite(fromHeader) && fromHeader > 0) {
-    return Math.min(30_000, Math.max(1000, fromHeader * 1000))
+  if (
+    msg.includes('quota') ||
+    msg.includes('resource has been exhausted') ||
+    msg.includes('exceeded') ||
+    status === 503
+  ) {
+    if (status === 503) return 'rate_limit'
+    return 'quota'
   }
-  // 2s, 4s, 8s (+ jitter leve)
-  return Math.min(20_000, 2000 * 2 ** (attempt - 1) + Math.floor(Math.random() * 400))
+  return null
 }
 
 export function isGeminiQuotaOrUnavailable(status, message = '') {
@@ -318,51 +299,34 @@ export async function geminiRequestWithKeyFallback({
 
         acquireGeminiKey(apiKey)
         try {
-          for (let attempt = 1; attempt <= RATE_LIMIT_RETRIES; attempt += 1) {
-            const response = await geminiFetch(model, apiKey, buildBody(model))
-            const data = await response.json().catch(() => ({}))
+          const response = await geminiFetch(model, apiKey, buildBody(model))
+          const data = await response.json().catch(() => ({}))
 
-            if (response.ok) {
-              markGeminiKeyOk(apiKey)
-              return { data, apiKey, model }
-            }
+          if (response.ok) {
+            markGeminiKeyOk(apiKey)
+            return { data, apiKey, model }
+          }
 
-            lastError = data.error?.message || `HTTP ${response.status}`
-            const reason = classifyGeminiKeyFailure(response.status, lastError)
-
-            if (reason === 'rate_limit' && attempt < RATE_LIMIT_RETRIES) {
-              const wait = backoffMs(attempt, response.headers?.get?.('retry-after'))
-              if (!silent) {
-                console.warn(
-                  `Gemini rate limit (${model}) — aguardando ${Math.round(wait / 1000)}s (tentativa ${attempt}/${RATE_LIMIT_RETRIES})…`,
-                )
-              }
-              // Bloqueio curto só durante o wait; não marca quota dura
-              markGeminiKeyBad(apiKey, 'rate_limit')
-              await sleep(wait)
-              continue
-            }
-
-            if (reason) {
-              lastWasKeyFailure = true
-              markGeminiKeyBad(apiKey, reason)
-              if (!silent) {
-                console.warn(`Gemini key falhou (${reason}, ${model}):`, lastError)
-              }
-              if (probeNextOnFail) {
-                for (const nextKey of getAvailableGeminiKeysInOrder(envReader)) {
-                  if (nextKey === apiKey || triedPairs.has(`${model}::${nextKey}`)) continue
-                  const ok = await silentProbeGeminiKey(nextKey)
-                  if (ok) break
-                }
-              }
-              break
-            }
-
+          lastError = data.error?.message || `HTTP ${response.status}`
+          const reason = classifyGeminiKeyFailure(response.status, lastError)
+          if (reason) {
+            lastWasKeyFailure = true
+            markGeminiKeyBad(apiKey, reason)
             if (!silent) {
-              console.warn(`Gemini falhou (${model}):`, lastError)
+              console.warn(`Gemini key falhou (${reason}, ${model}):`, lastError)
             }
-            break
+            if (probeNextOnFail) {
+              for (const nextKey of getAvailableGeminiKeysInOrder(envReader)) {
+                if (nextKey === apiKey || triedPairs.has(`${model}::${nextKey}`)) continue
+                const ok = await silentProbeGeminiKey(nextKey)
+                if (ok) break
+              }
+            }
+            continue
+          }
+
+          if (!silent) {
+            console.warn(`Gemini falhou (${model}):`, lastError)
           }
         } finally {
           releaseGeminiKey(apiKey)
@@ -372,23 +336,41 @@ export async function geminiRequestWithKeyFallback({
     return null
   }
 
-  // Inclui MOTHER no final da rotação principal (não só depois do erro)
-  const ordered = getAvailableGeminiKeysInOrder(envReader)
-  if (motherKey && !ordered.includes(motherKey) && !isKeyUnavailable(motherKey)) {
-    ordered.push(motherKey)
+  let result = await tryKeys(getAvailableGeminiKeysInOrder(envReader), false)
+  if (result) return result
+
+  result = await tryKeys(getGeminiKeysInOrder(envReader), true)
+  if (result) return result
+
+  const err = new Error(`Todas as API keys Gemini falharam. Último erro: ${lastError}`)
+  if (lastWasKeyFailure || isGeminiQuotaOrUnavailable(429, lastError)) {
+    err.code = 'quota_exceeded'
   }
 
-  let result = await tryKeys(ordered, false)
-  if (result) return result
+  if (motherKey && !allKeys.includes(motherKey)) {
+    for (const model of models) {
+      if (isKeyUnavailable(motherKey)) break
+      acquireGeminiKey(motherKey)
+      try {
+        const response = await geminiFetch(model, motherKey, buildBody(model))
+        const data = await response.json().catch(() => ({}))
+        if (response.ok) {
+          markGeminiKeyOk(motherKey)
+          return { data, apiKey: motherKey, model, keyLabel: GEMINI_MOTHER_KEY_LABEL }
+        }
+        lastError = data.error?.message || `HTTP ${response.status}`
+        const reason = classifyGeminiKeyFailure(response.status, lastError)
+        if (reason) {
+          lastWasKeyFailure = true
+          markGeminiKeyBad(motherKey, reason)
+        }
+      } finally {
+        releaseGeminiKey(motherKey)
+      }
+    }
+    err.message = `${err.message} (${GEMINI_MOTHER_KEY_LABEL} também falhou)`
+    if (lastWasKeyFailure) err.code = 'quota_exceeded'
+  }
 
-  const retryAll = getGeminiKeysInOrder(envReader)
-  if (motherKey && !retryAll.includes(motherKey)) retryAll.push(motherKey)
-  result = await tryKeys(retryAll, true)
-  if (result) return result
-
-  const reason = classifyGeminiKeyFailure(429, lastError)
-  const err = new Error(`Todas as API keys Gemini falharam. Último erro: ${lastError}`)
-  err.code = reason === 'quota' ? 'quota_exceeded' : reason === 'rate_limit' ? 'rate_limited' : 'gemini_failed'
-  err.geminiReason = reason
   throw err
 }

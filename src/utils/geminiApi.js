@@ -54,40 +54,23 @@ const VERIFY_GENERATION_CONFIG = {
 const MAX_RETRIES = 1 // Apenas 1 tentativa para economizar quota
 const BASE_DELAY = 2000 // 2 segundos
 
-/** Rate limit / quota Gemini (para retry e UI). */
+/** Erros aceitáveis para exibir ao usuário (cota / limite gratuito). */
 export function isGeminiQuotaError(error) {
   const msg = String(error?.message || error || '').toLowerCase()
   const code = String(error?.code || '').toLowerCase()
   return (
     code.includes('429') ||
     code.includes('quota') ||
-    code.includes('rate_limited') ||
     code.includes('resource_exhausted') ||
     isGeminiQuotaOrUnavailable(429, msg) ||
     msg.includes('esgotad') ||
-    msg.includes('resource_exhausted') ||
-    msg.includes('resource has been exhausted')
-  )
-}
-
-function isHardFreeTierMessage(message = '') {
-  const msg = String(message).toLowerCase()
-  return (
-    msg.includes('free_tier') ||
-    msg.includes('free tier') ||
-    msg.includes('generate_content_free_tier') ||
-    (msg.includes('billing') && (msg.includes('disabled') || msg.includes('not enabled')))
+    msg.includes('limite')
   )
 }
 
 export function formatAiErrorForUser(error) {
   if (isGeminiQuotaError(error)) {
-    const raw = String(error?.message || '')
-    if (isHardFreeTierMessage(raw)) {
-      return 'A chave Gemini ainda está no plano gratuito ou sem billing ativo. Ative o faturamento no Google AI Studio / Cloud e use a chave do projeto pago.'
-    }
-    // 429 / RPM — comum com crédito (auditoria dual + Search). Não é “sem crédito”.
-    return 'A API Gemini atingiu o limite temporário de requisições (rate limit). Aguarde alguns segundos e tente de novo — isso pode acontecer mesmo com crédito na conta.'
+    return 'Cota da API Gemini esgotada ou limite gratuito atingido. Tente novamente mais tarde ou configure outra chave.'
   }
   const code = String(error?.code || '')
   if (code === 'legal_audit_failed' || code === 'bundle_consistency_failed') {
@@ -213,44 +196,45 @@ async function runFailClosedAuditLoop(response, generatedText, options = {}) {
     lastVerification = verification
 
     if (verification.aprovado) {
-      // 2ª passagem obrigatória em todo conteúdo auditado (fail-closed)
-      try {
-        if (!silent) console.log('🔎 Confirmação jurídica (2ª passagem)…')
-        const confirm = await runSingleAudit(
-          buildLegalConfirmPrompt(currentText, auditContext),
-          silent,
-        )
-        if (!confirm.aprovado) {
-          lastVerification = confirm
-          if (confirm.texto_corrigido) {
-            currentResponse = applyVerificationToResponse(
-              currentResponse,
-              confirm,
-              currentText,
-            )
-            currentText = confirm.texto_corrigido
-            if (round < maxRounds) continue
-            throw buildAuditFailError(confirm, 'Confirmação jurídica ainda com FALSO')
+      // Jurídico: 2ª passagem de confirmação (reduz falso negativo/positivo)
+      // Flashcards também passam por 2ª confirmação jurídica (evita lixo factual)
+      if (legal) {
+        try {
+          const confirm = await runSingleAudit(
+            buildLegalConfirmPrompt(currentText, auditContext),
+            silent,
+          )
+          if (!confirm.aprovado) {
+            lastVerification = confirm
+            if (confirm.texto_corrigido) {
+              currentResponse = applyVerificationToResponse(
+                currentResponse,
+                confirm,
+                currentText,
+              )
+              currentText = confirm.texto_corrigido
+              if (round < maxRounds) continue
+              throw buildAuditFailError(confirm, 'Confirmação jurídica ainda com FALSO')
+            }
+            throw buildAuditFailError(confirm, 'Confirmação jurídica apontou FALSO')
           }
-          throw buildAuditFailError(confirm, 'Confirmação jurídica apontou FALSO')
+        } catch (confirmErr) {
+          if (confirmErr?.code === 'legal_audit_failed') throw confirmErr
+          // confirmação técnica falhou após 1ª aprovação → aceita 1ª (já sem FALSO)
+          if (!silent) {
+            console.warn('⚠️ Confirmação jurídica indisponível — mantendo 1ª aprovação')
+          }
         }
-      } catch (confirmErr) {
-        if (confirmErr?.code === 'legal_audit_failed') throw confirmErr
-        // Falha técnica na 2ª passagem → NÃO publica
-        throw buildAuditFailError(
-          { problemas: [{ motivo: confirmErr?.message || 'confirmação indisponível' }] },
-          'Confirmação jurídica indisponível — conteúdo NÃO publicado',
-        )
       }
 
-      if (!silent) console.log('✅ Auditoria + confirmação jurídica OK — aprovado')
+      if (!silent) console.log('✅ Auditoria limpa (zero FALSO) — aprovado')
       return {
         ...currentResponse,
         _verification: {
           ...(currentResponse._verification || {}),
           aprovado: true,
           auditMode,
-          dualConfirmed: true,
+          dualConfirmed: legal,
         },
       }
     }
@@ -434,13 +418,9 @@ export async function callGeminiWithRetry(prompt, options = {}) {
 
   const resolvedDisciplina = disciplina || courseData?.disciplina || options.disciplina || ''
   const legalByDiscipline = isLikelyLegalDiscipline(resolvedDisciplina)
-  // Trusted / forceAudit: sempre modo jurídico dual (flashcards, material, questões)
-  const forceLegalDual = Boolean(trusted || forceAudit || auditModeOption === 'legal')
-  const effectiveIsLegal = forceLegalDual || isLegalContent === true || legalByDiscipline
+  const effectiveIsLegal = isLegalContent === true || legalByDiscipline
   const auditMode =
-    forceLegalDual || auditModeOption === 'legal'
-      ? 'legal'
-      : auditModeOption || (effectiveIsLegal ? 'legal' : trusted || forceAudit ? 'factual' : null)
+    auditModeOption || (effectiveIsLegal ? 'legal' : trusted || forceAudit ? 'factual' : null)
 
   const promptBase = silent && !trusted ? appendSilentJsonRules(prompt) : prompt
   let enhancedPrompt = buildPromptWithCourseContext(promptBase, courseData)

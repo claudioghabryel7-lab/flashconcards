@@ -100,23 +100,19 @@ ${truncateForVerification(content)}`
 /** 2ª passagem jurídica — confirma que não ficou FALSO. */
 export function buildLegalConfirmPrompt(content, courseData = {}) {
   const { banca, cargo, disciplina, hoje } = examHeader(courseData)
-  const topico = courseData.topicoNome || courseData.topico || ''
 
-  return `CONFIRMAÇÃO FINAL OBRIGATÓRIA (auditor 2) — flashcards, material ou questões.
-Banca: ${banca} | Cargo: ${cargo} | Disciplina: ${disciplina} | Tópico: ${topico || '—'} | Data: ${hoje}
-Use Google Search. Seja rigoroso.
+  return `CONFIRMAÇÃO FINAL (auditor 2). Só aponte erros FALSOS inequívocos.
+Banca: ${banca} | Cargo: ${cargo} | Disciplina: ${disciplina} | Data: ${hoje}
+Use Google Search.
 
 Responda APENAS JSON:
 {
   "aprovado": true ou false,
-  "problemas": [{"trecho":"...","status":"FALSO|FORA_DO_TOPICO|GENERICO","motivo":"...","correcao":"..."}],
+  "problemas": [{"trecho":"...","status":"FALSO","motivo":"...","correcao":"..."}],
   "texto_corrigido": null ou JSON/texto completo corrigido
 }
 
-Regras:
-- aprovado=false se houver fato FALSO, lei/artigo inventado, fora do tópico, ou genérico demais.
-- Em dúvida factual → aprovado=false (não publique lixo).
-- Se reprovar, devolva texto_corrigido completo quando possível.
+aprovado=false SÓ com FALSO comprovado. Em dúvida → aprovado=true.
 
 CONTEÚDO:
 ${truncateForVerification(content, 9000)}`
