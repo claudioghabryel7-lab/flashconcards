@@ -402,10 +402,81 @@ function collectTextFromGeminiResponse(response) {
 }
 
 function stripConversationalWrapper(text = '') {
-  const cleaned = String(text).trim()
+  let cleaned = String(text).trim()
+  // Remove ruído comum do Google Search grounding / markdown
+  cleaned = cleaned
+    .replace(/```json\s*/gi, '')
+    .replace(/```/g, '')
+    .replace(/^\uFEFF/, '')
+    .replace(/\[\s*\d+\s*\]/g, '') // citações [1]
+    .replace(/\*\*/g, '')
+    .trim()
   const start = cleaned.search(/[\[{]/)
   if (start > 0) return cleaned.slice(start)
   return cleaned
+}
+
+function sanitizeJsonCandidate(raw = '') {
+  return String(raw)
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/\u00A0/g, ' ')
+    .replace(/,\s*([}\]])/g, '$1')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]+/g, ' ')
+}
+
+export async function parseAiJsonText(generatedText) {
+  const normalized =
+    typeof generatedText === 'string'
+      ? generatedText.trim()
+      : generatedText == null
+        ? ''
+        : String(generatedText).trim()
+
+  if (!normalized) {
+    const err = new Error('A IA não retornou texto para processar')
+    err.code = 'ai_empty_response'
+    throw err
+  }
+
+  const cleaned = stripConversationalWrapper(normalized)
+  const candidates = []
+  const balanced = extractBalancedJson(cleaned)
+  if (balanced) candidates.push(balanced)
+  const greedy = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/)?.[0]
+  if (greedy && greedy !== balanced) candidates.push(greedy)
+  // Às vezes o Search coloca texto depois do JSON — tenta o maior bloco {…}
+  const allObjects = cleaned.match(/\{[\s\S]*?\}(?=\s*(?:\{|$))/g)
+  if (allObjects?.length) {
+    const longest = [...allObjects].sort((a, b) => b.length - a.length)[0]
+    if (longest && !candidates.includes(longest)) candidates.push(longest)
+  }
+
+  if (!candidates.length) {
+    const err = new Error('Nenhum JSON válido encontrado na resposta da IA')
+    err.code = 'ai_json_parse_error'
+    throw err
+  }
+
+  let lastError
+  for (const candidate of candidates) {
+    const sanitized = sanitizeJsonCandidate(candidate)
+    try {
+      return JSON.parse(sanitized)
+    } catch (err) {
+      lastError = err
+      try {
+        return await repairJsonText(sanitized)
+      } catch (repairErr) {
+        lastError = repairErr
+      }
+    }
+  }
+
+  const err = new Error('Não foi possível reparar o JSON da resposta da IA')
+  err.code = 'ai_json_parse_error'
+  err.cause = lastError
+  throw err
 }
 
 /**
@@ -872,14 +943,17 @@ export async function auditTopicBundleConsistency(args = {}) {
 export async function generateAiJson(prompt, options = {}) {
   const maxAttempts = options.maxParseAttempts ?? 2
   // Search na geração = 1 passagem fidedigna (sem 2ª chamada de auditoria)
-  const withSearch = options.useGoogleSearch !== false
+  const preferSearch = options.useGoogleSearch !== false
   let lastError
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
+      // Última tentativa: se JSON falhou com Search, tenta sem Search (JSON mode limpo)
+      const withSearch = preferSearch && !(attempt === maxAttempts && lastError?.code === 'ai_json_parse_error')
+
       let effectivePrompt = prompt
       if (attempt > 1) {
-        effectivePrompt = `${prompt}\n\nIMPORTANTE: a resposta anterior não pôde ser lida. Retorne APENAS um único JSON válido e completo, sem markdown nem texto extra. Use Google Search e inclua só o que estiver certo.`
+        effectivePrompt = `${prompt}\n\nIMPORTANTE: a resposta anterior não pôde ser lida como JSON. Retorne APENAS um único objeto/array JSON válido e completo, sem markdown, sem texto antes/depois.${withSearch ? ' Use Google Search; inclua só o que estiver certo.' : ''}`
       }
 
       const response = await callGeminiWithRetry(effectivePrompt, {
@@ -956,41 +1030,6 @@ function extractBalancedJson(text = '') {
     }
   }
   return s.slice(start)
-}
-
-export async function parseAiJsonText(generatedText) {
-  const normalized =
-    typeof generatedText === 'string'
-      ? generatedText.trim()
-      : generatedText == null
-        ? ''
-        : String(generatedText).trim()
-
-  if (!normalized) {
-    const err = new Error('A IA não retornou texto para processar')
-    err.code = 'ai_empty_response'
-    throw err
-  }
-
-  const cleaned = stripConversationalWrapper(
-    normalized
-      .replace(/```json\s*/gi, '')
-      .replace(/```/g, '')
-      .trim(),
-  )
-
-  const candidate = extractBalancedJson(cleaned) || cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/)?.[0]
-  if (!candidate) {
-    const err = new Error('Nenhum JSON válido encontrado na resposta da IA')
-    err.code = 'ai_json_parse_error'
-    throw err
-  }
-
-  try {
-    return JSON.parse(candidate)
-  } catch {
-    return repairJsonText(candidate)
-  }
 }
 
 /**

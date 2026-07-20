@@ -18,6 +18,11 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
+import {
+  normalizeTopicKeyForStorage,
+  sanitizeTopicKeyForFirestore,
+  toSafeFirestoreDocId,
+} from '../utils/topicKeyFirestore'
 
 export const ASSET = {
   FLASHCARDS: 'flashcards',
@@ -29,7 +34,17 @@ export const ASSET = {
 export const FLASHCARD_TARGET = 30
 export const FLASHCARD_BATCH_SIZE = 10
 
-function sanitizeTopicKey(topicKey = '') {
+/** ID canônico (mesmo do aluno/edital). */
+function contentDocId(topicKey = '') {
+  return (
+    toSafeFirestoreDocId(topicKey) ||
+    sanitizeTopicKeyForFirestore(normalizeTopicKeyForStorage(topicKey)) ||
+    'topic_unknown'
+  )
+}
+
+/** ID antigo agressivo — só para migrar/atualizar docs já salvos. */
+export function legacyAggressiveTopicKey(topicKey = '') {
   return String(topicKey)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -37,6 +52,10 @@ function sanitizeTopicKey(topicKey = '') {
     .replace(/_+/g, '_')
     .replace(/^_|_$/g, '')
     .slice(0, 120)
+}
+
+function sanitizeTopicKey(topicKey = '') {
+  return contentDocId(topicKey)
 }
 
 function checkpointDocId(topicKey, assetType, { nivel = 1 } = {}) {
@@ -304,21 +323,29 @@ export async function finalizeFlashcardsCheckpoint({
 }
 
 export async function loadMaterialDraft(courseId, topicKey) {
-  const key = sanitizeTopicKey(topicKey)
-  const snap = await getDoc(doc(db, 'courses', courseId, 'conteudosCompletos', key))
-  if (!snap.exists()) return null
-  return { id: snap.id, ...snap.data() }
+  const key = contentDocId(topicKey)
+  const legacy = legacyAggressiveTopicKey(topicKey)
+  for (const id of [key, legacy]) {
+    if (!id) continue
+    const snap = await getDoc(doc(db, 'courses', courseId, 'conteudosCompletos', id))
+    if (snap.exists()) return { id: snap.id, ...snap.data() }
+  }
+  return null
 }
 
 /**
  * Se material já existe e está completo (ou draft válido), reusa sem API.
  */
 export async function prepareMaterialRun({ courseId, topicKey, jobId, forceFresh = false }) {
-  const key = sanitizeTopicKey(topicKey)
   const cp = await loadCheckpoint(courseId, topicKey, ASSET.MATERIAL)
 
   if (forceFresh) {
+    const key = contentDocId(topicKey)
+    const legacy = legacyAggressiveTopicKey(topicKey)
     await deleteDoc(doc(db, 'courses', courseId, 'conteudosCompletos', key)).catch(() => {})
+    if (legacy && legacy !== key) {
+      await deleteDoc(doc(db, 'courses', courseId, 'conteudosCompletos', legacy)).catch(() => {})
+    }
     await clearCheckpoint(courseId, topicKey, ASSET.MATERIAL)
     return { resume: false, alreadyComplete: false, existingDraft: null }
   }
@@ -357,30 +384,43 @@ export async function saveMaterialCheckpoint({
   extra = {},
   status = 'indisponivel',
 }) {
-  const key = sanitizeTopicKey(topicKey)
-  await setDoc(
-    doc(db, 'courses', courseId, 'conteudosCompletos', key),
-    {
-      ...parsed,
-      ...extra,
-      topicKey,
-      generationJobId: jobId || null,
-      generationDraft: false,
-      generationComplete: true,
-      status,
-      updatedAt: serverTimestamp(),
-      generatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  )
+  const key = contentDocId(topicKey)
+  const normalized = normalizeTopicKeyForStorage(topicKey)
+  const payload = {
+    ...parsed,
+    ...extra,
+    topicKey: normalized || topicKey,
+    generationJobId: jobId || null,
+    generationDraft: false,
+    generationComplete: true,
+    status,
+    updatedAt: serverTimestamp(),
+    generatedAt: serverTimestamp(),
+  }
+  await setDoc(doc(db, 'courses', courseId, 'conteudosCompletos', key), payload, { merge: true })
+
+  // Migra/atualiza doc legado (ID agressivo) se existir
+  const legacy = legacyAggressiveTopicKey(topicKey)
+  if (legacy && legacy !== key) {
+    const legacyRef = doc(db, 'courses', courseId, 'conteudosCompletos', legacy)
+    const legacySnap = await getDoc(legacyRef)
+    if (legacySnap.exists()) {
+      await setDoc(legacyRef, { ...payload, migratedTo: key }, { merge: true })
+    }
+  }
+
   await markCheckpointComplete(courseId, topicKey, ASSET.MATERIAL, jobId)
 }
 
 export async function loadQuestoesDraft(courseId, topicKey, nivel = 1) {
-  const key = `${sanitizeTopicKey(topicKey)}_nivel_${nivel}`
-  const snap = await getDoc(doc(db, 'courses', courseId, 'questoesTopico', key))
-  if (!snap.exists()) return null
-  return { id: snap.id, ...snap.data() }
+  const canonical = `${contentDocId(topicKey)}_nivel_${nivel}`
+  const legacy = `${legacyAggressiveTopicKey(topicKey)}_nivel_${nivel}`
+  for (const id of [canonical, legacy]) {
+    if (!id || id.startsWith('_')) continue
+    const snap = await getDoc(doc(db, 'courses', courseId, 'questoesTopico', id))
+    if (snap.exists()) return { id: snap.id, ...snap.data() }
+  }
+  return null
 }
 
 export async function prepareQuestoesRun({
@@ -434,24 +474,32 @@ export async function saveQuestoesCheckpoint({
   extra = {},
   status = 'indisponivel',
 }) {
-  const key = `${sanitizeTopicKey(topicKey)}_nivel_${nivel}`
+  const key = `${contentDocId(topicKey)}_nivel_${nivel}`
+  const normalized = normalizeTopicKeyForStorage(topicKey)
   const list = parsed?.questoes || parsed?.questions || []
-  await setDoc(
-    doc(db, 'courses', courseId, 'questoesTopico', key),
-    {
-      ...parsed,
-      ...extra,
-      topicKey,
-      nivel,
-      generationJobId: jobId || null,
-      generationDraft: false,
-      generationComplete: true,
-      status,
-      updatedAt: serverTimestamp(),
-      generatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  )
+  const payload = {
+    ...parsed,
+    ...extra,
+    topicKey: normalized || topicKey,
+    nivel,
+    generationJobId: jobId || null,
+    generationDraft: false,
+    generationComplete: true,
+    status,
+    updatedAt: serverTimestamp(),
+    generatedAt: serverTimestamp(),
+  }
+  await setDoc(doc(db, 'courses', courseId, 'questoesTopico', key), payload, { merge: true })
+
+  const legacyKey = `${legacyAggressiveTopicKey(topicKey)}_nivel_${nivel}`
+  if (legacyKey && legacyKey !== key) {
+    const legacyRef = doc(db, 'courses', courseId, 'questoesTopico', legacyKey)
+    const legacySnap = await getDoc(legacyRef)
+    if (legacySnap.exists()) {
+      await setDoc(legacyRef, { ...payload, migratedTo: key }, { merge: true })
+    }
+  }
+
   await markCheckpointComplete(courseId, topicKey, ASSET.QUESTOES, jobId, { nivel })
   return list.length
 }

@@ -139,6 +139,19 @@ const findDocumentByTopicKey = async (courseId, topicKey) => {
   const fromSanitized = await tryRead(sanitizedKey)
   if (fromSanitized) return fromSanitized
 
+  // ID legado agressivo (geração local antiga)
+  const legacyAggressive = String(topicKey || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 120)
+  if (legacyAggressive && legacyAggressive !== sanitizedKey) {
+    const fromLegacy = await tryRead(legacyAggressive)
+    if (fromLegacy) return fromLegacy
+  }
+
   if (!topicKey.includes('::') && !topicKey.includes('/') && !topicKey.includes('\\')) {
     return tryRead(topicKey)
   }

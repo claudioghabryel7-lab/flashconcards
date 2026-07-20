@@ -17,6 +17,12 @@ import { isLikelyLegalDiscipline } from '../utils/contentVerification'
 import { buildFlashcardPrompt } from '../utils/unifiedPrompt'
 import { buildMentoradoCronogramaPrompt } from '../utils/guiaMentoradoPrompts'
 import { DEFAULT_PLANNING_DAYS } from '../constants/guiaMentorado'
+import { CONTENT_STATUS } from '../utils/contentStatus'
+import {
+  normalizeTopicKeyForStorage,
+  sanitizeTopicKeyForFirestore,
+  toSafeFirestoreDocId,
+} from '../utils/topicKeyFirestore'
 import dayjs from 'dayjs'
 import {
   FLASHCARD_TARGET,
@@ -24,6 +30,7 @@ import {
   appendFlashcardBatch,
   finalizeFlashcardsCheckpoint,
   loadFlashcardsByTopicKey,
+  legacyAggressiveTopicKey,
   markBundleAuditPassed,
   prepareFlashcardsRun,
   prepareMaterialRun,
@@ -97,13 +104,12 @@ function resolvePlanningEndDate(config = {}) {
 }
 
 function sanitizeTopicKey(topicKey = '') {
-  return String(topicKey)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9_-]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '')
-    .slice(0, 120)
+  return (
+    toSafeFirestoreDocId(topicKey) ||
+    sanitizeTopicKeyForFirestore(normalizeTopicKeyForStorage(topicKey)) ||
+    legacyAggressiveTopicKey(topicKey) ||
+    'topic_unknown'
+  )
 }
 
 function sanitizeDisciplinaKey(name = '') {
@@ -558,25 +564,74 @@ async function finalizeLocalDayStatus(courseId, targetDate, { errors = [], total
   )
 }
 
-async function publishTopicAssets(courseId, { sanitized, topicKey, cardIds = [] }) {
-  await updateDoc(doc(db, 'courses', courseId, 'conteudosCompletos', sanitized), {
-    status: 'disponivel',
-    updatedAt: serverTimestamp(),
-  }).catch(() => {})
-  await updateDoc(doc(db, 'courses', courseId, 'questoesTopico', `${sanitized}_nivel_1`), {
-    status: 'disponivel',
-    updatedAt: serverTimestamp(),
-  }).catch(() => {})
+/**
+ * Libera assets do tópico + registra em topicoStatus (dispara notificação nos alunos).
+ * Atualiza ID canônico e ID legado agressivo (conteúdo gerado antes da unificação).
+ */
+async function publishTopicAssets(
+  courseId,
+  {
+    sanitized,
+    topicKey,
+    cardIds = [],
+    disciplinaNome = '',
+    topicoNome = '',
+  } = {},
+) {
+  const available = CONTENT_STATUS.AVAILABLE
+  const normalizedTopicKey = normalizeTopicKeyForStorage(topicKey || sanitized)
+  const statusDocId =
+    sanitizeTopicKeyForFirestore(normalizedTopicKey) || sanitized
+  const canonical = statusDocId
+  const legacy = legacyAggressiveTopicKey(topicKey || sanitized)
+  const contentIds = [...new Set([canonical, sanitized, legacy].filter(Boolean))]
+
+  for (const id of contentIds) {
+    await setDoc(
+      doc(db, 'courses', courseId, 'conteudosCompletos', id),
+      {
+        status: available,
+        topicKey: normalizedTopicKey,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    ).catch(() => {})
+    await setDoc(
+      doc(db, 'courses', courseId, 'questoesTopico', `${id}_nivel_1`),
+      {
+        status: available,
+        topicKey: normalizedTopicKey,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    ).catch(() => {})
+  }
+
   if (cardIds.length) {
-    await setFlashcardsStatus(courseId, cardIds, 'disponivel')
+    await setFlashcardsStatus(courseId, cardIds, available)
   } else if (topicKey) {
     const existing = await loadFlashcardsByTopicKey(courseId, topicKey)
     await setFlashcardsStatus(
       courseId,
       existing.map((c) => c.id),
-      'disponivel',
+      available,
     )
   }
+
+  // Fonte das notificações + gate de acesso do aluno
+  await setDoc(
+    doc(db, 'courses', courseId, 'topicoStatus', statusDocId),
+    {
+      topicKey: normalizedTopicKey,
+      status: available,
+      disciplinaNome: disciplinaNome || '',
+      topicoNome: topicoNome || '',
+      releasedAssets: { flashcards: true, material: true, questoes: true },
+      releasedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
 }
 
 /**
@@ -734,6 +789,8 @@ async function processSingleMentoradoTopic({
       sanitized,
       topicKey,
       cardIds: fcResult?.cardIds || [],
+      disciplinaNome: disciplina,
+      topicoNome: topic.topicoNome || label,
     })
   }
 
@@ -821,7 +878,7 @@ async function processGuiaMentoradoDay(courseId, serverPayload, updateProgress, 
   const targetDate = serverPayload?.targetDate
   if (!targetDate) throw new Error('Data do dia ausente.')
 
-  const autoPublish = Boolean(serverPayload?.autoPublish)
+  const autoPublish = serverPayload?.autoPublish !== false
   const forceFresh = Boolean(serverPayload?.forceFresh)
   const draftStatus = 'indisponivel'
   const errors = []
@@ -848,7 +905,18 @@ async function processGuiaMentoradoDay(courseId, serverPayload, updateProgress, 
     const pctBase = Math.round((entry.index / topics.length) * 90) + 8
     const prev = dayByKey.get(entry.topicKey)
     if (prev?.status === 'published' && !useForceFresh) {
-      await updateProgress(pctBase + 12, `${label} já publicado — pulando`)
+      // Repara liberação: painel diz Liberado mas aluno viaja sem topicoStatus/conteúdo disponivel
+      try {
+        await publishTopicAssets(courseId, {
+          sanitized: sanitizeTopicKey(entry.topicKey),
+          topicKey: entry.topicKey,
+          disciplinaNome: entry.topic.disciplina || '',
+          topicoNome: entry.topic.topicoNome || label,
+        })
+      } catch (repairErr) {
+        console.warn('[localJob] reparo de liberação:', repairErr?.message)
+      }
+      await updateProgress(pctBase + 12, `${label} já publicado — liberação sincronizada`)
       return { ok: true, topicKey: entry.topicKey, skipped: true }
     }
     return runTopicWithAutoRetry({
