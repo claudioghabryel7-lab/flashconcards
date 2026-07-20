@@ -48,6 +48,8 @@ const FlashcardsTopicoView = () => {
   const [fromCache, setFromCache] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
+  /** Card aberto via notificação do Professor — bypass da fila SRS */
+  const [focusOverrideCard, setFocusOverrideCard] = useState(null)
 
   const MIN_TOPIC_FLASHCARDS = 20
 
@@ -154,7 +156,12 @@ const FlashcardsTopicoView = () => {
   )
 
   const { dueQueue, stats } = useSRSDeck(cards, cardProgress)
-  const studyCards = dueQueue
+  const studyCards = useMemo(() => {
+    if (!focusOverrideCard) return dueQueue
+    const focusId = String(focusOverrideCard.id || '')
+    const rest = dueQueue.filter((c) => String(c.id || '') !== focusId)
+    return [focusOverrideCard, ...rest]
+  }, [dueQueue, focusOverrideCard])
   const shareCard = studyCards[currentIndex] || cards[currentIndex] || cards[0]
   const shareIndex = studyCards.length > 0 ? currentIndex : cards.indexOf(shareCard)
 
@@ -328,19 +335,29 @@ const FlashcardsTopicoView = () => {
 
   useEffect(() => {
     const focusId = searchParams.get('focusContentId')
-    if (!focusId || !cards.length) return
-    const idx = findCardIndex(cards, focusId)
-    if (idx >= 0) setCurrentIndex(idx)
+    if (!focusId || !cards.length) {
+      setFocusOverrideCard(null)
+      return
+    }
+    const idx = findCardIndex(cards, focusId, { courseId, topicKey })
+    if (idx < 0) {
+      setFocusOverrideCard(null)
+      toast.error('Não foi possível localizar o flashcard corrigido neste tópico.')
+      return
+    }
+    setFocusOverrideCard(cards[idx])
+    setCurrentIndex(0)
     const t = setTimeout(() => {
       const contentId =
         buildFlashcardContentId({
           courseId,
           topicKey,
-          card: cards[idx >= 0 ? idx : 0],
-          cardIndex: idx >= 0 ? idx : 0,
+          card: cards[idx],
+          cardIndex: idx,
         }) || focusId
       scrollToFocusedContent(contentId)
       scrollToFocusedContent(focusId)
+      if (cards[idx]?.id) scrollToFocusedContent(String(cards[idx].id))
     }, 400)
     return () => clearTimeout(t)
   }, [cards, searchParams, courseId, topicKey])
@@ -445,7 +462,7 @@ const FlashcardsTopicoView = () => {
         </div>
       )}
 
-      {!loading && !generating && !regenerating && !error && canStudy && cards.length > 0 && studyCards.length === 0 && (
+      {!loading && !generating && !regenerating && !error && canStudy && cards.length > 0 && studyCards.length === 0 && !focusOverrideCard && (
         <div className="cp-card p-10 text-center">
           <p className="text-4xl mb-3">✨</p>
           <p className="font-medium text-cp-text">Tudo em dia!</p>
@@ -460,7 +477,11 @@ const FlashcardsTopicoView = () => {
       {!loading && !generating && !regenerating && !error && canStudy && studyCards.length > 0 && (
         <div className="cp-card p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between text-xs text-cp-muted">
-            <span>Revisão espaçada · {studyCards.length} para revisar agora</span>
+            <span>
+              {focusOverrideCard
+                ? 'Flashcard corrigido pelo Professor IA'
+                : `Revisão espaçada · ${studyCards.length} para revisar agora`}
+            </span>
             <div className="flex items-center gap-2">
               <span>{stats.reviewed}/{stats.total} já estudados</span>
               {shareCard && (

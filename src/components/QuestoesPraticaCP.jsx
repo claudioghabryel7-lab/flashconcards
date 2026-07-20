@@ -135,7 +135,11 @@ export function QuestaoEnunciadoCard({
   topicKey,
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-cp-border bg-gradient-to-br from-cp-surface via-cp-bg-elevated to-cp-surface shadow-[0_8px_32px_rgba(0,0,0,0.06)]">
+    <div
+      className="overflow-hidden rounded-2xl border border-cp-border bg-gradient-to-br from-cp-surface via-cp-bg-elevated to-cp-surface shadow-[0_8px_32px_rgba(0,0,0,0.06)]"
+      data-content-id={contentId || undefined}
+      id={contentId ? `questao-${String(contentId).slice(0, 80)}` : undefined}
+    >
       <div className="border-b border-cp-border/80 bg-gradient-to-r from-cp-accent/8 via-transparent to-cp-accent2/8 px-4 py-3 sm:px-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">

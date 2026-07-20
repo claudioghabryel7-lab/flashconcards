@@ -32,30 +32,73 @@ async function applyFlashcardPatch(content, verdict) {
       c.field === 'ambos',
   )
   if (!corr?.newText) return 0
-  const field = String(corr.field || 'ambos').toLowerCase()
+  const field = String(corr.field || 'verso').toLowerCase()
+  const originalPergunta = String(content.data?.pergunta || content.data?.frente || '')
+  const originalResposta = String(content.data?.resposta || content.data?.verso || '')
   const patch = {}
-  if (field === 'frente' || field === 'ambos') {
+
+  if (field === 'frente') {
+    patch.pergunta = corr.newText.replace(/^FRENTE:\n?/i, '').trim()
+    patch.frente = patch.pergunta
+  } else if (field === 'verso') {
+    patch.resposta = corr.newText.replace(/^VERSO:\n?/i, '').trim()
+    patch.verso = patch.resposta
+  } else {
+    // ambos — só se o modelo devolver FRENTE/VERSO claramente
     const parts = String(corr.newText).split(/\n+VERSO:\n+/i)
-    if (field === 'frente') {
-      patch.pergunta = corr.newText.replace(/^FRENTE:\n?/i, '').trim()
-      patch.frente = patch.pergunta
-    } else if (parts.length >= 2) {
+    if (parts.length >= 2) {
       patch.pergunta = parts[0].replace(/^FRENTE:\n?/i, '').trim()
       patch.resposta = parts[1].trim()
       patch.frente = patch.pergunta
       patch.verso = patch.resposta
     } else {
-      patch.pergunta = corr.newText
-      patch.frente = patch.pergunta
+      // sem delimitador: assume só verso (não reescreve a frente)
+      patch.resposta = corr.newText.replace(/^VERSO:\n?/i, '').trim()
+      patch.verso = patch.resposta
     }
   }
-  if (field === 'verso') {
-    patch.resposta = corr.newText.replace(/^VERSO:\n?/i, '').trim()
-    patch.verso = patch.resposta
+
+  // Guarda: se a frente mudou demais sem o relato pedir reescrita total, mantém a original
+  if (patch.pergunta != null && originalPergunta) {
+    const sim = textSimilarity(originalPergunta, patch.pergunta)
+    if (sim < 0.35 && field !== 'frente') {
+      delete patch.pergunta
+      delete patch.frente
+    }
   }
+  if (patch.resposta != null && originalResposta) {
+    const sim = textSimilarity(originalResposta, patch.resposta)
+    // verso pode mudar mais (correção factual), mas zero overlap = outro card
+    if (sim < 0.08 && patch.resposta.length > 40 && originalResposta.length > 40) {
+      return 0
+    }
+  }
+
   if (!Object.keys(patch).length) return 0
   await updateDoc(content.ref, { ...patch, updatedAt: serverTimestamp() })
   return 1
+}
+
+function textSimilarity(a = '', b = '') {
+  const na = String(a)
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+  const nb = String(b)
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!na || !nb) return 0
+  if (na === nb) return 1
+  const shorter = na.length <= nb.length ? na : nb
+  const longer = na.length > nb.length ? na : nb
+  if (longer.includes(shorter.slice(0, Math.min(80, shorter.length)))) return 0.6
+  let shared = 0
+  const tokens = new Set(shorter.split(' ').filter((t) => t.length > 3))
+  tokens.forEach((t) => {
+    if (longer.includes(t)) shared += 1
+  })
+  return tokens.size ? shared / tokens.size : 0
 }
 
 async function applyQuestaoPatch(content, verdict) {
@@ -77,7 +120,15 @@ async function applyQuestaoPatch(content, verdict) {
   if (!questoes[idx]) return 0
 
   const next = { ...questoes[idx] }
-  if (pack.enunciado != null) next.enunciado = pack.enunciado
+  const originalEnunciado = String(next.enunciado || '')
+
+  // Preferir só gabarito/explicação; enunciado só se similaridade alta (correção pontual)
+  if (pack.enunciado != null) {
+    const sim = textSimilarity(originalEnunciado, String(pack.enunciado))
+    if (sim >= 0.45 || !originalEnunciado) {
+      next.enunciado = pack.enunciado
+    }
+  }
   if (pack.alternativas && typeof pack.alternativas === 'object') {
     next.alternativas = { ...(next.alternativas || {}), ...pack.alternativas }
   }
@@ -92,6 +143,13 @@ async function applyQuestaoPatch(content, verdict) {
     next.gabaritoComentado = expl
     next.explicacao = expl
   }
+
+  const changed =
+    next.enunciado !== questoes[idx].enunciado ||
+    next.respostaCorreta !== questoes[idx].respostaCorreta ||
+    next.gabaritoComentado !== questoes[idx].gabaritoComentado ||
+    JSON.stringify(next.alternativas) !== JSON.stringify(questoes[idx].alternativas)
+  if (!changed) return 0
 
   questoes[idx] = next
   await updateDoc(content.ref, { questoes, updatedAt: serverTimestamp() })
@@ -185,8 +243,9 @@ export async function processProfessorFlagLocal({
   const questaoHint =
     content.kind === 'questao'
       ? `
-Para questão use:
-{ "target": "questao", "field": "aligned", "newText": "{\\"correta\\":\\"A\\",\\"gabaritoComentado\\":\\"...\\",\\"enunciado\\":\\"...\\",\\"alternativas\\":{}}" }
+Para questão (PATCH MÍNIMO):
+{ "target": "questao", "field": "aligned", "newText": "{\\"correta\\":\\"A\\",\\"gabaritoComentado\\":\\"...\\"}" }
+Inclua "enunciado" ou "alternativas" SOMENTE se o erro estiver neles — e mantenha o mesmo assunto/tese.
 `
       : content.kind === 'material' || content.kind === 'incidencia'
         ? `
@@ -194,39 +253,47 @@ Para material use:
 { "target": "material", "field": "content", "newText": "{\\"content\\":\\"...html ou markdown corrigido...\\",\\"titulo\\":\\"...\\"}" }
 `
         : `
-Para flashcard use:
-{ "target": "flashcard", "field": "ambos", "newText": "FRENTE:\\n...\\n\\nVERSO:\\n..." }
+Para flashcard (PATCH MÍNIMO — NÃO reescreva o card do zero):
+Preferir um lado só:
+{ "target": "flashcard", "field": "verso", "newText": "texto corrigido do verso" }
+ou
+{ "target": "flashcard", "field": "frente", "newText": "texto corrigido da frente" }
+Só use field "ambos" se os DOIS lados tiverem erro factual, no formato:
+FRENTE:\\n...\\n\\nVERSO:\\n...
+Mantenha o MESMO tema/conceito do card original; corrija apenas o erro apontado.
 `
 
   const verdict = await generateAiJson(
-    `Você é o Professor IA. Analise a sinalização do aluno.
+    `Você é o Professor IA. Analise a sinalização do aluno e CORRIJA SÓ O ERRO — sem mudar o teor.
 
 TIPO: ${flag.contentType}
 RELATO: ${flag.text || flag.reportText || ''}
-PREVIEW: ${flag.preview || ''}
+PREVIEW (item sinalizado): ${flag.preview || ''}
 
-CONTEÚDO:
+CONTEÚDO ATUAL (não troque de assunto):
 ${content.text}
 
 Retorne APENAS JSON:
 {
   "reportValid": true,
-  "summary": "resumo curto",
+  "summary": "resumo curto do que foi corrigido",
   "needsAdminReview": false,
   "corrections": []
 }
 ${questaoHint}
 
-REGRAS:
+REGRAS OBRIGATÓRIAS:
 - Se o conteúdo estiver CORRETO: reportValid=false, corrections=[]
-- Se ERRADO e puder corrigir: reportValid=true + corrections
-- Se dúvida: needsAdminReview=true, corrections=[]`,
+- Se ERRADO: reportValid=true + corrections com PATCH MÍNIMO (só o trecho/campo errado)
+- PROIBIDO inventar outro flashcard/questão, mudar o tema, ou reescrever tudo "do zero"
+- Preserve o conceito pedagógico original; corrija fato jurídico, gabarito ou redação pontual
+- Se dúvida ou o erro exigir reescrita total: needsAdminReview=true, corrections=[]`,
     {
       courseId,
       trustedGeneration: true,
       isLegalContent: true,
       useGoogleSearch: true,
-      generationConfig: { maxOutputTokens: 8000, temperature: 0.2 },
+      generationConfig: { maxOutputTokens: 8000, temperature: 0.15 },
     },
   )
 

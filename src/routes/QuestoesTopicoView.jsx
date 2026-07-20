@@ -20,7 +20,13 @@ import {
 import { incrementQuestoesStats } from '../utils/questoesStats'
 import { isContentAvailable, toggleContentStatus, CONTENT_STATUS } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
-import ProfessorFlagNoteBanner from '../components/content/ProfessorFlagNoteBanner'
+import ProfessorFlagNoteBanner, {
+  scrollToFocusedContent,
+} from '../components/content/ProfessorFlagNoteBanner'
+import {
+  findQuestaoIndexInList,
+  parseNivelFromContentId,
+} from '../utils/flagCorrectionLinks'
 import {
   QuestoesLoading,
   QuestoesHeader,
@@ -202,6 +208,22 @@ const QuestoesTopicoView = () => {
   const [carregandoNivel, setCarregandoNivel] = useState(false)
   const [topicoPublishStatus, setTopicoPublishStatus] = useState(CONTENT_STATUS.UNAVAILABLE)
   const desempenhoNivelInicial = useRef(false)
+  const focusQuestaoApplied = useRef(false)
+
+  const focusContentId = searchParams.get('focusContentId') || ''
+  const focusNivelParam = Number(searchParams.get('nivel') || 0)
+  const focusNivelFromId = parseNivelFromContentId(focusContentId)
+  const focusNivel =
+    (focusNivelParam >= 1 && focusNivelParam <= 10 ? focusNivelParam : null) ||
+    focusNivelFromId ||
+    null
+
+  // Deep-link: fixa o nível antes de carregar o pack
+  useEffect(() => {
+    if (!focusNivel) return
+    setNivelAtual(focusNivel)
+    focusQuestaoApplied.current = false
+  }, [focusNivel, focusContentId])
 
   const todosNiveis = useMemo(() => Array.from({ length: 10 }, (_, i) => i + 1), [])
 
@@ -308,10 +330,15 @@ const QuestoesTopicoView = () => {
         }
 
         if (user && !desempenhoNivelInicial.current) {
-          const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoTopico', sanitizedKey)
-          const desempenhoDoc = await getDoc(desempenhoRef)
-          if (desempenhoDoc.exists()) {
-            setNivelAtual(desempenhoDoc.data().nivel || 1)
+          // Deep-link da notificação: prioriza o nível do contentId
+          if (focusNivel && focusNivel >= 1 && focusNivel <= 10) {
+            setNivelAtual(focusNivel)
+          } else {
+            const desempenhoRef = doc(db, 'users', user.uid, 'desempenhoTopico', sanitizedKey)
+            const desempenhoDoc = await getDoc(desempenhoRef)
+            if (desempenhoDoc.exists()) {
+              setNivelAtual(desempenhoDoc.data().nivel || 1)
+            }
           }
           desempenhoNivelInicial.current = true
         }
@@ -345,7 +372,21 @@ const QuestoesTopicoView = () => {
     }
 
     loadMeta()
-  }, [resolvedTopicKey, resolvedCourseId, user])
+  }, [resolvedTopicKey, resolvedCourseId, user, focusNivel])
+
+  // Deep-link: posiciona a questão corrigida após carregar o pack do nível
+  useEffect(() => {
+    if (!focusContentId || !questoesArray.length) return
+    if (focusQuestaoApplied.current) return
+    const idx = findQuestaoIndexInList(questoesArray, focusContentId)
+    if (idx < 0) return
+    setCurrentQuestionIndex(idx)
+    focusQuestaoApplied.current = true
+    const t = setTimeout(() => {
+      scrollToFocusedContent(focusContentId)
+    }, 450)
+    return () => clearTimeout(t)
+  }, [questoesArray, focusContentId, nivelAtual])
 
   useEffect(() => {
     if (!resolvedTopicKey || !resolvedCourseId) {

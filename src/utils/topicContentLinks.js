@@ -34,7 +34,9 @@ export function buildTopicContentLink({
   if (type === 'flashcard' || type === 'flashcards') {
     path = `/flashcards/topico/${cid}?disciplina=${disc}&modulo=${modulo}&topicKey=${encodedKey}`
   } else if (type === 'questao' || type === 'questoes') {
-    path = `/questoes-topic/${cid}/${keyForPath}?nome=${nome}`
+    const nivelMatch = String(contentId || '').match(/_n(\d+)(?:_|$)/)
+    const nivelQ = nivelMatch ? `&nivel=${nivelMatch[1]}` : ''
+    path = `/questoes-topic/${cid}/${keyForPath}?nome=${nome}${nivelQ}`
   } else if (type === 'material' || type === 'conteudo' || type === 'incidencia') {
     path = `/conteudo-completo/topic/${cid}/${keyForPath}?nome=${nome}`
   }

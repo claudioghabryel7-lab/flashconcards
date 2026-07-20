@@ -51,7 +51,10 @@ export function buildQuestaoContentId({
     questao?.uid ||
     `i${questionIndex}`
   const numero = questao?.numero ?? questionIndex + 1
-  const pack = packId ? `_p${String(packId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40)}` : ''
+  // Usar _pack_ (não _p) — evita colidir com palavras como "Processual"
+  const pack = packId
+    ? `_pack_${String(packId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40)}`
+    : ''
 
   return `${topic}_n${nivel}_q${numero}_${stable}${pack}`.slice(0, 500)
 }

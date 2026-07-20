@@ -77,8 +77,11 @@ function simpleHash(text = '') {
 
 function parseQuestaoContentId(contentId = '') {
   const id = String(contentId || '')
-  const packIdx = id.lastIndexOf('_p')
-  const packFromId = packIdx >= 0 ? id.slice(packIdx + 2) : ''
+  // Preferir _pack_ (novo); legado _p só após _e… ou _i…
+  const packMatch =
+    id.match(/_pack_([a-zA-Z0-9_-]+)$/) ||
+    id.match(/(?:_e[a-z0-9]+|_i\d+)_p([a-zA-Z0-9_-]+)$/i)
+  const packFromId = packMatch?.[1] || ''
   const nivelMatch = id.match(/_n(\d+)(?:_|$)/)
   const qWithSuffix = id.match(/_q(\d+)_/)
   const qAtEnd = id.match(/_q(\d+)$/)
