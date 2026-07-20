@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useEditalFlashcards } from '../hooks/useEditalFlashcards'
@@ -272,50 +271,6 @@ const FlashQuestoes = () => {
     })
   }, [organizedModules, subjectOrderConfig])
 
-  // Função para chamar Groq API (OTIMIZADA)
-  const callGroqAPI = async (prompt) => {
-    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-    if (!groqApiKey) {
-      throw new Error('VITE_GROQ_API_KEY não configurada')
-    }
-
-    try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${groqApiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'llama-3.1-8b-instant', // Modelo mais rápido
-          messages: [
-            {
-              role: 'system',
-              content: 'Especialista em concursos. Crie questões diretas e objetivas.',
-            },
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-          temperature: 0.7,
-          max_tokens: 8192, // Reduzido para velocidade
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error?.message || `Groq API error: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return data.choices[0]?.message?.content || ''
-    } catch (err) {
-      console.error('Erro ao chamar Groq API:', err)
-      throw err
-    }
-  }
-
   // Estado para avaliações das questões
   const [questionsRating, setQuestionsRating] = useState({ liked: false, disliked: false })
   const [cacheInfo, setCacheInfo] = useState(null)
@@ -537,23 +492,11 @@ EXEMPLO DO FORMATO EXATO (COM 10 QUESTÕES):
   ]
 }`
 
-      let aiResponse = ''
-
-      // Tentar Gemini primeiro com rotação de API keys
-      try {
-        const response = await callGeminiWithRetry(prompt, {
-          courseId: selectedCourseId || 'alego-default',
-        })
-        aiResponse = extractGeneratedText(response)
-        console.log('✅ Sucesso com rotação de API keys')
-      } catch (geminiErr) {
-        console.warn('⚠️ Gemini falhou, tentando Groq...', geminiErr)
-        if (groqApiKey) {
-          aiResponse = await callGroqAPI(prompt)
-        } else {
-          throw geminiErr
-        }
-      }
+      const response = await callGeminiWithRetry(prompt, {
+        courseId: selectedCourseId || 'alego-default',
+      })
+      const aiResponse = extractGeneratedText(response)
+      console.log('✅ Sucesso com rotação de API keys')
 
       // Validar que temos uma resposta
       if (!aiResponse || !aiResponse.trim()) {
@@ -919,27 +862,14 @@ ${editalPrompt ? `\nContexto do edital:\n${editalPrompt}\n` : ''}
 
 Forneça uma explicação didática e completa (BIZU) sobre esta questão seguindo as regras acima.`
 
-      let explanation = ''
-
-      try {
-        const response = await callGeminiWithRetry(prompt, {
-          courseId: selectedCourseId || 'alego-default',
-          generationConfig: {
-            maxOutputTokens: 4096,
-            temperature: 0.35,
-          },
-        })
-        explanation = extractGeneratedText(response)
-      } catch (geminiErr) {
-        const errorMessage = geminiErr.message || String(geminiErr) || ''
-        const isQuotaError = errorMessage.includes('429') || errorMessage.includes('quota')
-        
-        if (isQuotaError && groqApiKey) {
-          explanation = await callGroqAPI(prompt)
-        } else {
-          throw geminiErr
-        }
-      }
+      const response = await callGeminiWithRetry(prompt, {
+        courseId: selectedCourseId || 'alego-default',
+        generationConfig: {
+          maxOutputTokens: 4096,
+          temperature: 0.35,
+        },
+      })
+      const explanation = extractGeneratedText(response)
 
       // 🔥 NOVO: SALVAR NO CACHE
       console.log('💾 Salvando BIZU no cache...')

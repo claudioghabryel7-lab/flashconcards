@@ -9,13 +9,10 @@ export const KEY_OK_TTL_MS = 5 * 60 * 1000
 export const SILENT_PROBE_MODEL = 'gemini-2.5-flash'
 export const GEMINI_MOTHER_KEY_LABEL = 'CHAVE MOTHER'
 
-const MOTHER_ENV_NAMES = ['VITE_GEMINI_API_KEY_MAE', 'GEMINI_API_KEY_MAE']
-
 /** @type {Map<string, { status: string, reason?: string, until: number }>} */
 const keyHealth = new Map()
 /** Contagem de uso simultâneo por chave. */
 const keyInUse = new Map()
-let rrCursor = 0
 
 function isValidKey(key) {
   if (!key || typeof key !== 'string') return false
@@ -39,60 +36,29 @@ function readKey(envReader, name) {
   return isValidKey(value) ? value.trim() : null
 }
 
-/** Coleta todas as chaves Gemini configuradas (principal + numeradas). */
+/**
+ * SOMENTE a chave principal Gemini.
+ * Chaves numeradas, MOTHER, Google AI e Groq foram desativadas de propósito.
+ */
 export function collectGeminiApiKeys(envReader = readEnv) {
-  const keys = []
-  const add = (key) => {
-    if (key && !keys.includes(key)) keys.push(key)
-  }
-
-  add(readKey(envReader, 'VITE_GEMINI_API_KEY'))
-  add(readKey(envReader, 'VITE_GOOGLE_AI_API_KEY'))
-  add(readKey(envReader, 'GEMINI_API_KEY'))
-
-  for (let i = 1; i <= 10; i += 1) {
-    add(readKey(envReader, `VITE_GEMINI_API_KEY_${i}`))
-    add(readKey(envReader, `GEMINI_API_KEY_${i}`))
-  }
-
-  return keys
+  const key =
+    readKey(envReader, 'VITE_GEMINI_API_KEY') || readKey(envReader, 'GEMINI_API_KEY')
+  return key ? [key] : []
 }
 
-/** Chave reserva — só usada quando todas as demais falharem (CHAVE MOTHER). */
-export function collectMotherGeminiApiKey(envReader = readEnv) {
-  for (const name of MOTHER_ENV_NAMES) {
-    const key = readKey(envReader, name)
-    if (key) return key
-  }
+/** Desativado: o projeto usa apenas VITE_GEMINI_API_KEY. */
+export function collectMotherGeminiApiKey(_envReader = readEnv) {
   return null
 }
 
-/** Lista rotulada para painel de status (regulares + MÃE por último). */
 export function listGeminiApiKeyEntries(envReader = readEnv) {
-  const entries = []
-  const seen = new Set()
-  const add = (label, name) => {
-    const key = readKey(envReader, name)
-    if (!key || seen.has(key)) return
-    seen.add(key)
-    entries.push({ key, label })
-  }
-
-  add('VITE_GEMINI_API_KEY (Principal)', 'VITE_GEMINI_API_KEY')
-  add('VITE_GOOGLE_AI_API_KEY', 'VITE_GOOGLE_AI_API_KEY')
-  for (let i = 1; i <= 10; i += 1) {
-    add(`VITE_GEMINI_API_KEY_${i}`, `VITE_GEMINI_API_KEY_${i}`)
-  }
-
-  const mother = collectMotherGeminiApiKey(envReader)
-  if (mother && !seen.has(mother)) {
-    entries.push({ key: mother, label: GEMINI_MOTHER_KEY_LABEL })
-  }
-  return entries
+  const key = collectGeminiApiKeys(envReader)[0]
+  if (!key) return []
+  return [{ key, label: 'VITE_GEMINI_API_KEY (única)' }]
 }
 
 export function hasGeminiApiKeys(envReader = readEnv) {
-  return collectGeminiApiKeys(envReader).length > 0 || Boolean(collectMotherGeminiApiKey(envReader))
+  return collectGeminiApiKeys(envReader).length > 0
 }
 
 function getHealth(key) {
@@ -147,38 +113,10 @@ function releaseGeminiKey(key) {
   else keyInUse.set(key, n)
 }
 
-function sortByLeastInUse(keys) {
-  return [...keys].sort((a, b) => (keyInUse.get(a) || 0) - (keyInUse.get(b) || 0))
-}
-
-/** Ordem: OK → neutras (round-robin) → bad (último recurso). Prioriza menos uso simultâneo. */
 export function getGeminiKeysInOrder(envReader = readEnv) {
-  const all = collectGeminiApiKeys(envReader)
-  const good = []
-  const neutral = []
-  const bad = []
-
-  for (const key of all) {
-    if (isKeyGood(key)) good.push(key)
-    else if (isKeyBad(key)) bad.push(key)
-    else neutral.push(key)
-  }
-
-  const rotate = (list) => {
-    if (list.length <= 1) return list
-    const start = rrCursor % list.length
-    rrCursor += 1
-    return [...list.slice(start), ...list.slice(0, start)]
-  }
-
-  return [
-    ...sortByLeastInUse(good),
-    ...sortByLeastInUse(rotate(neutral)),
-    ...sortByLeastInUse(bad),
-  ]
+  return collectGeminiApiKeys(envReader)
 }
 
-/** Só chaves livres agora (não ocupadas/expiradas/inválidas no TTL). */
 export function getAvailableGeminiKeysInOrder(envReader = readEnv) {
   return getGeminiKeysInOrder(envReader).filter((key) => !isKeyUnavailable(key))
 }
@@ -239,7 +177,6 @@ export function isGeminiQuotaOrUnavailable(status, message = '') {
   return Boolean(classifyGeminiKeyFailure(status, message))
 }
 
-/** Teste mínimo e silencioso — não consome quota visível ao usuário. */
 export async function silentProbeGeminiKey(apiKey) {
   if (!apiKey) return false
   if (isKeyUnavailable(apiKey)) return false
@@ -265,21 +202,17 @@ export async function silentProbeGeminiKey(apiKey) {
 }
 
 /**
- * Executa generateContent com rotação silenciosa entre chaves e modelos.
- * Se uma chave estiver ocupada (rate limit) ou expirada/inválida, pula para a próxima.
- * @returns {Promise<{ data: object, apiKey: string, model: string }>}
+ * Executa generateContent com a única chave Gemini configurada.
  */
 export async function geminiRequestWithKeyFallback({
   buildBody,
   models = ['gemini-2.5-flash', 'gemini-2.5-pro'],
   envReader = readEnv,
   silent = true,
-  // Com 1 chave, probe de outras só gasta quota. Default off.
   probeNextOnFail = false,
 }) {
-  const motherKey = collectMotherGeminiApiKey(envReader)
   const allKeys = collectGeminiApiKeys(envReader)
-  if (!allKeys.length && !motherKey) {
+  if (!allKeys.length) {
     throw new Error(
       'Nenhuma API key Gemini configurada. Defina VITE_GEMINI_API_KEY no .env.local ou no Vercel.',
     )
@@ -289,88 +222,49 @@ export async function geminiRequestWithKeyFallback({
   let lastWasKeyFailure = false
   const triedPairs = new Set()
 
-  const tryKeys = async (keys, allowBad = false) => {
-    for (const model of models) {
-      for (const apiKey of keys) {
-        if (!allowBad && isKeyUnavailable(apiKey)) continue
-        const pair = `${model}::${apiKey}`
-        if (triedPairs.has(pair)) continue
-        triedPairs.add(pair)
+  for (const model of models) {
+    for (const apiKey of allKeys) {
+      if (isKeyUnavailable(apiKey)) continue
+      const pair = `${model}::${apiKey}`
+      if (triedPairs.has(pair)) continue
+      triedPairs.add(pair)
 
-        acquireGeminiKey(apiKey)
-        try {
-          const response = await geminiFetch(model, apiKey, buildBody(model))
-          const data = await response.json().catch(() => ({}))
-
-          if (response.ok) {
-            markGeminiKeyOk(apiKey)
-            return { data, apiKey, model }
-          }
-
-          lastError = data.error?.message || `HTTP ${response.status}`
-          const reason = classifyGeminiKeyFailure(response.status, lastError)
-          if (reason) {
-            lastWasKeyFailure = true
-            markGeminiKeyBad(apiKey, reason)
-            if (!silent) {
-              console.warn(`Gemini key falhou (${reason}, ${model}):`, lastError)
-            }
-            if (probeNextOnFail) {
-              for (const nextKey of getAvailableGeminiKeysInOrder(envReader)) {
-                if (nextKey === apiKey || triedPairs.has(`${model}::${nextKey}`)) continue
-                const ok = await silentProbeGeminiKey(nextKey)
-                if (ok) break
-              }
-            }
-            continue
-          }
-
-          if (!silent) {
-            console.warn(`Gemini falhou (${model}):`, lastError)
-          }
-        } finally {
-          releaseGeminiKey(apiKey)
-        }
-      }
-    }
-    return null
-  }
-
-  let result = await tryKeys(getAvailableGeminiKeysInOrder(envReader), false)
-  if (result) return result
-
-  result = await tryKeys(getGeminiKeysInOrder(envReader), true)
-  if (result) return result
-
-  const err = new Error(`Todas as API keys Gemini falharam. Último erro: ${lastError}`)
-  if (lastWasKeyFailure || isGeminiQuotaOrUnavailable(429, lastError)) {
-    err.code = 'quota_exceeded'
-  }
-
-  if (motherKey && !allKeys.includes(motherKey)) {
-    for (const model of models) {
-      if (isKeyUnavailable(motherKey)) break
-      acquireGeminiKey(motherKey)
+      acquireGeminiKey(apiKey)
       try {
-        const response = await geminiFetch(model, motherKey, buildBody(model))
+        const response = await geminiFetch(model, apiKey, buildBody(model))
         const data = await response.json().catch(() => ({}))
+
         if (response.ok) {
-          markGeminiKeyOk(motherKey)
-          return { data, apiKey: motherKey, model, keyLabel: GEMINI_MOTHER_KEY_LABEL }
+          markGeminiKeyOk(apiKey)
+          return { data, apiKey, model }
         }
+
         lastError = data.error?.message || `HTTP ${response.status}`
         const reason = classifyGeminiKeyFailure(response.status, lastError)
         if (reason) {
           lastWasKeyFailure = true
-          markGeminiKeyBad(motherKey, reason)
+          markGeminiKeyBad(apiKey, reason)
+          if (!silent) {
+            console.warn(`Gemini key falhou (${reason}, ${model}):`, lastError)
+          }
+          if (probeNextOnFail) {
+            // único key — nada a probe
+          }
+          continue
+        }
+
+        if (!silent) {
+          console.warn(`Gemini falhou (${model}):`, lastError)
         }
       } finally {
-        releaseGeminiKey(motherKey)
+        releaseGeminiKey(apiKey)
       }
     }
-    err.message = `${err.message} (${GEMINI_MOTHER_KEY_LABEL} também falhou)`
-    if (lastWasKeyFailure) err.code = 'quota_exceeded'
   }
 
+  const err = new Error(`API key Gemini falhou. Último erro: ${lastError}`)
+  if (lastWasKeyFailure || isGeminiQuotaOrUnavailable(429, lastError)) {
+    err.code = 'quota_exceeded'
+  }
   throw err
 }

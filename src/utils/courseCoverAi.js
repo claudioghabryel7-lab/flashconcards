@@ -61,8 +61,8 @@ export async function generateCourseDescriptionAi({
     throw new Error('Preencha o nome do curso e o concurso/competição.')
   }
 
-  if (!hasGeminiApiKeys() && !readEnv('VITE_GROQ_API_KEY')) {
-    throw new Error('Configure VITE_GEMINI_API_KEY (ou VITE_GROQ_API_KEY) no .env')
+  if (!hasGeminiApiKeys()) {
+    throw new Error('Configure VITE_GEMINI_API_KEY no .env')
   }
 
   const priceLine =
@@ -115,12 +115,10 @@ REGRAS:
       finishReason = response?.candidates?.[0]?.finishReason || null
       description = cleanDescription(extractGeneratedText(response))
     } catch (err) {
-      const groqKey = readEnv('VITE_GROQ_API_KEY')
-      if (!groqKey) throw err
-      description = cleanDescription(await callGroqFallback(prompt, groqKey))
+      throw err
     }
   } else {
-    description = cleanDescription(await callGroqFallback(prompt, readEnv('VITE_GROQ_API_KEY')))
+    throw new Error('Configure VITE_GEMINI_API_KEY no .env (única chave autorizada).')
   }
 
   if (finishReason === 'MAX_TOKENS' && description) {
@@ -154,28 +152,6 @@ REGRAS:
   }
 
   return description
-}
-
-async function callGroqFallback(prompt, groqApiKey) {
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${groqApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.5,
-      max_tokens: 1200,
-    }),
-  })
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
-    throw new Error(errorData.error?.message || `Groq API error: ${response.status}`)
-  }
-  const data = await response.json()
-  return data.choices?.[0]?.message?.content || ''
 }
 
 async function fetchBrandLogoDataUrl() {

@@ -10,8 +10,6 @@ const KEY_OK_TTL_MS = 5 * 60 * 1000
 const SILENT_PROBE_MODEL = 'gemini-2.5-flash'
 const GEMINI_MOTHER_KEY_LABEL = 'CHAVE MOTHER'
 
-const MOTHER_ENV_NAMES = ['GEMINI_API_KEY_MAE', 'VITE_GEMINI_API_KEY_MAE']
-
 /** @type {Map<string, { status: string, reason?: string, until: number }>} */
 const keyHealth = new Map()
 /** Contagem de uso simultâneo por chave (round-robin entre jobs). */
@@ -83,42 +81,22 @@ function collectGeminiApiKeys() {
     if (isValidKey(key) && !keys.includes(key.trim())) keys.push(key.trim())
   }
 
+  // SOMENTE a chave principal — chaves numeradas / mother desativadas
   const cfg = functions.config().gemini || {}
   add(cfg.api_key)
   add(process.env.GEMINI_API_KEY)
   add(process.env.VITE_GEMINI_API_KEY)
 
-  for (let i = 1; i <= 10; i += 1) {
-    add(cfg[`api_key_${i}`])
-    add(process.env[`GEMINI_API_KEY_${i}`])
-    add(process.env[`VITE_GEMINI_API_KEY_${i}`])
-  }
-
   if (!keys.length) {
     if (!rootEnvLoaded) loadRootEnvLocal()
     add(process.env.GEMINI_API_KEY)
     add(process.env.VITE_GEMINI_API_KEY)
-    for (let i = 1; i <= 10; i += 1) {
-      add(process.env[`GEMINI_API_KEY_${i}`])
-      add(process.env[`VITE_GEMINI_API_KEY_${i}`])
-    }
   }
 
   return keys
 }
 
 function collectMotherGeminiApiKey() {
-  const cfg = functions.config().gemini || {}
-  if (isValidKey(cfg.api_key_mae)) return cfg.api_key_mae.trim()
-  for (const name of MOTHER_ENV_NAMES) {
-    const key = readKey(name)
-    if (key) return key
-  }
-  loadRootEnvLocal()
-  for (const name of MOTHER_ENV_NAMES) {
-    const key = readKey(name)
-    if (key) return key
-  }
   return null
 }
 

@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState } from 'react'
 import {
   addDoc,
@@ -42,7 +41,6 @@ const AIChat = () => {
   const [lastRequestTime, setLastRequestTime] = useState(0)
   const [quotaCooldown, setQuotaCooldown] = useState(0) // Tempo restante de cooldown por quota
   const [quotaDailyLimit, setQuotaDailyLimit] = useState(false) // Limite diário atingido
-  const [usingGroq, setUsingGroq] = useState(false) // Se está usando Groq como fallback
   const MIN_REQUEST_INTERVAL = 5000 // Mínimo de 5 segundos entre requisições (aumentado)
 
   // Limpar mensagens antigas (mais de 1 hora) automaticamente
@@ -195,46 +193,6 @@ const AIChat = () => {
 
     findAvailableModel()
   }, [availableModel])
-
-  // Chamar Groq API como fallback
-  const callGroqAPI = async (prompt) => {
-    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-    if (!groqApiKey) {
-      throw new Error('GROQ_API_KEY não configurada')
-    }
-
-    try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${groqApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile', // Modelo rápido e eficiente
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 300,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error?.message || `Groq API error: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return data.choices[0]?.message?.content || 'Desculpe, não consegui gerar uma resposta.'
-    } catch (err) {
-      console.error('Erro ao chamar Groq API:', err)
-      throw err
-    }
-  }
 
   const getMentorResponse = async (userMessage) => {
     if (!hasGeminiApiKeys()) {
@@ -424,42 +382,19 @@ Pergunta do aluno: ${userMessage}
         fullPrompt = `${mentorPrompt}\n\nHISTÓRICO RECENTE (últimas 3 mensagens):\n${history}`
       }
 
-      // Pool de chaves: se uma estiver ocupada/expirada, tenta a próxima automaticamente
-      try {
-        const geminiResponse = await callGeminiWithRetry(fullPrompt, {
-          silent: true,
-          verifyContent: false,
-          useRAG: false,
-          useGoogleSearch: false,
-          models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 300,
-            topP: 0.9,
-          },
-        })
-        return extractGeneratedText(geminiResponse)
-      } catch (apiErr) {
-        if (!isGeminiQuotaError(apiErr)) throw apiErr
-
-        console.warn('⚠️ Todas as chaves Gemini esgotadas. Usando Groq como fallback...')
-        setQuotaDailyLimit(true)
-
-        const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-        if (groqApiKey) {
-          try {
-            setUsingGroq(true)
-            const groqResponse = await callGroqAPI(fullPrompt)
-            console.log('✅ Groq respondeu com sucesso!')
-            return groqResponse
-          } catch (groqErr) {
-            console.error('❌ Erro ao usar Groq como fallback:', groqErr)
-            setUsingGroq(false)
-            throw new Error('QUOTA_DAILY_LIMIT')
-          }
-        }
-        throw new Error('QUOTA_DAILY_LIMIT')
-      }
+      const geminiResponse = await callGeminiWithRetry(fullPrompt, {
+        silent: true,
+        verifyContent: false,
+        useRAG: false,
+        useGoogleSearch: false,
+        models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 300,
+          topP: 0.9,
+        },
+      })
+      return extractGeneratedText(geminiResponse)
     } catch (err) {
       console.error('Erro ao chamar mentor:', err)
       
@@ -603,11 +538,6 @@ O chat estará disponível novamente amanhã ou após configurar um plano pago.`
         {availableModel && (
           <p className="mt-1 text-xs text-emerald-600">
             ✓ Mentor pronto para orientar seus estudos
-          </p>
-        )}
-        {usingGroq && (
-          <p className="mt-1 text-xs text-emerald-600">
-            ⚡ Usando Groq (fallback automático)
           </p>
         )}
       </div>

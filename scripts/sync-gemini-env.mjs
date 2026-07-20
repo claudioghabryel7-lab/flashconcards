@@ -1,7 +1,7 @@
 /**
- * Copia VITE_GEMINI_API_KEY* do .env.local ou .env (raiz) para functions/.env como GEMINI_API_KEY*.
- * Inclui VITE_GEMINI_API_KEY_MAE → GEMINI_API_KEY_MAE (CHAVE MOTHER).
- * Rode antes de `firebase deploy --only functions` se as chaves só existirem no Next.
+ * Copia VITE_GEMINI_API_KEY do .env.local ou .env (raiz) para functions/.env como GEMINI_API_KEY.
+ * Somente a chave principal — chaves numeradas / MOTHER / Groq não são sincronizadas.
+ * Rode antes de `firebase deploy --only functions` se a chave só existir no Next.
  */
 import fs from 'fs'
 import path from 'path'
@@ -23,36 +23,21 @@ if (!sourcePath) {
 }
 
 const lines = fs.readFileSync(sourcePath, 'utf8').split(/\r?\n/)
-const geminiLines = []
-const seen = new Set()
+let geminiValue = null
 
 for (const line of lines) {
   const trimmed = line.trim()
   if (!trimmed || trimmed.startsWith('#')) continue
 
-  const mother = trimmed.match(/^VITE_GEMINI_API_KEY_MAE=(.+)$/)
-  if (mother) {
-    const value = mother[1].trim().replace(/^["']|["']$/g, '')
-    if (!seen.has('GEMINI_API_KEY_MAE')) {
-      seen.add('GEMINI_API_KEY_MAE')
-      geminiLines.push(`GEMINI_API_KEY_MAE=${value}`)
-    }
-    continue
-  }
-
-  const match = trimmed.match(/^VITE_GEMINI_API_KEY(_\d+)?=(.+)$/)
+  const match = trimmed.match(/^VITE_GEMINI_API_KEY=(.+)$/)
   if (!match) continue
 
-  const suffix = match[1] || ''
-  const value = match[2].trim().replace(/^["']|["']$/g, '')
-  const targetKey = `GEMINI_API_KEY${suffix}`
-  if (seen.has(targetKey)) continue
-  seen.add(targetKey)
-  geminiLines.push(`${targetKey}=${value}`)
+  geminiValue = match[1].trim().replace(/^["']|["']$/g, '')
+  break
 }
 
-if (geminiLines.length === 0) {
-  console.error(`Nenhuma VITE_GEMINI_API_KEY* encontrada em ${path.basename(sourcePath)}`)
+if (!geminiValue) {
+  console.error(`Nenhuma VITE_GEMINI_API_KEY encontrada em ${path.basename(sourcePath)}`)
   process.exit(1)
 }
 
@@ -66,7 +51,8 @@ const preserved = existing
   .filter((line) => {
     const t = line.trim()
     if (!t || t.startsWith('#')) return true
-    return !/^GEMINI_API_KEY(_\d+)?(=|$)/.test(t) && !/^GEMINI_API_KEY_MAE=/.test(t)
+    // Remove chaves Gemini antigas (principal, numeradas, mother)
+    return !/^GEMINI_API_KEY(_\d+|_MAE)?(=|$)/.test(t) && !/^VITE_GEMINI_API_KEY(_\d+|_MAE)?(=|$)/.test(t)
   })
   .join('\n')
   .trimEnd()
@@ -77,8 +63,13 @@ const header = [
   '',
 ].join('\n')
 
+const geminiLines = [
+  `GEMINI_API_KEY=${geminiValue}`,
+  `VITE_GEMINI_API_KEY=${geminiValue}`,
+]
+
 const output = [preserved, header, ...geminiLines, ''].filter(Boolean).join('\n')
 fs.writeFileSync(targetPath, output, 'utf8')
 console.log(
-  `✅ ${geminiLines.length} chave(s) Gemini copiada(s) de ${path.basename(sourcePath)} → functions/.env (inclui CHAVE MOTHER se houver)`,
+  `✅ Chave Gemini única copiada de ${path.basename(sourcePath)} → functions/.env`,
 )

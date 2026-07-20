@@ -104,7 +104,7 @@ const PoliticaPrivacidade = () => {
             </h3>
             <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-400 ml-4">
               <li><strong>Firebase/Google:</strong> Armazenamento seguro de dados e autenticação</li>
-              <li><strong>APIs de IA:</strong> Gemini/Groq para gerar questões (sem armazenar dados pessoais)</li>
+              <li><strong>APIs de IA:</strong> Gemini para gerar questões (sem armazenar dados pessoais)</li>
               <li><strong>Ordem Judicial:</strong> Se exigido por lei, após processo legal</li>
             </ul>
           </section>

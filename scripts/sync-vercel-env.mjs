@@ -38,7 +38,6 @@ map.set('MERCADOPAGO_MODE', 'prod')
 const geminiKeys = [
   'VITE_GEMINI_API_KEY',
   'GEMINI_API_KEY',
-  ...Array.from({ length: 10 }, (_, i) => `VITE_GEMINI_API_KEY_${i + 1}`),
 ]
 
 const keys = [

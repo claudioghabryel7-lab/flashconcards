@@ -1,4 +1,3 @@
-import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useState } from 'react'
 import {
   addDoc,
@@ -47,7 +46,6 @@ const FloatingAIChat = () => {
   const [lastRequestTime, setLastRequestTime] = useState(0)
   const [quotaCooldown, setQuotaCooldown] = useState(0) // Tempo restante de cooldown por quota
   const [quotaDailyLimit, setQuotaDailyLimit] = useState(false) // Limite diário atingido
-  const [usingGroq, setUsingGroq] = useState(false) // Se está usando Groq como fallback
   const [courseName, setCourseName] = useState('ALEGO') // Nome do curso para exibição
   const MIN_REQUEST_INTERVAL = 5000 // Mínimo de 5 segundos entre requisições (aumentado)
   
@@ -413,46 +411,6 @@ ANÁLISE:
 Me dê orientações sobre o que estudar hoje, o que preciso melhorar e sugestões práticas.`
   }
 
-  // Chamar Groq API como fallback
-  const callGroqAPI = async (prompt) => {
-    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-    if (!groqApiKey) {
-      throw new Error('GROQ_API_KEY não configurada')
-    }
-
-    try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${groqApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile', // Modelo rápido e eficiente
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 800,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error?.message || `Groq API error: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return data.choices[0]?.message?.content || 'Desculpe, não consegui gerar uma resposta.'
-    } catch (err) {
-      console.error('Erro ao chamar Groq API:', err)
-      throw err
-    }
-  }
-
   // Enviar mensagem da IA
   const sendAIMessage = async (userMessage, isInitial = false) => {
     if (!hasGeminiApiKeys()) {
@@ -631,99 +589,21 @@ Pergunta do aluno: ${userMessage}
 
 ⚠️ Lembre-se: Leia o edital/PDF acima ANTES de responder!`
 
-      // Tentar gerar resposta com Gemini primeiro
       let text = ''
-      let useGroqFallback = false
-      
-      try {
-        const geminiResponse = await callGeminiWithRetry(mentorPrompt, {
-          silent: true,
-          verifyContent: false,
-          useRAG: false,
-          useGoogleSearch: false,
-          models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 800,
-            topP: 0.9,
-            topK: 40,
-          },
-        })
-        text = extractGeneratedText(geminiResponse)
-      } catch (apiErr) {
-        // Capturar erro de forma mais robusta
-        const errorMessage = apiErr.message || String(apiErr) || ''
-        const errorString = JSON.stringify(apiErr) || ''
-        
-        console.log('🔍 Erro capturado:', {
-          message: errorMessage.substring(0, 200),
-          status: apiErr.status,
-          code: apiErr.code,
-          hasQuota: errorMessage.includes('quota') || errorString.includes('quota'),
-          has429: errorMessage.includes('429') || errorString.includes('429')
-        })
-        
-        // Verificar se é erro de quota (429 ou mensagens relacionadas)
-        const isQuotaError = 
-          errorMessage.includes('429') || 
-          errorMessage.includes('quota') ||
-          errorMessage.includes('Quota exceeded') ||
-          errorMessage.includes('Too Many Requests') ||
-          errorMessage.includes('RESOURCE_EXHAUSTED') ||
-          errorMessage.includes('rate limit') ||
-          errorString.includes('429') ||
-          errorString.includes('quota') ||
-          errorString.includes('Quota exceeded') ||
-          errorString.includes('free_tier_requests') ||
-          apiErr.status === 429 ||
-          apiErr.code === 429 ||
-          (apiErr.response && apiErr.response.status === 429)
-        
-        if (isQuotaError) {
-          // Qualquer erro de quota = tentar Groq imediatamente
-          console.warn('⚠️ Erro de quota detectado. Usando Groq como fallback...')
-          useGroqFallback = true
-        } else {
-          // Se não for erro de quota, lança o erro normalmente
-          console.log('❌ Erro não é de quota, lançando erro original')
-          throw apiErr
-        }
-      }
-      
-      // Se detectou erro de quota, usar Groq como fallback
-      if (useGroqFallback) {
-        const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-        if (groqApiKey) {
-          try {
-            console.log('🔄 Tentando usar Groq como fallback...')
-            setUsingGroq(true)
-            setQuotaDailyLimit(true)
-            
-            const groqResponse = await callGroqAPI(mentorPrompt)
-            
-            // Se Groq funcionou, salvar resposta e retornar
-            const chatRef = collection(db, 'chats', user.uid, 'messages')
-            await addDoc(chatRef, {
-              text: groqResponse,
-              sender: 'ai',
-              createdAt: serverTimestamp(),
-            })
-            
-            console.log('✅ Groq respondeu com sucesso!')
-            setSending(false)
-            return // Sucesso com Groq
-          } catch (groqErr) {
-            console.error('❌ Erro ao usar Groq como fallback:', groqErr)
-            setUsingGroq(false)
-            // Se Groq também falhar, continuar para mostrar erro
-            throw new Error('QUOTA_DAILY_LIMIT')
-          }
-        } else {
-          // Se não tem Groq configurado, lançar erro
-          console.error('❌ Groq API key não configurada')
-          throw new Error('QUOTA_DAILY_LIMIT')
-        }
-      }
+      const geminiResponse = await callGeminiWithRetry(mentorPrompt, {
+        silent: true,
+        verifyContent: false,
+        useRAG: false,
+        useGoogleSearch: false,
+        models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 800,
+          topP: 0.9,
+          topK: 40,
+        },
+      })
+      text = extractGeneratedText(geminiResponse)
 
       if (!text) {
         throw new Error('Quota da API excedida. Aguarde alguns minutos antes de tentar novamente.')
@@ -927,13 +807,6 @@ O chat estará disponível novamente amanhã ou após configurar um plano pago.`
                 }`}>
                   Mentor do Concurso {courseName}
                 </p>
-                {usingGroq && (
-                  <p className={`text-xs ${
-                    darkMode ? 'text-emerald-400' : 'text-emerald-600'
-                  }`}>
-                    ⚡ Usando Groq (fallback)
-                  </p>
-                )}
               </div>
               <button
                 type="button"

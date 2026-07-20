@@ -2112,10 +2112,8 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
     setMessage('')
 
     try {
-      const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-      
-      if (!hasGeminiApiKeys() && !groqApiKey) {
-        throw new Error('Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
+      if (!hasGeminiApiKeys()) {
+        throw new Error('Configure VITE_GEMINI_API_KEY no .env')
       }
 
       const courseIdToUse = (flashcardForm.courseId || selectedCourseForFlashcards || '').trim() || null
@@ -2208,30 +2206,15 @@ REGRAS CRÍTICAS:
 
       let responseText = ''
       
-      if (hasGeminiApiKeys()) {
-        try {
-          setFlashcardGenProgress('Chamando Gemini API...')
-          const response = await callGeminiWithRetry(prompt, {
-            courseId: courseIdForGeneration,
-            generationConfig: {
-              maxOutputTokens: 32000,
-              temperature: 0.35,
-            },
-          })
-          responseText = extractGeneratedText(response)
-        } catch (geminiError) {
-          console.warn('Erro com Gemini, tentando Groq...', geminiError)
-          if (groqApiKey) {
-            setFlashcardGenProgress('Chamando Groq API...')
-            responseText = await callGroqAPI(prompt)
-          } else {
-            throw geminiError
-          }
-        }
-      } else if (groqApiKey) {
-        setFlashcardGenProgress('Chamando Groq API...')
-        responseText = await callGroqAPI(prompt)
-      }
+      setFlashcardGenProgress('Chamando Gemini API...')
+      const response = await callGeminiWithRetry(prompt, {
+        courseId: courseIdForGeneration,
+        generationConfig: {
+          maxOutputTokens: 32000,
+          temperature: 0.35,
+        },
+      })
+      responseText = extractGeneratedText(response)
 
       setFlashcardGenProgress('Processando resposta da IA...')
 
@@ -6245,46 +6228,6 @@ CRÍTICO:
     }
   }
 
-  // Chamar Groq API como fallback
-  const callGroqAPI = async (prompt) => {
-    const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-    if (!groqApiKey) {
-      throw new Error('GROQ_API_KEY não configurada')
-    }
-
-    try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${groqApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 8000,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error?.message || `Groq API error: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return data.choices[0]?.message?.content || ''
-    } catch (err) {
-      console.error('Erro ao chamar Groq API:', err)
-      throw err
-    }
-  }
-
   // Gerar módulos e flashcards automaticamente com IA
   const generateWithAI = async () => {
     if (!aiGenerationConfig.materia) {
@@ -6297,10 +6240,8 @@ CRÍTICO:
     setMessage('')
 
     try {
-      const groqApiKey = readEnv('VITE_GROQ_API_KEY')
-      
-      if (!hasGeminiApiKeys() && !groqApiKey) {
-        throw new Error('Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY no .env')
+      if (!hasGeminiApiKeys()) {
+        throw new Error('Configure VITE_GEMINI_API_KEY no .env')
       }
 
       // Carregar informações do edital e PDF (do curso selecionado para flashcards)
@@ -6468,45 +6409,15 @@ CRÍTICO:
 
       setGenerationProgress('Chamando IA para gerar conteúdo...')
       
-      let aiResponse = ''
-      let useGroq = false
-
-      // Tentar Gemini primeiro
-      if (hasGeminiApiKeys()) {
-        try {
-          console.log('🤖 Tentando usar Gemini...')
-          // Usar callGeminiWithRetry para gerenciar API key automaticamente (igual book questões, material de apoio, véspera de prova)
-          const result = await callGeminiWithRetry(systemPrompt, {
-            courseId: courseIdForGeneration,
-            models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
-            generationConfig: { temperature: 0.35, maxOutputTokens: 8000 },
-          })
-          
-          aiResponse = extractGeneratedText(result)
-          console.log('✅ Gemini respondeu com sucesso')
-        } catch (geminiErr) {
-          const errorMsg = geminiErr.message || String(geminiErr) || ''
-          const isQuotaError = errorMsg.includes('429') || errorMsg.includes('quota')
-          
-          console.warn('⚠️ Erro no Gemini:', errorMsg.substring(0, 200))
-          
-          if (isQuotaError && groqApiKey) {
-            console.warn('🔄 Gemini com quota, usando Groq como fallback...')
-            useGroq = true
-            aiResponse = await callGroqAPI(systemPrompt)
-            console.log('✅ Groq respondeu com sucesso')
-          } else {
-            throw geminiErr
-          }
-        }
-      } else if (groqApiKey) {
-        console.log('🤖 Usando Groq diretamente...')
-        useGroq = true
-        aiResponse = await callGroqAPI(systemPrompt)
-        console.log('✅ Groq respondeu com sucesso')
-      } else {
-        throw new Error('Nenhuma API key configurada. Configure VITE_GEMINI_API_KEY ou VITE_GROQ_API_KEY')
-      }
+      console.log('🤖 Tentando usar Gemini...')
+      const result = await callGeminiWithRetry(systemPrompt, {
+        courseId: courseIdForGeneration,
+        models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+        generationConfig: { temperature: 0.35, maxOutputTokens: 8000 },
+      })
+      
+      const aiResponse = extractGeneratedText(result)
+      console.log('✅ Gemini respondeu com sucesso')
 
       if (!aiResponse || aiResponse.trim().length === 0) {
         throw new Error('A IA não retornou nenhuma resposta. Tente novamente.')

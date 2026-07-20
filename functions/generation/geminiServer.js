@@ -79,24 +79,15 @@ function loadApiKeys() {
     if (isValidKey(trimmed) && !keys.includes(trimmed)) keys.push(trimmed)
   }
 
+  // SOMENTE a chave principal (VITE_GEMINI_API_KEY / GEMINI_API_KEY)
   addKey(cfg.api_key)
   addKey(process.env.GEMINI_API_KEY)
   addKey(process.env.VITE_GEMINI_API_KEY)
-
-  for (let i = 1; i <= 10; i += 1) {
-    addKey(cfg[`api_key_${i}`])
-    addKey(process.env[`GEMINI_API_KEY_${i}`])
-    addKey(process.env[`VITE_GEMINI_API_KEY_${i}`])
-  }
 
   if (!keys.length) {
     loadRootEnvLocal()
     addKey(process.env.GEMINI_API_KEY)
     addKey(process.env.VITE_GEMINI_API_KEY)
-    for (let i = 1; i <= 10; i += 1) {
-      addKey(process.env[`GEMINI_API_KEY_${i}`])
-      addKey(process.env[`VITE_GEMINI_API_KEY_${i}`])
-    }
   }
 
   return keys
