@@ -76,28 +76,3 @@ export async function ensureFirestoreTransportRecovery({ force = false } = {}) {
   localStorage.setItem(CLEANUP_FLAG, '1')
   return { cleaned: true }
 }
-
-/**
- * Probe leve: se HTTPS ao host do Firestore falhar, a rede/IPv6/proxy está quebrada.
- */
-export async function probeFirestoreHost() {
-  if (typeof window === 'undefined') return { ok: false, reason: 'ssr' }
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 8000)
-    const res = await fetch('https://firestore.googleapis.com/', {
-      method: 'GET',
-      mode: 'no-cors',
-      cache: 'no-store',
-      signal: controller.signal,
-    })
-    clearTimeout(timer)
-    // no-cors → opaque; se chegou aqui, o handshake SSL concluiu
-    return { ok: true, type: res.type }
-  } catch (error) {
-    return {
-      ok: false,
-      reason: String(error?.message || error || 'fetch_failed'),
-    }
-  }
-}

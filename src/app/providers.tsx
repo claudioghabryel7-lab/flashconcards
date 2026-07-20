@@ -17,10 +17,7 @@ import { cleanupConsole } from '@/lib/consoleCleanup'
 import BackgroundGenerationBanner from '@/components/BackgroundGenerationBanner'
 import CourseReviewPrompt from '@/components/CourseReviewPrompt'
 import PushPermissionBanner from '@/components/PushPermissionBanner'
-import {
-  ensureFirestoreTransportRecovery,
-  probeFirestoreHost,
-} from '@/utils/firestoreTransportRecovery'
+import { ensureFirestoreTransportRecovery } from '@/utils/firestoreTransportRecovery'
 
 function ClientBootstrap() {
   useEffect(() => {
@@ -35,14 +32,7 @@ function ClientBootstrap() {
         window.location.reload()
         return
       }
-
       initFirebase()
-      const probe = await probeFirestoreHost()
-      if (cancelled || probe.ok) return
-      console.warn(
-        '[Firestore] Handshake SSL falhou. Teste dados móveis, desative VPN/antivírus ou IPv6 no roteador.',
-        probe.reason,
-      )
     })()
 
     return () => {
