@@ -41,7 +41,9 @@ export function getTopicCheckin(progressMap = {}, key = '') {
 
 /**
  * Alterna flashcards | questoes | estudado no progresso do usuário.
- * @returns {{ progress: object, value: boolean }}
+ * Mesma fonte do Edital Verticalizado (`userEditalProgress`).
+ * Com os 3 marcados, também grava `editalProgress` (igual ao Edital).
+ * @returns {{ progress: object, value: boolean, allDone: boolean }}
  */
 export async function toggleTopicCheckin({
   uid,
@@ -49,6 +51,7 @@ export async function toggleTopicCheckin({
   topicKey,
   campo,
   disciplinaNome = '',
+  topicoNome = '',
 }) {
   if (!uid || !courseId || !topicKey) {
     throw new Error('Dados insuficientes para check-in.')
@@ -62,7 +65,8 @@ export async function toggleTopicCheckin({
   const progress = { ...(snap.exists() ? snap.data()?.progress || {} : {}) }
   const current = progress[topicKey] || {}
   const value = !Boolean(current[campo])
-  progress[topicKey] = { ...current, [campo]: value }
+  const nextEntry = { ...current, [campo]: value }
+  progress[topicKey] = nextEntry
 
   await setDoc(
     ref,
@@ -74,6 +78,8 @@ export async function toggleTopicCheckin({
     },
     { merge: true },
   )
+
+  const allDone = Boolean(nextEntry.flashcards && nextEntry.questoes && nextEntry.estudado)
 
   if (campo === 'estudado' && value && disciplinaNome) {
     try {
@@ -105,5 +111,33 @@ export async function toggleTopicCheckin({
     }
   }
 
-  return { progress, value }
+  // Espelha o Edital: tópico 100% no dia → editalProgress
+  if (allDone) {
+    try {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+      const progressKey = `${uid}_${courseId}_${today}_${topicKey}`
+      await setDoc(
+        doc(db, 'editalProgress', progressKey),
+        {
+          userId: uid,
+          courseId,
+          date: today,
+          disciplina: disciplinaNome,
+          topico: topicoNome || disciplinaNome,
+          topicKey,
+          flashcards: true,
+          questoes: true,
+          estudado: true,
+          completedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          source: 'dashboard',
+        },
+        { merge: true },
+      )
+    } catch (editalErr) {
+      console.warn('[check-in] editalProgress:', editalErr?.message || editalErr)
+    }
+  }
+
+  return { progress, value, allDone }
 }

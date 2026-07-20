@@ -26,56 +26,56 @@ const quickLinks = [
     title: 'Flashcards',
     desc: 'Repetição espaçada por tópico',
     icon: SparklesIcon,
-    accent: 'cp-card-accent-violet',
+    tone: 'violet',
   },
   {
     to: '/resolver-questoes',
     title: 'Questões',
     desc: 'Resolva e acompanhe seus acertos',
     icon: FireIcon,
-    accent: 'cp-card-accent-cyan',
+    tone: 'cyan',
   },
   {
     to: '/edital-verticalizado',
     title: 'Edital',
     desc: 'Conteúdo verticalizado do concurso',
     icon: BookOpenIcon,
-    accent: 'cp-card-accent-cyan',
+    tone: 'success',
   },
   {
     to: '/guia-mentorado',
     title: 'Guia Mentorado',
     desc: 'Cronograma até a prova',
     icon: AcademicCapIcon,
-    accent: 'cp-card-accent-amber',
+    tone: 'amber',
   },
   {
     to: '/vespera-de-prova',
     title: 'Véspera',
     desc: 'Revisão final antes da prova',
     icon: BoltIcon,
-    accent: 'cp-card-accent-pink',
+    tone: 'pink',
   },
   {
     to: '/trilha',
     title: 'Trilha',
     desc: 'Tempo líquido, ciclo e metas',
     icon: MapIcon,
-    accent: 'cp-card-accent-cyan',
+    tone: 'cyan',
   },
   {
     to: '/comunidade',
     title: 'Comunidade',
     desc: 'Feed, seguidores e curtidas',
     icon: UserGroupIcon,
-    accent: 'cp-card-accent-pink',
+    tone: 'pink',
   },
   {
     to: '/calendario',
     title: 'Progresso',
     desc: 'Gráficos e histórico de estudo',
     icon: ChartBarIcon,
-    accent: 'cp-card-accent-violet',
+    tone: 'violet',
   },
 ]
 
@@ -127,33 +127,35 @@ const Dashboard = () => {
       : `${redacaoStats.total} redação${redacaoStats.total === 1 ? '' : 'ões'} · semana ${redacaoStats.weekUsed}/${redacaoStats.weekMax}`
 
   return (
-    <div className="pb-10">
-      <header className="relative mb-8 overflow-hidden rounded-2xl border border-cp-border bg-cp-bg-elevated p-5 sm:p-7 animate-fade-in">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-90"
-          style={{
-            background:
-              'radial-gradient(ellipse 80% 60% at 100% 0%, color-mix(in srgb, var(--cp-accent) 18%, transparent), transparent 55%), radial-gradient(ellipse 50% 40% at 0% 100%, color-mix(in srgb, var(--cp-accent-2) 14%, transparent), transparent 50%)',
-          }}
-          aria-hidden
-        />
-        <div className="relative">
+    <div className="dash-tech-shell pb-10">
+      <header className="dash-hero mb-7 p-5 sm:p-7">
+        <div className="dash-hero-grid" aria-hidden />
+        <div className="dash-hero-glow dash-hero-glow--a" aria-hidden />
+        <div className="dash-hero-glow dash-hero-glow--b" aria-hidden />
+        <div className="dash-hero-glow dash-hero-glow--c" aria-hidden />
+        <div className="dash-scanline" aria-hidden />
+
+        <div className="relative z-[1]">
           <div className="flex flex-wrap items-center gap-2">
             <span className="cp-badge-accent">FlashConCards</span>
+            <span className="dash-chip-live">
+              <span className="dash-live-dot" aria-hidden />
+              Ao vivo
+            </span>
             <span className="cp-badge">Dashboard</span>
           </div>
-          <h1 className="cp-headline mt-4 text-3xl sm:text-4xl md:text-[2.75rem]">
+          <h1 className="cp-headline mt-4 text-3xl sm:text-4xl md:text-[2.85rem]">
             Olá, <span className="cp-gradient-text">{firstName}</span>
           </h1>
           <p className="mt-2 max-w-xl text-sm text-cp-muted sm:text-base">
-            Sua central de estudo — matéria do dia, check-in e atalhos do concurso.
+            Central tech do concurso — matéria do dia, check-in sincronizado com o Edital e atalhos.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <OnlineNowBadge courseId={courseId} />
             {courseId ? (
               <Link
                 to="/guia-mentorado"
-                className="inline-flex items-center gap-1.5 rounded-full border border-cp-border bg-cp-surface px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-cp-muted transition hover:border-cp-accent/30 hover:text-cp-accent"
+                className="inline-flex items-center gap-1.5 rounded-full border border-cp-accent2/30 bg-cp-accent2/10 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-cp-accent2 transition hover:bg-cp-accent2/20"
               >
                 <ClockIcon className="h-3.5 w-3.5" />
                 Cronograma
@@ -163,24 +165,17 @@ const Dashboard = () => {
         </div>
       </header>
 
-      <div className="mb-6 animate-fade-in">
+      <div className="mb-6" style={{ animation: 'dash-rise 0.45s ease-out both' }}>
         <MateriaDoDiaCard user={user} courseId={courseId} />
       </div>
 
-      <div className="mb-8 animate-fade-in">
+      <div className="mb-8">
         <Link
           to="/treino-redacao"
-          className="cp-card cp-card-accent-violet group relative block overflow-hidden p-5 transition"
+          className="dash-tile dash-tile--violet group block p-5"
+          style={{ '--dash-delay': '60ms' }}
         >
-          <div
-            className="pointer-events-none absolute -right-10 top-0 h-32 w-32 rounded-full opacity-50"
-            style={{
-              background:
-                'radial-gradient(circle, color-mix(in srgb, var(--cp-accent) 40%, transparent), transparent 70%)',
-            }}
-            aria-hidden
-          />
-          <div className="relative flex items-start justify-between gap-4">
+          <div className="relative z-[1] flex items-start justify-between gap-4">
             <div>
               <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-cp-muted">
                 Treino de Redação
@@ -196,49 +191,55 @@ const Dashboard = () => {
                   : `Nesta semana: ${redacaoStats.weekUsed} de ${redacaoStats.weekMax} · novo tema a cada 7 dias`}
               </p>
             </div>
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cp-accent/25 bg-cp-accent/10 text-cp-accent transition group-hover:shadow-cp-glow">
+            <div className="dash-tile-icon shrink-0">
               <DocumentTextIcon className="h-5 w-5" />
             </div>
           </div>
-          <ArrowRightIcon className="relative mt-3 h-4 w-4 text-cp-accent transition group-hover:translate-x-1" />
+          <ArrowRightIcon className="dash-tile-arrow relative z-[1] mt-3 h-4 w-4" />
         </Link>
       </div>
 
-      <div className="animate-fade-in">
+      <div>
         <div className="mb-4 flex items-center justify-between gap-2">
-          <span className="cp-badge">Ferramentas</span>
+          <span className="cp-badge-cyan">Ferramentas</span>
           <span className="hidden font-mono text-[10px] uppercase tracking-wider text-cp-muted sm:inline">
             Acesso rápido
           </span>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {quickLinks.map((link) => {
+          {quickLinks.map((link, index) => {
             const Icon = link.icon
             return (
               <Link
                 key={link.to}
                 to={link.to}
-                className={`cp-card group relative overflow-hidden p-5 transition ${link.accent}`}
+                className={`dash-tile dash-tile--${link.tone} group p-5`}
+                style={{ '--dash-delay': `${80 + index * 45}ms` }}
               >
-                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-cp-border bg-cp-surface text-cp-accent transition group-hover:border-cp-accent/35 group-hover:shadow-cp-glow">
-                  <Icon className="h-5 w-5" />
+                <div className="relative z-[1]">
+                  <div className="dash-tile-icon mb-4">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-sm font-medium text-cp-text">{link.title}</h3>
+                  <p className="mt-1 text-xs text-cp-muted">{link.desc}</p>
+                  <ArrowRightIcon className="dash-tile-arrow mt-3 h-4 w-4" />
                 </div>
-                <h3 className="text-sm font-medium text-cp-text">{link.title}</h3>
-                <p className="mt-1 text-xs text-cp-muted">{link.desc}</p>
-                <ArrowRightIcon className="mt-3 h-4 w-4 text-cp-accent transition group-hover:translate-x-1" />
               </Link>
             )
           })}
           <Link
             to="/treino-redacao"
-            className="cp-card cp-card-accent-violet group relative overflow-hidden p-5 transition"
+            className="dash-tile dash-tile--violet group p-5"
+            style={{ '--dash-delay': `${80 + quickLinks.length * 45}ms` }}
           >
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-cp-accent/25 bg-cp-accent/10 text-cp-accent transition group-hover:shadow-cp-glow">
-              <DocumentTextIcon className="h-5 w-5" />
+            <div className="relative z-[1]">
+              <div className="dash-tile-icon mb-4">
+                <DocumentTextIcon className="h-5 w-5" />
+              </div>
+              <h3 className="text-sm font-medium text-cp-text">Redação</h3>
+              <p className="mt-1 text-xs text-cp-muted">{redacaoDesc}</p>
+              <ArrowRightIcon className="dash-tile-arrow mt-3 h-4 w-4" />
             </div>
-            <h3 className="text-sm font-medium text-cp-text">Redação</h3>
-            <p className="mt-1 text-xs text-cp-muted">{redacaoDesc}</p>
-            <ArrowRightIcon className="mt-3 h-4 w-4 text-cp-accent transition group-hover:translate-x-1" />
           </Link>
         </div>
       </div>

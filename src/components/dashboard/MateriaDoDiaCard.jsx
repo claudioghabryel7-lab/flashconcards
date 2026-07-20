@@ -126,6 +126,7 @@ export default function MateriaDoDiaCard({ user, courseId }) {
         topicKey: key,
         campo,
         disciplinaNome: topic.disciplina,
+        topicoNome: topic.topicoNome,
       })
       setProgress(next)
     } catch (err) {
@@ -145,17 +146,10 @@ export default function MateriaDoDiaCard({ user, courseId }) {
   const studyable = topics.filter((t) => !t.incidencia && topicProgressKey(t))
 
   return (
-    <section className="cp-card cp-card-accent-amber relative overflow-hidden p-5 sm:p-6">
-      <div
-        className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full opacity-40"
-        style={{
-          background:
-            'radial-gradient(circle, color-mix(in srgb, var(--cp-accent-4) 35%, transparent), transparent 70%)',
-        }}
-        aria-hidden
-      />
+    <section className="dash-tile dash-tile--amber relative overflow-hidden p-5 sm:p-6" style={{ '--dash-delay': '0ms' }}>
+      <div className="dash-scanline opacity-40" aria-hidden />
 
-      <div className="relative flex flex-wrap items-start justify-between gap-3">
+      <div className="relative z-[1] flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="cp-badge" style={{ color: 'var(--cp-accent-4)', borderColor: 'color-mix(in srgb, var(--cp-accent-4) 35%, transparent)', background: 'color-mix(in srgb, var(--cp-accent-4) 12%, transparent)' }}>
@@ -164,6 +158,7 @@ export default function MateriaDoDiaCard({ user, courseId }) {
             {dayMeta?.incidencia ? (
               <span className="cp-badge-cyan">Incidência</span>
             ) : null}
+            <span className="cp-badge text-[9px]">Sync Edital</span>
           </div>
           <h2 className="cp-headline mt-3 text-xl sm:text-2xl">Estudo de hoje</h2>
           <p className="mt-1 flex items-center gap-1.5 text-xs capitalize text-cp-muted">

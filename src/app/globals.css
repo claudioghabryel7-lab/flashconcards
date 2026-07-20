@@ -307,3 +307,249 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* —— Dashboard tech (CSS-only, GPU-friendly) —— */
+@keyframes dash-shimmer {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes dash-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes dash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dash-pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.35); opacity: 0.55; }
+}
+
+.dash-tech-shell {
+  position: relative;
+}
+
+.dash-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid var(--cp-border);
+  background: var(--cp-bg-elevated);
+  isolation: isolate;
+}
+
+.dash-hero-grid {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.45;
+  background-image:
+    radial-gradient(circle at 1px 1px, var(--cp-grid-dot) 1px, transparent 0);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(180deg, #000 20%, transparent 95%);
+}
+
+.dash-hero-glow {
+  pointer-events: none;
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(40px);
+  opacity: 0.55;
+  will-change: transform;
+  animation: dash-float 7s ease-in-out infinite;
+}
+
+.dash-hero-glow--a {
+  top: -20%;
+  right: -8%;
+  width: 280px;
+  height: 280px;
+  background: color-mix(in srgb, var(--cp-accent) 45%, transparent);
+}
+
+.dash-hero-glow--b {
+  bottom: -30%;
+  left: -5%;
+  width: 220px;
+  height: 220px;
+  background: color-mix(in srgb, var(--cp-accent-2) 40%, transparent);
+  animation-delay: -2.5s;
+}
+
+.dash-hero-glow--c {
+  top: 40%;
+  right: 25%;
+  width: 140px;
+  height: 140px;
+  background: color-mix(in srgb, var(--cp-accent-3) 35%, transparent);
+  animation-delay: -4s;
+}
+
+.dash-live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--cp-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cp-success) 25%, transparent);
+  animation: dash-pulse-dot 2s ease-in-out infinite;
+}
+
+.dash-tile {
+  --dash-accent: var(--cp-accent);
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--cp-border);
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--dash-accent) 14%, var(--cp-bg-elevated)) 0%,
+      var(--cp-bg-elevated) 48%,
+      var(--cp-bg-elevated) 100%
+    );
+  border-top: 2px solid var(--dash-accent);
+  transition:
+    transform 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
+  animation: dash-rise 0.45s ease-out both;
+  animation-delay: var(--dash-delay, 0ms);
+}
+
+.dash-tile::before {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 140%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--dash-accent) 70%, transparent),
+    transparent
+  );
+  opacity: 0.7;
+}
+
+.dash-tile::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  right: -30%;
+  top: -40%;
+  width: 160px;
+  height: 160px;
+  border-radius: 999px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--dash-accent) 28%, transparent), transparent 68%);
+  opacity: 0.85;
+  transition: transform 0.35s ease, opacity 0.35s ease;
+}
+
+.dash-tile:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--dash-accent) 45%, var(--cp-border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--dash-accent) 22%, transparent),
+    0 14px 28px color-mix(in srgb, var(--dash-accent) 16%, transparent);
+}
+
+.dash-tile:hover::after {
+  transform: scale(1.2) translate(-8%, 8%);
+  opacity: 1;
+}
+
+.dash-tile-icon {
+  display: flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--dash-accent) 30%, var(--cp-border));
+  background: color-mix(in srgb, var(--dash-accent) 14%, transparent);
+  color: var(--dash-accent);
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.dash-tile:hover .dash-tile-icon {
+  transform: scale(1.06);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--dash-accent) 30%, transparent);
+}
+
+.dash-tile-arrow {
+  color: var(--dash-accent);
+  transition: transform 0.22s ease;
+}
+
+.dash-tile:hover .dash-tile-arrow {
+  transform: translateX(4px);
+}
+
+.dash-tile--violet { --dash-accent: var(--cp-accent); }
+.dash-tile--cyan { --dash-accent: var(--cp-accent-2); }
+.dash-tile--pink { --dash-accent: var(--cp-accent-3); }
+.dash-tile--amber { --dash-accent: var(--cp-accent-4); }
+.dash-tile--success { --dash-accent: var(--cp-success); }
+
+.dash-scanline {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.07;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.08) 3px
+  );
+}
+
+.dark .dash-scanline {
+  opacity: 0.12;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 255, 255, 0.04) 3px
+  );
+}
+
+.dash-chip-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--cp-success) 35%, transparent);
+  background: color-mix(in srgb, var(--cp-success) 12%, transparent);
+  padding: 0.25rem 0.65rem;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cp-success);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-hero-glow,
+  .dash-live-dot,
+  .dash-tile {
+    animation: none !important;
+  }
+  .dash-tile:hover,
+  .dash-tile:hover .dash-tile-icon,
+  .dash-tile:hover .dash-tile-arrow {
+    transform: none;
+  }
+}
