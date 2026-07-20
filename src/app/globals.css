@@ -63,7 +63,8 @@ html,
 body {
   min-height: 100%;
   width: 100%;
-  overflow-x: hidden;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 html {
@@ -204,10 +205,12 @@ body {
 
 .cp-container {
   @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  min-width: 0;
 }
 
 .cp-container-wide {
   @apply mx-auto w-full max-w-[1400px] px-4 sm:px-6 lg:px-8;
+  min-width: 0;
 }
 
 @keyframes cp-aurora {
@@ -495,6 +498,16 @@ body {
 
 .dash-tile:hover .dash-tile-arrow {
   transform: translateX(4px);
+}
+
+@media (hover: none) {
+  .dash-tile:hover,
+  .dash-tile:hover::after,
+  .dash-tile:hover .dash-tile-icon,
+  .dash-tile:hover .dash-tile-arrow {
+    transform: none;
+    box-shadow: none;
+  }
 }
 
 .dash-tile--violet { --dash-accent: var(--cp-accent); }

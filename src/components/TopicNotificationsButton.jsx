@@ -66,7 +66,7 @@ const TopicNotificationsButton = memo(() => {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-[80] mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-cp-border bg-cp-bg shadow-2xl">
+        <div className="absolute right-0 top-full z-[80] mt-2 w-[min(20rem,calc(100%-1rem))] max-w-full overflow-hidden rounded-xl border border-cp-border bg-cp-bg shadow-2xl">
           <div className="flex items-center justify-between border-b border-cp-border px-4 py-3">
             <p className="text-sm font-semibold text-cp-text">Notificações</p>
             {notifications.length > 0 && (

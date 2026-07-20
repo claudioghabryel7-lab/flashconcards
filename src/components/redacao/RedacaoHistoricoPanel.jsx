@@ -170,12 +170,12 @@ export default function RedacaoHistoricoPanel({ userId, courseId, refreshKey = 0
             <ChartBarIcon className="h-4 w-4" />
             Mapa de evolução da nota
           </p>
-          <div className="h-56 w-full">
+          <div className="h-52 w-full min-w-0 sm:h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={evolutionData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <LineChart data={evolutionData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                <YAxis domain={[0, 1000]} tick={{ fontSize: 11 }} />
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                <YAxis domain={[0, 1000]} width={36} tick={{ fontSize: 10 }} />
                 <Tooltip
                   contentStyle={{
                     background: 'var(--cp-bg-elevated)',
@@ -205,12 +205,12 @@ export default function RedacaoHistoricoPanel({ userId, courseId, refreshKey = 0
           <p className="mb-3 font-mono text-[11px] uppercase tracking-wider text-cp-muted">
             Competências — média vs última
           </p>
-          <div className="h-64 w-full">
+          <div className="h-72 w-full min-w-0 sm:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={radarData}>
                 <PolarGrid />
-                <PolarAngleAxis dataKey="criterio" tick={{ fontSize: 11 }} />
-                <PolarRadiusAxis domain={[0, 200]} tick={{ fontSize: 10 }} />
+                <PolarAngleAxis dataKey="criterio" tick={{ fontSize: 9 }} />
+                <PolarRadiusAxis domain={[0, 200]} tick={{ fontSize: 9 }} />
                 <Radar
                   name="Média"
                   dataKey="media"
@@ -225,7 +225,7 @@ export default function RedacaoHistoricoPanel({ userId, courseId, refreshKey = 0
                   fill="var(--cp-accent-2)"
                   fillOpacity={0.2}
                 />
-                <Legend />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
               </RadarChart>
             </ResponsiveContainer>
           </div>
@@ -237,8 +237,8 @@ export default function RedacaoHistoricoPanel({ userId, courseId, refreshKey = 0
           Ainda não há redações salvas. Finalize um treino para começar o histórico.
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
-          <div className="space-y-2">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
+          <div className="max-h-[40vh] space-y-2 overflow-y-auto lg:max-h-[70vh]">
             {items.map((item) => {
               const when = item.createdAtMs
                 ? dayjs(item.createdAtMs).format('DD/MM/YYYY HH:mm')
@@ -249,7 +249,7 @@ export default function RedacaoHistoricoPanel({ userId, courseId, refreshKey = 0
                   key={item.id}
                   type="button"
                   onClick={() => setSelectedId(item.id)}
-                  className={`w-full rounded-xl border p-3 text-left transition ${
+                  className={`min-h-12 w-full rounded-xl border p-3 text-left transition ${
                     active
                       ? 'border-cp-accent/40 bg-cp-accent/10'
                       : 'border-cp-border bg-cp-surface hover:border-cp-accent/25'
@@ -271,10 +271,10 @@ export default function RedacaoHistoricoPanel({ userId, courseId, refreshKey = 0
                 <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Tema</p>
                 <h2 className="mt-1 text-base font-medium text-cp-text">{selected.tema}</h2>
                 <p className="mt-3 text-3xl font-black text-cp-accent">{selected.nota}<span className="text-base font-normal text-cp-muted">/1000</span></p>
-                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
                   {CRIT_KEYS.map(({ key, label }) => (
                     <div key={key} className="rounded-lg border border-cp-border bg-cp-bg/40 p-2 text-center">
-                      <p className="font-mono text-[9px] uppercase text-cp-muted">{label}</p>
+                      <p className="truncate font-mono text-[9px] uppercase text-cp-muted">{label}</p>
                       <p className="text-sm font-semibold text-cp-text">{selected.criterios?.[key] ?? '—'}</p>
                     </div>
                   ))}

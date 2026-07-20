@@ -34,12 +34,12 @@ export function CPPageHeader({
         </Link>
       )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+        <div className="min-w-0 flex-1">
           {badge && <span className="cp-badge cp-badge-accent">{badge}</span>}
-          <h1 className="cp-headline mt-4 text-3xl sm:text-4xl">{title}</h1>
+          <h1 className="cp-headline mt-4 break-words text-3xl sm:text-4xl">{title}</h1>
           {subtitle && <p className="mt-2 max-w-2xl text-cp-muted">{subtitle}</p>}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+        {actions && <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">{actions}</div>}
       </div>
     </div>
   )

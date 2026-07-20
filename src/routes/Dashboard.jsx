@@ -128,14 +128,14 @@ const Dashboard = () => {
 
   return (
     <div className="dash-tech-shell pb-10">
-      <header className="dash-hero mb-7 p-5 sm:p-7">
+      <header className="dash-hero mb-5 p-4 sm:mb-7 sm:p-7">
         <div className="dash-hero-grid" aria-hidden />
         <div className="dash-hero-glow dash-hero-glow--a" aria-hidden />
         <div className="dash-hero-glow dash-hero-glow--b" aria-hidden />
         <div className="dash-hero-glow dash-hero-glow--c" aria-hidden />
         <div className="dash-scanline" aria-hidden />
 
-        <div className="relative z-[1]">
+        <div className="relative z-[1] min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="cp-badge-accent">FlashConCards</span>
             <span className="dash-chip-live">
@@ -144,18 +144,18 @@ const Dashboard = () => {
             </span>
             <span className="cp-badge">Dashboard</span>
           </div>
-          <h1 className="cp-headline mt-4 text-3xl sm:text-4xl md:text-[2.85rem]">
+          <h1 className="cp-headline mt-3 break-words text-2xl sm:mt-4 sm:text-4xl md:text-[2.85rem]">
             Olá, <span className="cp-gradient-text">{firstName}</span>
           </h1>
           <p className="mt-2 max-w-xl text-sm text-cp-muted sm:text-base">
             Central tech do concurso — matéria do dia, check-in sincronizado com o Edital e atalhos.
           </p>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3">
             <OnlineNowBadge courseId={courseId} />
             {courseId ? (
               <Link
                 to="/guia-mentorado"
-                className="inline-flex items-center gap-1.5 rounded-full border border-cp-accent2/30 bg-cp-accent2/10 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-cp-accent2 transition hover:bg-cp-accent2/20"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-cp-accent2/30 bg-cp-accent2/10 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-cp-accent2 transition hover:bg-cp-accent2/20"
               >
                 <ClockIcon className="h-3.5 w-3.5" />
                 Cronograma
@@ -206,7 +206,7 @@ const Dashboard = () => {
             Acesso rápido
           </span>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {quickLinks.map((link, index) => {
             const Icon = link.icon
             return (

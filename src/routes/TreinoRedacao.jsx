@@ -699,7 +699,7 @@ CRÍTICO:
               <p className="mt-1 text-sm opacity-80">de 1000 pontos</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 p-3 sm:gap-3 sm:p-4 md:grid-cols-3 lg:grid-cols-5">
               {[
                 { label: 'Domínio', value: resultado.criterios?.dominio },
                 { label: 'Compreensão', value: resultado.criterios?.compreensao },
@@ -707,26 +707,26 @@ CRÍTICO:
                 { label: 'Estrutura', value: resultado.criterios?.estrutura },
                 { label: 'Conhecimento', value: resultado.criterios?.conhecimento },
               ].map((c) => (
-                <div key={c.label} className="cp-card !p-3 text-center">
-                  <p className="font-mono text-[10px] uppercase text-cp-muted">{c.label}</p>
-                  <p className="mt-1 text-xl font-semibold text-cp-accent">{c.value ?? '—'}</p>
+                <div key={c.label} className="cp-card !p-2.5 text-center sm:!p-3">
+                  <p className="truncate font-mono text-[9px] uppercase text-cp-muted sm:text-[10px]">{c.label}</p>
+                  <p className="mt-1 text-lg font-semibold text-cp-accent sm:text-xl">{c.value ?? '—'}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="cp-card p-4 text-center">
-              <p className="font-mono text-[10px] uppercase text-cp-muted">Parágrafos</p>
-              <p className="mt-1 text-xl font-semibold text-cp-text">{resultado.paragraphCount}</p>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="cp-card p-3 text-center sm:p-4">
+              <p className="truncate font-mono text-[9px] uppercase text-cp-muted sm:text-[10px]">Parágrafos</p>
+              <p className="mt-1 text-lg font-semibold text-cp-text sm:text-xl">{resultado.paragraphCount}</p>
             </div>
-            <div className="cp-card p-4 text-center">
-              <p className="font-mono text-[10px] uppercase text-cp-muted">Linhas</p>
-              <p className="mt-1 text-xl font-semibold text-cp-text">{resultado.lines}</p>
+            <div className="cp-card p-3 text-center sm:p-4">
+              <p className="truncate font-mono text-[9px] uppercase text-cp-muted sm:text-[10px]">Linhas</p>
+              <p className="mt-1 text-lg font-semibold text-cp-text sm:text-xl">{resultado.lines}</p>
             </div>
-            <div className="cp-card p-4 text-center">
-              <p className="font-mono text-[10px] uppercase text-cp-muted">Palavras</p>
-              <p className="mt-1 text-xl font-semibold text-cp-text">{resultado.wordCount}</p>
+            <div className="cp-card p-3 text-center sm:p-4">
+              <p className="truncate font-mono text-[9px] uppercase text-cp-muted sm:text-[10px]">Palavras</p>
+              <p className="mt-1 text-lg font-semibold text-cp-text sm:text-xl">{resultado.wordCount}</p>
             </div>
           </div>
 
@@ -767,8 +767,8 @@ CRÍTICO:
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={handleNewTheme} className="cp-btn-primary flex-1 !py-3 min-w-[140px]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <button type="button" onClick={handleNewTheme} className="cp-btn-primary w-full !py-3 sm:flex-1 sm:min-w-[140px]">
               Novo tema
             </button>
             <button
@@ -777,7 +777,7 @@ CRÍTICO:
                 setResultado(null)
                 setViewMode('historico')
               }}
-              className="cp-btn-ghost flex-1 !py-3 min-w-[140px]"
+              className="cp-btn-ghost w-full !py-3 sm:flex-1 sm:min-w-[140px]"
             >
               Histórico e evolução
             </button>
@@ -792,7 +792,7 @@ CRÍTICO:
                 setViewMode('treino')
                 generateTheme()
               }}
-              className="cp-btn-ghost flex-1 !py-3 min-w-[140px]"
+              className="cp-btn-ghost w-full !py-3 sm:flex-1 sm:min-w-[140px]"
             >
               Treinar novamente
             </button>
@@ -843,27 +843,31 @@ CRÍTICO:
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="cp-card p-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          <div className="cp-card p-3 sm:p-4">
             <p className="font-mono text-[10px] uppercase text-cp-muted">Tempo</p>
-            <p className={`mt-1 text-xl font-semibold ${timeLeft < 600 ? 'text-red-500' : 'text-cp-text'}`}>
+            <p className={`mt-1 text-lg font-semibold sm:text-xl ${timeLeft < 600 ? 'text-red-500' : 'text-cp-text'}`}>
               {formatTime(timeLeft)}
             </p>
-            <button type="button" onClick={() => setIsRunning(!isRunning)} className="mt-2 cp-btn-ghost !py-1 !text-xs">
-              {isRunning ? <><PauseIcon className="h-3 w-3" /> Pausar</> : <><PlayIcon className="h-3 w-3" /> Iniciar</>}
+            <button
+              type="button"
+              onClick={() => setIsRunning(!isRunning)}
+              className="mt-2 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full border border-cp-border px-3 py-2 text-xs font-medium text-cp-text transition hover:border-cp-accent/30 hover:bg-cp-surface"
+            >
+              {isRunning ? <><PauseIcon className="h-4 w-4" /> Pausar</> : <><PlayIcon className="h-4 w-4" /> Iniciar</>}
             </button>
           </div>
-          <div className="cp-card p-4">
+          <div className="cp-card p-3 sm:p-4">
             <p className="font-mono text-[10px] uppercase text-cp-muted">Palavras</p>
-            <p className="mt-1 text-xl font-semibold text-cp-text">{wordCount}</p>
+            <p className="mt-1 text-lg font-semibold text-cp-text sm:text-xl">{wordCount}</p>
           </div>
-          <div className="cp-card p-4">
+          <div className="cp-card p-3 sm:p-4">
             <p className="font-mono text-[10px] uppercase text-cp-muted">Parágrafos</p>
-            <p className="mt-1 text-xl font-semibold text-cp-text">{paragraphCount}</p>
+            <p className="mt-1 text-lg font-semibold text-cp-text sm:text-xl">{paragraphCount}</p>
           </div>
-          <div className="cp-card p-4">
+          <div className="cp-card p-3 sm:p-4">
             <p className="font-mono text-[10px] uppercase text-cp-muted">Linhas</p>
-            <p className="mt-1 text-xl font-semibold text-cp-text">{lines}</p>
+            <p className="mt-1 text-lg font-semibold text-cp-text sm:text-xl">{lines}</p>
           </div>
         </div>
 
@@ -915,7 +919,7 @@ CRÍTICO:
             value={redacaoTexto}
             onChange={(e) => setRedacaoTexto(e.target.value)}
             placeholder="Comece a escrever sua redação aqui..."
-            className="min-h-[360px] w-full resize-none rounded-xl border border-cp-border bg-cp-bg/40 p-4 font-serif text-base leading-relaxed text-cp-text focus:border-cp-accent/40 focus:outline-none focus:ring-2 focus:ring-cp-accent/20"
+            className="min-h-[240px] w-full resize-y rounded-xl border border-cp-border bg-cp-bg/40 p-3 font-serif text-base leading-relaxed text-cp-text focus:border-cp-accent/40 focus:outline-none focus:ring-2 focus:ring-cp-accent/20 sm:min-h-[360px] sm:p-4"
             disabled={analizing || timeLeft === 0}
           />
           <div className="mt-3 flex items-center justify-between text-xs text-cp-muted">

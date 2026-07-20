@@ -106,7 +106,7 @@ function CPDrawerMenu({
         aria-hidden
       />
       <aside
-        className="fixed inset-y-0 right-0 z-[70] flex w-[min(100vw,360px)] translate-x-0 flex-col border-l border-cp-border bg-[var(--cp-bg)] shadow-2xl will-change-transform"
+        className="fixed inset-y-0 right-0 z-[70] flex w-full max-w-[360px] translate-x-0 flex-col border-l border-cp-border bg-[var(--cp-bg)] shadow-2xl will-change-transform"
         style={{ contain: 'layout style paint' }}
       >
         <div className="flex items-center justify-between border-b border-cp-border px-5 py-4">

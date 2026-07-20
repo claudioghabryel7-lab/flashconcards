@@ -44,7 +44,7 @@ function CheckChip({ checked, label, onClick, disabled, accent }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] transition disabled:opacity-50 ${
+      className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-2 font-mono text-xs transition disabled:opacity-50 sm:min-h-0 sm:px-2.5 sm:py-1 sm:text-[10px] ${
         checked
           ? accent
           : 'border-cp-border bg-cp-surface text-cp-muted hover:border-cp-accent/30 hover:text-cp-text'
@@ -262,7 +262,7 @@ export default function MateriaDoDiaCard({ user, courseId }) {
                     <p className="truncate font-mono text-[10px] uppercase tracking-wider text-cp-muted">
                       {topic.disciplina}
                     </p>
-                    <h3 className="mt-0.5 text-sm font-medium leading-snug text-cp-text">
+                    <h3 className="mt-0.5 break-words text-sm font-medium leading-snug text-cp-text">
                       {topic.topicoNome}
                     </h3>
                   </div>
@@ -277,21 +277,21 @@ export default function MateriaDoDiaCard({ user, courseId }) {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link
                     to={`/conteudo-completo/topic/${courseId}/${topicKeyUrl}?nome=${nome}`}
-                    className="inline-flex items-center gap-1 rounded-lg border border-cp-border bg-cp-bg-elevated px-2.5 py-1.5 font-mono text-[10px] text-cp-text transition hover:border-cp-accent/40 hover:text-cp-accent"
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-cp-border bg-cp-bg-elevated px-3 py-2 font-mono text-xs text-cp-text transition hover:border-cp-accent/40 hover:text-cp-accent sm:min-h-0 sm:px-2.5 sm:py-1.5 sm:text-[10px]"
                   >
                     <BookOpenIcon className="h-3.5 w-3.5" />
                     Material
                   </Link>
                   <Link
                     to={`/flashcards/topico/${courseId}?disciplina=${disc}&modulo=${modulo}&topicKey=${topicKeyParam}`}
-                    className="inline-flex items-center gap-1 rounded-lg border border-cp-accent/25 bg-cp-accent/10 px-2.5 py-1.5 font-mono text-[10px] text-cp-accent transition hover:bg-cp-accent/20"
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-cp-accent/25 bg-cp-accent/10 px-3 py-2 font-mono text-xs text-cp-accent transition hover:bg-cp-accent/20 sm:min-h-0 sm:px-2.5 sm:py-1.5 sm:text-[10px]"
                   >
                     <SparklesIcon className="h-3.5 w-3.5" />
                     Flashcards
                   </Link>
                   <Link
                     to={`/questoes-topic/${courseId}/${topicKeyUrl}?nome=${nome}`}
-                    className="inline-flex items-center gap-1 rounded-lg border border-cp-accent2/25 bg-cp-accent2/10 px-2.5 py-1.5 font-mono text-[10px] text-cp-accent2 transition hover:bg-cp-accent2/20"
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-cp-accent2/25 bg-cp-accent2/10 px-3 py-2 font-mono text-xs text-cp-accent2 transition hover:bg-cp-accent2/20 sm:min-h-0 sm:px-2.5 sm:py-1.5 sm:text-[10px]"
                   >
                     <FireIcon className="h-3.5 w-3.5" />
                     Questões

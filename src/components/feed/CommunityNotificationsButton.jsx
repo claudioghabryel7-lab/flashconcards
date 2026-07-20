@@ -121,7 +121,7 @@ export default function CommunityNotificationsButton({ userId }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-cp-border bg-cp-bg shadow-xl">
+        <div className="absolute right-0 top-full z-30 mt-2 w-[min(20rem,calc(100%-1rem))] max-w-full overflow-hidden rounded-xl border border-cp-border bg-cp-bg shadow-xl">
           <div className="border-b border-cp-border px-3 py-2">
             <p className="text-xs font-semibold text-cp-text">Comunidade</p>
             <p className="text-[10px] text-cp-muted">Publicações de quem você segue</p>

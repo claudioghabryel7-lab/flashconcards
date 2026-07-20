@@ -124,10 +124,12 @@ export default function CPHeader() {
             : 'border-b border-cp-border/50 bg-cp-bg/80'
         }`}
       >
-        <div className="cp-container-wide flex h-[4.5rem] items-center justify-between gap-4">
-          <CPLogo size="lg" />
+        <div className="cp-container flex h-[4.5rem] min-w-0 items-center justify-between gap-2 sm:gap-4">
+          <div className="min-w-0 shrink">
+            <CPLogo size="lg" />
+          </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <button
               type="button"
               onClick={toggleDarkMode}
