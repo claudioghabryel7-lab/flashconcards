@@ -12,7 +12,7 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
-import { auditTopicBundleConsistency, generateAiJson } from '../utils/geminiApi'
+import { filterGeneratedContentWithGoogleSearch, generateAiJson } from '../utils/geminiApi'
 import { isLikelyLegalDiscipline } from '../utils/contentVerification'
 import { buildFlashcardPrompt } from '../utils/unifiedPrompt'
 import { buildMentoradoCronogramaPrompt } from '../utils/guiaMentoradoPrompts'
@@ -24,10 +24,7 @@ import {
   appendFlashcardBatch,
   finalizeFlashcardsCheckpoint,
   loadFlashcardsByTopicKey,
-  loadMaterialDraft,
-  loadQuestoesDraft,
   markBundleAuditPassed,
-  prepareBundleAudit,
   prepareFlashcardsRun,
   prepareMaterialRun,
   prepareQuestoesRun,
@@ -44,9 +41,10 @@ import {
 
 const TRUSTED_AI = {
   trustedGeneration: true,
-  // Search/RAG decididos em generateAiJson (só jurídico usa grounding)
   useRAG: false,
   useGoogleSearch: false,
+  verifyContent: false,
+  forceAudit: false,
 }
 
 /** Tentativas automáticas por tópico (erros temporários da IA) — sem clicar de novo. */
@@ -138,9 +136,8 @@ function buildTrustedOptions(disciplina = '', extra = {}) {
   return {
     ...TRUSTED_AI,
     isLegalContent: isLegal,
-    forceAudit: true,
-    auditMode: isLegal ? 'legal' : 'factual',
-    // Geração em JSON mode; grounding fica só na auditoria jurídica
+    verifyContent: false,
+    forceAudit: false,
     useGoogleSearch: false,
     useRAG: false,
     disciplina,
@@ -207,7 +204,7 @@ async function processPromptSave(
   })
 
   await updateProgress(20, `Gerando ${label}…`)
-  const parsed = await generateAiJson(prompt, {
+  let parsed = await generateAiJson(prompt, {
     courseId,
     ...buildTrustedOptions(disciplina, {
       isLegalContent: aiOptions.isLegalContent,
@@ -216,6 +213,46 @@ async function processPromptSave(
       courseContext: toCourseAiContextShape({ ...examCtx, disciplina }),
     }),
   })
+
+  const contentType = extra.contentType || aiOptions.contentType || ''
+  if (contentType === 'material' || contentType === 'questoes' || contentType === 'flashcards') {
+    await updateProgress(70, `Verificando ${label} com Google Search…`)
+    const items =
+      contentType === 'flashcards'
+        ? parsed?.flashcards || parsed?.cards
+        : contentType === 'questoes'
+          ? parsed?.questoes || parsed?.questions || parsed?.itens
+          : null
+    const checked = await filterGeneratedContentWithGoogleSearch({
+      content: parsed,
+      contentType,
+      items: Array.isArray(items) ? items : null,
+      courseContext: toCourseAiContextShape({ ...examCtx, disciplina }),
+    })
+    if (contentType === 'material') {
+      if (!checked.aprovado || !checked.kept) {
+        const err = new Error(
+          `Material reprovado no Google Search: ${checked.rejected?.[0]?.motivo || 'FALSO'}`,
+        )
+        err.code = 'material_incomplete'
+        throw err
+      }
+      parsed = checked.kept
+    } else if (Array.isArray(checked.kept)) {
+      if (!checked.kept.length) {
+        const err = new Error(`Nenhum item ok após Google Search (${label}).`)
+        err.code = contentType === 'flashcards' ? 'flashcards_invalid' : 'questoes_invalid'
+        throw err
+      }
+      if (parsed?.flashcards) parsed = { ...parsed, flashcards: checked.kept }
+      else if (parsed?.cards) parsed = { ...parsed, cards: checked.kept }
+      else if (parsed?.questoes) parsed = { ...parsed, questoes: checked.kept }
+      else if (parsed?.questions) parsed = { ...parsed, questions: checked.kept }
+      else if (parsed?.itens) parsed = { ...parsed, itens: checked.kept }
+      else parsed = { ...parsed, items: checked.kept }
+    }
+  }
+
   await updateProgress(85, `Salvando ${label} (checkpoint)…`)
 
   if (topicKey && extra.contentType === 'material') {
@@ -422,9 +459,29 @@ Retorne APENAS JSON:
       }
     }
 
-    if (batchCards.length < minKeep) {
+    // Google Search: publica só o que estiver ok
+    await updateProgress(pct, `Flashcards lote ${batchNum}: verificando com Google Search…`)
+    const verified = await filterGeneratedContentWithGoogleSearch({
+      contentType: 'flashcards',
+      items: batchCards,
+      courseContext: toCourseAiContextShape({
+        ...examCtx,
+        disciplina,
+        topicoNome,
+      }),
+    })
+    if (Array.isArray(verified.kept) && verified.kept.length) {
+      if (verified.rejected?.length) {
+        console.warn(
+          `[flashcards] lote ${batchNum}: ${verified.rejected.length} card(s) rejeitado(s) pelo Search`,
+        )
+      }
+      batchCards = verified.kept
+    }
+
+    if (batchCards.length < 1) {
       const err = new Error(
-        `Lote ${batchNum} de flashcards insuficiente após auditoria (${batchCards.length}/${cardsInBatch}).`,
+        `Lote ${batchNum} de flashcards: nenhum card ok após Google Search.`,
       )
       err.code = 'flashcards_invalid'
       throw err
@@ -450,9 +507,9 @@ Retorne APENAS JSON:
   }
 
   allCards = allCards.slice(0, FLASHCARD_TARGET)
-  if (allCards.length < FLASHCARD_TARGET - 2) {
+  if (allCards.length < Math.max(5, FLASHCARD_TARGET - 10)) {
     const err = new Error(
-      `Flashcards insuficientes após auditoria: ${allCards.length} (exigido ~${FLASHCARD_TARGET}). Checkpoint mantido — retome o job.`,
+      `Flashcards insuficientes após verificação: ${allCards.length} (alvo ~${FLASHCARD_TARGET}). Checkpoint mantido — retome o job.`,
     )
     err.code = 'flashcards_invalid'
     throw err
@@ -633,6 +690,20 @@ async function processSingleMentoradoTopic({
         generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
       }),
     })
+    await updateProgress(pctBase + 1, `${label}: material — Google Search…`)
+    const matCheck = await filterGeneratedContentWithGoogleSearch({
+      content: materialParsed,
+      contentType: 'material',
+      courseContext,
+    })
+    if (!matCheck.aprovado || !matCheck.kept) {
+      const err = new Error(
+        `Material reprovado no Google Search: ${matCheck.rejected?.[0]?.motivo || 'conteúdo FALSO'}`,
+      )
+      err.code = 'material_incomplete'
+      throw err
+    }
+    materialParsed = matCheck.kept
     await saveMaterialCheckpoint({
       courseId,
       topicKey,
@@ -676,6 +747,31 @@ async function processSingleMentoradoTopic({
         generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
       }),
     })
+    const qList =
+      questoesParsed?.questoes ||
+      questoesParsed?.questions ||
+      questoesParsed?.itens ||
+      (Array.isArray(questoesParsed) ? questoesParsed : null)
+    if (qList?.length) {
+      await updateProgress(pctBase + 4, `${label}: questões — Google Search…`)
+      const qCheck = await filterGeneratedContentWithGoogleSearch({
+        contentType: 'questoes',
+        items: qList,
+        courseContext,
+      })
+      if (!qCheck.aprovado || !qCheck.kept?.length) {
+        const err = new Error('Nenhuma questão ok após Google Search.')
+        err.code = 'questoes_invalid'
+        throw err
+      }
+      if (qCheck.rejected?.length) {
+        console.warn(`[questoes] ${qCheck.rejected.length} questão(ões) rejeitada(s)`)
+      }
+      if (questoesParsed?.questoes) questoesParsed = { ...questoesParsed, questoes: qCheck.kept }
+      else if (questoesParsed?.questions) questoesParsed = { ...questoesParsed, questions: qCheck.kept }
+      else if (questoesParsed?.itens) questoesParsed = { ...questoesParsed, itens: qCheck.kept }
+      else questoesParsed = qCheck.kept
+    }
     await saveQuestoesCheckpoint({
       courseId,
       topicKey,
@@ -726,44 +822,11 @@ async function processSingleMentoradoTopic({
 
   await patchLocalTopicStatus(courseId, topic._targetDate, topicKey, {
     flashcards: 'done',
-    step: 'auditoria',
+    step: 'publicando',
   })
 
-  const bundlePrep = await prepareBundleAudit({ courseId, topicKey, forceFresh })
-  if (bundlePrep.alreadyPassed) {
-    await updateProgress(pctBase + 12, `${label}: auditoria cruzada já ok — sem API`)
-  } else {
-    await updateProgress(pctBase + 12, `Tópico ${index + 1}/${total}: ${label} — auditoria cruzada`)
-    if (!materialParsed) materialParsed = await loadMaterialDraft(courseId, topicKey)
-    if (!questoesParsed) questoesParsed = await loadQuestoesDraft(courseId, topicKey, 1)
-    const cards =
-      fcResult?.cards ||
-      (await loadFlashcardsByTopicKey(courseId, topicKey)).map((c) => ({
-        pergunta: c.pergunta || c.frente,
-        resposta: c.resposta || c.verso,
-        frente: c.frente || c.pergunta,
-        verso: c.verso || c.resposta,
-      }))
-
-    try {
-      await auditTopicBundleConsistency({
-        flashcards: cards,
-        materialSample: JSON.stringify(materialParsed || {}).slice(0, 8000),
-        questoesSample: JSON.stringify(questoesParsed || {}).slice(0, 8000),
-        courseContext: {
-          banca: examCtx.banca,
-          concursoName: examCtx.concursoName,
-          cargo: examCtx.cargo,
-          disciplina,
-          topicoNome: topic.topicoNome,
-        },
-      })
-    } catch (bundleErr) {
-      if (resolveLegalFlag(disciplina)) throw bundleErr
-      console.warn('[localJob] bundle factual avisou — publicando:', bundleErr?.message)
-    }
-    await markBundleAuditPassed(courseId, topicKey, jobId)
-  }
+  // Sem auditoria cruzada — cada asset já passou no Google Search (ok publica / não-ok descarta)
+  await markBundleAuditPassed(courseId, topicKey, jobId)
 
   if (autoPublish) {
     await publishTopicAssets(courseId, {

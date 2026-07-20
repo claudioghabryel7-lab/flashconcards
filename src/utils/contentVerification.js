@@ -220,30 +220,46 @@ FLASHCARDS:
 ${truncateForVerification(flashcardsJson, FLASHCARD_VERIFY_CHARS)}`
 }
 
-export function buildConsistencyAuditPrompt({
-  flashcardsSample = '',
-  materialSample = '',
-  questoesSample = '',
-  courseContext = {},
-} = {}) {
-  const { banca, concurso, cargo } = examHeader(courseContext)
+export function buildGoogleSearchFilterPrompt(content, courseData = {}, contentType = '') {
+  const { banca, concurso, cargo, disciplina, hoje } = examHeader(courseData)
+  const topico = courseData.topicoNome || courseData.topico || ''
 
-  return `Verifique CONSISTÊNCIA entre flashcards, material e questões do MESMO tópico.
-Banca: ${banca} | Concurso: ${concurso} | Cargo: ${cargo}
+  if (contentType === 'flashcards' || contentType === 'questoes') {
+    const label = contentType === 'flashcards' ? 'flashcards' : 'questões'
+    return `Você vai RELER o conteúdo com Google Search (fontes oficiais) e filtrar o que pode publicar.
+Concurso: ${concurso} | Cargo: ${cargo} | Banca: ${banca}
+Disciplina: ${disciplina} | Tópico: ${topico} | Data: ${hoje}
 
-Detecte só contradições FALSAS claras entre os três. Em dúvida, aprove.
+CONTEÚDO (array indexado a partir de 0):
+${truncateForVerification(content, FLASHCARD_VERIFY_CHARS)}
 
 Responda APENAS JSON:
-{"aprovado": true|false, "problemas": [{"trecho":"...","status":"FALSO|INCERTO","motivo":"..."}], "texto_corrigido": null}
+{
+  "indices_ok": [0, 1, 2],
+  "indices_rejeitados": [{"indice": 3, "motivo": "fato FALSO"}]
+}
 
-FLASHCARDS (amostra):
-${flashcardsSample}
+Regras:
+- Use Google Search. Só rejeite item com erro FALSO claro (lei/artigo inventado, fato invertido).
+- Em dúvida → coloque em indices_ok.
+- INCERTO / estilo / preferência → indices_ok.
+- Não invente índices. indices_ok + rejeitados devem cobrir todos os ${label}.`
+  }
 
-MATERIAL (trecho):
-${String(materialSample).slice(0, 5000)}
+  return `Você vai RELER o material com Google Search e decidir se pode publicar.
+Concurso: ${concurso} | Cargo: ${cargo} | Banca: ${banca}
+Disciplina: ${disciplina} | Tópico: ${topico} | Data: ${hoje}
 
-QUESTÕES (trecho):
-${String(questoesSample).slice(0, 5000)}`
+MATERIAL:
+${truncateForVerification(content)}
+
+Responda APENAS JSON:
+{ "aprovado": true ou false, "motivo": "curto" }
+
+Regras:
+- aprovado=false SÓ com FALSO claro comprovado via busca.
+- Em dúvida → aprovado=true.
+- Não reprove por estilo, clareza ou amostra parcial.`
 }
 
 export function parseVerificationResult(rawText = {}) {
@@ -257,12 +273,35 @@ export function parseVerificationResult(rawText = {}) {
     falsosCount: 0,
   }
 
+  const tryParse = (text) => {
+    const cleaned = String(text || '')
+      .replace(/```json\s*/gi, '')
+      .replace(/```/g, '')
+      .trim()
+    const start = cleaned.search(/\{/)
+    if (start < 0) return null
+    let s = cleaned.slice(start)
+    const openBraces = (s.match(/\{/g) || []).length - (s.match(/\}/g) || []).length
+    const openBrackets = (s.match(/\[/g) || []).length - (s.match(/\]/g) || []).length
+    if (openBrackets > 0) s += ']'.repeat(Math.min(openBrackets, 20))
+    if (openBraces > 0) s += '}'.repeat(Math.min(openBraces, 20))
+    s = s.replace(/,\s*([}\]])/g, '$1')
+    try {
+      return JSON.parse(s)
+    } catch {
+      return null
+    }
+  }
+
   try {
-    const jsonMatch = String(rawText).match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return technicalFail
-    const parsed = JSON.parse(jsonMatch[0])
+    let parsed = tryParse(rawText)
+    if (!parsed) {
+      const greedy = String(rawText).match(/\{[\s\S]*\}/)
+      if (greedy) parsed = tryParse(greedy[0])
+    }
+    if (!parsed) return technicalFail
+
     const problemas = Array.isArray(parsed.problemas) ? parsed.problemas : []
-    // Ignora FALSOs fantasma (auditor reclamando da amostra truncada)
     const realProblemas = problemas.filter((p) => !isPhantomAuditProblem(p))
     const blocking = realProblemas.filter((p) => {
       const s = String(p?.status || '').toUpperCase()
@@ -276,7 +315,6 @@ export function parseVerificationResult(rawText = {}) {
         textoCorrigido = null
       }
     }
-    // Se só havia fantasmas de truncagem → aprova
     if (blocking.length === 0) {
       return {
         aprovado: true,
