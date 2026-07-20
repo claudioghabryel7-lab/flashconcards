@@ -10,6 +10,7 @@ import {
 import { doc, getDoc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore'
 import { useAuth } from '../../hooks/useAuth'
 import MentoradoDayAutomationStatus from '../guiaMentorado/MentoradoDayAutomationStatus'
+import AdminAndroidAutomationCard from './AdminAndroidAutomationCard'
 import {
   applyGuiaMentoradoConfigToAllCourses,
   formatDailyReleaseLabel,
@@ -867,6 +868,13 @@ export default function AdminGuiaMentorado() {
           )}
         </div>
       </div>
+
+      <AdminAndroidAutomationCard
+        courseId={courseId}
+        courseName={courseName}
+        busy={busyAction === 'today'}
+        onAutomateToday={handleToday}
+      />
 
       <div className="flex flex-wrap gap-3">
         <button

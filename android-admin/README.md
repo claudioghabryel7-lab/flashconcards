@@ -21,15 +21,18 @@ volta diretamente ao site no mesmo aparelho; não existe backend intermediário.
 Para teste por USB, também é possível selecionar o dispositivo no Android Studio
 e executar o módulo `app`.
 
-## Uso
+## Uso mais fácil (1 clique)
 
-1. Abra o aplicativo e entre no painel admin do FlashConCards.
-2. Toque em **Google / Login** e confirme que o Modo IA está disponível. Faça
-   login se o Google permitir a autenticação no WebView.
-3. Volte em **FlashConCards**.
-4. Inicie a geração no Guia Mentorado.
-5. A cada tópico, o aplicativo abre o Google, coleta o dossiê e retorna sozinho
-   ao painel para gerar material, questões e flashcards.
+1. Instale o APK e abra o app.
+2. Faça login no admin (aba FlashConCards).
+3. Em **Google / Login**, entre na conta Google uma vez.
+4. Volte para FlashConCards → aba **Guia Mentorado**.
+5. Toque no botão verde **Automatizar hoje (1 clique)**.
+
+O app consulta o Modo IA sozinho e gera material, questões e flashcards.
+
+No Chrome do celular, o botão **Abrir no app Android** tenta abrir este aplicativo
+(se já estiver instalado).
 
 ## Observação importante
 

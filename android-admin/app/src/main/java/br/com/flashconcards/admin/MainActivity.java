@@ -111,8 +111,33 @@ public class MainActivity extends Activity {
         configureSiteWebView();
         configureGoogleWebView();
 
-        siteWebView.loadUrl(SITE_URL);
+        siteWebView.loadUrl(resolveLaunchUrl(getIntent()));
         googleWebView.loadUrl(GOOGLE_AI_URL);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        String url = resolveLaunchUrl(intent);
+        if (siteWebView != null && url != null) {
+            showSite();
+            siteWebView.loadUrl(url);
+        }
+    }
+
+    private String resolveLaunchUrl(Intent intent) {
+        if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
+            Uri data = intent.getData();
+            if ("fccadmin".equals(data.getScheme())) {
+                return SITE_URL + "?tab=guia-mentorado";
+            }
+            String host = data.getHost();
+            if ("www.flashconcards.com.br".equals(host) || "flashconcards.com.br".equals(host)) {
+                return data.toString();
+            }
+        }
+        return SITE_URL + "?tab=guia-mentorado";
     }
 
     @SuppressLint("SetJavaScriptEnabled")

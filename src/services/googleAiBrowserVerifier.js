@@ -201,7 +201,7 @@ export async function getGoogleAiTopicDossier(meta = {}, { forceFresh = false } 
     const wrapped = new Error(
       extensionReady
         ? `Google AI local indisponível: ${error?.message || error}`
-        : 'Extensão FlashConCards Google AI Bridge não detectada. Instale/recarregue a extensão e mantenha o admin online.',
+        : 'App Android FlashConCards Admin (ou extensão Chrome) não detectado. Abra o admin pelo app e toque em “Automatizar hoje”.',
     )
     wrapped.code = 'google_ai_bridge_unavailable'
     throw wrapped
@@ -230,3 +230,34 @@ Use EXCLUSIVAMENTE os fatos confirmados no dossiê para afirmações específica
 Se o dossiê não confirmar lei, artigo, data, prazo ou exceção, omita esse dado.
 Não contradiga nem extrapole o dossiê.`
 }
+
+/** Detecta ponte local: app Android ou extensão Chrome. */
+export async function detectGoogleAiBridge() {
+  if (typeof window === 'undefined') {
+    return { available: false, kind: null }
+  }
+  if (window.FlashConCardsAndroid?.requestGoogleAi) {
+    extensionReady = true
+    return { available: true, kind: 'android' }
+  }
+  const ready = await ensureExtensionReady()
+  if (ready || extensionReady) {
+    return { available: true, kind: 'extension' }
+  }
+  return { available: false, kind: null }
+}
+
+export function openFlashConCardsAndroidApp() {
+  if (typeof window === 'undefined') return
+  const fallback = `${window.location.origin}/admin?tab=guia-mentorado`
+  // Scheme customizado do app; se não estiver instalado, o intent HTTPS tenta o package.
+  window.location.href = 'fccadmin://open'
+  setTimeout(() => {
+    const intent =
+      'intent://www.flashconcards.com.br/admin?tab=guia-mentorado#Intent;' +
+      'scheme=https;package=br.com.flashconcards.admin;' +
+      `S.browser_fallback_url=${encodeURIComponent(fallback)};end`
+    window.location.href = intent
+  }, 700)
+}
+
