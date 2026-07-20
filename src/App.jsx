@@ -39,6 +39,7 @@ const GuiaEstudos = lazy(() => import('./routes/GuiaEstudos'))
 const GuiaMentorado = lazy(() => import('./routes/GuiaMentorado'))
 const GuiaMentoradoDiaView = lazy(() => import('./routes/GuiaMentoradoDiaView'))
 const MateriasDeHoje = lazy(() => import('./routes/MateriasDeHoje'))
+const AdminModoIaApp = lazy(() => import('./routes/AdminModoIaApp'))
 const TestTrial = lazy(() => import('./routes/TestTrial'))
 const Mentoria = lazy(() => import('./routes/Mentoria'))
 const MateriaRevisada = lazy(() => import('./routes/MateriaRevisada'))
@@ -499,6 +500,14 @@ function App() {
             element={
               <ProtectedRoute adminOnly requireCourseSelection={false}>
                 <AdminPanel />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/modo-ia"
+            element={
+              <ProtectedRoute adminOnly requireCourseSelection={false}>
+                <AdminModoIaApp />
               </ProtectedRoute>
             }
           />

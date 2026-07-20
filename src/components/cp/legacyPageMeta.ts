@@ -7,6 +7,13 @@ export type LegacyPageMeta = Omit<CPPageHeaderProps, 'actions'> & {
 }
 
 export const LEGACY_PAGE_META: Record<string, LegacyPageMeta> = {
+  '/admin/modo-ia': {
+    badge: 'Admin',
+    title: 'Modo IA (grounding)',
+    subtitle: 'App interno: pesquisa Google automática sem download',
+    backHref: '/admin?tab=guia-mentorado',
+    backLabel: 'Guia Mentorado',
+  },
   '/materias-de-hoje': {
     badge: 'Hoje',
     title: 'Matérias de hoje',

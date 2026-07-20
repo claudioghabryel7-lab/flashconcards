@@ -215,9 +215,29 @@ export async function getGoogleAiTopicDossier(meta = {}, { forceFresh = false } 
   return { text, cached: false }
 }
 
-/** Nunca bloqueia a geração: usa ponte se existir; senão segue sem dossiê. */
+/** Nunca bloqueia a geração: tenta app web admin → ponte → segue sem dossiê. */
 export async function getGoogleAiTopicDossierOptional(meta = {}, options = {}) {
   try {
+    if (!options.forceFresh) {
+      const cached = readCache(meta)
+      if (cached) return { text: cached, cached: true }
+    }
+
+    // App interno /admin/modo-ia — busca Google pelo browser do admin (sem download)
+    try {
+      const { fetchAdminModoIaDossier } = await import('./googleAiWebDossierService')
+      const web = await fetchAdminModoIaDossier(meta, {
+        forceFresh: options.forceFresh,
+        onStatus: options.onStatus,
+      })
+      if (web?.text && web.text.length >= 120) {
+        writeCache(meta, web.text)
+        return { text: web.text, cached: false, source: web.source }
+      }
+    } catch {
+      // continua
+    }
+
     const bridge = await detectGoogleAiBridge()
     if (!bridge.available) return { text: '', cached: false, skipped: true }
     return await getGoogleAiTopicDossier(meta, options)
