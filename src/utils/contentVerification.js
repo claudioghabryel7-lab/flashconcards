@@ -15,6 +15,13 @@ const LEGAL_CLAIM_PATTERNS = [
   /juiz\s+das\s+garantias/gi,
 ]
 
+export function isLikelyLegalDiscipline(disciplina = '') {
+  const n = String(disciplina || '').toLowerCase()
+  return /direito|constitucional|penal|administrativ|processual|tribut|legisla|juríd|juridic|cf\/88|\bc\.?\s*c\.?|\bc\.?\s*p\.?|\bcpc\b|\bcpp\b|\bclt\b|emprego público|servidor/.test(
+    n,
+  )
+}
+
 export function truncateForVerification(text = '') {
   if (!text || text.length <= MAX_VERIFY_CHARS) return text
 
