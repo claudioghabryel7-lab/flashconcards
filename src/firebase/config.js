@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { initializeFirestore } from 'firebase/firestore'
+import { initializeFirestore, memoryLocalCache } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { ENV } from '../lib/env.js'
 
@@ -34,11 +34,12 @@ function initFirebase() {
   try {
     app = initializeApp(firebaseConfig)
     auth = getAuth(app)
-    // Long-polling evita ERR_SSL_PROTOCOL_ERROR / WebChannel quebrado em
-    // redes, proxies, antivírus e navegadores mobile (PC + Android).
+    // Long-polling + cache em memória: evita WebChannel SSL quebrado e
+    // IndexedDB corrompido (comum após SW legado / falha de rede).
     db = initializeFirestore(app, {
       experimentalForceLongPolling: true,
-      experimentalAutoDetectLongPolling: false,
+      experimentalLongPollingOptions: { timeoutSeconds: 10 },
+      localCache: memoryLocalCache(),
     })
     storage = getStorage(app)
     firebaseInitialized = true

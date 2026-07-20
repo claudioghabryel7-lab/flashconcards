@@ -17,11 +17,37 @@ import { cleanupConsole } from '@/lib/consoleCleanup'
 import BackgroundGenerationBanner from '@/components/BackgroundGenerationBanner'
 import CourseReviewPrompt from '@/components/CourseReviewPrompt'
 import PushPermissionBanner from '@/components/PushPermissionBanner'
+import {
+  ensureFirestoreTransportRecovery,
+  probeFirestoreHost,
+} from '@/utils/firestoreTransportRecovery'
 
 function ClientBootstrap() {
   useEffect(() => {
     cleanupConsole()
-    initFirebase()
+    let cancelled = false
+
+    ;(async () => {
+      const recovery = await ensureFirestoreTransportRecovery()
+      if (cancelled) return
+      if (recovery.cleaned) {
+        // Uma vez: limpa SW legado / IndexedDB e recarrega para abrir canal limpo
+        window.location.reload()
+        return
+      }
+
+      initFirebase()
+      const probe = await probeFirestoreHost()
+      if (cancelled || probe.ok) return
+      console.warn(
+        '[Firestore] Handshake SSL falhou. Teste dados móveis, desative VPN/antivírus ou IPv6 no roteador.',
+        probe.reason,
+      )
+    })()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
   useOnlineStatus()
   useSiteCacheSync()
