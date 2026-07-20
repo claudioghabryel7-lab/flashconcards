@@ -120,20 +120,41 @@ export async function tickMentoradoDailyOnline(adminUserId) {
         }
 
         // Horário passou e ainda não rodou → catch-up agora (admin online)
-        const userId = automation.automationUserId || adminUserId
-        const { jobId, promise, topicCount } = await startMentoradoDayContentAutomation({
-          userId,
-          courseId,
-          targetDate: todayKey,
-          autoPublish: true,
-        })
-
+        // Marca ANTES de enfileirar — evita 2º tick / clique manual duplicar o dia
         await markDailyChecked(courseId, todayKey, { started: true })
-        results.push({ courseId, started: true, jobId, topicCount })
 
-        // Um curso por tick — evita saturar a aba
-        promise.catch(() => {})
-        break
+        const userId = automation.automationUserId || adminUserId
+        try {
+          const { jobId, promise, topicCount, duplicate } = await startMentoradoDayContentAutomation({
+            userId,
+            courseId,
+            targetDate: todayKey,
+            autoPublish: true,
+          })
+
+          results.push({
+            courseId,
+            started: !duplicate,
+            duplicate: Boolean(duplicate),
+            jobId,
+            topicCount,
+          })
+
+          // Um curso por tick — evita saturar a aba
+          promise?.catch(() => {})
+          break
+        } catch (startErr) {
+          if (startErr?.code === 'duplicate_generation_job') {
+            results.push({
+              courseId,
+              skipped: true,
+              reason: 'job_duplicado',
+              existingJobId: startErr.existingJobId,
+            })
+            break
+          }
+          throw startErr
+        }
       } catch (err) {
         const message = err?.message || String(err)
         results.push({ courseId, error: message })

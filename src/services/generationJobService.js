@@ -73,6 +73,79 @@ function jobsRef(userId) {
   return collection(db, 'users', userId, 'generationJobs')
 }
 
+export const GENERATION_ACTIVE_STATUSES = [
+  GENERATION_JOB_STATUS.PENDING,
+  GENERATION_JOB_STATUS.RUNNING,
+  ...GENERATION_WAITING_STATUSES,
+]
+
+/** Chave estável para detectar 2 jobs gerando a mesma coisa. */
+export function buildGenerationJobFingerprint({
+  courseId = null,
+  jobType,
+  topicKey = null,
+  metadata = {},
+} = {}) {
+  const targetDate = metadata?.targetDate || metadata?.dayKey || ''
+  const flagId = metadata?.flagId || ''
+  return [
+    String(jobType || ''),
+    String(courseId || ''),
+    String(topicKey || ''),
+    String(targetDate || ''),
+    String(flagId || ''),
+  ].join('::')
+}
+
+function jobMatchesFingerprint(data = {}, fingerprintParts = {}) {
+  if (String(data.jobType || '') !== String(fingerprintParts.jobType || '')) return false
+  if (String(data.courseId || '') !== String(fingerprintParts.courseId || '')) return false
+  if (String(data.topicKey || '') !== String(fingerprintParts.topicKey || '')) return false
+  const wantDate = fingerprintParts.metadata?.targetDate || fingerprintParts.metadata?.dayKey || ''
+  const gotDate = data.metadata?.targetDate || data.metadata?.dayKey || ''
+  if (String(wantDate || '') !== String(gotDate || '')) return false
+  const wantFlag = fingerprintParts.metadata?.flagId || ''
+  const gotFlag = data.metadata?.flagId || ''
+  if (String(wantFlag || '') !== String(gotFlag || '')) return false
+  return true
+}
+
+/**
+ * Retorna job ativo (pending/running/waiting) com a mesma assinatura, se houver.
+ */
+export async function findActiveDuplicateGenerationJob({
+  userId,
+  courseId = null,
+  jobType,
+  topicKey = null,
+  metadata = {},
+}) {
+  if (!userId || !db || !jobType) return null
+
+  // Só status (evita índice composto novo); filtra jobType/curso no cliente.
+  const snap = await getDocs(
+    query(
+      jobsRef(userId),
+      where('status', 'in', [
+        GENERATION_JOB_STATUS.PENDING,
+        GENERATION_JOB_STATUS.RUNNING,
+        GENERATION_JOB_STATUS.WAITING_API,
+        GENERATION_JOB_STATUS.WAITING_RETRY,
+        GENERATION_JOB_STATUS.WAITING_TIMEOUT,
+      ]),
+    ),
+  )
+
+  const parts = { courseId, jobType, topicKey, metadata }
+  for (const d of snap.docs) {
+    const data = d.data() || {}
+    if (jobMatchesFingerprint(data, parts)) {
+      return { id: d.id, ...data }
+    }
+  }
+  return null
+}
+
 export async function createGenerationJob({
   userId,
   courseId,
@@ -84,6 +157,22 @@ export async function createGenerationJob({
 }) {
   if (!userId || !db) throw new Error('Usuário não autenticado.')
 
+  const duplicate = await findActiveDuplicateGenerationJob({
+    userId,
+    courseId,
+    jobType,
+    topicKey,
+    metadata,
+  })
+  if (duplicate) {
+    const err = new Error(
+      `Já existe um job ativo gerando o mesmo conteúdo (${String(duplicate.id).slice(0, 8)}…). Aguarde terminar.`,
+    )
+    err.code = 'duplicate_generation_job'
+    err.existingJobId = duplicate.id
+    throw err
+  }
+
   // Geração local na aba do admin — sem Cloud / sem payload no Firestore.
   const ref = await addDoc(
     jobsRef(userId),
@@ -93,6 +182,7 @@ export async function createGenerationJob({
       jobType,
       topicKey,
       metadata,
+      fingerprint: buildGenerationJobFingerprint({ courseId, jobType, topicKey, metadata }),
       runOnServer: false,
       serverPayload: null,
       status: GENERATION_JOB_STATUS.PENDING,

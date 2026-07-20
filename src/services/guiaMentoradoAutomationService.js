@@ -233,7 +233,7 @@ export async function startMentoradoDayContentAutomation({
     throw new Error(messages[prepared.reason] || `Não foi possível preparar o dia ${targetDate}.`)
   }
 
-  const { jobId, promise } = await startBackgroundGeneration({
+  const { jobId, promise, duplicate } = await startBackgroundGeneration({
     userId,
     courseId,
     jobType: 'guia_mentorado_automation',
@@ -252,7 +252,7 @@ export async function startMentoradoDayContentAutomation({
     },
   })
 
-  return { jobId, promise, topicCount: prepared.topicCount }
+  return { jobId, promise, topicCount: prepared.topicCount, duplicate: Boolean(duplicate) }
 }
 
 /**

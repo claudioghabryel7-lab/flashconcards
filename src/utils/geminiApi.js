@@ -74,6 +74,9 @@ export function formatAiErrorForUser(error) {
     return 'Cota da API Gemini esgotada ou limite gratuito atingido. Tente novamente mais tarde ou configure outra chave.'
   }
   const code = String(error?.code || '')
+  if (code === 'duplicate_generation_job') {
+    return error?.message || 'Já existe um job ativo gerando o mesmo conteúdo. Aguarde terminar.'
+  }
   if (code === 'legal_audit_failed' || code === 'bundle_consistency_failed') {
     return (
       error?.message ||
@@ -83,6 +86,9 @@ export function formatAiErrorForUser(error) {
   const msg = String(error?.message || error || '')
   if (msg.includes('Nenhum JSON') || msg.includes('reparar o JSON') || msg.includes('formato inválido')) {
     return 'A IA respondeu em formato inválido ou incompleto. Tente gerar novamente.'
+  }
+  if (msg.includes('mesmo conteúdo') || msg.includes('job ativo')) {
+    return msg
   }
   return 'Falha na geração com IA. Tente novamente.'
 }
