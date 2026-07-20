@@ -98,6 +98,50 @@ async function applyQuestaoPatch(content, verdict) {
   return 1
 }
 
+async function applyMaterialPatch(content, verdict) {
+  const corr = (verdict.corrections || []).find(
+    (c) =>
+      !c.target ||
+      c.target === 'material' ||
+      c.target === 'conteudo' ||
+      c.field === 'content' ||
+      c.field === 'titulo' ||
+      c.field === 'subtitulo' ||
+      c.field === 'secoes',
+  )
+  if (!corr?.newText) return 0
+
+  let pack = null
+  try {
+    pack = JSON.parse(corr.newText)
+  } catch {
+    pack = null
+  }
+
+  const patch = { updatedAt: serverTimestamp(), professorCorrectedAt: serverTimestamp() }
+
+  if (pack && typeof pack === 'object') {
+    if (pack.content != null) patch.content = pack.content
+    if (pack.titulo != null) patch.titulo = pack.titulo
+    if (pack.subtitulo != null) patch.subtitulo = pack.subtitulo
+    if (pack.materia != null) patch.materia = pack.materia
+    if (Array.isArray(pack.secoes)) patch.secoes = pack.secoes
+    if (pack.revisaoTurbo != null) patch.revisaoTurbo = pack.revisaoTurbo
+    if (pack.pegadinhas != null) patch.pegadinhas = pack.pegadinhas
+    if (pack.raioXProbabilidade != null) patch.raioXProbabilidade = pack.raioXProbabilidade
+  } else {
+    const field = String(corr.field || 'content').toLowerCase()
+    if (field === 'titulo') patch.titulo = corr.newText
+    else if (field === 'subtitulo') patch.subtitulo = corr.newText
+    else patch.content = corr.newText
+  }
+
+  const keys = Object.keys(patch).filter((k) => k !== 'updatedAt' && k !== 'professorCorrectedAt')
+  if (!keys.length) return 0
+  await updateDoc(content.ref, patch)
+  return 1
+}
+
 /**
  * Processa um item professor_supervisor (flag) no cliente.
  */
@@ -144,7 +188,12 @@ export async function processProfessorFlagLocal({
 Para questão use:
 { "target": "questao", "field": "aligned", "newText": "{\\"correta\\":\\"A\\",\\"gabaritoComentado\\":\\"...\\",\\"enunciado\\":\\"...\\",\\"alternativas\\":{}}" }
 `
-      : `
+      : content.kind === 'material' || content.kind === 'incidencia'
+        ? `
+Para material use:
+{ "target": "material", "field": "content", "newText": "{\\"content\\":\\"...html ou markdown corrigido...\\",\\"titulo\\":\\"...\\"}" }
+`
+        : `
 Para flashcard use:
 { "target": "flashcard", "field": "ambos", "newText": "FRENTE:\\n...\\n\\nVERSO:\\n..." }
 `
@@ -199,6 +248,8 @@ REGRAS:
       applied = await applyFlashcardPatch(content, verdict)
     } else if (content.kind === 'questao') {
       applied = await applyQuestaoPatch(content, verdict)
+    } else if (content.kind === 'material' || content.kind === 'incidencia') {
+      applied = await applyMaterialPatch(content, verdict)
     }
   }
 

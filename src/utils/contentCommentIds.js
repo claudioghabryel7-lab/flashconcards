@@ -106,3 +106,10 @@ export function buildFlashcardContentId({ courseId, topicKey, card, cardIndex = 
   const hash = pergunta ? simpleHash(pergunta.slice(0, 240)) : `idx${cardIndex}`
   return `${courseId || 'course'}_fc_${topic}_${hash}`.slice(0, 500)
 }
+
+/** ID estável para material completo (conteudosCompletos). */
+export function buildMaterialContentId({ courseId, topicKey }) {
+  const course = String(courseId || 'course').slice(0, 40)
+  const topic = sanitizeTopicKeyForContentId(topicKey)
+  return `${course}_mat_completo_${topic}`.slice(0, 500)
+}

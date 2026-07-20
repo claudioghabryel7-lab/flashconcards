@@ -1,7 +1,8 @@
 /**
  * Guia Mentorado — tick local enquanto o admin está online.
- * Se o horário do dia já passou e ainda não rodou hoje → gera agora.
- * Se já rodou hoje → só confirma (skip).
+ * 1) Se não há cronograma → gera determinístico (sem IA)
+ * 2) Se o horário do dia já passou e ainda não rodou → gera conteúdos do dia
+ * 3) Redação: a cada 7 dias, se não gerou tema → rotaciona (fallback)
  */
 import {
   collection,
@@ -13,7 +14,10 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { normalizeMentoradoAutomationConfig } from '../utils/guiaMentoradoAutomationConfig'
-import { startMentoradoDayContentAutomation } from './guiaMentoradoAutomationService'
+import {
+  startGuiaMentoradoCronogramaGeneration,
+  startMentoradoDayContentAutomation,
+} from './guiaMentoradoAutomationService'
 import { getActiveGenerationCount } from './aiGenerationRunner'
 
 function getTodayKeyInSaoPaulo(date = new Date()) {
@@ -60,10 +64,29 @@ async function markDailyChecked(courseId, todayKey, extra = {}) {
   )
 }
 
+async function courseHasCronogramaDay(courseId, dayKey) {
+  const monthKey = String(dayKey || '').slice(0, 7)
+  if (!monthKey) return false
+  const snap = await getDoc(doc(db, 'courses', courseId, 'cronograma', monthKey))
+  if (!snap.exists()) return false
+  return Boolean(snap.data()?.days?.[dayKey])
+}
+
+async function loadMentoradoConfigForCronograma(courseId) {
+  const [cfgSnap, guiaSnap] = await Promise.all([
+    getDoc(doc(db, 'courses', courseId, 'config', 'guiaMentorado')),
+    getDoc(doc(db, 'courses', courseId, 'guiaMentorado', 'config')),
+  ])
+  return {
+    ...(guiaSnap.exists() ? guiaSnap.data() : {}),
+    ...(cfgSnap.exists() ? cfgSnap.data() : {}),
+  }
+}
+
 let busy = false
 
 /**
- * Varre cursos e dispara o dia de hoje se a programação pediu e ainda não rodou.
+ * Varre cursos: cronograma faltando → gera; depois dia de hoje; depois redação 7d.
  */
 export async function tickMentoradoDailyOnline(adminUserId) {
   if (!db || !adminUserId || busy) return { skipped: true, reason: 'busy' }
@@ -92,7 +115,8 @@ export async function tickMentoradoDailyOnline(adminUserId) {
           continue
         }
 
-        const automation = normalizeMentoradoAutomationConfig(cfgSnap.data())
+        const rawCfg = cfgSnap.data() || {}
+        const automation = normalizeMentoradoAutomationConfig(rawCfg)
         if (!automation.enabled) {
           results.push({ courseId, skipped: true, reason: 'desligado' })
           continue
@@ -102,66 +126,104 @@ export async function tickMentoradoDailyOnline(adminUserId) {
           continue
         }
 
-        // Já ativou hoje → só checking
-        if (automation.lastDailyRunDayKey === todayKey) {
-          results.push({ courseId, skipped: true, reason: 'ja_rodou_hoje', checked: true })
-          continue
+        const userId = automation.automationUserId || adminUserId
+
+        // 1) Sem dia no cronograma → gera cronograma determinístico (1 curso/tick)
+        const hasDay = await courseHasCronogramaDay(courseId, todayKey)
+        if (!hasDay) {
+          const config = await loadMentoradoConfigForCronograma(courseId)
+          const { jobId, promise, duplicate } = await startGuiaMentoradoCronogramaGeneration({
+            userId,
+            courseId,
+            config: {
+              ...config,
+              hasRedacao: config.hasRedacao ?? automation.hasRedacao,
+              hasTAF: config.hasTAF ?? automation.hasTAF,
+              tafExercicios: config.tafExercicios || automation.tafExercicios || [],
+              dataProva: config.dataProva || automation.dataProva || null,
+              autoGerarConteudo: true,
+            },
+          })
+          results.push({
+            courseId,
+            started: !duplicate,
+            duplicate: Boolean(duplicate),
+            jobId,
+            kind: 'cronograma',
+          })
+          promise?.catch(() => {})
+          break
         }
 
-        // Ainda não chegou o horário → espera
-        if (!isPastReleaseTime(automation, clock)) {
+        // 2) Já ativou conteúdos hoje → segue para redação fallback abaixo
+        if (automation.lastDailyRunDayKey === todayKey) {
+          results.push({ courseId, skipped: true, reason: 'ja_rodou_hoje', checked: true })
+        } else if (!isPastReleaseTime(automation, clock)) {
           results.push({
             courseId,
             skipped: true,
             reason: 'antes_do_horario',
             at: `${String(automation.schedule.dailyReleaseHour).padStart(2, '0')}:${String(automation.schedule.dailyReleaseMinute).padStart(2, '0')}`,
           })
-          continue
-        }
+        } else {
+          await markDailyChecked(courseId, todayKey, { started: true })
 
-        // Horário passou e ainda não rodou → catch-up agora (admin online)
-        // Marca ANTES de enfileirar — evita 2º tick / clique manual duplicar o dia
-        await markDailyChecked(courseId, todayKey, { started: true })
+          try {
+            const { jobId, promise, topicCount, duplicate } = await startMentoradoDayContentAutomation({
+              userId,
+              courseId,
+              targetDate: todayKey,
+              autoPublish: true,
+            })
 
-        const userId = automation.automationUserId || adminUserId
-        try {
-          const { jobId, promise, topicCount, duplicate } = await startMentoradoDayContentAutomation({
-            userId,
-            courseId,
-            targetDate: todayKey,
-            autoPublish: true,
-          })
-
-          results.push({
-            courseId,
-            started: !duplicate,
-            duplicate: Boolean(duplicate),
-            jobId,
-            topicCount,
-          })
-
-          // Um curso por tick — evita saturar a aba
-          promise?.catch(() => {})
-          break
-        } catch (startErr) {
-          if (startErr?.code === 'duplicate_generation_job') {
             results.push({
               courseId,
-              skipped: true,
-              reason: 'job_duplicado',
-              existingJobId: startErr.existingJobId,
+              started: !duplicate,
+              duplicate: Boolean(duplicate),
+              jobId,
+              topicCount,
+              kind: 'dia',
             })
+
+            promise?.catch(() => {})
             break
+          } catch (startErr) {
+            if (startErr?.code === 'duplicate_generation_job') {
+              results.push({
+                courseId,
+                skipped: true,
+                reason: 'job_duplicado',
+                existingJobId: startErr.existingJobId,
+              })
+              break
+            }
+            throw startErr
           }
-          throw startErr
         }
       } catch (err) {
         const message = err?.message || String(err)
         results.push({ courseId, error: message })
-        // Dias sem cronograma/edital: marca o dia para não martelar a cada minuto
         if (/não encontrado|Nenhum tópico|sem conteúdos/i.test(message)) {
           await markDailyChecked(courseId, todayKey, { lastError: message }).catch(() => {})
         }
+      }
+    }
+
+    // 3) Fallback redação a cada 7 dias (admin online) — mesmo se o dia já rodou
+    if (getActiveGenerationCount() === 0) {
+      try {
+        const { tickProfessorRedacaoWeekly } = await import('./localProfessorRedacao')
+        const redacaoTick = await tickProfessorRedacaoWeekly()
+        if (redacaoTick?.didRotate) {
+          results.push({
+            kind: 'redacao_theme',
+            started: true,
+            courseId: redacaoTick.rotated?.[0]?.courseId,
+            tema: redacaoTick.rotated?.[0]?.tema,
+          })
+        }
+      } catch (redacaoErr) {
+        console.warn('[mentoradoOnline] redação semanal:', redacaoErr?.message || redacaoErr)
       }
     }
   } finally {

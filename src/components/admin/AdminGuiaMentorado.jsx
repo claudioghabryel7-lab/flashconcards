@@ -891,7 +891,7 @@ export default function AdminGuiaMentorado() {
           className="inline-flex items-center gap-2 rounded-xl border border-cp-border px-4 py-2 text-sm font-semibold text-cp-text transition hover:bg-cp-surface disabled:cursor-not-allowed disabled:opacity-50"
         >
           <SparklesIcon className={`h-4 w-4 ${busyAction === 'cronograma' ? 'animate-pulse' : ''}`} />
-          {busyAction === 'cronograma' ? 'Gerando…' : 'Gerar cronograma'}
+          {busyAction === 'cronograma' ? 'Gerando…' : 'Gerar cronograma (edital completo)'}
         </button>
         <button
           type="button"

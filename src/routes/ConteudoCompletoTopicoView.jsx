@@ -18,6 +18,8 @@ import SimpleMaterialEditor from '../components/SimpleMaterialEditor'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import ShareToFeedButton from '../components/feed/ShareToFeedButton'
 import { FEED_POST_TYPES } from '../services/trilhaFeedService'
+import ContentFeedbackActions from '../components/content/ContentFeedbackActions'
+import { buildMaterialContentId } from '../utils/contentCommentIds'
 import { stripHtml } from '../utils/htmlTextHelpers'
 import ReactMarkdown from 'react-markdown'
 import jsPDF from 'jspdf'
@@ -1228,7 +1230,23 @@ REGRAS:
               )}
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
+              {(hasTopicAccess || isAdmin) && conteudo && resolvedCourseId && (
+                <ContentFeedbackActions
+                  courseId={resolvedCourseId}
+                  contentType="material"
+                  contentId={buildMaterialContentId({
+                    courseId: resolvedCourseId,
+                    topicKey: resolvedTopicKey,
+                  })}
+                  topicKey={resolvedTopicKey}
+                  preview={stripHtml(String(conteudo.content || conteudo.titulo || '')).slice(0, 240)}
+                  materia={conteudo.materia || conteudo.titulo || 'Material'}
+                  assunto={effectiveTopicNome || resolvedTopicKey}
+                  contextLabel="este material"
+                  variant="inline"
+                />
+              )}
               <button type="button" onClick={handleDownloadPDF} className="cp-btn-ghost !text-xs">
                 <DocumentArrowDownIcon className="w-4 h-4" />
                 PDF

@@ -180,33 +180,31 @@ export async function tickProfessorOnline(adminUserId) {
       await endSessionOutsideWindow(data)
     }
 
-    // Redação semanal só na janela/agenda
-    if (data.recurringDaily ? within : data.enabled) {
-      try {
-        const { tickProfessorRedacaoWeekly } = await import('./localProfessorRedacao')
-        const redacaoTick = await tickProfessorRedacaoWeekly()
-        if (redacaoTick?.didRotate) {
-          const first = redacaoTick.rotated?.[0]
-          await patchProfessorActivity({
-            phase: 'idle_queue',
-            lastMessage: `Tema de redação da semana publicado${
-              first?.tema ? `: ${String(first.tema).slice(0, 80)}…` : '.'
-            } (${first?.notified || 0} aluno(s) avisados).`,
-            itemsProcessedSession: Number(data.itemsProcessedSession || 0) + 1,
-            currentActivity: {
-              phase: 'done_item',
-              message: 'Redação semanal — novo tema',
-              itemType: 'redacao',
-              courseId: first?.courseId || null,
-              progress: 100,
-              updatedAt: serverTimestamp(),
-            },
-          })
-          return { started: true, kind: 'redacao_theme', courseId: first?.courseId }
-        }
-      } catch (redacaoErr) {
-        console.warn('[professorOnline] redação semanal:', redacaoErr?.message || redacaoErr)
+    // Redação semanal: sempre com admin online (fallback também no Mentorado)
+    try {
+      const { tickProfessorRedacaoWeekly } = await import('./localProfessorRedacao')
+      const redacaoTick = await tickProfessorRedacaoWeekly()
+      if (redacaoTick?.didRotate) {
+        const first = redacaoTick.rotated?.[0]
+        await patchProfessorActivity({
+          phase: 'idle_queue',
+          lastMessage: `Tema de redação da semana publicado${
+            first?.tema ? `: ${String(first.tema).slice(0, 80)}…` : '.'
+          } (${first?.notified || 0} aluno(s) avisados).`,
+          itemsProcessedSession: Number(data.itemsProcessedSession || 0) + 1,
+          currentActivity: {
+            phase: 'done_item',
+            message: 'Redação semanal — novo tema',
+            itemType: 'redacao',
+            courseId: first?.courseId || null,
+            progress: 100,
+            updatedAt: serverTimestamp(),
+          },
+        })
+        return { started: true, kind: 'redacao_theme', courseId: first?.courseId }
       }
+    } catch (redacaoErr) {
+      console.warn('[professorOnline] redação semanal:', redacaoErr?.message || redacaoErr)
     }
 
     // Moderação: SEMPRE com admin online (painel aberto), independente da agenda

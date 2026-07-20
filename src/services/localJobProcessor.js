@@ -15,7 +15,6 @@ import { db } from '../firebase/config'
 import { generateAiJson } from '../utils/geminiApi'
 import { isLikelyLegalDiscipline } from '../utils/contentVerification'
 import { buildFlashcardPrompt } from '../utils/unifiedPrompt'
-import { buildMentoradoCronogramaPrompt } from '../utils/guiaMentoradoPrompts'
 import { DEFAULT_PLANNING_DAYS } from '../constants/guiaMentorado'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 import {
@@ -1212,9 +1211,7 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
   const planningEnd = resolvePlanningEndDate(config)
 
   // Documento real: editalVerticalizado/principal (disciplinas) — NÃO "atual"
-  const { loadEditalVerticalizado, buildEditalStructurePrompt } = await import(
-    '../utils/editalVerticalizadoLoader'
-  )
+  const { loadEditalVerticalizado } = await import('../utils/editalVerticalizadoLoader')
   const edital = await loadEditalVerticalizado(courseId)
   if (!edital?.disciplinas?.length) {
     throw new Error(
@@ -1222,43 +1219,26 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
     )
   }
 
-  // Resumo compacto + lista estruturada (evita prompt gigante e edital vazio)
-  const editalSummary = edital.disciplinas.map((d) => ({
-    disciplina: d.nome || '',
-    topicos: (d.topicos || []).map((t) => ({
-      numero: t.numero || '',
-      nome: t.nome || '',
-    })),
-  }))
-  const editalText = buildEditalStructurePrompt(edital, 80)
+  await updateProgress(25, 'Montando cronograma (edital completo, sem IA)…')
 
-  await updateProgress(20, 'Gerando cronograma (sem Google Search)…')
-
-  const prompt = buildMentoradoCronogramaPrompt({
+  const { buildDeterministicMentoradoCronograma } = await import('../utils/buildMentoradoCronograma')
+  const { cronograma: days, meta } = buildDeterministicMentoradoCronograma({
+    edital,
     today,
     planningEnd,
     config,
-    editalSummary,
-    editalText,
-    usingDefaultWindow: !config.dataProva,
   })
 
-  const parsed = await generateAiJson(prompt, {
-    courseId,
-    trustedGeneration: true,
-    useGoogleSearch: false,
-    searchGrounded: false,
-    generationConfig: { maxOutputTokens: 32000, temperature: 0.3 },
-  })
-
-  const days = parsed?.cronograma || []
   if (!Array.isArray(days) || days.length < 1) {
-    const err = new Error('A IA não retornou dias de cronograma. Tente gerar de novo.')
+    const err = new Error('Não foi possível montar dias de cronograma a partir do edital.')
     err.code = 'cronograma_empty'
     throw err
   }
 
-  await updateProgress(70, `Salvando ${days.length} dias…`)
+  await updateProgress(
+    70,
+    `Salvando ${days.length} dias (${meta?.totalTopics || 0} tópicos)…`,
+  )
 
   const byMonth = {}
   for (const day of days) {
@@ -1303,11 +1283,13 @@ async function processGuiaMentoradoCronograma(courseId, serverPayload, updatePro
     { merge: true },
   )
 
-  await updateProgress(95, `Cronograma salvo (${days.length} dias)`)
+  await updateProgress(95, `Cronograma salvo (${days.length} dias, sem IA)`)
 
   return {
     totalDays: days.length,
     monthsCount: Object.keys(byMonth).length,
+    totalTopics: meta?.totalTopics || 0,
+    source: 'deterministic',
     autoGerarConteudo: Boolean(config?.autoGerarConteudo),
   }
 }
