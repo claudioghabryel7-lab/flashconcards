@@ -57,21 +57,21 @@ const Cursos = () => {
   }
 
   return (
-    <div className="min-h-screen py-16 sm:py-20 md:py-24">
+    <div className="min-h-screen py-8 sm:py-16">
       <div className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center space-y-4 mb-12">
+        <div className="text-center space-y-3 mb-8 sm:space-y-4 sm:mb-12">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-border-primary bg-background-card text-xs font-semibold text-accent-orange">
             <AcademicCapIcon className="h-4 w-4" />
             Cursos Premium
           </div>
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-text-primary">
+          <h1 className="text-2xl sm:text-5xl md:text-6xl font-black text-text-primary">
             Escolha seu caminho para a
             <span className="block gradient-text">
               Aprovação
             </span>
           </h1>
-          <p className="text-lg text-text-secondary max-w-2xl mx-auto">
+          <p className="text-sm sm:text-lg text-text-secondary max-w-2xl mx-auto">
             Cursos completos para Polícia Militar, Polícia Civil, GCM e muito mais. 
             Conteúdo atualizado e focado na banca do seu concurso.
           </p>
@@ -84,14 +84,14 @@ const Cursos = () => {
             <p className="mt-6 text-lg text-text-secondary">Carregando cursos...</p>
           </div>
         ) : courses.length > 0 ? (
-          <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
             {courses.map((course, index) => (
               <div
                 key={course.id}
                 className="group relative bg-background-card border border-border-primary rounded-xl overflow-hidden hover:border-accent-orange/50 transition-all duration-300 hover:-translate-y-1"
               >
                 {/* Image Section */}
-                <div className="relative h-56 overflow-hidden">
+                <div className="relative h-40 overflow-hidden sm:h-56">
                   {(course.imageUrl || course.imageBase64) ? (
                     <>
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent z-10"></div>
@@ -119,7 +119,7 @@ const Cursos = () => {
                 </div>
 
                 {/* Content Section */}
-                <div className="p-6 space-y-4">
+                <div className="p-4 space-y-3 sm:space-y-4">
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center gap-1 bg-accent-orange/10 text-accent-orange px-3 py-1 rounded-full text-xs font-bold">
                       {course.competition}

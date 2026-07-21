@@ -53,9 +53,19 @@
 .cp-legacy-root .glass-card {
   background: var(--cp-surface) !important;
   border: 1px solid var(--cp-border) !important;
-  border-radius: 16px !important;
+  border-radius: 12px !important;
   backdrop-filter: blur(12px);
   box-shadow: none !important;
+}
+
+@media (min-width: 640px) {
+  .cp-legacy-root .bg-background-card,
+  .cp-legacy-root .stark-card,
+  .cp-legacy-root .stark-glass,
+  .cp-legacy-root .stark-stats,
+  .cp-legacy-root .glass-card {
+    border-radius: 16px !important;
+  }
 }
 
 .cp-legacy-root .bg-background-card-hover,
@@ -127,7 +137,16 @@
   background: var(--cp-surface) !important;
   border: 1px solid var(--cp-border) !important;
   color: var(--cp-text) !important;
-  border-radius: 12px !important;
+  border-radius: 10px !important;
+}
+
+@media (min-width: 640px) {
+  .cp-legacy-root input,
+  .cp-legacy-root select,
+  .cp-legacy-root textarea,
+  .cp-legacy-root .premium-input {
+    border-radius: 12px !important;
+  }
 }
 
 .cp-legacy-root input:focus,

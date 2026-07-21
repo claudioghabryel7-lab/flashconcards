@@ -23,11 +23,11 @@ export function CPPageHeader({
 }: CPPageHeaderProps) {
   const showBack = backHref != null && backHref !== ''
   return (
-    <div className="cp-page-header mb-5 animate-fade-in sm:mb-8">
+    <div className="cp-page-header mb-3 animate-fade-in sm:mb-8">
       {showBack && (
         <Link
           href={backHref}
-          className="mb-3 inline-flex items-center gap-2 text-sm text-cp-muted transition hover:text-cp-text sm:mb-4"
+          className="mb-2 inline-flex items-center gap-2 text-sm text-cp-muted transition hover:text-cp-text sm:mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           {backLabel}
@@ -36,8 +36,8 @@ export function CPPageHeader({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div className="min-w-0 flex-1">
           {badge && <span className="cp-badge cp-badge-accent">{badge}</span>}
-          <h1 className="cp-headline mt-2 break-words text-xl sm:mt-4 sm:text-4xl">{title}</h1>
-          {subtitle && <p className="mt-1.5 max-w-2xl text-sm text-cp-muted sm:mt-2 sm:text-base">{subtitle}</p>}
+          <h1 className="cp-headline mt-1.5 break-words text-lg leading-tight sm:mt-4 sm:text-4xl sm:leading-none">{title}</h1>
+          {subtitle && <p className="mt-1 max-w-2xl text-xs text-cp-muted sm:mt-2 sm:text-base">{subtitle}</p>}
         </div>
         {actions && <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">{actions}</div>}
       </div>

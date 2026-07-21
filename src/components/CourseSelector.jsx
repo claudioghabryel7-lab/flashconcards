@@ -102,13 +102,13 @@ const CourseSelector = () => {
   }
 
   return (
-    <div className="min-h-screen px-4 py-6 sm:py-10">
-      <div className="max-w-2xl w-full mx-auto bg-background-card rounded-xl border border-border-primary p-6 sm:p-8">
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-accent-orange to-accent-cyan mb-4">
-            <AcademicCapIcon className="h-8 w-8 text-background-primary" />
+    <div className="min-h-screen px-4 py-4 sm:py-10">
+      <div className="max-w-2xl w-full mx-auto bg-background-card rounded-xl border border-border-primary p-4 sm:p-8">
+        <div className="text-center mb-4 sm:mb-6">
+          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-r from-accent-orange to-accent-cyan mb-3 sm:mb-4">
+            <AcademicCapIcon className="h-6 w-6 sm:h-8 sm:w-8 text-background-primary" />
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black text-text-primary mb-2">
+          <h2 className="text-xl sm:text-3xl font-black text-text-primary mb-2">
             Escolha seu Curso
           </h2>
           <p className="text-text-secondary">
@@ -117,7 +117,7 @@ const CourseSelector = () => {
         </div>
 
         {/* Campo de Busca */}
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <MagnifyingGlassIcon className="h-5 w-5 text-text-muted" />
@@ -147,7 +147,7 @@ const CourseSelector = () => {
           )}
         </div>
 
-        <div className="space-y-3 mb-6">
+        <div className="space-y-3 mb-4 sm:mb-6">
           {filteredCourses.length > 0 ? (
             filteredCourses.map((course) => {
               const owned = hasPurchasedCourse(profile, course.id)
@@ -177,7 +177,7 @@ const CourseSelector = () => {
                         )}
                       </div>
                       <div className="min-w-0">
-                        <p className={`font-bold text-lg truncate ${
+                        <p className={`font-bold text-base sm:text-lg truncate ${
                           selectedCourseId === course.id
                             ? 'text-accent-orange'
                             : 'text-text-primary'

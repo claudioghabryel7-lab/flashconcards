@@ -109,7 +109,7 @@ export function LivePipeline() {
 
 export function StatsStrip() {
   return (
-    <div className="mt-20 grid gap-4 sm:grid-cols-3">
+    <div className="mt-10 grid gap-4 sm:mt-20 sm:grid-cols-3">
       {STATS.map((stat, i) => (
         <motion.div
           key={stat.label}
@@ -150,10 +150,10 @@ export function HowItWorks() {
   ]
 
   return (
-    <section className="mt-28" aria-labelledby="como-funciona">
+    <section className="mt-12 sm:mt-28" aria-labelledby="como-funciona">
       <div className="text-center">
         <span className="cp-badge cp-badge-cyan">Como funciona</span>
-        <h2 id="como-funciona" className="mt-4 text-2xl font-medium tracking-tight text-cp-text sm:text-3xl">
+        <h2 id="como-funciona" className="mt-4 text-xl font-medium tracking-tight text-cp-text sm:text-3xl">
           Do edital à aprovação com o <span className="cp-gradient-text">Concurseiro Preditivo</span>
         </h2>
       </div>
@@ -218,11 +218,11 @@ export function FeaturedCourses() {
   if (!loading && courses.length === 0) return null
 
   return (
-    <section className="mt-28" aria-labelledby="cursos-destaque">
+    <section className="mt-12 sm:mt-28" aria-labelledby="cursos-destaque">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <span className="cp-badge cp-badge-accent">Concursos ativos</span>
-          <h2 id="cursos-destaque" className="mt-4 text-2xl font-medium tracking-tight text-cp-text sm:text-3xl">
+          <h2 id="cursos-destaque" className="mt-4 text-xl font-medium tracking-tight text-cp-text sm:text-3xl">
             Comece a estudar agora
           </h2>
           <p className="mt-2 max-w-lg text-sm text-cp-muted">
@@ -304,10 +304,10 @@ export function HomeFaq() {
   ]
 
   return (
-    <section className="mt-28 pb-8" aria-labelledby="faq-concurseiro">
+    <section className="mt-12 pb-8 sm:mt-28" aria-labelledby="faq-concurseiro">
       <div className="text-center">
         <span className="cp-badge cp-badge-accent">FAQ</span>
-        <h2 id="faq-concurseiro" className="mt-4 text-2xl font-medium tracking-tight text-cp-text sm:text-3xl">
+        <h2 id="faq-concurseiro" className="mt-4 text-xl font-medium tracking-tight text-cp-text sm:text-3xl">
           Perguntas sobre o Concurseiro Preditivo
         </h2>
       </div>
@@ -351,7 +351,7 @@ export function CtaBanner() {
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      className="relative mt-20 overflow-hidden rounded-2xl border border-cp-accent/20 bg-gradient-to-br from-cp-accent/10 via-cp-surface to-cp-accent2/10 p-8 text-center sm:p-12"
+      className="relative mt-10 overflow-hidden rounded-2xl border border-cp-accent/20 bg-gradient-to-br from-cp-accent/10 via-cp-surface to-cp-accent2/10 p-8 text-center sm:mt-20 sm:p-12"
     >
       <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-cp-accent/20 blur-3xl" />
       <Brain className="relative mx-auto h-10 w-10 text-cp-accent2" />

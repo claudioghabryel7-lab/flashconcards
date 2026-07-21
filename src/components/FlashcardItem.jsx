@@ -145,7 +145,7 @@ const FlashcardItem = ({
   }
 
   const showInlineRating = showRating && !ratingBelowCard && flipped
-  const cardHeight = 'min-h-[min(260px,46dvh)] h-[min(260px,46dvh)] sm:min-h-[360px] sm:h-[360px]'
+  const cardHeight = 'min-h-[min(220px,42dvh)] h-[min(220px,42dvh)] sm:min-h-[360px] sm:h-[360px]'
 
   return (
     <div

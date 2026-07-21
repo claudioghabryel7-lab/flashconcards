@@ -45,7 +45,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         className={
           fullBleed
             ? 'cp-shell-pad-bottom relative z-10 w-full min-w-0'
-            : 'cp-container cp-shell-pad-bottom relative z-10 min-w-0 py-4 sm:py-6'
+            : 'cp-container cp-shell-pad-bottom relative z-10 min-w-0 py-3 sm:py-5'
         }
       >
         {children}

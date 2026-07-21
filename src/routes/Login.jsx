@@ -261,7 +261,7 @@ const Login = () => {
         </div>
       )}
       
-      <h2 className="text-2xl sm:text-3xl font-bold text-text-primary">
+      <h2 className="text-xl sm:text-3xl font-bold text-text-primary">
         {isRegisterMode ? 'Criar Conta' : 'Bem-vindo de volta!'}
       </h2>
       <p className="mt-2 text-xs sm:text-sm text-text-secondary">

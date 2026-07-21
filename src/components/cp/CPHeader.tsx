@@ -124,7 +124,7 @@ export default function CPHeader() {
             : 'border-b border-cp-border/50 bg-cp-bg/80'
         }`}
       >
-        <div className="cp-container flex h-[4.25rem] min-w-0 items-center justify-between gap-2 pt-[env(safe-area-inset-top,0px)] sm:h-[4.5rem] sm:gap-4">
+        <div className="cp-container flex h-14 min-w-0 items-center justify-between gap-2 pt-[env(safe-area-inset-top,0px)] sm:h-16 sm:gap-4">
           <div className="min-w-0 shrink">
             <span className="sm:hidden">
               <CPLogo size="sm" showText={false} />

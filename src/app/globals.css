@@ -75,6 +75,12 @@ html {
   text-size-adjust: 100%;
 }
 
+@media (max-width: 639px) {
+  html {
+    font-size: 14px;
+  }
+}
+
 body {
   background: var(--cp-bg);
   color: var(--cp-text);
@@ -144,7 +150,7 @@ body {
 .cp-card-accent-amber { border-top: 2px solid var(--cp-accent-4); }
 
 .cp-btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-300 sm:px-7 sm:py-3;
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium transition-all duration-300 sm:px-7 sm:py-3 sm:text-sm;
   font-family: var(--font-sans);
   color: #fff;
   background: linear-gradient(135deg, var(--cp-accent) 0%, #6366f1 50%, var(--cp-accent-2) 100%);
@@ -157,7 +163,7 @@ body {
 }
 
 .cp-btn-ghost {
-  @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300 sm:px-6 sm:py-3;
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-medium transition-all duration-300 sm:px-6 sm:py-3 sm:text-sm;
   font-family: var(--font-sans);
   color: var(--cp-text);
   border: 1px solid var(--cp-border);
@@ -170,7 +176,7 @@ body {
 }
 
 .cp-badge {
-  @apply inline-flex items-center gap-2 rounded-full px-3.5 py-1 text-[11px] font-medium tracking-wide;
+  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-medium tracking-wide;
   font-family: var(--font-mono);
   color: var(--cp-text-muted);
   border: 1px solid var(--cp-border);
@@ -191,10 +197,16 @@ body {
 
 .cp-glass-panel {
   border: 1px solid var(--cp-border);
-  border-radius: 20px;
+  border-radius: 12px;
   background: var(--cp-surface);
   backdrop-filter: blur(16px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 48px rgba(0, 0, 0, 0.08);
+}
+
+@media (min-width: 640px) {
+  .cp-glass-panel {
+    border-radius: 20px;
+  }
 }
 
 .dark .cp-glass-panel {
@@ -216,12 +228,12 @@ body {
 }
 
 .cp-container {
-  @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  @apply mx-auto w-full max-w-7xl px-3 sm:px-5 lg:px-8;
   min-width: 0;
 }
 
 .cp-container-wide {
-  @apply mx-auto w-full max-w-[1400px] px-4 sm:px-6 lg:px-8;
+  @apply mx-auto w-full max-w-[1400px] px-3 sm:px-5 lg:px-8;
   min-width: 0;
 }
 
@@ -237,7 +249,7 @@ body {
 }
 
 .cp-shell-pad-bottom {
-  padding-bottom: max(6rem, calc(env(safe-area-inset-bottom, 0px) + 5rem));
+  padding-bottom: max(4.25rem, calc(env(safe-area-inset-bottom, 0px) + 3.25rem));
 }
 
 @media (min-width: 640px) {
@@ -258,7 +270,7 @@ svg {
 @media (max-width: 639px) {
   .cp-btn-primary,
   .cp-btn-ghost {
-    min-height: 44px;
+    min-height: 40px;
   }
 }
 
@@ -394,10 +406,16 @@ svg {
 .dash-hero {
   position: relative;
   overflow: hidden;
-  border-radius: 20px;
+  border-radius: 12px;
   border: 1px solid var(--cp-border);
   background: var(--cp-bg-elevated);
   isolation: isolate;
+}
+
+@media (min-width: 640px) {
+  .dash-hero {
+    border-radius: 20px;
+  }
 }
 
 .dash-hero-grid {
@@ -524,15 +542,23 @@ svg {
 
 .dash-tile-icon {
   display: flex;
-  height: 2.75rem;
-  width: 2.75rem;
+  height: 2.25rem;
+  width: 2.25rem;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
+  border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--dash-accent) 30%, var(--cp-border));
   background: color-mix(in srgb, var(--dash-accent) 14%, transparent);
   color: var(--dash-accent);
   transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+@media (min-width: 640px) {
+  .dash-tile-icon {
+    height: 2.75rem;
+    width: 2.75rem;
+    border-radius: 14px;
+  }
 }
 
 .dash-tile:hover .dash-tile-icon {

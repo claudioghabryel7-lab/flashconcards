@@ -1284,7 +1284,7 @@ REGRAS IMPORTANTES:
 
   if (!editalVerticalizado) {
     return (
-      <div className="cp-card p-10 text-center">
+      <div className="cp-card p-5 text-center sm:p-10">
         <DocumentTextIcon className="mx-auto mb-4 h-14 w-14 text-cp-muted" />
         <h2 className="text-xl font-medium text-cp-text">Edital não disponível</h2>
         <p className="mt-2 text-sm text-cp-muted">
@@ -1470,7 +1470,7 @@ REGRAS IMPORTANTES:
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {courseName && (
         <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cp-muted">{courseName}</p>
       )}
@@ -1500,19 +1500,19 @@ REGRAS IMPORTANTES:
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="cp-card p-4">
               <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Disciplinas</p>
-              <p className="mt-1 text-2xl font-medium text-cp-text">{editalStats.disciplinas}</p>
+              <p className="mt-1 text-lg font-medium text-cp-text sm:text-2xl">{editalStats.disciplinas}</p>
             </div>
             <div className="cp-card p-4">
               <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Tópicos</p>
-              <p className="mt-1 text-2xl font-medium text-cp-text">{editalStats.totalTopicos}</p>
+              <p className="mt-1 text-lg font-medium text-cp-text sm:text-2xl">{editalStats.totalTopicos}</p>
             </div>
             <div className="cp-card p-4">
               <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Estudados</p>
-              <p className="mt-1 text-2xl font-medium text-cp-accent">{editalStats.estudados}</p>
+              <p className="mt-1 text-lg font-medium text-cp-accent sm:text-2xl">{editalStats.estudados}</p>
             </div>
             <div className="cp-card p-4">
               <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Progresso</p>
-              <p className="mt-1 text-2xl font-medium text-cp-accent2">{editalStats.pct}%</p>
+              <p className="mt-1 text-lg font-medium text-cp-accent2 sm:text-2xl">{editalStats.pct}%</p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-cp-border">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-cp-accent to-cp-accent2 transition-all"
@@ -1568,7 +1568,7 @@ REGRAS IMPORTANTES:
 
           <div className="space-y-3">
             {filteredDisciplinas.length === 0 ? (
-              <div className="cp-card p-10 text-center">
+              <div className="cp-card p-5 text-center sm:p-10">
                 <MagnifyingGlassIcon className="mx-auto mb-3 h-10 w-10 text-cp-muted" />
                 <p className="text-sm text-cp-muted">Nenhum resultado para &quot;{searchQuery}&quot;</p>
               </div>
@@ -1897,7 +1897,7 @@ REGRAS IMPORTANTES:
               />
             </div>
           ) : (
-            <div className="cp-card p-10 text-center">
+            <div className="cp-card p-5 text-center sm:p-10">
               <BookOpenIcon className="mx-auto mb-3 h-12 w-12 text-cp-muted" />
               <p className="text-sm text-cp-muted">Conteúdo ainda não disponível.</p>
             </div>

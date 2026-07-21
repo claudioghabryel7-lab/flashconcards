@@ -288,19 +288,19 @@ const GuiaMentoradoDiaView = () => {
   const dayOfWeek = dayjs(date).format('dddd')
   
   return (
-    <div className="min-h-screen bg-background-primary p-4 sm:p-8">
+    <div className="min-h-screen bg-background-primary p-3 sm:p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-2 text-text-secondary hover:text-text-primary mb-4 transition-colors"
+            className="flex items-center gap-2 text-text-secondary hover:text-text-primary mb-3 sm:mb-4 transition-colors"
           >
             <ArrowLeftIcon className="h-5 w-5" />
             Voltar
           </button>
           
-          <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">
+          <h1 className="text-xl sm:text-3xl font-bold text-text-primary">
             {dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1)}, {formattedDate}
           </h1>
           
@@ -334,8 +334,8 @@ const GuiaMentoradoDiaView = () => {
         
         {/* Informações do Dia */}
         {dayData && (
-          <div className="mb-6 p-4 rounded-xl bg-background-card border border-border-primary">
-            <h2 className="text-lg font-semibold text-text-primary mb-3">Matérias do Dia</h2>
+          <div className="mb-4 p-3 rounded-xl bg-background-card border border-border-primary sm:mb-6 sm:p-4">
+            <h2 className="text-base font-semibold text-text-primary mb-2 sm:text-lg sm:mb-3">Matérias do Dia</h2>
             {dayData.materias && dayData.materias.length > 0 ? (
               <div className="space-y-2">
                 {dayData.materias.map((m, idx) => (
@@ -360,9 +360,9 @@ const GuiaMentoradoDiaView = () => {
         )}
         
         {/* Timeline de Horas */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-text-primary">Cronograma do Dia</h2>
+        <div className="mb-4 sm:mb-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <h2 className="text-base font-semibold text-text-primary sm:text-lg">Cronograma do Dia</h2>
             <button
               onClick={() => setShowAddModal(true)}
               className="flex items-center gap-2 px-3 py-2 bg-accent-cyan text-background-primary rounded-lg hover:bg-accent-cyan-dim transition-colors text-sm"
@@ -416,7 +416,7 @@ const GuiaMentoradoDiaView = () => {
             ))}
             
             {schedule.length === 0 && (
-              <div className="p-8 rounded-xl bg-background-card border border-border-primary text-center">
+              <div className="p-5 rounded-xl bg-background-card border border-border-primary text-center sm:p-8">
                 <ClockIcon className="h-12 w-12 text-text-muted mx-auto mb-3" />
                 <p className="text-text-secondary">Nenhuma atividade agendada</p>
                 <button

@@ -47,7 +47,7 @@ const features = [
 
 export default function CPHero() {
   return (
-    <section className="relative w-full overflow-hidden pb-28 pt-20 sm:pt-28">
+    <section className="relative w-full overflow-hidden pb-14 pt-10 sm:pb-28 sm:pt-28">
       <div className="cp-container-wide relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -62,20 +62,20 @@ export default function CPHero() {
             <span className="cp-badge cp-badge-cyan">IA · Edital · Banca</span>
           </div>
 
-          <h1 className="relative z-10 cp-headline text-4xl sm:text-6xl lg:text-7xl">
+          <h1 className="relative z-10 cp-headline text-[1.65rem] leading-[1.15] sm:text-6xl lg:text-7xl">
             <span className="sr-only">Concurseiro Preditivo — </span>
             Estude com
             <span className="block cp-gradient-text">inteligência preditiva.</span>
           </h1>
 
-          <p className="relative z-10 mx-auto mt-8 max-w-xl text-base leading-relaxed text-cp-muted sm:text-lg">
+          <p className="relative z-10 mx-auto mt-4 max-w-xl text-sm leading-relaxed text-cp-muted sm:mt-8 sm:text-lg">
             <strong className="font-medium text-cp-text">Concurseiro Preditivo</strong> combina edital
             verticalizado, padrão de banca e IA generativa — questões preditivas, resumos e flashcards
             calibrados no seu concurso.
           </p>
 
-          <div className="relative z-10 mt-12 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/cursos" className="cp-btn-primary min-w-[200px]">
+          <div className="relative z-10 mt-6 flex flex-col items-center justify-center gap-3 sm:mt-12 sm:flex-row">
+            <Link href="/cursos" className="cp-btn-primary min-w-[160px] sm:min-w-[200px]">
               Explorar cursos
               <ArrowRight className="h-4 w-4" />
             </Link>
@@ -89,7 +89,7 @@ export default function CPHero() {
 
         <BancaMarquee />
 
-        <div className="mt-24 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-12 grid gap-4 sm:mt-24 sm:grid-cols-2 lg:grid-cols-4">
           {features.map((item, index) => {
             const Icon = item.icon
             return (
@@ -98,7 +98,7 @@ export default function CPHero() {
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * index, duration: 0.6 }}
-                className={`cp-card group p-6 ${item.accent}`}
+                className={`cp-card group p-4 sm:p-6 ${item.accent}`}
               >
                 <div className="mb-5 flex items-center justify-between">
                   <span className="font-mono text-[11px] text-cp-muted">{item.num}</span>

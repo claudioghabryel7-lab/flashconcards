@@ -665,12 +665,12 @@ CRÍTICO:
   // Tela de resultados
   if (resultado) {
     return (
-      <div className="space-y-6 pb-10">
+      <div className="space-y-4 pb-10">
         <div className="max-w-4xl mx-auto space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <span className="cp-badge cp-badge-accent">Resultado</span>
-              <h1 className="cp-headline mt-3 text-2xl">Treino de Redação</h1>
+              <h1 className="cp-headline mt-3 text-xl sm:text-2xl">Treino de Redação</h1>
               {savingHistory ? (
                 <p className="mt-1 text-xs text-cp-muted">Salvando no histórico…</p>
               ) : (
@@ -695,7 +695,7 @@ CRÍTICO:
           <div className="cp-card overflow-hidden p-0">
             <div className="bg-gradient-to-r from-cp-accent to-cp-accent2 p-6 text-white">
               <p className="font-mono text-[10px] uppercase tracking-wider opacity-80">Sua nota</p>
-              <p className="mt-1 text-5xl font-black">{resultado.nota}</p>
+              <p className="mt-1 text-3xl font-black sm:text-5xl">{resultado.nota}</p>
               <p className="mt-1 text-sm opacity-80">de 1000 pontos</p>
             </div>
 
@@ -814,7 +814,7 @@ CRÍTICO:
   }
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-4 pb-10">
       {configLoading ? (
         <div className="cp-card flex min-h-[40vh] items-center justify-center">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />
@@ -830,7 +830,7 @@ CRÍTICO:
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <span className="cp-badge cp-badge-accent">Redação</span>
-            <h1 className="cp-headline mt-3 text-2xl">Treino de Redação</h1>
+            <h1 className="cp-headline mt-3 text-xl sm:text-2xl">Treino de Redação</h1>
             {courseName && <p className="mt-1 text-sm text-cp-muted">{courseName} · Banca {courseBanca}</p>}
           </div>
           <button
