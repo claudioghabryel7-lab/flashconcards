@@ -151,15 +151,15 @@ Retorne APENAS JSON válido:
   "concurso": "${exam.concursoName}",
   "raioXProbabilidade": {
     "topicosQuentes": ["assunto 1", "assunto 2", "assunto 3", "assunto 4", "assunto 5", "assunto 6"],
-    "padraoBanca": "como a ${exam.banca} cobra este tópico para ${exam.cargo}"
+    "padraoBanca": "<h4>Como a banca cobra</h4><p>detalhe da ${exam.banca} para ${exam.cargo}</p><h4>O que mais cai</h4><ul><li>...</li></ul><h4>Pegadinhas recorrentes</h4><ul><li>...</li></ul>"
   },
   "revisaoTurbo": [
-    { "titulo": "assunto 1", "conteudo": "HTML simples (~150 palavras)" },
-    { "titulo": "assunto 2", "conteudo": "HTML simples (~150 palavras)" },
-    { "titulo": "assunto 3", "conteudo": "HTML simples (~150 palavras)" },
-    { "titulo": "assunto 4", "conteudo": "HTML simples (~150 palavras)" },
-    { "titulo": "assunto 5", "conteudo": "HTML simples (~150 palavras)" },
-    { "titulo": "assunto 6", "conteudo": "HTML simples (~150 palavras)" }
+    { "titulo": "assunto 1", "conteudo": "<h4>Conceito central</h4><p>...</p><h4>Na prática da banca</h4><p>...</p><h4>Dica de memorização</h4><p>...</p>" },
+    { "titulo": "assunto 2", "conteudo": "HTML (~220 palavras)" },
+    { "titulo": "assunto 3", "conteudo": "HTML (~220 palavras)" },
+    { "titulo": "assunto 4", "conteudo": "HTML (~220 palavras)" },
+    { "titulo": "assunto 5", "conteudo": "HTML (~220 palavras)" },
+    { "titulo": "assunto 6", "conteudo": "HTML (~220 palavras)" }
   ],
   "pegadinhas": [{ "titulo": "título", "conteudo": "pegadinha típica da ${exam.banca}" }],
   "questoesPreditivas": [{
@@ -172,6 +172,8 @@ Retorne APENAS JSON válido:
 
 REGRAS:
 - Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} itens em revisaoTurbo (um por assunto quente)
+- padraoBanca DETALHADO (não uma frase genérica) — explique como a ${exam.banca} cobra o tópico
+- Cada resumo com seção "Na prática da banca"
 - Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} questões preditivas no formato ${exam.tipoProva}
 - Campo "correta" obrigatório em cada questão preditiva
 - Foco 100% neste tópico + cargo ${exam.cargo} + banca ${exam.banca}

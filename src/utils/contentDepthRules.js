@@ -4,16 +4,19 @@ export const CONTEUDO_COMPLETO_DEPTH = {
   MIN_TOPICOS_QUENTES: 6,
   MAX_TOPICOS_QUENTES: 10,
   MIN_QUESTOES: 8,
-  /**
-   * Faixa por resumo — completa, mas cabível em 6–8 itens no mesmo JSON
-   * (faixas maiores faziam o modelo cortar em 1–2 resumos).
-   */
-  MIN_PALAVRAS_POR_RESUMO: 120,
-  MAX_PALAVRAS_POR_RESUMO: 200,
-  MIN_PALAVRAS_PEGADINHA: 40,
-  MAX_PALAVRAS_PEGADINHA: 80,
-  /** Comprimento mínimo de texto útil (sem HTML) para contar um resumo. */
-  MIN_CHARS_RESUMO_UTIL: 80,
+  /** Faixa por resumo — aprofundado, com expansão em lotes se o 1º JSON vier raso. */
+  MIN_PALAVRAS_POR_RESUMO: 180,
+  MAX_PALAVRAS_POR_RESUMO: 280,
+  MIN_PALAVRAS_PEGADINHA: 50,
+  MAX_PALAVRAS_PEGADINHA: 90,
+  /** Texto útil mínimo (sem HTML) para contar um resumo como presente. */
+  MIN_CHARS_RESUMO_UTIL: 120,
+  /** Texto útil mínimo para considerar o resumo com profundidade adequada. */
+  MIN_CHARS_RESUMO_PROFUNDO: 520,
+  /** padraoBanca mínimo (sem HTML) — deve explicar como a banca cobra. */
+  MIN_CHARS_PADRAO_BANCA: 420,
+  MIN_PALAVRAS_PADRAO_BANCA: 140,
+  MAX_PALAVRAS_PADRAO_BANCA: 240,
 }
 
 function plainTextLen(value) {
@@ -132,28 +135,39 @@ export function getConteudoCompletoDepthInstructions({
     MAX_PALAVRAS_POR_RESUMO,
     MIN_PALAVRAS_PEGADINHA,
     MAX_PALAVRAS_PEGADINHA,
+    MIN_PALAVRAS_PADRAO_BANCA,
+    MAX_PALAVRAS_PADRAO_BANCA,
   } = CONTEUDO_COMPLETO_DEPTH
 
   const cargoLabel = cargo || courseName || 'mencionado'
+  const bancaLabel = banca || 'definida'
 
   return `
-⚖️ PROFUNDIDADE EQUILIBRADA — COMPLETO, OBJETIVO E SEM ENCHER LINGUIÇA:
+⚖️ PROFUNDIDADE DE PROVA — MATERIAL DE ESTUDO REAL (NÃO TELEGRAMA):
 
-1. PROIBIDO material superficial/telegráfico. Também PROIBIDO texto excessivo, repetitivo ou "apostolão".
-2. Cubra o que realmente cai na banca ${banca || 'definida'} para ${concursoName || 'o concurso'} / cargo ${cargoLabel}.
-3. Raio-X: EXATAMENTE ${MIN_TOPICOS_QUENTES} "Top Assuntos Quentes" (pode ir até ${MAX_TOPICOS_QUENTES} só se a disciplina for muito ampla).
-4. Revisão Turbo: EXATAMENTE ${MIN_TOPICOS_QUENTES} blocos — UM para CADA assunto quente, na mesma ordem. NÃO entregue só 2 ou 3.
-5. Cada bloco da Revisão Turbo: entre ${MIN_PALAVRAS_POR_RESUMO} e ${MAX_PALAVRAS_POR_RESUMO} palavras (meta ~150). Inclua:
-   - conceito técnico claro
-   - artigo/lei/jurisprudência só quando essencial
-   - 1 exemplo prático do concurso/cargo ${cargoLabel}
-   - 1 dica de memorização concreta
-6. Pegadinhas: 3 a 5 itens; cada um com ${MIN_PALAVRAS_PEGADINHA}–${MAX_PALAVRAS_PEGADINHA} palavras.
-7. Questões Preditivas: EXATAMENTE ${MIN_QUESTOES}; gabarito comentado fundamentado mas objetivo.
-8. NÃO corte frases no meio. NÃO omita seções. NÃO invente leis.
-9. PRIORIDADE: completar os ${MIN_TOPICOS_QUENTES} resumos. Prefira ${MIN_TOPICOS_QUENTES} resumos na faixa ${MIN_PALAVRAS_POR_RESUMO}–${MAX_PALAVRAS_POR_RESUMO} palavras a poucos resumos longos.
+1. PROIBIDO resumo raso/telegráfico. Também PROIBIDO "apostolão" genérico sem foco na banca.
+2. Cubra o que realmente cai na banca ${bancaLabel} para ${concursoName || 'o concurso'} / cargo ${cargoLabel}.
+3. Raio-X: EXATAMENTE ${MIN_TOPICOS_QUENTES} "Top Assuntos Quentes" (até ${MAX_TOPICOS_QUENTES} só se a disciplina for muito ampla).
+4. PADRÃO DA BANCA (campo raioXProbabilidade.padraoBanca) — OBRIGATÓRIO e DETALHADO (${MIN_PALAVRAS_PADRAO_BANCA}–${MAX_PALAVRAS_PADRAO_BANCA} palavras em HTML):
+   - Como a ${bancaLabel} formula questões DESTE tópico para o cargo ${cargoLabel}
+   - O que mais cobra (literalidade de lei, interpretação, jurisprudência, cálculo, etc.)
+   - Verbos/estruturas típicas do enunciado
+   - 2–3 pegadinhas recorrentes da banca neste assunto
+   - 1 exemplo concreto de como a questão costuma aparecer
+   - O que a banca NÃO costuma cobrar aqui
+   Use <h4>, <p>, <ul><li>, <b>, <mark>. NÃO escreva uma frase única genérica.
+5. Revisão Turbo: EXATAMENTE ${MIN_TOPICOS_QUENTES} blocos — UM para CADA assunto quente, na mesma ordem.
+6. Cada bloco da Revisão Turbo: ${MIN_PALAVRAS_POR_RESUMO}–${MAX_PALAVRAS_POR_RESUMO} palavras (meta ~220). Estrutura obrigatória:
+   - <h4>Conceito central</h4> + desenvolvimento técnico
+   - base normativa essencial (artigo/lei/jurisprudência) quando couber
+   - <h4>Na prática da banca</h4> — como a ${bancaLabel} cobra ESTE ponto no cargo ${cargoLabel}
+   - 1 exemplo prático
+   - <h4>Dica de memorização</h4>
+7. Pegadinhas: 3 a 5 itens; cada um com ${MIN_PALAVRAS_PEGADINHA}–${MAX_PALAVRAS_PEGADINHA} palavras (armadilha típica da ${bancaLabel}).
+8. Questões Preditivas: EXATAMENTE ${MIN_QUESTOES}; gabarito comentado fundamentado.
+9. NÃO corte frases. NÃO omita o padrão da banca. NÃO invente leis.
 10. Formato HTML: <p>, <h4>, <b>, <mark>, <ul><li>. Sem markdown.
-11. Campo revisaoTurbo DEVE ser um ARRAY com ${MIN_TOPICOS_QUENTES} objetos { "titulo", "conteudo" }.`
+11. revisaoTurbo = ARRAY com ${MIN_TOPICOS_QUENTES} objetos { "titulo", "conteudo" }.`
 }
 
 /**
@@ -216,6 +230,57 @@ export function isMaterialContentComplete(parsed = {}) {
   }
 }
 
+function wordCountApprox(value) {
+  const plain = stripHtml(String(value || '')).trim()
+  if (!plain) return 0
+  return plain.split(/\s+/).filter(Boolean).length
+}
+
+function getPadraoBanca(material = {}) {
+  return String(material?.raioXProbabilidade?.padraoBanca || '').trim()
+}
+
+export function isPadraoBancaAdequate(material = {}) {
+  const padrao = getPadraoBanca(material)
+  return plainTextLen(padrao) >= CONTEUDO_COMPLETO_DEPTH.MIN_CHARS_PADRAO_BANCA
+}
+
+export function getShallowResumos(parsed = {}) {
+  return extractRevisaoTurboItems(parsed).filter(
+    (r) => plainTextLen(r.conteudo) < CONTEUDO_COMPLETO_DEPTH.MIN_CHARS_RESUMO_PROFUNDO,
+  )
+}
+
+export function isMaterialDepthAdequate(parsed = {}) {
+  const material = normalizeMaterialStructure(parsed)
+  const complete = isMaterialContentComplete(material)
+  if (!complete.ok) return { ...complete, depthOk: false }
+
+  if (!isPadraoBancaAdequate(material)) {
+    return {
+      ok: false,
+      depthOk: false,
+      reason: 'Padrão da banca ausente ou muito superficial — precisa explicar como a banca cobra o tópico.',
+      usable: complete.usable,
+      needed: complete.needed,
+    }
+  }
+
+  const shallow = getShallowResumos(material)
+  if (shallow.length > 0) {
+    return {
+      ok: false,
+      depthOk: false,
+      reason: `${shallow.length} resumo(s) ainda rasos demais (faltam conceito + prática da banca).`,
+      usable: complete.usable,
+      needed: complete.needed,
+      shallowTitles: shallow.map((r) => r.titulo),
+    }
+  }
+
+  return { ok: true, depthOk: true, usable: complete.usable, needed: complete.needed }
+}
+
 function buildRepairPrompt(material, context = {}) {
   const needed = CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES
   const existing = extractRevisaoTurboItems(material)
@@ -236,70 +301,147 @@ function buildRepairPrompt(material, context = {}) {
           '\n',
         )
 
-  return `O material JSON abaixo ficou INCOMPLETO: revisaoTurbo tem só ${usable} resumo(s) utilizáveis (mínimo obrigatório: ${needed}).
+  const banca = context.banca || material.banca || 'a banca'
+  const cargo = context.cargo || material.cargo || 'o cargo'
+
+  return `O material JSON ficou INCOMPLETO: revisaoTurbo tem só ${usable} resumo(s) (mínimo: ${needed}).
 
 CONTEXTO:
 - TÓPICO: ${context.topico || material.materia || material.titulo || ''}
-- BANCA: ${context.banca || material.banca || ''}
-- CARGO: ${context.cargo || material.cargo || ''}
+- BANCA: ${banca}
+- CARGO: ${cargo}
 - CONCURSO: ${context.concurso || material.concurso || ''}
 
 TÍTULOS JÁ EXISTENTES (NÃO repetir):
 ${existingTitles.map((t, i) => `${i + 1}. ${t}`).join('\n') || '(nenhum)'}
 
-ASSUNTOS QUE AINDA FALTAM (gere um resumo para cada):
+ASSUNTOS QUE AINDA FALTAM:
 ${topicHints}
 
-Gere APENAS JSON válido neste formato:
+Gere APENAS JSON:
 {
   "revisaoTurbo": [
-    { "titulo": "assunto", "conteudo": "<h4>Conceito</h4><p>...</p><h4>Dica de memorização</h4><p>...</p>" }
+    { "titulo": "assunto", "conteudo": "<h4>Conceito central</h4><p>...</p><h4>Na prática da banca</h4><p>...</p><h4>Dica de memorização</h4><p>...</p>" }
   ]
 }
 
 REGRAS:
-- Gere EXATAMENTE ${missing} novos itens em revisaoTurbo (não menos).
-- Cada conteudo: ${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_POR_RESUMO}–${CONTEUDO_COMPLETO_DEPTH.MAX_PALAVRAS_POR_RESUMO} palavras em HTML simples.
-- Não invente leis. Não use markdown. Não copie os títulos já existentes.
-- Retorne SOMENTE o JSON com revisaoTurbo (sem outras seções).`
+- EXATAMENTE ${missing} novos itens.
+- Cada conteudo: ${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_POR_RESUMO}–${CONTEUDO_COMPLETO_DEPTH.MAX_PALAVRAS_POR_RESUMO} palavras.
+- Inclua obrigatoriamente a seção "Na prática da banca" (como a ${banca} cobra no cargo ${cargo}).
+- Sem markdown. Sem inventar leis.`
+}
+
+function buildPadraoBancaPrompt(material, context = {}) {
+  const banca = context.banca || material.banca || 'a banca'
+  const cargo = context.cargo || material.cargo || 'o cargo'
+  const topico = context.topico || material.materia || material.titulo || ''
+  const topicos = (material?.raioXProbabilidade?.topicosQuentes || []).map(asTopicName).filter(Boolean)
+  const atual = getPadraoBanca(material)
+
+  return `Reescreva o campo padraoBanca deste material. O texto atual está ausente ou superficial (${wordCountApprox(atual)} palavras).
+
+TÓPICO: ${topico}
+BANCA: ${banca}
+CARGO: ${cargo}
+CONCURSO: ${context.concurso || material.concurso || ''}
+ASSUNTOS QUENTES: ${topicos.join('; ') || '(não listados)'}
+
+TEXTO ATUAL (melhorar/expandir):
+${atual || '(vazio)'}
+
+Gere APENAS JSON:
+{
+  "padraoBanca": "<h4>Como a banca cobra</h4><p>...</p><h4>O que mais cai</h4><ul><li>...</li></ul><h4>Pegadinhas recorrentes</h4><ul><li>...</li></ul><h4>Exemplo típico de cobrança</h4><p>...</p><h4>O que costuma NÃO cair</h4><p>...</p>"
+}
+
+REGRAS:
+- ${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_PADRAO_BANCA}–${CONTEUDO_COMPLETO_DEPTH.MAX_PALAVRAS_PADRAO_BANCA} palavras
+- Específico da ${banca} para o cargo ${cargo} neste tópico — nada genérico
+- HTML simples (<h4>, <p>, <ul>, <li>, <b>, <mark>)
+- Sem markdown`
+}
+
+function buildEnrichResumosPrompt(batch, context = {}, material = {}) {
+  const banca = context.banca || material.banca || 'a banca'
+  const cargo = context.cargo || material.cargo || 'o cargo'
+  const topico = context.topico || material.materia || material.titulo || ''
+
+  const itemsBlock = batch
+    .map(
+      (r, i) => `### Item ${i + 1}
+Título: ${r.titulo}
+Conteúdo atual (expandir, não encolher):
+${String(r.conteudo || '').slice(0, 1200)}`,
+    )
+    .join('\n\n')
+
+  return `Expanda os resumos abaixo. Estão rasos demais para estudo de concurso.
+
+TÓPICO: ${topico}
+BANCA: ${banca}
+CARGO: ${cargo}
+
+${itemsBlock}
+
+Gere APENAS JSON:
+{
+  "revisaoTurbo": [
+    { "titulo": "mesmo título", "conteudo": "<h4>Conceito central</h4><p>...</p><h4>Na prática da banca</h4><p>como a ${banca} cobra...</p><h4>Dica de memorização</h4><p>...</p>" }
+  ]
+}
+
+REGRAS:
+- Mantenha os MESMOS títulos, na mesma ordem
+- Cada conteudo: ${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_POR_RESUMO}–${CONTEUDO_COMPLETO_DEPTH.MAX_PALAVRAS_POR_RESUMO} palavras
+- Obrigatório: seção "Na prática da banca" específica da ${banca} / cargo ${cargo}
+- Aprofunde conceito + base normativa essencial + exemplo
+- Sem markdown. Sem inventar leis.`
+}
+
+async function callMaterialPatch(generateAiJson, generateOptions, prompt) {
+  return generateAiJson(prompt, {
+    ...generateOptions,
+    useGoogleSearch: false,
+    verifyContent: false,
+    useRAG: false,
+    maxContinues: generateOptions.maxContinues ?? 2,
+    generationConfig: {
+      ...(generateOptions.generationConfig || {}),
+      maxOutputTokens: Math.max(generateOptions.generationConfig?.maxOutputTokens || 0, 16000),
+      temperature: 0.2,
+    },
+  })
 }
 
 /**
- * Garante material completo: normaliza e, se faltar resumo, pede reparo à IA.
+ * Garante material completo E com profundidade (padrão da banca + resumos).
  */
 export async function ensureMaterialContentComplete(
   parsed,
-  { generateAiJson, generateOptions = {}, context = {}, maxRepairs = 2 } = {},
+  { generateAiJson, generateOptions = {}, context = {}, maxRepairs = 2, enrichDepth = true } = {},
 ) {
   let material = normalizeMaterialStructure(parsed)
   let check = isMaterialContentComplete(material)
-  if (check.ok) return material
 
-  if (typeof generateAiJson !== 'function') {
+  if (!check.ok && typeof generateAiJson !== 'function') {
     const err = new Error(check.reason || 'Material incompleto.')
     err.code = 'material_incomplete'
     throw err
   }
 
+  // 1) Completar quantidade de resumos
   for (let attempt = 0; attempt < maxRepairs && !check.ok; attempt += 1) {
     const missing = Math.max((check.needed || CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES) - (check.usable || 0), 1)
     console.warn(
       `[material] incompleto (${check.usable}/${check.needed}). Reparo ${attempt + 1}/${maxRepairs} (+${missing} resumos)...`,
     )
 
-    const patch = await generateAiJson(buildRepairPrompt(material, context), {
-      ...generateOptions,
-      useGoogleSearch: false,
-      verifyContent: false,
-      useRAG: false,
-      maxContinues: generateOptions.maxContinues ?? 2,
-      generationConfig: {
-        ...(generateOptions.generationConfig || {}),
-        maxOutputTokens: Math.max(generateOptions.generationConfig?.maxOutputTokens || 0, 16000),
-        temperature: 0.2,
-      },
-    })
-
+    const patch = await callMaterialPatch(
+      generateAiJson,
+      generateOptions,
+      buildRepairPrompt(material, context),
+    )
     const extras = extractRevisaoTurboItems(patch)
     if (!extras.length) {
       console.warn('[material] reparo não retornou resumos')
@@ -308,14 +450,12 @@ export async function ensureMaterialContentComplete(
 
     const existing = extractRevisaoTurboItems(material)
     const existingKeys = new Set(existing.map((r) => String(r.titulo || '').toLowerCase()))
-    const merged = [
-      ...existing,
-      ...extras.filter((r) => !existingKeys.has(String(r.titulo || '').toLowerCase())),
-    ]
-
     material = normalizeMaterialStructure({
       ...material,
-      revisaoTurbo: merged,
+      revisaoTurbo: [
+        ...existing,
+        ...extras.filter((r) => !existingKeys.has(String(r.titulo || '').toLowerCase())),
+      ],
     })
     check = isMaterialContentComplete(material)
   }
@@ -323,6 +463,81 @@ export async function ensureMaterialContentComplete(
   if (!check.ok) {
     const err = new Error(check.reason || 'Material incompleto/cortado. Gere novamente.')
     err.code = 'material_incomplete'
+    throw err
+  }
+
+  if (!enrichDepth || typeof generateAiJson !== 'function') {
+    return material
+  }
+
+  // 2) Expandir padrão da banca se superficial
+  if (!isPadraoBancaAdequate(material)) {
+    console.warn('[material] enriquecendo padraoBanca…')
+    try {
+      const patch = await callMaterialPatch(
+        generateAiJson,
+        generateOptions,
+        buildPadraoBancaPrompt(material, context),
+      )
+      const nextPadrao = String(patch?.padraoBanca || patch?.raioXProbabilidade?.padraoBanca || '').trim()
+      if (nextPadrao) {
+        material = normalizeMaterialStructure({
+          ...material,
+          raioXProbabilidade: {
+            ...(material.raioXProbabilidade || {}),
+            padraoBanca: nextPadrao,
+          },
+        })
+      }
+    } catch (err) {
+      console.warn('[material] falha ao enriquecer padraoBanca:', err?.message || err)
+    }
+  }
+
+  // 3) Expandir resumos rasos em lotes de 2
+  let shallow = getShallowResumos(material)
+  let enrichPasses = 0
+  while (shallow.length > 0 && enrichPasses < 3) {
+    enrichPasses += 1
+    const batch = shallow.slice(0, 2)
+    console.warn(
+      `[material] enriquecendo ${batch.length} resumo(s) rasos (passe ${enrichPasses}): ${batch.map((r) => r.titulo).join(', ')}`,
+    )
+    try {
+      const patch = await callMaterialPatch(
+        generateAiJson,
+        generateOptions,
+        buildEnrichResumosPrompt(batch, context, material),
+      )
+      const expanded = extractRevisaoTurboItems(patch)
+      if (!expanded.length) break
+
+      const byTitle = new Map(
+        expanded.map((r) => [String(r.titulo || '').toLowerCase(), r]),
+      )
+      const current = extractRevisaoTurboItems(material)
+      const merged = current.map((item) => {
+        const hit = byTitle.get(String(item.titulo || '').toLowerCase())
+        if (!hit) return item
+        // Só troca se ficou mais profundo
+        if (plainTextLen(hit.conteudo) > plainTextLen(item.conteudo)) {
+          return { ...item, conteudo: hit.conteudo }
+        }
+        return item
+      })
+      material = normalizeMaterialStructure({ ...material, revisaoTurbo: merged })
+    } catch (err) {
+      console.warn('[material] falha ao enriquecer resumos:', err?.message || err)
+      break
+    }
+    shallow = getShallowResumos(material)
+  }
+
+  // Se ainda estiver muito raso no padrão da banca, falha com mensagem clara
+  const depth = isMaterialDepthAdequate(material)
+  if (!depth.ok && !isPadraoBancaAdequate(material)) {
+    const err = new Error(depth.reason || 'Padrão da banca insuficiente.')
+    err.code = 'material_shallow'
     throw err
   }
 

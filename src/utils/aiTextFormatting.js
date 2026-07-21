@@ -165,18 +165,27 @@ ESTRUTURA HTML PERMITIDA:
 - <ul><li> — listas curtas de requisitos/exceções
 
 COMO ORGANIZAR CADA RESUMO (revisaoTurbo.conteudo):
-1. <h4> + <p> com o conceito central
-2. 2–4 parágrafos <p> de desenvolvimento (sem repetir a mesma ideia)
-3. <mark> em 1–2 trechos críticos
-4. <b> em termos técnicos essenciais
-5. Feche com <h4>Dica de memorização</h4> + 1 <p> ou lista curta
+1. <h4>Conceito central</h4> + 2–3 <p> de desenvolvimento técnico
+2. Base normativa essencial com <b>/<mark> (artigo/lei) quando couber
+3. <h4>Na prática da banca</h4> — OBRIGATÓRIO: como ESTA banca cobra ESTE ponto no cargo
+4. 1 exemplo concreto de cobrança
+5. <h4>Dica de memorização</h4> + 1 <p> ou lista curta
 
-EXEMPLO:
-"<h4>Conceito central</h4><p>O <b>inquérito policial</b> é procedimento administrativo...</p><p><mark>Art. 4º do CPP</mark> — o inquérito é dispensável quando...</p><h4>Na prática da banca</h4><ul><li>Costuma cobrar prazos</li><li>Pede distinção entre...</li></ul><h4>Dica de memorização</h4><p>Lembre: <b>I</b>nquérito = <b>I</b>nvestigação inicial.</p>"
+PADRÃO DA BANCA (raioXProbabilidade.padraoBanca) — OBRIGATÓRIO E DETALHADO:
+1. <h4>Como a banca cobra</h4>
+2. <h4>O que mais cai</h4> + lista
+3. <h4>Pegadinhas recorrentes</h4> + lista
+4. <h4>Exemplo típico de cobrança</h4>
+5. <h4>O que costuma NÃO cair</h4>
+NÃO aceite uma frase genérica do tipo "a banca cobra o assunto".
+
+EXEMPLO DE RESUMO:
+"<h4>Conceito central</h4><p>O <b>inquérito policial</b> é procedimento administrativo...</p><p><mark>Art. 4º do CPP</mark> — o inquérito é dispensável quando...</p><h4>Na prática da banca</h4><p>A banca costuma cobrar prazos e a dispensabilidade...</p><ul><li>Distinção entre...</li></ul><h4>Dica de memorização</h4><p>Lembre: <b>I</b>nquérito = <b>I</b>nvestigação inicial.</p>"
 
 REGRAS:
 - PROIBIDO markdown (** * __ #) — somente HTML
-- 3–5 parágrafos <p> por resumo (na faixa de ~120–200 palavras)
-- padraoBanca e gabaritoComentado: objetivos (parágrafos + <b>/<mark>)
+- 4–6 parágrafos/<li> por resumo (faixa ~180–280 palavras)
+- padraoBanca: 140–240 palavras, específico da banca/cargo
 - Cada <p> com 2–4 frases; sem parede de texto nem preenchimento vazio
-- OBRIGATÓRIO: revisaoTurbo com no mínimo 6 itens {titulo, conteudo}`
+- OBRIGATÓRIO: revisaoTurbo com no mínimo 6 itens {titulo, conteudo}
+- OBRIGATÓRIO: cada resumo com seção "Na prática da banca"`
