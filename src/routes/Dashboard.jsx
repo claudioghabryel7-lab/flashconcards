@@ -144,7 +144,7 @@ const Dashboard = () => {
             </span>
             <span className="cp-badge">Dashboard</span>
           </div>
-          <h1 className="cp-headline mt-3 break-words text-2xl sm:mt-4 sm:text-4xl md:text-[2.85rem]">
+          <h1 className="cp-headline mt-3 break-words text-xl sm:mt-4 sm:text-4xl md:text-[2.85rem]">
             Olá, <span className="cp-gradient-text">{firstName}</span>
           </h1>
           <p className="mt-2 max-w-xl text-sm text-cp-muted sm:text-base">
@@ -172,7 +172,7 @@ const Dashboard = () => {
       <div className="mb-8">
         <Link
           to="/treino-redacao"
-          className="dash-tile dash-tile--violet group block p-5"
+          className="dash-tile dash-tile--violet group block p-3.5 sm:p-5"
           style={{ '--dash-delay': '60ms' }}
         >
           <div className="relative z-[1] flex items-start justify-between gap-4">
@@ -213,7 +213,7 @@ const Dashboard = () => {
               <Link
                 key={link.to}
                 to={link.to}
-                className={`dash-tile dash-tile--${link.tone} group p-5`}
+                className={`dash-tile dash-tile--${link.tone} group p-3.5 sm:p-5`}
                 style={{ '--dash-delay': `${80 + index * 45}ms` }}
               >
                 <div className="relative z-[1]">
@@ -229,7 +229,7 @@ const Dashboard = () => {
           })}
           <Link
             to="/treino-redacao"
-            className="dash-tile dash-tile--violet group p-5"
+            className="dash-tile dash-tile--violet group p-3.5 sm:p-5"
             style={{ '--dash-delay': `${80 + quickLinks.length * 45}ms` }}
           >
             <div className="relative z-[1]">

@@ -146,7 +146,7 @@ export default function MateriaDoDiaCard({ user, courseId }) {
   const studyable = topics.filter((t) => !t.incidencia && topicProgressKey(t))
 
   return (
-    <section className="dash-tile dash-tile--amber relative overflow-hidden p-5 sm:p-6" style={{ '--dash-delay': '0ms' }}>
+    <section className="dash-tile dash-tile--amber relative overflow-hidden p-3.5 sm:p-6" style={{ '--dash-delay': '0ms' }}>
       <div className="dash-scanline opacity-40" aria-hidden />
 
       <div className="relative z-[1] flex flex-wrap items-start justify-between gap-3">
@@ -160,7 +160,7 @@ export default function MateriaDoDiaCard({ user, courseId }) {
             ) : null}
             <span className="cp-badge text-[9px]">Sync Edital</span>
           </div>
-          <h2 className="cp-headline mt-3 text-xl sm:text-2xl">Estudo de hoje</h2>
+          <h2 className="cp-headline mt-2 text-lg sm:mt-3 sm:text-2xl">Estudo de hoje</h2>
           <p className="mt-1 flex items-center gap-1.5 text-xs capitalize text-cp-muted">
             <CalendarDaysIcon className="h-3.5 w-3.5 shrink-0" />
             {formatTodayLabel(todayKey)}
@@ -226,7 +226,7 @@ export default function MateriaDoDiaCard({ user, courseId }) {
               return (
                 <div
                   key={`inc-${topic.disciplina}`}
-                  className="rounded-xl border border-cp-border bg-cp-surface/80 p-4"
+                  className="rounded-xl border border-cp-border bg-cp-surface/80 p-3 sm:p-4"
                 >
                   <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">
                     Revisão · incidência
@@ -255,7 +255,7 @@ export default function MateriaDoDiaCard({ user, courseId }) {
             return (
               <article
                 key={pKey || topic.topicKey}
-                className="rounded-xl border border-cp-border bg-cp-surface/80 p-4 transition hover:border-cp-accent/25"
+                className="rounded-xl border border-cp-border bg-cp-surface/80 p-3 transition hover:border-cp-accent/25 sm:p-4"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">

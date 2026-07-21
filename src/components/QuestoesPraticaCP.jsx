@@ -62,12 +62,12 @@ export function QuestoesHeader({ badge, title, subtitle, backLink }) {
       {backLink}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-cp-accent/30 bg-gradient-to-br from-cp-accent/15 to-cp-accent2/10">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cp-accent/30 bg-gradient-to-br from-cp-accent/15 to-cp-accent2/10 sm:h-12 sm:w-12">
             <FireIcon className="h-6 w-6 text-cp-accent" />
           </div>
           <div>
             <span className="cp-badge cp-badge-accent mb-2">{badge}</span>
-            <h1 className="cp-headline text-xl sm:text-2xl">{title}</h1>
+            <h1 className="cp-headline text-lg sm:text-2xl">{title}</h1>
             {subtitle && <p className="mt-1 text-sm text-cp-muted">{subtitle}</p>}
           </div>
         </div>
@@ -140,7 +140,7 @@ export function QuestaoEnunciadoCard({
       data-content-id={contentId || undefined}
       id={contentId ? `questao-${String(contentId).slice(0, 80)}` : undefined}
     >
-      <div className="border-b border-cp-border/80 bg-gradient-to-r from-cp-accent/8 via-transparent to-cp-accent2/8 px-4 py-3 sm:px-5">
+      <div className="border-b border-cp-border/80 bg-gradient-to-r from-cp-accent/8 via-transparent to-cp-accent2/8 px-3 py-2.5 sm:px-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             {questionNumber != null && (
@@ -176,8 +176,8 @@ export function QuestaoEnunciadoCard({
           </div>
         </div>
       </div>
-      <div className="px-4 py-5 sm:px-5 sm:py-6">
-        <p className="text-base font-medium leading-relaxed text-cp-text sm:text-lg">{enunciado}</p>
+      <div className="px-3 py-3.5 sm:px-5 sm:py-6">
+        <p className="text-sm font-medium leading-relaxed text-cp-text sm:text-lg">{enunciado}</p>
       </div>
     </div>
   )
@@ -196,7 +196,7 @@ export function QuestaoAlternativas({
 
   if (tipoProva === 'Certo/Errado') {
     return (
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
         {['C', 'E'].map((key) => {
           const isCorrect = key === correta
           const isSelected = selectedAnswer === key
@@ -207,7 +207,7 @@ export function QuestaoAlternativas({
               type="button"
               onClick={() => !modoAdminNavegacao && onAnswer(key)}
               disabled={reveal || modoAdminNavegacao}
-              className={`rounded-2xl border-2 p-5 transition-all duration-200 ${alternativaClassName({
+              className={`rounded-2xl border-2 p-3 transition-all duration-200 sm:p-5 ${alternativaClassName({
                 reveal,
                 isCorrect,
                 isSelected,
@@ -215,7 +215,7 @@ export function QuestaoAlternativas({
               })}`}
             >
               <div className="flex flex-col items-center gap-1.5">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full border border-cp-border bg-cp-bg font-mono text-lg font-bold text-cp-text">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-cp-border bg-cp-bg font-mono text-sm font-bold text-cp-text sm:h-10 sm:w-10 sm:text-lg">
                   {key}
                 </span>
                 <span className="text-xs font-medium text-cp-muted">{key === 'C' ? 'Certo' : 'Errado'}</span>
@@ -243,7 +243,7 @@ export function QuestaoAlternativas({
             type="button"
             onClick={() => !modoAdminNavegacao && onAnswer(key)}
             disabled={reveal || modoAdminNavegacao}
-            className={`w-full rounded-2xl border-2 p-4 text-left transition-all duration-200 ${alternativaClassName({
+            className={`w-full rounded-2xl border-2 p-3 text-left transition-all duration-200 sm:p-4 ${alternativaClassName({
               reveal,
               isCorrect,
               isSelected,
@@ -284,20 +284,20 @@ export function QuestaoExplicacao({ explicacao, editSlot }) {
 
 export function ResultadoDesempenho({ desempenho }) {
   return (
-    <div className="cp-card p-8 text-center space-y-6">
-      <h2 className="cp-headline text-xl">Prática concluída</h2>
+    <div className="cp-card space-y-4 p-5 text-center sm:space-y-6 sm:p-8">
+      <h2 className="cp-headline text-lg sm:text-xl">Prática concluída</h2>
       <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-2xl border border-cp-border bg-cp-surface p-4">
+        <div className="rounded-2xl border border-cp-border bg-cp-surface p-3 sm:p-4">
           <p className="font-mono text-[10px] uppercase text-cp-muted">Acertos</p>
-          <p className="mt-1 text-2xl font-medium text-emerald-400">{desempenho.acertos}</p>
+          <p className="mt-1 text-xl font-medium text-emerald-400 sm:text-2xl">{desempenho.acertos}</p>
         </div>
-        <div className="rounded-2xl border border-cp-border bg-cp-surface p-4">
+        <div className="rounded-2xl border border-cp-border bg-cp-surface p-3 sm:p-4">
           <p className="font-mono text-[10px] uppercase text-cp-muted">Erros</p>
-          <p className="mt-1 text-2xl font-medium text-red-400">{desempenho.erros}</p>
+          <p className="mt-1 text-xl font-medium text-red-400 sm:text-2xl">{desempenho.erros}</p>
         </div>
-        <div className="rounded-2xl border border-cp-border bg-cp-surface p-4">
+        <div className="rounded-2xl border border-cp-border bg-cp-surface p-3 sm:p-4">
           <p className="font-mono text-[10px] uppercase text-cp-muted">Aproveitamento</p>
-          <p className="mt-1 text-2xl font-medium text-cp-accent2">{desempenho.aproveitamento}%</p>
+          <p className="mt-1 text-xl font-medium text-cp-accent2 sm:text-2xl">{desempenho.aproveitamento}%</p>
         </div>
       </div>
     </div>

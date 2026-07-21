@@ -84,7 +84,7 @@ const TopicNotificationsButton = memo(() => {
             {flagNotifs.length === 0 &&
             otherInbox.length === 0 &&
             notifications.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-cp-muted">
+              <p className="px-4 py-4 text-center text-sm text-cp-muted">
                 Nenhuma novidade por enquanto.
               </p>
             ) : (

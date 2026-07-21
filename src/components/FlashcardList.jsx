@@ -204,28 +204,28 @@ const FlashcardList = ({
 
       {/* Avaliação SRS — abaixo do card (Noji) */}
       {showRating && flipped ? (
-        <div className="noji-rating mt-4 space-y-3">
+        <div className="noji-rating mt-4 space-y-2 sm:space-y-3">
           <p className="text-center text-sm font-medium text-cp-muted">
             Quão bem você lembrou?
           </p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
             <button
               type="button"
               onClick={() => handleRate('hard')}
-              className="noji-rate-hard group flex flex-col items-center rounded-2xl px-4 py-4 transition active:scale-[0.98]"
+              className="noji-rate-hard group flex flex-col items-center rounded-2xl px-3 py-3 transition active:scale-[0.98] sm:px-4 sm:py-4"
               style={{ touchAction: 'manipulation' }}
             >
-              <span className="text-base font-bold">Difícil</span>
+              <span className="text-sm font-bold sm:text-base">Difícil</span>
               <span className="mt-0.5 text-[11px] opacity-80">Repetir em {hardLabel}</span>
               <span className="mt-1 text-[10px] opacity-50">Tecla 1</span>
             </button>
             <button
               type="button"
               onClick={() => handleRate('easy')}
-              className="noji-rate-easy group flex flex-col items-center rounded-2xl px-4 py-4 transition active:scale-[0.98]"
+              className="noji-rate-easy group flex flex-col items-center rounded-2xl px-3 py-3 transition active:scale-[0.98] sm:px-4 sm:py-4"
               style={{ touchAction: 'manipulation' }}
             >
-              <span className="text-base font-bold">Fácil</span>
+              <span className="text-sm font-bold sm:text-base">Fácil</span>
               <span className="mt-0.5 text-[11px] opacity-80">Próximo em {easyLabel}</span>
               <span className="mt-1 text-[10px] opacity-50">Tecla 2</span>
             </button>
@@ -243,7 +243,7 @@ const FlashcardList = ({
       )}
 
       {/* Navegação lateral */}
-      <div className="mt-4 flex items-center justify-center gap-4">
+      <div className="mt-4 flex items-center justify-center gap-3 sm:gap-4">
         <button type="button" onClick={onPrev} className="noji-nav-btn" aria-label="Anterior">
           <ChevronLeftIcon className="h-5 w-5" />
         </button>

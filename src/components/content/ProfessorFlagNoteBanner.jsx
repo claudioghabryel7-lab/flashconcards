@@ -28,7 +28,7 @@ export default function ProfessorFlagNoteBanner({ className = '' }) {
 
   return (
     <div
-      className={`mb-4 rounded-2xl border border-cp-accent/30 bg-cp-accent/10 p-4 ${className}`}
+      className={`mb-4 rounded-2xl border border-cp-accent/30 bg-cp-accent/10 p-3 sm:p-4 ${className}`}
       role="status"
     >
       <div className="flex items-start gap-3">

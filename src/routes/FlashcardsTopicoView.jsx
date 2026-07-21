@@ -363,7 +363,7 @@ const FlashcardsTopicoView = () => {
   }, [cards, searchParams, courseId, topicKey])
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-4 pb-8 sm:space-y-6">
       <ProfessorFlagNoteBanner />
       <div className="cp-card p-4 sm:p-5">
         <Link
@@ -447,24 +447,24 @@ const FlashcardsTopicoView = () => {
       )}
 
       {!loading && !generating && !regenerating && !error && cards.length === 0 && !isAdmin && (
-        <div className="cp-card p-10 text-center">
-          <p className="text-4xl mb-3">⏳</p>
+        <div className="cp-card p-5 text-center sm:p-10">
+          <p className="mb-3 text-2xl sm:text-4xl">⏳</p>
           <p className="font-medium text-cp-text">Flashcards em preparação</p>
           <p className="mt-2 text-sm text-cp-muted">O administrador ainda não disponibilizou os flashcards deste tópico.</p>
         </div>
       )}
 
       {!loading && !generating && !regenerating && !error && cards.length > 0 && !canStudy && !isAdmin && (
-        <div className="cp-card p-10 text-center">
-          <p className="text-4xl mb-3">🔒</p>
+        <div className="cp-card p-5 text-center sm:p-10">
+          <p className="mb-3 text-2xl sm:text-4xl">🔒</p>
           <p className="font-medium text-cp-text">Conteúdo em preparação</p>
           <p className="mt-2 text-sm text-cp-muted">Aguarde o administrador disponibilizar estes flashcards.</p>
         </div>
       )}
 
       {!loading && !generating && !regenerating && !error && canStudy && cards.length > 0 && studyCards.length === 0 && !focusOverrideCard && (
-        <div className="cp-card p-10 text-center">
-          <p className="text-4xl mb-3">✨</p>
+        <div className="cp-card p-5 text-center sm:p-10">
+          <p className="mb-3 text-2xl sm:text-4xl">✨</p>
           <p className="font-medium text-cp-text">Tudo em dia!</p>
           <p className="mt-2 text-sm text-cp-muted">
             {stats.nextDue
@@ -475,7 +475,7 @@ const FlashcardsTopicoView = () => {
       )}
 
       {!loading && !generating && !regenerating && !error && canStudy && studyCards.length > 0 && (
-        <div className="cp-card p-4 sm:p-6">
+        <div className="cp-card p-3 sm:p-6">
           <div className="mb-4 flex items-center justify-between text-xs text-cp-muted">
             <span>
               {focusOverrideCard

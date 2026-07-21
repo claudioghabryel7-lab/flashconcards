@@ -1212,7 +1212,7 @@ REGRAS:
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto p-4 sm:p-6">
+    <div className="mx-auto max-w-5xl space-y-4 p-3 sm:space-y-6 sm:p-6">
       <ProfessorFlagNoteBanner />
       <Link to="/edital-verticalizado" className="inline-flex items-center gap-2 text-sm text-cp-muted hover:text-cp-accent transition">
         <ArrowLeftIcon className="w-5 h-5" />
@@ -1220,7 +1220,7 @@ REGRAS:
       </Link>
 
       <div
-        className="cp-card p-6 sm:p-8"
+        className="cp-card p-4 sm:p-8"
         data-content-id={buildMaterialContentId({
           courseId: resolvedCourseId,
           topicKey: resolvedTopicKey,
@@ -1230,7 +1230,7 @@ REGRAS:
           <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted mb-1">Material de apoio</p>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
-              <h1 className="cp-headline text-2xl sm:text-3xl break-words">
+              <h1 className="cp-headline break-words text-xl sm:text-3xl">
                 {conteudo.materia || conteudo.titulo || resolvedTopicKey}
               </h1>
               {conteudo.subtitulo && (
@@ -1316,7 +1316,7 @@ REGRAS:
             <>
               {/* Raio-X de Probabilidade */}
               {conteudo.raioXProbabilidade && (
-                <div className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-xl p-6 mb-8">
+                <div className="mb-5 rounded-xl bg-gradient-to-r from-orange-50 to-amber-50 p-4 dark:from-orange-900/20 dark:to-amber-900/20 sm:mb-8 sm:p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <FireIcon className="h-6 w-6 text-orange-600" />
                     <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
@@ -1358,7 +1358,7 @@ REGRAS:
               
               {/* Revisão Turbo */}
               {conteudo.revisaoTurbo && Array.isArray(conteudo.revisaoTurbo) && conteudo.revisaoTurbo.length > 0 && (
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6 mb-8">
+                <div className="mb-5 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 p-4 dark:from-blue-900/20 dark:to-indigo-900/20 sm:mb-8 sm:p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <LightBulbIcon className="h-6 w-6 text-blue-600" />
                     <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
@@ -1384,7 +1384,7 @@ REGRAS:
               
               {/* Pegadinhas */}
               {conteudo.pegadinhas && Array.isArray(conteudo.pegadinhas) && conteudo.pegadinhas.length > 0 && (
-                <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-6 mb-8">
+                <div className="mb-5 rounded-xl bg-red-50 p-4 dark:bg-red-900/20 sm:mb-8 sm:p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
                     <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">
@@ -1484,7 +1484,7 @@ REGRAS:
                       key={index}
                       className="border-l-4 border-alego-500 pl-6 py-3 bg-slate-50 dark:bg-slate-900/50 rounded-r-lg"
                     >
-                      <h3 className="text-xl sm:text-2xl font-semibold text-alego-600 dark:text-alego-400 mb-3">
+                      <h3 className="mb-3 text-lg font-semibold text-alego-600 dark:text-alego-400 sm:text-2xl">
                         {secao.titulo || `Seção ${index + 1}`}
                         {secao.tipo && (
                           <span className="ml-3 text-sm bg-alego-100 dark:bg-alego-900 text-alego-700 dark:text-alego-300 px-3 py-1 rounded-full">

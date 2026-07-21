@@ -1118,7 +1118,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
   }
 
   const renderBloqueioAluno = () => (
-    <div className="cp-card p-8 text-center">
+    <div className="cp-card p-5 text-center sm:p-10">
       <QuestionMarkCircleIcon className="h-10 w-10 text-amber-400 mx-auto mb-3" />
       <p className="font-medium text-cp-text">Questões em preparação</p>
       <p className="mt-2 text-sm text-cp-muted">
@@ -1137,12 +1137,12 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
   if (!questoes && error) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <Link to="/edital-verticalizado" className="inline-flex items-center gap-2 text-sm text-cp-muted hover:text-cp-accent transition">
           <ArrowLeftIcon className="h-4 w-4" />
           Voltar ao edital
         </Link>
-        <div className="cp-card p-10 text-center space-y-4">
+        <div className="cp-card space-y-4 p-5 text-center sm:p-10">
           <QuestionMarkCircleIcon className="h-12 w-12 text-cp-muted mx-auto" />
           <h1 className="cp-headline text-xl">Questões não disponíveis</h1>
           <p className="text-sm text-cp-muted">{error}</p>
@@ -1159,7 +1159,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
 
   if (!isAdmin && !carregandoNivel && !canPractice && !desempenho) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <Link to="/edital-verticalizado" className="inline-flex items-center gap-2 text-sm text-cp-muted hover:text-cp-accent transition">
           <ArrowLeftIcon className="h-4 w-4" />
           Voltar ao edital
@@ -1175,7 +1175,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <ProfessorFlagNoteBanner />
       {courseName && (
         <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cp-muted">{courseName}</p>
@@ -1209,7 +1209,7 @@ Retorne APENAS o JSON válido, sem texto adicional.`
       )}
 
 
-      <div className="cp-card p-6 sm:p-8">
+      <div className="cp-card p-4 sm:p-8">
           {carregandoNivel ? (
             <div className="py-12 text-center">
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-cp-accent border-t-transparent" />

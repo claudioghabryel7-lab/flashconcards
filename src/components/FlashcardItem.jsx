@@ -145,7 +145,7 @@ const FlashcardItem = ({
   }
 
   const showInlineRating = showRating && !ratingBelowCard && flipped
-  const cardHeight = 'min-h-[min(340px,52dvh)] h-[min(340px,52dvh)] sm:min-h-[360px] sm:h-[360px]'
+  const cardHeight = 'min-h-[min(260px,46dvh)] h-[min(260px,46dvh)] sm:min-h-[360px] sm:h-[360px]'
 
   return (
     <div
@@ -179,7 +179,7 @@ const FlashcardItem = ({
         >
           {/* Frente */}
           <div
-            className={`absolute inset-0 flex h-full w-full flex-col overflow-hidden rounded-3xl border p-5 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] sm:p-8 ${borderColor} ${cardColor}`}
+            className={`absolute inset-0 flex h-full w-full flex-col overflow-hidden rounded-2xl border p-3 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] sm:rounded-3xl sm:p-8 ${borderColor} ${cardColor}`}
             style={{
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
@@ -203,7 +203,7 @@ const FlashcardItem = ({
                   />
                 )}
               </div>
-              <div className="absolute right-0 top-0 z-20 flex gap-1">
+              <div className="absolute right-0 top-0 z-20 flex gap-0.5 sm:gap-1">
                 <button
                   type="button"
                   onPointerDown={(e) => e.stopPropagation()}
@@ -211,14 +211,14 @@ const FlashcardItem = ({
                     e.stopPropagation()
                     onToggleFavorite(card.id)
                   }}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
+                  className={`flex h-9 w-9 items-center justify-center rounded-full transition-all sm:h-10 sm:w-10 ${
                     isFavorite
                       ? 'bg-rose-50 text-rose-500 dark:bg-rose-950/40'
                       : 'text-slate-400 hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800'
                   }`}
                   aria-label={isFavorite ? 'Remover dos favoritos' : 'Favoritar'}
                 >
-                  <HeartIcon className="h-5 w-5" />
+                  <HeartIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                 </button>
                 {isAdmin && !editing && (
                   <>
@@ -229,7 +229,7 @@ const FlashcardItem = ({
                         e.stopPropagation()
                         handleEdit()
                       }}
-                      className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800"
+                      className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800 sm:h-10 sm:w-10"
                       aria-label="Editar"
                     >
                       <PencilIcon className="h-4 w-4" />
@@ -241,7 +241,7 @@ const FlashcardItem = ({
                         e.stopPropagation()
                         handleDelete()
                       }}
-                      className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
+                      className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-500 sm:h-10 sm:w-10"
                       aria-label="Excluir"
                     >
                       <TrashIcon className="h-4 w-4" />
@@ -250,18 +250,18 @@ const FlashcardItem = ({
                 )}
               </div>
 
-              <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-6 text-center sm:px-2 sm:py-8">
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-3 text-center sm:px-2 sm:py-8">
                 {editing ? (
                   editForm
                 ) : (
                   <>
-                    <span className="mb-3 inline-flex rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
+                    <span className="mb-2 inline-flex rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400 sm:mb-3 sm:px-3 sm:py-1 sm:text-[11px]">
                       Pergunta
                     </span>
-                    <h3 className={`text-lg font-semibold leading-relaxed sm:text-2xl ${textColor}`}>
+                    <h3 className={`text-base font-semibold leading-snug sm:text-2xl sm:leading-relaxed ${textColor}`}>
                       {card.pergunta}
                     </h3>
-                    <p className="noji-hint mt-6 text-sm text-slate-400">Toque para revelar a resposta</p>
+                    <p className="noji-hint mt-3 text-xs text-slate-400 sm:mt-6 sm:text-sm">Toque para revelar a resposta</p>
                   </>
                 )}
               </div>
@@ -285,7 +285,7 @@ const FlashcardItem = ({
 
           {/* Verso */}
           <div
-            className={`absolute inset-0 flex h-full w-full flex-col overflow-hidden rounded-3xl border p-5 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] sm:p-8 ${borderColor} ${
+            className={`absolute inset-0 flex h-full w-full flex-col overflow-hidden rounded-2xl border p-3 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] sm:rounded-3xl sm:p-8 ${borderColor} ${
               cardColor === 'bg-white' || cardColor === 'bg-slate-100'
                 ? 'bg-slate-900 dark:bg-slate-800'
                 : 'bg-slate-900'
@@ -306,36 +306,36 @@ const FlashcardItem = ({
                       e.stopPropagation()
                       handleEdit()
                     }}
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-white/10"
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-white/70 transition hover:bg-white/10 sm:h-10 sm:w-10"
                     aria-label="Editar verso"
                   >
                     <PencilIcon className="h-4 w-4" />
                   </button>
                 )}
               </div>
-              <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-4 text-center sm:px-2 sm:py-6">
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-3 text-center sm:px-2 sm:py-6">
                 {!editing && (
-                  <span className="mb-3 inline-flex shrink-0 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white/70">
+                  <span className="mb-2 inline-flex shrink-0 rounded-full bg-white/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/70 sm:mb-3 sm:px-3 sm:py-1 sm:text-[11px]">
                     Resposta
                   </span>
                 )}
                 {editing ? (
                   <div className="w-full text-left">{editForm}</div>
                 ) : (
-                  <div className="w-full text-base font-medium leading-relaxed text-white sm:text-xl">
+                  <div className="w-full text-sm font-medium leading-snug text-white sm:text-xl sm:leading-relaxed">
                     {card.resposta}
                   </div>
                 )}
               </div>
 
               {showInlineRating && (
-                <div className="mt-auto shrink-0 space-y-3 border-t border-white/10 pt-4" onClick={(e) => e.stopPropagation()}>
-                  <p className="text-center text-xs font-medium text-white/60">Como foi essa revisão?</p>
+                <div className="mt-auto shrink-0 space-y-2 border-t border-white/10 pt-3 sm:space-y-3 sm:pt-4" onClick={(e) => e.stopPropagation()}>
+                  <p className="text-center text-[11px] font-medium text-white/60 sm:text-xs">Como foi essa revisão?</p>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => handleRate('hard')}
-                      className="noji-rate-hard flex-1 rounded-2xl py-3.5 text-sm font-bold"
+                      className="noji-rate-hard flex-1 rounded-xl py-2.5 text-xs font-bold sm:rounded-2xl sm:py-3.5 sm:text-sm"
                       style={{ touchAction: 'manipulation' }}
                     >
                       Difícil
@@ -343,7 +343,7 @@ const FlashcardItem = ({
                     <button
                       type="button"
                       onClick={() => handleRate('easy')}
-                      className="noji-rate-easy flex-1 rounded-2xl py-3.5 text-sm font-bold"
+                      className="noji-rate-easy flex-1 rounded-xl py-2.5 text-xs font-bold sm:rounded-2xl sm:py-3.5 sm:text-sm"
                       style={{ touchAction: 'manipulation' }}
                     >
                       Fácil

@@ -499,7 +499,7 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.
       </div>
       
       {/* Conteúdo principal */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-12">
         {currentQuestion && (
           <div className="space-y-6">
             {/* Badge fictícia */}
@@ -526,10 +526,10 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.
             </div>
             
             {/* Enunciado */}
-            <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
+            <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-8">
               <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl -mr-32 -mt-32"></div>
               
-              <p className="relative text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white leading-relaxed">
+              <p className="relative text-base sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white leading-relaxed">
                 {currentQuestion.enunciado}
               </p>
             </div>
@@ -548,7 +548,7 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.
                     type="button"
                     onClick={() => handleAnswer(letra)}
                     disabled={showResult}
-                    className={`group relative w-full text-left p-5 sm:p-6 rounded-xl border-2 transition-all duration-300 overflow-hidden ${
+                    className={`group relative w-full text-left p-3 sm:p-6 rounded-xl border-2 transition-all duration-300 overflow-hidden ${
                       showCorrect
                         ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-500/50 shadow-lg shadow-green-500/20'
                         : showWrong
@@ -563,7 +563,7 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.
                     )}
                     
                     <div className="relative flex items-start gap-4">
-                      <span className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center font-black text-lg ${
+                      <span className={`flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-lg font-black text-sm sm:h-10 sm:w-10 sm:text-lg ${
                         showCorrect 
                           ? 'bg-green-500 text-white' 
                           : showWrong 
