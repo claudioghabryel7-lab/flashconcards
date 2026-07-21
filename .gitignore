@@ -20,12 +20,16 @@ build/
 
 # Environment variables
 .env
+.env.*
+!.env.vercel.example
 .env.local
 .env.production
 .env.example
 .env.example.template
 .env.vercel
 ENV_KEYS_TEMP.txt
+*API_KEY*
+*SECRET*
 
 # Editor directories and files
 .vscode/*
