@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import CourseAdScreen from '../components/CourseAdScreen'
+import { mapOrderedAlternativas } from '../utils/questaoAlternativas'
 import {
   ClockIcon,
   CheckCircleIcon,
@@ -1198,8 +1199,8 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.
         }
         
         // Caso contrário, embaralhar normalmente
-        // Converter alternativas em array de pares [letra, texto]
-        const alternativesArray = Object.entries(question.alternativas)
+        // Converter alternativas em array de pares [letra, texto] já ordenados A→E
+        const alternativesArray = mapOrderedAlternativas(question.alternativas)
         
         // Embaralhar o array
         const shuffled = [...alternativesArray].sort(() => Math.random() - 0.5)
@@ -1607,7 +1608,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown.
                       <h3 className="text-lg font-semibold mb-3 mt-2">{question.enunciado}</h3>
                       
                       <div className="space-y-2 mb-4">
-                        {Object.entries(question.alternativas || {}).map(([letra, texto]) => (
+                        {mapOrderedAlternativas(question.alternativas || {}).map(([letra, texto]) => (
                           <div
                             key={letra}
                             className={`p-3 rounded-lg ${
@@ -2474,7 +2475,7 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
               <>
                 {/* Interface para Múltipla Escolha */}
                 <div className="space-y-3">
-                  {currentQuestion.alternativas && Object.entries(currentQuestion.alternativas).map(([letra, texto]) => {
+                  {currentQuestion.alternativas && mapOrderedAlternativas(currentQuestion.alternativas).map(([letra, texto]) => {
                     const isSelected = answers[currentQuestionIndex] === letra
                     const isCorrect = letra === currentQuestion.correta
                     const hasAnswered = !!answers[currentQuestionIndex]

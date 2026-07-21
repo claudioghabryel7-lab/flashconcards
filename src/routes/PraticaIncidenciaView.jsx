@@ -20,6 +20,7 @@ import {
   buildIncidenciaQuestaoContentId,
   buildLegacyIncidenciaQuestaoContentId,
 } from '../utils/contentCommentIds'
+import { mapOrderedAlternativas } from '../utils/questaoAlternativas'
 
 const PraticaIncidenciaView = () => {
   const { courseId, disciplinaIdx } = useParams()
@@ -1066,7 +1067,7 @@ REGRAS:
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          {Object.entries(questoesParaExibir[currentQuestionIndex].alternativas).map(([key, value]) => (
+                          {mapOrderedAlternativas(questoesParaExibir[currentQuestionIndex].alternativas).map(([key, value]) => (
                             <button
                               key={key}
                               onClick={() => !modoAdminNavegacao && handleAnswer(key)}

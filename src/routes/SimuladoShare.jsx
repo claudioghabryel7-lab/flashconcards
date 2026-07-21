@@ -7,6 +7,7 @@ import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import ResultExport from '../components/ResultExport'
 import CourseAdScreen from '../components/CourseAdScreen'
+import { mapOrderedAlternativas } from '../utils/questaoAlternativas'
 import {
   ClockIcon,
   CheckCircleIcon,
@@ -55,8 +56,8 @@ const generateVisitorId = async () => {
 const shuffleAlternatives = (question) => {
   if (!question.alternativas || !question.correta) return question
   
-  // Converter alternativas em array de pares [letra, texto]
-  const alternativesArray = Object.entries(question.alternativas)
+  // Converter alternativas em array de pares [letra, texto] já ordenados A→E
+  const alternativesArray = mapOrderedAlternativas(question.alternativas)
   
   // Embaralhar o array
   const shuffled = [...alternativesArray].sort(() => Math.random() - 0.5)
@@ -1290,7 +1291,7 @@ Lembre-se: use 4 espaços no início de uma linha para criar um parágrafo.
             </div>
 
             <div className="space-y-3">
-              {Object.entries(currentQuestion.alternativas).map(([letra, texto]) => {
+              {mapOrderedAlternativas(currentQuestion.alternativas).map(([letra, texto]) => {
                 const isSelected = answers[currentQuestionIndex] === letra
                 return (
                   <button

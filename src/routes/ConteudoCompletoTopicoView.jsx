@@ -19,6 +19,7 @@ import {
   isMaterialContentComplete,
 } from '../utils/contentDepthRules'
 import { filterValidQuestoes } from '../utils/questoesQuality'
+import { mapOrderedAlternativas } from '../utils/questaoAlternativas'
 import {
   createGenerationJob,
   updateGenerationJob,
@@ -578,7 +579,7 @@ const ConteudoCompletoTopicoView = () => {
           yPosition += 10
 
           if (questao.alternativas) {
-            Object.entries(questao.alternativas).forEach(([letra, alt]) => {
+            mapOrderedAlternativas(questao.alternativas).forEach(([letra, alt]) => {
               const isCorrect = letra === questao.correta
               yPosition = addText(`${letra}) ${alt}`, margin + 10, yPosition, maxWidth - 15, 10, isCorrect, isCorrect ? '#16A34A' : '#71717A')
             })
@@ -1298,7 +1299,7 @@ REGRAS FINAIS:
                         
                         {questao.alternativas && (
                           <div className="space-y-2 mb-4">
-                            {Object.entries(questao.alternativas).map(([letra, alt]) => (
+                            {mapOrderedAlternativas(questao.alternativas).map(([letra, alt]) => (
                               <div
                                 key={letra}
                                 className={`p-3 rounded-lg text-sm ${
