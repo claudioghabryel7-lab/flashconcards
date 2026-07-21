@@ -15,7 +15,7 @@ import {
   normalizeExamContext,
 } from '../utils/examFidelityContext'
 import {
-  getConteudoCompletoDepthInstructions,
+  getConteudoCompletoSkeletonInstructions,
   ensureMaterialContentComplete,
   normalizeMaterialStructure,
   CONTEUDO_COMPLETO_DEPTH,
@@ -568,12 +568,13 @@ const ConteudoCompletoTopicoView = () => {
       const schemaSnippet = buildQuestaoJsonSchemaSnippet(exam.tipoProva, {
         includeExplicacao: false,
       })
-      const depth = getConteudoCompletoDepthInstructions({
+      const skeleton = getConteudoCompletoSkeletonInstructions({
         banca: exam.banca,
         concursoName: exam.concursoName,
         courseName: exam.courseName,
         cargo: exam.cargo,
       })
+      const stubWords = `${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_ESQUELETO}–${CONTEUDO_COMPLETO_DEPTH.MAX_PALAVRAS_ESQUELETO}`
 
       const prompt = `${fidelityBlock}
 Você é um especialista em criar conteúdo técnico completo e ESPECÍFICO para concursos públicos.
@@ -590,7 +591,7 @@ ${contextoDisciplina ? `- DISCIPLINA: ${contextoDisciplina.disciplina}` : ''}
 EDITAL BASE (trecho relevante):
 ${editalText.substring(0, 8000)}${editalText.length > 8000 ? '\n\n[texto truncado...]' : ''}
 
-${depth}
+${skeleton}
 
 ${formatInstructions}
 
@@ -599,15 +600,16 @@ REGRAS CRÍTICAS:
 2. Conteúdo específico para o CARGO ${exam.cargo || 'do edital'} e estilo da BANCA ${exam.banca || 'indicada'}
 3. NÃO use o nome do curso como se fosse o cargo
 4. Não invente leis/artigos; use apenas normas vigentes
-5. NÃO corte o JSON — complete TODAS as seções (raio-X, revisão turbo, pegadinhas, questões)
+5. NÃO corte o JSON — priorize COMPLETAR os ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} stubs curtos da revisaoTurbo
+6. PROIBIDO escrever resumos longos nesta fase (cortam o JSON). Profundidade vem na 2ª passagem.
 
-TAREFA:
-Gere material de "Véspera de Prova" completo para o tópico "${effectiveTopicNome || resolvedTopicKey}".
+TAREFA (FASE 1 — ESQUELETO):
+Gere o esqueleto do material de "Véspera de Prova" para "${effectiveTopicNome || resolvedTopicKey}".
 
 1. RAIO-X: exatamente ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} top assuntos quentes + padrão da banca ${exam.banca || 'indicada'} (DETALHADO) para o cargo ${exam.cargo || 'do edital'}
-2. REVISÃO TURBO: EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} resumos PROFUNDOS (não genéricos), cada um com as 6 seções: Conceito, Base normativa, Distinções/exceções, Na prática da banca, Margens de dúvida, Dica
+2. REVISÃO TURBO: EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} rascunhos CURTOS (${stubWords} palavras cada) — 1 parágrafo com ideia central + atenção da banca. SEM as 6 seções longas.
 3. PEGADINHAS: 3–5 armadilhas típicas da banca
-4. QUESTÕES PREDITIVAS: no formato ${tipoLabel} (gabarito comentado)
+4. QUESTÕES PREDITIVAS: no formato ${tipoLabel} (gabarito comentado objetivo)
 
 FORMATO JSON:
 {
@@ -625,12 +627,12 @@ FORMATO JSON:
     "padraoBanca": "<h4>Como a banca cobra</h4><p>explicação detalhada da ${exam.banca} para ${exam.cargo}</p><h4>O que mais cai</h4><ul><li>...</li></ul><h4>Pegadinhas recorrentes</h4><ul><li>...</li></ul><h4>Exemplo típico</h4><p>...</p>"
   },
   "revisaoTurbo": [
-    { "titulo": "assunto 1", "conteudo": "<h4>Conceito central</h4><p>...</p><h4>Base normativa</h4><p>...</p><h4>Distinções e exceções</h4><ul><li>...</li></ul><h4>Na prática da banca</h4><p>...</p><h4>Margens de dúvida</h4><ul><li><b>Dúvida:</b> ... <b>Resposta:</b> ...</li></ul><h4>Dica de memorização</h4><p>...</p>" },
-    { "titulo": "assunto 2", "conteudo": "..." },
-    { "titulo": "assunto 3", "conteudo": "..." },
-    { "titulo": "assunto 4", "conteudo": "..." },
-    { "titulo": "assunto 5", "conteudo": "..." },
-    { "titulo": "assunto 6", "conteudo": "..." }
+    { "titulo": "assunto 1", "conteudo": "<p>Rascunho curto (${stubWords} palavras): ideia central + 1 ponto de atenção da banca.</p>" },
+    { "titulo": "assunto 2", "conteudo": "<p>Rascunho curto…</p>" },
+    { "titulo": "assunto 3", "conteudo": "<p>Rascunho curto…</p>" },
+    { "titulo": "assunto 4", "conteudo": "<p>Rascunho curto…</p>" },
+    { "titulo": "assunto 5", "conteudo": "<p>Rascunho curto…</p>" },
+    { "titulo": "assunto 6", "conteudo": "<p>Rascunho curto…</p>" }
   ],
   "pegadinhas": [
     { "titulo": "Cuidado meu querido aluno!", "conteudo": "pegadinha da banca" }
@@ -638,7 +640,7 @@ FORMATO JSON:
   "questoesPreditivas": [
     {
       ${schemaSnippet},
-      "gabaritoComentado": "explicação detalhada"
+      "gabaritoComentado": "explicação objetiva"
     }
   ]
 }
@@ -646,14 +648,13 @@ FORMATO JSON:
 REGRAS FINAIS:
 - Fidelidade 100% à banca + cargo
 - padraoBanca NÃO pode ser genérico/curto — explique de verdade como a ${exam.banca} cobra
-- Cada resumo DEVE ter: conceito, base normativa, distinções, prática da banca, margens de dúvida (Dúvida→Resposta) e dica
-- PROIBIDO deixar margem de dúvida aberta; feche com regra + exceção
+- Cada item de revisaoTurbo: NO MÁXIMO ~${CONTEUDO_COMPLETO_DEPTH.MAX_PALAVRAS_ESQUELETO} palavras
 - Questões no formato ${tipoLabel} apenas
 - revisaoTurbo OBRIGATORIAMENTE com ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} itens
-- Retorne APENAS JSON válido e COMPLETO
+- Retorne APENAS JSON válido e COMPLETO (sem cortar no meio)
 - DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`
 
-      setProgress((prev) => Math.min(prev + 15, 70))
+      setProgress((prev) => Math.min(prev + 15, 55))
       const genOpts = {
         courseId: resolvedCourseId,
         isLegalContent: true,
@@ -661,20 +662,35 @@ REGRAS FINAIS:
         trustedGeneration: true,
         useGoogleSearch: true,
         verifyContent: true,
-        maxContinues: 4,
-        generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
+        maxContinues: 2,
+        generationConfig: { maxOutputTokens: 20000, temperature: 0.15 },
       }
       let parsed = await generateAiJson(prompt, genOpts)
+      setProgress((prev) => Math.min(prev + 10, 65))
       parsed = await ensureMaterialContentComplete(parsed, {
         generateAiJson,
-        generateOptions: genOpts,
+        generateOptions: {
+          ...genOpts,
+          verifyContent: false,
+          generationConfig: { maxOutputTokens: 14000, temperature: 0.18 },
+        },
         context: {
           topico: effectiveTopicNome || resolvedTopicKey,
           banca: exam.banca,
           cargo: exam.cargo,
           concurso: exam.concursoName,
         },
-        maxRepairs: 2,
+        maxRepairs: 3,
+        onProgress: (msg) => {
+          setProgress((prev) => Math.min(prev + 2, 88))
+          if (user?.uid && jobId) {
+            updateGenerationJob(user.uid, jobId, {
+              status: GENERATION_JOB_STATUS.RUNNING,
+              progress: Math.min(88, 65),
+              message: msg,
+            }).catch(() => {})
+          }
+        },
       })
 
       try {

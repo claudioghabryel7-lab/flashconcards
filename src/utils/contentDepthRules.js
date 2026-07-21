@@ -7,10 +7,13 @@ export const CONTEUDO_COMPLETO_DEPTH = {
   /** Faixa por resumo da Revisão Turbo — material de estudo, não telegrama. */
   MIN_PALAVRAS_POR_RESUMO: 280,
   MAX_PALAVRAS_POR_RESUMO: 420,
+  /** Esqueleto (fase 1): stubs curtos para caber no 1º JSON sem cortar. */
+  MIN_PALAVRAS_ESQUELETO: 55,
+  MAX_PALAVRAS_ESQUELETO: 95,
   MIN_PALAVRAS_PEGADINHA: 60,
   MAX_PALAVRAS_PEGADINHA: 110,
-  /** Texto útil mínimo (sem HTML) para contar um resumo como presente. */
-  MIN_CHARS_RESUMO_UTIL: 200,
+  /** Texto útil mínimo (sem HTML) para contar um resumo como presente (esqueleto ok). */
+  MIN_CHARS_RESUMO_UTIL: 160,
   /** Texto útil mínimo para considerar o resumo com profundidade de prova. */
   MIN_CHARS_RESUMO_PROFUNDO: 980,
   /** padraoBanca mínimo (sem HTML). */
@@ -121,6 +124,52 @@ export function getUsableResumos(parsed = {}) {
   return items.filter((r) => plainTextLen(r.conteudo) >= CONTEUDO_COMPLETO_DEPTH.MIN_CHARS_RESUMO_UTIL)
 }
 
+/**
+ * Instruções da FASE 1 (esqueleto): JSON leve para NÃO estourar tokens.
+ * A profundidade da Revisão Turbo vem depois, item a item.
+ */
+export function getConteudoCompletoSkeletonInstructions({
+  banca,
+  concursoName,
+  courseName,
+  cargo,
+} = {}) {
+  const {
+    MIN_TOPICOS_QUENTES,
+    MAX_TOPICOS_QUENTES,
+    MIN_QUESTOES,
+    MIN_PALAVRAS_ESQUELETO,
+    MAX_PALAVRAS_ESQUELETO,
+    MIN_PALAVRAS_PEGADINHA,
+    MAX_PALAVRAS_PEGADINHA,
+    MIN_PALAVRAS_PADRAO_BANCA,
+    MAX_PALAVRAS_PADRAO_BANCA,
+  } = CONTEUDO_COMPLETO_DEPTH
+
+  const cargoLabel = cargo || courseName || 'mencionado'
+  const bancaLabel = banca || 'definida'
+
+  return `
+🧩 FASE 1 — ESQUELETO COMPLETO (NÃO escreva resumos longos agora):
+
+1. Cubra o que realmente cai na banca ${bancaLabel} para ${concursoName || 'o concurso'} / cargo ${cargoLabel}.
+2. Raio-X: EXATAMENTE ${MIN_TOPICOS_QUENTES} "Top Assuntos Quentes" (até ${MAX_TOPICOS_QUENTES} só se a disciplina for muito ampla).
+3. PADRÃO DA BANCA (raioXProbabilidade.padraoBanca) — DETALHADO (${MIN_PALAVRAS_PADRAO_BANCA}–${MAX_PALAVRAS_PADRAO_BANCA} palavras):
+   - Como a ${bancaLabel} formula questões DESTE tópico para o cargo ${cargoLabel}
+   - O que mais cobra; verbos/estruturas típicas; pegadinhas; exemplo concreto; o que NÃO cai
+4. REVISÃO TURBO — EXATAMENTE ${MIN_TOPICOS_QUENTES} itens (um por assunto quente).
+   ⚠️ CADA "conteudo" é um RASCUNHO CURTO de ${MIN_PALAVRAS_ESQUELETO}–${MAX_PALAVRAS_ESQUELETO} palavras:
+   - 1 parágrafo com a ideia central + 1 ponto de atenção da banca
+   - NÃO escreva as 6 seções longas agora (virão numa 2ª passagem)
+   - NÃO ultrapasse ~${MAX_PALAVRAS_ESQUELETO} palavras por item (senão o JSON corta)
+5. Pegadinhas: 3 a 5 itens (${MIN_PALAVRAS_PEGADINHA}–${MAX_PALAVRAS_PEGADINHA} palavras), tipicamente da ${bancaLabel}.
+6. Questões Preditivas: EXATAMENTE ${MIN_QUESTOES}; gabarito comentado (pode ser objetivo).
+7. NÃO invente leis. NÃO use markdown. HTML: <p>, <h4>, <b>, <mark>, <ul><li>.
+8. revisaoTurbo = ARRAY com ${MIN_TOPICOS_QUENTES} objetos { "titulo", "conteudo" }.
+9. PRIORIDADE: JSON VÁLIDO E COMPLETO com os ${MIN_TOPICOS_QUENTES} stubs — profundidade depois.`
+}
+
+/** Instruções de profundidade (usadas no aprofundamento item a item). */
 export function getConteudoCompletoDepthInstructions({
   banca,
   concursoName,
@@ -327,8 +376,10 @@ function buildRepairPrompt(material, context = {}) {
 
   const banca = context.banca || material.banca || 'a banca'
   const cargo = context.cargo || material.cargo || 'o cargo'
+  const { MIN_PALAVRAS_ESQUELETO, MAX_PALAVRAS_ESQUELETO } = CONTEUDO_COMPLETO_DEPTH
 
   return `O material JSON ficou INCOMPLETO: revisaoTurbo tem só ${usable} resumo(s) (mínimo: ${needed}).
+Complete com ESQUELETOS CURTOS (não resumos longos — a profundidade virá depois, item a item).
 
 CONTEXTO:
 - TÓPICO: ${context.topico || material.materia || material.titulo || ''}
@@ -347,17 +398,18 @@ Gere APENAS JSON:
   "revisaoTurbo": [
     {
       "titulo": "assunto",
-      "conteudo": "<h4>Conceito central</h4><p>...</p><h4>Base normativa</h4><p>...</p><h4>Distinções e exceções</h4><ul><li>...</li></ul><h4>Na prática da banca</h4><p>...</p><h4>Margens de dúvida</h4><ul><li><b>Dúvida:</b> ... <b>Resposta:</b> ...</li></ul><h4>Dica de memorização</h4><p>...</p>"
+      "conteudo": "<p>Rascunho curto: ideia central + 1 ponto de atenção da banca.</p>"
     }
   ]
 }
 
 REGRAS:
 - EXATAMENTE ${missing} novos itens.
-- Cada conteudo: ${CONTEUDO_COMPLETO_DEPTH.MIN_PALAVRAS_POR_RESUMO}–${CONTEUDO_COMPLETO_DEPTH.MAX_PALAVRAS_POR_RESUMO} palavras.
-- Inclua as 6 seções (conceito, base normativa, distinções, prática da banca, margens de dúvida, dica).
-- "Na prática da banca" e "Margens de dúvida" específicos da ${banca} / cargo ${cargo}.
-- Sem markdown. Sem inventar leis.`
+- Cada conteudo: ${MIN_PALAVRAS_ESQUELETO}–${MAX_PALAVRAS_ESQUELETO} palavras (rascunho).
+- NÃO escreva as 6 seções longas agora.
+- Específico da ${banca} / cargo ${cargo}.
+- Sem markdown. Sem inventar leis.
+- JSON completo e curto.`
 }
 
 function buildPadraoBancaPrompt(material, context = {}) {
@@ -473,6 +525,8 @@ async function deepenOneResumo(item, { generateAiJson, generateOptions, context,
 
 /**
  * Garante material completo E com Revisão Turbo profunda (fecha margens de dúvida).
+ * Fluxo em fases: (1) completar esqueleto se faltarem itens, (2) padraoBanca,
+ * (3) aprofundar Revisão Turbo item a item — evita JSON monolítico que corta.
  */
 export async function ensureMaterialContentComplete(
   parsed,
@@ -480,11 +534,22 @@ export async function ensureMaterialContentComplete(
     generateAiJson,
     generateOptions = {},
     context = {},
-    maxRepairs = 2,
+    maxRepairs = 3,
     enrichDepth = true,
     deepenOneByOne = true,
+    onProgress = null,
   } = {},
 ) {
+  const notify = (msg) => {
+    if (typeof onProgress === 'function') {
+      try {
+        onProgress(msg)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   let material = normalizeMaterialStructure(parsed)
   let check = isMaterialContentComplete(material)
 
@@ -494,16 +559,28 @@ export async function ensureMaterialContentComplete(
     throw err
   }
 
-  // 1) Completar quantidade de resumos
+  // 1) Completar quantidade com ESQUELETOS curtos (não profundos — evita novo corte)
   for (let attempt = 0; attempt < maxRepairs && !check.ok; attempt += 1) {
     const missing = Math.max((check.needed || CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES) - (check.usable || 0), 1)
     console.warn(
-      `[material] incompleto (${check.usable}/${check.needed}). Reparo ${attempt + 1}/${maxRepairs} (+${missing} resumos)...`,
+      `[material] incompleto (${check.usable}/${check.needed}). Reparo esqueleto ${attempt + 1}/${maxRepairs} (+${missing})...`,
     )
+    notify(`Completando esqueleto da Revisão Turbo (${check.usable}/${check.needed})…`)
 
     const patch = await callMaterialPatch(
       generateAiJson,
-      generateOptions,
+      {
+        ...generateOptions,
+        maxContinues: Math.min(generateOptions.maxContinues ?? 2, 2),
+        generationConfig: {
+          ...(generateOptions.generationConfig || {}),
+          maxOutputTokens: Math.min(
+            Math.max(generateOptions.generationConfig?.maxOutputTokens || 0, 8000),
+            12000,
+          ),
+          temperature: 0.15,
+        },
+      },
       buildRepairPrompt(material, context),
     )
     const extras = extractRevisaoTurboItems(patch)
@@ -537,6 +614,7 @@ export async function ensureMaterialContentComplete(
   // 2) Expandir padrão da banca se superficial
   if (!isPadraoBancaAdequate(material)) {
     console.warn('[material] enriquecendo padraoBanca…')
+    notify('Aprofundando o padrão da banca…')
     try {
       const patch = await callMaterialPatch(
         generateAiJson,
@@ -558,29 +636,52 @@ export async function ensureMaterialContentComplete(
     }
   }
 
-  // 3) Aprofundar Revisão Turbo — preferencialmente 1 a 1 (qualidade > velocidade)
+  // 3) Aprofundar Revisão Turbo — sempre 1 a 1 (stubs da fase 1 → profundidade)
   let shallow = getShallowResumos(material)
   if (deepenOneByOne && shallow.length > 0) {
     console.warn(`[material] aprofundando Revisão Turbo item a item (${shallow.length} rasos)…`)
     const current = extractRevisaoTurboItems(material)
+    const total = current.length
     const deepened = []
+    let idx = 0
     for (const item of current) {
+      idx += 1
       if (isResumoDeepEnough(item)) {
         deepened.push(item)
         continue
       }
+      notify(`Aprofundando Revisão Turbo ${idx}/${total}: ${item.titulo || 'resumo'}…`)
       try {
         let next = await deepenOneResumo(item, {
           generateAiJson,
-          generateOptions: { ...generateOptions, useGoogleSearch: true },
+          generateOptions: {
+            ...generateOptions,
+            useGoogleSearch: true,
+            maxContinues: Math.min(generateOptions.maxContinues ?? 2, 2),
+            generationConfig: {
+              ...(generateOptions.generationConfig || {}),
+              maxOutputTokens: Math.min(
+                Math.max(generateOptions.generationConfig?.maxOutputTokens || 0, 10000),
+                14000,
+              ),
+              temperature: 0.18,
+            },
+          },
           context,
           material,
         })
-        // Segunda chance se ainda raso
         if (!isResumoDeepEnough(next)) {
           next = await deepenOneResumo(next, {
             generateAiJson,
-            generateOptions,
+            generateOptions: {
+              ...generateOptions,
+              maxContinues: 1,
+              generationConfig: {
+                ...(generateOptions.generationConfig || {}),
+                maxOutputTokens: 12000,
+                temperature: 0.12,
+              },
+            },
             context,
             material,
           })
@@ -593,15 +694,15 @@ export async function ensureMaterialContentComplete(
     }
     material = normalizeMaterialStructure({ ...material, revisaoTurbo: deepened })
     shallow = getShallowResumos(material)
-  } else {
-    // Fallback: lotes de 1–2
+  } else if (shallow.length > 0) {
     let enrichPasses = 0
-    while (shallow.length > 0 && enrichPasses < 4) {
+    while (shallow.length > 0 && enrichPasses < 6) {
       enrichPasses += 1
       const batch = shallow.slice(0, 1)
       console.warn(
         `[material] enriquecendo resumo raso (passe ${enrichPasses}): ${batch.map((r) => r.titulo).join(', ')}`,
       )
+      notify(`Aprofundando: ${batch.map((r) => r.titulo).join(', ')}…`)
       try {
         const patch = await callMaterialPatch(
           generateAiJson,
@@ -630,9 +731,9 @@ export async function ensureMaterialContentComplete(
 
   const depth = isMaterialDepthAdequate(material)
   if (!depth.ok) {
-    // Exige padrão da banca; se a revisão turbo ainda estiver rasa demais (>2), falha
     const stillShallow = getShallowResumos(material)
-    if (!isPadraoBancaAdequate(material) || stillShallow.length > 2) {
+    // Após fases: exige padraoBanca; tolera no máx. 1 resumo ainda raso
+    if (!isPadraoBancaAdequate(material) || stillShallow.length > 1) {
       const err = new Error(
         depth.reason ||
           'Revisão Turbo ainda genérica/incompleta. Regenere o material.',
