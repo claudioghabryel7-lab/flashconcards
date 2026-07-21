@@ -52,17 +52,34 @@ const UserFlashcardsManager = ({ selectedCourseId = null }) => {
     const unsubscribe = userFlashcardsService.subscribeToUserFlashcards(
       user.uid,
       (cards) => {
-        setFlashcards(cards)
+        let filtered = cards
+        if (filters.materia) {
+          filtered = filtered.filter((c) => c.materia === filters.materia)
+        }
+        if (filters.modulo) {
+          filtered = filtered.filter((c) =>
+            String(c.modulo || '').toLowerCase().includes(String(filters.modulo).toLowerCase()),
+          )
+        }
+        if (filters.search) {
+          const q = filters.search.toLowerCase()
+          filtered = filtered.filter(
+            (c) =>
+              String(c.pergunta || '').toLowerCase().includes(q) ||
+              String(c.resposta || '').toLowerCase().includes(q),
+          )
+        }
+        setFlashcards(filtered)
         setLoading(false)
       },
-      filters
+      selectedCourseId,
     )
 
     // Carregar estatísticas
     loadStats()
 
     return () => unsubscribe()
-  }, [user, filters])
+  }, [user, filters, selectedCourseId])
 
   const loadStats = async () => {
     if (!user) return

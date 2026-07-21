@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase/config'
@@ -9,6 +9,7 @@ import {
   persistCardReview,
   getRatingButtonLabel,
   getNextReviewLabel,
+  nextIndexAfterRating,
 } from '../utils/spacedRepetition'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -26,7 +27,6 @@ const FlashcardPIP = () => {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showAnswer, setShowAnswer] = useState(false)
   const [cardProgress, setCardProgress] = useState({})
-  const [sessionHard, setSessionHard] = useState([])
   const [completed, setCompleted] = useState(false)
   const [errorCount, setErrorCount] = useState(0)
   const [cardColor, setCardColor] = useState('bg-white')
@@ -44,7 +44,10 @@ const FlashcardPIP = () => {
     { name: 'Roxo', bg: 'bg-violet-50', text: 'text-slate-900', border: 'border-violet-200' },
   ]
 
-  const { dueQueue, stats, bumpNow, requeueCard } = useSRSDeck(allCards, cardProgress)
+  const { dueQueue, stats, bumpNow, requeueCard, removeFromRequeue, clearRequeue } = useSRSDeck(
+    allCards,
+    cardProgress,
+  )
 
   const [sessionQueue, setSessionQueue] = useState([])
   const sessionInitialized = useRef(false)
@@ -54,19 +57,19 @@ const FlashcardPIP = () => {
     setSessionQueue([])
     setCurrentIndex(0)
     setShowAnswer(false)
-    setSessionHard([])
     setCompleted(false)
     setErrorCount(0)
-  }, [courseIdParam, disciplina, modulo, topicKey])
+    clearRequeue()
+  }, [courseIdParam, disciplina, modulo, topicKey, clearRequeue])
 
+  // Inicializa a fila uma vez com os due; depois a fila é gerida pelas avaliações
   useEffect(() => {
     if (loading || sessionInitialized.current) return
     if (dueQueue.length === 0 && allCards.length === 0) return
-    const dueIds = new Set(dueQueue.map((c) => c.id))
-    const extra = sessionHard.filter((c) => !dueIds.has(c.id))
-    setSessionQueue([...extra, ...dueQueue])
+    setSessionQueue([...dueQueue])
     sessionInitialized.current = true
-  }, [loading, dueQueue, sessionHard, allCards.length])
+    if (dueQueue.length === 0) setCompleted(true)
+  }, [loading, dueQueue, allCards.length])
 
   const sessionCards = sessionQueue
 
@@ -89,9 +92,9 @@ const FlashcardPIP = () => {
         setAllCards(existing)
         setCurrentIndex(0)
         setShowAnswer(false)
-        setSessionHard([])
         setCompleted(false)
         setErrorCount(0)
+        sessionInitialized.current = false
       } catch (error) {
         console.error('Erro ao carregar flashcards:', error)
       } finally {
@@ -110,52 +113,47 @@ const FlashcardPIP = () => {
   const currentCard = sessionCards[currentIndex]
   const currentProgress = currentCard ? cardProgress[currentCard.id] : null
 
-  const advanceCard = useCallback(() => {
-    setShowAnswer(false)
-    setTimeout(() => {
-      setCurrentIndex((prev) => {
-        const next = prev + 1
-        if (next >= sessionCards.length) {
-          if (sessionHard.length > 0) {
-            return 0
-          }
-          setCompleted(true)
-          return prev
-        }
-        return next
-      })
-    }, 250)
-  }, [sessionCards.length, sessionHard.length])
-
   const handleRate = async (difficulty) => {
     if (!user || !currentCard || ratingRef.current) return
     ratingRef.current = true
+    const rated = currentCard
+    const indexBefore = currentIndex
 
     try {
       const { updated } = await persistCardReview(
         user.uid,
-        currentCard.id,
+        rated.id,
         cardProgress,
         difficulty,
         courseIdParam || 'alego-default',
       )
       setCardProgress(updated)
       bumpNow()
+      setShowAnswer(false)
 
       if (difficulty === 'hard') {
         setErrorCount((prev) => prev + 1)
-        setSessionHard((prev) => {
-          if (prev.some((c) => c.id === currentCard.id)) return prev
-          return [...prev, currentCard]
-        })
+        requeueCard(rated)
+        // Move o card atual para o fim e avança para o próximo (mesmo índice após remoção)
         setSessionQueue((prev) => {
-          if (prev.some((c) => c.id === currentCard.id)) return prev
-          return [...prev, currentCard]
+          const without = prev.filter((c) => c.id !== rated.id)
+          const next = [...without, rated]
+          setCurrentIndex(nextIndexAfterRating(indexBefore, next.length))
+          return next
         })
-        requeueCard(currentCard)
+      } else {
+        removeFromRequeue(rated.id)
+        setSessionQueue((prev) => {
+          const next = prev.filter((c) => c.id !== rated.id)
+          if (next.length === 0) {
+            setCompleted(true)
+            setCurrentIndex(0)
+          } else {
+            setCurrentIndex(nextIndexAfterRating(indexBefore, next.length))
+          }
+          return next
+        })
       }
-
-      advanceCard()
     } catch (error) {
       console.error('Erro ao salvar revisão:', error)
     } finally {
@@ -192,15 +190,15 @@ const FlashcardPIP = () => {
   if (completed || sessionCards.length === 0) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-slate-900 p-4">
-        <div className="max-w-md rounded-2xl bg-white p-10 text-center">
-          <h2 className="mb-4 text-3xl font-bold text-slate-900">Concluído!</h2>
-          <p className="mb-2 text-lg text-slate-700">
+        <div className="max-w-md rounded-2xl bg-white p-8 text-center sm:p-10">
+          <h2 className="mb-4 text-2xl font-bold text-slate-900 sm:text-3xl">Concluído!</h2>
+          <p className="mb-2 text-base text-slate-700 sm:text-lg">
             {stats.due === 0
               ? 'Todas as revisões deste tópico estão em dia.'
               : `${stats.due} card(s) ainda pendente(s) — volte quando vencerem.`}
           </p>
           {errorCount > 0 && (
-            <p className="text-slate-600">Marcados como difícil nesta sessão: {errorCount}</p>
+            <p className="text-sm text-slate-600">Marcados como difícil nesta sessão: {errorCount}</p>
           )}
           <button
             type="button"
@@ -220,9 +218,9 @@ const FlashcardPIP = () => {
 
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-slate-900 p-3 sm:p-4">
-      <div className="fixed left-3 top-3 z-50 text-sm font-bold text-white sm:left-4 sm:top-4">
+      <div className="fixed left-3 top-3 z-50 text-xs font-bold text-white sm:left-4 sm:top-4 sm:text-sm">
         {currentIndex + 1} / {sessionCards.length}
-        <span className="ml-2 text-xs font-normal text-slate-400">
+        <span className="ml-2 text-[10px] font-normal text-slate-400 sm:text-xs">
           · {stats.due} vencidos
         </span>
       </div>
@@ -236,19 +234,19 @@ const FlashcardPIP = () => {
             )
             window.open(`https://www.google.com/search?q=${q}`, '_blank')
           }}
-          className="rounded-lg bg-white p-3 text-slate-900 transition hover:opacity-80"
+          className="rounded-lg bg-white p-2.5 text-slate-900 transition hover:opacity-80 sm:p-3"
           title="Pesquisar no Google"
         >
-          <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </button>
         <button
           type="button"
           onClick={() => setShowColorPicker(!showColorPicker)}
-          className="rounded-lg bg-white p-3 text-slate-900 transition hover:opacity-80"
+          className="rounded-lg bg-white p-2.5 text-slate-900 transition hover:opacity-80 sm:p-3"
         >
-          <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
           </svg>
         </button>
@@ -268,27 +266,30 @@ const FlashcardPIP = () => {
         )}
       </div>
 
-      <div className="w-full max-w-4xl">
+      <div className="w-full max-w-3xl px-1">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentCard.id}
-            initial={{ opacity: 0, x: 60 }}
+            initial={{ opacity: 0, x: 40 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -60 }}
-            transition={{ duration: 0.25 }}
+            exit={{ opacity: 0, x: -40 }}
+            transition={{ duration: 0.2 }}
           >
             <button
               type="button"
               onClick={() => !showAnswer && setShowAnswer(true)}
-              className={`${cardColor} flex min-h-[min(520px,72dvh)] w-full flex-col items-center justify-center rounded-2xl border-4 p-6 text-center shadow-2xl sm:p-10 ${borderColor}`}
+              className={`${cardColor} flex min-h-[min(420px,62dvh)] w-full max-w-full flex-col items-center justify-center overflow-hidden rounded-2xl border-4 p-4 text-center shadow-2xl sm:min-h-[min(520px,72dvh)] sm:p-8 ${borderColor}`}
               style={{ touchAction: 'manipulation' }}
             >
-              <h2 className={`mb-6 text-xl font-bold leading-relaxed sm:text-3xl md:text-4xl ${textColor}`}>
+              <h2
+                className={`mb-4 max-w-full break-words font-semibold leading-snug sm:mb-6 sm:font-bold sm:leading-relaxed ${textColor}`}
+                style={{ fontSize: 'clamp(0.95rem, 2.8vw + 0.55rem, 1.75rem)' }}
+              >
                 {currentCard.pergunta}
               </h2>
 
               {!showAnswer && (
-                <p className={`text-sm ${textColor === 'text-white' ? 'text-slate-300' : 'text-slate-500'}`}>
+                <p className={`text-xs sm:text-sm ${textColor === 'text-white' ? 'text-slate-300' : 'text-slate-500'}`}>
                   Toque para ver a resposta
                 </p>
               )}
@@ -297,33 +298,36 @@ const FlashcardPIP = () => {
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`mt-4 w-full border-t-4 pt-6 ${textColor === 'text-white' ? 'border-white' : 'border-slate-900'}`}
+                  className={`mt-3 w-full border-t-4 pt-4 sm:mt-4 sm:pt-6 ${textColor === 'text-white' ? 'border-white' : 'border-slate-900'}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div
-                    className={`mb-6 max-h-[40dvh] overflow-y-auto text-base font-medium leading-relaxed sm:text-xl ${
+                    className={`mb-5 max-h-[36dvh] max-w-full overflow-y-auto break-words font-medium leading-relaxed sm:mb-6 sm:max-h-[40dvh] ${
                       textColor === 'text-white' ? 'text-slate-200' : 'text-slate-700'
                     }`}
+                    style={{ fontSize: 'clamp(0.875rem, 2vw + 0.45rem, 1.25rem)' }}
                   >
                     {currentCard.resposta}
                   </div>
 
                   {nextReviewLabel && (
-                    <p className="mb-4 text-xs text-slate-500">Última revisão agendada: {nextReviewLabel}</p>
+                    <p className="mb-3 text-[11px] text-slate-500 sm:mb-4 sm:text-xs">
+                      Última revisão agendada: {nextReviewLabel}
+                    </p>
                   )}
 
-                  <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+                  <div className="flex flex-col gap-2.5 sm:flex-row sm:justify-center sm:gap-3">
                     <button
                       type="button"
                       onClick={() => handleRate('hard')}
-                      className="rounded-xl bg-slate-900 px-6 py-4 font-bold text-white transition active:scale-[0.98] sm:px-8"
+                      className="rounded-xl bg-slate-900 px-5 py-3.5 text-sm font-bold text-white transition active:scale-[0.98] sm:px-8 sm:py-4 sm:text-base"
                     >
                       Difícil · {hardLabel}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleRate('easy')}
-                      className="rounded-xl bg-indigo-600 px-6 py-4 font-bold text-white transition active:scale-[0.98] sm:px-8"
+                      className="rounded-xl bg-indigo-600 px-5 py-3.5 text-sm font-bold text-white transition active:scale-[0.98] sm:px-8 sm:py-4 sm:text-base"
                     >
                       Fácil · {easyLabel}
                     </button>

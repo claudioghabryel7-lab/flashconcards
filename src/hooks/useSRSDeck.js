@@ -4,6 +4,7 @@ import { buildDueQueue, getDeckSRSStats, isCardDue } from '../utils/spacedRepeti
 
 /**
  * Deck SRS com fila automática de cards vencidos e atualização periódica.
+ * Cards marcados como difícil na sessão vão para o FIM da fila (não para o início).
  */
 export function useSRSDeck(cards = [], cardProgress = {}, { refreshMs = 15000, includeAll = false } = {}) {
   const [now, setNow] = useState(() => dayjs())
@@ -18,8 +19,9 @@ export function useSRSDeck(cards = [], cardProgress = {}, { refreshMs = 15000, i
     if (includeAll) return [...cards]
     const base = buildDueQueue(cards, cardProgress, now)
     const baseIds = new Set(base.map((c) => c.id))
-    const extra = sessionRequeue.filter((c) => !baseIds.has(c.id))
-    return [...extra, ...base]
+    // Difíceis da sessão no fim — não interrompem a fila atual
+    const extra = sessionRequeue.filter((c) => c?.id && !baseIds.has(c.id))
+    return [...base, ...extra]
   }, [cards, cardProgress, now, includeAll, sessionRequeue])
 
   const stats = useMemo(
@@ -37,6 +39,11 @@ export function useSRSDeck(cards = [], cardProgress = {}, { refreshMs = 15000, i
     })
   }, [])
 
+  const removeFromRequeue = useCallback((cardId) => {
+    if (!cardId) return
+    setSessionRequeue((prev) => prev.filter((c) => c.id !== cardId))
+  }, [])
+
   const clearRequeue = useCallback(() => setSessionRequeue([]), [])
 
   return {
@@ -45,6 +52,7 @@ export function useSRSDeck(cards = [], cardProgress = {}, { refreshMs = 15000, i
     dueQueue,
     stats,
     requeueCard,
+    removeFromRequeue,
     clearRequeue,
     isCardDue: (cardId) => isCardDue(cardProgress[cardId], now),
   }
