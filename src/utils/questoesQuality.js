@@ -2,6 +2,7 @@
  * Validação leve de questões geradas — descarta itens inválidos antes de publicar.
  */
 import { alternativasAsOrderedObject, normalizeQuestaoAlternativas } from './questaoAlternativas.js'
+import { isCertoErradoTipo, resolveTipoProvaFromBanca } from './examFidelityContext.js'
 
 function resolveGabarito(q = {}, alternativas = []) {
   let raw =
@@ -62,8 +63,10 @@ function coerceQuestoesList(raw) {
 /**
  * @returns {{ ok: object[], dropped: number }}
  */
-export function filterValidQuestoes(rawList, { tipoProva = 'ABCD', minKeep = 1 } = {}) {
+export function filterValidQuestoes(rawList, { tipoProva = 'ABCD', minKeep = 1, banca = '' } = {}) {
   const list = coerceQuestoesList(rawList)
+  const resolvedTipo = resolveTipoProvaFromBanca(banca, tipoProva)
+  const expectCE = isCertoErradoTipo(resolvedTipo)
   const ok = []
 
   for (const item of list) {
@@ -71,7 +74,7 @@ export function filterValidQuestoes(rawList, { tipoProva = 'ABCD', minKeep = 1 }
     const enunciado = String(item.enunciado || item.pergunta || item.texto || '').trim()
     if (enunciado.length < 12) continue
 
-    if (tipoProva === 'Certo/Errado' || tipoProva === 'CE') {
+    if (expectCE) {
       const gabarito = resolveGabarito(item)
       if (gabarito !== 'C' && gabarito !== 'E') continue
       ok.push({
@@ -80,6 +83,8 @@ export function filterValidQuestoes(rawList, { tipoProva = 'ABCD', minKeep = 1 }
         correta: gabarito,
         respostaCorreta: gabarito,
         gabarito,
+        tipo: 'certo_errado',
+        tipoProva: 'Certo/Errado',
       })
       continue
     }
@@ -87,20 +92,12 @@ export function filterValidQuestoes(rawList, { tipoProva = 'ABCD', minKeep = 1 }
     const alts = normalizeQuestaoAlternativas(item.alternativas || item.opcoes || item.opções, 5)
     const gabarito = resolveGabarito(item, alts)
 
-    // Se a IA misturou CE em prova ABCD, ainda aceita C/E
+    // Prova ABCD: rejeita itens só Certo/Errado (formato da banca errado)
     if ((gabarito === 'C' || gabarito === 'E') && alts.length < 2) {
-      ok.push({
-        ...item,
-        enunciado,
-        correta: gabarito,
-        respostaCorreta: gabarito,
-        gabarito,
-        tipo: 'certo_errado',
-      })
       continue
     }
 
-    if (!gabarito) continue
+    if (!gabarito || !/^[A-E]$/.test(gabarito)) continue
     if (alts.length < 2) continue
     const letters = new Set(alts.map((a) => a.letra))
     if (!letters.has(gabarito)) continue
@@ -114,11 +111,16 @@ export function filterValidQuestoes(rawList, { tipoProva = 'ABCD', minKeep = 1 }
       correta: gabarito,
       respostaCorreta: gabarito,
       gabarito,
+      tipoProva: 'ABCD',
     })
   }
 
   if (minKeep > 0 && list.length > 0 && ok.length === 0) {
-    const err = new Error('Nenhuma questão válida gerada (gabarito/alternativas).')
+    const err = new Error(
+      expectCE
+        ? 'Nenhuma questão válida no formato Certo/Errado (gabarito C ou E).'
+        : 'Nenhuma questão válida no formato múltipla escolha (A–E).',
+    )
     err.code = 'questoes_invalid'
     throw err
   }

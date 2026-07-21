@@ -9,6 +9,18 @@ import { useAuth } from '../hooks/useAuth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import {
+  buildExamFidelityBlock,
+  buildQuestaoJsonSchemaSnippet,
+  buildTipoProvaInstructions,
+  formatTipoProvaLabel,
+  normalizeExamContext,
+} from '../utils/examFidelityContext'
+import {
+  getConteudoCompletoDepthInstructions,
+  isMaterialContentComplete,
+} from '../utils/contentDepthRules'
+import { filterValidQuestoes } from '../utils/questoesQuality'
+import {
   createGenerationJob,
   updateGenerationJob,
   GENERATION_JOB_STATUS,
@@ -759,11 +771,12 @@ ONDE:
       const editalText = (editalData.pdfText || editalData.prompt || '').toString()
       console.log('📝 [ConteudoCompleto] Tamanho do editalText:', editalText.length)
 
-      // Carregar dados do curso para obter a banca examinadora
+      // Carregar dados do curso para banca + cargo
       const courseRef = doc(db, 'courses', resolvedCourseId)
       const courseDoc = await getDoc(courseRef)
       const courseData = courseDoc.exists() ? courseDoc.data() : {}
       const banca = courseData.banca || ''
+      const cargo = courseData.cargo || courseData.competition || ''
 
       // Carregar edital verticalizado para extrair contexto da disciplina
       let editalVerticalizado = null
@@ -773,14 +786,13 @@ ONDE:
         if (editalVerticalDoc.exists()) {
           const data = editalVerticalDoc.data()
 
-          // Verificar se o edital está dividido em partes
           if (data.temPartes && data.totalPartes > 1) {
             const partesRef = collection(db, 'courses', resolvedCourseId, 'editalVerticalizado', 'principal', 'partes')
             const partesSnapshot = await getDocs(query(partesRef, orderBy('parte')))
 
             const todasDisciplinas = [...(data.disciplinas || [])]
-            partesSnapshot.forEach((doc) => {
-              const parteData = doc.data()
+            partesSnapshot.forEach((docSnap) => {
+              const parteData = docSnap.data()
               if (parteData.disciplinas && Array.isArray(parteData.disciplinas)) {
                 todasDisciplinas.push(...parteData.disciplinas)
               }
@@ -805,10 +817,9 @@ ONDE:
       const unifiedRef = doc(db, 'courses', resolvedCourseId, 'prompts', 'unified')
       const unifiedDoc = await getDoc(unifiedRef)
       const unifiedData = unifiedDoc.exists() ? unifiedDoc.data() : {}
-      const concursoName = unifiedData.concursoName || ''
+      const concursoName = unifiedData.concursoName || courseData.competition || ''
       setProgress(25)
 
-      // Extrair contexto hierárquico do edital
       let contextoDisciplina = null
       if (editalVerticalizado) {
         contextoDisciplina = extractContextFromEdital(editalVerticalizado, resolvedTopicKey)
@@ -817,191 +828,96 @@ ONDE:
         }
       }
 
-      const prompt = `Você é um especialista em criar conteúdo técnico completo e ESPECÍFICO para cursos preparatórios de concursos públicos.
+      const exam = normalizeExamContext({
+        banca,
+        cargo,
+        concursoName: concursoName || courseData.competition || courseName,
+        courseName: courseName || courseData.name,
+        competition: courseData.competition,
+        nivel: courseData.nivel || courseData.escolaridade,
+        area: courseData.area,
+      })
+      const tipoLabel = formatTipoProvaLabel(exam.tipoProva)
+      const fidelityBlock = buildExamFidelityBlock(exam)
+      const formatInstructions = buildTipoProvaInstructions(exam.tipoProva)
+      const schemaSnippet = buildQuestaoJsonSchemaSnippet(exam.tipoProva, {
+        includeExplicacao: false,
+      })
+      const depth = getConteudoCompletoDepthInstructions({
+        banca: exam.banca,
+        concursoName: exam.concursoName,
+        courseName: exam.courseName,
+        cargo: exam.cargo,
+      })
 
-CONTEXTO (não cite estes nomes no texto final):
-${banca ? `BANCA: ${banca}\n` : ''}${concursoName ? `CONCURSO: ${concursoName}\n` : ''}CURSO: ${
-        courseName || 'Curso Preparatório'
-      }
-      
-${contextoDisciplina ? `DISCIPLINA ESPECÍFICA: ${contextoDisciplina.disciplina}\n` : ''}TÓPICO ESPECÍFICO DO EDITAL (USE APENAS ESTE TÓPICO, NÃO MISTURE COM OUTROS): ${resolvedTopicKey}
-NOME DO TÓPICO: ${effectiveTopicNome || resolvedTopicKey}
+      const prompt = `${fidelityBlock}
+Você é um especialista em criar conteúdo técnico completo e ESPECÍFICO para concursos públicos.
 
-EDITAL BASE (trecho relevante para este tópico):
+CONTEXTO:
+- CURSO: ${courseName || 'Curso Preparatório'}
+- CONCURSO: ${exam.concursoName || 'NÃO DEFINIDO'}
+- CARGO: ${exam.cargo || 'NÃO DEFINIDO'}
+- BANCA: ${exam.banca || 'NÃO DEFINIDA'}
+- TIPO DE PROVA: ${tipoLabel}
+${contextoDisciplina ? `- DISCIPLINA: ${contextoDisciplina.disciplina}` : ''}
+- TÓPICO: ${effectiveTopicNome || resolvedTopicKey}
+
+EDITAL BASE (trecho relevante):
 ${editalText.substring(0, 8000)}${editalText.length > 8000 ? '\n\n[texto truncado...]' : ''}
 
-⚠️⚠️⚠️ REGRAS CRÍTICAS - EVITE CONTEÚDO GENÉRICO ⚠️⚠️⚠️
-1. FOCO 100% ESPECÍFICO: Crie conteúdo APENAS para o tópico "${effectiveTopicNome || resolvedTopicKey}"${contextoDisciplina ? ` DENTRO DA DISCIPLINA "${contextoDisciplina.disciplina}"` : ''}
-2. NÃO CRIE conteúdo genérico sobre toda a matéria (ex: se tópico é "Conceitos" em "Direito Constitucional", não fale de todo Direito Constitucional)
-3. SEJA ESPECÍFICO: Use artigos, leis, números, jurisprudência relacionados a ESTE tópico ${contextoDisciplina ? `nesta disciplina` : ''}
-4. EVITE ASSUNTOS DIFERENTES: Não mencione outros tópicos do edital
-5. CONTEÚDO TÉCNICO: Use linguagem formal, citations, artigos de lei
-6. PROFUNDIDADE ADEQUADA: Nível técnico para concurso público, não básico
-7. EXEMPLOS PRÁTICOS: Inclua exemplos concretos e aplicáveis
+${depth}
 
-🚨🚨🚨 BANCA EXAMINADORA - OBRIGATÓRIO 🚨🚨🚨
-BANCA DEFINIDA: ${banca || 'NÃO DEFINIDA'}
-- ADAPTE TODO O CONTEÚDO ao estilo da banca "${banca || 'NÃO DEFINIDA'}"
-- Se a banca for INSTITUTO AOCP: foco em artigos de lei na íntegra, questões de múltipla escolha diretas, interpretação literal
-- Se a banca for FGV: foco em interpretação de texto, questões contextualizadas, análise crítica
-- Se a banca for CESPE/CEBRASPE: foco em assertivas C/E, interpretação constitucional
-- Se a banca for FCC: foco em legislação atualizada, questões de múltipla escolha, interpretação direta
-- Se a banca for VUNESP: foco em interpretação de texto, questões contextualizadas, análise crítica
-- SEJA FIEL À BANCA DEFINIDA ACIMA.
+${formatInstructions}
 
-EXEMPLOS DO QUE EVITAR (ERRADO):
-❌ Se tópico é "Conceitos" em "Direito Constitucional": 
-   "O Direito Constitucional é o ramo do direito que estuda as constituições..."
+REGRAS CRÍTICAS:
+1. FOCO 100% no tópico "${effectiveTopicNome || resolvedTopicKey}"${contextoDisciplina ? ` da disciplina "${contextoDisciplina.disciplina}"` : ''}
+2. Conteúdo específico para o CARGO ${exam.cargo || 'do edital'} e estilo da BANCA ${exam.banca || 'indicada'}
+3. NÃO use o nome do curso como se fosse o cargo
+4. Não invente leis/artigos; use apenas normas vigentes
+5. NÃO corte o JSON — complete TODAS as seções (raio-X, revisão turbo, pegadinhas, questões)
 
-🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
+TAREFA:
+Gere material de "Véspera de Prova" completo para o tópico "${effectiveTopicNome || resolvedTopicKey}".
 
-[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
-Para o tópico solicitado, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar qualquer conteúdo visível para o usuário:
-
-1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
-2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
-3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
-4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes (como Pacote Anticrime, Lei Henry Borel, etc., se aplicável)
-5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
-6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
-7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
-
-SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DO CONTEÚDO FINAL.
-
-[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
-Gere o conteúdo estruturado com:
-- Raio-X de Probabilidade (Foco na banca ${banca || 'NÃO DEFINIDA'})
-- Revisão Turbo (Cronologia real e precisa, sem alucinações de numeração)
-- Cuidado, Caçapa! (Pegadinhas reais da banca)
-- 5 Questões Preditivas inéditas com gabarito comentado fundamentado estritamente na lei real vigente
-
-Seja cirúrgico, técnico e focado na literalidade e jurisprudência pacificada. Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto.
-
-INSTRUÇÕES:
-Gere um material de revisão de "Véspera de Prova" para o tópico "${effectiveTopicNome || resolvedTopicKey}"${contextoDisciplina ? ` da disciplina "${contextoDisciplina.disciplina}"` : ''}.
-
-🔍 VERIFICAÇÃO DE FONTES - OBRIGATÓRIO:
-- Para CADA lei, decreto ou norma jurídica mencionada, VERIFIQUE a atualidade usando as ferramentas disponíveis
-- Para CADA jurisprudência citada, VERIFIQUE se está vigente e atualizada
-- Use as ferramentas de Function Calling para buscar em APIs oficiais (Senado, Datajud/CNJ)
-- Sempre busque de fontes confiáveis: TJ,STF,LEI(E SUAS ATUALIZAÇÕES, NÃO PEGUE NADA ANTIGO OU DESATUALIZADO), GRAN CURSOS, QCONCURSOS, CONTEÚDOS JURÍDICOS, SITES DO PLANALTO, ENTENDIMENTOS ETC EM MATÉRIAS DE DIREITO... O FOCO É SEMPRE SER ATUALIZADO!
- Atualizações até o ano de agora ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} até o exato momento
-Sempre verifique atualizações de acordo com a data hora em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} , nunca dê conteúdo desatualizado... sempre atualizado. Verifique a veracidade da fonte em useGoogleSearch.
-DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se há leis, decretos ou regulamentos recentes que possam afetar o conteúdo.
-
-🚨 PROIBIÇÃO ABSOLUTA DE ALUCINAÇÃO DE LEIS: É expressamente proibido inventar, supor ou criar números de leis, decretos ou emendas (especialmente com o ano corrente de 2026). Toda e qualquer lei citada deve ser um fato histórico real e amplamente consolidado. Na dúvida sobre o número exato da alteração, cite apenas o artigo principal da lei base (ex: 'conforme o Artigo 19 da Lei nº 11.340/2006') em vez de inventar uma lei modificadora.
-
-**MODO HACKER DOS CONCURSOS**
-
-1. ****RAIO-X DE PROBABILIDADE**:
-   - Top Assuntos Quentes: Gere entre 5 a 15 tópicos com maior probabilidade de cair NO CONCURSO ${concursoName || 'mencionado'} (quantidade depende da extensão do conteúdo da disciplina)
-   - O Padrão da Banca: Como a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar esta disciplina especificamente no concurso.
-
-2. **REVISÃO TURBO**:
-   - 🚨 OBRIGATÓRIO: Gere UM RESUMO para CADA UM dos "Top Assuntos Quentes" listados no Raio-X de Probabilidade
-   - Se houver 5 top assuntos quentes, gere 5 resumos (um para cada)
-   - Se houver 10 top assuntos quentes, gere 10 resumos (um para cada)
-   - Cada resumo deve corresponder EXATAMENTE a um dos top assuntos quentes listados
-   - NÃO PULE nenhum top assunto quente - todos devem ter seu resumo
-   - Cada resumo deve:
-     * Explicar o conceito de forma clara e didática (NADA SUPERFICIAL, QUERO BEM COMPLETO)
-     * Citar exemplos práticos do concurso ${concursoName || 'mencionado'}
-     * Ser específico para o cargo de ${courseName || 'mencionado'}
-     * Incluir dicas de memorização (nada genérico e vazio/vago)
-     * Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
-   - 3-4 pegadinhas ("Cuidado meu querido aluno!"):
-     * Erros comuns que a banca ${banca || 'NÃO DEFINIDA'} costuma cobrar
-     * Detalhes que passam despercebidos
-     * Armadilhas específicas do concurso ${concursoName || 'mencionado'}
-     * Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
-
-3. **QUESTÕES PREDITIVAS**:
-   - Gere EXATAMENTE 5 questões para este tópico
-   - No estilo da banca ${banca || 'NÃO DEFINIDA'} (A, B, C, D, E ou Certo/Errado)
-   - Contextualizadas com o concurso ${concursoName || 'mencionado'} e cargo ${courseName || 'mencionado'}
-   - Gabarito Comentado: explique o porquê das outras estarem erradas
-   - Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)
-   - Seja detalhado e completo nas explicações
-
-🚨 INSTRUÇÃO CRÍTICA - CONTEÚDO ATUALIZADO:
-VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-- PENSE: "Vou gerar agora de acordo com atualizações verídicas da data atual (${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })})"
-- USE APENAS INFORMAÇÕES ATUALIZADAS E VIGENTES ATÉ ESTA DATA
-- VERIFIQUE SE HOUVE ALTERAÇÕES RECENTES NAS LEIS, DECRETOS OU NORMAS
-- NÃO USE INFORMAÇÕES DESATUALIZADAS OU REVOGADAS
-- CITE SEMPRE A DATA DE ATUALIZAÇÃO QUANDO NECESSÁRIO
-
-📅 CRONOLOGIA TEMPORAL OBRIGATÓRIA:
-- Para CADA lei, decreto ou norma mencionada no conteúdo, você DEVE traçar uma cronologia desde sua criação até a data atual
-- Exemplo: "Lei X, criada em 01/01/2000, alterada em 15/03/2010 pela Lei Y, modificada em 20/06/2015 pelo Decreto Z, atualizada em 10/02/2020 pela Medida Provisória W, vigente até ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}"
-- Liste TODAS as alterações relevantes: leis, decretos, medidas provisórias, emendas constitucionais, súmulas, jurisprudências
-- Sempre indique a data de cada alteração e o instrumento que a causou
-- Se a lei foi revogada, indique a data de revogação e o instrumento que a revogou
-- Mantenha o conteúdo atualizado considerando TODAS as alterações até a data atual
-
-🚨 TRAVAS DE SEGURANÇA E FIDELIDADE JURÍDICA ABSOLUTA:
-
-1. PROIBIÇÃO DE ALUCINAÇÃO LEGISLATIVA:
-- Você está terminantemente proibido de inventar, supor ou estimar números de leis, decretos ou datas. Se não houver registro histórico exato e pacificado no ordenamento jurídico brasileiro de uma alteração, você NÃO deve mencioná-la.
-- Nenhuma alteração futura hipotética deve ser criada. Toda e qualquer norma citada deve ter como lastro o portal do Planalto (Legislação Federal) ou os repositórios oficiais do STF/STJ.
-
-2. FILTRO DE CONSTITUCIONALIDADE E RECEPÇÃO (CF/88):
-- Para cada artigo ou código anterior a 1988 (como o CPP de 1941 ou o CP de 1940), você DEVE verificar se o dispositivo foi RECECIONADO ou NÃO pela Constituição Federal de 1988.
-- É terminantemente proibido indicar como aplicável ou vigente um dispositivo legal que os Tribunais Superiores (STF/STJ) já declararam como não-recepcionado ou inconstitucional (Ex: Incomunicabilidade do preso do Art. 21 do CPP, prisão por dívida de depositário infiel, etc.). Você deve apontar o dispositivo e declarar imediatamente a sua ineficácia jurídica atual por incompatibilidade constitucional.
-
-3. ALINHAMENTO OBRIGATÓRIO DE JURISPRUDÊNCIA PACIFICADA (STF/STJ):
-- Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
-- Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
-
-[TRAVA JURÍDICA CRÍTICA]: O modelo deve validar obrigatoriamente as inovações legislativas mais recentes (incluindo leis de 2025 e 2026), aplicando seus reflexos automáticos nos códigos e legislações pertinentes.
+1. RAIO-X: 6–10 top assuntos quentes + padrão da banca ${exam.banca || 'indicada'} para o cargo ${exam.cargo || 'do edital'}
+2. REVISÃO TURBO: UM resumo completo para CADA assunto quente (sem pular)
+3. PEGADINHAS: 3–5 armadilhas típicas da banca
+4. QUESTÕES PREDITIVAS: no formato ${tipoLabel} (gabarito comentado)
 
 FORMATO JSON:
 {
-  "validacaoArtigo": "Artigo, lei ou jurisprudência específica citada (texto literal com fonte)",
-  "titulo": "Título específico do conteúdo - OBRIGATÓRIO: Inclua data e hora atual no formato (DD/MM/AAAA HH:MM) no final do título. Exemplo: 'Inquérito Policial (26/06/2026 14:30)'",
+  "validacaoArtigo": "artigo/lei/jurisprudência base",
+  "titulo": "Título do conteúdo",
   "materia": "${effectiveTopicNome || resolvedTopicKey}",
-  "subtitulo": "Subtítulo específico opcional",
+  "subtitulo": "Revisão estratégica — ${exam.cargo || exam.concursoName}",
   "numero": "${resolvedTopicKey}",
+  "banca": "${exam.banca}",
+  "cargo": "${exam.cargo}",
+  "concurso": "${exam.concursoName}",
+  "tipoProva": "${tipoLabel}",
   "raioXProbabilidade": {
-    "topicosQuentes": ["assunto 1", "assunto 2", "assunto 3"],
-    "padraoBanca": "descrição do padrão"
+    "topicosQuentes": ["assunto 1", "assunto 2"],
+    "padraoBanca": "como a ${exam.banca} cobra este tópico para ${exam.cargo}"
   },
   "revisaoTurbo": [
-    {
-      "titulo": "Título do resumo",
-      "conteudo": "resumo detalhado 1"
-    }
+    { "titulo": "Título do resumo", "conteudo": "HTML completo do resumo" }
   ],
   "pegadinhas": [
-    {
-      "titulo": "Cuidado meu querido aluno!",
-      "conteudo": "pegadinha 1"
-    }
+    { "titulo": "Cuidado meu querido aluno!", "conteudo": "pegadinha da banca" }
   ],
   "questoesPreditivas": [
     {
-      "enunciado": "texto da questão",
-      "alternativas": {
-        "A": "Alternativa A",
-        "B": "Alternativa B",
-        "C": "Alternativa C",
-        "D": "Alternativa D",
-        "E": "Alternativa E"
-      },
-      "correta": "A",
+      ${schemaSnippet},
       "gabaritoComentado": "explicação detalhada"
     }
   ]
 }
 
-REGRAS:
-- Use tom focado e direto
-- Seja ESPECÍFICO do concurso ${concursoName || 'mencionado'} e cargo ${courseName || 'mencionado'}
-- Cite o nome do concurso e cargo nos resumos e questões
-- Preencha "validacaoArtigo" PRIMEIRO com o artigo/lei/jurisprudência literal antes de escrever o conteúdo
-- Retorne APENAS o JSON válido, sem texto adicional
-- Use texto limpo sem markdown (apenas tags HTML simples como <b> e <i> se necessário)`
+REGRAS FINAIS:
+- Fidelidade 100% à banca + cargo
+- Questões no formato ${tipoLabel} apenas
+- Retorne APENAS JSON válido e COMPLETO
+- DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`
 
       setProgress((prev) => Math.min(prev + 15, 70))
       const parsed = await generateAiJson(prompt, {
@@ -1011,13 +927,39 @@ REGRAS:
         trustedGeneration: true,
         useGoogleSearch: true,
         verifyContent: true,
+        maxContinues: 3,
+        generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
       })
+
+      const completeness = isMaterialContentComplete(parsed)
+      if (!completeness.ok) {
+        throw new Error(completeness.reason || 'Material incompleto/cortado. Gere novamente.')
+      }
+
+      try {
+        const pred = parsed?.questoesPreditivas
+        if (Array.isArray(pred) && pred.length) {
+          const { ok } = filterValidQuestoes(pred, {
+            tipoProva: exam.tipoProva,
+            banca: exam.banca,
+            minKeep: 0,
+          })
+          parsed.questoesPreditivas = ok
+        }
+      } catch (sanitizeErr) {
+        console.warn('[ConteudoCompleto] sanitizar questões:', sanitizeErr?.message || sanitizeErr)
+      }
+
       setProgress(75)
       const payload = {
-          ...parsed,
+        ...parsed,
         materia: parsed.materia || parsed.titulo || resolvedTopicKey,
         numero: parsed.numero || resolvedTopicKey,
-          topicKey: resolvedTopicKey,
+        banca: exam.banca,
+        cargo: exam.cargo,
+        concurso: exam.concursoName,
+        tipoProva: tipoLabel,
+        topicKey: resolvedTopicKey,
         status: CONTENT_STATUS.UNAVAILABLE,
         updatedAt: serverTimestamp(),
         generatedAt: serverTimestamp(),

@@ -101,11 +101,67 @@ export function normalizeExamContext(raw = {}) {
 }
 
 export function resolveTipoProvaFromBanca(banca = '', explicit = '') {
-  if (explicit === 'Certo/Errado' || explicit === 'ABCD') return explicit
+  if (explicit === 'Certo/Errado' || explicit === 'CE' || explicit === 'CertoErrado') {
+    return 'Certo/Errado'
+  }
+  if (
+    explicit === 'ABCD' ||
+    explicit === 'Múltipla Escolha' ||
+    explicit === 'Multipla Escolha' ||
+    explicit === 'ME'
+  ) {
+    return 'ABCD'
+  }
   const u = String(banca || '').toUpperCase()
   if (CERTO_ERRADO_BANCAS.some((b) => u.includes(b))) return 'Certo/Errado'
   return 'ABCD'
 }
+
+/** Rótulo legível do formato da prova. */
+export function formatTipoProvaLabel(tipoProva = '') {
+  return isCertoErradoTipo(tipoProva) ? 'Certo/Errado' : 'Múltipla Escolha (A–E)'
+}
+
+export function isCertoErradoTipo(tipoProva = '') {
+  const t = String(tipoProva || '').trim()
+  return t === 'Certo/Errado' || t === 'CE' || t === 'CertoErrado'
+}
+
+/** Schema JSON de uma questão conforme o formato da banca. */
+export function buildQuestaoJsonSchemaSnippet(tipoProva = 'ABCD', { includeExplicacao = true } = {}) {
+  if (isCertoErradoTipo(tipoProva)) {
+    return `"enunciado": "assertiva no estilo Certo/Errado",
+      "respostaCorreta": "C",
+      "correta": "C"${includeExplicacao ? ',\n      "explicacao": "por que é certo ou errado"' : ''}`
+  }
+  return `"enunciado": "texto da questão",
+      "alternativas": {
+        "A": "texto da alternativa A",
+        "B": "texto da alternativa B",
+        "C": "texto da alternativa C",
+        "D": "texto da alternativa D",
+        "E": "texto da alternativa E"
+      },
+      "respostaCorreta": "A",
+      "correta": "A"${includeExplicacao ? ',\n      "explicacao": "explicação da alternativa correta"' : ''}`
+}
+
+/** Instruções de formato para o prompt. */
+export function buildTipoProvaInstructions(tipoProva = 'ABCD') {
+  if (isCertoErradoTipo(tipoProva)) {
+    return `FORMATO OBRIGATÓRIO — CERTO/ERRADO (CESPE/CEBRASPE):
+- Cada item é UMA assertiva (verdadeira ou falsa).
+- Gabarito SOMENTE "C" (Certo) ou "E" (Errado).
+- NÃO use alternativas A–E.
+- NÃO misture com múltipla escolha.`
+  }
+  return `FORMATO OBRIGATÓRIO — MÚLTIPLA ESCOLHA (A–E):
+- Cada questão tem EXATAMENTE 5 alternativas (A, B, C, D, E).
+- Gabarito SOMENTE uma letra A–E.
+- NÃO use Certo/Errado (C/E).
+- NÃO misture com formato CESPE.`
+}
+
 
 /**
  * Bloco obrigatório injetado em TODO prompt de geração/auditoria.

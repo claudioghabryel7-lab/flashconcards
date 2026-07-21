@@ -7,7 +7,11 @@ import ReactMarkdown from 'react-markdown'
 import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
-import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { formatAiErrorForUser } from '../utils/geminiApi'
+import {
+  buildQuestoesExamHeader,
+  generateQuestoesInBatches,
+} from '../utils/questoesGeneration'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
@@ -270,144 +274,94 @@ const PraticaIncidenciaView = () => {
       setProgress(20)
       setStatus('Gerando questões com IA...')
 
-      // Determinar tipo de prova baseado na banca
-      const bancasCertoErrado = ['CESPE', 'CEBRASPE', 'FCC', 'VUNESP', 'FGV', 'IBFC', 'AOCP', 'CONSULPAM', 'FUNRIO', 'NUCEPE', 'QUADRIX', 'IDECAN']
-      const tipoProva = bancasCertoErrado.some(b => banca.toUpperCase().includes(b)) ? 'Certo/Errado' : 'Múltipla Escolha'
+      // Tipo de prova pela banca (CESPE/CEBRASPE = C/E; demais = A–E)
+      const examHeader = buildQuestoesExamHeader({
+        banca,
+        cargo,
+        concursoName: courseData.competition || courseName,
+        courseName: courseName || courseData.name,
+        competition: courseData.competition,
+        nivel: courseData.nivel || courseData.escolaridade,
+        area: courseData.area,
+      })
+      const { exam, tipoProva, tipoLabel, fidelityBlock, formatInstructions, schemaSnippet } =
+        examHeader
 
-      // Preparar conteúdo de incidência para a IA
       const topAssuntos = conteudoIncidencia.topAssuntosGerais || []
       const analisePorTopico = conteudoIncidencia.analisePorTopico || []
 
-      // Prompt para gerar questões
-      const prompt = `Você é um especialista em criar questões de concurso público baseadas em análise de incidência.
+      const buildBatchPrompt = ({ batchNumber, batches, count }) => `${fidelityBlock}
+Você é um especialista em criar questões de concurso público baseadas em análise de incidência.
 
 CONTEXTO:
 - CURSO: ${courseName || 'Curso Preparatório'}
-- CARGO: ${cargo || 'NÃO DEFINIDO'}
-- BANCA EXAMINADORA: ${banca || 'NÃO DEFINIDA'}
-- TIPO DE PROVA: ${tipoProva}
+- CARGO: ${exam.cargo || 'NÃO DEFINIDO'}
+- BANCA EXAMINADORA: ${exam.banca || 'NÃO DEFINIDA'}
+- TIPO DE PROVA DA BANCA: ${tipoLabel}
 - DISCIPLINA: ${conteudoIncidencia.disciplina || 'Disciplina'}
-- NÍVEL DE PRÁTICA: ${nivelAtual} (de 1 a 10, onde 1 é básico e 10 é avançado)
+- NÍVEL DE PRÁTICA: ${nivelAtual} (1 básico → 10 avançado)
+- LOTE: ${batchNumber}/${batches} — gere EXATAMENTE ${count} questões neste lote
 
 ASSUNTOS COM MAIOR INCIDÊNCIA (Top Gerais):
-${topAssuntos.map((a, i) => `${i + 1}. ${a.assunto} - ${a.probabilidade}% de chance\n   Revisão: ${a.revisao}`).join('\n\n')}
+${topAssuntos.map((a, i) => `${i + 1}. ${a.assunto} - ${a.probabilidade}%\n   Revisão: ${a.revisao}`).join('\n\n')}
 
-ANÁLISE POR TÓPICO:
-${analisePorTopico.map(t => 
-  `Tópico: ${t.topicoNumero} - ${t.topicoNome}\n` + 
-  t.assuntos?.sort((a, b) => b.probabilidade - a.probabilidade)
-    .map((a, i) => `  ${i + 1}. ${a.assunto} - ${a.probabilidade}%\n     Revisão: ${a.revisao}`)
-    .join('\n')
-).join('\n\n')}
+ANÁLISE POR TÓPICO (resumo):
+${analisePorTopico
+  .slice(0, 8)
+  .map(
+    (t) =>
+      `Tópico: ${t.topicoNumero} - ${t.topicoNome}\n` +
+      (t.assuntos || [])
+        .sort((a, b) => b.probabilidade - a.probabilidade)
+        .slice(0, 3)
+        .map((a, i) => `  ${i + 1}. ${a.assunto} - ${a.probabilidade}%`)
+        .join('\n'),
+  )
+  .join('\n\n')}
 
-INSTRUÇÕES SOBRE DIFICULDADE POR NÍVEL:
-- Nível ${nivelAtual}: ${nivelAtual === 1 ? 'Questões básicas e diretas, foco em conceitos fundamentais' : nivelAtual <= 3 ? 'Questões de nível fácil a médio, com aplicação de conceitos básicos' : nivelAtual <= 6 ? 'Questões de nível médio, exigindo análise e interpretação' : nivelAtual <= 8 ? 'Questões de nível avançado, com casos complexos e detalhados' : 'Questões de nível especialista, com nuances jurídicas profundas e casos excepcionais'}
-- Aumente progressivamente a dificuldade conforme o nível
-- Nos níveis mais altos, inclua casos práticos, jurisprudência recente e questões de concursos anteriores
+${formatInstructions}
+
+INSTRUÇÕES DE DIFICULDADE:
+- Nível ${nivelAtual}: ${nivelAtual === 1 ? 'básicas' : nivelAtual <= 3 ? 'fácil/médio' : nivelAtual <= 6 ? 'médio' : nivelAtual <= 8 ? 'avançado' : 'especialista'}
+- Priorize assuntos de alta incidência; adapte ao cargo ${exam.cargo || 'do edital'}
 
 TAREFA:
-Gere EXATAMENTE 50 questões de ${tipoProva} baseadas nos assuntos com maior probabilidade de incidência.
+Gere EXATAMENTE ${count} questões no formato ${tipoLabel}, baseadas nos assuntos de maior incidência.
+Não repita enunciados. Distribua por probabilidade (mais questões nos assuntos quentes).
 
-INSTRUÇÕES CRÍTICAS - DISTRIBUIÇÃO DE QUESTÕES POR PROBABILIDADE:
-- Assuntos com probabilidade ALTA (80-100%): 20-25 questões (40-50% do total)
-- Assuntos com probabilidade MÉDIA (50-70%): 15-20 questões (30-40% do total)
-- Assuntos com probabilidade BAIXA (10-40%): 5-10 questões (10-20% do total)
-- QUANTO MAIOR A PROBABILIDADE, MAIS QUESTÕES
-- QUANTO MENOR A PROBABILIDADE, MENOS QUESTÕES
-
-INSTRUÇÕES SOBRE TIPO DE PROVA:
-${tipoProva === 'Certo/Errado' ? `
-- Use formato Certo/Errado (C ou E)
-- Cada questão deve ter um enunciado que pode ser Certo ou Errado
-- Resposta deve ser "C" (Certo) ou "E" (Errado)
-- Explicação deve detalhar POR QUE é certo ou errado
-` : `
-- Use formato Múltipla Escolha (A, B, C, D, E)
-- Cada questão deve ter 5 alternativas
-- Resposta deve ser uma das letras (A, B, C, D, E)
-- Explicação deve detalhar a resposta correta
-`}
-
-INSTRUÇÕES GERAIS:
-1. Use o estilo da banca ${banca || 'NÃO DEFINIDA'}
-2. Cada questão deve ter:
-   - Enunciado claro e direto
-   ${tipoProva === 'Certo/Errado' ? `
-   - Alternativa correta: "C" (Certo) ou "E" (Errado)
-   ` : `
-   - 5 alternativas (A, B, C, D, E)
-   - Alternativa correta indicada
-   `}
-   - Explicação detalhada da resposta
-3. Ordene as questões pela probabilidade do assunto (maior para menor)
-4. Adapte o nível de dificuldade ao cargo ${cargo || 'NÃO DEFINIDO'}
-5. Gere EXATAMENTE 50 questões (nem mais, nem menos)
+Cada questão:
+- Enunciado claro
+${
+  tipoProva === 'Certo/Errado'
+    ? '- Gabarito C ou E (sem A–E)'
+    : '- 5 alternativas A–E e gabarito A–E'
+}
+- Explicação detalhada
+- Campos assunto + probabilidade
 
 ESTRUTURA DO JSON:
 {
   "disciplina": "${conteudoIncidencia.disciplina || 'Disciplina'}",
-  "banca": "${banca || 'NÃO DEFINIDA'}",
-  "cargo": "${cargo || 'NÃO DEFINIDO'}",
+  "banca": "${exam.banca || 'NÃO DEFINIDA'}",
+  "cargo": "${exam.cargo || 'NÃO DEFINIDO'}",
   "curso": "${courseName || 'Curso Preparatório'}",
-  "tipoProva": "${tipoProva}",
+  "tipoProva": "${tipoLabel}",
   "nivel": ${nivelAtual},
   "questoes": [
     {
       "numero": 1,
       "assunto": "nome do assunto",
       "probabilidade": 95,
-      "enunciado": "texto da questão",
-      ${tipoProva === 'Certo/Errado' ? `
-      "respostaCorreta": "C",
-      ` : `
-      "alternativas": {
-        "A": "texto da alternativa A",
-        "B": "texto da alternativa B",
-        "C": "texto da alternativa C",
-        "D": "texto da alternativa D",
-        "E": "texto da alternativa E"
-      },
-      "respostaCorreta": "A",
-      `}
-      "explicacao": "explicação detalhada da resposta correta"
+      ${schemaSnippet}
     }
   ]
 }
 
-REGRAS IMPORTANTES:
-- Use probabilidades reais baseadas no conteúdo de incidência
-- Adapte o estilo ao da banca ${banca || 'NÃO DEFINIDA'}
-- Distribua as questões conforme a probabilidade (mais questões para alta incidência)
-- Seja específico e técnico nas questões
-- Para disciplinas jurídicas: cite leis, artigos e jurisprudência
-- Para disciplinas não jurídicas: foque em conceitos e aplicações práticas
+REGRAS:
+- Fidelidade 100% à banca ${exam.banca || 'indicada'} e ao cargo ${exam.cargo || 'do edital'}
+- Formato ${tipoLabel} — sem misturar
 - DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-- Use apenas informações atualizadas até esta data
-- GERE EXATAMENTE 50 QUESTÕES
-
-🚨 TRAVAS DE SEGURANÇA E FIDELIDADE JURÍDICA ABSOLUTA:
-
-1. PROIBIÇÃO DE ALUCINAÇÃO LEGISLATIVA:
-- Você está terminantemente proibido de inventar, supor ou estimar números de leis, decretos ou datas. Se não houver registro histórico exato e pacificado no ordenamento jurídico brasileiro de uma alteração, você NÃO deve mencioná-la.
-- Nenhuma alteração futura hipotética deve ser criada. Toda e qualquer norma citada deve ter como lastro o portal do Planalto (Legislação Federal) ou os repositórios oficiais do STF/STJ.
-
-2. FILTRO DE CONSTITUCIONALIDADE E RECEPÇÃO (CF/88):
-- Para cada artigo ou código anterior a 1988 (como o CPP de 1941 ou o CP de 1940), você DEVE verificar se o dispositivo foi RECECIONADO ou NÃO pela Constituição Federal de 1988.
-- É terminantemente proibido indicar como aplicável ou vigente um dispositivo legal que os Tribunais Superiores (STF/STJ) já declararam como não-recepcionado ou inconstitucional (Ex: Incomunicabilidade do preso do Art. 21 do CPP, prisão por dívida de depositário infiel, etc.). Você deve apontar o dispositivo e declarar imediatamente a sua ineficácia jurídica atual por incompatibilidade constitucional.
-
-3. ALINHAMENTO OBRIGATÓRIO DE JURISPRUDÊNCIA PACIFICADA (STF/STJ):
-- Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
-- Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
-
-[TRAVA JURÍDICA CRÍTICA]: O modelo deve validar obrigatoriamente as inovações legislativas mais recentes (incluindo leis de 2025 e 2026), aplicando seus reflexos automáticos nos códigos e legislações pertinentes.
-
-⚠️ REGRAS CRÍTICAS PARA JSON VÁLIDO:
-- NÃO use aspas duplas (") dentro das strings de alternativas ou enunciados. Use aspas simples (')
-- NÃO use quebras de linha (\n) dentro das strings. Use espaço normal
-- NÃO use caracteres especiais que possam quebrar o JSON (como \, /, etc)
-- O JSON deve ser 100% válido e parseável
-
-Retorne APENAS o JSON válido, sem texto adicional.`
+- Retorne APENAS JSON válido`
 
       setProgress(50)
       setStatus('Gerando em segundo plano… Você pode sair desta tela.')
@@ -417,10 +371,38 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         courseId,
         jobType: 'questoes_incidencia',
         topicKey: String(disciplinaIdx),
-        metadata: { nivel: nivelAtual, disciplina: sanitizedDisciplinaNome },
+        metadata: { nivel: nivelAtual, disciplina: sanitizedDisciplinaNome, tipoProva: tipoLabel },
         task: async ({ updateProgress }) => {
-          await updateProgress(50, 'Gerando questões com IA…')
-          const parsed = await generateAiJson(prompt, { courseId, isLegalContent: true, useRAG: true })
+          await updateProgress(50, `Gerando questões (${tipoLabel}) em lotes…`)
+          const batchResult = await generateQuestoesInBatches({
+            buildBatchPrompt,
+            total: 50,
+            batchSize: 10,
+            examCtx: exam,
+            aiOptions: {
+              courseId,
+              isLegalContent: true,
+              useRAG: true,
+              useGoogleSearch: true,
+              verifyContent: false,
+            },
+            onBatchProgress: async ({ batchNumber, batches }) => {
+              await updateProgress(
+                50 + Math.round((batchNumber / batches) * 35),
+                `Lote ${batchNumber}/${batches} (${tipoLabel})…`,
+              )
+            },
+          })
+
+          const parsed = {
+            disciplina: conteudoIncidencia.disciplina || 'Disciplina',
+            banca: exam.banca || 'NÃO DEFINIDA',
+            cargo: exam.cargo || 'NÃO DEFINIDO',
+            curso: courseName || 'Curso Preparatório',
+            tipoProva: tipoLabel,
+            nivel: nivelAtual,
+            questoes: batchResult.questoes,
+          }
 
           await updateProgress(90, 'Salvando questões…')
 
@@ -435,14 +417,18 @@ Retorne APENAS o JSON válido, sem texto adicional.`
             ? CONTENT_STATUS.AVAILABLE
             : CONTENT_STATUS.UNAVAILABLE
 
-          await setDoc(questoesRef, {
-            ...parsed,
-            disciplinaIdx: disciplinaIndex,
-            nivel: nivelAtual,
-            status: initialStatus,
-            updatedAt: serverTimestamp(),
-            generatedAt: serverTimestamp(),
-          }, { merge: true })
+          await setDoc(
+            questoesRef,
+            {
+              ...parsed,
+              disciplinaIdx: disciplinaIndex,
+              nivel: nivelAtual,
+              status: initialStatus,
+              updatedAt: serverTimestamp(),
+              generatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          )
 
           return parsed
         },
