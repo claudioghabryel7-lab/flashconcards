@@ -24,8 +24,11 @@ import { hasPurchasedCourse } from '../utils/courseAccess'
 import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import { CPPageHeader } from '@/components/cp/CPPageLayout'
 import {
-  calculateNextReview,
+  buildStudyQueue,
   isCardDue,
+  nextIndexAfterRating,
+  persistCardReview,
+  parseReviewDate,
 } from '../utils/spacedRepetition'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 import AnkiExportService from '../services/ankiExportService'
@@ -107,6 +110,8 @@ const FlashcardView = () => {
   const [miniSimCards, setMiniSimCards] = useState([])
   /** Cards marcados Difícil — ficam na sessão até Fácil (além do nextReview de 1 min). */
   const [sessionHardIds, setSessionHardIds] = useState([])
+  /** Força revisar todos os cards do módulo (após "Revisar novamente"). */
+  const [forceReviewAll, setForceReviewAll] = useState(false)
   const [editalPrompt, setEditalPrompt] = useState('')
   const [selectedCourseId, setSelectedCourseId] = useState(null)
   const [availableCourses, setAvailableCourses] = useState([])
@@ -286,48 +291,20 @@ const FlashcardView = () => {
     fetchPrompt()
   }, [activeCourseId])
 
-  // Carregar progresso dos cards do usuário - FILTRADO POR CURSO
+  // Progresso SRS do usuário (mapa completo — persistência é por cardId, sem wipe)
   useEffect(() => {
     if (!user) return () => {}
-    
+
     const userProgressRef = doc(db, 'userProgress', user.uid)
     const unsub = onSnapshot(userProgressRef, (snapshot) => {
       if (snapshot.exists()) {
-        const data = snapshot.data()
-        const allCardProgress = data.cardProgress || {}
-        
-        // Filtrar progresso apenas dos cards do curso selecionado
-        const filteredProgress = {}
-        const currentCourseId = activeCourseId
-        
-        // Se temos cards carregados, filtrar pelo curso deles
-        cards.forEach(card => {
-          const progress = allCardProgress[card.id]
-          if (progress) {
-            const cardCourseId = card.courseId || null
-            // Incluir se o curso do card corresponde ao curso selecionado
-            if (cardCourseId === currentCourseId) {
-              filteredProgress[card.id] = progress
-            }
-          }
-        })
-        
-        // Também incluir progressos de cards que ainda não foram carregados mas pertencem ao curso
-        Object.keys(allCardProgress).forEach(cardId => {
-          if (!filteredProgress[cardId]) {
-            // Incluir temporariamente, será filtrado quando os cards carregarem
-            filteredProgress[cardId] = allCardProgress[cardId]
-          }
-        })
-        
-        setCardProgress(filteredProgress)
-        // Log removido para limpar console
+        setCardProgress(snapshot.data().cardProgress || {})
       } else {
         setCardProgress({})
       }
     })
     return () => unsub()
-  }, [user, activeCourseId, cards])
+  }, [user])
 
   // Organizar por edital verticalizado (disciplinas/tópicos) + cards do usuário
   const organizedCards = useMemo(() => {
@@ -576,22 +553,26 @@ const FlashcardView = () => {
 
   const filteredCards = useMemo(() => {
     if (studyMode === 'miniSim' || !selectedMateria || !selectedModulo) return []
-    const due = moduleAllCards.filter((card) => isCardDue(cardProgress[card.id], srsNow))
-    const dueIds = new Set(due.map((c) => c.id))
-    const hardExtra = moduleAllCards.filter(
-      (card) => sessionHardIds.includes(card.id) && !dueIds.has(card.id),
-    )
-    return [...due, ...hardExtra]
-  }, [selectedMateria, selectedModulo, moduleAllCards, cardProgress, studyMode, srsNow, sessionHardIds])
+    if (forceReviewAll) return [...moduleAllCards]
+    return buildStudyQueue(moduleAllCards, cardProgress, sessionHardIds, srsNow)
+  }, [
+    selectedMateria,
+    selectedModulo,
+    moduleAllCards,
+    cardProgress,
+    studyMode,
+    srsNow,
+    sessionHardIds,
+    forceReviewAll,
+  ])
 
   const moduleStats = useMemo(() => {
     const total = moduleAllCards.length
     const due = moduleAllCards.filter((c) => isCardDue(cardProgress[c.id], srsNow)).length
     const nextDue = moduleAllCards
-      .map((c) => cardProgress[c.id]?.nextReview)
+      .map((c) => parseReviewDate(cardProgress[c.id]?.nextReview))
       .filter(Boolean)
-      .map((d) => dayjs(d))
-      .filter((d) => d.isValid() && d.isAfter(srsNow))
+      .filter((d) => d.isAfter(srsNow))
       .sort((a, b) => a.diff(b))[0]
     return { total, due, nextDue }
   }, [moduleAllCards, cardProgress, srsNow])
@@ -615,6 +596,7 @@ const FlashcardView = () => {
     setSessionRatings({})
     setModuleCompleted(false)
     setSessionHardIds([])
+    setForceReviewAll(false)
     // Resetar timer quando mudar de módulo
     setTimerActive(false)
   }, [selectedMateria, selectedModulo, studyMode])
@@ -637,11 +619,12 @@ const FlashcardView = () => {
     }
   }, [activeCards.length, currentIndex])
 
-  const checkModuleCompletion = (ratingsSnapshot) => {
+  const checkModuleCompletion = (ratingsSnapshot, queueAfterLength) => {
     if (studyMode === 'miniSim') return false
     if (!selectedMateria || !selectedModulo) return false
-    if (activeCards.length === 0) return false
-    return activeCards.every((card) => ratingsSnapshot[card.id] === 'easy')
+    if (queueAfterLength > 0) return false
+    // Sessão concluída quando a fila fica vazia após ao menos uma avaliação
+    return Object.keys(ratingsSnapshot || {}).length > 0
   }
 
   const toggleMateria = (materia) => {
@@ -669,7 +652,9 @@ const FlashcardView = () => {
     setStudyMode('module')
     setCurrentIndex(0)
     setExpandedMaterias((prev) => ({ ...prev, [materia]: true }))
-    setSearchParams({ materia, modulo })
+    const nextParams = { materia, modulo }
+    if (activeCourseId) nextParams.course = activeCourseId
+    setSearchParams(nextParams)
   }
 
   const startMiniSim = (materia) => {
@@ -770,61 +755,43 @@ const FlashcardView = () => {
 
     try {
       const ratedId = cardId
-      const remainingBefore = activeCards.filter((c) => c.id !== ratedId)
-      const now = dayjs()
-      const currentProgress = cardProgress[cardId] || {}
-      const newProgressData = calculateNextReview(currentProgress, difficulty, now)
-
-      const newProgress = {
-        ...currentProgress,
-        ...newProgressData,
-        lastReviewed: now.toISOString(),
-      }
-
-      const currentCardProgress = { ...cardProgress, [cardId]: newProgress }
-
-      const userProgressRef = doc(db, 'userProgress', user.uid)
-      await setDoc(
-        userProgressRef,
-        {
-          cardProgress: currentCardProgress,
-          updatedAt: new Date().toISOString(),
-          courseId: activeCourseId,
-        },
-        { merge: true },
+      const indexBefore = currentIndex
+      const { updated } = await persistCardReview(
+        user.uid,
+        cardId,
+        cardProgress,
+        difficulty,
+        activeCourseId,
       )
 
-      setCardProgress(currentCardProgress)
+      setCardProgress(updated)
       setSrsNow(dayjs())
+      setForceReviewAll(false)
 
-      if (difficulty === 'hard') {
-        setSessionHardIds((prev) => (prev.includes(ratedId) ? prev : [...prev, ratedId]))
-      } else {
-        setSessionHardIds((prev) => prev.filter((id) => id !== ratedId))
-      }
+      const nextHardIds =
+        difficulty === 'hard'
+          ? sessionHardIds.includes(ratedId)
+            ? sessionHardIds
+            : [...sessionHardIds, ratedId]
+          : sessionHardIds.filter((id) => id !== ratedId)
+
+      setSessionHardIds(nextHardIds)
+
+      // Fila após a avaliação: fácil sai; difícil vai para o fim
+      const queueAfter = buildStudyQueue(moduleAllCards, updated, nextHardIds, dayjs())
+      const queueAfterLength = queueAfter.length
 
       setSessionRatings((prevRatings) => {
-        const updated = { ...prevRatings, [cardId]: difficulty }
-        if (checkModuleCompletion(updated)) {
+        const nextRatings = { ...prevRatings, [cardId]: difficulty }
+        if (checkModuleCompletion(nextRatings, queueAfterLength)) {
           setModuleCompleted(true)
         }
-        return updated
+        return nextRatings
       })
 
-      // Não chamar goNext(): o card sai da fila due e o próximo já ocupa o mesmo índice.
-      // Hard: reentra no fim da fila via sessionHardIds.
-      setCurrentIndex((i) => {
-        const nextLen =
-          difficulty === 'hard'
-            ? Math.max(remainingBefore.length, 1)
-            : remainingBefore.length
-        if (nextLen <= 0) return 0
-        // Após fácil: mantém índice (próximo escorrega). Após difícil: manda para o fim.
-        if (difficulty === 'hard') {
-          return Math.max(0, remainingBefore.length)
-        }
-        return i >= remainingBefore.length ? 0 : i
-      })
+      // Mantém o índice: o próximo card escorrega para a mesma posição (fácil e difícil).
+      // Antes o difícil saltava para o fim e "perdia" o card que o aluno estava estudando.
+      setCurrentIndex(nextIndexAfterRating(indexBefore, queueAfterLength))
     } catch (err) {
       console.error('Erro ao salvar revisão SRS:', err)
       alert('Não foi possível salvar a revisão. Tente de novo.')
@@ -834,15 +801,19 @@ const FlashcardView = () => {
   const resetModuleSession = () => {
     setSessionRatings({})
     setModuleCompleted(false)
+    setSessionHardIds([])
     setCurrentIndex(0)
   }
 
   const handleReviewAgain = () => {
     resetModuleSession()
+    setForceReviewAll(true)
+    setSrsNow(dayjs())
   }
 
   const handleExitModule = () => {
     resetModuleSession()
+    setForceReviewAll(false)
     setStudyMode('module')
     setMiniSimCards([])
     setSelectedMateria(null)

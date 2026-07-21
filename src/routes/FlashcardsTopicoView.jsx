@@ -17,7 +17,7 @@ import { generateShareToken } from '../utils/shareToken'
 import ShareItemButton from '../components/share/ShareItemButton'
 import { FEED_POST_TYPES } from '../services/trilhaFeedService'
 import { CONTENT_STATUS, isContentAvailable, toggleContentStatus } from '../utils/contentStatus'
-import { persistCardReview } from '../utils/spacedRepetition'
+import { persistCardReview, nextIndexAfterRating } from '../utils/spacedRepetition'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
 import toast from 'react-hot-toast'
 import ProfessorFlagNoteBanner, {
@@ -155,7 +155,7 @@ const FlashcardsTopicoView = () => {
     [cards, cardProgress]
   )
 
-  const { dueQueue, stats, requeueCard, bumpNow } = useSRSDeck(cards, cardProgress)
+  const { dueQueue, stats, requeueCard, removeFromRequeue, bumpNow } = useSRSDeck(cards, cardProgress)
   const studyCards = useMemo(() => {
     if (!focusOverrideCard) return dueQueue
     const focusId = String(focusOverrideCard.id || '')
@@ -169,6 +169,7 @@ const FlashcardsTopicoView = () => {
     async (cardId, difficulty) => {
       if (!user) return
       try {
+        const indexBefore = currentIndex
         const ratedCard = cards.find((c) => c.id === cardId) || studyCards.find((c) => c.id === cardId)
         const { updated } = await persistCardReview(user.uid, cardId, cardProgress, difficulty, courseId)
         setCardProgress(updated)
@@ -176,24 +177,35 @@ const FlashcardsTopicoView = () => {
 
         if (difficulty === 'hard' && ratedCard) {
           requeueCard(ratedCard)
+        } else {
+          removeFromRequeue(cardId)
+          if (focusOverrideCard && String(focusOverrideCard.id) === String(cardId)) {
+            setFocusOverrideCard(null)
+          }
         }
 
-        setCurrentIndex((i) => {
-          // Fácil: card some da due → próximo escorrega para o mesmo índice
-          // Difícil: card vai para o fim da fila de sessão
-          const remaining = dueQueue.filter((c) => c.id !== cardId).length
-          if (difficulty === 'hard') {
-            return Math.max(0, remaining)
-          }
-          if (remaining <= 0) return 0
-          return i >= remaining ? 0 : i
-        })
+        // Fácil: some da fila; difícil: vai para o fim. Em ambos, índice estável (próximo escorrega).
+        const remaining = dueQueue.filter((c) => c.id !== cardId).length
+        const queueAfterLength = difficulty === 'hard' ? remaining + 1 : remaining
+        setCurrentIndex(nextIndexAfterRating(indexBefore, queueAfterLength))
       } catch (err) {
         console.error(err)
         toast.error('Erro ao salvar revisão')
       }
     },
-    [user, cardProgress, courseId, dueQueue, cards, studyCards, requeueCard, bumpNow],
+    [
+      user,
+      cardProgress,
+      courseId,
+      dueQueue,
+      cards,
+      studyCards,
+      requeueCard,
+      removeFromRequeue,
+      bumpNow,
+      currentIndex,
+      focusOverrideCard,
+    ],
   )
 
   useEffect(() => {
@@ -328,19 +340,6 @@ const FlashcardsTopicoView = () => {
     }
   }
 
-  if (!disciplina || !modulo) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center p-6 text-center">
-        <div className="cp-card max-w-md p-8">
-          <p className="text-cp-muted mb-4">Tópico inválido.</p>
-          <Link to="/flashcards" className="cp-btn-primary inline-flex">
-            Voltar aos flashcards
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
   const canStudy = isAdmin || (hasTopicAccess && cards.length > 0 && isContentAvailable(publishStatus, false))
 
   useEffect(() => {
@@ -371,6 +370,19 @@ const FlashcardsTopicoView = () => {
     }, 400)
     return () => clearTimeout(t)
   }, [cards, searchParams, courseId, topicKey])
+
+  if (!disciplina || !modulo) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center p-6 text-center">
+        <div className="cp-card max-w-md p-8">
+          <p className="text-cp-muted mb-4">Tópico inválido.</p>
+          <Link to="/flashcards" className="cp-btn-primary inline-flex">
+            Voltar aos flashcards
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="w-full max-w-full min-w-0 space-y-4 overflow-x-clip pb-8 sm:space-y-6">

@@ -1376,18 +1376,18 @@ img[loading="lazy"] {
 }
 
 .noji-card {
-  min-height: 320px;
+  min-height: min(240px, 42dvh);
 }
 
 .noji-flip-container {
   perspective: 1400px;
-  min-height: 320px;
+  min-height: min(240px, 42dvh);
 }
 
 .noji-flip-inner {
   position: relative;
   width: 100%;
-  min-height: 320px;
+  min-height: min(240px, 42dvh);
   transform-style: preserve-3d;
   transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
@@ -1402,7 +1402,7 @@ img[loading="lazy"] {
   position: absolute;
   inset: 0;
   width: 100%;
-  min-height: 320px;
+  min-height: min(240px, 42dvh);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   transform-style: preserve-3d;

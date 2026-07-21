@@ -145,7 +145,7 @@ const FlashcardItem = ({
   }
 
   const showInlineRating = showRating && !ratingBelowCard && flipped
-  const cardHeight = 'min-h-[min(260px,48dvh)] h-[min(280px,52dvh)] sm:min-h-[360px] sm:h-[360px]'
+  const cardHeight = 'min-h-[min(240px,42dvh)] h-[min(260px,48dvh)] sm:min-h-[340px] sm:h-[360px]'
 
   return (
     <div
@@ -250,7 +250,7 @@ const FlashcardItem = ({
                 )}
               </div>
 
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-6 text-center sm:px-2 sm:py-8">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-y-auto overscroll-contain px-1 py-5 text-center sm:px-2 sm:py-8">
                 {editing ? (
                   editForm
                 ) : (
@@ -258,7 +258,10 @@ const FlashcardItem = ({
                     <span className="mb-1.5 inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400 sm:mb-3 sm:px-3 sm:py-1 sm:text-[11px]">
                       Pergunta
                     </span>
-                    <h3 className={`w-full max-w-full break-words text-[13px] font-medium leading-relaxed sm:text-xl sm:font-semibold sm:leading-relaxed ${textColor}`}>
+                    <h3
+                      className={`w-full max-w-full break-words font-medium leading-snug sm:font-semibold sm:leading-relaxed ${textColor}`}
+                      style={{ fontSize: 'clamp(0.875rem, 2.2vw + 0.5rem, 1.25rem)' }}
+                    >
                       {card.pergunta}
                     </h3>
                     <p className="noji-hint mt-2 text-[10px] text-slate-400 sm:mt-6 sm:text-sm">Toque para revelar a resposta</p>
@@ -269,12 +272,12 @@ const FlashcardItem = ({
               {(card.materia || card.modulo) && (
                 <div className="mt-auto flex min-w-0 shrink-0 flex-wrap justify-center gap-1.5 pt-2">
                   {card.materia && (
-                    <span className="max-w-full break-words rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    <span className="max-w-[46%] truncate rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                       {card.materia}
                     </span>
                   )}
                   {card.modulo && (
-                    <span className="max-w-full break-words rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    <span className="max-w-[46%] truncate rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                       {card.modulo}
                     </span>
                   )}
@@ -313,7 +316,7 @@ const FlashcardItem = ({
                   </button>
                 )}
               </div>
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-3 text-center sm:px-2 sm:py-6">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-y-auto overscroll-contain px-1 py-3 text-center sm:px-2 sm:py-6">
                 {!editing && (
                   <span className="mb-2 inline-flex shrink-0 rounded-full bg-white/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/70 sm:mb-3 sm:px-3 sm:py-1 sm:text-[11px]">
                     Resposta
@@ -322,7 +325,10 @@ const FlashcardItem = ({
                 {editing ? (
                   <div className="w-full text-left">{editForm}</div>
                 ) : (
-                  <div className="w-full max-w-full break-words text-[13px] font-medium leading-relaxed text-white sm:text-lg sm:leading-relaxed">
+                  <div
+                    className="w-full max-w-full break-words font-medium leading-snug text-white sm:leading-relaxed"
+                    style={{ fontSize: 'clamp(0.8125rem, 2vw + 0.45rem, 1.125rem)' }}
+                  >
                     {card.resposta}
                   </div>
                 )}

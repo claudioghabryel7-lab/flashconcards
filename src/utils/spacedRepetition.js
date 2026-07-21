@@ -42,10 +42,13 @@ export function calculateNextReview(currentProgress, difficulty, now = dayjs()) 
 
   const streak = (currentProgress?.consecutiveCorrect || 0) + 1
   const idx = Math.min(streak - 1, EASY_INTERVALS_MINUTES.length - 1)
-  const intervalMinutes = EASY_INTERVALS_MINUTES[idx]
+  // Ajusta intervalo pelo ease factor (Anki-like leve), sem sair da faixa útil
+  const base = EASY_INTERVALS_MINUTES[idx]
+  const ef = Math.min(3, Math.max(1.3, (currentProgress?.easeFactor || 2.5) + 0.05))
+  const intervalMinutes = Math.max(1, Math.round(base * (ef / 2.5)))
 
   return {
-    easeFactor: Math.min(3, (currentProgress?.easeFactor || 2.5) + 0.05),
+    easeFactor: ef,
     intervalMinutes,
     nextReview: now.add(intervalMinutes, 'minute').toISOString(),
     reviewCount,
@@ -97,6 +100,26 @@ export function buildDueQueue(cards = [], cardProgress = {}, now = dayjs()) {
     })
 }
 
+/**
+ * Monta a fila de estudo: due (ordenados) + cards difíceis da sessão no fim.
+ * sessionHardIds: ids marcados como difícil nesta sessão (ficam no fim até fácil ou fim da sessão).
+ */
+export function buildStudyQueue(cards = [], cardProgress = {}, sessionHardIds = [], now = dayjs()) {
+  const due = buildDueQueue(cards, cardProgress, now)
+  const dueIds = new Set(due.map((c) => c.id))
+  const byId = new Map(cards.map((c) => [c.id, c]))
+  const hardExtra = sessionHardIds
+    .map((id) => byId.get(id))
+    .filter((c) => c && !dueIds.has(c.id))
+  return [...due, ...hardExtra]
+}
+
+/** Após avaliar: índice estável — o próximo card "escorrega" para o mesmo índice. */
+export function nextIndexAfterRating(currentIndex, queueLengthAfter) {
+  if (queueLengthAfter <= 0) return 0
+  return currentIndex >= queueLengthAfter ? 0 : currentIndex
+}
+
 export function getDeckSRSStats(cards = [], cardProgress = {}, now = dayjs()) {
   const total = cards.length
   const due = buildDueQueue(cards, cardProgress, now).length
@@ -107,27 +130,31 @@ export function getDeckSRSStats(cards = [], cardProgress = {}, now = dayjs()) {
     .filter((d) => d.isAfter(now))
     .sort((a, b) => a.diff(b))[0]
 
-  return { total, due, reviewed, nextDue, mastered: total - due - (total - reviewed) }
+  const mastered = cards.filter((c) => (cardProgress[c.id]?.stage || 0) >= 4).length
+  return { total, due, reviewed, nextDue, mastered }
 }
 
+/**
+ * Persiste UMA revisão sem sobrescrever o mapa inteiro de cardProgress
+ * (evita corrida entre abas / snapshot atrasado apagar progresso).
+ */
 export async function persistCardReview(userId, cardId, cardProgress, difficulty, courseId = null) {
   const { doc, setDoc } = await import('firebase/firestore')
   const { db } = await import('../firebase/config')
 
   const now = dayjs()
-  const current = cardProgress[cardId] || {}
+  const current = cardProgress?.[cardId] || {}
   const next = {
     ...current,
     ...calculateNextReview(current, difficulty, now),
     lastReviewed: now.toISOString(),
   }
 
-  const updated = { ...cardProgress, [cardId]: next }
-  // Merge no doc; campo cardProgress é substituído pelo mapa completo (estado local).
+  const updated = { ...(cardProgress || {}), [cardId]: next }
   await setDoc(
     doc(db, 'userProgress', userId),
     {
-      cardProgress: updated,
+      [`cardProgress.${cardId}`]: next,
       updatedAt: now.toISOString(),
       ...(courseId ? { courseId } : {}),
     },
