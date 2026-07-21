@@ -16,7 +16,9 @@ import {
 } from '../utils/examFidelityContext'
 import {
   getConteudoCompletoDepthInstructions,
-  isMaterialContentComplete,
+  ensureMaterialContentComplete,
+  normalizeMaterialStructure,
+  CONTEUDO_COMPLETO_DEPTH,
 } from '../utils/contentDepthRules'
 import { filterValidQuestoes } from '../utils/questoesQuality'
 import { mapOrderedAlternativas } from '../utils/questaoAlternativas'
@@ -324,7 +326,7 @@ const ConteudoCompletoTopicoView = () => {
           return
         }
         if (foundDoc) {
-          setConteudo(foundDoc)
+          setConteudo(normalizeMaterialStructure(foundDoc))
           setLoading(false)
           return
         }
@@ -377,7 +379,7 @@ const ConteudoCompletoTopicoView = () => {
           const numeroSnap = await getDocs(qNumero)
           const matchedFromNumero = tryMatchFromSnapshot(numeroSnap)
           if (matchedFromNumero) {
-            setConteudo(matchedFromNumero)
+            setConteudo(normalizeMaterialStructure(matchedFromNumero))
             setLoading(false)
             return
           }
@@ -389,7 +391,7 @@ const ConteudoCompletoTopicoView = () => {
           const materiaSnap = await getDocs(qMateria)
           const matchedFromMateria = tryMatchFromSnapshot(materiaSnap)
           if (matchedFromMateria) {
-            setConteudo(matchedFromMateria)
+            setConteudo(normalizeMaterialStructure(matchedFromMateria))
             setLoading(false)
             return
           }
@@ -602,8 +604,8 @@ REGRAS CRÍTICAS:
 TAREFA:
 Gere material de "Véspera de Prova" completo para o tópico "${effectiveTopicNome || resolvedTopicKey}".
 
-1. RAIO-X: 6–10 top assuntos quentes + padrão da banca ${exam.banca || 'indicada'} para o cargo ${exam.cargo || 'do edital'}
-2. REVISÃO TURBO: UM resumo completo para CADA assunto quente (sem pular)
+1. RAIO-X: exatamente ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} top assuntos quentes + padrão da banca ${exam.banca || 'indicada'} para o cargo ${exam.cargo || 'do edital'}
+2. REVISÃO TURBO: EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} resumos (um por assunto quente, mesma ordem) — NÃO entregue só 2
 3. PEGADINHAS: 3–5 armadilhas típicas da banca
 4. QUESTÕES PREDITIVAS: no formato ${tipoLabel} (gabarito comentado)
 
@@ -619,11 +621,16 @@ FORMATO JSON:
   "concurso": "${exam.concursoName}",
   "tipoProva": "${tipoLabel}",
   "raioXProbabilidade": {
-    "topicosQuentes": ["assunto 1", "assunto 2"],
+    "topicosQuentes": ["assunto 1", "assunto 2", "assunto 3", "assunto 4", "assunto 5", "assunto 6"],
     "padraoBanca": "como a ${exam.banca} cobra este tópico para ${exam.cargo}"
   },
   "revisaoTurbo": [
-    { "titulo": "Título do resumo", "conteudo": "HTML completo do resumo" }
+    { "titulo": "assunto 1", "conteudo": "HTML do resumo 1" },
+    { "titulo": "assunto 2", "conteudo": "HTML do resumo 2" },
+    { "titulo": "assunto 3", "conteudo": "HTML do resumo 3" },
+    { "titulo": "assunto 4", "conteudo": "HTML do resumo 4" },
+    { "titulo": "assunto 5", "conteudo": "HTML do resumo 5" },
+    { "titulo": "assunto 6", "conteudo": "HTML do resumo 6" }
   ],
   "pegadinhas": [
     { "titulo": "Cuidado meu querido aluno!", "conteudo": "pegadinha da banca" }
@@ -639,25 +646,33 @@ FORMATO JSON:
 REGRAS FINAIS:
 - Fidelidade 100% à banca + cargo
 - Questões no formato ${tipoLabel} apenas
+- revisaoTurbo OBRIGATORIAMENTE com ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} itens
 - Retorne APENAS JSON válido e COMPLETO
 - DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`
 
       setProgress((prev) => Math.min(prev + 15, 70))
-      const parsed = await generateAiJson(prompt, {
+      const genOpts = {
         courseId: resolvedCourseId,
         isLegalContent: true,
         useRAG: false,
         trustedGeneration: true,
         useGoogleSearch: true,
         verifyContent: true,
-        maxContinues: 3,
+        maxContinues: 4,
         generationConfig: { maxOutputTokens: 32000, temperature: 0.15 },
-      })
-
-      const completeness = isMaterialContentComplete(parsed)
-      if (!completeness.ok) {
-        throw new Error(completeness.reason || 'Material incompleto/cortado. Gere novamente.')
       }
+      let parsed = await generateAiJson(prompt, genOpts)
+      parsed = await ensureMaterialContentComplete(parsed, {
+        generateAiJson,
+        generateOptions: genOpts,
+        context: {
+          topico: effectiveTopicNome || resolvedTopicKey,
+          banca: exam.banca,
+          cargo: exam.cargo,
+          concurso: exam.concursoName,
+        },
+        maxRepairs: 2,
+      })
 
       try {
         const pred = parsed?.questoesPreditivas
@@ -694,7 +709,7 @@ REGRAS FINAIS:
       await setDoc(doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', sanitizedKey), payload, {
         merge: true,
       })
-      setConteudo({ id: sanitizedKey, ...payload })
+      setConteudo(normalizeMaterialStructure({ id: sanitizedKey, ...payload }))
       setError('')
       setProgress(100)
       if (user?.uid && jobId) {

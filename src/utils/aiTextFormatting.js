@@ -176,6 +176,7 @@ EXEMPLO:
 
 REGRAS:
 - PROIBIDO markdown (** * __ #) — somente HTML
-- 3–5 parágrafos <p> por resumo (não mais que isso)
+- 3–5 parágrafos <p> por resumo (na faixa de ~120–200 palavras)
 - padraoBanca e gabaritoComentado: objetivos (parágrafos + <b>/<mark>)
-- Cada <p> com 2–4 frases; sem parede de texto nem preenchimento vazio`
+- Cada <p> com 2–4 frases; sem parede de texto nem preenchimento vazio
+- OBRIGATÓRIO: revisaoTurbo com no mínimo 6 itens {titulo, conteudo}`

@@ -744,14 +744,27 @@ async function processSingleMentoradoTopic({
       console.warn('[mentorado] sanitizar questões do material:', sanitizeErr?.message || sanitizeErr)
     }
 
-    const completeness = (await import('../utils/contentDepthRules')).isMaterialContentComplete(
-      materialParsed,
-    )
-    if (!completeness.ok) {
-      const err = new Error(completeness.reason || 'Material incompleto (sem revisão/conteúdo utilizável).')
-      err.code = 'material_incomplete'
-      throw err
-    }
+    const { ensureMaterialContentComplete } = await import('../utils/contentDepthRules')
+    const { generateAiJson: genJson } = await import('../utils/geminiApi')
+    materialParsed = await ensureMaterialContentComplete(materialParsed, {
+      generateAiJson: genJson,
+      generateOptions: {
+        courseId,
+        ...buildTrustedOptions(disciplina, {
+          contentType: 'material',
+          verifyContent: false,
+          courseContext,
+          generationConfig: { maxOutputTokens: 32000, temperature: 0.2 },
+        }),
+      },
+      context: {
+        topico: topic.topicoNome || label,
+        banca: examCtx.banca,
+        cargo: examCtx.cargo,
+        concurso: examCtx.concursoName,
+      },
+      maxRepairs: 2,
+    })
 
     await saveMaterialCheckpoint({
       courseId,
