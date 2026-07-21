@@ -18,13 +18,10 @@ dist-ssr
 out/
 build/
 
-# Environment variables
+# Environment variables — nunca versionar segredos
 .env
-.env.local
-.env.production
-.env.example
-.env.example.template
-.env.vercel
+.env.*
+!.env.vercel.example
 ENV_KEYS_TEMP.txt
 
 # Editor directories and files

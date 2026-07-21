@@ -1,8 +1,9 @@
 /**
- * Função utilitária para chamadas à API Gemini com retry, fallback e rotação de API keys
- * Resolve erros de alta demanda implementando exponential backoff, modelos alternativos e rotação de múltiplas keys
+ * Função utilitária para chamadas à API Gemini com retry e fallback de modelos
+ * Resolve erros de alta demanda implementando exponential backoff e modelos alternativos
  * Integra verificação de fontes oficiais para garantir veracidade do conteúdo
  * Implementa RAG (Retrieval-Augmented Generation) com Google Search para evitar alucinações
+ * Usa uma única chave: VITE_GEMINI_API_KEY
  */
 
 import { performRAG, googleSearch } from './googleSearch.js'
@@ -137,26 +138,12 @@ function extractSearchTopic(prompt) {
 }
 
 /**
- * Carrega múltiplas API keys do Gemini
- * Prioriza VITE_GEMINI_API_KEY, depois tenta numbered keys
- * @returns {Array<string>} - Lista de API keys disponíveis
+ * Carrega a única API key do Gemini (VITE_GEMINI_API_KEY)
+ * @returns {string|undefined}
  */
-function loadApiKeys() {
-  const apiKeys = []
-
-  const mainKey = readEnv('VITE_GEMINI_API_KEY') || readEnv('VITE_GOOGLE_AI_API_KEY')
-  if (mainKey) {
-    apiKeys.push(mainKey)
-  }
-
-  for (let i = 1; i <= 10; i++) {
-    const key = readEnv(`VITE_GEMINI_API_KEY_${i}`)
-    if (key && !apiKeys.includes(key)) {
-      apiKeys.push(key)
-    }
-  }
-
-  return apiKeys
+function getApiKey() {
+  const key = readEnv('VITE_GEMINI_API_KEY')
+  return key || undefined
 }
 
 async function callGeminiViaServer(prompt, options = {}) {
@@ -222,25 +209,19 @@ async function silentTestApiKey(apiKey) {
 }
 
 /**
- * Filtra API keys disponíveis fazendo teste silencioso
- * @returns {Promise<Array<string>>} - Lista de API keys disponíveis
+ * Retorna a API key se estiver disponível (teste silencioso)
+ * @returns {Promise<string|undefined>}
  */
-async function getAvailableApiKeys() {
-  const allApiKeys = loadApiKeys()
-  const availableKeys = []
-  
-  for (const apiKey of allApiKeys) {
-    const isAvailable = await silentTestApiKey(apiKey)
-    if (isAvailable) {
-      availableKeys.push(apiKey)
-    }
-  }
-  
-  return availableKeys
+async function getAvailableApiKey() {
+  const apiKey = getApiKey()
+  if (!apiKey) return undefined
+
+  const isAvailable = await silentTestApiKey(apiKey)
+  return isAvailable ? apiKey : undefined
 }
 
 /**
- * Faz uma chamada à API Gemini com retry automático, fallback de modelo e rotação de API keys
+ * Faz uma chamada à API Gemini com retry automático e fallback de modelo
  * @param {string} prompt - O prompt para enviar à IA
  * @param {Object} options - Opções adicionais
  * @param {number} options.maxRetries - Número máximo de tentativas (padrão: 3)
@@ -368,11 +349,11 @@ async function executeGeminiRequest(prompt, options = {}) {
 
   const finalPrompt = prompt
 
-  // Teste silencioso para filtrar apenas API keys disponíveis
-  let apiKeys = await getAvailableApiKeys()
+  // Teste silencioso para verificar se a API key está disponível
+  let apiKey = await getAvailableApiKey()
 
-  // Sem keys no cliente (comum no Next/Vercel) → proxy server-side
-  if (apiKeys.length === 0 && typeof window !== 'undefined') {
+  // Sem key no cliente (comum no Next/Vercel) → proxy server-side
+  if (!apiKey && typeof window !== 'undefined') {
     if (!silent) console.log('🔑 Nenhuma key no cliente — usando /api/gemini/generate')
     return callGeminiViaServer(finalPrompt, {
       generationConfig,
@@ -384,14 +365,14 @@ async function executeGeminiRequest(prompt, options = {}) {
     })
   }
 
-  if (apiKeys.length === 0) {
+  if (!apiKey) {
     throw new Error(
       'Nenhuma API key do Gemini configurada. Defina VITE_GEMINI_API_KEY no .env.local (local) ou nas variáveis do Vercel.'
     )
   }
 
   if (!silent) {
-    console.log(`🔑 API Keys disponíveis: ${apiKeys.length} de ${loadApiKeys().length} totais`)
+    console.log('🔑 Usando VITE_GEMINI_API_KEY')
     if (useGoogleSearch) console.log(`🔍 Google Search Grounding ativado`)
     if (useFunctionCalling) console.log(`🔧 Function Calling ativado com ${tools.length} ferramentas`)
   }
@@ -401,68 +382,64 @@ async function executeGeminiRequest(prompt, options = {}) {
   for (const model of models) {
     if (!silent) console.log(`🔄 Tentando modelo: ${model}`)
 
-    for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex++) {
-      const apiKey = apiKeys[keyIndex]
-      if (!silent) console.log(`🔑 Tentando API key ${keyIndex + 1}/${apiKeys.length}`)
-
-      try {
-        const requestBody = {
-          contents: [{ parts: [{ text: finalPrompt }] }],
-          generationConfig,
-        }
-
-        // Adicionar Google Search Grounding se solicitado
-        if (useGoogleSearch) {
-          requestBody.tools = [
-            {
-              googleSearch: {}
-            }
-          ]
-        }
-
-        // Adicionar Function Calling se solicitado
-        if (useFunctionCalling && tools.length > 0) {
-          requestBody.tools = requestBody.tools || []
-          requestBody.tools.push(...tools)
-        }
-
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
-          }
-        )
-
-        const data = await response.json()
-
-        if (!response.ok) {
-          const errorMessage = data.error?.message || 'Erro na API da IA'
-          
-          // Se for erro 429 (quota) ou 503 (alta demanda), tentar próxima key
-          if (response.status === 429 || response.status === 503) {
-            if (!silent) console.log(`⚠️ API key ${keyIndex + 1} com erro (${response.status}), tentando próxima...`)
-            continue
-          }
-          
-          const err = new Error(errorMessage)
-          if (response.status === 429) err.code = 'quota_exceeded'
-          throw err
-        }
-
-        if (!silent) console.log(`✅ Sucesso com modelo ${model} e API key ${keyIndex + 1}`)
-        return data
-
-      } catch (error) {
-        lastError = error
-        if (!silent) console.error(`❌ Erro com modelo ${model} e key ${keyIndex + 1}:`, error.message)
-        // Não fazer retry, tentar próxima key/modelo
+    try {
+      const requestBody = {
+        contents: [{ parts: [{ text: finalPrompt }] }],
+        generationConfig,
       }
+
+      // Adicionar Google Search Grounding se solicitado
+      if (useGoogleSearch) {
+        requestBody.tools = [
+          {
+            googleSearch: {}
+          }
+        ]
+      }
+
+      // Adicionar Function Calling se solicitado
+      if (useFunctionCalling && tools.length > 0) {
+        requestBody.tools = requestBody.tools || []
+        requestBody.tools.push(...tools)
+      }
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        const errorMessage = data.error?.message || 'Erro na API da IA'
+
+        // Se for erro 429 (quota) ou 503 (alta demanda), tentar próximo modelo
+        if (response.status === 429 || response.status === 503) {
+          if (!silent) console.log(`⚠️ Modelo ${model} com erro (${response.status}), tentando próximo...`)
+          lastError = new Error(errorMessage)
+          if (response.status === 429) lastError.code = 'quota_exceeded'
+          continue
+        }
+
+        const err = new Error(errorMessage)
+        if (response.status === 429) err.code = 'quota_exceeded'
+        throw err
+      }
+
+      if (!silent) console.log(`✅ Sucesso com modelo ${model}`)
+      return data
+
+    } catch (error) {
+      lastError = error
+      if (!silent) console.error(`❌ Erro com modelo ${model}:`, error.message)
     }
   }
 
-  // Se chegou aqui, todos os modelos e keys falharam
+  // Se chegou aqui, todos os modelos falharam
   if (typeof window !== 'undefined') {
     try {
       if (!silent) console.log('🔄 Tentando proxy server-side /api/gemini/generate...')
@@ -480,7 +457,7 @@ async function executeGeminiRequest(prompt, options = {}) {
   }
 
   const finalErr = new Error(
-    `Todos os modelos e API keys falharam. Último erro: ${lastError?.message || 'Erro desconhecido'}`
+    `Todos os modelos falharam. Último erro: ${lastError?.message || 'Erro desconhecido'}`
   )
   if (isGeminiQuotaError(lastError)) finalErr.code = 'quota_exceeded'
   throw finalErr
@@ -798,14 +775,13 @@ function formatWaitTime(seconds) {
 }
 
 /**
- * Verifica o status de todas as API keys do Gemini
+ * Verifica o status da API key do Gemini
  * @returns {Promise<Array<Object>>} - Lista de status das keys
  */
 export async function checkGeminiApiKeysStatus() {
-  const apiKeys = loadApiKeys()
-  const results = []
+  const apiKey = getApiKey()
 
-  if (apiKeys.length === 0) {
+  if (!apiKey) {
     return [
       {
         name: 'Configuração',
@@ -817,19 +793,14 @@ export async function checkGeminiApiKeysStatus() {
     ]
   }
 
-  for (let i = 0; i < apiKeys.length; i++) {
-    const key = apiKeys[i]
-    const keyName = i === 0 ? 'VITE_GEMINI_API_KEY (Principal)' : `VITE_GEMINI_API_KEY_${i}`
-    
-    console.log(`🔍 Testando ${keyName}...`)
-    const status = await testApiKey(key)
-    
-    results.push({
-      name: keyName,
-      keyPreview: key.substring(0, 10) + '...',
-      ...status
-    })
-  }
+  console.log('🔍 Testando VITE_GEMINI_API_KEY...')
+  const status = await testApiKey(apiKey)
 
-  return results
+  return [
+    {
+      name: 'VITE_GEMINI_API_KEY',
+      keyPreview: apiKey.substring(0, 10) + '...',
+      ...status,
+    },
+  ]
 }

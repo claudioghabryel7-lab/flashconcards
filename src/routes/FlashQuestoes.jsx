@@ -538,13 +538,13 @@ EXEMPLO DO FORMATO EXATO (COM 10 QUESTÕES):
 
       let aiResponse = ''
 
-      // Tentar Gemini primeiro com rotação de API keys
+      // Tentar Gemini primeiro
       try {
         const response = await callGeminiWithRetry(prompt, {
           courseId: selectedCourseId || 'alego-default',
         })
         aiResponse = extractGeneratedText(response)
-        console.log('✅ Sucesso com rotação de API keys')
+        console.log('✅ Sucesso com Gemini')
       } catch (geminiErr) {
         console.warn('⚠️ Gemini falhou, tentando Groq...', geminiErr)
         if (groqApiKey) {

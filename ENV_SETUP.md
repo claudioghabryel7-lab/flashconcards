@@ -1,8 +1,7 @@
 # Variáveis de Ambiente
 
 ## Google Gemini API
-- `VITE_GEMINI_API_KEY`: API Key principal do Google Gemini
-- `VITE_GEMINI_API_KEY_1` a `VITE_GEMINI_API_KEY_10`: API Keys de backup (opcional)
+- `VITE_GEMINI_API_KEY`: Única API Key do Google Gemini usada pelo app
 
 ## Google Search API (para RAG)
 Para implementar RAG (Retrieval-Augmented Generation) e evitar alucinações:
