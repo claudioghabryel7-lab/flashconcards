@@ -20,6 +20,7 @@ export async function getUnifiedPrompt(courseId) {
       return {
         banca: data.banca || '',
         concursoName: data.concursoName || '',
+        cargo: data.cargo || '',
         prompt: data.prompt || '',
       }
     }
@@ -32,6 +33,7 @@ export async function getUnifiedPrompt(courseId) {
       return {
         banca: courseData.banca || '',
         concursoName: courseData.competition || courseData.name || '',
+        cargo: courseData.cargo || courseData.competition || '',
         prompt: '',
       }
     }
@@ -113,9 +115,10 @@ Gere conteúdo com:
 - Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
 
 REGRAS PARA AS QUESTÕES:
-- Questões objetivas, claras, com alternativas bem elaboradas
-- Cada questão deve ter 5 alternativas (A, B, C, D, E)
-- Apenas UMA alternativa está correta
+- Adapte ao formato oficial da banca do concurso (CESPE/CEBRASPE = Certo/Errado; demais bancas = múltipla escolha A–E)
+- Questões objetivas, claras e no estilo da banca
+- Se múltipla escolha: 5 alternativas (A–E) e apenas UMA correta
+- Se Certo/Errado: assertiva com gabarito C ou E (sem A–E)
 - As alternativas incorretas devem ser plausíveis (distratores inteligentes)
 - Baseie-se PRIMARIAMENTE no conteúdo dos flashcards fornecidos abaixo
 - Questões devem ser FICTÍCIAS (não são questões reais de provas anteriores)
@@ -127,7 +130,7 @@ ${editalText ? `CONTEXTO DO EDITAL:\n${editalText}\n\n` : ''}
 
 ${flashcardsContent ? `⚠️ CONTEÚDO PRINCIPAL - FLASHCARDS:\nUse ESTE conteúdo como base principal para criar as questões:\n\n${flashcardsContent}\n\n` : ''}
 
-TAREFA: Criar questões FICTÍCIAS de múltipla escolha para a matéria "${materia}".
+TAREFA: Criar questões FICTÍCIAS no formato da banca para a matéria "${materia}".
 
 IMPORTANTE: Gere MUITAS questões (mínimo 20, ideal 30+). NÃO pare em 10 questões. Quanto mais questões, melhor.`
   }
@@ -194,20 +197,22 @@ INFORMAÇÕES DO CONCURSO
 ═══════════════════════════════════════════════════════════════════════════════
 BANCA: ${unified.banca}
 CONCURSO: ${unified.concursoName}
+CARGO: ${unified.cargo || unified.concursoName}
+TIPO DE PROVA: use o formato oficial da banca (CESPE/CEBRASPE = Certo/Errado; demais = A–E)
 MATÉRIA: ${materia}
 
 ${editalText ? `CONTEXTO DO EDITAL:\n${editalText}\n\n` : ''}
 
 ${flashcardsContent ? `⚠️ CONTEÚDO PRINCIPAL - FLASHCARDS:\nUse ESTE conteúdo como base principal para criar as questões:\n\n${flashcardsContent}\n\n` : ''}
 
-TAREFA: Criar questões FICTÍCIAS de múltipla escolha no estilo da banca ${unified.banca} para o concurso ${unified.concursoName}, matéria "${materia}".
+TAREFA: Criar questões FICTÍCIAS no formato oficial da banca ${unified.banca} para o concurso ${unified.concursoName} / cargo ${unified.cargo || unified.concursoName}, matéria "${materia}".
 
 REGRAS ESPECÍFICAS:
-- Estilo da banca ${unified.banca}
+- Estilo e formato da banca ${unified.banca} (CESPE/CEBRASPE = Certo/Errado; demais = A–E)
 - Questões devem ser FICTÍCIAS mas realistas
 - Baseie-se PRIMARIAMENTE no conteúdo dos flashcards fornecidos
-- Cada questão deve ter 5 alternativas (A, B, C, D, E)
-- Apenas UMA alternativa está correta
+- Se múltipla escolha: 5 alternativas (A–E) e apenas UMA correta
+- Se Certo/Errado: assertiva com gabarito C ou E (sem A–E)
 - As alternativas incorretas devem ser plausíveis (distratores inteligentes)
 
 QUANTIDADE DE QUESTÕES:

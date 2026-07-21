@@ -513,22 +513,69 @@ export function wasGeminiTruncated(response) {
   return reason === 'MAX_TOKENS' || reason === 'LENGTH'
 }
 
+/** True se há pelo menos uma chave Gemini configurada no ambiente. */
+export function hasGeminiApiKeys() {
+  const keys = loadApiKeys()
+  return Array.isArray(keys) && keys.length > 0
+}
+
 /**
  * Chamada silenciosa + parse JSON robusto (uso padrão em todas as gerações).
+ * Se a resposta for cortada (MAX_TOKENS), continua automaticamente até completar o JSON.
  */
 export async function generateAiJson(prompt, options = {}) {
-  const response = await callGeminiWithRetry(prompt, {
+  const maxContinues = options.maxContinues ?? 3
+  const {
+    maxContinues: _mc,
+    rejectTruncated = true,
+    ...callOptions
+  } = options
+
+  const baseCallOpts = {
     useRAG: false,
     useGoogleSearch: true,
     verifyContent: false,
-    ...options,
-    // Sempre silencioso no parse JSON; Search/verify vêm de options (material = verify on)
+    ...callOptions,
     silent: true,
-  })
+  }
+
+  let response = await callGeminiWithRetry(prompt, baseCallOpts)
+  let fullText = extractGeneratedText(response)
+  let continues = 0
+
+  while (wasGeminiTruncated(response) && continues < maxContinues) {
+    continues += 1
+    console.warn(
+      `⚠️ Resposta Gemini truncada (MAX_TOKENS). Continuando JSON (${continues}/${maxContinues})...`,
+    )
+    const continuePrompt = `Continue EXATAMENTE de onde o JSON abaixo parou.
+Não repita o trecho já escrito.
+Não adicione markdown, comentários ou texto fora do JSON.
+Complete até fechar todas as chaves e colchetes, gerando um JSON 100% válido e completo.
+
+JSON PARCIAL (continue a partir do final):
+${fullText.slice(-8000)}`
+
+    response = await callGeminiWithRetry(continuePrompt, {
+      ...baseCallOpts,
+      useGoogleSearch: false,
+      verifyContent: false,
+      useRAG: false,
+      generationConfig: {
+        ...(baseCallOpts.generationConfig || {}),
+        maxOutputTokens:
+          baseCallOpts.generationConfig?.maxOutputTokens || DEFAULT_GENERATION_CONFIG.maxOutputTokens,
+        temperature: Math.min(0.2, baseCallOpts.generationConfig?.temperature ?? 0.2),
+      },
+    })
+    const chunk = extractGeneratedText(response)
+    fullText = mergeJsonContinuation(fullText, chunk)
+  }
+
+  const stillTruncated = wasGeminiTruncated(response)
 
   try {
-    const text = extractGeneratedText(response)
-    const parsed = await parseAiJsonText(text)
+    const parsed = await parseAiJsonText(fullText)
     if (parsed?.erro) {
       const err = new Error(String(parsed.erro))
       err.code = 'ai_generation_error'
@@ -537,11 +584,52 @@ export async function generateAiJson(prompt, options = {}) {
     return parsed
   } catch (error) {
     if (isGeminiQuotaError(error)) throw error
+    if (error?.code === 'ai_generation_error') throw error
+    if (stillTruncated && rejectTruncated) {
+      const err = new Error(
+        'A geração foi cortada pelo limite de tokens e o conteúdo ficou incompleto. Tente novamente.',
+      )
+      err.code = 'ai_truncated'
+      err.cause = error
+      throw err
+    }
     const err = new Error(formatAiErrorForUser(error))
     err.code = error.code || 'ai_json_parse_error'
     err.cause = error
     throw err
   }
+}
+
+/** Une o texto parcial com o chunk de continuação, evitando duplicação grosseira. */
+function mergeJsonContinuation(previous = '', chunk = '') {
+  const prev = String(previous || '')
+  const next = String(chunk || '').trim()
+  if (!next) return prev
+
+  // Se o chunk já contém um JSON completo que inclui o início, prefira o maior parseável
+  const nextClean = next
+    .replace(/```json\s*/gi, '')
+    .replace(/```/g, '')
+    .trim()
+
+  // Overlap: se o final do prev aparece no início do next, corte a duplicata
+  const maxOverlap = Math.min(400, prev.length, nextClean.length)
+  for (let size = maxOverlap; size >= 40; size -= 1) {
+    const suffix = prev.slice(-size)
+    if (nextClean.startsWith(suffix)) {
+      return prev + nextClean.slice(size)
+    }
+  }
+
+  // Se o modelo recomeçou o objeto/array, tente anexar só o que falta
+  if (
+    (nextClean.startsWith('{') || nextClean.startsWith('[')) &&
+    (prev.includes('{') || prev.includes('['))
+  ) {
+    return prev + nextClean.replace(/^[\s\S]*?(?=[,\]\}])/, '')
+  }
+
+  return `${prev}${nextClean}`
 }
 
 export async function parseAiJsonText(generatedText) {

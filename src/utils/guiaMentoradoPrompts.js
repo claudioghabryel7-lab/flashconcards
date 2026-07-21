@@ -110,6 +110,7 @@ export function buildMentoradoConteudoPrompt({
     banca: exam.banca,
     concursoName: exam.concursoName,
     courseName: exam.courseName,
+    cargo: exam.cargo,
   })
   const altBlock =
     exam.tipoProva === 'Certo/Errado'

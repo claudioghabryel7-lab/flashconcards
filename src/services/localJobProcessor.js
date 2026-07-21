@@ -744,12 +744,11 @@ async function processSingleMentoradoTopic({
       console.warn('[mentorado] sanitizar questões do material:', sanitizeErr?.message || sanitizeErr)
     }
 
-    const hasBody =
-      (Array.isArray(materialParsed?.revisaoTurbo) && materialParsed.revisaoTurbo.length > 0) ||
-      String(materialParsed?.content || '').trim().length > 80 ||
-      String(materialParsed?.titulo || '').trim().length > 3
-    if (!hasBody) {
-      const err = new Error('Material incompleto (sem revisão/conteúdo utilizável).')
+    const completeness = (await import('../utils/contentDepthRules')).isMaterialContentComplete(
+      materialParsed,
+    )
+    if (!completeness.ok) {
+      const err = new Error(completeness.reason || 'Material incompleto (sem revisão/conteúdo utilizável).')
       err.code = 'material_incomplete'
       throw err
     }

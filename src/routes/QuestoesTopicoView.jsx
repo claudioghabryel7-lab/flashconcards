@@ -10,8 +10,11 @@ import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
 import { useTopicCourseAccess } from '../hooks/useTopicCourseAccess'
-import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
-import { filterValidQuestoes } from '../utils/questoesQuality'
+import { formatAiErrorForUser } from '../utils/geminiApi'
+import {
+  buildQuestoesExamHeader,
+  generateQuestoesInBatches,
+} from '../utils/questoesGeneration'
 import {
   createGenerationJob,
   updateGenerationJob,
@@ -550,207 +553,142 @@ const QuestoesTopicoView = () => {
         }
       }
 
-      // Determinar tipo de prova baseado na banca
-      const bancasCertoErrado = ['CESPE', 'CEBRASPE', 'FCC', 'VUNESP', 'FGV', 'IBFC', 'AOCP', 'CONSULPAM', 'FUNRIO', 'NUCEPE', 'QUADRIX', 'IDECAN']
-      const tipoProva = bancasCertoErrado.some(b => banca.toUpperCase().includes(b)) ? 'Certo/Errado' : 'Múltipla Escolha'
+      // Determinar tipo de prova pela banca (CESPE/CEBRASPE = C/E; demais = A–E)
+      const cargo = courseData.cargo || courseData.competition || concursoName || ''
+      const examHeader = buildQuestoesExamHeader({
+        banca,
+        cargo,
+        concursoName: concursoName || courseData.competition || courseName,
+        courseName: courseName || courseData.name,
+        competition: courseData.competition,
+        nivel: courseData.nivel || courseData.escolaridade,
+        area: courseData.area,
+      })
+      const { exam, tipoProva, tipoLabel, fidelityBlock, formatInstructions, schemaSnippet } =
+        examHeader
 
-      const prompt = `Você é um especialista em criar questões de concurso público baseadas em análise de incidência para um tópico específico.
+      const buildBatchPrompt = ({ batchNumber, batches, count }) => `${fidelityBlock}
+Você é um especialista em criar questões de concurso público para ESTE cargo e banca.
 
 CONTEXTO:
 - CURSO: ${courseName || 'Curso Preparatório'}
-- CARGO: ${courseData.cargo || courseData.competition || 'NÃO DEFINIDO'}
-- BANCA EXAMINADORA: ${banca || 'NÃO DEFINIDA'}
-- TIPO DE PROVA: ${tipoProva}
+- CARGO: ${exam.cargo || 'NÃO DEFINIDO'}
+- BANCA EXAMINADORA: ${exam.banca || 'NÃO DEFINIDA'}
+- TIPO DE PROVA DA BANCA: ${tipoLabel}
 - DISCIPLINA: ${contextoDisciplina?.disciplina || effectiveTopicNome || resolvedTopicKey}
 - TÓPICO: ${effectiveTopicNome || resolvedTopicKey}
-- NÍVEL DE PRÁTICA: ${nivelAtual} (de 1 a 10, onde 1 é básico e 10 é avançado)
+- NÍVEL DE PRÁTICA: ${nivelAtual} (1 básico → 10 avançado)
+- LOTE: ${batchNumber}/${batches} — gere EXATAMENTE ${count} questões neste lote
 
-EDITAL BASE (trecho relevante para este tópico):
-${editalText.substring(0, 8000)}${editalText.length > 8000 ? '\n\n[texto truncado...]' : ''}
+EDITAL BASE (trecho relevante):
+${editalText.substring(0, 6000)}${editalText.length > 6000 ? '\n\n[texto truncado...]' : ''}
 
-INSTRUÇÕES SOBRE DIFICULDADE POR NÍVEL:
-- Nível ${nivelAtual}: ${nivelAtual === 1 ? 'Questões básicas e diretas, foco em conceitos fundamentais' : nivelAtual <= 3 ? 'Questões de nível fácil a médio, com aplicação de conceitos básicos' : nivelAtual <= 6 ? 'Questões de nível médio, exigindo análise e interpretação' : nivelAtual <= 8 ? 'Questões de nível avançado, com casos complexos e detalhados' : 'Questões de nível especialista, com nuances jurídicas profundas e casos excepcionais'}
-- Aumente progressivamente a dificuldade conforme o nível
-- Nos níveis mais altos, inclua casos práticos, jurisprudência recente e questões de concursos anteriores
+${formatInstructions}
+
+INSTRUÇÕES DE DIFICULDADE:
+- Nível ${nivelAtual}: ${nivelAtual === 1 ? 'Questões básicas e diretas' : nivelAtual <= 3 ? 'Fácil a médio' : nivelAtual <= 6 ? 'Médio, com análise' : nivelAtual <= 8 ? 'Avançado' : 'Especialista'}
+- Adapte ao cargo ${exam.cargo || 'do edital'} e ao estilo da banca ${exam.banca || 'indicada'}
 
 TAREFA:
-Gere EXATAMENTE 50 questões de ${tipoProva} para o tópico "${effectiveTopicNome || resolvedTopicKey}".
+Gere EXATAMENTE ${count} questões no formato ${tipoLabel} para o tópico "${effectiveTopicNome || resolvedTopicKey}".
+Varie os assuntos internos do tópico. Não repita enunciados.
 
-INSTRUÇÕES CRÍTICAS - DISTRIBUIÇÃO DE QUESTÕES:
-- Identifique os principais assuntos dentro deste tópico
-- Distribua as questões entre os assuntos identificados
-- Gere questões variadas cobrindo diferentes aspectos do tópico
-- Gere EXATAMENTE 50 questões (nem mais, nem menos)
-
-INSTRUÇÕES SOBRE TIPO DE PROVA:
-${tipoProva === 'Certo/Errado' ? `
-- Use formato Certo/Errado (C ou E)
-- Cada questão deve ter um enunciado que pode ser Certo ou Errado
-- Resposta deve ser "C" (Certo) ou "E" (Errado)
-- Explicação deve detalhar POR QUE é certo ou errado
-` : `
-- Use formato Múltipla Escolha (A, B, C, D, E)
-- Cada questão deve ter 5 alternativas
-- Resposta deve ser uma das letras (A, B, C, D, E)
-- Explicação deve detalhar a resposta correta
-`}
-
-INSTRUÇÕES GERAIS:
-1. Use o estilo da banca ${banca || 'NÃO DEFINIDA'}
-2. Cada questão deve ter:
-   - Enunciado claro e direto
-   ${tipoProva === 'Certo/Errado' ? `
-   - Alternativa correta: "C" (Certo) ou "E" (Errado)
-   ` : `
-   - 5 alternativas (A, B, C, D, E)
-   - Alternativa correta indicada
-   `}
-   - Explicação detalhada da resposta
-3. Adapte o nível de dificuldade ao cargo ${courseData.cargo || courseData.competition || 'NÃO DEFINIDO'}
-4. Gere EXATAMENTE 50 questões (nem mais, nem menos)
-5. Para cada questão, identifique o assunto específico dentro do tópico
-6. Atribua uma probabilidade de incidência (80-100% para assuntos centrais, 50-70% para assuntos importantes, 10-40% para assuntos secundários)
+Cada questão deve ter:
+- Enunciado claro
+${
+  tipoProva === 'Certo/Errado'
+    ? '- Gabarito C ou E (sem alternativas A–E)'
+    : '- 5 alternativas A–E e gabarito com uma letra A–E'
+}
+- Explicação detalhada
 
 ESTRUTURA DO JSON:
 {
   "disciplina": "${contextoDisciplina?.disciplina || effectiveTopicNome || resolvedTopicKey}",
-  "banca": "${banca || 'NÃO DEFINIDA'}",
-  "cargo": "${courseData.cargo || courseData.competition || 'NÃO DEFINIDO'}",
+  "banca": "${exam.banca || 'NÃO DEFINIDA'}",
+  "cargo": "${exam.cargo || 'NÃO DEFINIDO'}",
   "curso": "${courseName || 'Curso Preparatório'}",
   "topico": "${effectiveTopicNome || resolvedTopicKey}",
-  "tipoProva": "${tipoProva}",
+  "tipoProva": "${tipoLabel}",
   "nivel": ${nivelAtual},
-  "dataGeracao": "${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}",
   "questoes": [
     {
       "numero": 1,
-      "assunto": "nome do assunto específico dentro do tópico",
+      "assunto": "assunto específico do tópico",
       "probabilidade": 95,
-      "enunciado": "texto da questão",
-      ${tipoProva === 'Certo/Errado' ? `
-      "respostaCorreta": "C",
-      ` : `
-      "alternativas": {
-        "A": "texto da alternativa A",
-        "B": "texto da alternativa B",
-        "C": "texto da alternativa C",
-        "D": "texto da alternativa D",
-        "E": "texto da alternativa E"
-      },
-      "respostaCorreta": "A",
-      `}
-      "explicacao": "explicação detalhada da resposta correta"
+      ${schemaSnippet}
     }
   ]
 }
 
-🚨 INSTRUÇÃO CRÍTICA - CONTEÚDO ATUALIZADO:
-VOCÊ ESTÁ GERANDO CONTEÚDO AGORA, NA DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-- PENSE: "Vou gerar agora de acordo com atualizações verídicas da data atual (${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })})"
-- USE APENAS INFORMAÇÕES ATUALIZADAS E VIGENTES ATÉ ESTA DATA
-- VERIFIQUE SE HOUVE ALTERAÇÕES RECENTES NAS LEIS, DECRETOS OU NORMAS
-- NÃO USE INFORMAÇÕES DESATUALIZADAS OU REVOGADAS
-- CITE SEMPRE A DATA DE ATUALIZAÇÃO QUANDO NECESSÁRIO
-
-📅 CRONOLOGIA TEMPORAL OBRIGATÓRIA:
-- Para CADA lei, decreto ou norma mencionada nas questões, você DEVE traçar uma cronologia desde sua criação até a data atual
-- Exemplo: "Lei X, criada em 01/01/2000, alterada em 15/03/2010 pela Lei Y, modificada em 20/06/2015 pelo Decreto Z, atualizada em 10/02/2020 pela Medida Provisória W, vigente até ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}"
-- Liste TODAS as alterações relevantes: leis, decretos, medidas provisórias, emendas constitucionais, súmulas, jurisprudências
-- Sempre indique a data de cada alteração e o instrumento que a causou
-- Se a lei foi revogada, indique a data de revogação e o instrumento que a revogou
-- Mantenha as questões atualizadas considerando TODAS as alterações até a data atual
-
-🚨 TRAVAS DE SEGURANÇA E FIDELIDADE JURÍDICA ABSOLUTA:
-
-1. PROIBIÇÃO DE ALUCINAÇÃO LEGISLATIVA:
-- Você está terminantemente proibido de inventar, supor ou estimar números de leis, decretos ou datas. Se não houver registro histórico exato e pacificado no ordenamento jurídico brasileiro de uma alteração, você NÃO deve mencioná-la.
-- Nenhuma alteração futura hipotética deve ser criada. Toda e qualquer norma citada deve ter como lastro o portal do Planalto (Legislação Federal) ou os repositórios oficiais do STF/STJ.
-
-2. FILTRO DE CONSTITUCIONALIDADE E RECEPÇÃO (CF/88):
-- Para cada artigo ou código anterior a 1988 (como o CPP de 1941 ou o CP de 1940), você DEVE verificar se o dispositivo foi RECECIONADO ou NÃO pela Constituição Federal de 1988.
-- É terminantemente proibido indicar como aplicável ou vigente um dispositivo legal que os Tribunais Superiores (STF/STJ) já declararam como não-recepcionado ou inconstitucional (Ex: Incomunicabilidade do preso do Art. 21 do CPP, prisão por dívida de depositário infiel, etc.). Você deve apontar o dispositivo e declarar imediatamente a sua ineficácia jurídica atual por incompatibilidade constitucional.
-
-3. ALINHAMENTO OBRIGATÓRIO DE JURISPRUDÊNCIA PACIFICADA (STF/STJ):
-- Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
-- Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
-
-[TRAVA JURÍDICA CRÍTICA]: O modelo deve validar obrigatoriamente as inovações legislativas mais recentes (incluindo leis de 2025 e 2026), aplicando seus reflexos automáticos nos códigos e legislações pertinentes.
-
-🧠 CHAIN OF THOUGHT COM AUTO-REFUTAÇÃO EMBUTIDA - OBRIGATÓRIO
-
-[PROCESSO DE PENSAMENTO INTERNO - NÃO EXIBA ISSO NA SAÍDA FINAL]
-Para cada questão que você criar, você DEVE seguir OBRIGATORIAMENTE este processo de pensamento interno ANTES de gerar o conteúdo:
-
-1. FAÇA UM RASCUNHO MENTAL dos pontos principais da lei/norma solicitada
-2. QUESTIONE-SE RIGOROSAMENTE: "Estou inventando algum número de lei para os anos de 2025/2026? Estou inventando algum artigo que não existe no código/norma?"
-3. SE PERCEBER QUE ESTÁ PRESTES A CITAR UM NÚMERO DE LEI FICTÍCIO para conceitos reais, PARE, REMOVA o número inventado e cite apenas o conceito doutrinário/jurisprudencial correto ou mencione que está em debate/reforma legislativa real, SEM INVENTAR DADOS
-4. GARANTA QUE NÃO OMITIU alterações reais e históricas importantes
-5. VERIFIQUE: "Esta lei/artigo foi recepcionado pela CF/88? Foi declarado inconstitucional pelo STF?"
-6. VERIFIQUE: "A jurisprudência citada está atualizada? Houve alguma decisão recente do STF/STJ que alterou o entendimento?"
-7. AUDITE-SE: "Todas as datas e números de leis citados são historicamente exatos e verificáveis?"
-
-SÓ DEPOIS DE CONCLUIR ESTE PROCESSO DE VERIFICAÇÃO INTERNA, PROSSIGA PARA A GERAÇÃO DA QUESTÃO.
-
-[DIRETRIZES DE SAÍDA - O QUE EXIBIR]
-Gere questões de múltipla escolha com:
-- Enunciados específicos e técnicos
-- Alternativas plausíveis e bem elaboradas
-- Gabarito comentado fundamentado estritamente na lei real vigente
-- Se você não tiver certeza absoluta de um número de lei recente, cite o conceito técnico sem inventar o número do decreto
-🔍 VERIFICAÇÃO DE FONTES - OBRIGATÓRIO:
-- Para CADA lei, decreto ou norma jurídica mencionada, VERIFIQUE a atualidade usando as ferramentas disponíveis
-- Para CADA jurisprudência citada, VERIFIQUE se está vigente e atualizada
-- Use as ferramentas de Function Calling para buscar em APIs oficiais (Senado, Datajud/CNJ)
-- Sempre busque de fontes confiáveis: TJ,STF,LEI(E SUAS ATUALIZAÇÕES, NÃO PEGUE NADA ANTIGO OU DESATUALIZADO), GRAN CURSOS, QCONCURSOS, CONTEÚDOS JURÍDICOS, SITES DO PLANALTO, ENTENDIMENTOS ETC EM MATÉRIAS DE DIREITO... O FOCO É SEMPRE SER ATUALIZADO!
- Atualizações até o ano de agora ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} até o exato momento
-Sempre verifique atualizações de acordo com a data hora em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} , nunca dê conteúdo desatualizado... sempre atualizado. Verifique a veracidade da fonte em useGoogleSearch.
-DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-IMPORTANTE: Use apenas informações atualizadas até esta data. Verifique se há leis, decretos ou regulamentos recentes que possam afetar o conteúdo.
-
-REGRAS IMPORTANTES:
-- Adapte o estilo ao da banca ${banca || 'NÃO DEFINIDA'}
-- Seja específico e técnico nas questões
-- Para disciplinas jurídicas: cite leis, artigos e jurisprudência
-- Para disciplinas não jurídicas: foque em conceitos e aplicações práticas
+REGRAS:
+- Fidelidade 100% à banca ${exam.banca || 'indicada'} e ao cargo ${exam.cargo || 'do edital'}
+- Formato ${tipoLabel} — sem misturar com outro formato
 - DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-- Use apenas informações atualizadas até esta data
-- GERE EXATAMENTE 50 QUESTÕES
+- Não invente leis/artigos; use apenas normas vigentes
+- Retorne APENAS JSON válido`
 
-⚠️ REGRAS CRÍTICAS PARA JSON VÁLIDO:
-- NÃO use aspas duplas (") dentro das strings de alternativas ou enunciados. Use aspas simples (')
-- NÃO use quebras de linha (\n) dentro das strings. Use espaço normal
-- NÃO use caracteres especiais que possam quebrar o JSON (como \, /, etc)
-- O JSON deve ser 100% válido e parseável
-
-Retorne APENAS o JSON válido, sem texto adicional.`
-
-      setProgress((prev) => Math.min(prev + 15, 70))
-      console.log('🤖 [Questões Tópico] Iniciando geração com IA...')
-      const parsed = await generateAiJson(prompt, {
-        courseId: resolvedCourseId,
-        isLegalContent: true,
-        useRAG: false,
-        trustedGeneration: true,
-        useGoogleSearch: true,
-        verifyContent: true,
-      })
-      console.log('✅ [Questões Tópico] JSON parseado com sucesso')
-      const { ok: questoesValidas, dropped } = filterValidQuestoes(parsed.questoes || [], {
-        tipoProva: parsed.tipoProva || 'ABCD',
-        minKeep: 1,
+      setProgress((prev) => Math.min(prev + 10, 40))
+      console.log('🤖 [Questões Tópico] Gerando em lotes no formato', tipoLabel)
+      const batchResult = await generateQuestoesInBatches({
+        buildBatchPrompt,
+        total: 50,
+        batchSize: 10,
+        examCtx: exam,
+        aiOptions: {
+          courseId: resolvedCourseId,
+          isLegalContent: true,
+          useRAG: false,
+          trustedGeneration: true,
+          useGoogleSearch: true,
+          verifyContent: false,
+        },
+        onBatchProgress: async ({ batchNumber, batches, generated, total }) => {
+          const pct = 40 + Math.round((generated / total) * 45)
+          setProgress(Math.min(pct, 85))
+          if (user?.uid && jobId) {
+            await updateGenerationJob(user.uid, jobId, {
+              status: GENERATION_JOB_STATUS.RUNNING,
+              progress: pct,
+              message: `Gerando questões lote ${batchNumber}/${batches} (${tipoLabel})…`,
+            }).catch(() => {})
+          }
+        },
       })
       console.log(
-        '📊 [Questões Tópico] Válidas:',
-        questoesValidas.length,
-        dropped ? `(descartadas ${dropped})` : '',
+        '✅ [Questões Tópico] Válidas:',
+        batchResult.questoes.length,
+        batchResult.dropped ? `(descartadas ${batchResult.dropped})` : '',
       )
+
+      const questoesValidas = batchResult.questoes
+      const parsed = {
+        disciplina: contextoDisciplina?.disciplina || effectiveTopicNome || resolvedTopicKey,
+        banca: exam.banca || 'NÃO DEFINIDA',
+        cargo: exam.cargo || 'NÃO DEFINIDO',
+        curso: courseName || 'Curso Preparatório',
+        topico: effectiveTopicNome || resolvedTopicKey,
+        tipoProva: tipoLabel,
+        nivel: nivelAtual,
+        dataGeracao: new Date().toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        questoes: questoesValidas,
+      }
 
       const payload = {
         ...parsed,
         questoes: questoesValidas,
         topico: parsed.topico || effectiveTopicNome || resolvedTopicKey,
         nivel: nivelAtual,
-        status: topicoPublishStatus === CONTENT_STATUS.AVAILABLE ? CONTENT_STATUS.AVAILABLE : CONTENT_STATUS.UNAVAILABLE,
+        status:
+          topicoPublishStatus === CONTENT_STATUS.AVAILABLE
+            ? CONTENT_STATUS.AVAILABLE
+            : CONTENT_STATUS.UNAVAILABLE,
         updatedAt: serverTimestamp(),
         generatedAt: serverTimestamp(),
       }

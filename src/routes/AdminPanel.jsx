@@ -48,6 +48,7 @@ import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSign
 import { auth, db, storage } from '../firebase/config'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { useAuth } from '../hooks/useAuth'
+import { resetAppCache } from '../utils/resetAppCache'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { createSlug } from '../utils/slug'
@@ -294,6 +295,7 @@ const AdminPanel = () => {
   // Estados para verificação de status da IA
   const [showAiStatusModal, setShowAiStatusModal] = useState(false)
   const [checkingAiStatus, setCheckingAiStatus] = useState(false)
+  const [resettingAppCache, setResettingAppCache] = useState(false)
   const [aiKeysStatus, setAiKeysStatus] = useState([])
   const [aiStatusError, setAiStatusError] = useState('')
   
@@ -5416,6 +5418,25 @@ CRÍTICO:
     }
   }
 
+  /** Limpa caches do navegador/app e recarrega para aplicar atualizações. */
+  const handleResetAppCache = async () => {
+    if (resettingAppCache) return
+    const ok = window.confirm(
+      'Resetar o cache do app?\n\nIsso limpa Service Worker, Cache Storage e caches locais, e recarrega a página para aplicar as atualizações.',
+    )
+    if (!ok) return
+
+    setResettingAppCache(true)
+    setMessage('🧹 Resetando cache… a página será recarregada.')
+    try {
+      await resetAppCache({ reload: true })
+    } catch (error) {
+      console.error('Erro ao resetar cache:', error)
+      setMessage(`❌ Erro ao resetar cache: ${error.message || error}`)
+      setResettingAppCache(false)
+    }
+  }
+
   // Função interna para gerar conteúdos completos (sem confirmação, para uso no processamento automático)
   const handleGenerateAllConteudosCompletosInternal = async (courseId, editalText, unifiedData, updateMessage) => {
     if (!editalText || editalText.trim().length === 0) {
@@ -7105,23 +7126,45 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
                         </p>
                       </div>
                     </div>
-                    <button
-                      onClick={handleCheckAiStatus}
-                      disabled={checkingAiStatus}
-                      className="px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg flex items-center gap-2"
-                    >
-                      {checkingAiStatus ? (
-                        <>
-                          <ArrowPathIcon className="h-5 w-5 animate-spin" />
-                          Verificando...
-                        </>
-                      ) : (
-                        <>
-                          <SparklesIcon className="h-5 w-5" />
-                          Verificar Status da I.A.
-                        </>
-                      )}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleResetAppCache}
+                        disabled={resettingAppCache}
+                        className="px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl font-bold hover:from-amber-600 hover:to-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg flex items-center gap-2"
+                        title="Limpa cache do navegador e recarrega para aplicar atualizações"
+                      >
+                        {resettingAppCache ? (
+                          <>
+                            <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                            Resetando…
+                          </>
+                        ) : (
+                          <>
+                            <ArrowPathIcon className="h-5 w-5" />
+                            Resetar cache
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCheckAiStatus}
+                        disabled={checkingAiStatus}
+                        className="px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg flex items-center gap-2"
+                      >
+                        {checkingAiStatus ? (
+                          <>
+                            <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                            Verificando...
+                          </>
+                        ) : (
+                          <>
+                            <SparklesIcon className="h-5 w-5" />
+                            Verificar Status da I.A.
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
