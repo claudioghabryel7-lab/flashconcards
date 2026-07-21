@@ -1302,7 +1302,7 @@ IMPORTANTE:
               </div>
             </div>
           ) : activeCards.length === 0 ? (
-            <div className="noji-empty cp-card flex h-full min-h-[480px] flex-col items-center justify-center p-10 text-center">
+            <div className="noji-empty cp-card flex h-full min-h-[320px] flex-col items-center justify-center p-6 text-center sm:min-h-[480px] sm:p-10">
               <div className="mb-4 text-5xl">✨</div>
               <p className="text-lg font-semibold text-cp-text">Tudo em dia!</p>
               <p className="mt-2 max-w-md text-sm text-cp-muted">
@@ -1312,13 +1312,24 @@ IMPORTANTE:
                     : `${moduleStats.total} cards neste deck · nenhum pendente agora`
                   : 'Este tópico ainda não tem flashcards.'}
               </p>
-              <button
-                type="button"
-                onClick={exitStudySession}
-                className="mt-6 rounded-xl border border-cp-border px-5 py-2.5 text-sm font-medium text-cp-text transition hover:bg-cp-surface"
-              >
-                ← Voltar aos decks
-              </button>
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                {moduleStats.total > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleReviewAgain}
+                    className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                  >
+                    Revisar todos agora
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={exitStudySession}
+                  className="rounded-xl border border-cp-border px-5 py-2.5 text-sm font-medium text-cp-text transition hover:bg-cp-surface"
+                >
+                  ← Voltar aos decks
+                </button>
+              </div>
             </div>
           ) : (
             <div className="noji-session cp-card flex h-full min-h-0 max-w-full min-w-0 flex-col overflow-hidden lg:min-h-[calc(100vh-12rem)]">
