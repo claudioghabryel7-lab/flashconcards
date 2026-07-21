@@ -2,6 +2,7 @@ import { FireIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outl
 import CommentFormattedText from './content/CommentFormattedText'
 import { probabilidadeBadgeClass } from '../utils/htmlTextHelpers'
 import ContentFeedbackActions from './content/ContentFeedbackActions'
+import { mapOrderedAlternativas } from '../utils/questaoAlternativas'
 
 export function resolveQuestaoGabarito(questao) {
   return questao?.respostaCorreta || questao?.correta || questao?.gabarito || ''
@@ -18,15 +19,7 @@ export function resolveQuestaoExplicacao(questao) {
 }
 
 function normalizeAlternativas(questao) {
-  const raw = questao?.alternativas
-  if (!raw) return {}
-  if (Array.isArray(raw)) {
-    const letters = ['A', 'B', 'C', 'D', 'E']
-    return Object.fromEntries(
-      raw.map((value, index) => [letters[index] || String(index), String(value)]),
-    )
-  }
-  return raw
+  return mapOrderedAlternativas(questao?.alternativas)
 }
 
 function alternativaClassName({ reveal, isCorrect, isSelected, idle }) {
@@ -233,7 +226,7 @@ export function QuestaoAlternativas({
 
   return (
     <div className="space-y-2.5">
-      {Object.entries(alternativas).map(([key, value]) => {
+      {alternativas.map(([key, value]) => {
         const isCorrect = key === correta
         const isSelected = selectedAnswer === key
         const idle = !reveal

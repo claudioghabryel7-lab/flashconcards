@@ -17,6 +17,7 @@ import { useSubjectOrder } from '../hooks/useSubjectOrder'
 import { applySubjectOrder, applyModuleOrder } from '../utils/subjectOrder'
 import { callGeminiWithRetry, extractGeneratedText, generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import { FolderIcon, ChevronRightIcon, ChevronDownIcon, LightBulbIcon, CheckCircleIcon, XCircleIcon, HandThumbUpIcon, HandThumbDownIcon, ChartBarIcon, BookOpenIcon, XMarkIcon, CheckIcon } from '@heroicons/react/24/outline'
+import { mapOrderedAlternativas, alternativasAsOrderedObject } from '../utils/questaoAlternativas'
 import { 
   getOrCreateQuestionsCache, 
   saveQuestionsCache, 
@@ -646,9 +647,17 @@ ${completeQuestions.join(',\n')}
         throw new Error('A IA não gerou nenhuma questão. Tente novamente.')
       }
 
+      // Garantir alternativas sempre A→E (Firestore/Object.entries não preservam ordem)
+      const questoesOrdenadas = parsedData.questoes.map((q) => ({
+        ...q,
+        alternativas: q?.alternativas
+          ? alternativasAsOrderedObject(q.alternativas, 5)
+          : q?.alternativas,
+      }))
+
       // 🔥 NOVO: SALVAR NO CACHE (com courseId)
       console.log('💾 Salvando questões no cache...', { selectedMateria, selectedModulo, selectedCourseId })
-      await saveQuestionsCache(selectedMateria, selectedModulo, parsedData.questoes, selectedCourseId)
+      await saveQuestionsCache(selectedMateria, selectedModulo, questoesOrdenadas, selectedCourseId)
       const newCacheInfo = { likes: 0, dislikes: 0, score: 100, cached: false }
 
       // Questões são ilimitadas - não precisa incrementar contador
@@ -656,7 +665,7 @@ ${completeQuestions.join(',\n')}
       // Navegar para a página de responder questões
       navigate('/flashquestoes/responder', {
         state: {
-          questions: parsedData.questoes,
+          questions: questoesOrdenadas,
           selectedMateria,
           selectedModulo,
           cacheInfo: newCacheInfo
@@ -910,7 +919,7 @@ Questão:
 ${question.enunciado}
 
 Alternativas:
-${Object.entries(question.alternativas).map(([letra, texto]) => `${letra}) ${texto}`).join('\n')}
+${mapOrderedAlternativas(question.alternativas).map(([letra, texto]) => `${letra}) ${texto}`).join('\n')}
 
 Alternativa correta: ${question.correta}
 

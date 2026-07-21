@@ -22,6 +22,7 @@ import {
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import ContentFeedbackActions from '../components/content/ContentFeedbackActions'
 import { buildQuestaoContentId } from '../utils/contentCommentIds'
+import { mapOrderedAlternativas } from '../utils/questaoAlternativas'
 
 const QuestionView = () => {
   const navigate = useNavigate()
@@ -261,7 +262,7 @@ Questão:
 ${question.enunciado}
 
 Alternativas:
-${Object.entries(question.alternativas).map(([letra, texto]) => `${letra}) ${texto}`).join('\n')}
+${mapOrderedAlternativas(question.alternativas).map(([letra, texto]) => `${letra}) ${texto}`).join('\n')}
 
 Alternativa correta: ${question.correta}
 
@@ -536,7 +537,7 @@ Forneça uma explicação didática e completa (BIZU) sobre esta questão.
             
             {/* Alternativas */}
             <div className="space-y-3 sm:space-y-4">
-              {Object.entries(currentQuestion.alternativas).map(([letra, texto]) => {
+              {mapOrderedAlternativas(currentQuestion.alternativas).map(([letra, texto]) => {
                 const isSelected = selectedAnswer === letra
                 const isCorrect = letra === currentQuestion.correta
                 const showCorrect = showResult && isCorrect
