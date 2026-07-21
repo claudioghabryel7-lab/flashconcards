@@ -379,7 +379,7 @@ const ConteudoCompletoTopicoView = () => {
           const numeroSnap = await getDocs(qNumero)
           const matchedFromNumero = tryMatchFromSnapshot(numeroSnap)
           if (matchedFromNumero) {
-            setConteudo(matchedFromNumero)
+            setConteudo(normalizeMaterialStructure(matchedFromNumero))
             setLoading(false)
             return
           }
@@ -391,7 +391,7 @@ const ConteudoCompletoTopicoView = () => {
           const materiaSnap = await getDocs(qMateria)
           const matchedFromMateria = tryMatchFromSnapshot(materiaSnap)
           if (matchedFromMateria) {
-            setConteudo(matchedFromMateria)
+            setConteudo(normalizeMaterialStructure(matchedFromMateria))
             setLoading(false)
             return
           }
@@ -709,7 +709,7 @@ REGRAS FINAIS:
       await setDoc(doc(db, 'courses', resolvedCourseId, 'conteudosCompletos', sanitizedKey), payload, {
         merge: true,
       })
-      setConteudo({ id: sanitizedKey, ...payload })
+      setConteudo(normalizeMaterialStructure({ id: sanitizedKey, ...payload }))
       setError('')
       setProgress(100)
       if (user?.uid && jobId) {
