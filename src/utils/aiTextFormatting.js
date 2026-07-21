@@ -164,12 +164,16 @@ ESTRUTURA HTML PERMITIDA:
 - <mark> — grifar prazos, artigos e pegadinhas
 - <ul><li> — listas curtas de requisitos/exceções
 
-COMO ORGANIZAR CADA RESUMO (revisaoTurbo.conteudo):
-1. <h4>Conceito central</h4> + 2–3 <p> de desenvolvimento técnico
-2. Base normativa essencial com <b>/<mark> (artigo/lei) quando couber
-3. <h4>Na prática da banca</h4> — OBRIGATÓRIO: como ESTA banca cobra ESTE ponto no cargo
-4. 1 exemplo concreto de cobrança
-5. <h4>Dica de memorização</h4> + 1 <p> ou lista curta
+COMO ORGANIZAR CADA RESUMO (revisaoTurbo.conteudo) — 6 SEÇÕES OBRIGATÓRIAS:
+1. <h4>Conceito central</h4> — definição precisa + elementos/requisitos
+2. <h4>Base normativa</h4> — artigo/lei/súmula essenciais (só se for real)
+3. <h4>Distinções e exceções</h4> — fronteiras do instituto; o que NÃO se aplica
+4. <h4>Na prática da banca</h4> — como ESTA banca cobra ESTE ponto no cargo (específico)
+5. <h4>Margens de dúvida</h4> — 2–4 itens no formato <b>Dúvida:</b> … <b>Resposta:</b> …
+6. <h4>Dica de memorização</h4>
+
+PROIBIDO: texto genérico ("é importante saber", "a banca cobra o tema") sem substância.
+OBRIGATÓRIO: fechar dúvidas — regra + exceção + o que não se aplica.
 
 PADRÃO DA BANCA (raioXProbabilidade.padraoBanca) — OBRIGATÓRIO E DETALHADO:
 1. <h4>Como a banca cobra</h4>
@@ -177,15 +181,13 @@ PADRÃO DA BANCA (raioXProbabilidade.padraoBanca) — OBRIGATÓRIO E DETALHADO:
 3. <h4>Pegadinhas recorrentes</h4> + lista
 4. <h4>Exemplo típico de cobrança</h4>
 5. <h4>O que costuma NÃO cair</h4>
-NÃO aceite uma frase genérica do tipo "a banca cobra o assunto".
 
 EXEMPLO DE RESUMO:
-"<h4>Conceito central</h4><p>O <b>inquérito policial</b> é procedimento administrativo...</p><p><mark>Art. 4º do CPP</mark> — o inquérito é dispensável quando...</p><h4>Na prática da banca</h4><p>A banca costuma cobrar prazos e a dispensabilidade...</p><ul><li>Distinção entre...</li></ul><h4>Dica de memorização</h4><p>Lembre: <b>I</b>nquérito = <b>I</b>nvestigação inicial.</p>"
+"<h4>Conceito central</h4><p>O <b>inquérito policial</b> é procedimento administrativo...</p><h4>Base normativa</h4><p><mark>Art. 4º do CPP</mark>...</p><h4>Distinções e exceções</h4><ul><li>Não se confunde com...</li></ul><h4>Na prática da banca</h4><p>A banca costuma cobrar prazos e a dispensabilidade...</p><h4>Margens de dúvida</h4><ul><li><b>Dúvida:</b> O inquérito é indispensável? <b>Resposta:</b> Não, quando...</li></ul><h4>Dica de memorização</h4><p>Lembre: <b>I</b>nquérito = <b>I</b>nvestigação inicial.</p>"
 
 REGRAS:
 - PROIBIDO markdown (** * __ #) — somente HTML
-- 4–6 parágrafos/<li> por resumo (faixa ~180–280 palavras)
+- Cada resumo: ~280–420 palavras, com as 6 seções
 - padraoBanca: 140–240 palavras, específico da banca/cargo
-- Cada <p> com 2–4 frases; sem parede de texto nem preenchimento vazio
 - OBRIGATÓRIO: revisaoTurbo com no mínimo 6 itens {titulo, conteudo}
-- OBRIGATÓRIO: cada resumo com seção "Na prática da banca"`
+- OBRIGATÓRIO: cada resumo com "Na prática da banca" + "Margens de dúvida"`
