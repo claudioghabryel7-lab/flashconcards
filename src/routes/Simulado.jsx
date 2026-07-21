@@ -928,7 +928,7 @@ CRÍTICO: Retorne APENAS o JSON, sem markdown, sem explicações.
       const genAI = new GoogleGenerativeAI(apiKey)
       // 🔥 OTIMIZAÇÃO: Usar modelo mais rápido para simulado
       const model = genAI.getGenerativeModel({ 
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         generationConfig: {
           maxOutputTokens: 8192, // Reduzido para mais velocidade
           temperature: 0.7,

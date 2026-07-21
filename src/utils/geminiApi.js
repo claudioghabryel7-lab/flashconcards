@@ -16,13 +16,14 @@ import {
   applyVerificationToResponse,
 } from './contentVerification.js'
 import { appendSilentJsonRules } from './aiPromptUtils.js'
+import {
+  GEMINI_FLASH_MODEL,
+  getDefaultGeminiModels,
+  VERIFY_GEMINI_MODELS,
+} from './geminiModels.js'
 
-const MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
-]
-
-const VERIFY_MODELS = ['gemini-2.5-flash']
+const MODELS = getDefaultGeminiModels()
+const VERIFY_MODELS = VERIFY_GEMINI_MODELS
 
 const DEFAULT_GENERATION_CONFIG = {
   temperature: 0.35,
@@ -169,7 +170,7 @@ async function callGeminiViaServer(prompt, options = {}) {
 async function silentTestApiKey(apiKey) {
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_FLASH_MODEL}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -226,7 +227,7 @@ async function getAvailableApiKey() {
  * @param {Object} options - Opções adicionais
  * @param {number} options.maxRetries - Número máximo de tentativas (padrão: 3)
  * @param {number} options.baseDelay - Delay base em ms (padrão: 2000)
- * @param {Array<string>} options.models - Lista de modelos para tentar (padrão: gemini-2.5-flash, gemini-2.5-flash-8b, gemini-2.5-pro)
+ * @param {Array<string>} options.models - Lista de modelos para tentar (padrão: gemini-3.6-flash, gemini-3.5-flash, gemini-3.1-pro-preview)
  * @param {Object} options.generationConfig - Configuração de geração (temperature, maxOutputTokens, etc.)
  * @param {boolean} options.useGoogleSearch - Se deve usar Google Search Grounding (padrão: false)
  * @param {boolean} options.useRAG - Se deve usar RAG com Google Search API (padrão: true)
@@ -417,8 +418,8 @@ async function executeGeminiRequest(prompt, options = {}) {
       if (!response.ok) {
         const errorMessage = data.error?.message || 'Erro na API da IA'
 
-        // Se for erro 429 (quota) ou 503 (alta demanda), tentar próximo modelo
-        if (response.status === 429 || response.status === 503) {
+        // Se for erro 429/503 (quota/alta demanda) ou 404 (modelo indisponível), tentar próximo
+        if (response.status === 429 || response.status === 503 || response.status === 404) {
           if (!silent) console.log(`⚠️ Modelo ${model} com erro (${response.status}), tentando próximo...`)
           lastError = new Error(errorMessage)
           if (response.status === 429) lastError.code = 'quota_exceeded'
@@ -678,7 +679,7 @@ export async function repairJsonText(raw) {
 async function testApiKey(apiKey) {
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_FLASH_MODEL}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

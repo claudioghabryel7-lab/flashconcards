@@ -194,10 +194,28 @@ const AIChat = () => {
         const data = await response.json()
         const models = data.models || []
         
-        const generateModels = models.filter((model) => {
-          const methods = model.supportedGenerationMethods || []
-          return methods.includes('generateContent')
-        })
+        const preferred = [
+          'gemini-3.6-flash',
+          'gemini-3.5-flash',
+          'gemini-3.1-pro-preview',
+          'gemini-flash-latest',
+          'gemini-pro-latest',
+        ]
+        const generateModels = models
+          .filter((model) => {
+            const methods = model.supportedGenerationMethods || []
+            return methods.includes('generateContent')
+          })
+          .sort((a, b) => {
+            const an = a.name.replace('models/', '')
+            const bn = b.name.replace('models/', '')
+            const ai = preferred.indexOf(an)
+            const bi = preferred.indexOf(bn)
+            if (ai === -1 && bi === -1) return 0
+            if (ai === -1) return 1
+            if (bi === -1) return -1
+            return ai - bi
+          })
 
         if (generateModels.length === 0) {
           setModelError('Nenhum modelo de geração disponível. Verifique sua API key.')
