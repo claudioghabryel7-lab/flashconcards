@@ -50,7 +50,7 @@ export async function generateAndSaveQuestoesForTopico({
   editalText = '',
 }) {
   if (!hasGeminiApiKeys()) {
-    throw new Error('Nenhuma API key Gemini configurada (VITE_GEMINI_API_KEY ou backups)')
+    throw new Error('Nenhuma API key Gemini configurada (VITE_GEMINI_API_KEY)')
   }
 
   // Carregar dados do curso para obter a banca examinadora
