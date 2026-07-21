@@ -3,10 +3,26 @@ import dayjs from 'dayjs'
 /** Intervalos progressivos (minutos) após marcar Fácil consecutivamente */
 export const EASY_INTERVALS_MINUTES = [15, 60, 360, 1440, 4320, 10080, 20160]
 
+/** Normaliza nextReview vindo do Firestore (ISO string, Date ou Timestamp). */
+export function parseReviewDate(value) {
+  if (!value) return null
+  if (typeof value?.toDate === 'function') {
+    const d = dayjs(value.toDate())
+    return d.isValid() ? d : null
+  }
+  if (typeof value?.seconds === 'number') {
+    const d = dayjs(value.seconds * 1000)
+    return d.isValid() ? d : null
+  }
+  const d = dayjs(value)
+  return d.isValid() ? d : null
+}
+
 export function isCardDue(progress, now = dayjs()) {
   if (!progress?.nextReview) return true
-  const next = dayjs(progress.nextReview)
-  return !next.isValid() || next.isBefore(now) || next.isSame(now)
+  const next = parseReviewDate(progress.nextReview)
+  if (!next) return true
+  return !next.isAfter(now)
 }
 
 export function calculateNextReview(currentProgress, difficulty, now = dayjs()) {
@@ -40,19 +56,20 @@ export function calculateNextReview(currentProgress, difficulty, now = dayjs()) 
 }
 
 export function formatIntervalMinutes(minutes) {
-  if (minutes < 60) return `${minutes} min`
-  if (minutes < 1440) return `${Math.round(minutes / 60)} h`
-  return `${Math.round(minutes / 1440)} d`
+  const m = Number(minutes) || 0
+  if (m < 60) return `${m} min`
+  if (m < 1440) return `${Math.round(m / 60)} h`
+  return `${Math.round(m / 1440)} d`
 }
 
 export function getNextReviewLabel(progress, now = dayjs()) {
   if (!progress?.nextReview) return null
-  const next = dayjs(progress.nextReview)
-  if (!next.isValid() || isCardDue(progress, now)) return null
+  const next = parseReviewDate(progress.nextReview)
+  if (!next || isCardDue(progress, now)) return null
   return next.format('DD/MM HH:mm')
 }
 
-/** Rótulo do botão SRS (ex.: "Repetir em 1 min", "Próximo: 6 h") */
+/** Rótulo do botão SRS — retorna só o intervalo (ex.: "1 min", "15 min"). */
 export function getRatingButtonLabel(difficulty, currentProgress, now = dayjs()) {
   const next = calculateNextReview(currentProgress || {}, difficulty, now)
   return formatIntervalMinutes(next.intervalMinutes)
@@ -60,8 +77,8 @@ export function getRatingButtonLabel(difficulty, currentProgress, now = dayjs())
 
 function overdueMinutes(progress, now) {
   if (!progress?.nextReview) return 99999
-  const next = dayjs(progress.nextReview)
-  if (!next.isValid() || next.isAfter(now)) return 0
+  const next = parseReviewDate(progress.nextReview)
+  if (!next || next.isAfter(now)) return 0
   return now.diff(next, 'minute')
 }
 
@@ -85,10 +102,9 @@ export function getDeckSRSStats(cards = [], cardProgress = {}, now = dayjs()) {
   const due = buildDueQueue(cards, cardProgress, now).length
   const reviewed = cards.filter((c) => (cardProgress[c.id]?.reviewCount || 0) > 0).length
   const nextDue = cards
-    .map((c) => cardProgress[c.id]?.nextReview)
+    .map((c) => parseReviewDate(cardProgress[c.id]?.nextReview))
     .filter(Boolean)
-    .map((d) => dayjs(d))
-    .filter((d) => d.isValid() && d.isAfter(now))
+    .filter((d) => d.isAfter(now))
     .sort((a, b) => a.diff(b))[0]
 
   return { total, due, reviewed, nextDue, mastered: total - due - (total - reviewed) }
@@ -107,6 +123,7 @@ export async function persistCardReview(userId, cardId, cardProgress, difficulty
   }
 
   const updated = { ...cardProgress, [cardId]: next }
+  // Merge no doc; campo cardProgress é substituído pelo mapa completo (estado local).
   await setDoc(
     doc(db, 'userProgress', userId),
     {

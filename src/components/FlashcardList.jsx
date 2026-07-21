@@ -216,7 +216,7 @@ const FlashcardList = ({
               style={{ touchAction: 'manipulation' }}
             >
               <span className="text-sm font-bold sm:text-base">Difícil</span>
-              <span className="mt-0.5 text-[11px] opacity-80">Repetir em {hardLabel}</span>
+              <span className="mt-0.5 text-[11px] opacity-80">Repetir em {hardLabel || '1 min'}</span>
               <span className="mt-1 text-[10px] opacity-50">Tecla 1</span>
             </button>
             <button
@@ -226,7 +226,7 @@ const FlashcardList = ({
               style={{ touchAction: 'manipulation' }}
             >
               <span className="text-sm font-bold sm:text-base">Fácil</span>
-              <span className="mt-0.5 text-[11px] opacity-80">Próximo em {easyLabel}</span>
+              <span className="mt-0.5 text-[11px] opacity-80">Próximo em {easyLabel || '15 min'}</span>
               <span className="mt-1 text-[10px] opacity-50">Tecla 2</span>
             </button>
           </div>

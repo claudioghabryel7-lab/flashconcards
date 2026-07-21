@@ -155,7 +155,7 @@ const FlashcardsTopicoView = () => {
     [cards, cardProgress]
   )
 
-  const { dueQueue, stats } = useSRSDeck(cards, cardProgress)
+  const { dueQueue, stats, requeueCard, bumpNow } = useSRSDeck(cards, cardProgress)
   const studyCards = useMemo(() => {
     if (!focusOverrideCard) return dueQueue
     const focusId = String(focusOverrideCard.id || '')
@@ -169,21 +169,31 @@ const FlashcardsTopicoView = () => {
     async (cardId, difficulty) => {
       if (!user) return
       try {
+        const ratedCard = cards.find((c) => c.id === cardId) || studyCards.find((c) => c.id === cardId)
         const { updated } = await persistCardReview(user.uid, cardId, cardProgress, difficulty, courseId)
         setCardProgress(updated)
-        setTimeout(() => {
-          setCurrentIndex((i) => {
-            const remaining = dueQueue.filter((c) => c.id !== cardId).length
-            if (remaining <= 0) return 0
-            return i >= remaining ? 0 : i
-          })
-        }, 200)
+        bumpNow()
+
+        if (difficulty === 'hard' && ratedCard) {
+          requeueCard(ratedCard)
+        }
+
+        setCurrentIndex((i) => {
+          // Fácil: card some da due → próximo escorrega para o mesmo índice
+          // Difícil: card vai para o fim da fila de sessão
+          const remaining = dueQueue.filter((c) => c.id !== cardId).length
+          if (difficulty === 'hard') {
+            return Math.max(0, remaining)
+          }
+          if (remaining <= 0) return 0
+          return i >= remaining ? 0 : i
+        })
       } catch (err) {
         console.error(err)
         toast.error('Erro ao salvar revisão')
       }
     },
-    [user, cardProgress, courseId, dueQueue],
+    [user, cardProgress, courseId, dueQueue, cards, studyCards, requeueCard, bumpNow],
   )
 
   useEffect(() => {

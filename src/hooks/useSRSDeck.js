@@ -32,8 +32,8 @@ export function useSRSDeck(cards = [], cardProgress = {}, { refreshMs = 15000, i
   const requeueCard = useCallback((card) => {
     if (!card?.id) return
     setSessionRequeue((prev) => {
-      if (prev.some((c) => c.id === card.id)) return prev
-      return [card, ...prev]
+      const without = prev.filter((c) => c.id !== card.id)
+      return [...without, card]
     })
   }, [])
 

@@ -178,6 +178,44 @@ function buildNotification(courseId, topicKey, meta = {}) {
   }
 }
 
+function ackKey(topicKey) {
+  return sanitizeTopicKeyForFirestore(normalizeTopicKeyForStorage(topicKey) || topicKey) || topicKey
+}
+
+function isAcknowledged(acknowledgedKeys, topicKey) {
+  if (!acknowledgedKeys || !topicKey) return false
+  const key = ackKey(topicKey)
+  return Boolean(
+    acknowledgedKeys[topicKey] ||
+      acknowledgedKeys[key] ||
+      acknowledgedKeys[normalizeTopicKeyForStorage(topicKey)] ||
+      acknowledgedKeys[sanitizeTopicKeyForFirestore(topicKey)],
+  )
+}
+
+function withAck(acknowledgedKeys, topicKey) {
+  const key = ackKey(topicKey)
+  return {
+    ...acknowledgedKeys,
+    [topicKey]: true,
+    [key]: true,
+  }
+}
+
+function withoutAck(acknowledgedKeys, topicKey) {
+  const next = { ...acknowledgedKeys }
+  const variants = [
+    topicKey,
+    ackKey(topicKey),
+    normalizeTopicKeyForStorage(topicKey),
+    sanitizeTopicKeyForFirestore(topicKey),
+  ]
+  variants.forEach((k) => {
+    if (k) delete next[k]
+  })
+  return next
+}
+
 const MAX_ITEMS = 200
 
 /**
@@ -188,6 +226,7 @@ const MAX_ITEMS = 200
 export function useTopicNotifications(userId, courseId) {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [resyncNonce, setResyncNonce] = useState(0)
   const prevMapRef = useRef({})
   const initializedRef = useRef(false)
 
@@ -195,7 +234,7 @@ export function useTopicNotifications(userId, courseId) {
     (data) => {
       if (!userId || !courseId) return
       const items = refreshNotificationLabels(data.items || [])
-      const next = { ...data, items }
+      const next = { ...data, items, acknowledgedKeys: data.acknowledgedKeys || {} }
       saveStored(userId, courseId, next)
       setNotifications(items)
       setUnreadCount(items.filter((n) => !n.read).length)
@@ -229,19 +268,28 @@ export function useTopicNotifications(userId, courseId) {
         const metaByKey = buildMetaIndex(snapshot)
         const storedNow = loadStored(userId, resolvedId)
         let { acknowledgedKeys, items } = storedNow
+        acknowledgedKeys = { ...(acknowledgedKeys || {}) }
         items = refreshNotificationLabels(items)
         const existingIds = new Set(items.map((n) => n.id))
         const newItems = []
 
+        // Tópico bloqueado de novo → libera acknowledge para re-notificar na próxima liberação
+        Object.entries(map).forEach(([key, status]) => {
+          if (status === CONTENT_STATUS.AVAILABLE) return
+          if (isAcknowledged(acknowledgedKeys, key)) {
+            acknowledgedKeys = withoutAck(acknowledgedKeys, key)
+          }
+        })
+
         const addTopic = (topicKey, meta) => {
-          if (acknowledgedKeys[topicKey]) return
+          if (isAcknowledged(acknowledgedKeys, topicKey)) return
           const notif = buildNotification(resolvedId, topicKey, meta)
           if (existingIds.has(notif.id)) {
-            acknowledgedKeys = { ...acknowledgedKeys, [topicKey]: true }
+            acknowledgedKeys = withAck(acknowledgedKeys, topicKey)
             return
           }
           newItems.push(notif)
-          acknowledgedKeys = { ...acknowledgedKeys, [topicKey]: true }
+          acknowledgedKeys = withAck(acknowledgedKeys, topicKey)
           existingIds.add(notif.id)
         }
 
@@ -257,7 +305,8 @@ export function useTopicNotifications(userId, courseId) {
             const wasAvailable =
               prev[topicKey] === CONTENT_STATUS.AVAILABLE ||
               prev[sanitizeTopicKeyForFirestore(topicKey)] === CONTENT_STATUS.AVAILABLE ||
-              prev[normalizeTopicKeyForStorage(topicKey)] === CONTENT_STATUS.AVAILABLE
+              prev[normalizeTopicKeyForStorage(topicKey)] === CONTENT_STATUS.AVAILABLE ||
+              prev[ackKey(topicKey)] === CONTENT_STATUS.AVAILABLE
             if (wasAvailable) return
             addTopic(topicKey, meta)
           })
@@ -265,15 +314,14 @@ export function useTopicNotifications(userId, courseId) {
         }
 
         const labelsChanged = items.some((n, i) => n.label !== storedNow.items?.[i]?.label)
+        const ackChanged =
+          Object.keys(acknowledgedKeys).length !== Object.keys(storedNow.acknowledgedKeys || {}).length
         if (newItems.length > 0) {
           const merged = [...newItems, ...items]
             .sort((a, b) => b.createdAt - a.createdAt)
             .slice(0, MAX_ITEMS)
           persist({ acknowledgedKeys, items: merged })
-        } else if (
-          Object.keys(acknowledgedKeys).length !== Object.keys(storedNow.acknowledgedKeys || {}).length ||
-          labelsChanged
-        ) {
+        } else if (ackChanged || labelsChanged) {
           persist({ acknowledgedKeys, items })
         }
       },
@@ -285,7 +333,7 @@ export function useTopicNotifications(userId, courseId) {
       initializedRef.current = false
       prevMapRef.current = {}
     }
-  }, [userId, courseId, persist])
+  }, [userId, courseId, persist, resyncNonce])
 
   const markAllRead = useCallback(() => {
     const stored = loadStored(userId, courseId)
@@ -303,9 +351,11 @@ export function useTopicNotifications(userId, courseId) {
   )
 
   const clearAll = useCallback(() => {
-    const stored = loadStored(userId, courseId)
-    persist({ ...stored, items: [] })
-  }, [userId, courseId, persist])
+    persist({ acknowledgedKeys: {}, items: [] })
+    initializedRef.current = false
+    prevMapRef.current = {}
+    setResyncNonce((n) => n + 1)
+  }, [persist])
 
   return { notifications, unreadCount, markAllRead, markRead, clearAll }
 }

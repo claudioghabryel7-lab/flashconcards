@@ -105,6 +105,8 @@ const FlashcardView = () => {
   const [moduleCompleted, setModuleCompleted] = useState(false)
   const [studyMode, setStudyMode] = useState('module')
   const [miniSimCards, setMiniSimCards] = useState([])
+  /** Cards marcados Difícil — ficam na sessão até Fácil (além do nextReview de 1 min). */
+  const [sessionHardIds, setSessionHardIds] = useState([])
   const [editalPrompt, setEditalPrompt] = useState('')
   const [selectedCourseId, setSelectedCourseId] = useState(null)
   const [availableCourses, setAvailableCourses] = useState([])
@@ -574,8 +576,13 @@ const FlashcardView = () => {
 
   const filteredCards = useMemo(() => {
     if (studyMode === 'miniSim' || !selectedMateria || !selectedModulo) return []
-    return moduleAllCards.filter((card) => isCardDue(cardProgress[card.id], srsNow))
-  }, [selectedMateria, selectedModulo, moduleAllCards, cardProgress, studyMode, srsNow])
+    const due = moduleAllCards.filter((card) => isCardDue(cardProgress[card.id], srsNow))
+    const dueIds = new Set(due.map((c) => c.id))
+    const hardExtra = moduleAllCards.filter(
+      (card) => sessionHardIds.includes(card.id) && !dueIds.has(card.id),
+    )
+    return [...due, ...hardExtra]
+  }, [selectedMateria, selectedModulo, moduleAllCards, cardProgress, studyMode, srsNow, sessionHardIds])
 
   const moduleStats = useMemo(() => {
     const total = moduleAllCards.length
@@ -602,11 +609,12 @@ const FlashcardView = () => {
 
   useEffect(() => {
     setShuffledCardIds(null)
-  }, [selectedMateria, selectedModulo, studyMode, filteredCards.length])
+  }, [selectedMateria, selectedModulo, studyMode])
 
   useEffect(() => {
     setSessionRatings({})
     setModuleCompleted(false)
+    setSessionHardIds([])
     // Resetar timer quando mudar de módulo
     setTimerActive(false)
   }, [selectedMateria, selectedModulo, studyMode])
@@ -617,6 +625,17 @@ const FlashcardView = () => {
     const interval = setInterval(() => setSrsNow(dayjs()), 15000)
     return () => clearInterval(interval)
   }, [user, studyMode])
+
+  // Evita índice fora da fila quando o card avaliado sai dos "due"
+  useEffect(() => {
+    if (activeCards.length === 0) {
+      if (currentIndex !== 0) setCurrentIndex(0)
+      return
+    }
+    if (currentIndex >= activeCards.length) {
+      setCurrentIndex(0)
+    }
+  }, [activeCards.length, currentIndex])
 
   const checkModuleCompletion = (ratingsSnapshot) => {
     if (studyMode === 'miniSim') return false
@@ -747,49 +766,69 @@ const FlashcardView = () => {
 
   // Avaliar dificuldade - Sistema Noji/Anki simplificado
   const rateDifficulty = async (cardId, difficulty) => {
-    if (!user) return
+    if (!user || !cardId) return
 
-    const now = dayjs()
-    const currentProgress = cardProgress[cardId] || {}
-    const newProgressData = calculateNextReview(currentProgress, difficulty, now)
+    try {
+      const ratedId = cardId
+      const remainingBefore = activeCards.filter((c) => c.id !== ratedId)
+      const now = dayjs()
+      const currentProgress = cardProgress[cardId] || {}
+      const newProgressData = calculateNextReview(currentProgress, difficulty, now)
 
-    const newProgress = {
-      ...currentProgress,
-      ...newProgressData,
-      lastReviewed: now.toISOString(),
-    }
-    
-    // Salvar progresso do usuário (filtrado por curso se necessário)
-    const userProgressRef = doc(db, 'userProgress', user.uid)
-    const currentCardProgress = { ...cardProgress, [cardId]: newProgress }
-    
-    await setDoc(
-      userProgressRef,
-      {
-        cardProgress: currentCardProgress,
-        updatedAt: new Date().toISOString(),
-        // Adicionar metadata do curso para filtragem
-        courseId: activeCourseId,
-      },
-      { merge: true },
-    )
-
-    // Atualizar estado local
-    setCardProgress(currentCardProgress)
-    setSrsNow(dayjs())
-
-    setSessionRatings((prevRatings) => {
-      const updated = { ...prevRatings, [cardId]: difficulty }
-      if (checkModuleCompletion(updated)) {
-        setModuleCompleted(true)
+      const newProgress = {
+        ...currentProgress,
+        ...newProgressData,
+        lastReviewed: now.toISOString(),
       }
-      return updated
-    })
-    
-    // Avançar para próximo card após um pequeno delay (sempre avança)
-    setTimeout(() => {
-      goNext()
-    }, 200) // Reduzido para melhor responsividade
+
+      const currentCardProgress = { ...cardProgress, [cardId]: newProgress }
+
+      const userProgressRef = doc(db, 'userProgress', user.uid)
+      await setDoc(
+        userProgressRef,
+        {
+          cardProgress: currentCardProgress,
+          updatedAt: new Date().toISOString(),
+          courseId: activeCourseId,
+        },
+        { merge: true },
+      )
+
+      setCardProgress(currentCardProgress)
+      setSrsNow(dayjs())
+
+      if (difficulty === 'hard') {
+        setSessionHardIds((prev) => (prev.includes(ratedId) ? prev : [...prev, ratedId]))
+      } else {
+        setSessionHardIds((prev) => prev.filter((id) => id !== ratedId))
+      }
+
+      setSessionRatings((prevRatings) => {
+        const updated = { ...prevRatings, [cardId]: difficulty }
+        if (checkModuleCompletion(updated)) {
+          setModuleCompleted(true)
+        }
+        return updated
+      })
+
+      // Não chamar goNext(): o card sai da fila due e o próximo já ocupa o mesmo índice.
+      // Hard: reentra no fim da fila via sessionHardIds.
+      setCurrentIndex((i) => {
+        const nextLen =
+          difficulty === 'hard'
+            ? Math.max(remainingBefore.length, 1)
+            : remainingBefore.length
+        if (nextLen <= 0) return 0
+        // Após fácil: mantém índice (próximo escorrega). Após difícil: manda para o fim.
+        if (difficulty === 'hard') {
+          return Math.max(0, remainingBefore.length)
+        }
+        return i >= remainingBefore.length ? 0 : i
+      })
+    } catch (err) {
+      console.error('Erro ao salvar revisão SRS:', err)
+      alert('Não foi possível salvar a revisão. Tente de novo.')
+    }
   }
 
   const resetModuleSession = () => {
