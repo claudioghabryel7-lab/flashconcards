@@ -2,11 +2,10 @@ import { readEnv, isDevEnv } from '@/lib/env.js'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where, limit, setDoc, serverTimestamp, orderBy } from 'firebase/firestore'
-import { ArrowLeftIcon, PencilIcon, FireIcon, LightBulbIcon, ExclamationTriangleIcon, BookOpenIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, PencilIcon, FireIcon, LightBulbIcon, ExclamationTriangleIcon, BookOpenIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon, DocumentArrowDownIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { db } from '../firebase/config'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { useAuth } from '../hooks/useAuth'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
 import {
   buildExamFidelityBlock,
@@ -191,8 +190,7 @@ const ConteudoCompletoTopicoView = () => {
   const [courseName, setCourseName] = useState('')
   const [generating, setGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [validating, setValidating] = useState(false)
-  const [validationMessage, setValidationMessage] = useState('')
+  const [regenMessage, setRegenMessage] = useState('')
   const [editingContent, setEditingContent] = useState(false)
   const [editDraft, setEditDraft] = useState(null)
   const [savingEdit, setSavingEdit] = useState(false)
@@ -428,99 +426,17 @@ const ConteudoCompletoTopicoView = () => {
     }
   }, [conteudo, loading])
 
-  const handleValidateTopic = async () => {
-    if (!resolvedCourseId || !resolvedTopicKey || !conteudo) return
+  /** Regenera o material sempre, sem validação prévia. */
+  const handleRegenerateContent = async () => {
+    if (!resolvedCourseId || !resolvedTopicKey) return
+    if (generating || editingContent) return
 
-    const apiKey = readEnv('VITE_GEMINI_API_KEY')
-    if (!apiKey) {
-      setError('API Key não configurada.')
-      return
-    }
-
-    try {
-      setValidating(true)
-      setValidationMessage('')
-
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-
-      const resumoConteudo = [
-        conteudo.materia || '',
-        conteudo.titulo || '',
-        conteudo.subtitulo || '',
-        (conteudo.content || '').toString().replace(/<[^>]+>/g, ' ').slice(0, 1500),
-      ]
-        .join('\n')
-        .trim()
-
-      const validatorPrompt = `Você é um avaliador de aderência de conteúdo a tópicos de edital.
-
-TÓPICO-ALVO DO EDITAL:
-- chave bruta: "${resolvedTopicKey}"
-- número (se houver): "${topicNumeroFromKey || ''}"
-- nome (se houver): "${effectiveTopicNome || ''}"
-
-CONTEÚDO GERADO (resumo):
-${resumoConteudo || '[vazio]'}
-
-TAREFA:
-Verifique se o conteúdo acima realmente corresponde ao tópico do edital informado.
-
-REGRAS:
-- Considere que o conteúdo está "correto" se a MAIOR PARTE dele tratar diretamente do tópico.
-- Marque como "incorreto" se o conteúdo falar de outra lei, outro assunto principal ou da matéria inteira de forma genérica.
-
-RESPOSTA APENAS EM JSON VÁLIDO, no formato exato:
-{
-  "match": true|false,
-  "reason": "explicação curta em português",
-  "action": "keep" ou "regenerate"
-}
-
-ONDE:
-- "match" deve ser false quando o conteúdo não estiver alinhado ao tópico.
-- "action" deve ser "keep" quando estiver adequado e "regenerate" quando estiver inadequado.`
-
-      const result = await model.generateContent(validatorPrompt)
-      let text = result.response.text().trim()
-      if (text.startsWith('```json')) {
-        text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      } else if (text.startsWith('```')) {
-        text = text.replace(/```\n?/g, '').trim()
-      }
-      const jsonMatch = text.match(/\{[\s\S]*\}/)
-      if (jsonMatch) text = jsonMatch[0]
-
-      const parsed = JSON.parse(text)
-      const match = !!parsed.match
-      const action = parsed.action === 'regenerate' ? 'regenerate' : 'keep'
-      const reason = parsed.reason || ''
-
-      if (match && action === 'keep') {
-        setValidationMessage(
-          reason
-            ? `A IA analisou e entendeu que o conteúdo está coerente com este tópico: ${reason}`
-            : 'A IA analisou e entendeu que o conteúdo está coerente com este tópico.'
-        )
-        return
-      }
-
-      // Conteúdo considerado inadequado para o tópico → regenerar
-      const success = await handleGenerateContent()
-      if (success) {
-        setValidationMessage(
-          reason
-            ? `A IA detectou que o conteúdo não condizia bem com o tópico e gerou um novo material: ${reason}`
-            : 'A IA detectou que o conteúdo não condizia bem com o tópico e gerou um novo material.'
-        )
-      } else {
-        setValidationMessage('A IA indicou que o conteúdo não está adequado, mas houve erro ao tentar regenerar.')
-      }
-    } catch (err) {
-      console.error('Erro ao validar tópico/conteúdo:', err)
-      setValidationMessage('Não foi possível validar automaticamente este conteúdo agora. Tente novamente mais tarde.')
-    } finally {
-      setValidating(false)
+    setRegenMessage('Regenerando material…')
+    const success = await handleGenerateContent()
+    if (success) {
+      setRegenMessage('Material regenerado com sucesso.')
+    } else {
+      setRegenMessage('Não foi possível regenerar o material. Tente novamente.')
     }
   }
 
@@ -1224,16 +1140,18 @@ REGRAS FINAIS:
               )}
               <button
                 type="button"
-                onClick={handleValidateTopic}
-                disabled={validating || generating || editingContent}
-                className="cp-btn-ghost !text-xs !text-red-400"
+                onClick={handleRegenerateContent}
+                disabled={generating || editingContent}
+                className="cp-btn-ghost !text-xs"
+                title="Regenerar este material do zero"
               >
-                {validating ? 'Analisando…' : 'Reportar'}
+                <ArrowPathIcon className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
+                {generating ? 'Regenerando…' : 'Regenerar'}
               </button>
             </div>
           </div>
-          {validationMessage && (
-            <p className="mt-3 text-xs text-cp-muted">{validationMessage}</p>
+          {regenMessage && (
+            <p className="mt-3 text-xs text-cp-muted">{regenMessage}</p>
           )}
         </div>
 
