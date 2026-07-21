@@ -5,6 +5,11 @@
 import * as JsPdfModule from 'jspdf'
 import { mapOrderedAlternativas } from './questaoAlternativas.js'
 import { stripHtml } from './htmlTextHelpers.js'
+import {
+  extractRevisaoTurboItems,
+  extractPegadinhas,
+  normalizeMaterialStructure,
+} from './contentDepthRules.js'
 
 const jsPDF = JsPdfModule.jsPDF || JsPdfModule.default?.jsPDF || JsPdfModule.default
 if (typeof jsPDF !== 'function') {
@@ -65,6 +70,7 @@ function triggerPdfDownload(pdf, fileName) {
  */
 export async function downloadMaterialPdf(conteudo) {
   if (!conteudo) throw new Error('Sem conteúdo para exportar')
+  conteudo = normalizeMaterialStructure(conteudo)
 
   const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' })
   const pageWidth = pdf.internal.pageSize.getWidth()
@@ -150,31 +156,29 @@ export async function downloadMaterialPdf(conteudo) {
     }
   }
 
-  const turbo = conteudo.revisaoTurbo
-  if (turbo) {
+  const turboItems = extractRevisaoTurboItems(conteudo)
+  if (turboItems.length) {
     sectionBanner('Revisao Turbo', [37, 99, 235])
-    if (Array.isArray(turbo.resumos) && turbo.resumos.length) {
-      writeLines('Resumos:', { size: 11, bold: true })
-      turbo.resumos.forEach((resumo, idx) => {
-        if (typeof resumo === 'string') {
-          writeLines(`${idx + 1}. ${resumo}`, { size: 10, indent: 2 })
-        } else {
-          const titulo = resumo?.titulo || resumo?.nome || `Resumo ${idx + 1}`
-          writeLines(`${idx + 1}. ${titulo}`, { size: 10, bold: true, indent: 2 })
-          if (resumo?.conteudo) writeLines(resumo.conteudo, { size: 10, indent: 4 })
-        }
-      })
-    }
-    if (Array.isArray(turbo.pegadinhas) && turbo.pegadinhas.length) {
-      writeLines('Cuidado (pegadinhas):', { size: 11, bold: true, color: [185, 28, 28] })
-      turbo.pegadinhas.forEach((pegadinha, idx) => {
-        const titulo = typeof pegadinha === 'string' ? pegadinha : pegadinha?.titulo || pegadinha?.nome || `Item ${idx + 1}`
-        writeLines(`${idx + 1}. ${titulo}`, { size: 10, bold: true, indent: 2, color: [185, 28, 28] })
-        if (typeof pegadinha === 'object' && pegadinha?.conteudo) {
-          writeLines(pegadinha.conteudo, { size: 10, indent: 4, color: [127, 29, 29] })
-        }
-      })
-    }
+    writeLines('Resumos:', { size: 11, bold: true })
+    turboItems.forEach((resumo, idx) => {
+      writeLines(`${idx + 1}. ${resumo.titulo}`, { size: 10, bold: true, indent: 2 })
+      writeLines(resumo.conteudo, { size: 10, indent: 4 })
+    })
+  }
+
+  const pegadinhas = extractPegadinhas(conteudo)
+  if (pegadinhas.length) {
+    writeLines('Cuidado (pegadinhas):', { size: 11, bold: true, color: [185, 28, 28] })
+    pegadinhas.forEach((pegadinha, idx) => {
+      const titulo =
+        typeof pegadinha === 'string'
+          ? pegadinha
+          : pegadinha?.titulo || pegadinha?.nome || `Item ${idx + 1}`
+      writeLines(`${idx + 1}. ${titulo}`, { size: 10, bold: true, indent: 2, color: [185, 28, 28] })
+      if (typeof pegadinha === 'object' && pegadinha?.conteudo) {
+        writeLines(pegadinha.conteudo, { size: 10, indent: 4, color: [127, 29, 29] })
+      }
+    })
   }
 
   if (Array.isArray(conteudo.questoesPreditivas) && conteudo.questoesPreditivas.length) {

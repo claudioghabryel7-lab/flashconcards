@@ -150,10 +150,17 @@ Retorne APENAS JSON válido:
   "cargo": "${exam.cargo}",
   "concurso": "${exam.concursoName}",
   "raioXProbabilidade": {
-    "topicosQuentes": ["assunto 1"],
+    "topicosQuentes": ["assunto 1", "assunto 2", "assunto 3", "assunto 4", "assunto 5", "assunto 6"],
     "padraoBanca": "como a ${exam.banca} cobra este tópico para ${exam.cargo}"
   },
-  "revisaoTurbo": [{ "titulo": "título", "conteudo": "HTML simples longo" }],
+  "revisaoTurbo": [
+    { "titulo": "assunto 1", "conteudo": "HTML simples (~150 palavras)" },
+    { "titulo": "assunto 2", "conteudo": "HTML simples (~150 palavras)" },
+    { "titulo": "assunto 3", "conteudo": "HTML simples (~150 palavras)" },
+    { "titulo": "assunto 4", "conteudo": "HTML simples (~150 palavras)" },
+    { "titulo": "assunto 5", "conteudo": "HTML simples (~150 palavras)" },
+    { "titulo": "assunto 6", "conteudo": "HTML simples (~150 palavras)" }
+  ],
   "pegadinhas": [{ "titulo": "título", "conteudo": "pegadinha típica da ${exam.banca}" }],
   "questoesPreditivas": [{
     "enunciado": "texto no estilo ${exam.banca}",
@@ -164,6 +171,7 @@ Retorne APENAS JSON válido:
 }
 
 REGRAS:
+- Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} itens em revisaoTurbo (um por assunto quente)
 - Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} questões preditivas no formato ${exam.tipoProva}
 - Campo "correta" obrigatório em cada questão preditiva
 - Foco 100% neste tópico + cargo ${exam.cargo} + banca ${exam.banca}
