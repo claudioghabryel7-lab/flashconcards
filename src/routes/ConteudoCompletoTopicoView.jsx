@@ -426,8 +426,9 @@ const ConteudoCompletoTopicoView = () => {
     }
   }, [conteudo, loading])
 
-  /** Regenera o material sempre, sem validação prévia. */
+  /** Regenera o material sempre, sem validação prévia (somente admin). */
   const handleRegenerateContent = async () => {
+    if (!isAdmin) return
     if (!resolvedCourseId || !resolvedTopicKey) return
     if (generating || editingContent) return
 
@@ -1138,19 +1139,21 @@ REGRAS FINAIS:
                   {editingContent ? 'Editando…' : 'Editar'}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={handleRegenerateContent}
-                disabled={generating || editingContent}
-                className="cp-btn-ghost !text-xs"
-                title="Regenerar este material do zero"
-              >
-                <ArrowPathIcon className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
-                {generating ? 'Regenerando…' : 'Regenerar'}
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleRegenerateContent}
+                  disabled={generating || editingContent}
+                  className="cp-btn-ghost !text-xs"
+                  title="Regenerar este material do zero"
+                >
+                  <ArrowPathIcon className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
+                  {generating ? 'Regenerando…' : 'Regenerar'}
+                </button>
+              )}
             </div>
           </div>
-          {regenMessage && (
+          {isAdmin && regenMessage && (
             <p className="mt-3 text-xs text-cp-muted">{regenMessage}</p>
           )}
         </div>
