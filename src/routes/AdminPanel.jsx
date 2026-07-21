@@ -48,6 +48,7 @@ import { createUserWithEmailAndPassword, deleteUser as deleteAuthUser, fetchSign
 import { auth, db, storage } from '../firebase/config'
 import { FIREBASE_FUNCTIONS } from '../config/firebaseFunctions'
 import { useAuth } from '../hooks/useAuth'
+import { resetAppCache } from '../utils/resetAppCache'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { callGeminiWithRetry, extractGeneratedText } from '../utils/geminiApi'
 import { createSlug } from '../utils/slug'
@@ -294,6 +295,7 @@ const AdminPanel = () => {
   // Estados para verificação de status da IA
   const [showAiStatusModal, setShowAiStatusModal] = useState(false)
   const [checkingAiStatus, setCheckingAiStatus] = useState(false)
+  const [resettingAppCache, setResettingAppCache] = useState(false)
   const [aiKeysStatus, setAiKeysStatus] = useState([])
   const [aiStatusError, setAiStatusError] = useState('')
   
