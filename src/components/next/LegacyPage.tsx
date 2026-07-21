@@ -67,7 +67,7 @@ export default function LegacyPage({
   if (requireCourseSelection && profile && profile.selectedCourseId === undefined) return null
 
   return (
-    <div className="cp-legacy-root pb-8">
+    <div className="cp-legacy-root max-w-full min-w-0 overflow-x-clip pb-8">
       {meta && (
         <CPPageHeader
           badge={meta.badge}

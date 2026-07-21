@@ -100,14 +100,14 @@ const FlashcardList = ({
   const easyLabel = getRatingButtonLabel('easy', cardProg)
 
   return (
-    <div className="noji-study mx-auto flex w-full max-w-2xl flex-col pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div className="noji-study mx-auto flex w-full max-w-2xl min-w-0 flex-col overflow-x-clip pb-[max(1rem,env(safe-area-inset-bottom))]">
       {/* Barra de progresso — estilo Noji */}
-      <div className="mb-4 space-y-2">
-        <div className="flex items-center justify-between text-xs font-medium text-cp-muted">
-          <span>
+      <div className="mb-4 min-w-0 space-y-2">
+        <div className="flex min-w-0 items-center justify-between gap-2 text-xs font-medium text-cp-muted">
+          <span className="min-w-0 break-words">
             {reviewedCount} revisados · {cards.length - reviewedCount} restantes
           </span>
-          <span className="font-mono tabular-nums">
+          <span className="shrink-0 font-mono tabular-nums">
             {currentIndex + 1}/{cards.length}
           </span>
         </div>
@@ -178,7 +178,7 @@ const FlashcardList = ({
       </div>
 
       {/* Card principal */}
-      <div className="flex flex-1 flex-col items-center justify-center py-2">
+      <div className="flex min-w-0 max-w-full flex-1 flex-col items-center justify-center overflow-x-clip py-2">
         <FlashcardItem
           card={currentCard}
           flipped={flipped}
@@ -232,7 +232,7 @@ const FlashcardList = ({
           </div>
         </div>
       ) : (
-        <p className="mt-4 text-center text-xs text-cp-muted">
+        <p className="mt-4 max-w-full break-words px-1 text-center text-xs text-cp-muted">
           <kbd className="rounded border border-cp-border bg-cp-bg px-1.5 py-0.5 font-mono text-[10px]">Espaço</kbd>
           {' '}para virar ·{' '}
           <kbd className="rounded border border-cp-border bg-cp-bg px-1.5 py-0.5 font-mono text-[10px]">←</kbd>

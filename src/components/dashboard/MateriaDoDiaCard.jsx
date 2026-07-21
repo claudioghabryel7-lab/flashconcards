@@ -146,11 +146,11 @@ export default function MateriaDoDiaCard({ user, courseId }) {
   const studyable = topics.filter((t) => !t.incidencia && topicProgressKey(t))
 
   return (
-    <section className="dash-tile dash-tile--amber relative overflow-hidden p-3.5 sm:p-6" style={{ '--dash-delay': '0ms' }}>
+    <section className="dash-tile dash-tile--amber relative max-w-full min-w-0 overflow-hidden p-3.5 sm:p-6" style={{ '--dash-delay': '0ms' }}>
       <div className="dash-scanline opacity-40" aria-hidden />
 
-      <div className="relative z-[1] flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <div className="relative z-[1] flex max-w-full min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 max-w-full flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="cp-badge" style={{ color: 'var(--cp-accent-4)', borderColor: 'color-mix(in srgb, var(--cp-accent-4) 35%, transparent)', background: 'color-mix(in srgb, var(--cp-accent-4) 12%, transparent)' }}>
               Matéria do dia
@@ -160,7 +160,7 @@ export default function MateriaDoDiaCard({ user, courseId }) {
             ) : null}
             <span className="cp-badge text-[9px]">Sync Edital</span>
           </div>
-          <h2 className="cp-headline mt-2 text-lg sm:mt-3 sm:text-2xl">Estudo de hoje</h2>
+          <h2 className="cp-headline mt-2 break-words text-lg sm:mt-3 sm:text-2xl">Estudo de hoje</h2>
           <p className="mt-1 flex items-center gap-1.5 text-xs capitalize text-cp-muted">
             <CalendarDaysIcon className="h-3.5 w-3.5 shrink-0" />
             {formatTodayLabel(todayKey)}
@@ -259,7 +259,7 @@ export default function MateriaDoDiaCard({ user, courseId }) {
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-mono text-[10px] uppercase tracking-wider text-cp-muted">
+                    <p className="break-words font-mono text-[10px] uppercase tracking-wider text-cp-muted">
                       {topic.disciplina}
                     </p>
                     <h3 className="mt-0.5 break-words text-sm font-medium leading-snug text-cp-text">

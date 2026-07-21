@@ -89,8 +89,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.35s ease, color 0.35s ease;
-  padding-left: env(safe-area-inset-left, 0px);
-  padding-right: env(safe-area-inset-right, 0px);
+  /* Safe-area horizontal só em fixed/containers — padding no body + 100% filhos = overflow */
 }
 
 .cp-dot-grid {
@@ -228,13 +227,45 @@ body {
 }
 
 .cp-container {
-  @apply mx-auto w-full max-w-7xl px-3 sm:px-5 lg:px-8;
+  @apply mx-auto w-full max-w-7xl;
   min-width: 0;
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+
+@media (min-width: 640px) {
+  .cp-container {
+    padding-left: max(1.25rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1.25rem, env(safe-area-inset-right, 0px));
+  }
+}
+
+@media (min-width: 1024px) {
+  .cp-container {
+    padding-left: max(2rem, env(safe-area-inset-left, 0px));
+    padding-right: max(2rem, env(safe-area-inset-right, 0px));
+  }
 }
 
 .cp-container-wide {
-  @apply mx-auto w-full max-w-[1400px] px-3 sm:px-5 lg:px-8;
+  @apply mx-auto w-full max-w-[1400px];
   min-width: 0;
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+
+@media (min-width: 640px) {
+  .cp-container-wide {
+    padding-left: max(1.25rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1.25rem, env(safe-area-inset-right, 0px));
+  }
+}
+
+@media (min-width: 1024px) {
+  .cp-container-wide {
+    padding-left: max(2rem, env(safe-area-inset-left, 0px));
+    padding-right: max(2rem, env(safe-area-inset-right, 0px));
+  }
 }
 
 /* Painéis fixos — iPhone notch / home indicator */
@@ -502,7 +533,8 @@ svg {
   pointer-events: none;
   position: absolute;
   inset: 0 auto auto 0;
-  width: 140%;
+  width: 100%;
+  max-width: 100%;
   height: 1px;
   background: linear-gradient(
     90deg,
@@ -640,4 +672,99 @@ svg {
   .dash-tile:hover .dash-tile-arrow {
     transform: none;
   }
+}
+
+/* ── Noji Flashcards (portado de index.css para o bundle Next) ── */
+.noji-study {
+  --noji-hard: #ef4444;
+  --noji-easy: #10b981;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.noji-tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  color: var(--cp-muted, #64748b);
+  transition: background 0.15s, color 0.15s;
+}
+
+.noji-tool-btn:hover {
+  background: rgba(99, 102, 241, 0.08);
+  color: #6366f1;
+}
+
+.noji-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--cp-border);
+  color: var(--cp-muted, #64748b);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.noji-nav-btn:hover {
+  background: var(--cp-surface);
+  color: var(--cp-text);
+  border-color: color-mix(in srgb, var(--cp-accent) 35%, var(--cp-border));
+}
+
+.noji-rate-hard {
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%);
+  color: #b91c1c;
+}
+
+.noji-rate-hard:hover {
+  background: linear-gradient(135deg, #fee2e2 0%, #fca5a5 100%);
+}
+
+.dark .noji-rate-hard {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(185, 28, 28, 0.2) 100%);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.noji-rate-easy {
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  background: linear-gradient(135deg, #ecfdf5 0%, #a7f3d0 100%);
+  color: #047857;
+}
+
+.noji-rate-easy:hover {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+}
+
+.dark .noji-rate-easy {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.2) 100%);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.noji-session {
+  background: linear-gradient(180deg, var(--cp-bg-elevated) 0%, var(--cp-bg) 100%);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.noji-deck-panel {
+  scrollbar-width: thin;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.noji-progress-fill {
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+}
+
+.noji-hint {
+  opacity: 0.85;
 }

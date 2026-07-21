@@ -8,41 +8,32 @@ export default function TechBackground({ showLogo = true }: { showLogo?: boolean
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div className="absolute inset-0 bg-cp-bg" />
 
-      {/* Gradientes estáticos (sem animação/blur pesado) */}
+      {/* % do pai (não vw) — evita expandir a largura do documento no iOS Safari */}
       <div
-        className="absolute -left-[15%] -top-[25%] h-[55vh] w-[55vw] rounded-full opacity-60"
+        className="absolute -left-[15%] -top-[25%] h-[55%] w-[55%] rounded-full opacity-60"
         style={{ background: 'radial-gradient(circle, var(--cp-aurora-1) 0%, transparent 70%)' }}
       />
       <div
-        className="absolute -right-[10%] top-[5%] h-[45vh] w-[45vw] rounded-full opacity-50"
+        className="absolute -right-[10%] top-[5%] h-[45%] w-[45%] rounded-full opacity-50"
         style={{ background: 'radial-gradient(circle, var(--cp-aurora-2) 0%, transparent 70%)' }}
       />
       <div
-        className="absolute bottom-[-15%] left-[15%] h-[40vh] w-[50vw] rounded-full opacity-40"
+        className="absolute bottom-[-15%] left-[15%] h-[40%] w-[50%] rounded-full opacity-40"
         style={{ background: 'radial-gradient(circle, var(--cp-aurora-3) 0%, transparent 70%)' }}
       />
 
       {showLogo && (
-        <div className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2">
+        <div className="absolute left-1/2 top-[42%] max-w-[min(480px,70%)] -translate-x-1/2 -translate-y-1/2">
           <Image
             src="/course-icons/logo.png"
             alt=""
             width={480}
             height={480}
-            className="cp-hero-watermark h-auto w-[min(72vw,380px)] max-w-none select-none sm:w-[420px]"
-            loading="lazy"
+            className="h-auto w-full max-w-full opacity-[var(--cp-watermark-opacity)]"
+            priority={false}
           />
         </div>
       )}
-
-      <div className="cp-dot-grid absolute inset-0 opacity-30" />
-
-      <div
-        className="absolute inset-0"
-        style={{
-          background: 'radial-gradient(ellipse at center, transparent 0%, var(--cp-bg) 78%)',
-        }}
-      />
     </div>
   )
 }

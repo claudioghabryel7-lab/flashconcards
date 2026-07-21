@@ -149,12 +149,12 @@ const FlashcardItem = ({
 
   return (
     <div
-      className="relative mx-auto w-full max-w-xl px-0 sm:px-0"
+      className="relative mx-auto w-full max-w-xl min-w-0 overflow-x-clip px-0 sm:px-0"
       data-content-id={buildFlashcardContentId({ courseId, topicKey, card, cardIndex })}
       id={card?.id ? String(card.id) : undefined}
     >
       <div
-        className={`relative mx-auto w-full cursor-pointer select-none ${cardHeight}`}
+        className={`relative mx-auto w-full max-w-full min-w-0 cursor-pointer select-none overflow-hidden ${cardHeight}`}
         style={{ perspective: '1200px', WebkitPerspective: '1200px', touchAction: 'manipulation' }}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
@@ -170,7 +170,7 @@ const FlashcardItem = ({
         aria-label={flipped ? 'Mostrar pergunta' : 'Mostrar resposta'}
       >
         <div
-          className="relative h-full w-full transition-transform duration-500 ease-out will-change-transform"
+          className="relative h-full w-full max-w-full transition-transform duration-500 ease-out will-change-transform"
           style={{
             transformStyle: 'preserve-3d',
             WebkitTransformStyle: 'preserve-3d',
@@ -179,14 +179,14 @@ const FlashcardItem = ({
         >
           {/* Frente */}
           <div
-            className={`absolute inset-0 flex h-full w-full flex-col overflow-hidden rounded-2xl border p-3 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] sm:rounded-3xl sm:p-8 ${borderColor} ${cardColor}`}
+            className={`absolute inset-0 flex h-full w-full max-w-full flex-col overflow-hidden rounded-2xl border p-3 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] sm:rounded-3xl sm:p-8 ${borderColor} ${cardColor}`}
             style={{
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
               transform: 'rotateY(0deg) translateZ(1px)',
             }}
           >
-            <div className="relative z-10 flex h-full min-h-0 flex-col">
+            <div className="relative z-10 flex h-full min-h-0 min-w-0 flex-col">
               <div className="absolute left-0 top-0 z-20">
                 {courseId && (
                   <ContentFeedbackActions
@@ -250,7 +250,7 @@ const FlashcardItem = ({
                 )}
               </div>
 
-              <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-3 text-center sm:px-2 sm:py-8">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-3 text-center sm:px-2 sm:py-8">
                 {editing ? (
                   editForm
                 ) : (
@@ -258,7 +258,7 @@ const FlashcardItem = ({
                     <span className="mb-2 inline-flex rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400 sm:mb-3 sm:px-3 sm:py-1 sm:text-[11px]">
                       Pergunta
                     </span>
-                    <h3 className={`text-base font-semibold leading-snug sm:text-2xl sm:leading-relaxed ${textColor}`}>
+                    <h3 className={`w-full max-w-full break-words text-base font-semibold leading-snug sm:text-2xl sm:leading-relaxed ${textColor}`}>
                       {card.pergunta}
                     </h3>
                     <p className="noji-hint mt-3 text-xs text-slate-400 sm:mt-6 sm:text-sm">Toque para revelar a resposta</p>
@@ -267,14 +267,14 @@ const FlashcardItem = ({
               </div>
 
               {(card.materia || card.modulo) && (
-                <div className="mt-auto flex shrink-0 flex-wrap justify-center gap-1.5 pt-2">
+                <div className="mt-auto flex min-w-0 shrink-0 flex-wrap justify-center gap-1.5 pt-2">
                   {card.materia && (
-                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    <span className="max-w-full break-words rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                       {card.materia}
                     </span>
                   )}
                   {card.modulo && (
-                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    <span className="max-w-full break-words rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                       {card.modulo}
                     </span>
                   )}
@@ -285,7 +285,7 @@ const FlashcardItem = ({
 
           {/* Verso */}
           <div
-            className={`absolute inset-0 flex h-full w-full flex-col overflow-hidden rounded-2xl border p-3 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] sm:rounded-3xl sm:p-8 ${borderColor} ${
+            className={`absolute inset-0 flex h-full w-full max-w-full flex-col overflow-hidden rounded-2xl border p-3 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] sm:rounded-3xl sm:p-8 ${borderColor} ${
               cardColor === 'bg-white' || cardColor === 'bg-slate-100'
                 ? 'bg-slate-900 dark:bg-slate-800'
                 : 'bg-slate-900'
@@ -296,7 +296,7 @@ const FlashcardItem = ({
               transform: 'rotateY(180deg) translateZ(1px)',
             }}
           >
-            <div className="relative z-10 flex h-full min-h-0 flex-col">
+            <div className="relative z-10 flex h-full min-h-0 min-w-0 flex-col">
               <div className="absolute right-0 top-0 z-20 flex gap-1">
                 {isAdmin && !editing && (
                   <button
@@ -313,7 +313,7 @@ const FlashcardItem = ({
                   </button>
                 )}
               </div>
-              <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-3 text-center sm:px-2 sm:py-6">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-3 text-center sm:px-2 sm:py-6">
                 {!editing && (
                   <span className="mb-2 inline-flex shrink-0 rounded-full bg-white/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/70 sm:mb-3 sm:px-3 sm:py-1 sm:text-[11px]">
                     Resposta
@@ -322,7 +322,7 @@ const FlashcardItem = ({
                 {editing ? (
                   <div className="w-full text-left">{editForm}</div>
                 ) : (
-                  <div className="w-full text-sm font-medium leading-snug text-white sm:text-xl sm:leading-relaxed">
+                  <div className="w-full max-w-full break-words text-sm font-medium leading-snug text-white sm:text-xl sm:leading-relaxed">
                     {card.resposta}
                   </div>
                 )}

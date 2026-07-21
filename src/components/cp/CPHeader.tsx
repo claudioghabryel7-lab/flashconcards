@@ -118,18 +118,18 @@ export default function CPHeader() {
   return (
     <>
       <header
-        className={`sticky top-0 z-50 w-full transition-[border-color,background-color,box-shadow] duration-300 ${
+        className={`sticky top-0 z-50 w-full max-w-full overflow-x-clip transition-[border-color,background-color,box-shadow] duration-300 ${
           scrolled
-            ? 'border-b border-cp-border bg-cp-bg/90 shadow-[0_4px_24px_rgba(0,0,0,0.08)] md:backdrop-blur-md'
-            : 'border-b border-cp-border/50 bg-cp-bg/80'
+            ? 'border-b border-cp-border bg-cp-bg shadow-[0_4px_24px_rgba(0,0,0,0.08)]'
+            : 'border-b border-cp-border/50 bg-cp-bg'
         }`}
       >
         <div className="cp-container flex h-14 min-w-0 items-center justify-between gap-2 pt-[env(safe-area-inset-top,0px)] sm:h-16 sm:gap-4">
-          <div className="min-w-0 shrink">
-            <span className="sm:hidden">
+          <div className="min-w-0 shrink overflow-hidden">
+            <span className="md:hidden">
               <CPLogo size="sm" showText={false} />
             </span>
-            <span className="hidden sm:inline-flex">
+            <span className="hidden md:inline-flex">
               <CPLogo size="md" />
             </span>
           </div>

@@ -127,16 +127,16 @@ const Dashboard = () => {
       : `${redacaoStats.total} redação${redacaoStats.total === 1 ? '' : 'ões'} · semana ${redacaoStats.weekUsed}/${redacaoStats.weekMax}`
 
   return (
-    <div className="dash-tech-shell pb-10">
-      <header className="dash-hero mb-5 p-4 sm:mb-7 sm:p-7">
+    <div className="dash-tech-shell w-full max-w-full min-w-0 overflow-x-clip pb-10">
+      <header className="dash-hero mb-5 max-w-full overflow-hidden p-4 sm:mb-7 sm:p-7">
         <div className="dash-hero-grid" aria-hidden />
         <div className="dash-hero-glow dash-hero-glow--a" aria-hidden />
         <div className="dash-hero-glow dash-hero-glow--b" aria-hidden />
         <div className="dash-hero-glow dash-hero-glow--c" aria-hidden />
         <div className="dash-scanline" aria-hidden />
 
-        <div className="relative z-[1] min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="relative z-[1] min-w-0 max-w-full">
+          <div className="flex max-w-full flex-wrap items-center gap-2">
             <span className="cp-badge-accent">FlashConCards</span>
             <span className="dash-chip-live">
               <span className="dash-live-dot" aria-hidden />
@@ -147,7 +147,7 @@ const Dashboard = () => {
           <h1 className="cp-headline mt-3 break-words text-xl sm:mt-4 sm:text-4xl md:text-[2.85rem]">
             Olá, <span className="cp-gradient-text">{firstName}</span>
           </h1>
-          <p className="mt-2 max-w-xl text-sm text-cp-muted sm:text-base">
+          <p className="mt-2 max-w-xl break-words text-sm text-cp-muted sm:text-base">
             Central tech do concurso — matéria do dia, check-in sincronizado com o Edital e atalhos.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3">

@@ -363,9 +363,9 @@ const FlashcardsTopicoView = () => {
   }, [cards, searchParams, courseId, topicKey])
 
   return (
-    <div className="space-y-4 pb-8 sm:space-y-6">
+    <div className="w-full max-w-full min-w-0 space-y-4 overflow-x-clip pb-8 sm:space-y-6">
       <ProfessorFlagNoteBanner />
-      <div className="cp-card p-4 sm:p-5">
+      <div className="cp-card max-w-full min-w-0 overflow-hidden p-3 sm:p-5">
         <Link
           to="/edital-verticalizado"
           className="mb-3 inline-flex items-center gap-2 text-sm text-cp-muted transition hover:text-cp-accent"
@@ -373,10 +373,10 @@ const FlashcardsTopicoView = () => {
           <ChevronLeftIcon className="h-4 w-4" />
           Voltar ao edital
         </Link>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="font-mono text-[11px] uppercase tracking-wider text-indigo-500">{disciplina}</p>
-            <h1 className="text-lg font-semibold text-cp-text">{modulo}</h1>
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 max-w-full flex-1">
+            <p className="break-words font-mono text-[11px] uppercase tracking-wider text-indigo-500">{disciplina}</p>
+            <h1 className="mt-0.5 break-words text-base font-semibold leading-snug text-cp-text sm:text-lg">{modulo}</h1>
             {fromCache && cards.length > 0 && (
               <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
                 {cards.length} flashcards neste tópico
@@ -475,9 +475,9 @@ const FlashcardsTopicoView = () => {
       )}
 
       {!loading && !generating && !regenerating && !error && canStudy && studyCards.length > 0 && (
-        <div className="cp-card p-3 sm:p-6">
-          <div className="mb-4 flex items-center justify-between text-xs text-cp-muted">
-            <span>
+        <div className="cp-card max-w-full min-w-0 overflow-x-clip p-3 sm:p-6">
+          <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-cp-muted">
+            <span className="min-w-0 break-words">
               {focusOverrideCard
                 ? 'Flashcard corrigido pelo Professor IA'
                 : `Revisão espaçada · ${studyCards.length} para revisar agora`}

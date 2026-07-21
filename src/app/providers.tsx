@@ -36,7 +36,18 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                 {children}
                 <BackgroundGenerationBanner />
                 <AdminProfessorDock />
-                <Toaster position="top-right" />
+                <Toaster
+                  position="top-center"
+                  containerStyle={{
+                    top: 'max(0.75rem, env(safe-area-inset-top, 0px))',
+                    left: 'max(0.5rem, env(safe-area-inset-left, 0px))',
+                    right: 'max(0.5rem, env(safe-area-inset-right, 0px))',
+                  }}
+                  toastOptions={{
+                    className: 'max-w-[min(100%,22rem)] !break-words',
+                    style: { maxWidth: 'min(100vw - 1rem, 22rem)' },
+                  }}
+                />
               </SystemProvider>
             </AuthProvider>
           </DarkModeProvider>

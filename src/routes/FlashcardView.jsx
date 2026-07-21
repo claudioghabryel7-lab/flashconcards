@@ -1020,16 +1020,15 @@ IMPORTANTE:
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-full min-w-0 space-y-4 overflow-x-clip sm:space-y-6">
+      {!isStudying && (
       <CPPageHeader
         badge="Noji · SRS"
         title="Flashcards"
         subtitle={
-          isStudying
-            ? `${selectedMateria} › ${selectedModulo}`
-            : courseName
-              ? `${courseName} — biblioteca de decks com repetição espaçada`
-              : 'Biblioteca de decks com repetição espaçada'
+          courseName
+            ? `${courseName} — biblioteca de decks com repetição espaçada`
+            : 'Biblioteca de decks com repetição espaçada'
         }
         backHref="/dashboard"
         actions={
@@ -1045,45 +1044,34 @@ IMPORTANTE:
                 </option>
               ))}
             </select>
-          ) : isStudying ? (
-            <button
-              type="button"
-              onClick={() => setTimerActive(!timerActive)}
-              className={`relative group inline-flex items-center gap-3 px-5 py-3 rounded-xl border backdrop-blur-sm transition-all cursor-pointer ${
-                timerActive
-                  ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 dark:from-green-500/30 dark:to-emerald-500/30 border-green-500/50 dark:border-green-400/50 hover:border-green-500/70 dark:hover:border-green-400/70'
-                  : 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 border-blue-500/30 dark:border-blue-400/30 hover:border-blue-500/50 dark:hover:border-blue-400/50'
-              }`}
-              title={timerActive ? 'Clique para pausar o timer' : 'Clique para iniciar o timer'}
-            >
-              <div className="relative">
-                <div className={`absolute inset-0 rounded-full blur-md transition-opacity ${
-                  timerActive
-                    ? 'bg-green-500 opacity-50 group-hover:opacity-75 animate-pulse'
-                    : 'bg-blue-500 opacity-50 group-hover:opacity-75'
-                }`}></div>
-                <ClockIcon className={`relative h-6 w-6 ${
-                  timerActive
-                    ? 'text-green-600 dark:text-green-400'
-                    : 'text-blue-600 dark:text-blue-400'
-                }`} />
-              </div>
-              <div>
-                <p className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                  {timerActive ? 'Contando...' : 'Clique para contar'}
-                </p>
-                <p className={`text-xl font-black bg-clip-text text-transparent ${
-                  timerActive
-                    ? 'bg-gradient-to-r from-green-600 to-emerald-600 dark:from-green-400 dark:to-emerald-400'
-                    : 'bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400'
-                }`}>
-                  {formattedTime}
-                </p>
-              </div>
-            </button>
           ) : undefined
         }
       />
+      )}
+
+      {isStudying && (
+        <div className="flex items-center justify-between gap-2 lg:hidden">
+          <button
+            type="button"
+            onClick={exitStudySession}
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-cp-border px-3 py-2 text-xs font-medium text-cp-muted"
+          >
+            ← Decks
+          </button>
+          <button
+            type="button"
+            onClick={() => setTimerActive(!timerActive)}
+            className={`inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
+              timerActive
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600'
+                : 'border-cp-border text-cp-muted'
+            }`}
+          >
+            <ClockIcon className="h-4 w-4" />
+            {formattedTime}
+          </button>
+        </div>
+      )}
 
       {!cardsLoading && cards.length === 0 && hasEdital && (
         <div className="rounded-xl border border-cp-border bg-cp-surface px-4 py-3 text-sm text-cp-muted">
@@ -1124,9 +1112,13 @@ IMPORTANTE:
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(260px,320px)_1fr]">
-        {/* Biblioteca de decks — estilo Noji */}
-        <div className="noji-deck-panel cp-card flex flex-col overflow-hidden lg:max-h-[calc(100vh-12rem)]">
+      <div className="grid w-full max-w-full min-w-0 gap-4 overflow-x-clip lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+        {/* Biblioteca de decks — oculta no mobile durante sessão de estudo */}
+        <div
+          className={`noji-deck-panel cp-card flex max-w-full min-w-0 flex-col overflow-hidden lg:max-h-[calc(100vh-12rem)] ${
+            isStudying ? 'hidden lg:flex' : 'flex'
+          }`}
+        >
           <div className="border-b border-cp-border p-4">
             <div className="mb-1 flex items-center justify-between">
               <p className="text-sm font-semibold text-cp-text">Meus decks</p>
@@ -1194,7 +1186,7 @@ IMPORTANTE:
                           {materia.charAt(0).toUpperCase()}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className={`block truncate font-medium ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-cp-text'}`}>
+                          <span className={`block break-words font-medium leading-snug ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-cp-text'}`}>
                             {materia}
                           </span>
                           <span className="text-[10px] text-cp-muted">{modulos.length} tópicos</span>
@@ -1250,7 +1242,7 @@ IMPORTANTE:
                                           : 'text-cp-muted hover:bg-cp-surface/80 hover:text-cp-text'
                                   }`}
                                 >
-                                  <span className="mr-2 min-w-0 flex-1 truncate">{modulo}</span>
+                                  <span className="mr-2 min-w-0 flex-1 break-words whitespace-normal text-left leading-snug">{modulo}</span>
                                   <span
                                     className={`shrink-0 rounded-lg px-2 py-0.5 font-mono text-[10px] font-semibold ${
                                       isModuloSelected
@@ -1283,9 +1275,9 @@ IMPORTANTE:
         </div>
 
         {/* Sessão de estudo — estilo Noji */}
-        <div className="min-h-[520px] lg:min-h-[calc(100vh-12rem)]">
+        <div className="min-h-0 min-w-0 max-w-full overflow-x-clip lg:min-h-[calc(100vh-12rem)]">
           {!selectedMateria || !selectedModulo ? (
-            <div className="noji-empty cp-card flex h-full min-h-[480px] flex-col items-center justify-center p-12 text-center">
+            <div className="noji-empty cp-card flex h-full min-h-[320px] max-w-full flex-col items-center justify-center p-6 text-center sm:min-h-[480px] sm:p-12">
               <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-indigo-500 to-violet-600 text-3xl shadow-lg shadow-indigo-500/25">
                 📚
               </div>
@@ -1319,14 +1311,14 @@ IMPORTANTE:
               </button>
             </div>
           ) : (
-            <div className="noji-session cp-card flex h-full min-h-[520px] flex-col overflow-hidden lg:min-h-[calc(100vh-12rem)]">
+            <div className="noji-session cp-card flex h-full min-h-0 max-w-full min-w-0 flex-col overflow-hidden lg:min-h-[calc(100vh-12rem)]">
               {/* Header da sessão */}
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-cp-border px-4 py-3 sm:px-6">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
+              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-cp-border px-3 py-3 sm:items-center sm:px-6">
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <p className="break-words text-[11px] font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
                     {selectedMateria}
                   </p>
-                  <p className="truncate text-base font-semibold text-cp-text">{selectedModulo}</p>
+                  <p className="mt-0.5 break-words text-sm font-semibold leading-snug text-cp-text sm:text-base">{selectedModulo}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="hidden rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 sm:inline">
@@ -1342,7 +1334,7 @@ IMPORTANTE:
                   <button
                     type="button"
                     onClick={exitStudySession}
-                    className="rounded-xl border border-cp-border px-3 py-1.5 text-xs font-medium text-cp-muted transition hover:bg-cp-surface hover:text-cp-text"
+                    className="hidden rounded-xl border border-cp-border px-3 py-1.5 text-xs font-medium text-cp-muted transition hover:bg-cp-surface hover:text-cp-text lg:inline"
                   >
                     Sair
                   </button>
@@ -1350,7 +1342,7 @@ IMPORTANTE:
               </div>
 
               {/* Área do card */}
-              <div className="flex flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6">
+              <div className="flex min-w-0 max-w-full flex-1 flex-col overflow-x-clip px-3 py-3 sm:px-6 sm:py-6">
                 <FlashcardList
                   cards={activeCards}
                   currentIndex={currentIndex}

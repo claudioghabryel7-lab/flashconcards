@@ -38,14 +38,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="relative min-h-screen min-h-dvh w-full min-w-0 overflow-x-hidden overflow-x-clip text-cp-text">
+    <div className="relative min-h-screen min-h-dvh w-full max-w-full min-w-0 overflow-x-hidden overflow-x-clip text-cp-text">
       <TechBackground showLogo={!fullBleed} />
       <CPHeader />
       <main
         className={
           fullBleed
-            ? 'cp-shell-pad-bottom relative z-10 w-full min-w-0'
-            : 'cp-container cp-shell-pad-bottom relative z-10 min-w-0 py-3 sm:py-5'
+            ? 'cp-shell-pad-bottom relative z-10 w-full max-w-full min-w-0 overflow-x-clip'
+            : 'cp-container cp-shell-pad-bottom relative z-10 max-w-full min-w-0 overflow-x-clip py-3 sm:py-5'
         }
       >
         {children}

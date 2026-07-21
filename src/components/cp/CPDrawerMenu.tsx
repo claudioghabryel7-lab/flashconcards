@@ -108,11 +108,11 @@ function CPDrawerMenu({
       <aside
         className="fixed inset-y-0 right-0 z-[70] flex w-full max-w-[min(360px,100%)] translate-x-0 flex-col border-l border-cp-border bg-[var(--cp-bg)] shadow-2xl will-change-transform"
         style={{
+          contain: 'layout style paint',
           paddingTop: 'env(safe-area-inset-top, 0px)',
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
           paddingRight: 'env(safe-area-inset-right, 0px)',
         }}
-        style={{ contain: 'layout style paint' }}
       >
         <div className="flex items-center justify-between border-b border-cp-border px-5 py-4">
           <CPLogo size="sm" />
