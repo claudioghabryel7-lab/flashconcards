@@ -53,7 +53,7 @@ const TopicNotificationsButton = memo(() => {
             markInboxAllRead()
           }
         }}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full border border-cp-border text-cp-muted transition hover:border-cp-accent/30 hover:bg-cp-surface hover:text-cp-text"
+        className="relative flex h-11 w-11 items-center justify-center rounded-full border border-cp-border text-cp-muted transition hover:border-cp-accent/30 hover:bg-cp-surface hover:text-cp-text sm:h-10 sm:w-10"
         aria-label="Notificações"
         aria-expanded={open}
       >
@@ -66,7 +66,7 @@ const TopicNotificationsButton = memo(() => {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-[80] mt-2 w-[min(20rem,calc(100%-1rem))] max-w-full overflow-hidden rounded-xl border border-cp-border bg-cp-bg shadow-2xl">
+        <div className="absolute right-0 top-full z-[80] mt-2 w-72 max-w-[min(18rem,calc(100%-0.5rem))] overflow-hidden rounded-xl border border-cp-border bg-cp-bg shadow-2xl">
           <div className="flex items-center justify-between border-b border-cp-border px-4 py-3">
             <p className="text-sm font-semibold text-cp-text">Notificações</p>
             {notifications.length > 0 && (

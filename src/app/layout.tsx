@@ -1,5 +1,5 @@
 import '@/lib/import-meta-env.js'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import Providers from './providers'
@@ -40,12 +40,23 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
 }
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: 'cover',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f6f4ff' },
+    { media: '(prefers-color-scheme: dark)', color: '#09090b' },
+  ],
+}
+
 export const dynamic = 'force-dynamic'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} h-full`} suppressHydrationWarning>
-      <body className="min-h-full bg-cp-bg text-cp-text antialiased" suppressHydrationWarning>
+      <body className="min-h-full min-h-dvh bg-cp-bg text-cp-text antialiased" suppressHydrationWarning>
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

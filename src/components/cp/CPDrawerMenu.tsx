@@ -106,7 +106,12 @@ function CPDrawerMenu({
         aria-hidden
       />
       <aside
-        className="fixed inset-y-0 right-0 z-[70] flex w-full max-w-[360px] translate-x-0 flex-col border-l border-cp-border bg-[var(--cp-bg)] shadow-2xl will-change-transform"
+        className="fixed inset-y-0 right-0 z-[70] flex w-full max-w-[min(360px,100%)] translate-x-0 flex-col border-l border-cp-border bg-[var(--cp-bg)] shadow-2xl will-change-transform"
+        style={{
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          paddingRight: 'env(safe-area-inset-right, 0px)',
+        }}
         style={{ contain: 'layout style paint' }}
       >
         <div className="flex items-center justify-between border-b border-cp-border px-5 py-4">
@@ -114,7 +119,7 @@ function CPDrawerMenu({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-cp-border text-cp-muted transition hover:bg-cp-surface hover:text-cp-text"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-cp-border text-cp-muted transition hover:bg-cp-surface hover:text-cp-text"
             aria-label="Fechar menu"
           >
             <X className="h-4 w-4" />

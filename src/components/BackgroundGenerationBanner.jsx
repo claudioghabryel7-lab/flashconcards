@@ -193,7 +193,7 @@ export default function BackgroundGenerationBanner() {
     const waiting = jobs.length - running
 
     return (
-      <div className="fixed bottom-4 right-4 z-[90] flex flex-col items-end gap-2">
+      <div className="cp-fixed-br fixed z-[90] flex max-w-[min(20rem,calc(100%-2rem))] flex-col items-end gap-2">
         {stopFeedback ? (
           <p
             className={`max-w-xs rounded-lg px-3 py-2 text-xs shadow-lg ${
@@ -236,7 +236,7 @@ export default function BackgroundGenerationBanner() {
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-[90] max-w-sm space-y-2"
+      className="cp-fixed-br fixed z-[90] w-[min(22rem,calc(100%-2rem))] max-w-full space-y-2"
       role="status"
       aria-live="polite"
     >

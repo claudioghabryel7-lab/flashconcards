@@ -23,11 +23,11 @@ export default function CPLogo({ size = 'md', showText = true, asLink = true }: 
         priority
       />
       {showText && (
-        <div className="leading-none">
-          <p className="font-display text-base font-semibold tracking-tight text-cp-text">
+        <div className="min-w-0 leading-none">
+          <p className="truncate font-display text-sm font-semibold tracking-tight text-cp-text sm:text-base">
             Concurseiro
           </p>
-          <p className="mt-1 font-mono text-[11px] tracking-wider text-cp-muted">
+          <p className="mt-1 font-mono text-[10px] tracking-wider text-cp-muted sm:text-[11px]">
             Preditivo
           </p>
         </div>
@@ -40,7 +40,7 @@ export default function CPLogo({ size = 'md', showText = true, asLink = true }: 
   }
 
   return (
-    <Link href="/" className="group inline-flex items-center gap-3.5">
+    <Link href="/" className="group inline-flex max-w-full items-center gap-2 sm:gap-3.5">
       {content}
     </Link>
   )

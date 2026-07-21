@@ -56,7 +56,11 @@ export default function TrilhaTimerBanner() {
   return (
     <Link
       href="/trilha"
-      className="fixed bottom-20 right-4 z-40 flex max-w-[min(100%-2rem,280px)] items-center gap-2.5 rounded-2xl border border-cp-accent/30 bg-cp-bg/95 px-4 py-3 shadow-xl backdrop-blur-md transition hover:border-cp-accent/50"
+      className="fixed z-40 flex max-w-[min(100%-2rem,280px)] items-center gap-2.5 rounded-2xl border border-cp-accent/30 bg-cp-bg/95 px-4 py-3 shadow-xl backdrop-blur-md transition hover:border-cp-accent/50"
+      style={{
+        bottom: 'max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem))',
+        right: 'max(1rem, env(safe-area-inset-right, 0px))',
+      }}
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cp-accent/15 text-cp-accent">
         <Clock className="h-4 w-4" />

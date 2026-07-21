@@ -121,7 +121,7 @@ export default function AdminProfessorDock() {
   // Fechado: FAB discreto para reabrir
   if (mode === MODES.closed) {
     return (
-      <div className="fixed bottom-4 left-4 z-[91]">
+      <div className="cp-fixed-bl fixed z-[91] flex flex-col items-start gap-2">
         <button
           type="button"
           onClick={() => setDockMode(MODES.open)}
@@ -143,10 +143,10 @@ export default function AdminProfessorDock() {
   // Minimizado: chip estilo jobs
   if (mode === MODES.mini) {
     return (
-      <div className="fixed bottom-4 left-4 z-[91] flex flex-col items-start gap-2">
+      <div className="cp-fixed-bl fixed z-[91] flex flex-col items-start gap-2">
         {feedback && (
           <p
-            className={`max-w-xs rounded-lg px-3 py-2 text-xs shadow-lg ${
+            className={`max-w-[min(18rem,calc(100%-2rem))] rounded-lg px-3 py-2 text-xs shadow-lg ${
               feedback.type === 'err'
                 ? 'bg-red-500/15 text-red-700 dark:text-red-200'
                 : 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-200'
@@ -159,7 +159,7 @@ export default function AdminProfessorDock() {
           <button
             type="button"
             onClick={() => setDockMode(MODES.open)}
-            className="inline-flex items-center gap-2 rounded-full border border-violet-500/35 bg-cp-surface/95 px-4 py-2 text-xs font-semibold text-cp-text shadow-lg backdrop-blur-sm transition hover:border-violet-500/55"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-violet-500/35 bg-cp-surface/95 px-4 py-2 text-xs font-semibold text-cp-text shadow-lg backdrop-blur-sm transition hover:border-violet-500/55"
             title="Expandir Professor IA"
           >
             <span className="relative flex h-2 w-2">
@@ -188,7 +188,7 @@ export default function AdminProfessorDock() {
 
   // Expandido
   return (
-    <div className="fixed bottom-4 left-4 z-[91] w-[min(100vw-2rem,22rem)] space-y-2">
+    <div className="cp-fixed-bl fixed z-[91] w-[min(22rem,calc(100%-2rem))] max-w-full space-y-2">
       {feedback && (
         <p
           className={`rounded-lg px-3 py-2 text-xs shadow-lg ${

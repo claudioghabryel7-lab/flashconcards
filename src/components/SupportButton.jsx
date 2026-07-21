@@ -63,7 +63,7 @@ const SupportButton = () => {
   }
 
   return (
-    <div className={`fixed bottom-6 left-6 z-50 transition-opacity duration-500 ${isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+    <div className={`cp-fixed-bl fixed z-50 transition-opacity duration-500 ${isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'} max-sm:bottom-[max(5.5rem,calc(env(safe-area-inset-bottom,0px)+4.5rem))]`}>
       {/* Alerta de Erro (se houver) */}
       {hasError && (
         <div
