@@ -604,8 +604,8 @@ REGRAS CRÍTICAS:
 TAREFA:
 Gere material de "Véspera de Prova" completo para o tópico "${effectiveTopicNome || resolvedTopicKey}".
 
-1. RAIO-X: exatamente ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} top assuntos quentes + padrão da banca ${exam.banca || 'indicada'} para o cargo ${exam.cargo || 'do edital'}
-2. REVISÃO TURBO: EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} resumos (um por assunto quente, mesma ordem) — NÃO entregue só 2
+1. RAIO-X: exatamente ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} top assuntos quentes + padrão da banca ${exam.banca || 'indicada'} (DETALHADO) para o cargo ${exam.cargo || 'do edital'}
+2. REVISÃO TURBO: EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} resumos profundos (conceito + "Na prática da banca" + dica)
 3. PEGADINHAS: 3–5 armadilhas típicas da banca
 4. QUESTÕES PREDITIVAS: no formato ${tipoLabel} (gabarito comentado)
 
@@ -622,15 +622,15 @@ FORMATO JSON:
   "tipoProva": "${tipoLabel}",
   "raioXProbabilidade": {
     "topicosQuentes": ["assunto 1", "assunto 2", "assunto 3", "assunto 4", "assunto 5", "assunto 6"],
-    "padraoBanca": "como a ${exam.banca} cobra este tópico para ${exam.cargo}"
+    "padraoBanca": "<h4>Como a banca cobra</h4><p>explicação detalhada da ${exam.banca} para ${exam.cargo}</p><h4>O que mais cai</h4><ul><li>...</li></ul><h4>Pegadinhas recorrentes</h4><ul><li>...</li></ul><h4>Exemplo típico</h4><p>...</p>"
   },
   "revisaoTurbo": [
-    { "titulo": "assunto 1", "conteudo": "HTML do resumo 1" },
-    { "titulo": "assunto 2", "conteudo": "HTML do resumo 2" },
-    { "titulo": "assunto 3", "conteudo": "HTML do resumo 3" },
-    { "titulo": "assunto 4", "conteudo": "HTML do resumo 4" },
-    { "titulo": "assunto 5", "conteudo": "HTML do resumo 5" },
-    { "titulo": "assunto 6", "conteudo": "HTML do resumo 6" }
+    { "titulo": "assunto 1", "conteudo": "<h4>Conceito central</h4><p>...</p><h4>Na prática da banca</h4><p>...</p><h4>Dica de memorização</h4><p>...</p>" },
+    { "titulo": "assunto 2", "conteudo": "..." },
+    { "titulo": "assunto 3", "conteudo": "..." },
+    { "titulo": "assunto 4", "conteudo": "..." },
+    { "titulo": "assunto 5", "conteudo": "..." },
+    { "titulo": "assunto 6", "conteudo": "..." }
   ],
   "pegadinhas": [
     { "titulo": "Cuidado meu querido aluno!", "conteudo": "pegadinha da banca" }
@@ -645,6 +645,8 @@ FORMATO JSON:
 
 REGRAS FINAIS:
 - Fidelidade 100% à banca + cargo
+- padraoBanca NÃO pode ser genérico/curto — explique de verdade como a ${exam.banca} cobra
+- Cada resumo DEVE ter a seção "Na prática da banca"
 - Questões no formato ${tipoLabel} apenas
 - revisaoTurbo OBRIGATORIAMENTE com ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} itens
 - Retorne APENAS JSON válido e COMPLETO
