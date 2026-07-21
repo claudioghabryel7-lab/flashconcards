@@ -145,7 +145,7 @@ const FlashcardItem = ({
   }
 
   const showInlineRating = showRating && !ratingBelowCard && flipped
-  const cardHeight = 'min-h-[min(220px,42dvh)] h-[min(220px,42dvh)] sm:min-h-[360px] sm:h-[360px]'
+  const cardHeight = 'min-h-[min(260px,48dvh)] h-[min(280px,52dvh)] sm:min-h-[360px] sm:h-[360px]'
 
   return (
     <div
@@ -250,18 +250,18 @@ const FlashcardItem = ({
                 )}
               </div>
 
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-3 text-center sm:px-2 sm:py-8">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-y-auto px-1 py-6 text-center sm:px-2 sm:py-8">
                 {editing ? (
                   editForm
                 ) : (
                   <>
-                    <span className="mb-2 inline-flex rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400 sm:mb-3 sm:px-3 sm:py-1 sm:text-[11px]">
+                    <span className="mb-1.5 inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400 sm:mb-3 sm:px-3 sm:py-1 sm:text-[11px]">
                       Pergunta
                     </span>
-                    <h3 className={`w-full max-w-full break-words text-base font-semibold leading-snug sm:text-2xl sm:leading-relaxed ${textColor}`}>
+                    <h3 className={`w-full max-w-full break-words text-[13px] font-medium leading-relaxed sm:text-xl sm:font-semibold sm:leading-relaxed ${textColor}`}>
                       {card.pergunta}
                     </h3>
-                    <p className="noji-hint mt-3 text-xs text-slate-400 sm:mt-6 sm:text-sm">Toque para revelar a resposta</p>
+                    <p className="noji-hint mt-2 text-[10px] text-slate-400 sm:mt-6 sm:text-sm">Toque para revelar a resposta</p>
                   </>
                 )}
               </div>
@@ -322,7 +322,7 @@ const FlashcardItem = ({
                 {editing ? (
                   <div className="w-full text-left">{editForm}</div>
                 ) : (
-                  <div className="w-full max-w-full break-words text-sm font-medium leading-snug text-white sm:text-xl sm:leading-relaxed">
+                  <div className="w-full max-w-full break-words text-[13px] font-medium leading-relaxed text-white sm:text-lg sm:leading-relaxed">
                     {card.resposta}
                   </div>
                 )}

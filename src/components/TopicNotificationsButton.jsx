@@ -53,11 +53,11 @@ const TopicNotificationsButton = memo(() => {
             markInboxAllRead()
           }
         }}
-        className="relative flex h-11 w-11 items-center justify-center rounded-full border border-cp-border text-cp-muted transition hover:border-cp-accent/30 hover:bg-cp-surface hover:text-cp-text sm:h-10 sm:w-10"
+        className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-cp-border text-cp-muted transition hover:border-cp-accent/30 hover:bg-cp-surface hover:text-cp-text sm:h-10 sm:w-10"
         aria-label="Notificações"
         aria-expanded={open}
       >
-        <Bell className="h-4 w-4" />
+        <Bell className="h-4 w-4 shrink-0" aria-hidden strokeWidth={2} />
         {totalUnread > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-cp-accent px-1 text-[10px] font-bold text-cp-bg">
             {totalUnread > 9 ? '9+' : totalUnread}
@@ -66,7 +66,7 @@ const TopicNotificationsButton = memo(() => {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-[80] mt-2 w-72 max-w-[min(18rem,calc(100%-0.5rem))] overflow-hidden rounded-xl border border-cp-border bg-cp-bg shadow-2xl">
+        <div className="absolute right-0 top-full z-[80] mt-2 w-[min(18rem,calc(100vw-1.5rem))] max-w-[18rem] overflow-hidden rounded-xl border border-cp-border bg-cp-bg shadow-2xl">
           <div className="flex items-center justify-between border-b border-cp-border px-4 py-3">
             <p className="text-sm font-semibold text-cp-text">Notificações</p>
             {notifications.length > 0 && (

@@ -138,10 +138,10 @@ export default function CPHeader() {
             <button
               type="button"
               onClick={toggleDarkMode}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-cp-border text-cp-muted transition hover:border-cp-border-hover hover:bg-cp-surface hover:text-cp-text sm:h-10 sm:w-10"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-cp-border text-cp-muted transition hover:border-cp-border-hover hover:bg-cp-surface hover:text-cp-text sm:h-10 sm:w-10"
               aria-label="Alternar tema"
             >
-              {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {darkMode ? <Sun className="h-4 w-4 shrink-0" aria-hidden /> : <Moon className="h-4 w-4 shrink-0" aria-hidden />}
             </button>
 
             {user && (
@@ -206,10 +206,10 @@ export default function CPHeader() {
             <button
               type="button"
               onClick={openDrawer}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-cp-border bg-cp-surface text-cp-text transition hover:border-cp-accent/30 hover:shadow-cp-glow sm:h-10 sm:w-10"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-cp-border bg-cp-surface text-cp-text transition hover:border-cp-accent/30 hover:shadow-cp-glow sm:h-10 sm:w-10"
               aria-label="Abrir menu"
             >
-              <Menu className="h-5 w-5" />
+              <Menu className="h-5 w-5 shrink-0" aria-hidden />
             </button>
           </div>
         </div>

@@ -289,11 +289,10 @@ body {
   }
 }
 
-/* Evita overflow horizontal de tabelas/pre em mobile */
+/* Evita overflow horizontal de mídia — NÃO aplicar em svg (quebra ícones Lucide/Heroicons) */
 img,
 video,
-iframe,
-svg {
+iframe {
   max-width: 100%;
   height: auto;
 }
