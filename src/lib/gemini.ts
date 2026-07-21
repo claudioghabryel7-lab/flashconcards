@@ -1,7 +1,12 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { readEnv } from './env.js'
+import {
+  GEMINI_FLASH_MODEL,
+  GEMINI_FLASH_FALLBACK_MODEL,
+  GEMINI_PRO_MODEL,
+} from '../utils/geminiModels.js'
 
-const MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro']
+const MODELS = [GEMINI_FLASH_MODEL, GEMINI_FLASH_FALLBACK_MODEL, GEMINI_PRO_MODEL]
 
 function getApiKey() {
   return readEnv('VITE_GEMINI_API_KEY') || ''
@@ -22,7 +27,7 @@ function getGenAI() {
 
 export const geminiModel = {
   async generateContent(prompt: string) {
-    const model = getGenAI().getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const model = getGenAI().getGenerativeModel({ model: GEMINI_FLASH_MODEL })
     return model.generateContent(prompt)
   },
 }

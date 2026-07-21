@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { readEnv } from '@/lib/env.js'
+import { getDefaultGeminiModels } from '@/utils/geminiModels.js'
 
-const DEFAULT_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro']
+const DEFAULT_MODELS = getDefaultGeminiModels()
 
 function getServerApiKey(): string {
   return readEnv('VITE_GEMINI_API_KEY') || ''
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
       }
 
       lastError = data.error?.message || `HTTP ${response.status}`
-      if (response.status === 429 || response.status === 503) {
+      if (response.status === 429 || response.status === 503 || response.status === 404) {
         continue
       }
     }

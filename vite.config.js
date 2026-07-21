@@ -42,7 +42,7 @@ export default defineConfig({
             }
             // Bibliotecas de IA/PDF em chunk separado (carregadas apenas quando necessário)
             if (id.includes('@google/generative-ai') || id.includes('pdfjs') || id.includes('html2canvas')) {
-              return 'ai-vendor-gemini-2.5-flash-' + Date.now()
+              return 'ai-vendor-gemini-3.6-flash-' + Date.now()
             }
             // Outros vendors (mas não React)
             if (!id.includes('react') && !id.includes('react-dom') && !id.includes('react-router')) {
@@ -51,9 +51,9 @@ export default defineConfig({
           }
         },
         // Otimizar nomes de chunks para melhor cache COM TIMESTAMP E VERSÃO
-        chunkFileNames: 'assets/js/[name]-[hash]-' + Date.now() + '-v2.5-flash.js',
-        entryFileNames: 'assets/js/[name]-[hash]-' + Date.now() + '-v2.5-flash.js',
-        assetFileNames: 'assets/[ext]/[name]-[hash]-' + Date.now() + '-v2.5-flash.[ext]',
+        chunkFileNames: 'assets/js/[name]-[hash]-' + Date.now() + '-v3.6-flash.js',
+        entryFileNames: 'assets/js/[name]-[hash]-' + Date.now() + '-v3.6-flash.js',
+        assetFileNames: 'assets/[ext]/[name]-[hash]-' + Date.now() + '-v3.6-flash.[ext]',
       },
     },
     // Chunk size warnings
