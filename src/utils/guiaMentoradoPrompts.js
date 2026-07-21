@@ -154,12 +154,12 @@ Retorne APENAS JSON válido:
     "padraoBanca": "<h4>Como a banca cobra</h4><p>detalhe da ${exam.banca} para ${exam.cargo}</p><h4>O que mais cai</h4><ul><li>...</li></ul><h4>Pegadinhas recorrentes</h4><ul><li>...</li></ul>"
   },
   "revisaoTurbo": [
-    { "titulo": "assunto 1", "conteudo": "<h4>Conceito central</h4><p>...</p><h4>Na prática da banca</h4><p>...</p><h4>Dica de memorização</h4><p>...</p>" },
-    { "titulo": "assunto 2", "conteudo": "HTML (~220 palavras)" },
-    { "titulo": "assunto 3", "conteudo": "HTML (~220 palavras)" },
-    { "titulo": "assunto 4", "conteudo": "HTML (~220 palavras)" },
-    { "titulo": "assunto 5", "conteudo": "HTML (~220 palavras)" },
-    { "titulo": "assunto 6", "conteudo": "HTML (~220 palavras)" }
+    { "titulo": "assunto 1", "conteudo": "<h4>Conceito central</h4><p>...</p><h4>Base normativa</h4><p>...</p><h4>Distinções e exceções</h4><ul><li>...</li></ul><h4>Na prática da banca</h4><p>...</p><h4>Margens de dúvida</h4><ul><li><b>Dúvida:</b> ... <b>Resposta:</b> ...</li></ul><h4>Dica de memorização</h4><p>...</p>" },
+    { "titulo": "assunto 2", "conteudo": "HTML (~340 palavras, 6 seções)" },
+    { "titulo": "assunto 3", "conteudo": "HTML (~340 palavras, 6 seções)" },
+    { "titulo": "assunto 4", "conteudo": "HTML (~340 palavras, 6 seções)" },
+    { "titulo": "assunto 5", "conteudo": "HTML (~340 palavras, 6 seções)" },
+    { "titulo": "assunto 6", "conteudo": "HTML (~340 palavras, 6 seções)" }
   ],
   "pegadinhas": [{ "titulo": "título", "conteudo": "pegadinha típica da ${exam.banca}" }],
   "questoesPreditivas": [{
@@ -173,7 +173,8 @@ Retorne APENAS JSON válido:
 REGRAS:
 - Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} itens em revisaoTurbo (um por assunto quente)
 - padraoBanca DETALHADO (não uma frase genérica) — explique como a ${exam.banca} cobra o tópico
-- Cada resumo com seção "Na prática da banca"
+- Cada resumo com 6 seções: conceito, base normativa, distinções, prática da banca, margens de dúvida, dica
+- Cada resumo ~280–420 palavras; feche dúvidas com Dúvida→Resposta
 - Gere EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_QUESTOES} questões preditivas no formato ${exam.tipoProva}
 - Campo "correta" obrigatório em cada questão preditiva
 - Foco 100% neste tópico + cargo ${exam.cargo} + banca ${exam.banca}

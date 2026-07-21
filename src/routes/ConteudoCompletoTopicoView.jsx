@@ -605,7 +605,7 @@ TAREFA:
 Gere material de "Véspera de Prova" completo para o tópico "${effectiveTopicNome || resolvedTopicKey}".
 
 1. RAIO-X: exatamente ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} top assuntos quentes + padrão da banca ${exam.banca || 'indicada'} (DETALHADO) para o cargo ${exam.cargo || 'do edital'}
-2. REVISÃO TURBO: EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} resumos profundos (conceito + "Na prática da banca" + dica)
+2. REVISÃO TURBO: EXATAMENTE ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} resumos PROFUNDOS (não genéricos), cada um com as 6 seções: Conceito, Base normativa, Distinções/exceções, Na prática da banca, Margens de dúvida, Dica
 3. PEGADINHAS: 3–5 armadilhas típicas da banca
 4. QUESTÕES PREDITIVAS: no formato ${tipoLabel} (gabarito comentado)
 
@@ -625,7 +625,7 @@ FORMATO JSON:
     "padraoBanca": "<h4>Como a banca cobra</h4><p>explicação detalhada da ${exam.banca} para ${exam.cargo}</p><h4>O que mais cai</h4><ul><li>...</li></ul><h4>Pegadinhas recorrentes</h4><ul><li>...</li></ul><h4>Exemplo típico</h4><p>...</p>"
   },
   "revisaoTurbo": [
-    { "titulo": "assunto 1", "conteudo": "<h4>Conceito central</h4><p>...</p><h4>Na prática da banca</h4><p>...</p><h4>Dica de memorização</h4><p>...</p>" },
+    { "titulo": "assunto 1", "conteudo": "<h4>Conceito central</h4><p>...</p><h4>Base normativa</h4><p>...</p><h4>Distinções e exceções</h4><ul><li>...</li></ul><h4>Na prática da banca</h4><p>...</p><h4>Margens de dúvida</h4><ul><li><b>Dúvida:</b> ... <b>Resposta:</b> ...</li></ul><h4>Dica de memorização</h4><p>...</p>" },
     { "titulo": "assunto 2", "conteudo": "..." },
     { "titulo": "assunto 3", "conteudo": "..." },
     { "titulo": "assunto 4", "conteudo": "..." },
@@ -646,7 +646,8 @@ FORMATO JSON:
 REGRAS FINAIS:
 - Fidelidade 100% à banca + cargo
 - padraoBanca NÃO pode ser genérico/curto — explique de verdade como a ${exam.banca} cobra
-- Cada resumo DEVE ter a seção "Na prática da banca"
+- Cada resumo DEVE ter: conceito, base normativa, distinções, prática da banca, margens de dúvida (Dúvida→Resposta) e dica
+- PROIBIDO deixar margem de dúvida aberta; feche com regra + exceção
 - Questões no formato ${tipoLabel} apenas
 - revisaoTurbo OBRIGATORIAMENTE com ${CONTEUDO_COMPLETO_DEPTH.MIN_TOPICOS_QUENTES} itens
 - Retorne APENAS JSON válido e COMPLETO
