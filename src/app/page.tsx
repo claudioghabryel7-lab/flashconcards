@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import CPHero from '@/components/cp/CPHero'
 import HomeJsonLd from '@/components/cp/HomeJsonLd'
+import HomeCourseChatbot from '@/components/cp/HomeCourseChatbot'
 import {
   CtaBanner,
   FeaturedCourses,
@@ -62,6 +63,7 @@ export default function HomePage() {
         <CtaBanner />
         <HomeFaq />
       </div>
+      <HomeCourseChatbot />
     </>
   )
 }

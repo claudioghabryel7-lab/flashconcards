@@ -221,10 +221,13 @@ exports.createPixPayment = functions.https.onRequest((req, res) => {
         })
       }
 
-      // Obter Access Token do Mercado Pago
       const accessToken = functions.config().mercadopago?.access_token_prod || 
                          process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
-                         'APP_USR-3743437950896305-112812-559fadd346072c35f8cb81e21d4e562d-2583165550'
+                         process.env.MERCADOPAGO_ACCESS_TOKEN
+
+      if (!accessToken) {
+        return res.status(500).json({ error: 'MERCADOPAGO_ACCESS_TOKEN não configurado' })
+      }
 
       // Configurar cliente do Mercado Pago
       const client = new MercadoPagoConfig({
@@ -418,8 +421,8 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
           
           try {
             const accessToken = functions.config().mercadopago?.access_token_prod || 
-                               process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
-                               'APP_USR-3743437950896305-112812-559fadd346072c35f8cb81e21d4e562d-2583165550'
+process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
+                         process.env.MERCADOPAGO_ACCESS_TOKEN
             
             const client = new MercadoPagoConfig({
               accessToken: accessToken,
@@ -461,8 +464,8 @@ exports.webhookMercadoPago = functions.https.onRequest((req, res) => {
         
         // Buscar informações do pagamento no Mercado Pago usando a API
         const accessToken = functions.config().mercadopago?.access_token_prod || 
-                           process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
-                           'APP_USR-3743437950896305-112812-559fadd346072c35f8cb81e21d4e562d-2583165550'
+process.env.MERCADOPAGO_ACCESS_TOKEN_PROD ||
+                         process.env.MERCADOPAGO_ACCESS_TOKEN
         
         const client = new MercadoPagoConfig({
           accessToken: accessToken,

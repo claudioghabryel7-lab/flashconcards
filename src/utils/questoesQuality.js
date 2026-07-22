@@ -3,6 +3,7 @@
  */
 import { alternativasAsOrderedObject, normalizeQuestaoAlternativas } from './questaoAlternativas.js'
 import { isCertoErradoTipo, resolveTipoProvaFromBanca } from './examFidelityContext.js'
+import { attachNormalizedIllustration } from './stemVisualContent.js'
 
 function resolveGabarito(q = {}, alternativas = []) {
   let raw =
@@ -77,15 +78,17 @@ export function filterValidQuestoes(rawList, { tipoProva = 'ABCD', minKeep = 1, 
     if (expectCE) {
       const gabarito = resolveGabarito(item)
       if (gabarito !== 'C' && gabarito !== 'E') continue
-      ok.push({
-        ...item,
-        enunciado,
-        correta: gabarito,
-        respostaCorreta: gabarito,
-        gabarito,
-        tipo: 'certo_errado',
-        tipoProva: 'Certo/Errado',
-      })
+      ok.push(
+        attachNormalizedIllustration({
+          ...item,
+          enunciado,
+          correta: gabarito,
+          respostaCorreta: gabarito,
+          gabarito,
+          tipo: 'certo_errado',
+          tipoProva: 'Certo/Errado',
+        }),
+      )
       continue
     }
 
@@ -104,15 +107,17 @@ export function filterValidQuestoes(rawList, { tipoProva = 'ABCD', minKeep = 1, 
     // Aceita alternativa com texto curto (leis/artigos)
     if (alts.some((a) => !String(a.texto || '').trim())) continue
 
-    ok.push({
-      ...item,
-      enunciado,
-      alternativas: alternativasAsOrderedObject(alts, 5),
-      correta: gabarito,
-      respostaCorreta: gabarito,
-      gabarito,
-      tipoProva: 'ABCD',
-    })
+    ok.push(
+      attachNormalizedIllustration({
+        ...item,
+        enunciado,
+        alternativas: alternativasAsOrderedObject(alts, 5),
+        correta: gabarito,
+        respostaCorreta: gabarito,
+        gabarito,
+        tipoProva: 'ABCD',
+      }),
+    )
   }
 
   if (minKeep > 0 && list.length > 0 && ok.length === 0) {

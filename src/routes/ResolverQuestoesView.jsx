@@ -439,6 +439,8 @@ const ResolverQuestoesView = () => {
                   })}
                   alternateContentIds={[currentItem.id, currentItem.packId].filter(Boolean)}
                   topicKey={currentItem.topicKey || null}
+                  ilustracao={currentQuestao.ilustracao}
+                  textoBase={currentQuestao.textoBase}
                 />
 
                 {!showResult ? (

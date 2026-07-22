@@ -15,6 +15,7 @@ import {
 } from '../utils/examFidelityContext'
 import { startBackgroundGeneration } from './aiGenerationRunner'
 import { CONTENT_STATUS } from '../utils/contentStatus'
+import { QUESTOES_TARGET } from './localGenerationCheckpoint'
 
 /** Data final do planejamento: data da prova ou hoje + 90 dias. */
 export function resolvePlanningEndDate(config = {}) {
@@ -110,7 +111,7 @@ function buildTopicPayloads(topic, context, autoPublish) {
     topicoNome: topic.topicoNome,
     disciplina: topic.disciplina,
     nivel: 1,
-    quantidadeQuestoes: 12,
+    quantidadeQuestoes: QUESTOES_TARGET,
     ...shared,
   })
 

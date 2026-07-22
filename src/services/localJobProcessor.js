@@ -14,7 +14,12 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { generateAiJson } from '../utils/geminiApi'
+import { generateQuestoesInBatches } from '../utils/questoesGeneration'
 import { isLikelyLegalDiscipline } from '../utils/contentVerification'
+import {
+  attachNormalizedIllustration,
+  appendVisualMediaAppendix,
+} from '../utils/stemVisualContent'
 import { buildFlashcardPrompt } from '../utils/unifiedPrompt'
 import { DEFAULT_PLANNING_DAYS } from '../constants/guiaMentorado'
 import { CONTENT_STATUS } from '../utils/contentStatus'
@@ -28,6 +33,9 @@ import dayjs from 'dayjs'
 import {
   FLASHCARD_TARGET,
   FLASHCARD_BATCH_SIZE,
+  QUESTOES_TARGET,
+  QUESTOES_BATCH_SIZE,
+  QUESTOES_MIN_COMPLETE,
   appendFlashcardBatch,
   finalizeFlashcardsCheckpoint,
   loadFlashcardsByTopicKey,
@@ -199,7 +207,7 @@ async function processPromptSave(
       jobId,
       nivel,
       forceFresh,
-      minCount: 1,
+      minCount: QUESTOES_MIN_COMPLETE,
     })
     if (prep.alreadyComplete && prep.existingDraft) {
       await updateProgress(90, `${label} já no checkpoint — pulando API`)
@@ -234,6 +242,70 @@ async function processPromptSave(
       )
     : null
   await updateProgress(20, dossier?.text ? `Gerando ${label} com dossiê + Search…` : `Gerando ${label}…`)
+
+  // Questões: sempre em lotes (evita truncar em ~12 quando o alvo é 50)
+  if (topicKey && extra.contentType === 'questoes') {
+    const totalQuestoes =
+      Number(serverPayload?.quantidadeQuestoes) > 0
+        ? Number(serverPayload.quantidadeQuestoes)
+        : QUESTOES_TARGET
+    const promptWithDossier = appendVisualMediaAppendix(
+      appendGoogleAiDossier(prompt, dossier?.text),
+      disciplina,
+      extra.topico || serverPayload?.savePlan?.topicoNome || topicKey || '',
+      'questoes',
+    )
+    const batchResult = await generateQuestoesInBatches({
+      total: totalQuestoes,
+      batchSize: QUESTOES_BATCH_SIZE,
+      examCtx,
+      buildBatchPrompt: ({ batchNumber, batches, count }) => `${promptWithDossier}
+
+═══ LOTE ${batchNumber}/${batches} ═══
+Ignore qualquer quantidade anterior neste prompt.
+Gere EXATAMENTE ${count} questões neste lote (parte de ${totalQuestoes} no total).
+Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
+      aiOptions: {
+        courseId,
+        ...buildTrustedOptions(disciplina, {
+          isLegalContent: aiOptions.isLegalContent,
+          contentType: 'questoes',
+          verifyContent: false,
+          generationConfig: aiOptions.generationConfig || {
+            maxOutputTokens: 24000,
+            temperature: 0.2,
+          },
+          courseContext: toCourseAiContextShape({ ...examCtx, disciplina }),
+        }),
+      },
+      onBatchProgress: async ({ batchNumber, batches, generated, total }) => {
+        const pct = 20 + Math.round((generated / Math.max(total, 1)) * 60)
+        await updateProgress(
+          Math.min(pct, 80),
+          `Gerando ${label} lote ${batchNumber}/${batches} (${generated}/${total})…`,
+        )
+      },
+    })
+    const parsed = {
+      questoes: batchResult.questoes,
+      tipoProva: batchResult.tipoLabel,
+      banca: examCtx.banca,
+      cargo: examCtx.cargo,
+      concurso: examCtx.concursoName,
+    }
+    await updateProgress(85, `Salvando ${label} (checkpoint)…`)
+    await saveQuestoesCheckpoint({
+      courseId,
+      topicKey,
+      jobId,
+      nivel: extra.nivel ?? 1,
+      parsed,
+      extra: { topico: extra.topico, disciplina, ...extra },
+      status,
+    })
+    return { resultRef: { collection: collectionName, docId }, parsed, resumed: false }
+  }
+
   const parsed = await generateAiJson(appendGoogleAiDossier(prompt, dossier?.text), {
     courseId,
     ...buildTrustedOptions(disciplina, {
@@ -256,18 +328,6 @@ async function processPromptSave(
     })
     return { resultRef: { collection: collectionName, docId }, parsed, resumed: false }
   }
-  if (topicKey && extra.contentType === 'questoes') {
-    await saveQuestoesCheckpoint({
-      courseId,
-      topicKey,
-      jobId,
-      nivel: extra.nivel ?? 1,
-      parsed,
-      extra: { topico: extra.topico, disciplina, ...extra },
-      status,
-    })
-    return { resultRef: { collection: collectionName, docId }, parsed, resumed: false }
-  }
 
   const resultRef = await saveMerge(courseId, collectionName, docId, parsed, extra)
   return { resultRef, parsed, resumed: false }
@@ -276,14 +336,15 @@ async function processPromptSave(
 function normalizeCard(card = {}) {
   const pergunta = String(card.pergunta || card.frente || card.front || card.question || '').trim()
   const resposta = String(card.resposta || card.verso || card.back || card.answer || '').trim()
-  return {
+  return attachNormalizedIllustration({
+    ...card,
     pergunta,
     resposta,
     frente: pergunta,
     verso: resposta,
     dificuldade: card.dificuldade || 'médio',
     prioridade: card.prioridade || 'alta',
-  }
+  })
 }
 
 function dedupeCards(cards = []) {
@@ -400,7 +461,7 @@ async function processFlashcardsTopico(
       : ''
 
     const topicoNome = meta.topicoNome || meta.topicKey || ''
-    const prompt = appendGoogleAiDossier(`${buildExamFidelityBlock(examCtx)}
+    const promptCore = `${buildExamFidelityBlock(examCtx)}
 ${basePrompt}
 
 ═══ TRAVA DE TÓPICO (OBRIGATÓRIA) ═══
@@ -421,7 +482,13 @@ REGRAS DE OURO (violação = card inválido):
 ${existingList}
 
 Retorne APENAS JSON:
-{ "flashcards": [ { "pergunta": "...", "resposta": "..." } ] }`, dossier)
+{ "flashcards": [ { "pergunta": "...", "resposta": "..." } ] }`
+    const prompt = appendVisualMediaAppendix(
+      appendGoogleAiDossier(promptCore, dossier),
+      disciplina,
+      topicoNome,
+      'flashcards',
+    )
 
     const { validateFlashcardBatchOrThrow } = await import('../utils/flashcardQuality')
     const minKeep = Math.max(1, Math.ceil(cardsInBatch * 0.4))
@@ -795,28 +862,33 @@ async function processSingleMentoradoTopic({
     jobId,
     nivel: 1,
     forceFresh,
-    minCount: 1,
+    minCount: QUESTOES_MIN_COMPLETE,
   })
   if (qPrep.alreadyComplete && qPrep.existingDraft) {
     questoesParsed = qPrep.existingDraft
     await updateProgress(pctBase + 4, `${label}: questões do checkpoint — sem API`)
   } else if (topic.questoesPrompt) {
-    const { filterValidQuestoes } = await import('../utils/questoesQuality')
-    const tipoProva = examCtx.tipoProva || courseContext?.tipoProva || 'ABCD'
-    let ok = []
-    let dropped = 0
-    let lastRaw = null
-
-    const tryFilter = (raw) => {
-      lastRaw = raw
-      return filterValidQuestoes(raw?.questoes || raw, { tipoProva, minKeep: 1 })
-    }
-
-    // Tentativa 1: geração com Search
+    const promptWithDossier = appendVisualMediaAppendix(
+      appendGoogleAiDossier(topic.questoesPrompt, googleAiDossier),
+      disciplina,
+      topic.topicoNome || topicKey,
+      'questoes',
+    )
+    let batchResult
     try {
-      questoesParsed = await generateAiJson(
-        appendGoogleAiDossier(topic.questoesPrompt, googleAiDossier),
-        {
+      batchResult = await generateQuestoesInBatches({
+        total: QUESTOES_TARGET,
+        batchSize: QUESTOES_BATCH_SIZE,
+        examCtx,
+        buildBatchPrompt: ({ batchNumber, batches, count }) => `${promptWithDossier}
+
+═══ LOTE ${batchNumber}/${batches} ═══
+Ignore qualquer quantidade anterior neste prompt.
+Gere EXATAMENTE ${count} questões neste lote (parte de ${QUESTOES_TARGET} no total).
+TODA questão DEVE ter "correta": "A"|"B"|"C"|"D"|"E" (ou "C"|"E" se Certo/Errado).
+alternativas A-E com texto real (não vazio), se múltipla escolha.
+Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
+        aiOptions: {
           courseId,
           ...buildTrustedOptions(disciplina, {
             contentType: 'questoes',
@@ -825,94 +897,42 @@ async function processSingleMentoradoTopic({
             generationConfig: { maxOutputTokens: 24000, temperature: 0.15 },
           }),
         },
-      )
-      ;({ ok, dropped } = tryFilter(questoesParsed))
-    } catch (firstErr) {
-      console.warn('[mentorado] questões tentativa 1:', firstErr?.message || firstErr)
-    }
-
-    // Tentativa 2: regenerar com prompt mais rígido + Search
-    if (!ok.length) {
-      await updateProgress(pctBase + 4, `${label}: regenerando questões (formato + veracidade)…`)
-      try {
-        questoesParsed = await generateAiJson(
-          appendGoogleAiDossier(
-            `${topic.questoesPrompt}
-
-═══ REGENERAÇÃO OBRIGATÓRIA ═══
-A resposta anterior FOI REJEITADA (gabarito/alternativas inválidos ou JSON cortado).
-Gere de novo com EXATAMENTE 10 questões.
-TODA questão DEVE ter "correta": "A"|"B"|"C"|"D"|"E" (ou "C"|"E" se Certo/Errado).
-alternativas A-E com texto real (não vazio).
-Confirme cada gabarito com Google Search.`,
-            googleAiDossier,
-          ),
-          {
-            courseId,
-            ...buildTrustedOptions(disciplina, {
-              contentType: 'questoes',
-              verifyContent: false,
-              courseContext,
-              generationConfig: { maxOutputTokens: 20000, temperature: 0.1 },
-            }),
-          },
-        )
-        ;({ ok, dropped } = tryFilter(questoesParsed))
-      } catch (secondErr) {
-        console.warn('[mentorado] questões tentativa 2:', secondErr?.message || secondErr)
-      }
-    }
-
-    // Tentativa 3: reparo estrutural sem Search (só formatação)
-    if (!ok.length && lastRaw) {
-      await updateProgress(pctBase + 4, `${label}: reparando formato das questões…`)
-      try {
-        const repair = await generateAiJson(
-          `Reescreva as questões abaixo em JSON VÁLIDO e COMPLETO.
-
-TIPO DE PROVA: ${tipoProva}
-DISCIPLINA: ${disciplina}
-TÓPICO: ${topic.topicoNome || topicKey}
-
-ENTRADA:
-${JSON.stringify(lastRaw).slice(0, 14000)}
-
-RETORNE APENAS:
-{ "questoes": [ { "numero": 1, "enunciado": "...", "alternativas": {"A":"...","B":"...","C":"...","D":"...","E":"..."}, "correta": "A", "gabaritoComentado": "..." } ] }
-
-REGRAS:
-- Pelo menos 8 questões
-- "correta" obrigatório (A-E ou C/E)
-- alternativas com texto não vazio
-- não invente lei nova: preserve fatos da entrada`,
-          {
-            courseId,
-            trustedGeneration: true,
-            useGoogleSearch: false,
-            verifyContent: false,
-            generationConfig: { maxOutputTokens: 16000, temperature: 0 },
-          },
-        )
-        ;({ ok, dropped } = tryFilter(repair))
-        if (ok.length) questoesParsed = { ...(questoesParsed || {}), questoes: ok }
-      } catch (repairErr) {
-        console.warn('[mentorado] reparo questões:', repairErr?.message || repairErr)
-      }
-    }
-
-    if (dropped) {
-      console.warn(`[mentorado] ${dropped} questão(ões) inválida(s) descartada(s) em ${topicKey}`)
-    }
-
-    if (!ok.length) {
+        onBatchProgress: async ({ batchNumber, batches, generated, total: tot }) => {
+          await updateProgress(
+            pctBase + 3,
+            `${label}: questões lote ${batchNumber}/${batches} (${generated}/${tot})…`,
+          )
+        },
+      })
+    } catch (batchErr) {
+      console.warn('[mentorado] questões em lotes:', batchErr?.message || batchErr)
       const err = new Error(
-        'Não foi possível gerar questões válidas após 3 tentativas (gabarito/alternativas).',
+        batchErr?.message ||
+          'Não foi possível gerar questões válidas em lotes (gabarito/alternativas).',
       )
+      err.code = batchErr?.code || 'questoes_invalid'
+      throw err
+    }
+
+    if (batchResult.dropped) {
+      console.warn(
+        `[mentorado] ${batchResult.dropped} questão(ões) inválida(s) descartada(s) em ${topicKey}`,
+      )
+    }
+
+    if (!batchResult.questoes?.length) {
+      const err = new Error('Não foi possível gerar questões válidas (gabarito/alternativas).')
       err.code = 'questoes_invalid'
       throw err
     }
 
-    questoesParsed = { ...(questoesParsed || {}), questoes: ok }
+    questoesParsed = {
+      questoes: batchResult.questoes,
+      tipoProva: batchResult.tipoLabel,
+      banca: examCtx.banca,
+      cargo: examCtx.cargo,
+      concurso: examCtx.concursoName,
+    }
     await saveQuestoesCheckpoint({
       courseId,
       topicKey,

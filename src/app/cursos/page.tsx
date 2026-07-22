@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import {
@@ -23,6 +24,7 @@ type Course = {
   courseDuration?: string
   price?: number
   originalPrice?: number
+  monthlyPrice?: number
   imageUrl?: string
   imageBase64?: string
   featured?: boolean
@@ -230,7 +232,7 @@ export default function CursosPage() {
                   </div>
 
                   {(course.price || course.originalPrice) && (
-                    <div className="flex items-baseline gap-2 pt-1">
+                    <div className="flex flex-wrap items-baseline gap-2 pt-1">
                       {course.originalPrice && course.originalPrice > (course.price || 0) && (
                         <span className="text-sm text-cp-muted line-through">
                           {formatCurrency(course.originalPrice)}
@@ -239,12 +241,26 @@ export default function CursosPage() {
                       <span className="text-xl font-bold text-cp-accent">
                         {formatCurrency(course.price || 99.9)}
                       </span>
+                      {course.monthlyPrice != null && (
+                        <span className="text-xs text-cp-muted">
+                          ou {formatCurrency(Number(course.monthlyPrice))}/mês
+                        </span>
+                      )}
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2 pt-2 text-sm text-cp-accent">
-                    Acessar curso
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <span className="inline-flex items-center gap-2 text-sm text-cp-accent">
+                      Ver detalhes
+                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    </span>
+                    <Link
+                      href={`/pagamento?course=${encodeURIComponent(course.id)}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="ml-auto rounded-full border border-cp-accent/40 bg-cp-accent/15 px-3 py-1 text-xs font-semibold text-cp-accent hover:bg-cp-accent/25"
+                    >
+                      Comprar
+                    </Link>
                   </div>
                 </div>
               </button>

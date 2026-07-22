@@ -3,6 +3,7 @@ import { HeartIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/solid'
 import { useAuth } from '../hooks/useAuth'
 import ContentFeedbackActions from './content/ContentFeedbackActions'
 import { buildFlashcardContentId } from '../utils/contentCommentIds'
+import StudyIllustration from './StudyIllustration'
 
 const FlashcardItem = ({
   card,
@@ -264,6 +265,19 @@ const FlashcardItem = ({
                     >
                       {card.pergunta}
                     </h3>
+                    {card.textoBase ? (
+                      <blockquote className="mt-3 max-h-40 w-full overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200 sm:text-xs">
+                        {card.textoBase}
+                      </blockquote>
+                    ) : null}
+                    {(card.ilustracao?.lado === 'pergunta' ||
+                      card.ilustracao?.lado === 'enunciado' ||
+                      card.ilustracao?.lado === 'ambos' ||
+                      (!card.ilustracao?.lado &&
+                        card.ilustracao &&
+                        card.ilustracao.preset !== 'conta')) && (
+                      <StudyIllustration ilustracao={card.ilustracao} className="mt-3 w-full text-left" />
+                    )}
                     <p className="noji-hint mt-2 text-[10px] text-slate-400 sm:mt-6 sm:text-sm">Toque para revelar a resposta</p>
                   </>
                 )}
@@ -325,12 +339,24 @@ const FlashcardItem = ({
                 {editing ? (
                   <div className="w-full text-left">{editForm}</div>
                 ) : (
-                  <div
-                    className="w-full max-w-full break-words font-medium leading-snug text-white sm:leading-relaxed"
-                    style={{ fontSize: 'clamp(0.8125rem, 2vw + 0.45rem, 1.125rem)' }}
-                  >
-                    {card.resposta}
-                  </div>
+                  <>
+                    <div
+                      className="w-full max-w-full break-words font-medium leading-snug text-white sm:leading-relaxed"
+                      style={{ fontSize: 'clamp(0.8125rem, 2vw + 0.45rem, 1.125rem)' }}
+                    >
+                      {card.resposta}
+                    </div>
+                    {(card.ilustracaoResposta ||
+                      card.ilustracao?.lado === 'resposta' ||
+                      card.ilustracao?.lado === 'ambos' ||
+                      card.ilustracao?.preset === 'conta') && (
+                      <StudyIllustration
+                        ilustracao={card.ilustracaoResposta || card.ilustracao}
+                        dark
+                        className="mt-3 w-full text-left"
+                      />
+                    )}
+                  </>
                 )}
               </div>
 

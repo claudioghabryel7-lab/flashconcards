@@ -30,6 +30,7 @@ import {
 import { buildMentoradoQuestoesPrompt } from '../utils/guiaMentoradoPrompts'
 import { isWithinProfessorWindow } from './professorSupervisorService'
 import { normalizeExamContext, resolveTipoProvaFromBanca } from '../utils/examFidelityContext'
+import { QUESTOES_MIN_COMPLETE, QUESTOES_TARGET } from './localGenerationCheckpoint'
 
 const CONFIG_PATH = ['config', 'contentAutomation']
 const NIVEL_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -58,7 +59,7 @@ function sanitizeTopicDocId(topicKey = '') {
 
 function hasUsableQuestoes(data = {}) {
   const arr = data.questoes || data.questoesPreditivas || data.questions
-  return Array.isArray(arr) && arr.length > 0
+  return Array.isArray(arr) && arr.length >= QUESTOES_MIN_COMPLETE
 }
 
 function hasUsableMateriaRevisada(data = {}) {
@@ -401,7 +402,7 @@ async function startNivelJob(adminUserId, gap) {
     topicoNome: gap.topicoNome || gap.topicKey,
     nivel: gap.nivel,
     editalText: meta.editalText,
-    quantidadeQuestoes: 12,
+    quantidadeQuestoes: QUESTOES_TARGET,
     ...exam,
     tipoProva,
   })
@@ -427,6 +428,7 @@ async function startNivelJob(adminUserId, gap) {
     metadata: { nivel: gap.nivel, source: 'content_automation' },
     serverPayload: {
       prompt,
+      quantidadeQuestoes: QUESTOES_TARGET,
       aiOptions: {
         useGoogleSearch: true,
         isLegalContent: true,

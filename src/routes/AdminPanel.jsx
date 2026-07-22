@@ -38,6 +38,7 @@ import {
 import EditalVerticalizadoManager from '../components/EditalVerticalizadoManager'
 import AdminContentModeration from '../components/admin/AdminContentModeration'
 import AdminGuiaMentorado from '../components/admin/AdminGuiaMentorado'
+import AdminPaymentChatbotConfig from '../components/AdminPaymentChatbotConfig'
 import AdminProfessorSupervisor from '../components/admin/AdminProfessorSupervisor'
 import AdminGenerationJobs from '../components/admin/AdminGenerationJobs'
 import ContentPublishButton from '../components/ContentPublishButton'
@@ -237,6 +238,9 @@ const AdminPanel = () => {
     description: '',
     price: 99.90,
     originalPrice: 149.99,
+    monthlyPrice: 39.9,
+    monthlyEnabled: true,
+    benefits: '',
     competition: '',
     courseDuration: '', // Tempo do curso (ex: "6 meses", "1 ano", etc.)
     imageBase64: '',
@@ -2897,6 +2901,12 @@ REGRAS CRÍTICAS:
         description: courseForm.description || '',
         price: parseFloat(courseForm.price) || 99.90,
         originalPrice: parseFloat(courseForm.originalPrice) || 149.99,
+        monthlyPrice: parseFloat(courseForm.monthlyPrice) || 39.9,
+        monthlyEnabled: courseForm.monthlyEnabled !== false,
+        benefits: String(courseForm.benefits || '')
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean),
         competition: courseForm.competition,
         courseDuration: courseForm.courseDuration || '',
         imageBase64: courseForm.imageBase64 || '',
@@ -2914,6 +2924,9 @@ REGRAS CRÍTICAS:
         description: '',
         price: 99.90,
         originalPrice: 149.99,
+        monthlyPrice: 39.9,
+        monthlyEnabled: true,
+        benefits: '',
         competition: '',
         courseDuration: '',
         imageBase64: '',
@@ -2952,6 +2965,9 @@ REGRAS CRÍTICAS:
       description: course.description || '',
       price: course.price || 99.90,
       originalPrice: course.originalPrice || 149.99,
+      monthlyPrice: course.monthlyPrice || 39.9,
+      monthlyEnabled: course.monthlyEnabled !== false,
+      benefits: Array.isArray(course.benefits) ? course.benefits.join('\n') : course.benefits || '',
       competition: course.competition || '',
       courseDuration: course.courseDuration || '',
       active: course.active !== false,
@@ -2984,6 +3000,14 @@ REGRAS CRÍTICAS:
         description: editingCourseData.description?.trim() || '',
         price: parseFloat(editingCourseData.price) || 99.90,
         originalPrice: parseFloat(editingCourseData.originalPrice) || 149.99,
+        monthlyPrice: parseFloat(editingCourseData.monthlyPrice) || 39.9,
+        monthlyEnabled: editingCourseData.monthlyEnabled !== false,
+        benefits: Array.isArray(editingCourseData.benefits)
+          ? editingCourseData.benefits
+          : String(editingCourseData.benefits || '')
+              .split('\n')
+              .map((s) => s.trim())
+              .filter(Boolean),
         competition: editingCourseData.competition.trim(),
         courseDuration: editingCourseData.courseDuration?.trim() || '',
         active: editingCourseData.active,
@@ -6951,6 +6975,7 @@ Retorne APENAS o JSON, sem markdown, sem explicações.`
     { id: 'banners', label: '🖼️ Banners', icon: '🖼️' },
     { id: 'popup', label: '🔔 Popup Banner', icon: '🔔' },
     { id: 'courses', label: '🎓 Cursos', icon: '🎓' },
+    { id: 'payment-chatbot', label: '💳 Pagamento & Chat', icon: '💳' },
     { id: 'reviews', label: '⭐ Avaliações', icon: '⭐' },
     { id: 'news', label: '📰 Notícias de Concursos', icon: '📰' },
     { id: 'simulados', label: '📝 Simulados', icon: '📝' },
@@ -9690,6 +9715,13 @@ Retorne APENAS o JSON válido, sem markdown, sem explicações adicionais.`
             )}
 
             {/* Tab: Cursos */}
+            {activeTab === 'payment-chatbot' && (
+              <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
+                <h2 className="mb-4 text-xl font-bold text-alego-700">Pagamento Mercado Pago & Chatbot</h2>
+                <AdminPaymentChatbotConfig />
+              </div>
+            )}
+
             {activeTab === 'courses' && (
               <div className="space-y-6">
                 <div className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
@@ -9937,6 +9969,45 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-2">
+                              Preço mensal (R$)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={courseForm.monthlyPrice}
+                              onChange={(e) => setCourseForm(prev => ({ ...prev, monthlyPrice: parseFloat(e.target.value) || 0 }))}
+                              className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                            />
+                          </div>
+                          <div className="flex items-end pb-2">
+                            <label className="flex items-center gap-2 text-xs text-slate-600">
+                              <input
+                                type="checkbox"
+                                checked={courseForm.monthlyEnabled !== false}
+                                onChange={(e) => setCourseForm(prev => ({ ...prev, monthlyEnabled: e.target.checked }))}
+                                className="rounded"
+                              />
+                              Oferecer plano mensal
+                            </label>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-2">
+                            O que o curso oferece (1 benefício por linha)
+                          </label>
+                          <textarea
+                            value={courseForm.benefits || ''}
+                            onChange={(e) => setCourseForm(prev => ({ ...prev, benefits: e.target.value }))}
+                            rows={4}
+                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                            placeholder={"Edital verticalizado\nQuestões preditivas\nFlashcards por tópico"}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center gap-2">
                           <input
                             type="checkbox"
@@ -10092,6 +10163,44 @@ Retorne APENAS a descrição, sem títulos ou formatação adicional.`
                                               className="w-full rounded-lg border border-slate-300 p-2 text-sm"
                                             />
                                           </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-3">
+                                          <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                              Preço mensal (R$)
+                                            </label>
+                                            <input
+                                              type="number"
+                                              step="0.01"
+                                              value={editingCourseData?.monthlyPrice || 0}
+                                              onChange={(e) => setEditingCourseData(prev => ({ ...prev, monthlyPrice: parseFloat(e.target.value) || 0 }))}
+                                              className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                                            />
+                                          </div>
+                                          <div className="flex items-end pb-2">
+                                            <label className="flex items-center gap-2 text-xs text-slate-600">
+                                              <input
+                                                type="checkbox"
+                                                checked={editingCourseData?.monthlyEnabled !== false}
+                                                onChange={(e) => setEditingCourseData(prev => ({ ...prev, monthlyEnabled: e.target.checked }))}
+                                                className="rounded"
+                                              />
+                                              Plano mensal
+                                            </label>
+                                          </div>
+                                        </div>
+
+                                        <div>
+                                          <label className="block text-xs font-semibold text-slate-600 mb-1">
+                                            Benefícios (1 por linha)
+                                          </label>
+                                          <textarea
+                                            value={editingCourseData?.benefits || ''}
+                                            onChange={(e) => setEditingCourseData(prev => ({ ...prev, benefits: e.target.value }))}
+                                            rows={3}
+                                            className="w-full rounded-lg border border-slate-300 p-2 text-sm"
+                                          />
                                         </div>
                                         
                                         <div className="grid grid-cols-2 gap-3">

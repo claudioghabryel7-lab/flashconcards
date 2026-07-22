@@ -12,6 +12,7 @@ import {
   buildQuestoesExamHeader,
   generateQuestoesInBatches,
 } from '../utils/questoesGeneration'
+import { appendVisualMediaAppendix } from '../utils/stemVisualContent'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
@@ -291,7 +292,9 @@ const PraticaIncidenciaView = () => {
       const topAssuntos = conteudoIncidencia.topAssuntosGerais || []
       const analisePorTopico = conteudoIncidencia.analisePorTopico || []
 
-      const buildBatchPrompt = ({ batchNumber, batches, count }) => `${fidelityBlock}
+      const buildBatchPrompt = ({ batchNumber, batches, count }) =>
+        appendVisualMediaAppendix(
+          `${fidelityBlock}
 Você é um especialista em criar questões de concurso público baseadas em análise de incidência.
 
 CONTEXTO:
@@ -362,7 +365,11 @@ REGRAS:
 - Fidelidade 100% à banca ${exam.banca || 'indicada'} e ao cargo ${exam.cargo || 'do edital'}
 - Formato ${tipoLabel} — sem misturar
 - DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-- Retorne APENAS JSON válido`
+- Retorne APENAS JSON válido`,
+          conteudoIncidencia.disciplina || 'Disciplina',
+          conteudoIncidencia.disciplina || '',
+          'questoes',
+        )
 
       setProgress(50)
       setStatus('Gerando em segundo plano… Você pode sair desta tela.')
@@ -1037,6 +1044,8 @@ REGRAS:
                         alternateContentIds={
                           legacyQuestaoContentId !== questaoContentId ? [legacyQuestaoContentId] : []
                         }
+                        ilustracao={questaoAtual.ilustracao}
+                        textoBase={questaoAtual.textoBase}
                       />
 
                       {/* Alternativas - Certo/Errado ou Múltipla */}
