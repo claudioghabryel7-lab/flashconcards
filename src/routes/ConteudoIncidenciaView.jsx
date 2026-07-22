@@ -7,6 +7,7 @@ import { db } from '../firebase/config'
 import { useAuth } from '../hooks/useAuth'
 import { useDarkMode } from '../hooks/useDarkMode.jsx'
 import { generateAiJson, formatAiErrorForUser } from '../utils/geminiApi'
+import { generateIncidenciaCompleta } from '../utils/incidenciaGeneration'
 import { startBackgroundGeneration } from '../services/aiGenerationRunner'
 import { isContentAvailable, CONTENT_STATUS, toggleContentStatus } from '../utils/contentStatus'
 import ContentPublishButton from '../components/ContentPublishButton'
@@ -163,111 +164,7 @@ const ConteudoIncidenciaView = () => {
       }))
 
       setProgress(35)
-      setStatus('Enviando solicitação para a IA...')
-
-      // Prompt para a IA gerar conteúdo de maior incidência
-      const prompt = `Você é um especialista em análise de concursos públicos e previsão de temas para provas. ATUE COMO UMA "VIDENTE" - você sabe exatamente o que vai cair na prova.
-
-CONTEXTO:
-- CURSO: ${courseName || 'Curso Preparatório'}
-- CARGO: ${cargo || 'NÃO DEFINIDO'}
-- BANCA EXAMINADORA: ${banca || 'NÃO DEFINIDA'}
-- DISCIPLINA: ${disciplina.nome}
-
-TÓPICOS DA DISCIPLINA:
-${topicosStructure.map((t, i) => `${i + 1}. ${t.numero} - ${t.nome}`).join('\n')}
-
-EDITAL BASE (trecho relevante):
-${editalText.substring(0, 10000)}${editalText.length > 10000 ? '\n\n[texto truncado...]' : ''}
-
-TAREFA:
-Analise TODOS os tópicos desta disciplina e gere um conteúdo de revisão focado no que REALMENTE vai cair na prova.
-
-INSTRUÇÕES CRÍTICAS:
-1. Para CADA tópico da disciplina, identifique os assuntos que serão cobrados
-2. Atribua uma probabilidade de incidência (10-100%) para cada assunto baseado:
-   - No histórico específico da banca ${banca || 'NÃO DEFINIDA'}
-   - No cargo específico: ${cargo || 'NÃO DEFINIDO'}
-   - Na relevância do assunto para este concurso
-   - Na atualidade e importância do tema
-3. ORDENE sempre da MAIOR probabilidade para a MENOR (100% → 10%)
-4. Para CADA assunto, gere uma REVISÃO COMPLETA do que o candidato precisa estudar
-5. Seja direto e prático: "estude isso porque isso vai cair"
-6. Não faça rodeios - o conteúdo deve ser focado no que será cobrado
-
-IMPORTANTE - DISTRIBUIÇÃO DE PROBABILIDADES:
-- NÃO coloque tudo com probabilidade alta (80-100%)
-- Tenha uma distribuição REALISTA:
-  * 20-30% dos assuntos com probabilidade ALTA (80-100%)
-  * 40-50% dos assuntos com probabilidade MÉDIA (50-70%)
-  * 20-30% dos assuntos com probabilidade BAIXA (10-40%)
-- Assuntos muito específicos ou raros devem ter probabilidade baixa (10-30%)
-- Assuntos fundamentais e recorrentes devem ter probabilidade alta (80-100%)
-- Assuntos importantes mas não tão frequentes devem ter probabilidade média (50-70%)
-
-ESTRUTURA DO JSON:
-{
-  "disciplina": "${disciplina.nome}",
-  "banca": "${banca || 'NÃO DEFINIDA'}",
-  "cargo": "${cargo || 'NÃO DEFINIDO'}",
-  "curso": "${courseName || 'Curso Preparatório'}",
-  "analisePorTopico": [
-    {
-      "topicoNumero": "número do tópico",
-      "topicoNome": "nome do tópico",
-      "assuntos": [
-        {
-          "assunto": "nome do assunto",
-          "probabilidade": 95,
-          "revisao": "revisão completa do que estudar - seja direto: 'estude X, Y, Z porque isso vai cair'"
-        }
-      ]
-    }
-  ],
-  "topAssuntosGerais": [
-    {
-      "assunto": "assunto que mais cairá em toda a disciplina",
-      "probabilidade": 95,
-      "revisao": "revisão completa do que estudar"
-    }
-  ],
-  "dicasEstudo": [
-    "dica 1 de estudo focado",
-    "dica 2 de estudo focado"
-  ]
-}
-
-REGRAS IMPORTANTES:
-- Use probabilidades realistas baseadas no histórico da banca ${banca || 'NÃO DEFINIDA'}
-- ADAPTE o conteúdo ao cargo específico: ${cargo || 'NÃO DEFINIDO'}
-- ORDENE sempre da maior probabilidade para a menor
-- Seja uma "vidente": diga exatamente o que estudar
-- Use linguagem direta e prática
-- Para disciplinas jurídicas: cite leis, artigos e jurisprudência atualizadas
-- Para disciplinas não jurídicas: foque em conceitos e aplicações práticas
-- DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-- Use apenas informações atualizadas até esta data
-
-🚨 TRAVAS DE SEGURANÇA E FIDELIDADE JURÍDICA ABSOLUTA:
-
-1. PROIBIÇÃO DE ALUCINAÇÃO LEGISLATIVA:
-- Você está terminantemente proibido de inventar, supor ou estimar números de leis, decretos ou datas. Se não houver registro histórico exato e pacificado no ordenamento jurídico brasileiro de uma alteração, você NÃO deve mencioná-la.
-- Nenhuma alteração futura hipotética deve ser criada. Toda e qualquer norma citada deve ter como lastro o portal do Planalto (Legislação Federal) ou os repositórios oficiais do STF/STJ.
-
-2. FILTRO DE CONSTITUCIONALIDADE E RECEPÇÃO (CF/88):
-- Para cada artigo ou código anterior a 1988 (como o CPP de 1941 ou o CP de 1940), você DEVE verificar se o dispositivo foi RECECIONADO ou NÃO pela Constituição Federal de 1988.
-- É terminantemente proibido indicar como aplicável ou vigente um dispositivo legal que os Tribunais Superiores (STF/STJ) já declararam como não-recepcionado ou inconstitucional (Ex: Incomunicabilidade do preso do Art. 21 do CPP, prisão por dívida de depositário infiel, etc.). Você deve apontar o dispositivo e declarar imediatamente a sua ineficácia jurídica atual por incompatibilidade constitucional.
-
-3. ALINHAMENTO OBRIGATÓRIO DE JURISPRUDÊNCIA PACIFICADA (STF/STJ):
-- Toda análise legal deve confrontar a "letra fria da lei" com o entendimento atualizado das Súmulas Vinculantes, Súmulas do STF/STJ e os julgamentos de repercussão geral ou controle concentrado (ADIs, ADC, ADPFs).
-- Se a eficácia de um artigo foi alterada, suspensa ou modelada por decisão definitiva do STF (como ocorreu no arquivamento do Art. 28 do CPP e no Juiz das Garantias), o texto DEVE refletir o procedimento determinado pelo Tribunal, e não a redação literal suspensa ou defasada que consta no código.
-
-[TRAVA JURÍDICA CRÍTICA]: O modelo deve validar obrigatoriamente as inovações legislativas mais recentes (incluindo leis de 2025 e 2026), aplicando seus reflexos automáticos nos códigos e legislações pertinentes.
-
-Retorne APENAS o JSON válido, sem texto adicional.`
-
-      setProgress(50)
-      setStatus('Gerando em segundo plano… Você pode sair desta tela.')
+      setStatus('Enviando solicitação para a IA (lotes para não cortar a revisão)…')
 
       const { promise } = await startBackgroundGeneration({
         userId: user?.uid,
@@ -275,12 +172,37 @@ Retorne APENAS o JSON válido, sem texto adicional.`
         jobType: 'conteudo_incidencia',
         topicKey: String(disciplinaIdx),
         metadata: { disciplina: disciplina.nome },
-        task: async ({ updateProgress }) => {
-          await updateProgress(50, 'Gerando com IA…')
-          const parsed = await generateAiJson(prompt, {
-            courseId,
-            isLegalContent: true,
+        serverPayload: {
+          courseMeta: {
+            banca,
+            cargo,
+            courseName: courseName || 'Curso Preparatório',
+            editalText,
+          },
+          savePlan: {
+            disciplinaNome: disciplina.nome,
+            disciplinaIdx: disciplinaIndex,
+            docId: disciplina.nome.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100),
+            topicos: topicosStructure,
+            status: 'indisponivel',
+          },
+          aiOptions: {
             useRAG: true,
+            isLegalContent: true,
+          },
+        },
+        task: async ({ updateProgress }) => {
+          await updateProgress(40, 'Gerando revisão completa em lotes…')
+          const parsed = await generateIncidenciaCompleta({
+            disciplinaNome: disciplina.nome,
+            topicos: topicosStructure,
+            banca,
+            cargo,
+            courseName: courseName || 'Curso Preparatório',
+            editalText,
+            courseId,
+            generateFn: generateAiJson,
+            onProgress: updateProgress,
           })
 
           await updateProgress(90, 'Salvando conteúdo…')

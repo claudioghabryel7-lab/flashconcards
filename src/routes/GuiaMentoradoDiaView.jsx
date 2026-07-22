@@ -154,12 +154,13 @@ const GuiaMentoradoDiaView = () => {
           const nome = materia?.disciplina || materia?.materia || 'Matéria'
           autoSchedule.push({
             startTime: `${String(t).padStart(2, '0')}:00`,
-            endTime: `${String(Math.min(t + 2, 20)).padStart(2, '0')}:00`,
-            activity: `Incidência: ${nome}`,
+            endTime: `${String(Math.min(t + 3, 20)).padStart(2, '0')}:00`,
+            activity: `Incidência (1 matéria): ${nome}`,
             type: 'incidencia',
             completed: false,
+            disciplina: nome,
           })
-          t = Math.min(t + 2, 18)
+          t = Math.min(t + 3, 18)
         })
       }
     }

@@ -158,13 +158,18 @@ export function extractTopicsForMateriaDoDia(dayEntry = {}, editalVerticalizado)
         const key = normalizeLabel(disciplina)
         if (!key || seen.has(key)) return null
         seen.add(key)
+        const found = findDisciplina(editalVerticalizado, disciplina)
+        const disciplinaIdx = found
+          ? (editalVerticalizado?.disciplinas || []).indexOf(found)
+          : -1
         return {
-          disciplina,
+          disciplina: found?.nome || disciplina,
           topicoNome: item.topico || 'Incidência / revisão',
           topicoNumero: '',
           topicKey: '',
-          modulo: disciplina,
+          modulo: found?.nome || disciplina,
           incidencia: true,
+          disciplinaIdx,
           firstStudyDate: dayKey,
         }
       })

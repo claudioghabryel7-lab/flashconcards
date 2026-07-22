@@ -8,6 +8,7 @@ import {
   FireIcon,
   ArrowRightIcon,
   CalendarDaysIcon,
+  BoltIcon,
 } from '@heroicons/react/24/outline'
 import { CheckIcon } from '@heroicons/react/24/solid'
 import { db } from '../../firebase/config'
@@ -44,7 +45,7 @@ function CheckChip({ checked, label, onClick, disabled, accent }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-2 font-mono text-xs transition disabled:opacity-50 sm:min-h-0 sm:px-2.5 sm:py-1 sm:text-[10px] ${
+      className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-mono text-[10px] transition disabled:opacity-50 ${
         checked
           ? accent
           : 'border-cp-border bg-cp-surface text-cp-muted hover:border-cp-accent/30 hover:text-cp-text'
@@ -146,21 +147,25 @@ export default function MateriaDoDiaCard({ user, courseId }) {
   const studyable = topics.filter((t) => !t.incidencia && topicProgressKey(t))
 
   return (
-    <section className="dash-tile dash-tile--amber relative max-w-full min-w-0 overflow-hidden p-3.5 sm:p-6" style={{ '--dash-delay': '0ms' }}>
-      <div className="dash-scanline opacity-40" aria-hidden />
-
+    <section
+      className="dash-focus relative max-w-full min-w-0 overflow-hidden p-4 sm:p-5"
+      style={{ '--dash-delay': '0ms' }}
+    >
       <div className="relative z-[1] flex max-w-full min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 max-w-full flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="cp-badge" style={{ color: 'var(--cp-accent-4)', borderColor: 'color-mix(in srgb, var(--cp-accent-4) 35%, transparent)', background: 'color-mix(in srgb, var(--cp-accent-4) 12%, transparent)' }}>
-              Matéria do dia
+            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-cp-accent-4">
+              Hoje
             </span>
             {dayMeta?.incidencia ? (
-              <span className="cp-badge-cyan">Incidência</span>
+              <span className="rounded-md border border-cp-accent2/30 bg-cp-accent2/10 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-cp-accent2">
+                Incidência
+              </span>
             ) : null}
-            <span className="cp-badge text-[9px]">Sync Edital</span>
           </div>
-          <h2 className="cp-headline mt-2 break-words text-lg sm:mt-3 sm:text-2xl">Estudo de hoje</h2>
+          <h2 className="cp-headline mt-1.5 break-words text-xl sm:text-2xl">
+            {dayMeta?.incidencia ? 'Revisão de incidência' : 'Matéria do dia'}
+          </h2>
           <p className="mt-1 flex items-center gap-1.5 text-xs capitalize text-cp-muted">
             <CalendarDaysIcon className="h-3.5 w-3.5 shrink-0" />
             {formatTodayLabel(todayKey)}
@@ -168,25 +173,24 @@ export default function MateriaDoDiaCard({ user, courseId }) {
         </div>
 
         {!loading && studyable.length > 0 ? (
-          <div className="rounded-xl border border-cp-border bg-cp-surface px-3 py-2 text-right">
-            <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">Check-in</p>
+          <div className="rounded-lg border border-cp-border/80 bg-cp-surface/60 px-3 py-2 text-right">
+            <p className="font-mono text-[9px] uppercase tracking-wider text-cp-muted">Done</p>
             <p className="text-sm font-medium text-cp-text">
               {doneCount}/{studyable.length}
-              <span className="ml-1 text-xs font-normal text-cp-muted">completos</span>
             </p>
           </div>
         ) : null}
       </div>
 
       {dayMeta?.descricao ? (
-        <p className="relative mt-3 text-xs text-cp-muted line-clamp-2">{dayMeta.descricao}</p>
+        <p className="relative mt-2 text-xs text-cp-muted line-clamp-1">{dayMeta.descricao}</p>
       ) : null}
 
-      <div className="relative mt-4 space-y-3">
+      <div className="relative mt-4 space-y-2.5">
         {loading ? (
           <div className="space-y-2">
             {[1, 2].map((i) => (
-              <div key={i} className="h-24 animate-pulse rounded-xl border border-cp-border bg-cp-surface" />
+              <div key={i} className="h-20 animate-pulse rounded-xl border border-cp-border bg-cp-surface" />
             ))}
           </div>
         ) : error ? (
@@ -198,11 +202,8 @@ export default function MateriaDoDiaCard({ user, courseId }) {
             Selecione um curso no perfil para ver a matéria do dia.
           </p>
         ) : topics.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-cp-border bg-cp-surface px-4 py-5">
-            <p className="text-sm text-cp-text">Nenhuma matéria programada para hoje.</p>
-            <p className="mt-1 text-xs text-cp-muted">
-              Gere ou confira o cronograma no Guia Mentorado.
-            </p>
+          <div className="rounded-xl border border-dashed border-cp-border bg-cp-surface/50 px-4 py-5">
+            <p className="text-sm text-cp-text">Nada programado para hoje.</p>
             <Link
               to="/guia-mentorado"
               className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-cp-accent transition hover:gap-2"
@@ -223,30 +224,43 @@ export default function MateriaDoDiaCard({ user, courseId }) {
             const busy = savingKey?.startsWith(`${pKey}:`)
 
             if (topic.incidencia) {
+              const idx = Number.isInteger(topic.disciplinaIdx) ? topic.disciplinaIdx : -1
+              const hasIdx = idx >= 0
               return (
                 <div
                   key={`inc-${topic.disciplina}`}
-                  className="rounded-xl border border-cp-border bg-cp-surface/80 p-3 sm:p-4"
+                  className="rounded-xl border border-cp-accent2/25 bg-cp-accent2/5 p-3.5"
                 >
-                  <p className="font-mono text-[10px] uppercase tracking-wider text-cp-muted">
-                    Revisão · incidência
+                  <p className="font-mono text-[9px] uppercase tracking-wider text-cp-accent2">
+                    1 matéria · revisão completa
                   </p>
                   <h3 className="mt-1 text-sm font-medium text-cp-text">{topic.disciplina}</h3>
-                  <p className="mt-0.5 text-xs text-cp-muted">{topic.topicoNome}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Link
-                      to="/edital-verticalizado"
-                      className="inline-flex items-center gap-1 rounded-lg border border-cp-accent/25 bg-cp-accent/10 px-2.5 py-1.5 font-mono text-[10px] text-cp-accent transition hover:bg-cp-accent/20"
-                    >
-                      <BookOpenIcon className="h-3.5 w-3.5" />
-                      Abrir edital
-                    </Link>
-                    <Link
-                      to={`/guia-mentorado/${courseId}/${todayKey}`}
-                      className="inline-flex items-center gap-1 rounded-lg border border-cp-border px-2.5 py-1.5 font-mono text-[10px] text-cp-muted transition hover:border-cp-accent/30 hover:text-cp-text"
-                    >
-                      Ver dia no Guia
-                    </Link>
+                    {hasIdx ? (
+                      <>
+                        <Link
+                          to={`/conteudo-incidencia/${courseId}/${idx}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-cp-accent2/30 bg-cp-accent2/15 px-2.5 py-1.5 font-mono text-[10px] text-cp-accent2 transition hover:bg-cp-accent2/25"
+                        >
+                          <BoltIcon className="h-3.5 w-3.5" />
+                          Abrir revisão
+                        </Link>
+                        <Link
+                          to={`/pratica-incidencia/${courseId}/${idx}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-cp-border px-2.5 py-1.5 font-mono text-[10px] text-cp-muted transition hover:border-cp-accent/30 hover:text-cp-text"
+                        >
+                          <FireIcon className="h-3.5 w-3.5" />
+                          Praticar
+                        </Link>
+                      </>
+                    ) : (
+                      <Link
+                        to={`/guia-mentorado/${courseId}/${todayKey}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-cp-border px-2.5 py-1.5 font-mono text-[10px] text-cp-muted transition hover:text-cp-text"
+                      >
+                        Ver no Guia
+                      </Link>
+                    )}
                   </div>
                 </div>
               )
@@ -255,11 +269,11 @@ export default function MateriaDoDiaCard({ user, courseId }) {
             return (
               <article
                 key={pKey || topic.topicKey}
-                className="rounded-xl border border-cp-border bg-cp-surface/80 p-3 transition hover:border-cp-accent/25 sm:p-4"
+                className="rounded-xl border border-cp-border/80 bg-cp-surface/50 p-3.5 transition hover:border-cp-accent/30"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="break-words font-mono text-[10px] uppercase tracking-wider text-cp-muted">
+                    <p className="break-words font-mono text-[9px] uppercase tracking-wider text-cp-muted">
                       {topic.disciplina}
                     </p>
                     <h3 className="mt-0.5 break-words text-sm font-medium leading-snug text-cp-text">
@@ -267,38 +281,38 @@ export default function MateriaDoDiaCard({ user, courseId }) {
                     </h3>
                   </div>
                   {check.flashcards && check.questoes && check.estudado ? (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] text-emerald-600 dark:text-emerald-400">
+                    <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[9px] text-emerald-600 dark:text-emerald-400">
                       <CheckCircleIcon className="h-3.5 w-3.5" />
-                      Dia ok
+                      Ok
                     </span>
                   ) : null}
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   <Link
                     to={`/conteudo-completo/topic/${courseId}/${topicKeyUrl}?nome=${nome}`}
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-cp-border bg-cp-bg-elevated px-3 py-2 font-mono text-xs text-cp-text transition hover:border-cp-accent/40 hover:text-cp-accent sm:min-h-0 sm:px-2.5 sm:py-1.5 sm:text-[10px]"
+                    className="inline-flex items-center gap-1 rounded-lg border border-cp-border bg-cp-bg-elevated px-2.5 py-1.5 font-mono text-[10px] text-cp-text transition hover:border-cp-accent/40 hover:text-cp-accent"
                   >
                     <BookOpenIcon className="h-3.5 w-3.5" />
                     Material
                   </Link>
                   <Link
                     to={`/flashcards/topico/${courseId}?disciplina=${disc}&modulo=${modulo}&topicKey=${topicKeyParam}`}
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-cp-accent/25 bg-cp-accent/10 px-3 py-2 font-mono text-xs text-cp-accent transition hover:bg-cp-accent/20 sm:min-h-0 sm:px-2.5 sm:py-1.5 sm:text-[10px]"
+                    className="inline-flex items-center gap-1 rounded-lg border border-cp-accent/25 bg-cp-accent/10 px-2.5 py-1.5 font-mono text-[10px] text-cp-accent transition hover:bg-cp-accent/20"
                   >
                     <SparklesIcon className="h-3.5 w-3.5" />
-                    Flashcards
+                    Flash
                   </Link>
                   <Link
                     to={`/questoes-topic/${courseId}/${topicKeyUrl}?nome=${nome}`}
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-cp-accent2/25 bg-cp-accent2/10 px-3 py-2 font-mono text-xs text-cp-accent2 transition hover:bg-cp-accent2/20 sm:min-h-0 sm:px-2.5 sm:py-1.5 sm:text-[10px]"
+                    className="inline-flex items-center gap-1 rounded-lg border border-cp-accent2/25 bg-cp-accent2/10 px-2.5 py-1.5 font-mono text-[10px] text-cp-accent2 transition hover:bg-cp-accent2/20"
                   >
                     <FireIcon className="h-3.5 w-3.5" />
                     Questões
                   </Link>
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-1.5 border-t border-cp-border pt-3">
+                <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-cp-border/60 pt-2.5">
                   <CheckChip
                     label="Material"
                     checked={check.estudado}
@@ -307,7 +321,7 @@ export default function MateriaDoDiaCard({ user, courseId }) {
                     accent="border-emerald-500/35 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
                   />
                   <CheckChip
-                    label="Flashcards"
+                    label="Flash"
                     checked={check.flashcards}
                     disabled={busy}
                     onClick={() => handleToggle(topic, 'flashcards')}
@@ -330,9 +344,9 @@ export default function MateriaDoDiaCard({ user, courseId }) {
       {courseId && topics.length > 0 ? (
         <Link
           to={`/guia-mentorado/${courseId}/${todayKey}`}
-          className="relative mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-cp-accent transition hover:gap-2"
+          className="relative mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-cp-accent transition hover:gap-2"
         >
-          Ver dia completo no Guia
+          Dia completo no Guia
           <ArrowRightIcon className="h-3.5 w-3.5" />
         </Link>
       ) : null}

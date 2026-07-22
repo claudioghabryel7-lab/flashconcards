@@ -47,6 +47,26 @@ FORMATO (APENAS JSON):
 Retorne APENAS o JSON válido, sem markdown.`
 }
 
+function formatTopicosBlock(topicos = []) {
+  return (topicos || [])
+    .map((t, i) => {
+      if (typeof t === 'string') return `${i + 1}. ${t}`
+      return `${i + 1}. ${t.numero ? `${t.numero} - ` : ''}${t.nome || t}`
+    })
+    .join('\n')
+}
+
+const INCIDENCIA_REVISAO_RULES = `INSTRUÇÕES DA REVISÃO (OBRIGATÓRIO):
+1. Para CADA tópico, liste assuntos cobrados com probabilidade 10–100%
+2. Distribuição realista (alta/média/baixa) — não coloque tudo em 80–100%
+3. Ordene da maior para a menor probabilidade
+4. Para CADA assunto, escreva uma REVISÃO COMPLETA e DIRETA (mínimo ~120 palavras): o que estudar, artigos/leis/súmulas quando couber, pegadinhas da banca, e por que cai
+5. NÃO corte a revisão no meio. NÃO use reticências "..." no lugar do conteúdo
+6. NÃO deixe o campo "revisao" curto ou vazio`
+
+/**
+ * Prompt de incidência para disciplina inteira (só use se poucos tópicos).
+ */
 export function buildIncidenciaAutomationPrompt({
   disciplinaNome,
   topicos = [],
@@ -55,10 +75,8 @@ export function buildIncidenciaAutomationPrompt({
   courseName = 'Curso Preparatório',
   editalText = '',
 }) {
-  const topicosBlock = (topicos || [])
-    .map((t, i) => `${i + 1}. ${t.numero ? `${t.numero} - ` : ''}${t.nome || t}`)
-    .join('\n')
-  const edital = String(editalText || '').slice(0, 10000)
+  const topicosBlock = formatTopicosBlock(topicos)
+  const edital = String(editalText || '').slice(0, 40000)
 
   return `DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', {
     day: '2-digit',
@@ -76,17 +94,14 @@ CARGO: ${cargo || 'NÃO DEFINIDO'}
 TÓPICOS DA DISCIPLINA:
 ${topicosBlock || '(usar edital abaixo)'}
 
-EDITAL BASE (trecho):
-${edital}${editalText.length > 10000 ? '\n\n[texto truncado...]' : ''}
+EDITAL BASE:
+${edital}${String(editalText || '').length > 40000 ? '\n\n[texto truncado...]' : ''}
 
 TAREFA:
 Gere um conteúdo de revisão de incidência focado no que REALMENTE tende a cair.
+Cubra TODOS os tópicos listados — nenhum pode faltar.
 
-INSTRUÇÕES:
-1. Para cada tópico, liste assuntos cobrados com probabilidade 10–100%
-2. Distribuição realista (alta/média/baixa) — não coloque tudo em 80–100%
-3. Ordene da maior para a menor probabilidade
-4. Para cada assunto, escreva uma REVISÃO direta do que estudar
+${INCIDENCIA_REVISAO_RULES}
 
 JSON:
 {
@@ -99,7 +114,7 @@ JSON:
       "topicoNumero": "número",
       "topicoNome": "nome",
       "assuntos": [
-        { "assunto": "nome", "probabilidade": 95, "revisao": "estude X porque cai" }
+        { "assunto": "nome", "probabilidade": 95, "revisao": "revisão completa e longa do que estudar" }
       ]
     }
   ],
@@ -107,6 +122,96 @@ JSON:
     { "assunto": "assunto geral", "probabilidade": 95, "revisao": "revisão completa" }
   ],
   "dicasEstudo": ["dica 1", "dica 2"]
+}
+
+Retorne APENAS o JSON válido.`
+}
+
+/**
+ * Prompt de um lote de tópicos (evita truncamento).
+ */
+export function buildIncidenciaBatchPrompt({
+  disciplinaNome,
+  topicos = [],
+  banca = '',
+  cargo = '',
+  courseName = 'Curso Preparatório',
+  editalText = '',
+  batchIndex = 1,
+  batchTotal = 1,
+}) {
+  const topicosBlock = formatTopicosBlock(topicos)
+  const edital = String(editalText || '').slice(0, 35000)
+
+  return `DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  })}
+
+Você é especialista em incidência de prova para concursos.
+Este é o LOTE ${batchIndex}/${batchTotal} da disciplina "${disciplinaNome}".
+
+CURSO: ${courseName}
+BANCA: ${banca || 'NÃO DEFINIDA'}
+CARGO: ${cargo || 'NÃO DEFINIDO'}
+
+TÓPICOS DESTE LOTE (gere SOMENTE estes):
+${topicosBlock}
+
+EDITAL BASE (referência):
+${edital}${String(editalText || '').length > 35000 ? '\n\n[texto truncado...]' : ''}
+
+${INCIDENCIA_REVISAO_RULES}
+
+JSON (apenas este lote):
+{
+  "analisePorTopico": [
+    {
+      "topicoNumero": "número",
+      "topicoNome": "nome",
+      "assuntos": [
+        { "assunto": "nome", "probabilidade": 85, "revisao": "revisão completa ≥120 palavras" }
+      ]
+    }
+  ]
+}
+
+Retorne APENAS o JSON válido, sem markdown.`
+}
+
+/**
+ * Resumo geral após os lotes.
+ */
+export function buildIncidenciaResumoPrompt({
+  disciplinaNome,
+  banca = '',
+  cargo = '',
+  courseName = 'Curso Preparatório',
+  analisePorTopico = [],
+}) {
+  const preview = (analisePorTopico || [])
+    .slice(0, 40)
+    .map((t) => {
+      const top = (t.assuntos || [])
+        .slice(0, 3)
+        .map((a) => `${a.assunto} (${a.probabilidade}%)`)
+        .join('; ')
+      return `- ${t.topicoNumero || ''} ${t.topicoNome}: ${top}`
+    })
+    .join('\n')
+
+  return `Com base na análise de incidência da disciplina "${disciplinaNome}" (${courseName}, banca ${banca || 'N/D'}, cargo ${cargo || 'N/D'}), gere o RESUMO GERAL.
+
+ASSUNTOS JÁ MAPEADOS:
+${preview || '(sem preview)'}
+
+JSON:
+{
+  "topAssuntosGerais": [
+    { "assunto": "assunto transversal mais cobrado", "probabilidade": 95, "revisao": "revisão completa ≥100 palavras" }
+  ],
+  "dicasEstudo": ["dica prática 1", "dica prática 2", "dica prática 3"]
 }
 
 Retorne APENAS o JSON válido.`

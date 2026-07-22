@@ -1,7 +1,7 @@
 /**
  * Bot do Guia Mentorado — sem IA / sem Google Search.
- * Distribui TODOS os tópicos do edital até 5 dias antes da prova;
- * nos últimos 5 dias agenda revisão por incidência (todas as matérias).
+ * Distribui TODOS os tópicos do edital até a reta final;
+ * na incidência agenda 1 matéria por dia (revisão completa).
  */
 import dayjs from 'dayjs'
 import { formatTopicoAsModulo } from './editalVerticalizadoLoader'
@@ -146,20 +146,23 @@ function distributeTopics(topics, bucketCount) {
   return buckets
 }
 
-/** Distribui todas as disciplinas nos N dias de incidência. */
-function distributeDisciplinas(disciplinas, dayCount) {
+/**
+ * 1 matéria por dia de incidência.
+ * Se houver mais dias que disciplinas, cicla (2ª passagem de revisão).
+ */
+function distributeDisciplinasOnePerDay(disciplinas, dayCount) {
   const buckets = Array.from({ length: Math.max(1, dayCount) }, () => [])
   if (!disciplinas.length) return buckets
-  disciplinas.forEach((nome, idx) => {
-    buckets[idx % buckets.length].push(nome)
-  })
+  for (let i = 0; i < buckets.length; i += 1) {
+    buckets[i].push(disciplinas[i % disciplinas.length])
+  }
   return buckets
 }
 
 /**
  * Monta o cronograma (bot determinístico).
- * - Estudo de tópicos: hoje → (prova − 5 dias)
- * - Últimos 5 dias: incidência de TODAS as matérias
+ * - Estudo de tópicos até a janela de incidência
+ * - Incidência: 1 matéria por dia (revisão completa)
  */
 export function buildDeterministicMentoradoCronograma({
   edital,
@@ -191,13 +194,19 @@ export function buildDeterministicMentoradoCronograma({
   const hasTAF = Boolean(config.hasTAF)
   const tafExercicios = Array.isArray(config.tafExercicios) ? config.tafExercicios.filter(Boolean) : []
 
-  // Últimos 5 dias = incidência; o restante = estudo de tópicos (até 5 dias antes da prova)
-  const incidenciaCount = Math.min(INCIDENCIA_FINAL_DAYS, Math.max(0, dateKeys.length - 1))
+  // Incidência: 1 matéria/dia — janela = max(5, nº de disciplinas), limitada à janela disponível
+  const incidenciaCount = Math.min(
+    Math.max(INCIDENCIA_FINAL_DAYS, disciplinas.length || 1),
+    Math.max(0, dateKeys.length - 1),
+  )
   const studyDateKeys = dateKeys.slice(0, Math.max(1, dateKeys.length - incidenciaCount))
   const incidenciaDateKeys = dateKeys.slice(studyDateKeys.length)
 
   const topicBuckets = distributeTopics(topics, studyDateKeys.length)
-  const disciplinaBuckets = distributeDisciplinas(disciplinas, incidenciaDateKeys.length || 1)
+  const disciplinaBuckets = distributeDisciplinasOnePerDay(
+    disciplinas,
+    incidenciaDateKeys.length || 1,
+  )
   const cronograma = []
 
   studyDateKeys.forEach((data, idx) => {
