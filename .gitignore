@@ -44,3 +44,4 @@ firebase-service-account.json
 
 # Vercel local link (não versionar)
 .vercel/
+tsconfig.tsbuildinfo
