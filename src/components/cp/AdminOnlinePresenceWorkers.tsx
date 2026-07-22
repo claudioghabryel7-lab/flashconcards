@@ -1,19 +1,26 @@
 'use client'
 
 /**
- * Workers do admin em qualquer página do app (não só no painel Admin).
- * Professor IA: corrige Moderação automaticamente enquanto o admin estiver online.
+ * Workers de presença: enquanto QUALQUER usuário autenticado está online
+ * (aba visível), o Professor IA e o Guia Mentorado avançam automaticamente.
+ * Alunos não veem controles — só o indicador "Professor online".
  */
-import { useAdminOnlineWorkers } from '@/hooks/useAdminOnlineWorkers'
 import { useAuth } from '@/hooks/useAuth'
+import { useAdminOnlineWorkers } from '@/hooks/useAdminOnlineWorkers'
 
 export default function AdminOnlinePresenceWorkers() {
-  const { isAdmin } = useAuth()
+  const { user, isAdmin } = useAuth()
+  const loggedIn = Boolean(user?.uid)
+
   useAdminOnlineWorkers({
-    enabled: Boolean(isAdmin),
+    enabled: loggedIn,
     professor: true,
     mentorado: true,
-    content: true,
+    // Automação global de conteúdo (revisão/níveis) só no admin
+    content: Boolean(isAdmin),
+    // Redação semanal (tema + notificação) só no admin
+    allowRedacaoWeekly: Boolean(isAdmin),
   })
+
   return null
 }

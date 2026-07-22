@@ -30,12 +30,28 @@ const JOB_LABELS = {
   materia_revisada: 'Matéria revisada', // legado
   guia_mentorado_cronograma: 'Cronograma Guia Mentorado',
   guia_mentorado_automation: 'Conteúdos do dia (Guia Mentorado)',
+  guia_mentorado_incidencia: 'Incidência do dia (Guia Mentorado)',
   guia_mentorado_backfill: 'Guia Mentorado (dia 1 → hoje)',
   guia_mentorado: 'Guia Mentorado', // legado
   professor_supervisor: 'Professor fiscalizador',
   flashcards_edital: 'Flashcards do edital', // legado
   admin_batch: 'Geração em lote', // legado
 }
+
+/** Jobs de automação implícita — alunos não veem o banner */
+const HIDDEN_FROM_STUDENT_JOBS = new Set([
+  'professor_supervisor',
+  'guia_mentorado_cronograma',
+  'guia_mentorado_automation',
+  'guia_mentorado_incidencia',
+  'guia_mentorado_backfill',
+  'guia_mentorado',
+  'admin_materia_revisada',
+  'admin_edital_verticalizado',
+  'admin_batch',
+  'conteudo_incidencia',
+  'questoes_incidencia',
+])
 
 const WAITING_HINTS = {
   [GENERATION_JOB_STATUS.WAITING_API]:
@@ -109,7 +125,7 @@ function saveMinimized(value) {
 
 export default function BackgroundGenerationBanner() {
   const { user, isAdmin } = useAuth()
-  const { jobs, subscribeError } = useBackgroundGeneration()
+  const { jobs } = useBackgroundGeneration()
   const [dismissing, setDismissing] = useState({})
   const [dismissErrors, setDismissErrors] = useState({})
   const [stoppingAll, setStoppingAll] = useState(false)
@@ -117,15 +133,20 @@ export default function BackgroundGenerationBanner() {
   const [minimized, setMinimized] = useState(loadMinimized)
   const [nowTick, setNowTick] = useState(Date.now())
 
-  useEffect(() => {
-    if (!jobs.length) return undefined
-    const timer = setInterval(() => setNowTick(Date.now()), 15_000)
-    return () => clearInterval(timer)
-  }, [jobs.length])
+  const visibleJobs = (jobs || []).filter((job) => {
+    if (isAdmin) return true
+    return !HIDDEN_FROM_STUDENT_JOBS.has(job.jobType)
+  })
 
   useEffect(() => {
-    if (!jobs.length) setMinimized(false)
-  }, [jobs.length])
+    if (!visibleJobs.length) return undefined
+    const timer = setInterval(() => setNowTick(Date.now()), 15_000)
+    return () => clearInterval(timer)
+  }, [visibleJobs.length])
+
+  useEffect(() => {
+    if (!visibleJobs.length) setMinimized(false)
+  }, [visibleJobs.length])
 
   useEffect(() => {
     if (!stopFeedback) return undefined
@@ -133,7 +154,7 @@ export default function BackgroundGenerationBanner() {
     return () => clearTimeout(timer)
   }, [stopFeedback])
 
-  if (!jobs.length) return null
+  if (!visibleJobs.length) return null
 
   const handleStopAll = async () => {
     if (!user?.uid || stoppingAll) return
@@ -149,7 +170,7 @@ export default function BackgroundGenerationBanner() {
         : await cancelAllGenerationJobs(user.uid)
       setStopFeedback({
         type: 'success',
-        text: `Parados ${result.cancelled ?? jobs.length} job(s).`,
+        text: `Parados ${result.cancelled ?? visibleJobs.length} job(s).`,
       })
     } catch (err) {
       setStopFeedback({
@@ -189,8 +210,8 @@ export default function BackgroundGenerationBanner() {
   }
 
   if (minimized) {
-    const running = jobs.filter((j) => j.status === GENERATION_JOB_STATUS.RUNNING).length
-    const waiting = jobs.length - running
+    const running = visibleJobs.filter((j) => j.status === GENERATION_JOB_STATUS.RUNNING).length
+    const waiting = visibleJobs.length - running
 
     return (
       <div className="cp-fixed-br fixed z-[90] flex max-w-[min(20rem,calc(100%-2rem))] flex-col items-end gap-2">
@@ -225,7 +246,7 @@ export default function BackgroundGenerationBanner() {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cp-accent opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-cp-accent" />
             </span>
-            {jobs.length} tarefa{jobs.length !== 1 ? 's' : ''} IA
+            {visibleJobs.length} tarefa{visibleJobs.length !== 1 ? 's' : ''} IA
             {waiting > 0 ? ` · ${waiting} aguardando` : ''}
             <ChevronUpIcon className="h-4 w-4 text-cp-muted" />
           </button>
@@ -240,11 +261,6 @@ export default function BackgroundGenerationBanner() {
       role="status"
       aria-live="polite"
     >
-      {subscribeError ? (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-200">
-          {subscribeError}
-        </div>
-      ) : null}
       <div className="flex items-center justify-end gap-2">
         {stopFeedback ? (
           <p
@@ -276,7 +292,7 @@ export default function BackgroundGenerationBanner() {
           {stoppingAll ? 'Parando…' : isAdmin ? 'Parar tudo' : 'Parar todas'}
         </button>
       </div>
-      {jobs.map((job) => {
+      {visibleJobs.map((job) => {
         const waiting = isWaitingStatus(job.status)
         const pending = isPendingStatus(job.status)
         const waitingTimeout = job.status === GENERATION_JOB_STATUS.WAITING_TIMEOUT
