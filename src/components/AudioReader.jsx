@@ -11,42 +11,35 @@ import {
   cancelSpeech,
   getTeacherSettings,
   isSpeechSupported,
+  listGeminiVoices,
   pauseSpeech,
-  pickTeacherVoice,
   prepareSpeechText,
+  resolveTeacherVoice,
   resumeSpeech,
   saveTeacherSettings,
   speakText,
-  waitForVoices,
 } from '../services/teacherSpeechService'
 
 /**
- * Leitor de materiais com Modo Professor (voz local, sem API de IA).
+ * Leitor de materiais com vozes Gemini Live (Modo Professor).
  */
 const AudioReader = ({ text, title = '', className = '', showIntro = true }) => {
   const [isReading, setIsReading] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [isSupported] = useState(() => isSpeechSupported())
-  const [voices, setVoices] = useState([])
   const [settings, setSettings] = useState(() => getTeacherSettings())
   const [error, setError] = useState(null)
   const abortRef = useRef(null)
 
   useEffect(() => {
-    if (!isSupported) return undefined
-
-    let alive = true
-    waitForVoices().then((list) => {
-      if (alive) setVoices(list)
-    })
     return () => {
-      alive = false
       if (abortRef.current) abortRef.current.abort()
       cancelSpeech()
     }
-  }, [isSupported])
+  }, [])
 
-  const selectedVoice = pickTeacherVoice(voices, settings.gender)
+  const selectedVoice = resolveTeacherVoice(settings)
+  const voiceOptions = listGeminiVoices(settings.gender)
 
   const updateSettings = (partial) => {
     setSettings(saveTeacherSettings(partial))
@@ -74,18 +67,15 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
     setIsPaused(false)
 
     try {
-      const voice = pickTeacherVoice(voices, settings.gender)
       if (showIntro) {
         await speakText(buildMaterialIntro(title), {
-          voice,
-          gender: settings.gender,
+          voiceName: settings.voiceName,
           rate: settings.speechRate,
           signal: controller.signal,
         })
       }
       await speakText(clean, {
-        voice,
-        gender: settings.gender,
+        voiceName: settings.voiceName,
         rate: settings.speechRate,
         signal: controller.signal,
       })
@@ -94,7 +84,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
     } catch (err) {
       if (err?.name === 'AbortError') return
       console.error('Erro na leitura:', err)
-      setError(err?.message || 'Falha na leitura')
+      setError(err?.message || 'Falha na leitura Gemini')
       setIsReading(false)
       setIsPaused(false)
     }
@@ -139,7 +129,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
               Modo Professor
             </p>
             <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
-              {selectedVoice?.name || 'Voz local'} · sem IA
+              Gemini Live · {selectedVoice?.label || settings.voiceName}
             </p>
           </div>
         </div>
@@ -174,7 +164,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
 
       <div className="space-y-2">
         <div>
-          <p className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-400">Voz do professor</p>
+          <p className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-400">Tipo de voz</p>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -203,11 +193,28 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
 
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+            Voz Gemini Live
+          </label>
+          <select
+            value={settings.voiceName}
+            onChange={(e) => updateSettings({ voiceName: e.target.value })}
+            className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+          >
+            {voiceOptions.map((voice) => (
+              <option key={voice.id} value={voice.id}>
+                {voice.label} — {voice.hint}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
             Velocidade: {Number(settings.speechRate).toFixed(1)}x
           </label>
           <input
             type="range"
-            min="0.7"
+            min="0.75"
             max="1.25"
             step="0.05"
             value={settings.speechRate}
@@ -219,7 +226,7 @@ const AudioReader = ({ text, title = '', className = '', showIntro = true }) => 
 
       {isReading && (
         <div className="mt-2 text-xs text-indigo-600 dark:text-indigo-400">
-          {isPaused ? 'Pausado' : 'Lendo com pausas naturais…'}
+          {isPaused ? 'Pausado' : 'Lendo com voz Gemini Live…'}
         </div>
       )}
       {error && <div className="mt-2 text-xs text-red-500">{error}</div>}

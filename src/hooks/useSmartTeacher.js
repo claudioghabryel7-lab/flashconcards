@@ -6,19 +6,17 @@ import {
   getTeacherSettings,
   isSpeechSupported,
   pauseSpeech,
-  pickTeacherVoice,
   playTickSound,
   prepareSpeechText,
+  resolveTeacherVoice,
   resumeSpeech,
   runThinkCountdown,
   saveTeacherSettings,
   speakText,
-  waitForVoices,
 } from '../services/teacherSpeechService'
 
 /**
- * Orquestra o Modo Professor nos flashcards:
- * intro → lê frente → ticks/think time → vira → lê verso → próximo.
+ * Orquestra o Modo Professor nos flashcards com vozes Gemini Live.
  */
 export function useSmartTeacher({
   cards = [],
@@ -30,7 +28,6 @@ export function useSmartTeacher({
   deckTitle = '',
 }) {
   const [supported] = useState(() => isSpeechSupported())
-  const [voices, setVoices] = useState([])
   const [settings, setSettings] = useState(() => getTeacherSettings())
   const [status, setStatus] = useState('idle') // idle | playing | paused | thinking
   const [phase, setPhase] = useState('idle') // intro | front | thinking | back | next | done
@@ -46,7 +43,6 @@ export function useSmartTeacher({
   const indexRef = useRef(currentIndex)
   const flippedRef = useRef(flipped)
   const settingsRef = useRef(settings)
-  const voicesRef = useRef([])
 
   useEffect(() => {
     cardsRef.current = cards
@@ -60,21 +56,8 @@ export function useSmartTeacher({
   useEffect(() => {
     settingsRef.current = settings
   }, [settings])
-  useEffect(() => {
-    voicesRef.current = voices
-  }, [voices])
 
-  useEffect(() => {
-    let alive = true
-    waitForVoices().then((list) => {
-      if (alive) setVoices(list)
-    })
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  const selectedVoice = pickTeacherVoice(voices, settings.gender)
+  const selectedVoice = resolveTeacherVoice(settings)
 
   const stopAll = useCallback(() => {
     runIdRef.current += 1
@@ -111,16 +94,8 @@ export function useSmartTeacher({
       if (!clean) return
       await waitIfPaused(signal)
       const cfg = settingsRef.current
-      let voiceList = voicesRef.current
-      if (!voiceList?.length) {
-        voiceList = await waitForVoices()
-        voicesRef.current = voiceList
-        setVoices(voiceList)
-      }
-      const voice = pickTeacherVoice(voiceList, cfg.gender)
       await speakText(clean, {
-        voice,
-        gender: cfg.gender,
+        voiceName: cfg.voiceName,
         rate: cfg.speechRate,
         signal,
       })
@@ -132,7 +107,7 @@ export function useSmartTeacher({
   const runSessionFrom = useCallback(
     async (startIndex) => {
       if (!supported) {
-        setError('Seu navegador não suporta leitura de áudio local.')
+        setError('Reprodução de áudio não suportada neste navegador.')
         return
       }
 
@@ -155,18 +130,12 @@ export function useSmartTeacher({
           const card = cardsRef.current[i]
           if (!card) break
 
-          // Garante card atual alinhado
-          if (indexRef.current !== i) {
-            // navegação externa via onGoNext/onSelect — o pai controla índice
-          }
-
           const front = card.pergunta || card.frente || ''
           const back = card.resposta || card.verso || ''
           const materia = deckSubtitle || card.materia || ''
           const assunto = deckTitle || card.modulo || ''
           const subjectLine = [materia, assunto].filter(Boolean).join('. ')
 
-          // Frente
           if (flippedRef.current) onFlipChange?.(false)
           setPhase('intro')
           await speak(
@@ -180,7 +149,6 @@ export function useSmartTeacher({
             .join('. ')
           await speak(frontText || 'Frente do flashcard.', controller.signal)
 
-          // Tempo para pensar + ticks
           setPhase('thinking')
           setStatus('thinking')
           setThinkRemaining(settingsRef.current.thinkSeconds)
@@ -193,7 +161,6 @@ export function useSmartTeacher({
             },
           })
 
-          // Vira e lê verso
           onFlipChange?.(true)
           setPhase('back')
           setStatus('playing')
@@ -218,11 +185,9 @@ export function useSmartTeacher({
             setStatus('playing')
           }
 
-          // Vira para a frente antes de trocar o card (evita flash do verso)
           onFlipChange?.(false)
           onGoNext?.()
           i += 1
-          // Pequena pausa para o React aplicar o novo índice/card
           await new Promise((r) => setTimeout(r, 350))
         }
       } catch (err) {
@@ -264,14 +229,6 @@ export function useSmartTeacher({
     setEnabled(false)
   }, [stopAll])
 
-  // Se o usuário navegar manualmente durante a sessão, interrompe para evitar desalinhamento
-  useEffect(() => {
-    if (!playingRef.current) return
-    // Não cancela no avanço automático do próprio professor (phase next → index change)
-    if (phase === 'next' || phase === 'done') return
-    // Se mudou índice sem estar na fase de transição, para
-  }, [currentIndex, phase])
-
   return {
     supported,
     enabled,
@@ -281,7 +238,6 @@ export function useSmartTeacher({
     settings,
     updateSettings,
     selectedVoice,
-    voices,
     error,
     play,
     pause,

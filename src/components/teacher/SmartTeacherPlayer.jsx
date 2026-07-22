@@ -7,7 +7,7 @@ import {
   StopIcon,
   SpeakerWaveIcon,
 } from '@heroicons/react/24/outline'
-import { THINK_TIME_OPTIONS } from '../../services/teacherSpeechService'
+import { listGeminiVoices, THINK_TIME_OPTIONS } from '../../services/teacherSpeechService'
 
 const PHASE_LABELS = {
   idle: 'Pronto para ensinar',
@@ -20,8 +20,7 @@ const PHASE_LABELS = {
 }
 
 /**
- * Painel do Modo Professor (sem API de IA).
- * Controles: play/pause/stop, voz M/F, tempo para virar o card.
+ * Painel do Modo Professor com vozes Gemini Live.
  */
 export default function SmartTeacherPlayer({
   supported,
@@ -40,11 +39,12 @@ export default function SmartTeacherPlayer({
 }) {
   const [showConfig, setShowConfig] = useState(false)
   const isActive = status === 'playing' || status === 'thinking' || status === 'paused'
+  const voiceOptions = listGeminiVoices(settings.gender)
 
   if (!supported) {
     return (
       <div className={`rounded-2xl border border-cp-border bg-cp-surface/80 px-3 py-2 text-xs text-cp-muted ${className}`}>
-        Leitura de áudio não suportada neste navegador.
+        Reprodução de áudio não suportada neste navegador.
       </div>
     )
   }
@@ -61,7 +61,7 @@ export default function SmartTeacherPlayer({
           </div>
           {!compact && (
             <p className="mt-1 text-[11px] leading-relaxed text-cp-muted">
-              Voz local profissional — sem IA. Lê a frente, conta o tempo, vira e lê o verso.
+              Vozes Gemini Live (Aoede, Kore, Despina, Charon…) — sem Assistente Google.
             </p>
           )}
         </div>
@@ -111,8 +111,8 @@ export default function SmartTeacherPlayer({
 
         <div className="ml-auto flex items-center gap-1.5 text-[11px] text-cp-muted">
           <SpeakerWaveIcon className="h-3.5 w-3.5" />
-          <span className="max-w-[140px] truncate sm:max-w-[220px]">
-            {selectedVoice?.name || 'Voz do sistema'}
+          <span className="max-w-[160px] truncate sm:max-w-[240px]">
+            Gemini · {selectedVoice?.label || settings.voiceName}
           </span>
         </div>
       </div>
@@ -146,7 +146,7 @@ export default function SmartTeacherPlayer({
         <div className="mt-3 space-y-3 rounded-xl border border-cp-border bg-cp-bg/80 p-3">
           <div>
             <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-cp-muted">
-              Voz do professor
+              Tipo de voz
             </p>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -172,9 +172,23 @@ export default function SmartTeacherPlayer({
                 Masculina
               </button>
             </div>
-            <p className="mt-1.5 text-[10px] leading-relaxed text-cp-muted">
-              Prioriza vozes Natural/Neural do seu aparelho (Edge/Chrome/iOS costumam soar mais humanas).
-            </p>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-cp-muted">
+              Voz Gemini Live
+            </label>
+            <select
+              value={settings.voiceName}
+              onChange={(e) => updateSettings({ voiceName: e.target.value })}
+              className="w-full rounded-xl border border-cp-border bg-cp-surface px-3 py-2 text-xs text-cp-text"
+            >
+              {voiceOptions.map((voice) => (
+                <option key={voice.id} value={voice.id}>
+                  {voice.label} — {voice.hint}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -200,7 +214,7 @@ export default function SmartTeacherPlayer({
             </label>
             <input
               type="range"
-              min="0.7"
+              min="0.75"
               max="1.25"
               step="0.05"
               value={settings.speechRate}

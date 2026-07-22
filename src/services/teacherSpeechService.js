@@ -1,9 +1,10 @@
 /**
- * Motor de fala do Modo Professor — 100% local (Web Speech API).
- * Sem API de IA: usa vozes do navegador/SO, priorizando Neural/Natural.
+ * Motor de fala do Modo Professor — vozes Gemini Live (TTS).
+ * Aoede, Despina, Kore, Sulafat, Vindemiatrix, Zephyr, Charon, Orus, etc.
+ * Não usa Web Speech / Assistente Google (Regina, Yasmin…).
  */
 
-const STORAGE_KEY = 'flashconcards.smartTeacher.v1'
+const STORAGE_KEY = 'flashconcards.smartTeacher.v2'
 
 export const THINK_TIME_OPTIONS = [
   { value: 5, label: '5 segundos' },
@@ -15,40 +16,76 @@ export const THINK_TIME_OPTIONS = [
   { value: 60, label: '1 minuto' },
 ]
 
+/** Catálogo Gemini Live / Gemini TTS */
+export const GEMINI_LIVE_VOICES = {
+  female: [
+    { id: 'Aoede', label: 'Aoede', hint: 'Leve e envolvente' },
+    { id: 'Despina', label: 'Despina', hint: 'Suave' },
+    { id: 'Kore', label: 'Kore', hint: 'Firme' },
+    { id: 'Sulafat', label: 'Sulafat', hint: 'Acolhedora' },
+    { id: 'Vindemiatrix', label: 'Vindemiatrix', hint: 'Gentil' },
+    { id: 'Zephyr', label: 'Zephyr', hint: 'Brilhante' },
+    { id: 'Leda', label: 'Leda', hint: 'Jovem' },
+    { id: 'Achernar', label: 'Achernar', hint: 'Macia' },
+    { id: 'Callirrhoe', label: 'Callirrhoe', hint: 'Descontraída' },
+    { id: 'Autonoe', label: 'Autonoe', hint: 'Clara' },
+    { id: 'Erinome', label: 'Erinome', hint: 'Nítida' },
+    { id: 'Gacrux', label: 'Gacrux', hint: 'Madura' },
+    { id: 'Laomedeia', label: 'Laomedeia', hint: 'Animada' },
+    { id: 'Pulcherrima', label: 'Pulcherrima', hint: 'Direta' },
+  ],
+  male: [
+    { id: 'Charon', label: 'Charon', hint: 'Informativo' },
+    { id: 'Orus', label: 'Orus', hint: 'Firme' },
+    { id: 'Puck', label: 'Puck', hint: 'Animado' },
+    { id: 'Fenrir', label: 'Fenrir', hint: 'Energético' },
+    { id: 'Alnilam', label: 'Alnilam', hint: 'Firme' },
+    { id: 'Schedar', label: 'Schedar', hint: 'Equilibrado' },
+    { id: 'Iapetus', label: 'Iapetus', hint: 'Claro' },
+    { id: 'Umbriel', label: 'Umbriel', hint: 'Descontraído' },
+    { id: 'Algieba', label: 'Algieba', hint: 'Suave' },
+    { id: 'Enceladus', label: 'Enceladus', hint: 'Aéreo' },
+    { id: 'Rasalgethi', label: 'Rasalgethi', hint: 'Didático' },
+    { id: 'Sadaltager', label: 'Sadaltager', hint: 'Conhecedor' },
+    { id: 'Achird', label: 'Achird', hint: 'Amigável' },
+    { id: 'Sadachbia', label: 'Sadachbia', hint: 'Vivo' },
+    { id: 'Zubenelgenubi', label: 'Zubenelgenubi', hint: 'Casual' },
+    { id: 'Algenib', label: 'Algenib', hint: 'Grave' },
+  ],
+}
+
 export const DEFAULT_TEACHER_SETTINGS = {
-  gender: 'female', // 'female' | 'male'
+  gender: 'female',
+  voiceName: 'Aoede',
   thinkSeconds: 15,
-  speechRate: 0.92,
+  speechRate: 1,
   autoAdvance: true,
 }
 
-const FEMALE_HINTS = [
-  'female', 'woman', 'feminina', 'mulher',
-  'francisca', 'maria', 'luciana', 'helena', 'gabriela', 'vitória', 'vitoria',
-  'fernanda', 'camila', 'ana', 'julia', 'júlia', 'beatriz', 'isabela',
-  'daniela', 'patricia', 'patrícia', 'sara', 'sofia', 'joana', 'ines', 'ines',
-  'amalia', 'amália', 'raquel', 'catarina', 'lucia', 'lúcia',
-]
-
-const MALE_HINTS = [
-  'male', 'man', 'masculina', 'homem',
-  'antonio', 'antónio', 'daniel', 'felipe', 'ricardo', 'thiago', 'tiago',
-  'joao', 'joão', 'pedro', 'carlos', 'paulo', 'lucas', 'bruno', 'rafael',
-  'gustavo', 'marcelo', 'rodrigo', 'andre', 'andré', 'faber', 'jeff', 'cadu',
-  'edresson', 'heitor', 'nicolas', 'nicolás',
-]
-
-const PREMIUM_HINTS = [
-  'natural', 'neural', 'premium', 'enhanced', 'online', 'wavenet',
-  'studio', 'journey', 'polyglot', 'expressive',
-]
+function defaultVoiceForGender(gender) {
+  return gender === 'male' ? 'Charon' : 'Aoede'
+}
 
 function loadRawSettings() {
   if (typeof window === 'undefined') return { ...DEFAULT_TEACHER_SETTINGS }
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { ...DEFAULT_TEACHER_SETTINGS }
-    return { ...DEFAULT_TEACHER_SETTINGS, ...JSON.parse(raw) }
+    // migra v1 (Web Speech) → v2 (Gemini Live)
+    const legacy = !raw ? localStorage.getItem('flashconcards.smartTeacher.v1') : null
+    const parsed = raw ? JSON.parse(raw) : legacy ? JSON.parse(legacy) : null
+    if (!parsed) return { ...DEFAULT_TEACHER_SETTINGS }
+    const gender = parsed.gender === 'male' ? 'male' : 'female'
+    const catalog = GEMINI_LIVE_VOICES[gender] || GEMINI_LIVE_VOICES.female
+    const voiceName = catalog.some((v) => v.id === parsed.voiceName)
+      ? parsed.voiceName
+      : defaultVoiceForGender(gender)
+    return {
+      ...DEFAULT_TEACHER_SETTINGS,
+      ...parsed,
+      gender,
+      voiceName,
+      speechRate: Number(parsed.speechRate) > 0 ? Number(parsed.speechRate) : 1,
+    }
   } catch {
     return { ...DEFAULT_TEACHER_SETTINGS }
   }
@@ -59,105 +96,34 @@ export function getTeacherSettings() {
 }
 
 export function saveTeacherSettings(partial) {
-  const next = { ...loadRawSettings(), ...partial }
+  const current = loadRawSettings()
+  const next = { ...current, ...partial }
+  if (partial?.gender && partial.gender !== current.gender && !partial.voiceName) {
+    next.voiceName = defaultVoiceForGender(partial.gender)
+  }
+  const catalog = GEMINI_LIVE_VOICES[next.gender] || GEMINI_LIVE_VOICES.female
+  if (!catalog.some((v) => v.id === next.voiceName)) {
+    next.voiceName = defaultVoiceForGender(next.gender)
+  }
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
   }
   return next
 }
 
+export function listGeminiVoices(gender = 'female') {
+  return GEMINI_LIVE_VOICES[gender] || GEMINI_LIVE_VOICES.female
+}
+
+export function resolveTeacherVoice(settings = getTeacherSettings()) {
+  const gender = settings.gender === 'male' ? 'male' : 'female'
+  const catalog = listGeminiVoices(gender)
+  const found = catalog.find((v) => v.id === settings.voiceName)
+  return found || catalog[0]
+}
+
 export function isSpeechSupported() {
-  return typeof window !== 'undefined' && 'speechSynthesis' in window
-}
-
-export function waitForVoices(timeoutMs = 2500) {
-  if (!isSpeechSupported()) return Promise.resolve([])
-
-  const existing = window.speechSynthesis.getVoices()
-  if (existing.length) return Promise.resolve(existing)
-
-  return new Promise((resolve) => {
-    let done = false
-    const finish = () => {
-      if (done) return
-      done = true
-      window.speechSynthesis.onvoiceschanged = null
-      resolve(window.speechSynthesis.getVoices() || [])
-    }
-    window.speechSynthesis.onvoiceschanged = finish
-    setTimeout(finish, timeoutMs)
-  })
-}
-
-function normalizeVoiceName(voice) {
-  return `${voice?.name || ''} ${voice?.voiceURI || ''}`.toLowerCase()
-}
-
-function langScore(voice) {
-  const lang = (voice.lang || '').toLowerCase().replace('_', '-')
-  if (lang === 'pt-br' || lang.startsWith('pt-br')) return 100
-  if (lang.startsWith('pt')) return 70
-  return 0
-}
-
-function premiumScore(voice) {
-  const name = normalizeVoiceName(voice)
-  let score = 0
-  for (const hint of PREMIUM_HINTS) {
-    if (name.includes(hint)) score += 25
-  }
-  if (voice.localService === false) score += 8 // vozes "online" do Edge costumam soar mais naturais
-  if (voice.default) score += 2
-  return score
-}
-
-function genderScore(voice, gender) {
-  const name = normalizeVoiceName(voice)
-  const femaleHits = FEMALE_HINTS.filter((h) => name.includes(h)).length
-  const maleHits = MALE_HINTS.filter((h) => name.includes(h)).length
-
-  if (gender === 'female') {
-    if (femaleHits > 0) return 40 + femaleHits * 8
-    if (maleHits > 0) return -40
-    // Empate: preferir pitch mais alto via nomes neutros — leve bônus se não for claramente masculina
-    return 0
-  }
-
-  if (maleHits > 0) return 40 + maleHits * 8
-  if (femaleHits > 0) return -40
-  return 0
-}
-
-export function scoreVoiceForTeacher(voice, gender = 'female') {
-  if (!voice) return -Infinity
-  const lang = langScore(voice)
-  if (lang <= 0) return -1000
-  return lang + premiumScore(voice) + genderScore(voice, gender)
-}
-
-export function pickTeacherVoice(voices, gender = 'female') {
-  const list = Array.isArray(voices) ? voices : []
-  if (!list.length) return null
-
-  const ranked = [...list]
-    .map((voice) => ({ voice, score: scoreVoiceForTeacher(voice, gender) }))
-    .filter((entry) => entry.score > -500)
-    .sort((a, b) => b.score - a.score)
-
-  if (ranked.length) return ranked[0].voice
-
-  // Fallback: qualquer pt*
-  const pt = list.find((v) => (v.lang || '').toLowerCase().startsWith('pt'))
-  return pt || list[0] || null
-}
-
-export function listTeacherVoices(voices, gender) {
-  const list = Array.isArray(voices) ? voices : []
-  return [...list]
-    .map((voice) => ({ voice, score: scoreVoiceForTeacher(voice, gender) }))
-    .filter((entry) => entry.score > -500)
-    .sort((a, b) => b.score - a.score)
-    .map((entry) => entry.voice)
+  return typeof window !== 'undefined' && typeof Audio !== 'undefined' && typeof fetch === 'function'
 }
 
 /** Normaliza texto de estudo para leitura mais natural (concursos). */
@@ -175,7 +141,6 @@ export function prepareSpeechText(raw = '') {
 
   if (!text) return ''
 
-  // Abreviações comuns em materiais de concurso
   const replacements = [
     [/\bArt\.\s*/gi, 'Artigo '],
     [/\barts\.\s*/gi, 'artigos '],
@@ -200,11 +165,10 @@ export function prepareSpeechText(raw = '') {
   return text.replace(/\s+/g, ' ').trim()
 }
 
-function splitIntoChunks(text) {
+function splitIntoChunks(text, maxLen = 700) {
   const prepared = prepareSpeechText(text)
   if (!prepared) return []
 
-  // Frases com pausa natural; evita pedaços minúsculos
   const parts = prepared
     .split(/(?<=[.!?…;:])\s+|\n+/)
     .map((p) => p.trim())
@@ -213,10 +177,14 @@ function splitIntoChunks(text) {
   const chunks = []
   let buffer = ''
   for (const part of parts) {
-    if ((buffer + ' ' + part).trim().length < 180) {
-      buffer = `${buffer} ${part}`.trim()
+    if (!buffer) {
+      buffer = part
+      continue
+    }
+    if (`${buffer} ${part}`.length <= maxLen) {
+      buffer = `${buffer} ${part}`
     } else {
-      if (buffer) chunks.push(buffer)
+      chunks.push(buffer)
       buffer = part
     }
   }
@@ -273,7 +241,6 @@ async function playBuffer(buffer, { volume = 0.45 } = {}) {
   src.start(0)
 }
 
-/** Tick sintético (fallback se o WAV não carregar). */
 async function playSyntheticTick({ final = false } = {}) {
   const ctx = await getAudioContext()
   if (!ctx) return
@@ -316,10 +283,6 @@ function delay(ms, signal) {
   })
 }
 
-/**
- * Contagem regressiva com ticks (um por segundo; tick final no fim).
- * `shouldPause` (opcional) — enquanto retornar true, a contagem fica em espera.
- */
 export async function runThinkCountdown(seconds, { signal, onTick, shouldPause } = {}) {
   const total = Math.max(0, Number(seconds) || 0)
   for (let remaining = total; remaining > 0; remaining -= 1) {
@@ -335,108 +298,188 @@ export async function runThinkCountdown(seconds, { signal, onTick, shouldPause }
   onTick?.(0)
 }
 
-/**
- * Lê texto com pausas naturais. Retorna Promise que resolve ao terminar.
- */
-export function speakText(text, options = {}) {
-  const {
-    voice = null,
-    gender = 'female',
-    rate = 0.92,
-    pitch,
-    volume = 1,
-    signal,
-    onBoundary,
-  } = options
+function base64ToUint8Array(base64) {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
 
-  if (!isSpeechSupported()) {
-    return Promise.reject(new Error('Leitura de áudio não suportada neste navegador'))
+function parsePcmSampleRate(mimeType = '') {
+  const match = String(mimeType).match(/rate\s*=\s*(\d+)/i)
+  return match ? Number(match[1]) : 24000
+}
+
+/** Empacota PCM 16-bit mono em WAV para o <audio> do navegador. */
+export function pcmBase64ToWavBlob(base64, mimeType = 'audio/L16;rate=24000') {
+  const pcm = base64ToUint8Array(base64)
+  const sampleRate = parsePcmSampleRate(mimeType)
+  const numChannels = 1
+  const bitsPerSample = 16
+  const blockAlign = (numChannels * bitsPerSample) / 8
+  const byteRate = sampleRate * blockAlign
+  const dataSize = pcm.length
+  const buffer = new ArrayBuffer(44 + dataSize)
+  const view = new DataView(buffer)
+
+  const writeStr = (offset, str) => {
+    for (let i = 0; i < str.length; i += 1) view.setUint8(offset + i, str.charCodeAt(i))
   }
 
-  const chunks = splitIntoChunks(text)
-  if (!chunks.length) return Promise.resolve()
+  writeStr(0, 'RIFF')
+  view.setUint32(4, 36 + dataSize, true)
+  writeStr(8, 'WAVE')
+  writeStr(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, numChannels, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, byteRate, true)
+  view.setUint16(32, blockAlign, true)
+  view.setUint16(34, bitsPerSample, true)
+  writeStr(36, 'data')
+  view.setUint32(40, dataSize, true)
 
-  const synth = window.speechSynthesis
-  const resolvedPitch =
-    typeof pitch === 'number' ? pitch : gender === 'female' ? 1.05 : 0.92
+  new Uint8Array(buffer, 44).set(pcm)
+  return new Blob([buffer], { type: 'audio/wav' })
+}
 
-  return (async () => {
-    let aborted = false
+function audioBlobFromTtsResponse({ audioBase64, mimeType }) {
+  const mime = String(mimeType || '')
+  if (mime.includes('wav') || mime.includes('mp3') || mime.includes('mpeg') || mime.includes('ogg')) {
+    return new Blob([base64ToUint8Array(audioBase64)], { type: mime.split(';')[0] || 'audio/wav' })
+  }
+  // Gemini TTS costuma devolver PCM cru
+  return pcmBase64ToWavBlob(audioBase64, mimeType)
+}
+
+let currentAudio = null
+let currentObjectUrl = null
+
+function clearCurrentAudio() {
+  if (currentAudio) {
+    try {
+      currentAudio.onended = null
+      currentAudio.onerror = null
+      currentAudio.pause()
+      currentAudio.removeAttribute('src')
+      currentAudio.load()
+    } catch {
+      /* ignore */
+    }
+  }
+  currentAudio = null
+  if (currentObjectUrl) {
+    try {
+      URL.revokeObjectURL(currentObjectUrl)
+    } catch {
+      /* ignore */
+    }
+  }
+  currentObjectUrl = null
+}
+
+async function fetchGeminiTtsChunk(text, { voiceName, signal } = {}) {
+  const response = await fetch('/api/gemini/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text,
+      voiceName,
+      styleHint:
+        'Leia em português do Brasil com a qualidade das vozes do Gemini Live. Tom de professor(a) persuasivo(a), belo, claro e pausado — nunca mecânico ou de assistente de voz barato.',
+    }),
+    signal,
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.error || `Falha no TTS Gemini (${response.status})`)
+  }
+  if (!data.audioBase64) {
+    throw new Error('TTS Gemini não retornou áudio')
+  }
+  return data
+}
+
+function playHtmlAudio(blob, { rate = 1, signal } = {}) {
+  return new Promise((resolve, reject) => {
+    clearCurrentAudio()
+    const url = URL.createObjectURL(blob)
+    currentObjectUrl = url
+    const audio = new Audio(url)
+    currentAudio = audio
+    audio.playbackRate = Math.min(1.5, Math.max(0.7, Number(rate) || 1))
+
     const onAbort = () => {
-      aborted = true
-      try {
-        synth.cancel()
-      } catch {
-        /* ignore */
-      }
+      clearCurrentAudio()
+      reject(new DOMException('Aborted', 'AbortError'))
     }
     signal?.addEventListener('abort', onAbort, { once: true })
 
-    try {
-      // Chrome às vezes fica "preso" — resume ajuda
-      if (synth.paused) synth.resume()
-
-      for (let i = 0; i < chunks.length; i += 1) {
-        if (aborted || signal?.aborted) {
-          throw new DOMException('Aborted', 'AbortError')
-        }
-
-        await new Promise((chunkResolve, chunkReject) => {
-          const utterance = new SpeechSynthesisUtterance(chunks[i])
-          utterance.lang = voice?.lang || 'pt-BR'
-          if (voice) utterance.voice = voice
-          utterance.rate = rate
-          utterance.pitch = resolvedPitch
-          utterance.volume = volume
-
-          utterance.onend = () => chunkResolve()
-          utterance.onerror = (event) => {
-            if (event?.error === 'interrupted' || event?.error === 'canceled') {
-              chunkReject(new DOMException('Aborted', 'AbortError'))
-              return
-            }
-            chunkReject(new Error(event?.error || 'Erro na síntese de voz'))
-          }
-          if (onBoundary) {
-            utterance.onboundary = (ev) => onBoundary(ev, chunks[i], i)
-          }
-
-          synth.speak(utterance)
-        })
-
-        // Pausa breve entre frases (efeito de professor pausado)
-        if (i < chunks.length - 1) {
-          await delay(280, signal)
-        }
-      }
-    } finally {
+    audio.onended = () => {
       signal?.removeEventListener('abort', onAbort)
+      clearCurrentAudio()
+      resolve()
     }
-  })()
+    audio.onerror = () => {
+      signal?.removeEventListener('abort', onAbort)
+      clearCurrentAudio()
+      reject(new Error('Falha ao reproduzir áudio Gemini'))
+    }
+
+    audio.play().catch((err) => {
+      signal?.removeEventListener('abort', onAbort)
+      clearCurrentAudio()
+      reject(err)
+    })
+  })
 }
 
-export function cancelSpeech() {
-  if (!isSpeechSupported()) return
-  try {
-    window.speechSynthesis.cancel()
-  } catch {
-    /* ignore */
+/**
+ * Lê texto com voz Gemini Live. Retorna Promise que resolve ao terminar.
+ */
+export async function speakText(text, options = {}) {
+  const {
+    voiceName = getTeacherSettings().voiceName,
+    rate = getTeacherSettings().speechRate,
+    signal,
+  } = options
+
+  if (!isSpeechSupported()) {
+    throw new Error('Reprodução de áudio não suportada neste navegador')
+  }
+
+  const chunks = splitIntoChunks(text)
+  if (!chunks.length) return
+
+  for (let i = 0; i < chunks.length; i += 1) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const tts = await fetchGeminiTtsChunk(chunks[i], { voiceName, signal })
+    const blob = audioBlobFromTtsResponse(tts)
+    await playHtmlAudio(blob, { rate, signal })
+    if (i < chunks.length - 1) {
+      await delay(180, signal)
+    }
   }
 }
 
+export function cancelSpeech() {
+  clearCurrentAudio()
+}
+
 export function pauseSpeech() {
-  if (!isSpeechSupported()) return
   try {
-    window.speechSynthesis.pause()
+    currentAudio?.pause()
   } catch {
     /* ignore */
   }
 }
 
 export function resumeSpeech() {
-  if (!isSpeechSupported()) return
   try {
-    window.speechSynthesis.resume()
+    const p = currentAudio?.play()
+    if (p?.catch) p.catch(() => {})
   } catch {
     /* ignore */
   }
@@ -460,4 +503,16 @@ export function buildMaterialIntro(title = '') {
   const t = prepareSpeechText(title)
   if (t) return `Vamos estudar o material: ${t}. Acompanhe com atenção.`
   return 'Vamos estudar este material. Acompanhe com atenção.'
+}
+
+// Compat: APIs antigas do Web Speech — mantidas como no-op / stubs
+export function waitForVoices() {
+  return Promise.resolve(listGeminiVoices('female').concat(listGeminiVoices('male')))
+}
+
+export function pickTeacherVoice(_voices, gender = 'female') {
+  const settings = getTeacherSettings()
+  const g = gender || settings.gender
+  const voice = resolveTeacherVoice({ ...settings, gender: g })
+  return { name: voice.label, lang: 'pt-BR', voiceURI: voice.id, geminiVoice: voice.id }
 }

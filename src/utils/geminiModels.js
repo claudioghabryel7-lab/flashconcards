@@ -31,3 +31,17 @@ export const DEFAULT_GEMINI_MODELS = [
 ]
 
 export const VERIFY_GEMINI_MODELS = [GEMINI_FLASH_MODEL]
+
+/** Modelos Gemini TTS (vozes Live: Kore, Aoede, Despina, Charon…). */
+export const GEMINI_TTS_MODELS = [
+  'gemini-2.5-flash-preview-tts',
+  'gemini-2.5-pro-preview-tts',
+  'gemini-3.1-flash-tts-preview',
+  'gemini-3.1-flash-tts',
+]
+
+export function getGeminiTtsModels() {
+  const preferred = String(readEnv('VITE_GEMINI_TTS_MODEL') || '').trim()
+  if (!preferred) return GEMINI_TTS_MODELS
+  return [preferred, ...GEMINI_TTS_MODELS.filter((m) => m !== preferred)]
+}
