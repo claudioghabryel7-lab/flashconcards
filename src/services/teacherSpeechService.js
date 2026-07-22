@@ -503,11 +503,22 @@ export function resumeSpeech() {
   }
 }
 
-export function buildFlashcardIntro(index, total, materia = '') {
-  const n = index + 1
+/** Título do tópico/artigo — falar só uma vez no início da sessão. */
+export function buildSessionIntro(materia = '', total = 0) {
   const subject = prepareSpeechText(materia)
-  if (subject) return `Flashcard ${n} de ${total}. Assunto: ${subject}.`
-  return `Flashcard ${n} de ${total}.`
+  if (subject && total > 0) {
+    return `Vamos estudar: ${subject}. São ${total} flashcards.`
+  }
+  if (subject) return `Vamos estudar: ${subject}.`
+  if (total > 0) return `Vamos começar. São ${total} flashcards.`
+  return 'Vamos começar os flashcards.'
+}
+
+/** Intro curta do card — sem repetir o título do assunto. */
+export function buildFlashcardIntro(index, total) {
+  const n = index + 1
+  if (total > 0) return `Flashcard ${n} de ${total}.`
+  return `Flashcard ${n}.`
 }
 
 export function buildNextCardCue(isLast) {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  buildFlashcardIntro,
   buildNextCardCue,
+  buildSessionIntro,
   cancelSpeech,
   getTeacherSettings,
   isSpeechSupported,
@@ -163,6 +163,17 @@ export function useSmartTeacher({
 
       try {
         let i = startIndex
+        // Título do tópico/artigo: só uma vez no começo da aula
+        const firstCard = cardsRef.current[i]
+        const materia = deckSubtitle || firstCard?.materia || ''
+        const assunto = deckTitle || firstCard?.modulo || ''
+        const subjectLine = [materia, assunto].filter(Boolean).join('. ')
+        setPhase('intro')
+        await speak(
+          buildSessionIntro(subjectLine, cardsRef.current.length - startIndex),
+          controller.signal
+        )
+
         while (i < cardsRef.current.length) {
           if (controller.signal.aborted || runId !== runIdRef.current) return
 
@@ -171,17 +182,10 @@ export function useSmartTeacher({
 
           const front = card.pergunta || card.frente || ''
           const back = card.resposta || card.verso || ''
-          const materia = deckSubtitle || card.materia || ''
-          const assunto = deckTitle || card.modulo || ''
-          const subjectLine = [materia, assunto].filter(Boolean).join('. ')
 
           if (flippedRef.current) onFlipChange?.(false)
-          setPhase('intro')
-          await speak(
-            buildFlashcardIntro(i, cardsRef.current.length, subjectLine),
-            controller.signal
-          )
 
+          // Nos cards seguintes: só o conteúdo (frente → verso), sem repetir o título
           setPhase('front')
           const frontText = [card.textoBase ? `Texto base: ${card.textoBase}` : '', front]
             .filter(Boolean)
