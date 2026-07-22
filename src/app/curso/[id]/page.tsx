@@ -108,7 +108,7 @@ export default function CursoHubPage() {
   return (
     <section className="relative px-4 pb-20 pt-10 sm:px-6">
       <div className="mx-auto max-w-6xl">
-        <Link href="/cursos" className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white">
+        <Link href="/cursos" className="inline-flex items-center gap-2 text-sm text-cp-muted transition hover:text-cp-text">
           <ArrowLeft className="h-4 w-4" /> Voltar para cursos
         </Link>
 
@@ -120,17 +120,17 @@ export default function CursoHubPage() {
             <div className="mt-4">
               <OnlineNowBadge courseId={courseId} />
             </div>
-            <h1 className="mt-4 text-4xl font-bold sm:text-5xl">{title}</h1>
+            <h1 className="mt-4 text-4xl font-bold text-cp-text sm:text-5xl">{title}</h1>
             {course?.competition && <p className="mt-2 text-cp-accent">{course.competition}</p>}
-            {course?.banca && <p className="mt-1 text-sm text-slate-400">Banca {course.banca}</p>}
-            <p className="mt-3 max-w-2xl text-slate-400">
+            {course?.banca && <p className="mt-1 text-sm text-cp-muted">Banca {course.banca}</p>}
+            <p className="mt-3 max-w-2xl text-cp-muted">
               {course?.description ||
                 'Escolha como estudar. Material gerado com foco no edital, na banca e no tópico.'}
             </p>
             <ul className="mt-5 space-y-2">
               {benefits.map((b) => (
-                <li key={b} className="flex items-start gap-2 text-sm text-slate-300">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                <li key={b} className="flex items-start gap-2 text-sm text-cp-text">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cp-success" />
                   {b}
                 </li>
               ))}
@@ -149,7 +149,7 @@ export default function CursoHubPage() {
             <div className="space-y-3 p-5">
               <div className="flex items-baseline gap-2">
                 {course?.originalPrice && course.originalPrice > (course.price || 0) && (
-                  <span className="text-sm text-slate-500 line-through">
+                  <span className="text-sm text-cp-muted line-through">
                     {formatCurrency(course.originalPrice)}
                   </span>
                 )}
@@ -158,7 +158,7 @@ export default function CursoHubPage() {
                 </span>
               </div>
               {course?.monthlyPrice != null && (
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-cp-muted">
                   ou {formatCurrency(Number(course.monthlyPrice))}/mês no plano mensal
                 </p>
               )}
@@ -189,8 +189,8 @@ export default function CursoHubPage() {
                 <div className={`mb-4 inline-flex rounded-xl bg-gradient-to-br ${mod.color} p-3 text-slate-950`}>
                   <Icon className="h-5 w-5" />
                 </div>
-                <h2 className="text-lg font-semibold text-white group-hover:text-cp-accent">{mod.title}</h2>
-                <p className="mt-2 text-sm text-slate-400">{mod.desc}</p>
+                <h2 className="text-lg font-semibold text-cp-text group-hover:text-cp-accent">{mod.title}</h2>
+                <p className="mt-2 text-sm text-cp-muted">{mod.desc}</p>
               </button>
             )
           })}

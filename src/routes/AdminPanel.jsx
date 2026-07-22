@@ -1660,7 +1660,7 @@ Use EXATAMENTE os nomes dos módulos fornecidos acima.`
           {...listeners}
           className="flex items-center gap-2 flex-shrink-0 cursor-grab active:cursor-grabbing"
         >
-          <span className="text-indigo-400 text-xs">⋮⋮</span>
+          <span className="text-indigo-600 dark:text-indigo-400 text-xs">⋮⋮</span>
         </div>
         <div className="flex-1">
           <span className="text-xs font-medium text-slate-900 dark:text-slate-100">{modulo}</span>

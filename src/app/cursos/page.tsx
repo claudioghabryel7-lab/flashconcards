@@ -213,7 +213,7 @@ export default function CursosPage() {
                     <OnlineNowBadge courseId={course.id} compact />
                   </div>
 
-                  <h2 className="text-base font-medium tracking-tight text-zinc-100 group-hover:text-white">
+                  <h2 className="text-base font-medium tracking-tight text-cp-text group-hover:text-cp-accent">
                     {course.name || 'Curso'}
                   </h2>
 

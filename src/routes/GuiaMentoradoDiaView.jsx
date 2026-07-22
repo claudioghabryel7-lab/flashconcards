@@ -244,13 +244,13 @@ const GuiaMentoradoDiaView = () => {
   const getActivityIcon = (type) => {
     switch (type) {
       case 'taf':
-        return <DocumentTextIcon className="h-4 w-4 text-orange-400" />
+        return <DocumentTextIcon className="h-4 w-4 text-orange-600 dark:text-orange-400" />
       case 'estudo':
-        return <BookOpenIcon className="h-4 w-4 text-blue-400" />
+        return <BookOpenIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
       case 'redacao':
-        return <PencilIcon className="h-4 w-4 text-pink-400" />
+        return <PencilIcon className="h-4 w-4 text-pink-600 dark:text-pink-400" />
       case 'simulado':
-        return <FireIcon className="h-4 w-4 text-purple-400" />
+        return <FireIcon className="h-4 w-4 text-purple-600 dark:text-purple-400" />
       case 'revisao':
         return <SparklesIcon className="h-4 w-4 text-green-400" />
       default:
@@ -309,15 +309,15 @@ const GuiaMentoradoDiaView = () => {
             <div className="mt-2 flex items-center gap-2">
               <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                 dayData.type === 'estudo'
-                  ? 'bg-blue-500/20 text-blue-300'
+                  ? 'bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
                   : dayData.type === 'taf'
-                  ? 'bg-orange-500/20 text-orange-300'
+                  ? 'bg-orange-500/15 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300'
                   : dayData.type === 'redacao'
-                  ? 'bg-pink-500/20 text-pink-300'
+                  ? 'bg-pink-500/15 text-pink-700 dark:bg-pink-500/20 dark:text-pink-300'
                   : dayData.type === 'revisao'
                   ? 'bg-green-500/20 text-green-300'
                   : dayData.type === 'simulado'
-                  ? 'bg-purple-500/20 text-purple-300'
+                  ? 'bg-purple-500/15 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300'
                   : dayData.type === 'reta_final'
                   ? 'bg-red-500/20 text-red-300'
                   : 'bg-gray-500/20 text-gray-300'
@@ -341,7 +341,7 @@ const GuiaMentoradoDiaView = () => {
               <div className="space-y-2">
                 {dayData.materias.map((m, idx) => (
                   <div key={idx} className="flex items-center gap-2 text-text-secondary">
-                    <BookOpenIcon className="h-4 w-4 text-blue-400" />
+                    <BookOpenIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                     <span className="font-medium text-text-primary">{m.disciplina}:</span>
                     <span>{m.topico}</span>
                   </div>
@@ -352,7 +352,7 @@ const GuiaMentoradoDiaView = () => {
             )}
             {dayData.tafExercicio && (
               <div className="mt-3 flex items-center gap-2 text-text-secondary">
-                <DocumentTextIcon className="h-4 w-4 text-orange-400" />
+                <DocumentTextIcon className="h-4 w-4 text-orange-600 dark:text-orange-400" />
                 <span className="font-medium text-text-primary">TAF:</span>
                 <span>{dayData.tafExercicio}</span>
               </div>

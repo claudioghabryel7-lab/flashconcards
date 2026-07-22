@@ -371,7 +371,7 @@ export default function Trilha() {
               {timerPaused ? 'Pausado' : timerActive ? 'Foco em andamento' : 'Pronto para iniciar'}
             </p>
             {alarmTriggered && (
-              <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-300">
+              <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-700 dark:text-amber-300">
                 <BellIcon className="h-4 w-4" />
                 Bloco finalizado
               </p>

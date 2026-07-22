@@ -1064,7 +1064,7 @@ REGRAS:
 
   const renderBloqueioAluno = () => (
     <div className="cp-card p-5 text-center sm:p-10">
-      <QuestionMarkCircleIcon className="h-10 w-10 text-amber-400 mx-auto mb-3" />
+      <QuestionMarkCircleIcon className="h-10 w-10 text-amber-600 dark:text-amber-400 mx-auto mb-3" />
       <p className="font-medium text-cp-text">Questões em preparação</p>
       <p className="mt-2 text-sm text-cp-muted">
         O administrador ainda não liberou as questões preditivas deste tópico.
@@ -1427,7 +1427,7 @@ REGRAS:
                   Nível atual: <span className="font-mono text-cp-accent">{desempenho.nivel}</span>/10
                 </p>
                 {desempenho.completouNivel && desempenho.proximoNivel > desempenho.nivel && (
-                  <p className="text-sm text-emerald-400">
+                  <p className="text-sm text-emerald-700 dark:text-emerald-400">
                     Você completou este nível. Pode avançar para o nível {desempenho.proximoNivel}.
                   </p>
                 )}
@@ -1443,8 +1443,8 @@ REGRAS:
                         <div className="flex items-center gap-3">
                           <span className="text-cp-muted">{hist.acertos}/{hist.totalQuestoes} acertos</span>
                           <span className={`font-mono ${
-                            hist.aproveitamento >= 70 ? 'text-emerald-400' :
-                            hist.aproveitamento >= 50 ? 'text-amber-400' :
+                            hist.aproveitamento >= 70 ? 'text-emerald-700 dark:text-emerald-400' :
+                            hist.aproveitamento >= 50 ? 'text-amber-700 dark:text-amber-400' :
                             'text-red-400'
                           }`}>
                             {hist.aproveitamento}%
@@ -1458,7 +1458,7 @@ REGRAS:
 
               {desempenho.precisaRevisar?.length > 0 && (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-                  <h4 className="font-mono text-[10px] uppercase text-amber-400 mb-3">Precisa revisar</h4>
+                  <h4 className="font-mono text-[10px] uppercase text-amber-700 dark:text-amber-400 mb-3">Precisa revisar</h4>
                   <ul className="list-disc list-inside space-y-1">
                     {desempenho.precisaRevisar.map((assunto, idx) => (
                       <li key={idx} className="text-sm text-cp-muted">{assunto}</li>
