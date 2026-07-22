@@ -8,12 +8,14 @@ import {
   ArrowLeft,
   BookOpen,
   Brain,
+  CheckCircle2,
   FileText,
   HelpCircle,
   Loader2,
   PenTool,
   Sparkles,
   Route,
+  ShoppingCart,
 } from 'lucide-react'
 import { db, initFirebase, firebaseInitialized } from '@/firebase/config'
 import OnlineNowBadge from '@/components/cp/OnlineNowBadge'
@@ -27,11 +29,28 @@ const modules = [
   { href: 'trilha', title: 'Trilha', desc: 'Cronômetro líquido, ciclo e metas por matéria.', icon: Route, color: 'from-emerald-400 to-lime-500', legacy: '/trilha' },
 ]
 
+function formatCurrency(value: number) {
+  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+type CourseData = {
+  name?: string
+  competition?: string
+  description?: string
+  imageUrl?: string
+  imageBase64?: string
+  price?: number
+  originalPrice?: number
+  monthlyPrice?: number
+  benefits?: string[]
+  banca?: string
+}
+
 export default function CursoHubPage() {
   const params = useParams()
   const router = useRouter()
   const courseId = String(params?.id || '')
-  const [course, setCourse] = useState<{ name?: string; competition?: string; description?: string } | null>(null)
+  const [course, setCourse] = useState<CourseData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -49,7 +68,7 @@ export default function CursoHubPage() {
       try {
         const snap = await getDoc(doc(db, 'courses', courseId))
         if (!cancelled && snap.exists()) {
-          setCourse(snap.data())
+          setCourse(snap.data() as CourseData)
         }
       } catch (err) {
         console.error('Erro ao carregar curso:', err)
@@ -67,6 +86,16 @@ export default function CursoHubPage() {
   const title =
     course?.name ||
     decodeURIComponent(courseId).replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  const img = course?.imageUrl || course?.imageBase64 || ''
+  const benefits =
+    Array.isArray(course?.benefits) && course.benefits.length
+      ? course.benefits
+      : [
+          'Edital verticalizado',
+          'Questões preditivas da banca',
+          'Flashcards e material por tópico',
+          'Guia mentorado e trilha',
+        ]
 
   if (loading) {
     return (
@@ -83,21 +112,68 @@ export default function CursoHubPage() {
           <ArrowLeft className="h-4 w-4" /> Voltar para cursos
         </Link>
 
-        <div className="mt-8">
-          <span className="inline-flex items-center gap-2 rounded-full border border-cp-accent/30 bg-cp-accent/10 px-3 py-1 text-xs font-medium text-cp-accent">
-            <Sparkles className="h-3.5 w-3.5" /> Trilha preditiva
-          </span>
-          <div className="mt-4">
-            <OnlineNowBadge courseId={courseId} />
+        <div className="mt-8 grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full border border-cp-accent/30 bg-cp-accent/10 px-3 py-1 text-xs font-medium text-cp-accent">
+              <Sparkles className="h-3.5 w-3.5" /> Trilha preditiva
+            </span>
+            <div className="mt-4">
+              <OnlineNowBadge courseId={courseId} />
+            </div>
+            <h1 className="mt-4 text-4xl font-bold sm:text-5xl">{title}</h1>
+            {course?.competition && <p className="mt-2 text-cp-accent">{course.competition}</p>}
+            {course?.banca && <p className="mt-1 text-sm text-slate-400">Banca {course.banca}</p>}
+            <p className="mt-3 max-w-2xl text-slate-400">
+              {course?.description ||
+                'Escolha como estudar. Material gerado com foco no edital, na banca e no tópico.'}
+            </p>
+            <ul className="mt-5 space-y-2">
+              {benefits.map((b) => (
+                <li key={b} className="flex items-start gap-2 text-sm text-slate-300">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                  {b}
+                </li>
+              ))}
+            </ul>
           </div>
-          <h1 className="mt-4 text-4xl font-bold sm:text-5xl">{title}</h1>
-          {course?.competition && (
-            <p className="mt-2 text-cp-accent">{course.competition}</p>
-          )}
-          <p className="mt-3 max-w-2xl text-slate-400">
-            {course?.description ||
-              'Escolha como estudar. Material gerado com foco no edital, na banca e no tópico.'}
-          </p>
+
+          <div className="cp-card overflow-hidden p-0">
+            <div className="relative h-44 bg-cp-surface">
+              {img ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={img} alt={title} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full items-center justify-center text-cp-muted">Sem imagem</div>
+              )}
+            </div>
+            <div className="space-y-3 p-5">
+              <div className="flex items-baseline gap-2">
+                {course?.originalPrice && course.originalPrice > (course.price || 0) && (
+                  <span className="text-sm text-slate-500 line-through">
+                    {formatCurrency(course.originalPrice)}
+                  </span>
+                )}
+                <span className="text-2xl font-bold text-cp-accent">
+                  {formatCurrency(course?.price || 99.9)}
+                </span>
+              </div>
+              {course?.monthlyPrice != null && (
+                <p className="text-sm text-slate-400">
+                  ou {formatCurrency(Number(course.monthlyPrice))}/mês no plano mensal
+                </p>
+              )}
+              <Link
+                href={`/pagamento?course=${encodeURIComponent(courseId)}`}
+                className="cp-btn-primary inline-flex w-full items-center justify-center gap-2"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                Comprar agora
+              </Link>
+              <Link href="/select-course" className="cp-btn-ghost inline-flex w-full justify-center text-sm">
+                Já tenho acesso — selecionar curso
+              </Link>
+            </div>
+          </div>
         </div>
 
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -118,16 +194,6 @@ export default function CursoHubPage() {
               </button>
             )
           })}
-        </div>
-
-        <div className="mt-10 cp-card p-6">
-          <p className="text-sm text-slate-400">
-            Para vincular este curso à sua conta, acesse{' '}
-            <Link href="/select-course" className="text-cp-accent hover:underline">
-              Selecionar curso
-            </Link>
-            {' '}após o login.
-          </p>
         </div>
       </div>
     </section>

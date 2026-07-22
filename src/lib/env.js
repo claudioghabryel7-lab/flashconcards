@@ -13,6 +13,7 @@ export const ENV = {
   VITE_GEMINI_MODEL: process.env.VITE_GEMINI_MODEL,
   VITE_GOOGLE_SEARCH_API_KEY: process.env.VITE_GOOGLE_SEARCH_API_KEY,
   VITE_GOOGLE_SEARCH_ENGINE_ID: process.env.VITE_GOOGLE_SEARCH_ENGINE_ID,
+  VITE_MERCADOPAGO_PUBLIC_KEY: process.env.VITE_MERCADOPAGO_PUBLIC_KEY,
   DEV: process.env.NODE_ENV !== 'production',
   PROD: process.env.NODE_ENV === 'production',
   MODE: process.env.NODE_ENV || 'development',
