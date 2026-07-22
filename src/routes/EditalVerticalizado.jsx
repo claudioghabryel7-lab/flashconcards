@@ -1816,6 +1816,7 @@ REGRAS IMPORTANTES:
                       {/* Leitura de Áudio */}
                       <div className="mt-4">
                         <AudioReader 
+                          title={secao.titulo || 'Seção do edital'}
                           text={secao.conteudo.replace(/<[^>]*>/g, '')} // Remover HTML para leitura
                           className="w-full"
                         />
@@ -1829,6 +1830,7 @@ REGRAS IMPORTANTES:
                       {/* Leitura de Áudio */}
                       <div className="mt-4">
                         <AudioReader 
+                          title={secao.titulo || 'Seção do edital'}
                           text={secao.texto}
                           className="w-full"
                         />
@@ -1858,6 +1860,7 @@ REGRAS IMPORTANTES:
                               {/* Leitura de Áudio */}
                               <div className="mt-3">
                                 <AudioReader 
+                                  title={subsecao.titulo || 'Subseção'}
                                   text={subsecao.conteudo.replace(/<[^>]*>/g, '')} // Remover HTML para leitura
                                   className="w-full"
                                 />
@@ -1871,6 +1874,7 @@ REGRAS IMPORTANTES:
                               {/* Leitura de Áudio */}
                               <div className="mt-3">
                                 <AudioReader 
+                                  title={subsecao.titulo || 'Subseção'}
                                   text={subsecao.texto}
                                   className="w-full"
                                 />
