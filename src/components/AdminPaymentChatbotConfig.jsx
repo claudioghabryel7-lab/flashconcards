@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from '../../firebase/config'
+import { db } from '../firebase/config'
 
 /**
  * Configuração de pagamento (plano mensal) + chatbot da home.
