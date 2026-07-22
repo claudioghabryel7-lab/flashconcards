@@ -19,13 +19,7 @@ export default function StudentProfessorOnlineBadge() {
     const sync = () => setTabVisible(typeof document === 'undefined' ? true : !document.hidden)
     sync()
     document.addEventListener('visibilitychange', sync)
-    window.addEventListener('focus', sync)
-    window.addEventListener('blur', sync)
-    return () => {
-      document.removeEventListener('visibilitychange', sync)
-      window.removeEventListener('focus', sync)
-      window.removeEventListener('blur', sync)
-    }
+    return () => document.removeEventListener('visibilitychange', sync)
   }, [user?.uid, isAdmin])
 
   if (!user?.uid || isAdmin) return null
