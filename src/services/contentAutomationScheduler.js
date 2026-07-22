@@ -25,12 +25,15 @@ import {
 } from '../utils/topicKeyFirestore'
 import {
   buildMateriaRevisadaAutomationPrompt,
-  buildIncidenciaAutomationPrompt,
 } from '../utils/contentAutomationPrompts'
 import { buildMentoradoQuestoesPrompt } from '../utils/guiaMentoradoPrompts'
 import { isWithinProfessorWindow } from './professorSupervisorService'
 import { normalizeExamContext, resolveTipoProvaFromBanca } from '../utils/examFidelityContext'
 import { QUESTOES_MIN_COMPLETE, QUESTOES_TARGET } from './localGenerationCheckpoint'
+import {
+  isIncidenciaContentComplete,
+  sanitizeDisciplinaDocId,
+} from '../utils/incidenciaGeneration'
 
 const CONFIG_PATH = ['config', 'contentAutomation']
 const NIVEL_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -43,9 +46,7 @@ function getTodayKeyInSaoPaulo(date = new Date()) {
 }
 
 function sanitizeDisciplinaKey(name = '') {
-  return String(name || '')
-    .replace(/[^a-zA-Z0-9]/g, '_')
-    .substring(0, 100)
+  return sanitizeDisciplinaDocId(name)
 }
 
 /** Mesma regra do localJobProcessor para IDs de questoesTopico. */
@@ -70,11 +71,8 @@ function hasUsableMateriaRevisada(data = {}) {
   )
 }
 
-function hasUsableIncidencia(data = {}) {
-  return (
-    (Array.isArray(data.analisePorTopico) && data.analisePorTopico.length > 0) ||
-    (Array.isArray(data.topAssuntosGerais) && data.topAssuntosGerais.length > 0)
-  )
+function hasUsableIncidencia(data = {}, expectedTopicCount = 0) {
+  return isIncidenciaContentComplete(data, expectedTopicCount)
 }
 
 async function patchAutomation(patch) {
@@ -189,7 +187,12 @@ async function findIncidenciaGaps(courseIds) {
     try {
       const snap = await getDocs(collection(db, 'courses', courseId, 'conteudosIncidencia'))
       snap.docs.forEach((d) => {
-        if (hasUsableIncidencia(d.data())) existing.add(d.id)
+        const data = d.data() || {}
+        const expected = Array.isArray(data.analisePorTopico)
+          ? data.analisePorTopico.length
+          : 0
+        // Aceita só se revisão estiver completa (não cortada)
+        if (hasUsableIncidencia(data, expected || 1)) existing.add(d.id)
       })
     } catch {
       continue
@@ -344,14 +347,6 @@ async function startReviewJob(adminUserId, gap) {
 
 async function startIncidenciaJob(adminUserId, gap) {
   const meta = await loadCourseMeta(gap.courseId)
-  const prompt = buildIncidenciaAutomationPrompt({
-    disciplinaNome: gap.disciplinaNome,
-    topicos: gap.topicos,
-    banca: meta.banca,
-    cargo: meta.cargo,
-    courseName: meta.courseName,
-    editalText: meta.editalText,
-  })
 
   await patchAutomation({
     phase: 'incidencia',
@@ -371,16 +366,22 @@ async function startIncidenciaJob(adminUserId, gap) {
     topicKey: String(gap.disciplinaIdx),
     metadata: { disciplina: gap.disciplinaNome, source: 'content_automation' },
     serverPayload: {
-      prompt,
+      courseMeta: {
+        banca: meta.banca,
+        cargo: meta.cargo,
+        courseName: meta.courseName,
+        editalText: meta.editalText,
+      },
       aiOptions: {
         useRAG: true,
         isLegalContent: true,
-        generationConfig: { maxOutputTokens: 16000, temperature: 0.3 },
+        generationConfig: { maxOutputTokens: 32000, temperature: 0.3 },
       },
       savePlan: {
         disciplinaNome: gap.disciplinaNome,
         disciplinaIdx: gap.disciplinaIdx,
         docId: gap.docId,
+        topicos: gap.topicos || [],
         status: CONTENT_STATUS.AVAILABLE,
       },
     },

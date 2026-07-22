@@ -49,6 +49,11 @@ import {
   setFlashcardsStatus,
 } from './localGenerationCheckpoint'
 import {
+  generateIncidenciaCompleta,
+  isIncidenciaContentComplete,
+  sanitizeDisciplinaDocId,
+} from '../utils/incidenciaGeneration'
+import {
   buildExamFidelityBlock,
   buildExamFidelityInline,
   normalizeExamContext,
@@ -1317,20 +1322,40 @@ async function processGuiaMentoradoBackfill(
     }
 
     try {
-      const dayResult = await processGuiaMentoradoDay(
-        courseId,
-        {
-          topics: prepared.topics,
-          targetDate: dayKey,
-          autoPublish,
-          forceFresh: false,
-        },
-        async (p, msg) => {
-          const mapped = pctBase + Math.round(((p || 0) / 100) * Math.max(1, Math.round(92 / totalDays) - 1))
-          await updateProgress(Math.min(mapped, 94), `[${dayKey}] ${msg || ''}`)
-        },
-        { userId, jobId },
-      )
+      const dayResult =
+        prepared.kind === 'incidencia'
+          ? await processGuiaMentoradoIncidenciaDay(
+              courseId,
+              {
+                items: prepared.items,
+                targetDate: dayKey,
+                autoPublish,
+                courseMeta: prepared.courseMeta,
+              },
+              async (p, msg) => {
+                const mapped =
+                  pctBase +
+                  Math.round(((p || 0) / 100) * Math.max(1, Math.round(92 / totalDays) - 1))
+                await updateProgress(Math.min(mapped, 94), `[${dayKey}] ${msg || ''}`)
+              },
+              { userId, jobId },
+            )
+          : await processGuiaMentoradoDay(
+              courseId,
+              {
+                topics: prepared.topics,
+                targetDate: dayKey,
+                autoPublish,
+                forceFresh: false,
+              },
+              async (p, msg) => {
+                const mapped =
+                  pctBase +
+                  Math.round(((p || 0) / 100) * Math.max(1, Math.round(92 / totalDays) - 1))
+                await updateProgress(Math.min(mapped, 94), `[${dayKey}] ${msg || ''}`)
+              },
+              { userId, jobId },
+            )
       processed += 1
       if (dayResult?.errors?.length) {
         dayErrors.push(
@@ -1586,6 +1611,163 @@ Retorne APENAS JSON:
   return { resultRef: { collection: 'editalVerticalizado', docId: 'atual' }, parsed }
 }
 
+async function processConteudoIncidencia(courseId, serverPayload, updateProgress) {
+  const savePlan = serverPayload?.savePlan || {}
+  const disciplinaNome = savePlan.disciplinaNome || serverPayload?.disciplinaNome || 'Disciplina'
+  const docId = savePlan.docId || sanitizeDisciplinaDocId(disciplinaNome)
+  const status = savePlan.status || CONTENT_STATUS.AVAILABLE || 'disponivel'
+  const topicos = Array.isArray(savePlan.topicos)
+    ? savePlan.topicos
+    : Array.isArray(serverPayload?.topicos)
+      ? serverPayload.topicos
+      : []
+
+  // Já completo? não regera
+  try {
+    const existing = await getDoc(doc(db, 'courses', courseId, 'conteudosIncidencia', docId))
+    if (existing.exists() && isIncidenciaContentComplete(existing.data(), topicos.length)) {
+      await updateProgress(95, `Incidência de ${disciplinaNome} já completa — pulando`)
+      return {
+        resultRef: { collection: 'conteudosIncidencia', docId, resumed: true },
+        parsed: existing.data(),
+        resumed: true,
+      }
+    }
+  } catch {
+    /* segue geração */
+  }
+
+  const meta = serverPayload?.courseMeta || {}
+  const parsed = await generateIncidenciaCompleta({
+    disciplinaNome,
+    topicos,
+    banca: meta.banca || savePlan.banca || '',
+    cargo: meta.cargo || savePlan.cargo || '',
+    courseName: meta.courseName || savePlan.courseName || 'Curso Preparatório',
+    editalText: meta.editalText || serverPayload?.editalText || '',
+    courseId,
+    generateFn: generateAiJson,
+    onProgress: updateProgress,
+    aiOptions: serverPayload?.aiOptions || {},
+  })
+
+  await updateProgress(92, `Salvando incidência: ${disciplinaNome}`)
+  const resultRef = await saveMerge(courseId, 'conteudosIncidencia', docId, parsed, {
+    disciplinaIdx: savePlan.disciplinaIdx,
+    status,
+  })
+  return { resultRef, parsed, resumed: false }
+}
+
+async function processGuiaMentoradoIncidenciaDay(
+  courseId,
+  serverPayload,
+  updateProgress,
+  { userId, jobId } = {},
+) {
+  const items = Array.isArray(serverPayload?.items) ? serverPayload.items : []
+  const targetDate = serverPayload?.targetDate
+  if (!targetDate) throw new Error('Data do dia ausente.')
+  if (!items.length) throw new Error('Nenhuma matéria de incidência no dia.')
+
+  const autoPublish = serverPayload?.autoPublish !== false
+  const status = autoPublish ? CONTENT_STATUS.AVAILABLE : CONTENT_STATUS.UNAVAILABLE
+  const courseMeta = serverPayload?.courseMeta || {}
+  const errors = []
+  let done = 0
+
+  await setDoc(
+    doc(db, 'courses', courseId, 'mentoradoAutomation', targetDate),
+    {
+      status: 'running',
+      kind: 'incidencia',
+      jobId: jobId || null,
+      userId: userId || null,
+      totalTopics: items.length,
+      publishedCount: 0,
+      updatedAt: serverTimestamp(),
+      startedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i]
+    const label = item.disciplinaNome || `Matéria ${i + 1}`
+    const pctBase = Math.round((i / items.length) * 85) + 5
+    try {
+      await updateProgress(pctBase, `Incidência do dia: ${label}`)
+      const result = await processConteudoIncidencia(
+        courseId,
+        {
+          courseMeta,
+          savePlan: {
+            disciplinaNome: item.disciplinaNome,
+            disciplinaIdx: item.disciplinaIdx,
+            docId: item.docId || sanitizeDisciplinaDocId(item.disciplinaNome),
+            topicos: item.topicos || [],
+            status,
+          },
+          aiOptions: {
+            useRAG: true,
+            isLegalContent: true,
+          },
+        },
+        async (p, msg) => {
+          const mapped = pctBase + Math.round(((p || 0) / 100) * Math.max(8, Math.round(80 / items.length)))
+          await updateProgress(Math.min(mapped, 92), msg || label)
+        },
+      )
+      if (result?.parsed) done += 1
+    } catch (err) {
+      errors.push({
+        topicKey: item.docId || item.disciplinaNome,
+        error: err?.message || String(err),
+        code: err?.code || null,
+      })
+    }
+  }
+
+  await setDoc(
+    doc(db, 'courses', courseId, 'mentoradoAutomation', targetDate),
+    {
+      status: errors.length ? 'partial' : 'done',
+      kind: 'incidencia',
+      totalTopics: items.length,
+      publishedCount: done,
+      errors,
+      updatedAt: serverTimestamp(),
+      finishedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+
+  try {
+    const todayKey = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+    }).format(new Date())
+    if (targetDate === todayKey) {
+      await setDoc(
+        doc(db, 'courses', courseId, 'config', 'guiaMentorado'),
+        {
+          automation: {
+            lastDailyRunDayKey: todayKey,
+            lastDailyRunAt: serverTimestamp(),
+            lastError: errors.length ? errors[0]?.error || 'partial' : null,
+          },
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
+    }
+  } catch {
+    /* ignore */
+  }
+
+  await updateProgress(96, `Incidência do dia: ${done}/${items.length} matéria(s)`)
+  return { publishedCount: done, totalTopics: items.length, errors, kind: 'incidencia' }
+}
+
 /**
  * Executa o payload que antes ia para Cloud Functions — agora no browser.
  */
@@ -1643,21 +1825,7 @@ export async function processLocalGenerationJob({
       )
     }
     case 'conteudo_incidencia': {
-      const docId =
-        serverPayload.savePlan?.docId ||
-        sanitizeDisciplinaKey(serverPayload.savePlan?.disciplinaNome)
-      return processPromptSave(
-        courseId,
-        serverPayload,
-        updateProgress,
-        'conteúdo de incidência',
-        'conteudosIncidencia',
-        docId,
-        {
-          disciplinaIdx: serverPayload.savePlan?.disciplinaIdx,
-          status: serverPayload.savePlan?.status || 'indisponivel',
-        },
-      )
+      return processConteudoIncidencia(courseId, serverPayload, updateProgress)
     }
     case 'questoes_incidencia': {
       const nivel = serverPayload.savePlan?.nivel ?? 1
@@ -1702,9 +1870,20 @@ export async function processLocalGenerationJob({
       return processFlashcardsTopico(courseId, serverPayload, updateProgress, { jobId })
     case 'guia_mentorado_automation':
       return processGuiaMentoradoDay(courseId, serverPayload, updateProgress, { userId, jobId })
+    case 'guia_mentorado_incidencia':
+      return processGuiaMentoradoIncidenciaDay(courseId, serverPayload, updateProgress, {
+        userId,
+        jobId,
+      })
     case 'guia_mentorado_cronograma':
       return processGuiaMentoradoCronograma(courseId, serverPayload, updateProgress)
     case 'guia_mentorado_backfill': {
+      if (serverPayload?.kind === 'incidencia' || serverPayload?.items?.length) {
+        return processGuiaMentoradoIncidenciaDay(courseId, serverPayload, updateProgress, {
+          userId,
+          jobId,
+        })
+      }
       if (serverPayload?.topics?.length && serverPayload?.targetDate) {
         return processGuiaMentoradoDay(courseId, serverPayload, updateProgress, { userId, jobId })
       }

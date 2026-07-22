@@ -16,6 +16,46 @@ import {
 import { startBackgroundGeneration } from './aiGenerationRunner'
 import { CONTENT_STATUS } from '../utils/contentStatus'
 import { QUESTOES_TARGET } from './localGenerationCheckpoint'
+import { sanitizeDisciplinaDocId } from '../utils/incidenciaGeneration'
+
+function findDisciplinaInEdital(edital, disciplinaNome) {
+  const nome = String(disciplinaNome || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+  const list = edital?.disciplinas || []
+  const idx = list.findIndex((d) => {
+    const n = String(d?.nome || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+    return n === nome || n.includes(nome) || nome.includes(n)
+  })
+  if (idx < 0) return null
+  return { disciplina: list[idx], disciplinaIdx: idx }
+}
+
+function buildIncidenciaDayItems(dayEntry, edital) {
+  const seen = new Set()
+  const items = []
+  for (const raw of dayEntry?.materias || []) {
+    const disciplinaNome = String(raw?.disciplina || raw?.materia || '').trim()
+    if (!disciplinaNome) continue
+    const key = disciplinaNome.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    const found = findDisciplinaInEdital(edital, disciplinaNome)
+    items.push({
+      disciplinaNome: found?.disciplina?.nome || disciplinaNome,
+      disciplinaIdx: found?.disciplinaIdx ?? -1,
+      docId: sanitizeDisciplinaDocId(found?.disciplina?.nome || disciplinaNome),
+      topicos: Array.isArray(found?.disciplina?.topicos) ? found.disciplina.topicos : [],
+    })
+  }
+  return items
+}
 
 /** Data final do planejamento: data da prova ou hoje + 90 dias. */
 export function resolvePlanningEndDate(config = {}) {
@@ -176,12 +216,35 @@ export async function prepareMentoradoDayAutomation({
   }
 
   const tipo = dayEntry.type || dayEntry.tipo || 'estudo'
-  // Simulado / descanso / incidência: sem geração de material de tópico
-  if (tipo === 'simulado' || tipo === 'descanso' || tipo === 'incidencia' || tipo === 'reta_final') {
+  if (tipo === 'simulado' || tipo === 'descanso') {
     return { ok: false, reason: 'skip_day_type', targetDate, tipo }
   }
 
   const edital = editalVerticalizado || (await loadEditalVerticalizado(courseId))
+
+  // Dia de incidência: gera 1 matéria (revisão completa) por dia
+  if (tipo === 'incidencia' || tipo === 'reta_final' || dayEntry.incidencia) {
+    const items = buildIncidenciaDayItems(dayEntry, edital)
+    if (!items.length) {
+      return { ok: false, reason: 'no_topics', targetDate, tipo, kind: 'incidencia' }
+    }
+    const baseContext = await loadMentoradoAutomationContext(courseId)
+    return {
+      ok: true,
+      kind: 'incidencia',
+      targetDate,
+      autoPublish,
+      items,
+      topicCount: items.length,
+      courseMeta: {
+        banca: baseContext.banca || '',
+        cargo: baseContext.cargo || '',
+        courseName: baseContext.courseName || '',
+        editalText: baseContext.editalText || '',
+      },
+    }
+  }
+
   const topics = extractTopicsFromCronogramaDay(
     { data: targetDate, tipo, materias: dayEntry.materias || [] },
     edital,
@@ -199,6 +262,7 @@ export async function prepareMentoradoDayAutomation({
   const topicPayloads = topics.map((topic) => buildTopicPayloads(topic, context, autoPublish))
   return {
     ok: true,
+    kind: 'estudo',
     targetDate,
     autoPublish,
     topics: topicPayloads,
@@ -236,6 +300,37 @@ export async function startMentoradoDayContentAutomation({
     throw new Error(messages[prepared.reason] || `Não foi possível preparar o dia ${targetDate}.`)
   }
 
+  if (prepared.kind === 'incidencia') {
+    const { jobId, promise, duplicate } = await startBackgroundGeneration({
+      userId,
+      courseId,
+      jobType: 'guia_mentorado_incidencia',
+      topicKey: null,
+      metadata: {
+        kind: 'incidencia',
+        topicCount: prepared.topicCount,
+        targetDate,
+        autoPublish,
+        disciplinas: prepared.items.map((i) => i.disciplinaNome),
+      },
+      runOnServer: false,
+      serverPayload: {
+        courseId,
+        autoPublish,
+        targetDate,
+        items: prepared.items,
+        courseMeta: prepared.courseMeta,
+      },
+    })
+    return {
+      jobId,
+      promise,
+      topicCount: prepared.topicCount,
+      duplicate: Boolean(duplicate),
+      kind: 'incidencia',
+    }
+  }
+
   const { jobId, promise, duplicate } = await startBackgroundGeneration({
     userId,
     courseId,
@@ -255,7 +350,7 @@ export async function startMentoradoDayContentAutomation({
     },
   })
 
-  return { jobId, promise, topicCount: prepared.topicCount, duplicate: Boolean(duplicate) }
+  return { jobId, promise, topicCount: prepared.topicCount, duplicate: Boolean(duplicate), kind: 'estudo' }
 }
 
 /**
