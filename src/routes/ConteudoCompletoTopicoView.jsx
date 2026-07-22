@@ -38,6 +38,8 @@ import { buildMaterialContentId } from '../utils/contentCommentIds'
 import { stripHtml } from '../utils/htmlTextHelpers'
 import ReactMarkdown from 'react-markdown'
 import { downloadMaterialPdf } from '../utils/materialPdfExport'
+import AudioReader from '../components/AudioReader'
+import { buildMaterialSpeechScript } from '../utils/materialSpeechText'
 
 // Função para gerar chave estável do tópico (mesma do EditalVerticalizado)
 const makeTopicKey = (topico) => {
@@ -984,6 +986,16 @@ REGRAS FINAIS:
           </div>
           {isAdmin && regenMessage && (
             <p className="mt-3 text-xs text-cp-muted">{regenMessage}</p>
+          )}
+
+          {!editingContent && conteudo && (
+            <div className="mt-4">
+              <AudioReader
+                title={conteudo.materia || conteudo.titulo || effectiveTopicNome || 'Material de apoio'}
+                text={buildMaterialSpeechScript(conteudo, { courseName })}
+                className="w-full"
+              />
+            </div>
           )}
         </div>
 

@@ -7,6 +7,8 @@ import {
   ChevronRightIcon,
 } from '@heroicons/react/24/outline'
 import FlashcardItem from './FlashcardItem'
+import SmartTeacherPlayer from './teacher/SmartTeacherPlayer'
+import { useSmartTeacher } from '../hooks/useSmartTeacher'
 import { useSearchParams } from 'react-router-dom'
 import { getRatingButtonLabel } from '../utils/spacedRepetition'
 
@@ -52,17 +54,52 @@ const FlashcardList = ({
 
   const disciplina = decodeURIComponent(searchParams.get('disciplina') || '')
 
-  useEffect(() => {
+  const goNext = useCallback(() => {
+    onNext?.()
+  }, [onNext])
+
+  const teacher = useSmartTeacher({
+    cards,
+    currentIndex,
+    flipped,
+    onFlipChange: setFlipped,
+    onGoNext: goNext,
+    deckSubtitle: deckSubtitle || disciplina,
+    deckTitle,
+  })
+
+  const teacherStop = teacher.stop
+  const teacherStatus = teacher.status
+
+  const handlePrev = useCallback(() => {
+    teacherStop()
     setFlipped(false)
-  }, [currentIndex, currentCard?.id])
+    onPrev?.()
+  }, [onPrev, teacherStop])
+
+  const handleNext = useCallback(() => {
+    teacherStop()
+    setFlipped(false)
+    onNext?.()
+  }, [onNext, teacherStop])
+
+  const handleSelect = useCallback(
+    (index) => {
+      teacherStop()
+      setFlipped(false)
+      onSelect?.(index)
+    },
+    [onSelect, teacherStop]
+  )
 
   const handleRate = useCallback(
     (difficulty) => {
       if (!currentCard || !onRateDifficulty) return
+      teacherStop()
       onRateDifficulty(currentCard.id, difficulty)
       setFlipped(false)
     },
-    [currentCard, onRateDifficulty]
+    [currentCard, onRateDifficulty, teacherStop]
   )
 
   useEffect(() => {
@@ -72,11 +109,12 @@ const FlashcardList = ({
 
       if (e.code === 'Space') {
         e.preventDefault()
+        if (teacherStatus === 'playing' || teacherStatus === 'thinking') return
         setFlipped((f) => !f)
       } else if (e.code === 'ArrowLeft') {
-        onPrev?.()
+        handlePrev()
       } else if (e.code === 'ArrowRight') {
-        onNext?.()
+        handleNext()
       } else if (showRating && flipped) {
         if (e.key === '1' || e.key === 'h') handleRate('hard')
         if (e.key === '2' || e.key === 'e') handleRate('easy')
@@ -84,7 +122,7 @@ const FlashcardList = ({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [currentCard, flipped, showRating, handleRate, onPrev, onNext])
+  }, [currentCard, flipped, showRating, handleRate, handlePrev, handleNext, teacherStatus])
 
   const handleColorChange = (option) => {
     setCardColor(option.bg)
@@ -132,48 +170,64 @@ const FlashcardList = ({
           )}
         </div>
       )}
-      <div className="mb-4 flex items-center justify-end gap-2">
-        <div className="relative flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              const q = encodeURIComponent(
-                `${disciplina}/${currentCard.pergunta}/${currentCard.resposta} esse flashcard está correto?`
-              )
-              window.open(`https://www.google.com/search?q=${q}`, '_blank')
-            }}
-            className="noji-tool-btn"
-            title="Pesquisar no Google"
-          >
-            <MagnifyingGlassIcon className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowColorPicker(!showColorPicker)}
-            className="noji-tool-btn"
-            title="Cor do card"
-          >
-            <SwatchIcon className="h-4 w-4" />
-          </button>
-          {onShuffle && (
-            <button type="button" onClick={onShuffle} className="noji-tool-btn" title="Embaralhar">
-              <ArrowPathIcon className="h-4 w-4" />
+      <div className="mb-4">
+        <SmartTeacherPlayer
+          supported={teacher.supported}
+          status={teacher.status}
+          phase={teacher.phase}
+          thinkRemaining={teacher.thinkRemaining}
+          settings={teacher.settings}
+          updateSettings={teacher.updateSettings}
+          selectedVoice={teacher.selectedVoice}
+          error={teacher.error}
+          onPlay={teacher.play}
+          onPause={teacher.pause}
+          onStop={teacher.stop}
+          className="mb-3"
+        />
+        <div className="flex items-center justify-end gap-2">
+          <div className="relative flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                const q = encodeURIComponent(
+                  `${disciplina}/${currentCard.pergunta}/${currentCard.resposta} esse flashcard está correto?`
+                )
+                window.open(`https://www.google.com/search?q=${q}`, '_blank')
+              }}
+              className="noji-tool-btn"
+              title="Pesquisar no Google"
+            >
+              <MagnifyingGlassIcon className="h-4 w-4" />
             </button>
-          )}
-          {showColorPicker && (
-            <div className="absolute right-0 top-full z-50 mt-2 grid w-48 grid-cols-2 gap-1.5 rounded-2xl border border-cp-border bg-cp-surface p-2 shadow-xl">
-              {COLOR_OPTIONS.map((option) => (
-                <button
-                  key={option.name}
-                  type="button"
-                  onClick={() => handleColorChange(option)}
-                  className={`rounded-xl border px-2 py-2 text-[11px] font-medium ${option.bg} ${option.text} ${option.border}`}
-                >
-                  {option.name}
-                </button>
-              ))}
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={() => setShowColorPicker(!showColorPicker)}
+              className="noji-tool-btn"
+              title="Cor do card"
+            >
+              <SwatchIcon className="h-4 w-4" />
+            </button>
+            {onShuffle && (
+              <button type="button" onClick={onShuffle} className="noji-tool-btn" title="Embaralhar">
+                <ArrowPathIcon className="h-4 w-4" />
+              </button>
+            )}
+            {showColorPicker && (
+              <div className="absolute right-0 top-full z-50 mt-2 grid w-48 grid-cols-2 gap-1.5 rounded-2xl border border-cp-border bg-cp-surface p-2 shadow-xl">
+                {COLOR_OPTIONS.map((option) => (
+                  <button
+                    key={option.name}
+                    type="button"
+                    onClick={() => handleColorChange(option)}
+                    className={`rounded-xl border px-2 py-2 text-[11px] font-medium ${option.bg} ${option.text} ${option.border}`}
+                  >
+                    {option.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -244,7 +298,7 @@ const FlashcardList = ({
 
       {/* Navegação lateral */}
       <div className="mt-4 flex items-center justify-center gap-3 sm:gap-4">
-        <button type="button" onClick={onPrev} className="noji-nav-btn" aria-label="Anterior">
+        <button type="button" onClick={handlePrev} className="noji-nav-btn" aria-label="Anterior">
           <ChevronLeftIcon className="h-5 w-5" />
         </button>
         <div className="flex gap-1">
@@ -252,7 +306,7 @@ const FlashcardList = ({
             <button
               key={card.id}
               type="button"
-              onClick={() => onSelect(index)}
+              onClick={() => handleSelect(index)}
               className={`h-1.5 rounded-full transition-all ${
                 index === currentIndex
                   ? 'w-6 bg-indigo-500'
@@ -267,7 +321,7 @@ const FlashcardList = ({
             <span className="ml-1 self-center text-[10px] text-cp-muted">+{cards.length - 12}</span>
           )}
         </div>
-        <button type="button" onClick={onNext} className="noji-nav-btn" aria-label="Próximo">
+        <button type="button" onClick={handleNext} className="noji-nav-btn" aria-label="Próximo">
           <ChevronRightIcon className="h-5 w-5" />
         </button>
       </div>
