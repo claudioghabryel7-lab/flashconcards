@@ -15,6 +15,7 @@ import {
   buildQuestoesExamHeader,
   generateQuestoesInBatches,
 } from '../utils/questoesGeneration'
+import { appendVisualMediaAppendix } from '../utils/stemVisualContent'
 import {
   createGenerationJob,
   updateGenerationJob,
@@ -567,7 +568,9 @@ const QuestoesTopicoView = () => {
       const { exam, tipoProva, tipoLabel, fidelityBlock, formatInstructions, schemaSnippet } =
         examHeader
 
-      const buildBatchPrompt = ({ batchNumber, batches, count }) => `${fidelityBlock}
+      const buildBatchPrompt = ({ batchNumber, batches, count }) =>
+        appendVisualMediaAppendix(
+          `${fidelityBlock}
 Você é um especialista em criar questões de concurso público para ESTE cargo e banca.
 
 CONTEXTO:
@@ -626,7 +629,11 @@ REGRAS:
 - Formato ${tipoLabel} — sem misturar com outro formato
 - DATA ATUAL: ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
 - Não invente leis/artigos; use apenas normas vigentes
-- Retorne APENAS JSON válido`
+- Retorne APENAS JSON válido`,
+          contextoDisciplina?.disciplina || effectiveTopicNome || resolvedTopicKey,
+          effectiveTopicNome || resolvedTopicKey,
+          'questoes',
+        )
 
       setProgress((prev) => Math.min(prev + 10, 40))
       console.log('🤖 [Questões Tópico] Gerando em lotes no formato', tipoLabel)
@@ -1320,6 +1327,8 @@ REGRAS:
                                 ? [legacyQuestaoContentId]
                                 : []
                             }
+                            ilustracao={questaoAtual.ilustracao}
+                            textoBase={questaoAtual.textoBase}
                           />
 
                           {!showResult && !modoAdminNavegacao ? (

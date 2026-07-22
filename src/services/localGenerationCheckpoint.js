@@ -290,6 +290,9 @@ export async function appendFlashcardBatch({
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       source: 'local_admin_generation',
+      ...(item.ilustracao ? { ilustracao: item.ilustracao } : {}),
+      ...(item.ilustracaoResposta ? { ilustracaoResposta: item.ilustracaoResposta } : {}),
+      ...(item.textoBase ? { textoBase: item.textoBase } : {}),
     })
     ids.push(ref.id)
     order += 1

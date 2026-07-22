@@ -228,6 +228,8 @@ export default function SharedQuestaoView() {
               assunto={questaoAtual.assunto}
               probabilidade={questaoAtual.probabilidade}
               enunciado={questaoAtual.enunciado}
+              ilustracao={questaoAtual.ilustracao}
+              textoBase={questaoAtual.textoBase}
             />
 
             {!showResult ? (

@@ -3,6 +3,7 @@ import CommentFormattedText from './content/CommentFormattedText'
 import { probabilidadeBadgeClass } from '../utils/htmlTextHelpers'
 import ContentFeedbackActions from './content/ContentFeedbackActions'
 import { mapOrderedAlternativas } from '../utils/questaoAlternativas'
+import StudyIllustration from './StudyIllustration'
 
 export function resolveQuestaoGabarito(questao) {
   return questao?.respostaCorreta || questao?.correta || questao?.gabarito || ''
@@ -126,6 +127,8 @@ export function QuestaoEnunciadoCard({
   contentId,
   alternateContentIds = [],
   topicKey,
+  ilustracao = null,
+  textoBase = null,
 }) {
   return (
     <div
@@ -170,6 +173,12 @@ export function QuestaoEnunciadoCard({
         </div>
       </div>
       <div className="px-3 py-3.5 sm:px-5 sm:py-6">
+        {textoBase ? (
+          <blockquote className="mb-4 max-h-56 overflow-y-auto rounded-xl border border-cp-border bg-cp-bg/70 px-3 py-3 text-sm leading-relaxed text-cp-text/90 whitespace-pre-wrap">
+            {textoBase}
+          </blockquote>
+        ) : null}
+        {ilustracao ? <StudyIllustration ilustracao={ilustracao} className="mb-4" /> : null}
         <p className="text-sm font-medium leading-relaxed text-cp-text sm:text-lg">{enunciado}</p>
       </div>
     </div>

@@ -16,6 +16,10 @@ import { db } from '../firebase/config'
 import { generateAiJson } from '../utils/geminiApi'
 import { generateQuestoesInBatches } from '../utils/questoesGeneration'
 import { isLikelyLegalDiscipline } from '../utils/contentVerification'
+import {
+  attachNormalizedIllustration,
+  appendVisualMediaAppendix,
+} from '../utils/stemVisualContent'
 import { buildFlashcardPrompt } from '../utils/unifiedPrompt'
 import { DEFAULT_PLANNING_DAYS } from '../constants/guiaMentorado'
 import { CONTENT_STATUS } from '../utils/contentStatus'
@@ -245,7 +249,12 @@ async function processPromptSave(
       Number(serverPayload?.quantidadeQuestoes) > 0
         ? Number(serverPayload.quantidadeQuestoes)
         : QUESTOES_TARGET
-    const promptWithDossier = appendGoogleAiDossier(prompt, dossier?.text)
+    const promptWithDossier = appendVisualMediaAppendix(
+      appendGoogleAiDossier(prompt, dossier?.text),
+      disciplina,
+      extra.topico || serverPayload?.savePlan?.topicoNome || topicKey || '',
+      'questoes',
+    )
     const batchResult = await generateQuestoesInBatches({
       total: totalQuestoes,
       batchSize: QUESTOES_BATCH_SIZE,
@@ -327,14 +336,15 @@ Retorne APENAS JSON válido com o array "questoes" contendo ${count} itens.`,
 function normalizeCard(card = {}) {
   const pergunta = String(card.pergunta || card.frente || card.front || card.question || '').trim()
   const resposta = String(card.resposta || card.verso || card.back || card.answer || '').trim()
-  return {
+  return attachNormalizedIllustration({
+    ...card,
     pergunta,
     resposta,
     frente: pergunta,
     verso: resposta,
     dificuldade: card.dificuldade || 'médio',
     prioridade: card.prioridade || 'alta',
-  }
+  })
 }
 
 function dedupeCards(cards = []) {
@@ -451,7 +461,7 @@ async function processFlashcardsTopico(
       : ''
 
     const topicoNome = meta.topicoNome || meta.topicKey || ''
-    const prompt = appendGoogleAiDossier(`${buildExamFidelityBlock(examCtx)}
+    const promptCore = `${buildExamFidelityBlock(examCtx)}
 ${basePrompt}
 
 ═══ TRAVA DE TÓPICO (OBRIGATÓRIA) ═══
@@ -472,7 +482,13 @@ REGRAS DE OURO (violação = card inválido):
 ${existingList}
 
 Retorne APENAS JSON:
-{ "flashcards": [ { "pergunta": "...", "resposta": "..." } ] }`, dossier)
+{ "flashcards": [ { "pergunta": "...", "resposta": "..." } ] }`
+    const prompt = appendVisualMediaAppendix(
+      appendGoogleAiDossier(promptCore, dossier),
+      disciplina,
+      topicoNome,
+      'flashcards',
+    )
 
     const { validateFlashcardBatchOrThrow } = await import('../utils/flashcardQuality')
     const minKeep = Math.max(1, Math.ceil(cardsInBatch * 0.4))
@@ -852,7 +868,12 @@ async function processSingleMentoradoTopic({
     questoesParsed = qPrep.existingDraft
     await updateProgress(pctBase + 4, `${label}: questões do checkpoint — sem API`)
   } else if (topic.questoesPrompt) {
-    const promptWithDossier = appendGoogleAiDossier(topic.questoesPrompt, googleAiDossier)
+    const promptWithDossier = appendVisualMediaAppendix(
+      appendGoogleAiDossier(topic.questoesPrompt, googleAiDossier),
+      disciplina,
+      topic.topicoNome || topicKey,
+      'questoes',
+    )
     let batchResult
     try {
       batchResult = await generateQuestoesInBatches({
